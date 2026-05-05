@@ -764,105 +764,66 @@ identically regardless of which provider wrote it.
 
 ---
 
-## 10.4 Compression codecs (M21, v0.3)
+## 10.4 Compression codecs
 
 Signal-channel datasets carry their compression codec via either the
-HDF5 filter pipeline or a dedicated per-channel attribute:
+HDF5 filter pipeline (codec ids 1–3) or a dedicated per-channel
+`@compression` uint8 attribute (codec ids 4+):
 
-| Codec                  | Transport                                                                                                                                                                     |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **zlib** (default)     | `H5P_DEFLATE` filter at level 6. Lossless. Readable by any HDF5 library without extra plugins.                                                                                |
-| **LZ4**                | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
-| **Numpress-delta**     | Per-channel transform implemented inside TTIO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
-| **rANS-order0**        | Range-asymmetric numeral systems entropy coder, order-0 (per-byte) frequency model. Codec id `4`. **Implemented in M83** (v0.12 unreleased) across all three languages — clean-room from Duda 2014, no htslib source consulted. Wire format, deterministic frequency-table normalisation, and cross-language conformance contract specified in `docs/codecs/rans.md`. Standalone primitive only; signal-channel pipeline wiring lands in M86. |
-| **rANS-order1**        | Order-1 (preceding-byte context) rANS variant. Codec id `5`. **Implemented in M83** alongside order-0 — same wire format, per-context frequency tables (256 of them) with run-length-encoded sparse rows. See `docs/codecs/rans.md`. |
-| **base-pack**          | 2-bit ACGT packed-base codec for genomic read sequences. Codec id `6`. Lossless on the full byte alphabet via a sparse position+byte sidecar mask: bases that are uppercase `{A,C,G,T}` pack into 2-bit slots (4 bases per output byte, big-endian within byte), everything else (`N`, IUPAC ambiguity codes, lowercase soft-masking, gaps) is recorded in the mask alongside its input position so the decoder restores it byte-for-byte. **Implemented in M84** (v0.12 unreleased) across all three languages — clean-room implementation, no htslib / CRAM tools-Java / jbzip source consulted. Wire format and case-sensitivity rationale in `docs/codecs/base_pack.md`. Standalone primitive only; signal-channel pipeline wiring lands in M86. |
-| **quality-binned**     | Illumina-style quality-score binning that maps 40+ raw Phred levels onto 8 bins (CRUMBLE-derived bin table, fixed in v0 of scheme `0x00`). 4-bit-packed bin indices, big-endian within byte. Codec id `7`. Lossy by construction (decode returns the bin centre, not the original Phred). **Implemented in M85 Phase A** (v0.12 unreleased) across all three languages — clean-room implementation, no htslib / CRUMBLE / NCBI SRA toolkit source consulted. Wire format and bin table specified in `docs/codecs/quality.md`. Standalone primitive only; signal-channel pipeline wiring is a future M86 phase. |
-| **name-tokenized**     | Read-name tokenisation: each name is split into numeric and string tokens, per-column type detection picks columnar (delta-encoded numerics + dictionary-encoded strings) or verbatim mode. Codec id `8`. Lossless. **Implemented in M85 Phase B** (v0.12 unreleased) across all three languages — clean-room lean implementation, no htslib / CRAM tools-Java / samtools / SRA toolkit / Bonfield 2022 reference source consulted. Wire format and tokenisation rules in `docs/codecs/name_tokenizer.md`. Standalone primitive only; signal-channel pipeline wiring is a future M86 phase. The lean implementation achieves ~3-7:1 compression on structured Illumina names; reaching the original ≥ 20:1 target requires the full Bonfield 2022 token-type set and is a future optimisation milestone. |
-| **ref-diff**           | Reference-based sequence-diff codec. Codec id `9`. **Context-aware** — encoder/decoder consume sibling channels (`positions`, `cigars`) and an external reference resolver alongside the channel bytes. For each cigar M-op base, a single bit records match-vs-substitution (1 = sub, with the actual base following as 8 bits MSB-first). I/S-op bases are appended verbatim; D/H/N/P ops carry no payload. The resulting bitstream is rANS-order-0-encoded per 10K-read slice (CRAM-aligned). **Implemented in M93** (v1.2.0) across all three languages — clean-room implementation modelled on the published CRAM 3.1 spec, no htslib / tools-Java source consulted. Wire format, slice strategy, embedded reference layout, and binding decisions in `docs/codecs/ref_diff.md`. Sequence-channel pipeline wiring lands in M93 (this milestone). Falls back to BASE_PACK silently when the reference is unavailable at write (Q5b in design spec); hard error on read when reference is unresolvable (Q5c). |
-| **fqzcomp-nx16**       | ~~Lossless quality-score codec, codec id `10`. Context-modeled adaptive arithmetic coding with SplitMix64 context hashing.~~ **REMOVED in Phase 10 (2026-04-30)** — too slow (~0.16 MB/s vs CRAM 3.1's ~3 GB/s) to ship. Java preserves enum ordinal 10 as `_RESERVED_10` (`@Deprecated`); ObjC uses `TTIOCompressionReserved10`. The default v1.5 quality codec is now `fqzcomp-nx16-z` (codec id `12`); the v1 codec was never released outside development and no .tio files in the wild used it. |
-| **fqzcomp-nx16-z**     | Lossless quality-score codec, CRAM-mimic variant. Codec id `12`. Magic `M94Z`. Static-per-block frequency tables (build pass + frozen encode pass), 16-bit renormalisation (`B = 16`, `b = 2^16`), `T = 4096` fixed (12-bit shift). `T` divides `b*L = 2^31` exactly, making byte-pairing mathematically guaranteed (see `docs/codecs/fqzcomp_nx16_z.md` §8). Bit-pack context model: 12 bits `prev_q` + 2 bits position bucket + 1 bit revcomp, masked to `2^14` slots. 4-way interleaved rANS states. Header carries the freq tables (zlib-deflated) so the decoder skips the build pass. **Implemented in M94.Z** (v1.2.0) across all three languages — clean-room implementation of CRAM 3.1 `rANS-Nx16` discipline (htscodecs master), no htslib / tools-Java source consulted. **Two on-disk shapes share magic + codec id, distinguished by version byte:** version `1` (canonical for v1.5 files; pure-language rANS body, four contiguous substreams) and version `2` (Phase 10 / 2026-04-30; opt-in via `prefer_native` or `TTIO_M94Z_USE_NATIVE=1`; libttio_rans byte layout `[4×states LE][4×lane_sizes LE][per-lane data]` with no trailer). Both versions decode in pure language; native decode for V2 is wired but off by default (callback-overhead bottleneck — see `docs/native-rans-library.md` §4). Wire format and binding decisions §90a–§90e in `docs/codecs/fqzcomp_nx16_z.md`. **Default for v1.5 quality channels** when a run already qualifies as v1.5 (any v1.5 codec already in use elsewhere on the run). |
+| Id | Codec                  | Transport                                                                                                                                                                     |
+|---:|------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 0  | NONE                   | Passthrough.                                                                                                                                                                  |
+| 1  | ZLIB                   | `H5P_DEFLATE` filter at level 6 (default for non-genomic channels). Lossless. Readable by any HDF5 library without extra plugins.                                              |
+| 2  | LZ4                    | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
+| 3  | NUMPRESS_DELTA         | Per-channel transform implemented inside TTIO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
+| 4  | RANS_ORDER0            | Range Asymmetric Numeral Systems entropy coder, order-0 (per-byte) frequency model. Clean-room from Duda 2014, no htslib source consulted. Wire format + deterministic frequency-table normalisation specified in `docs/codecs/rans.md`. |
+| 5  | RANS_ORDER1            | Order-1 (preceding-byte context) rANS variant. Same wire format as order-0; per-context frequency tables (256 of them) with run-length-encoded sparse rows. See `docs/codecs/rans.md`. |
+| 6  | BASE_PACK              | 2-bit ACGT packed-base codec for genomic sequences. Lossless on the full byte alphabet via a sparse position+byte sidecar mask: bases that are uppercase `{A,C,G,T}` pack into 2-bit slots (4 bases per output byte, big-endian within byte); everything else (`N`, IUPAC ambiguity codes, lowercase soft-masking, gaps) is recorded in the mask alongside its input position so the decoder restores it byte-for-byte. See `docs/codecs/base_pack.md`. |
+| 7  | QUALITY_BINNED         | Illumina-8 / CRUMBLE-derived 8-bin Phred quantisation. 4-bit-packed bin indices, big-endian within byte. Lossy (decode returns the bin centre, not the original Phred). See `docs/codecs/quality.md`. |
+| 8  | _RESERVED_8            | Reserved on the wire (Java enum ordinal stability). Was the v1 NAME_TOKENIZED codec; superseded by id 15. Reader paths reject id 8 with a v1.0 migration error. |
+| 9  | _RESERVED_9            | Reserved on the wire. Was the v1 REF_DIFF codec; superseded by id 14. |
+| 10 | _RESERVED_10           | Reserved on the wire. Was the FQZCOMP_NX16 v1 codec; superseded by id 12. |
+| 11 | DELTA_RANS_ORDER0      | Running delta + zigzag-varint + rANS-O0 wrapper for sorted-ascending integer arrays. Auto-default for the `positions` channel. See `docs/codecs/delta_rans.md`. |
+| 12 | FQZCOMP_NX16_Z         | CRAM-mimic lossless quality codec. Magic `M94Z`, V4 wire format. Static-per-block frequency tables (zlib-deflated in the header so the decoder skips the build pass), 16-bit renormalisation (`B = 16`, `b = 2^16`), `T = 4096` fixed (12-bit shift); `T \| b·L = 2^31` exactly, byte-pairing mathematically guaranteed. Bit-pack context model: 12 bits `prev_q` + 2 bits position bucket + 1 bit revcomp, masked to `2^14` slots. 4-way interleaved rANS states. **Default for the `qualities` channel.** Clean-room implementation of CRAM 3.1 `rANS-Nx16` discipline; no htslib / tools-Java source consulted. See `docs/codecs/fqzcomp_nx16_z.md`. |
+| 13 | MATE_INLINE_V2         | Inlined per-record mate_info (chrom + pos + tlen) as a single channel. Replaces the M82 compound + per-field subgroup decomposition. **Default for the `mate_info` channel.** See `docs/codecs/mate_info_v2.md`. |
+| 14 | REF_DIFF_V2            | **Context-aware** reference-based sequence-diff codec. Encoder/decoder consume sibling channels (`positions`, `cigars`) and an external reference resolver alongside the channel bytes. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`. **Default for the `sequences` channel** when a reference is available; falls back to BASE_PACK silently when not. See `docs/codecs/ref_diff_v2.md`. |
+| 15 | NAME_TOKENIZED_V2      | 8-substream multi-token columnar codec for read names. Substreams: FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT, each auto-picked between rANS-O0 and raw passthrough. Per-block reset every 4096 reads; magic `NTK2`. **Default for the `read_names` channel.** See `docs/codecs/name_tokenizer_v2.md`. |
 
-The five reserved codec ids (`4`–`8`) are committed to the disk
-format in M79 so cross-language readers see a stable enum table
-before encoders land. **As of v0.12.x (post-M86 Phase D) all
-five (rANS order-0, rANS order-1, base-pack, quality-binned,
-name-tokenized) ship as standalone primitives in all three
-languages — the genomic codec library is conceptually complete.**
+Ids `0`–`3` ride the HDF5 filter pipeline; ids `4`+ are signalled via
+the per-channel `@compression` attribute (see §10.5). Reserved ids
+`8` / `9` / `10` retain their wire-format slots so cross-language
+readers can defensively reject removed-codec files with a clear v1.0
+migration error.
 
-**v1.2 / M93 adds codec id `9` (REF_DIFF)** — the first
-context-aware codec, applicable to the `sequences` channel of
-reference-aligned `WrittenGenomicRun` instances. **v1.2 / M94
-adds codec id `10` (FQZCOMP_NX16)** — lossless quality codec
-with context-modeled adaptive arithmetic coding + 4-way rANS,
-applicable to the `qualities` channel. M95 (codec id `11`,
-DELTA_RANS_ORDER0) extends the table further; see
-`docs/superpowers/specs/2026-04-28-m93-m94-m95-codec-design.md`.
-**v1.2 / M94.Z adds codec id `12` (FQZCOMP_NX16_Z)** — a
-CRAM-mimic FQZCOMP_NX16 variant with static-per-block freq
-tables, 16-bit renormalisation, and `T = 4096` fixed power-of-2
-total (`T | b*L` exactly), making byte-pairing mathematically
-guaranteed. Codec id 10 is RETAINED for backward compatibility
-with v1.1.x M94 v1 fixtures and in-flight files; the v1.5
-default codec stack uses id `12` for new files on the
-`qualities` channel. See
-`docs/codecs/fqzcomp_nx16_z.md` and
-`docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
+### Codec-channel applicability
 
-Ids `4`, `5`, `6`, `7`, and `8` are all wired into the genomic
-signal-channel write/read pipeline. The codec applicability per
-channel is:
+- Ids `4`, `5` (rANS order-0/1) apply to every byte and integer
+  channel via the LE byte-serialisation contract in §10.7.
+- Id `6` (BASE_PACK) applies to the `sequences` channel.
+- Id `7` (QUALITY_BINNED) applies to the `qualities` channel only —
+  validation rejects QUALITY_BINNED on `sequences` because Phred-bin
+  quantisation would silently destroy ACGT data.
+- Id `11` (DELTA_RANS_ORDER0) applies to sortable integer channels
+  (`positions` is the canonical case).
+- Id `12` (FQZCOMP_NX16_Z) applies to the `qualities` channel and
+  is the v1.0 default.
+- Id `13` (MATE_INLINE_V2) applies to the `mate_info` channel and
+  is the v1.0 default.
+- Id `14` (REF_DIFF_V2) applies to the `sequences` channel of
+  reference-aligned `WrittenGenomicRun` instances and is the v1.0
+  default when a reference is available.
+- Id `15` (NAME_TOKENIZED_V2) applies to the `read_names` channel
+  and is the v1.0 default.
 
-- Ids `4`, `5`, `6` apply to both `sequences` and `qualities`
-  byte channels (M86 Phase A).
-- Id `7` (quality-binned) applies to the `qualities` byte
-  channel only — validation rejects QUALITY_BINNED on
-  `sequences` because Phred-bin quantisation would silently
-  destroy ACGT data (M86 Phase D).
-- Id `8` (name-tokenized) applies to the `read_names` channel
-  (M86 Phase E) AND the `cigars` channel (M86 Phase C) —
-  validation rejects NAME_TOKENIZED on sequences/qualities/
-  integer channels because the codec tokenises UTF-8 strings,
-  not binary byte streams. Both channels use a schema-lift
-  pattern (compound → flat uint8).
-- Ids `4` and `5` (rANS order-0/1) also apply to the **integer
-  channels** `positions` (int64), `flags` (uint32), and
-  `mapping_qualities` (uint8) via the int↔byte serialisation
-  contract in §10.7 (M86 Phase B). Validation rejects ids `6`,
-  `7`, `8` on integer channels.
-- Ids `4` and `5` ALSO apply to the **cigars channel** via a
-  length-prefix-concat serialisation contract — see §10.8 for
-  the codec-selection guidance (rANS is the recommended
-  default; NAME_TOKENIZED is the niche choice for uniform
-  CIGARs).
-- The **mate_info channel** (M82 compound: chrom + pos + tlen)
-  is decomposed into three per-field virtual channels
-  (`mate_info_chrom`, `mate_info_pos`, `mate_info_tlen`) when
-  any per-field override is set — see §10.9 for the subgroup
-  schema and per-field codec applicability. The chrom field
-  takes the same codec set as cigars
-  ({RANS_ORDER0/1, NAME_TOKENIZED}); pos/tlen take the
-  integer-channel set ({RANS_ORDER0/1}).
+See §10.5 for the `@compression` attribute scheme, §10.6 for the
+`read_names` channel format, §10.7 for the integer-channel
+serialisation contract, §10.8 for the cigars channel, §10.9 for
+the mate_info channel, §10.9b for the MATE_INLINE_V2 wire format,
+§10.10b for the NAME_TOKENIZED_V2 wire format.
 
-See §10.5 for the byte-channel `@compression` attribute
-scheme, §10.6 for the `read_names` schema-lift pattern, §10.7
-for the integer-channel serialisation contract, §10.8 for the
-cigars channel and codec-selection guidance, and §10.9 for the
-mate_info subgroup and per-field decomposition.
-
-**The genomic codec pipeline-wiring is now complete for ALL
-M82 channels.** Every channel under `signal_channels/`
-supports at least one codec choice; every M79 codec slot
-(4–8) is wired into its applicable channels with cross-
-language byte-exact conformance.
-
-> **Note on CRAM 3.1 specifically.** v1.2 begins parity with CRAM
-> 3.1's compression characteristics: REF_DIFF (codec id `9`, M93)
-> matches CRAM's reference-based sequence diff, and the M94/M95
-> milestones add fqzcomp-Nx16 quality coding (id `10`) and
-> delta-encoded sorted integer channels (id `11`). With the M93/M94/M95
-> trio shipped, TTI-O closes the architectural compression gap to
-> CRAM 3.1's lossless profile.
+The genomic codec pipeline-wiring covers ALL M82 channels — every
+channel under `signal_channels/` has at least one applicable codec
+with cross-language byte-exact conformance.
 
 ## 10.5 `@compression` attribute on signal-channel datasets (M86)
 
