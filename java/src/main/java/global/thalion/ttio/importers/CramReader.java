@@ -30,7 +30,7 @@ import java.util.Objects;
  * dependency. Construction succeeds without samtools on PATH;
  * {@link #toGenomicRun(String, String, String)} raises
  * {@link SamtoolsNotFoundException} when samtools cannot be located
- * at first use (Binding Decision §135 from M87).</p>
+ * at first use (from M87).</p>
  *
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.importers.cram.CramReader},
@@ -50,7 +50,7 @@ public class CramReader extends BamReader {
      *                       {@link #toGenomicRun} call).
      * @param referenceFasta filesystem path to the reference FASTA
      *                       against which the CRAM was aligned.
-     *                       Required (Binding Decision §139); CRAM
+     *                       Required (); CRAM
      *                       is reference-compressed and cannot be
      *                       decoded without it. samtools auto-builds
      *                       a {@code .fai} index alongside the FASTA
@@ -59,7 +59,7 @@ public class CramReader extends BamReader {
     public CramReader(Path path, Path referenceFasta) {
         super(path);
         this.referenceFasta = Objects.requireNonNull(referenceFasta,
-            "referenceFasta is required for CramReader (Binding Decision §139)");
+            "referenceFasta is required for CramReader ()");
     }
 
     /** @return the reference FASTA path passed at construction time. */

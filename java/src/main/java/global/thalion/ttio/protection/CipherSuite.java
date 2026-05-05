@@ -12,19 +12,19 @@ import java.util.Map;
 
 /**
  * Cipher-suite catalog and algorithm-dispatched parameter helpers
- * (v0.7 M48).
+ * ().
  *
  * <p>Pre-v0.7, encryption / signing / key-wrap APIs accepted an
  * implicit fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for
  * signatures, AES-KW-style wrap for KEK). Key sizes and nonce lengths
  * were hardcoded module-level constants.</p>
  *
- * <p>v0.7 M48 generalises the public API with an {@code algorithm}
+ * <p>generalises the public API with an {@code algorithm}
  * parameter backed by this catalog. The intent was to shape the
  * parameter hole so M49's post-quantum binding is a pure plug-in —
  * no API change — once ML-KEM-1024 / ML-DSA-87 are ready.</p>
  *
- * <p>v0.8 M49 activates the PQC entries. {@code "ml-kem-1024"} (FIPS
+ * <p>activates the PQC entries. {@code "ml-kem-1024"} (FIPS
  * 203) and {@code "ml-dsa-87"} (FIPS 204) transition from
  * {@code RESERVED} to {@code ACTIVE}. The Java implementation uses
  * <b>Bouncy Castle</b> 1.79+ as the PQC provider (see
@@ -102,7 +102,7 @@ public final class CipherSuite {
         m.put("ml-kem-1024", new Entry(
             "ml-kem-1024", Category.KEM,
             /* publicKeySize= */ 1568, 0, 0, Status.ACTIVE,
-            "NIST FIPS 203 ML-KEM-1024. v0.8 M49 via Bouncy Castle. "
+            "NIST FIPS 203 ML-KEM-1024. via Bouncy Castle. "
             + "Python / ObjC path uses liboqs; see docs/pqc.md.",
             /* privateKeySize= */ 3168
         ));
@@ -113,7 +113,7 @@ public final class CipherSuite {
         m.put("ml-dsa-87", new Entry(
             "ml-dsa-87", Category.SIGNATURE,
             /* publicKeySize= */ 2592, 0, 4627, Status.ACTIVE,
-            "NIST FIPS 204 ML-DSA-87. v0.8 M49 via Bouncy Castle. "
+            "NIST FIPS 204 ML-DSA-87. via Bouncy Castle. "
             + "Emits v3: signature-attribute prefix.",
             /* privateKeySize= */ 4896
         ));
@@ -308,7 +308,7 @@ public final class CipherSuite {
                 algorithm + " is in the catalog but has status "
                 + e.status + " — this build does not ship the "
                 + "primitive. Reserved algorithms activate in later "
-                + "milestones (M49 for ml-kem-1024 / ml-dsa-87).");
+                + "milestones (for ml-kem-1024 / ml-dsa-87).");
         }
         return e;
     }

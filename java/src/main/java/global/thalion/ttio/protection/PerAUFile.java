@@ -246,8 +246,8 @@ public final class PerAUFile {
                 int datasetId = nMs + 1;
                 // Signal-channel encryption runs in two cases (M90.11
                 // semantics, mirroring Python's run_signal_encrypt):
-                //   (a) caller supplied chromosome keys (M90.4 path)
-                //   (b) caller supplied an empty key_map (M90.4 no-op)
+                //   (a) caller supplied chromosome keys (path)
+                //   (b) caller supplied an empty key_map (no-op)
                 // The only path that SKIPS signal-channel encryption
                 // is the headers-only case (key_map == {"_headers": K}).
                 boolean runSignalEncrypt =

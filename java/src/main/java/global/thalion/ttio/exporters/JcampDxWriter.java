@@ -28,7 +28,7 @@ import java.nio.file.Path;
  *       {@code conformance/jcamp_dx/}.</li>
  * </ul>
  *
- * <p><b>API status:</b> Stable (v0.11 M73 for AFFN, v0.12 M76 for
+ * <p><b>API status:</b> Stable (for AFFN, for
  * PAC/SQZ/DIF).</p>
  *
  * <p><b>Cross-language equivalents:</b><br>
@@ -41,7 +41,7 @@ public final class JcampDxWriter {
 
     private JcampDxWriter() {}
 
-    // ── AFFN (existing, v0.11 M73) ─────────────────────────────────
+    // ── AFFN (existing,) ─────────────────────────────────
 
     private static void appendXYDATA(StringBuilder out, double[] xs, double[] ys) {
         // Per-value String.format was ~75% of this writer's runtime on
@@ -78,7 +78,7 @@ public final class JcampDxWriter {
         writeUVVisSpectrum(spectrum, path, title, JcampDxEncoding.AFFN);
     }
 
-    // ── AFFN + compressed dispatch (v0.12 M76) ────────────────────
+    // ── AFFN + compressed dispatch () ────────────────────
 
     public static void writeRamanSpectrum(RamanSpectrum spectrum,
                                           Path path,

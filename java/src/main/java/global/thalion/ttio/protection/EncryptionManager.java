@@ -55,7 +55,7 @@ public final class EncryptionManager {
     }
 
     /**
-     * Encrypt plaintext bytes with the named cipher suite. v0.7 M48:
+     * Encrypt plaintext bytes with the named cipher suite.:
      * algorithm selection is routed through {@link CipherSuite}.
      * Only {@code "aes-256-gcm"} is active in v0.7; reserved suites
      * raise {@link CipherSuite.UnsupportedAlgorithmException}.
@@ -104,7 +104,7 @@ public final class EncryptionManager {
     }
 
     /**
-     * Decrypt with the named cipher suite. v0.7 M48: algorithm
+     * Decrypt with the named cipher suite.: algorithm
      * selection via {@link CipherSuite}.
      *
      *
@@ -166,7 +166,7 @@ public final class EncryptionManager {
 
     // ------------------------------------------------------------ key wrap
     //
-    // v0.7 M47: versioned wrapped-key blob format v1.2.
+    // versioned wrapped-key blob format v1.2.
     //
     //   +0   2  magic       = 0x4D 0x57 ("MW" — TTIO Wrap)
     //   +2   1  version     = 0x02
@@ -185,7 +185,7 @@ public final class EncryptionManager {
     private static final byte[] WK_MAGIC = { 'M', 'W' };
     private static final byte WK_VERSION_V2 = 0x02;
     private static final int WK_ALG_AES_256_GCM = 0x0000;
-    /** v0.8 M49: ML-KEM-1024 envelope. Writes set the
+    /** ML-KEM-1024 envelope. Writes set the
      *  {@code opt_pqc_preview} feature flag on the enclosing file. */
     public static final int WK_ALG_ML_KEM_1024 = 0x0001;
     private static final int WK_HEADER_LEN = 11;
@@ -225,7 +225,7 @@ public final class EncryptionManager {
 
     /**
      * Wrap a DEK with an explicit version selector and cipher suite.
-     * v0.8 M49: adds {@code algorithm="ml-kem-1024"} for post-quantum
+     * adds {@code algorithm="ml-kem-1024"} for post-quantum
      * key encapsulation. {@code kek} is interpreted per algorithm —
      * 32-byte symmetric for AES-GCM, 1568-byte ML-KEM public key for
      * ML-KEM.

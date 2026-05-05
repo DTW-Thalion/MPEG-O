@@ -54,7 +54,7 @@ public interface StorageDataset extends AutoCloseable {
 
     /** Read all elements.
      *
-     *  <p>Return type varies by backend (Appendix B Gap 2):</p>
+     *  <p>Return type varies by backend :</p>
      *  <ul>
      *    <li>Primitive datasets: native Java array matching
      *        {@link #precision()} — {@code double[]} for FLOAT64,
@@ -87,7 +87,7 @@ public interface StorageDataset extends AutoCloseable {
      *  <p>Throws {@link IllegalStateException} if called on a primitive
      *  dataset.</p>
      *
-     *  <p>Appendix B Gap 2 — backend-agnostic compound access.</p> */
+     *  <p>— backend-agnostic compound access.</p> */
     @SuppressWarnings("unchecked")
     default List<Map<String, Object>> readRows() {
         List<CompoundField> fields = compoundFields();
@@ -124,7 +124,7 @@ public interface StorageDataset extends AutoCloseable {
     }
 
     /** Return the dataset contents as a byte stream in the TTIO
-     *  canonical layout (v0.7 M43).
+     *  canonical layout ().
      *
      *  <p>Semantics:</p>
      *  <ul>
@@ -259,7 +259,7 @@ public interface StorageDataset extends AutoCloseable {
                 yield (byte[]) raw;
             }
             case UINT8 -> {
-                // v0.11 M79: bytes are endian-neutral; copy through.
+                // bytes are endian-neutral; copy through.
                 yield (byte[]) raw;
             }
             case UINT16 -> {
@@ -275,7 +275,7 @@ public interface StorageDataset extends AutoCloseable {
                 throw new UnsupportedOperationException(
                     "Precision " + p + " is reserved for cross-language parity");
             case UINT64 -> {
-                // v0.11 M82: genomic index offsets, packed identically
+                // genomic index offsets, packed identically
                 // to INT64 (twos-complement is the same on the wire).
                 long[] a = (long[]) raw;
                 ByteBuffer bb = ByteBuffer.allocate(a.length * 8)
@@ -295,12 +295,12 @@ public interface StorageDataset extends AutoCloseable {
     void setAttribute(String name, Object value);
 
     /** Remove an attribute. No-op if the attribute does not exist.
-     *  Appendix B Gap 8 — added for parity with Python ABC and ObjC
+     *  — added for parity with Python ABC and ObjC
      *  {@code -deleteAttributeNamed:error:}. */
     void deleteAttribute(String name);
 
     /** List attribute names. Returns an empty list if there are no
-     *  attributes. Appendix B Gap 8. */
+     *  attributes. */
     List<String> attributeNames();
 
     // ── Lifecycle ────────────────────────────────────────────────

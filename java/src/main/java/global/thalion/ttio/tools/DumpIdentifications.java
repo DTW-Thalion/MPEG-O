@@ -19,7 +19,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * v0.7 M51 — compound parity dumper. Reads an {@code .tio} file and
+ * — compound parity dumper. Reads an {@code .tio} file and
  * emits {@code /study/identifications}, {@code /study/quantifications},
  * and {@code /study/provenance} as deterministic JSON to stdout.
  *

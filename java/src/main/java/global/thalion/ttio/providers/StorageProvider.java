@@ -70,7 +70,7 @@ public interface StorageProvider extends AutoCloseable {
     @Deprecated(since = "0.8", forRemoval = true)
     default Object nativeHandle() { return null; }
 
-    // ── Capabilities (Appendix B Gap 3) ──────────────────────────
+    // ── Capabilities ──────────────────────────
 
     /** {@code true} if the backend honors {@code chunkSize} in
      *  {@link StorageGroup#createDataset}. Defaults to {@code false}
@@ -84,7 +84,7 @@ public interface StorageProvider extends AutoCloseable {
      *  {@link Hdf5Provider} returns {@code true} (zlib + LZ4). */
     default boolean supportsCompression() { return false; }
 
-    // ── Transactions (Appendix B Gap 11) ─────────────────────────
+    // ── Transactions ─────────────────────────
 
     /** Start a write-batching transaction. Default no-op (HDF5,
      *  Memory). SQLiteProvider overrides this to issue {@code BEGIN}

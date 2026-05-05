@@ -433,7 +433,7 @@ public class Anonymizer {
                             overlaps = !(readEnd < start || pos > end);
                         } else {
                             // Empty / unparseable CIGAR — fall back to
-                            // position-only check (M90.3 behaviour).
+                            // position-only check (behaviour).
                             overlaps = (pos >= start && pos <= end);
                         }
                         if (overlaps) {

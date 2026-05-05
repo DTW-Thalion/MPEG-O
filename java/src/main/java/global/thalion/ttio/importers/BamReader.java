@@ -34,7 +34,7 @@ import java.util.Map;
  * pattern. {@code samtools} is a runtime dependency only — the
  * {@code BamReader} class is loadable on systems without samtools; only
  * {@link #toGenomicRun(String, String, String)} requires the binary on
- * PATH (Binding Decision §135).</p>
+ * PATH ().</p>
  *
  * <p>samtools auto-detects SAM vs BAM format from magic bytes; one
  * parser handles both. The companion {@link SamReader} exists as a
@@ -225,7 +225,7 @@ public class BamReader {
                         + line.substring(0, Math.min(120, line.length())), e);
                 }
 
-                // RNEXT '=' expansion (Binding Decision §131).
+                // RNEXT '=' expansion ().
                 if ("=".equals(rnext)) rnext = rname;
 
                 readNames.add(qname);
@@ -298,10 +298,10 @@ public class BamReader {
                 + " for " + path + ": " + stderrText.trim());
         }
 
-        // sample_name override (Binding Decision §133).
+        // sample_name override ().
         String effectiveSample = sampleName != null ? sampleName : rgSample;
 
-        // reference_uri: first @SQ wins (HANDOFF §2.4).
+        // reference_uri: first @SQ wins
         String referenceUri = sqNames.isEmpty() ? "" : sqNames.get(0);
 
         int n = readNames.size();
@@ -414,7 +414,7 @@ public class BamReader {
     }
 
     /**
-     * First-call samtools availability probe (Binding Decision §135).
+     * First-call samtools availability probe ().
      *
      * <p>We deliberately do NOT memoise a "missing" result: if samtools
      * was missing on a previous call but later installed, the next

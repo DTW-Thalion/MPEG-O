@@ -72,7 +72,7 @@ public final class Hdf5Provider implements StorageProvider {
         return new Hdf5GroupAdapter(file.rootGroup(), /*ownsNative=*/true);
     }
 
-    /** v0.7 M44: wrap a raw {@link Hdf5Group} in the provider adapter
+    /** wrap a raw {@link Hdf5Group} in the provider adapter
      *  so callers holding the low-level handle (AcquisitionRun,
      *  SpectralDataset) can hand it off as a protocol
      *  {@link StorageGroup}. The adapter does <b>not</b> take ownership
@@ -84,7 +84,7 @@ public final class Hdf5Provider implements StorageProvider {
         return new Hdf5GroupAdapter(group, /*ownsNative=*/false);
     }
 
-    /** v0.7 M44: wrap a raw {@link Hdf5Dataset} as a protocol
+    /** wrap a raw {@link Hdf5Dataset} as a protocol
      *  {@link StorageDataset}. Same non-owning semantics as
      *  {@link #adapterForGroup}.
      *
@@ -165,7 +165,7 @@ public final class Hdf5Provider implements StorageProvider {
                 return new Hdf5CompoundDatasetAdapter(delegate, name, schema, len);
             }
             Hdf5Dataset ds = delegate.openDataset(name);
-            // v0.7 M45: if the group carries a @__shape_<name>__
+            // if the group carries a @__shape_<name>__
             // attribute, it's a flattened N-D dataset — reconstruct
             // the shape for the adapter.
             long[] ndShape = null;
@@ -206,12 +206,12 @@ public final class Hdf5Provider implements StorageProvider {
             return new Hdf5DatasetAdapter(ds, name);
         }
 
-        /** v0.7 M45: N-D datasets. Stored as a flat 1-D HDF5 dataset
+        /** N-D datasets. Stored as a flat 1-D HDF5 dataset
          *  plus a {@code @shape_json} attribute recording the original
          *  rank and per-axis lengths. This matches the SqliteProvider
          *  layout so canonical bytes stay bit-identical across
          *  backends; native H5Screate_simple(rank, dims, null) storage
-         *  is a v0.8 optimisation (M44 MSImage refactor scope). */
+         *  is a v0.8 optimisation (MSImage refactor scope). */
         @Override
         public StorageDataset createDatasetND(String name, Precision precision,
                                                 long[] shape, long[] chunks,
@@ -345,14 +345,14 @@ public final class Hdf5Provider implements StorageProvider {
     static final class Hdf5DatasetAdapter implements StorageDataset {
         private final Hdf5Dataset delegate;
         private final String name;
-        private final long[] ndShape;  // v0.7 M45: null ⇒ 1-D
+        private final long[] ndShape;  // null ⇒ 1-D
         private final boolean ownsNative;
 
         Hdf5DatasetAdapter(Hdf5Dataset delegate, String name) {
             this(delegate, name, null, /*ownsNative=*/true);
         }
 
-        /** v0.7 M45: N-D variant. {@code ndShape} preserves the full
+        /** N-D variant. {@code ndShape} preserves the full
          *  rank through the adapter; the underlying HDF5 dataset is
          *  stored as a flat 1-D BLOB for maximum backend compatibility
          *  (matches SqliteProvider's layout). Full-rank HDF5
@@ -387,7 +387,7 @@ public final class Hdf5Provider implements StorageProvider {
         @Override public boolean hasAttribute(String n) {
             // M86: route through Hdf5Dataset's attribute API so the
             // codec-dispatch read path can probe @compression on the
-            // dataset itself (Binding Decision §86).
+            // dataset itself ().
             return delegate.hasAttribute(n);
         }
         @Override public Object getAttribute(String n) {
@@ -404,7 +404,7 @@ public final class Hdf5Provider implements StorageProvider {
         }
         @Override public void setAttribute(String n, Object v) {
             // M86: dataset-level @compression attribute is a uint8 by
-            // spec (Binding Decision §86). Numbers go through the
+            // spec (). Numbers go through the
             // uint8 writer; nulls delete.
             // M90.2: Strings (e.g. @ttio_signature) go through the
             // UTF-8 string writer added in Hdf5Dataset.

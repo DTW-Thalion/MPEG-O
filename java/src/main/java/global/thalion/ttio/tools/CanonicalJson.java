@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * v0.7 M51 — deterministic JSON formatter for cross-language compound
+ * — deterministic JSON formatter for cross-language compound
  * byte-parity. Output is byte-identical to
  * ``ttio.tools._canonical_json`` in Python and
  * {@code TTIOCanonicalJSON} in Objective-C.

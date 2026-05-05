@@ -1165,7 +1165,7 @@ public final class ZarrProvider implements StorageProvider {
                 yield out;
             }
             case UINT8 -> {
-                // v0.11 M79: byte channel — copy out unchanged.
+                // byte channel — copy out unchanged.
                 byte[] out = new byte[raw.length];
                 System.arraycopy(raw, 0, out, 0, raw.length);
                 yield out;
@@ -1205,7 +1205,7 @@ public final class ZarrProvider implements StorageProvider {
                 for (int i = 0; i < totalElems; i++) bb.putInt(a[i]);
             }
             case UINT8 -> {
-                // v0.11 M79: byte channel — single-byte writes are
+                // byte channel — single-byte writes are
                 // endian-neutral.
                 byte[] a = (byte[]) data;
                 for (int i = 0; i < totalElems; i++) bb.put(a[i]);
