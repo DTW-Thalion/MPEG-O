@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,19 +260,105 @@
         </blockquote>
         <div class="desc">
           
-          Sequential reader for an MS run stored inside an
-          `.tio` file. Internally wraps an TTIOAcquisitionRun
-          read-back;
           
-            -nextSpectrum:
-          
+        </p>
+        <p>
 
-          advances a position counter and returns spectra one
-          at a time via the existing hyperslab path. Suitable for
-          streaming through runs larger than memory. API
-          status: Stable. Cross-language equivalents: Python:
-          ttio.stream_reader.StreamReader
-          Java: global.thalion.ttio.StreamReader
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Query/TTIOStreamReader.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Sequential reader for an MS run stored inside a
+            <code>.tio</code> file. Internally wraps a
+            <code>TTIOAcquisitionRun</code> read-back;
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamReader-nextSpectrumWithError$">
+                -nextSpectrumWithError:
+              </a>
+
+            </code>
+            advances a position counter and returns spectra
+            one at a time via the existing hyperslab path, making
+            it suitable for streaming through runs larger than
+            memory.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The reader holds the file open until
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamReader-close">
+                -close
+              </a>
+
+            </code>
+            is sent. Callers may inspect
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamReader-totalCount">
+                -totalCount
+              </a>
+
+            </code>
+            and
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamReader-currentPosition">
+                -currentPosition
+              </a>
+
+            </code>
+            to drive progress UIs, or call
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamReader-reset">
+                -reset
+              </a>
+
+            </code>
+            to restart from the first spectrum.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.stream_reader.StreamReader</code> <br />
+            Java: <code>global.thalion.ttio.StreamReader</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -293,7 +379,9 @@
         - (BOOL) <b>atEnd</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>YES</code> when the position has
+            advanced past the last spectrum; <code>NO</code>
+            otherwise.
           
         </div>
         <hr class="method-separator">
@@ -303,7 +391,15 @@
         - (void) <b>close</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Releases the underlying file handle and run
+            reference. Subsequent calls to
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamReader-nextSpectrumWithError$">
+                -nextSpectrumWithError:
+              </a>
+
+            </code>
+            return <code>nil</code>.
           
         </div>
         <hr class="method-separator">
@@ -324,7 +420,17 @@
         - (instancetype) <b>initWithFilePath:</b> (NSString*)path<b> runName:</b> (NSString*)runName<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Opens <code><var>path</var></code> read-only and
+            prepares the named run for sequential read-back.
+            Returns <code>nil</code> on failure with
+            <code><var>error</var></code> populated. @param
+            <var>path</var> Absolute or relative <var>path</var>
+            to an existing <code>.tio</code> file. @param
+            <var>runName</var> Run group name inside the file
+            (for example <code>@&quot;run_0001&quot;</code>). @param
+            <var>error</var> Out-parameter populated on failure.
+            @return An initialised reader positioned at index
+            <code>0</code>, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -334,7 +440,13 @@
         - (<a rel="gsdoc" href="TTIOMassSpectrum.html#class$TTIOMassSpectrum">TTIOMassSpectrum</a>*) <b>nextSpectrumWithError:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Materialises and returns the spectrum at
+            <code>currentPosition</code>, then advances by one.
+            Returns <code>nil</code> when the iterator has
+            reached the end or on read failure. @param
+            <var>error</var> Out-parameter populated on read
+            failure. @return The next mass spectrum, or
+            <code>nil</code> at end of run or on failure.
           
         </div>
         <hr class="method-separator">
@@ -344,7 +456,8 @@
         - (void) <b>reset</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Repositions the iterator to the start of the
+            run.
           
         </div>
         <hr class="method-separator">

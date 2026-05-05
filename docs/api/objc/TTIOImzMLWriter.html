@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -273,7 +273,39 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOImzMLWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Pure value object describing a successful imzML +.ibd
+            write: output paths, UUID, mode, and pixel count.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -355,7 +387,79 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOImzMLWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            imzML +.ibd exporter. Reverses
+            <code>TTIOImzMLReader</code> : takes a list of pixel
+            spectra plus grid metadata and emits the canonical
+            paired.imzML /.ibd files. Both continuous mode
+            (shared m/z axis, per-pixel intensity arrays) and
+            processed mode (per-pixel m/z + intensity arrays)
+            are supported.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The emitted XML uses the canonical IMS accessions (
+            <code>IMS:1000080</code> for UUID,
+            <code>IMS:1000042/43</code> for max counts) that
+            real-world imzML files like the pyimzML test
+            corpus use. Output passes pyimzml&apos;s
+            <code>ImzMLParser</code> and round-trips through
+            <code>TTIOImzMLReader</code> bit-identically.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.exporters.imzml</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.exporters.ImzMLWriter
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -371,8 +475,16 @@
         + (<a rel="gsdoc" href="#class$TTIOImzMLWriteResult">TTIOImzMLWriteResult</a>*) <b>writeFromImport:</b> (<a rel="gsdoc" href="TTIOImzMLReader.html#class$TTIOImzMLImport">TTIOImzMLImport</a>*)import<b> toImzMLPath:</b> (NSString*)imzmlPath<b> ibdPath:</b> (NSString*)ibdPath<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Round-trip helper: re-emit an TTIOImzMLImport to
-            disk.
+            Round-trip helper: re-emits a
+            <code>TTIOImzMLImport</code> to disk. @param
+            <var>import</var> Import value object previously
+            produced by the reader. @param
+            <var>imzmlPath</var> Destination.imzML path. @param
+            <var>ibdPath</var> Optional explicit.ibd path;
+            <code>nil</code> derives by extension swap. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return Write result on success, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

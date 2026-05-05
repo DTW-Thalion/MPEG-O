@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -255,17 +255,60 @@
         typedef NS_ENUM(NSInteger) TTIOJcampDxEncoding;<br />
         <div class="desc">
           
-          JCAMP-DX 5.01 `##XYDATA=(X++(Y..Y))` encoding modes
-          supported by `TTIOJcampDxWriter`. `AFFN` emits one
-          free-format (X, Y) pair per line &#8212; the default
-          and the only mode available prior to M76. `PAC` / `SQZ` /
-          `DIF` emit the JCAMP-DX 5.01 &#167;5.9 compressed forms;
-          equispaced X is required and a shared YFACTOR is
-          chosen to carry ~7 significant digits of
-          integer-scaled Y precision. Cross-language
-          equivalents: Java:
-          global.thalion.ttio.exporters.JcampDxEncoding
-          Python: encoding=&quot;...&quot; keyword on write_*_spectrum
+          
+        </p>
+        <p>
+
+            <em>Type:</em> NS_ENUM (NSInteger)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOJcampDxEncoding.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            JCAMP-DX 5.01 <code>##XYDATA=(X++(Y..Y))</code>
+            encoding modes supported by
+            <code>TTIOJcampDxWriter</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <code>AFFN</code> emits one free-format (X, Y) pair
+            per line and is the default. <code>PAC</code> /
+            <code>SQZ</code> / <code>DIF</code> emit the
+            JCAMP-DX 5.01 &#167;5.9 compressed forms; equispaced X
+            is required and a shared YFACTOR is chosen to carry
+            approximately seven significant digits of
+            integer-scaled Y precision.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.exporters.JcampDxEncoding
+            </code>
+            <br /> Python: <code>encoding=&quot;...&quot;</code> keyword
+            on <code>write_*_spectrum</code>
+                  </p>
+        <p>
+          
           
           <dl>
             <dt><em>TTIOJcampDxEncodingAFFN</em></dt>

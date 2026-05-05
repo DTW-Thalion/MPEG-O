@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,19 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          JCAMP-DX 5.01 reader for 1-D vibrational and UV-Vis
-          spectra. Dispatches on `##DATA TYPE=` to return one
-          of TTIORamanSpectrum, TTIOIRSpectrum, or
-          TTIOUVVisSpectrum; unknown data types
-          return <code>nil</code> with an error. Accepts both
-          dialects of `##XYDATA=(X++(Y..Y))`: - AFFN (fast
-          path) &#8212; one (X, Y) pair per line, free-format decimals.
-          - PAC / SQZ / DIF / DUP &#8212; JCAMP-DX 5.01 &#167;5.9
-          character-encoded Y-stream (delegated to
-          TTIOJcampDxDecode). Requires FIRSTX /
-          LASTX / NPOINTS. Cross-language equivalents: Python:
-          ttio.importers.jcamp_dx.read_spectrum
-          Java: global.thalion.ttio.importers.JcampDxReader
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -287,8 +275,16 @@
         + (<a rel="gsdoc" href="TTIOSpectrum.html#class$TTIOSpectrum">TTIOSpectrum</a>*) <b>readSpectrumFromPath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Returns TTIORamanSpectrum, TTIOIRSpectrum,
-            TTIOUVVisSpectrum, or <code>nil</code>.
+            Reads a JCAMP-DX file and returns the appropriate
+            concrete spectrum subclass. @param <var>path</var>
+            Filesystem <var>path</var> to a JCAMP-DX 5.01
+            document. @param <var>error</var> Out-parameter
+            populated when the data type is unrecognised or
+            the file is malformed. @return A
+            <code>TTIORamanSpectrum</code>,
+            <code>TTIOIRSpectrum</code>, or
+            <code>TTIOUVVisSpectrum</code>, or <code>nil</code>
+            on failure.
           
         </div>
         <hr class="method-separator">

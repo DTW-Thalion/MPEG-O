@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -267,20 +267,74 @@
         </blockquote>
         <div class="desc">
           
-          In-memory storage provider. URLs look like
-          ``memory://&lt;name&gt;``; opening
-          the same name twice returns the same tree until
-          <a rel="gsdoc" href="#method$TTIOMemoryProvider+discardStore$">
-            +discardStore:
-          </a>
+          
+        </p>
+        <p>
 
-          clears it. Exists alongside TTIOHDF5Provider to prove
-          the abstraction works &#8212; if upper layers read/write
-          identically through both, the protocol contract
-          is correct. API status: Stable (Provisional per M39 &#8212; may
-          change before v1.0). Cross-language equivalents:
-          Python: ttio.providers.memory.MemoryProvider Java:
-          global.thalion.ttio.providers.MemoryProvider
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> TTIOStorageProvider, NSObject
+            (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Providers/TTIOMemoryProvider.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            In-memory storage provider. URLs look like
+            <code>memory://&lt;name&gt;</code>; opening the same
+            name twice returns the same tree until
+            <code>
+              <a rel="gsdoc" href="#method$TTIOMemoryProvider+discardStore$">
+                +discardStore:
+              </a>
+
+            </code>
+            clears it. Exists alongside
+            <code>TTIOHDF5Provider</code> to prove the
+            abstraction works &#8212; if upper layers read
+            and write identically through both, the protocol
+            contract is correct.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.providers.memory.MemoryProvider</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.providers.MemoryProvider
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -295,7 +349,9 @@
         + (void) <b>discardStore:</b> (NSString*)url;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Drops the named in-memory store. Subsequent opens of
+            the same URL see a fresh empty tree. @param
+            <var>url</var> Memory URL of the store to discard.
           
         </div>
         <hr class="method-separator">

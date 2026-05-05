@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,14 +261,77 @@
         </blockquote>
         <div class="desc">
           
-          Write-side container for a single genomic run,
-          passed to +[TTIOSpectralDataset
-          writeMinimalToPath:...genomicRuns:...].
-          Genomic analogue of TTIOWrittenRun. Pure data &#8212; no
-          methods beyond accessors and the designated
-          initializer. Cross-language equivalents: Python:
-          ttio.written_genomic_run.WrittenGenomicRun
-          Java: global.thalion.ttio.genomics.WrittenGenomicRun
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Genomics/TTIOWrittenGenomicRun.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Write-side container for a single genomic run,
+            passed to
+            <code>
+              +[TTIOSpectralDataset
+              writeMinimalToPath:...genomicRuns:...]
+            </code>
+            . Genomic analogue of <code>TTIOWrittenRun</code>. Pure
+            data &#8212; no methods beyond accessors and the designated
+            initialisers.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The class holds parallel C-array buffers (positions,
+            mapping qualities, flags, sequences, qualities,
+            offsets, lengths, mate positions, template
+            lengths) plus per-read variable-length string
+            arrays (cigars, read names, mate chromosomes,
+            chromosomes). The writer materialises these
+            into the on-disk channel layout described in
+            <code>docs/format-spec.md</code> &#167;10.4-&#167;10.10.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>
+              ttio.written_genomic_run.WrittenGenomicRun
+            </code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.genomics.WrittenGenomicRun
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -344,7 +407,7 @@
             Getter for property &apos;embedReference&apos; with attributes
             (readwrite, nonatomic, assign). See also
             <a rel="gsdoc" href="#method$TTIOWrittenGenomicRun-setEmbedReference$">[TTIOWrittenGenomicRun -setEmbedReference:]</a>
-
+ When <code>YES</code> (default) and a context-aware codec is selected on the <code>sequences</code> channel, the writer embeds the chromosome sequences supplied in <code>referenceChromSeqs</code> at <code>/study/references/&lt;referenceUri&gt;/</code>.
           
         </div>
         <hr class="method-separator">
@@ -365,7 +428,9 @@
         - (instancetype) <b>initWithAcquisitionMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOAcquisitionMode">TTIOAcquisitionMode</a>)mode<b> referenceUri:</b> (NSString*)referenceUri<b> platform:</b> (NSString*)platform<b> sampleName:</b> (NSString*)sampleName<b> positions:</b> (NSData*)positions<b> mappingQualities:</b> (NSData*)mappingQualities<b> flags:</b> (NSData*)flags<b> sequences:</b> (NSData*)sequences<b> qualities:</b> (NSData*)qualities<b> offsets:</b> (NSData*)offsets<b> lengths:</b> (NSData*)lengths<b> cigars:</b> (NSArray<NSString*>*)cigars<b> readNames:</b> (NSArray<NSString*>*)readNames<b> mateChromosomes:</b> (NSArray<NSString*>*)mateChromosomes<b> matePositions:</b> (NSData*)matePositions<b> templateLengths:</b> (NSData*)templateLengths<b> chromosomes:</b> (NSArray<NSString*>*)chromosomes<b> signalCompression:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOCompression">TTIOCompression</a>)signalCompression;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience initialiser without per-channel
+            codec overrides; delegates to the designated
+            initialiser with an empty overrides dictionary.
           
         </div>
         <hr class="method-separator">
@@ -375,8 +440,8 @@
         - (instancetype) <b>initWithAcquisitionMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOAcquisitionMode">TTIOAcquisitionMode</a>)mode<b> referenceUri:</b> (NSString*)referenceUri<b> platform:</b> (NSString*)platform<b> sampleName:</b> (NSString*)sampleName<b> positions:</b> (NSData*)positions<b> mappingQualities:</b> (NSData*)mappingQualities<b> flags:</b> (NSData*)flags<b> sequences:</b> (NSData*)sequences<b> qualities:</b> (NSData*)qualities<b> offsets:</b> (NSData*)offsets<b> lengths:</b> (NSData*)lengths<b> cigars:</b> (NSArray<NSString*>*)cigars<b> readNames:</b> (NSArray<NSString*>*)readNames<b> mateChromosomes:</b> (NSArray<NSString*>*)mateChromosomes<b> matePositions:</b> (NSData*)matePositions<b> templateLengths:</b> (NSData*)templateLengths<b> chromosomes:</b> (NSArray<NSString*>*)chromosomes<b> signalCompression:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOCompression">TTIOCompression</a>)signalCompression<b> signalCodecOverrides:</b> (NSDictionary<NSString*,NSNumber*>*)signalCodecOverrides;<br />
         <div class="desc">
           
-            M86: same as the 17-arg initialiser plus per-channel
-            codec overrides.
+            Designated initialiser including the per-channel
+            codec overrides dictionary.
           
         </div>
         <hr class="method-separator">
@@ -467,7 +532,7 @@
             attributes (readwrite, nonatomic, copy). See
             also
             <a rel="gsdoc" href="#method$TTIOWrittenGenomicRun-setProvenanceRecords$">[TTIOWrittenGenomicRun -setProvenanceRecords:]</a>
-
+ Per-run provenance records. Persisted under <code>&lt;run&gt;/provenance/steps</code> by the writer; read back via <code>-[TTIOGenomicRun provenanceChain]</code>. Defaults to an empty array.
           
         </div>
         <hr class="method-separator">
@@ -546,7 +611,7 @@
             Setter for property &apos;embedReference&apos; with attributes
             (readwrite, nonatomic, assign). See also
             <a rel="gsdoc" href="#method$TTIOWrittenGenomicRun-embedReference">[TTIOWrittenGenomicRun -embedReference]</a>
-
+ When <code>YES</code> (default) and a context-aware codec is selected on the <code>sequences</code> channel, the writer embeds the chromosome sequences supplied in <code>referenceChromSeqs</code> at <code>/study/references/&lt;referenceUri&gt;/</code>.
           
         </div>
         <hr class="method-separator">
@@ -560,7 +625,7 @@
             attributes (readwrite, nonatomic, copy). See
             also
             <a rel="gsdoc" href="#method$TTIOWrittenGenomicRun-provenanceRecords">[TTIOWrittenGenomicRun -provenanceRecords]</a>
-
+ Per-run provenance records. Persisted under <code>&lt;run&gt;/provenance/steps</code> by the writer; read back via <code>-[TTIOGenomicRun provenanceChain]</code>. Defaults to an empty array.
           
         </div>
         <hr class="method-separator">

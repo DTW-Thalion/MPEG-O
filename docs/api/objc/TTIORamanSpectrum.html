@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,12 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          1-D Raman spectrum: wavenumber (cm^-1) + intensity arrays
-          plus excitation laser wavelength, laser power, and
-          detector integration time. Cross-language
-          equivalents: Java:
-          global.thalion.ttio.RamanSpectrum
-          Python: ttio.raman_spectrum.RamanSpectrum
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -296,7 +291,18 @@
         - (instancetype) <b>initWithWavenumberArray:</b> (<a rel="gsdoc" href="TTIOSignalArray.html#class$TTIOSignalArray">TTIOSignalArray</a>*)wavenumbers<b> intensityArray:</b> (<a rel="gsdoc" href="TTIOSignalArray.html#class$TTIOSignalArray">TTIOSignalArray</a>*)intensity<b> excitationWavelengthNm:</b> (double)excitationNm<b> laserPowerMw:</b> (double)laserPowerMw<b> integrationTimeSec:</b> (double)integrationTime<b> indexPosition:</b> (NSUInteger)indexPosition<b> scanTimeSeconds:</b> (double)scanTime<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>wavenumbers</var> Wavenumber values. @param
+            <var>intensity</var> Intensity values; same length.
+            @param <var>excitationNm</var> Excitation wavelength
+            in nm. @param <var>laserPowerMw</var> Laser power in mW.
+            @param <var>integrationTime</var> Detector
+            integration time in seconds. @param
+            <var>indexPosition</var> Position in parent run.
+            @param <var>scanTime</var> Scan time in seconds.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return An initialised spectrum, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,24 +260,71 @@
         </blockquote>
         <div class="desc">
           
-          Compound-type persistence helpers for TTI-O
-          v0.2+ on-disk format. These helpers write and read
-          native HDF5 compound datasets that replace the v0.1
-          JSON-encoded string attributes. v0.1 files
-          (detected by the absence of @ttio_features on the
-          root) are read via the old JSON path; v0.2+ writers
-          always emit compound datasets and tag the root with
-          the appropriate feature flag. All functions use
-          variable-length C strings inside the compound
-          records so h5dump can visualize them directly and
-          external tools that understand compound types can
-          introspect without a bespoke reader. API status:
-          Stable (internal helper). Cross-language equivalents:
-          Python: ttio._hdf5_io (private helper module) Java:
-          global.thalion.ttio.hdf5.Hdf5CompoundIO
-          Each language exposes these differently due to HDF5
-          binding shapes; see docs/api-review-v0.6.md for the
-          documented stylistic difference.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOCompoundIO.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Compound-type persistence helpers for the
+            on-disk format. Writes and reads native HDF5
+            compound datasets that hold identifications,
+            quantifications, provenance records, and
+            the optional <code>spectrum_index/headers</code>
+            compound. Variable- length C strings are used
+            inside the records so <code>h5dump</code> can
+            visualise the rows directly.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The class also provides a generic schema-driven writer
+            / reader (
+            <code>
+              <a rel="gsdoc" href="#method$TTIOCompoundIO+writeGeneric$intoGroup$datasetNamed$fields$error$">+writeGeneric:intoGroup:datasetNamed:fields:error:</a>
+
+            </code>
+            ) used by the storage-provider adapter layer.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable (internal
+            helper).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio._hdf5_io</code> (private
+            helper module) <br /> Java:
+            <code>global.thalion.ttio.hdf5.Hdf5CompoundIO</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -301,13 +348,17 @@
         + (NSDictionary*) <b>readCompoundHeaderRow:</b> (NSUInteger)row<b> fromGroup:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Verify the compound headers dataset exists and
-            returns <var>row</var> i as an NSDictionary
-            {offset, length, retention_time, ms_level,
-            polarity, precursor_mz, precursor_charge,
-            base_peak_intensity}. Used only by
-            tests; main query paths still use the parallel
-            datasets.
+            Reads a single header <var>row</var> from the
+            compound dataset. @param <var>row</var> Zero-based
+            <var>row</var> index. @param <var>parent</var> Parent
+            group containing <code>spectrum_index/</code>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return Dictionary keyed by field name (
+            <code>offset</code>, <code>length</code>,
+            <code>retention_time</code>, <code>ms_level</code>,
+            <code>polarity</code>, <code>precursor_mz</code>,
+            <code>precursor_charge</code>,
+            <code>base_peak_intensity</code>).
           
         </div>
         <hr class="method-separator">
@@ -317,8 +368,8 @@
         + (NSArray<NSDictionary*>*) <b>readGenericFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> fields:</b> (NSArray<TTIOCompoundField*>*)fields<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Read an existing compound dataset, returning rows as
-            NSDictionary keyed by field <var>name</var>.
+            Reads a compound dataset, returning rows as
+            dictionaries keyed by field <var>name</var>.
           
         </div>
         <hr class="method-separator">
@@ -328,7 +379,12 @@
         + (NSArray<TTIOIdentification*>*) <b>readIdentificationsFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads identifications previously written by
+            <code>
+              <a rel="gsdoc" href="#method$TTIOCompoundIO+writeIdentifications$intoGroup$datasetNamed$error$">+writeIdentifications:intoGroup:datasetNamed:error:</a>
+
+            </code>
+            .
           
         </div>
         <hr class="method-separator">
@@ -338,7 +394,7 @@
         + (NSArray<TTIOProvenanceRecord*>*) <b>readProvenanceFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads provenance records.
           
         </div>
         <hr class="method-separator">
@@ -348,7 +404,7 @@
         + (NSArray<TTIOQuantification*>*) <b>readQuantificationsFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads quantifications.
           
         </div>
         <hr class="method-separator">
@@ -358,12 +414,12 @@
         + (BOOL) <b>writeCompoundHeadersForIndex:</b> (<a rel="gsdoc" href="TTIOSpectrumIndex.html#class$TTIOSpectrumIndex">TTIOSpectrumIndex</a>*)index<b> intoGroup:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Writes a single compound `headers` dataset alongside
-            the existing parallel 1-D datasets under
-            `spectrum_index/`. Purely additive; read
-            path still uses the parallel arrays. This dataset
-            exists primarily for external tooling / h5dump
-            readability.
+            Writes a <code>headers</code> compound dataset
+            alongside the existing parallel 1-D datasets
+            under <code>spectrum_index/</code>. Purely additive;
+            the read path still uses the parallel arrays. Exists
+            primarily for external-tool readability (
+            <code>h5dump</code>, schema-aware viewers).
           
         </div>
         <hr class="method-separator">
@@ -373,9 +429,16 @@
         + (BOOL) <b>writeGeneric:</b> (NSArray<NSDictionary*>*)rows<b> intoGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> fields:</b> (NSArray<TTIOCompoundField*>*)fields<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Write an array of <var>rows</var> (each NSDictionary
-            keyed by field <var>name</var>) into a compound
-            dataset with the given schema.
+            Writes an array of dictionary <var>rows</var> into a
+            compound dataset with the given schema. @param
+            <var>rows</var> Rows; each <code>NSDictionary</code>
+            keyed by field <var>name</var>. @param
+            <var>parent</var> Destination <var>parent</var>
+            group. @param <var>name</var> Dataset
+            <var>name</var>. @param <var>fields</var> Schema
+            definition. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -385,7 +448,8 @@
         + (BOOL) <b>writeIdentifications:</b> (NSArray<TTIOIdentification*>*)idents<b> intoGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes identifications as a compound dataset under
+            <code>parent/name</code>.
           
         </div>
         <hr class="method-separator">
@@ -395,7 +459,8 @@
         + (BOOL) <b>writeProvenance:</b> (NSArray<TTIOProvenanceRecord*>*)records<b> intoGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes provenance <var>records</var> as a compound
+            dataset.
           
         </div>
         <hr class="method-separator">
@@ -405,7 +470,7 @@
         + (BOOL) <b>writeQuantifications:</b> (NSArray<TTIOQuantification*>*)quants<b> intoGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> datasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes quantifications as a compound dataset.
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -273,7 +273,40 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOMzTabWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Pure value object describing a successful mzTab write:
+            output path, mzTab version, and per-section row
+            counts.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -391,7 +424,65 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOMzTabWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            mzTab exporter. Reverses <code>TTIOMzTabReader</code>
+            : takes identifications + quantifications (plus optional
+            features) and emits a mzTab file. Supports both
+            proteomics (<code>1.0</code>, PSH/PSM + PRH/PRT
+            + PEH/PEP sections) and metabolomics (
+            <code>2.0.0-M</code>, SMH/SML + SFH/SMF + SEH/SME)
+            dialects.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.exporters.mztab</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.exporters.MzTabWriter
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -407,7 +498,20 @@
         + (<a rel="gsdoc" href="#class$TTIOMzTabWriteResult">TTIOMzTabWriteResult</a>*) <b>writeToPath:</b> (NSString*)path<b> identifications:</b> (NSArray<TTIOIdentification*>*)idents<b> quantifications:</b> (NSArray<TTIOQuantification*>*)quants<b> features:</b> (NSArray<TTIOFeature*>*)features<b> version:</b> (NSString*)version<b> title:</b> (NSString*)title<b> description:</b> (NSString*)description<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Features-aware writer (M78).
+            Features-aware writer. @param
+            <var>path</var> Output mzTab <var>path</var>. @param
+            <var>idents</var> Identifications to emit (may be
+            <code>nil</code>). @param <var>quants</var>
+            Quantifications to emit (may be
+            <code>nil</code>). @param <var>features</var>
+            Features to emit (may be <code>nil</code>). @param
+            <var>version</var> mzTab <var>version</var>. @param
+            <var>title</var> Optional dataset <var>title</var>.
+            @param <var>description</var> Optional dataset
+            <var>description</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            Write result on success, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -417,8 +521,21 @@
         + (<a rel="gsdoc" href="#class$TTIOMzTabWriteResult">TTIOMzTabWriteResult</a>*) <b>writeToPath:</b> (NSString*)path<b> identifications:</b> (NSArray<TTIOIdentification*>*)idents<b> quantifications:</b> (NSArray<TTIOQuantification*>*)quants<b> version:</b> (NSString*)version<b> title:</b> (NSString*)title<b> description:</b> (NSString*)description<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Backwards-compat &#8212; writes without
-            features.
+            Backwards-compatible writer that omits
+            features. @param <var>path</var> Output mzTab
+            <var>path</var>. @param <var>idents</var>
+            Identifications to emit (may be
+            <code>nil</code>). @param <var>quants</var>
+            Quantifications to emit (may be
+            <code>nil</code>). @param <var>version</var> mzTab
+            <var>version</var> (<code>&quot;1.0&quot;</code> or
+            <code>&quot;2.0.0-M&quot;</code>). @param <var>title</var>
+            Optional dataset <var>title</var>. @param
+            <var>description</var> Optional dataset
+            <var>description</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            Write result on success, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,18 +261,71 @@
         </blockquote>
         <div class="desc">
           
-          Provider registry singleton. Providers self-register
-          via +load
-. Callers
-          resolve by explicit name or URL scheme. API status:
-          Stable (Provisional per M39 &#8212; may change before v1.0).
-          Cross-language equivalents: Python:
-          ttio.providers &#8212; module-level functions
-          (discover_providers, open_provider,
-          register_provider) &#8212; idiomatic for Python
-          packaging. Java:
-          global.thalion.ttio.providers.ProviderRegistry
-          class
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Providers/TTIOProviderRegistry.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Provider registry singleton. Concrete providers
+            self-register via
+            <code>
+              
+                +load
+              
+
+            </code>
+            . Callers resolve a provider by explicit name or by URL
+            scheme.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.providers</code> &#8212;
+            module-level <code>discover_providers</code>,
+            <code>open_provider</code>,
+            <code>register_provider</code> (idiomatic for Python
+            packaging). <br /> Java:
+            <code>
+              global.thalion.ttio.providers.ProviderRegistry
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -290,7 +343,7 @@
         + (instancetype) <b>sharedRegistry</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return The shared registry instance.
           
         </div>
         <hr class="method-separator">
@@ -300,7 +353,8 @@
         - (NSArray<NSString*>*) <b>knownProviderNames</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Names of all currently registered
+            providers.
           
         </div>
         <hr class="method-separator">
@@ -310,10 +364,14 @@
         - (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageProvider)">TTIOStorageProvider</a>>) <b>openURL:</b> (NSString*)url<b> mode:</b> (<a rel="gsdoc" href="TTIOStorageProtocols.html#type$TTIOStorageOpenMode">TTIOStorageOpenMode</a>)mode<b> provider:</b> (NSString*)providerName<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Open a provider for a URL or bare path.
-            ``providerName`` overrides scheme
-            detection when non-nil. Returns <code>nil</code>
-            with *error set on failure.
+            Opens a provider for a URL or bare path. @param
+            <var>url</var> URL or filesystem path. @param
+            <var>mode</var> Open <var>mode</var>. @param
+            <var>providerName</var> Optional explicit provider
+            name; overrides scheme detection when non-
+            <code>nil</code>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            An opened provider, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -323,7 +381,20 @@
         - (void) <b>registerProviderClass:</b> (Class)providerClass<b> forName:</b> (NSString*)name;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Registers a provider class under the given
+            <var>name</var>. Subsequent
+            <code>
+              <a rel="gsdoc" href="#method$TTIOProviderRegistry-openURL$mode$provider$error$">
+                -openURL:mode:provider:error:
+              </a>
+
+            </code>
+            calls naming this provider, or matching its supported
+            URL scheme, dispatch to it. @param
+            <var>providerClass</var> Provider class conforming to
+            <code>TTIOStorageProvider</code>. @param
+            <var>name</var> Short <var>name</var> (e.g.
+            <code>@&quot;hdf5&quot;</code>, <code>@&quot;memory&quot;</code>).
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,16 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          1-D mid-IR spectrum: wavenumber (cm^-1) + either
-          transmittance or absorbance array, the mode
-          enum that disambiguates them, a spectral resolution in
-          cm^-1, and an optional scan count (FTIR averaging).
-          The second signal array is always named `&quot;intensity&quot;` in
-          the HDF5 layout regardless of mode; the `mode` attribute
-          tells a reader how to interpret the values.
-          Cross-language equivalents: Java:
-          global.thalion.ttio.IRSpectrum
-          Python: ttio.ir_spectrum.IRSpectrum
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -289,7 +280,18 @@
         - (instancetype) <b>initWithWavenumberArray:</b> (<a rel="gsdoc" href="TTIOSignalArray.html#class$TTIOSignalArray">TTIOSignalArray</a>*)wavenumbers<b> intensityArray:</b> (<a rel="gsdoc" href="TTIOSignalArray.html#class$TTIOSignalArray">TTIOSignalArray</a>*)intensity<b> mode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOIRMode">TTIOIRMode</a>)mode<b> resolutionCmInv:</b> (double)resolutionCmInv<b> numberOfScans:</b> (NSUInteger)numberOfScans<b> indexPosition:</b> (NSUInteger)indexPosition<b> scanTimeSeconds:</b> (double)scanTime<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>wavenumbers</var> Wavenumber values. @param
+            <var>intensity</var> Intensity values per
+            <code><var>mode</var></code>. @param <var>mode</var>
+            Transmittance or absorbance. @param
+            <var>resolutionCmInv</var> Spectral resolution.
+            @param <var>numberOfScans</var> Accumulated-scan
+            count. @param <var>indexPosition</var> Position in
+            parent run. @param <var>scanTime</var> Scan time in
+            seconds. @param <var>error</var> Out-parameter
+            populated on failure. @return An initialised
+            spectrum, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

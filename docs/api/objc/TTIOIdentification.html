@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,16 +261,77 @@
         </blockquote>
         <div class="desc">
           
-          Links a spectrum (by its 0-based index within an
-          acquisition run) to a chemical entity
-          identification, with a confidence score and
-          an evidence chain represented as an ordered list of
-          free-form strings (typically CV accession
-          references such as &quot;MS:1002217 search engine
-          specific score&quot;). API status: Stable. Cross-language
-          equivalents: Python:
-          ttio.identification.Identification
-          Java: global.thalion.ttio.Identification
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOIdentification.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Links a spectrum (by its zero-based index within an
+            acquisition run) to a chemical-entity
+            identification, with a confidence score and
+            an evidence chain. The evidence chain is an ordered list
+            of free-form strings &#8212; typically CV accession references
+            such as
+            <code>
+              @&quot;MS:1002217 search engine specific score&quot;
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Persisted as a row in the
+            <code>/study/identifications</code> compound
+            dataset.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.identification.Identification</code>
+            <br /> Java:
+            <code>global.thalion.ttio.Identification</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -292,7 +353,15 @@
         + (instancetype) <b>fromPlist:</b> (NSDictionary*)plist;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>plist</var> Plist representation
+            produced by
+            <code>
+              <a rel="gsdoc" href="#method$TTIOIdentification-asPlist">
+                -asPlist
+              </a>
+
+            </code>
+            . @return The reconstructed identification.
           
         </div>
         <hr class="method-separator">
@@ -302,7 +371,8 @@
         - (NSDictionary*) <b>asPlist</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Plist-friendly dictionary representation
+            suitable for legacy-attribute serialisation.
           
         </div>
         <hr class="method-separator">
@@ -345,7 +415,14 @@
         - (instancetype) <b>initWithRunName:</b> (NSString*)runName<b> spectrumIndex:</b> (NSUInteger)spectrumIndex<b> chemicalEntity:</b> (NSString*)chemicalEntity<b> confidenceScore:</b> (double)score<b> evidenceChain:</b> (NSArray<NSString*>*)evidence;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>runName</var> Acquisition-run name. @param
+            <var>spectrumIndex</var> Spectrum position within the
+            run. @param <var>chemicalEntity</var> Identified
+            entity. @param <var>score</var> Confidence
+            <var>score</var>. @param <var>evidence</var> Ordered
+            <var>evidence</var> references. @return An
+            initialised identification.
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -272,9 +272,40 @@
         </blockquote>
         <div class="desc">
           
-          One SRM/MRM transition: precursor &#8594; product m/z with its
-          collision energy and an optional retention-time
-          window.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOTransitionList.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            One SRM/MRM transition: precursor &#8594; product m/z
+            with its collision energy and an optional
+            retention-time window.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -304,7 +335,7 @@
         - (instancetype) <b>initWithPrecursorMz:</b> (double)precursor<b> productMz:</b> (double)product<b> collisionEnergy:</b> (double)ce<b> retentionTimeWindow:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)window;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser.
           
         </div>
         <hr class="method-separator">
@@ -356,12 +387,53 @@
         </blockquote>
         <div class="desc">
           
-          Ordered list of TTIOTransition objects. Stored in the
-          dataset as a single JSON-encoded string attribute
-          under /study/transitions/. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.transition_list.TransitionList
-          Java: global.thalion.ttio.TransitionList
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOTransitionList.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Ordered list of <code>TTIOTransition</code>
+            objects. Stored in the dataset as a single
+            JSON-encoded string attribute under
+            <code>/study/transitions/</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.transition_list.TransitionList</code>
+            <br /> Java:
+            <code>global.thalion.ttio.TransitionList</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -381,7 +453,15 @@
         + (instancetype) <b>fromPlist:</b> (NSDictionary*)plist;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>plist</var> Plist representation
+            produced by
+            <code>
+              <a rel="gsdoc" href="#method$TTIOTransitionList-asPlist">
+                -asPlist
+              </a>
+
+            </code>
+            . @return The reconstructed transition list.
           
         </div>
         <hr class="method-separator">
@@ -391,7 +471,7 @@
         - (NSDictionary*) <b>asPlist</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Plist representation of the list.
           
         </div>
         <hr class="method-separator">
@@ -401,7 +481,7 @@
         - (NSUInteger) <b>count</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Number of transitions.
           
         </div>
         <hr class="method-separator">
@@ -411,7 +491,9 @@
         - (instancetype) <b>initWithTransitions:</b> (NSArray<TTIOTransition*>*)transitions;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>transitions</var> Ordered <var>transitions</var>
+            . @return An initialised transition list.
           
         </div>
         <hr class="method-separator">
@@ -421,7 +503,10 @@
         - (<a rel="gsdoc" href="#class$TTIOTransition">TTIOTransition</a>*) <b>transitionAtIndex:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>index</var> Zero-based position; must
+            satisfy <code><var>index</var> &lt; count</code>.
+            @return The transition at
+            <code><var>index</var></code>.
           
         </div>
         <hr class="method-separator">

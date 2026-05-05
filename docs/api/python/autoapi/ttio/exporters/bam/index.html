@@ -425,7 +425,7 @@ samtools’ file-format auto-detection (Gotcha §165).</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">samtools</span></code> binary is a runtime dependency. Construction
 succeeds without samtools on PATH; <a class="reference internal" href="#ttio.exporters.bam.BamWriter.write" title="ttio.exporters.bam.BamWriter.write"><code class="xref py py-meth docutils literal notranslate"><span class="pre">write()</span></code></a> raises
 <a class="reference internal" href="../../importers/bam/index.html#ttio.importers.bam.SamtoolsNotFoundError" title="ttio.importers.bam.SamtoolsNotFoundError"><code class="xref py py-class docutils literal notranslate"><span class="pre">SamtoolsNotFoundError</span></code></a> when samtools
-is missing at first call (Binding Decision §135 from M87).</p>
+is missing at first call (from M87).</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="ttio.exporters.bam.BamWriter.path">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span><a class="reference internal" href="../../../../_modules/ttio/exporters/bam.html#BamWriter.path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.exporters.bam.BamWriter.path" title="Link to this definition">¶</a></dt>
@@ -444,7 +444,7 @@ lines. If <code class="docutils literal notranslate"><span class="pre">None</spa
 so the most common Python-side call is one-arg. Java and
 ObjC pass this explicitly because their
 <code class="docutils literal notranslate"><span class="pre">WrittenGenomicRun</span></code> analogues don’t carry provenance.</p></li>
-<li><p><strong>sort</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em>, </em><em>default True</em>) – When <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default per Binding Decision §137),
+<li><p><strong>sort</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a><em>, </em><em>default True</em>) – When <code class="docutils literal notranslate"><span class="pre">True</span></code> (the default ),
 pipes the SAM text through <code class="docutils literal notranslate"><span class="pre">samtools</span> <span class="pre">sort</span> <span class="pre">-O</span> <span class="pre">bam</span></code> so
 the output BAM is coordinate-sorted (the precondition
 most BAM consumers expect — IGV, GATK, <code class="docutils literal notranslate"><span class="pre">samtools</span>

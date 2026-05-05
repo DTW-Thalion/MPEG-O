@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,27 +260,86 @@
         </blockquote>
         <div class="desc">
           
-          Mass-spectrometry imaging dataset: a width
-          x height grid of pixels, each pixel a spectral profile of
-          `spectralPoints` float64 values. As of v0.2
-          (Milestone 12), TTIOMSImage inherits from
-          TTIOSpectralDataset, so it carries
-          identifications, quantifications, provenance
-          records, and TTIOEncryptable / closeFile semantics
-          for free. The image cube itself is persisted under
-          `/study/image_cube/` as a 3-D HDF5
-          dataset with tile-aligned chunking. v0.1 layout (cube
-          at `/image_cube/` in the root group) remains readable as a
-          fallback via
           
-            +readFromFilePath:
-          
+        </p>
+        <p>
 
-          . Buffer layout (row-major): `cube[(y * width + x) *
-          spectralPoints + s]`. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.ms_image.MSImage Java:
-          global.thalion.ttio.MSImage
+            <em>Inherits From:</em> TTIOSpectralDataset : NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> TTIOEncryptable (inherited)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Image/TTIOMSImage.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Mass-spectrometry imaging dataset: a
+            <code>width &#215; height</code> grid of pixels,
+            each pixel a spectral profile of
+            <code>spectralPoints</code> float64 values. Inherits
+            from <code>TTIOSpectralDataset</code> so it carries
+            identifications, quantifications,
+            provenance records, and the
+            <code>TTIOEncryptable</code> /
+            <code>
+              <a rel="gsdoc" href="TTIOSpectralDataset.html#method$TTIOSpectralDataset-closeFile">
+                -closeFile
+              </a>
+
+            </code>
+            semantics for free.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The image cube is persisted under
+            <code>/study/image_cube/</code> as a 3-D HDF5
+            dataset with tile-aligned chunking. Buffer layout
+            is row-major:
+            <code>
+              cube[(y * width + x) * spectralPoints + s]
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.ms_image.MSImage</code>
+            <br /> Java:
+            <code>global.thalion.ttio.MSImage</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -306,9 +365,11 @@
         + (instancetype) <b>readFromFilePath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Override of TTIOSpectralDataset&apos;s read; falls back
-            to v0.1 `/image_cube/` if `/study/image_cube` is
-            missing.
+            Reads an MS image from <code><var>path</var></code>.
+            Auto-detects the canonical
+            <code>/study/image_cube/</code> layout and falls
+            back to the legacy root <code>/image_cube/</code>
+            <var>path</var> when the canonical group is absent.
           
         </div>
         <hr class="method-separator">
@@ -318,10 +379,13 @@
         + (NSData*) <b>readTileFromFilePath:</b> (NSString*)path<b> atX:</b> (NSUInteger)x<b> y:</b> (NSUInteger)y<b> width:</b> (NSUInteger)tileWidth<b> height:</b> (NSUInteger)tileHeight<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Read a `tileWidth <var>x</var> tileHeight` tile
-            starting at `(<var>x</var>, <var>y</var>)`.
-            Supports both the v0.2 /study/image_cube layout
-            and the v0.1 /image_cube layout by auto-detecting.
+            Reads a
+            <code>
+              <var>tileWidth</var> &#215; <var>tileHeight</var>
+            </code>
+            tile starting at
+            <code>(<var>x</var>, <var>y</var>)</code>. Supports
+            both the canonical and legacy cube paths.
           
         </div>
         <hr class="method-separator">
@@ -353,8 +417,8 @@
         - (instancetype) <b>initWithTitle:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> width:</b> (NSUInteger)width<b> height:</b> (NSUInteger)height<b> spectralPoints:</b> (NSUInteger)spectralPoints<b> tileSize:</b> (NSUInteger)tileSize<b> pixelSizeX:</b> (double)pixelSizeX<b> pixelSizeY:</b> (double)pixelSizeY<b> scanPattern:</b> (NSString*)scanPattern<b> cube:</b> (NSData*)cube;<br />
         <div class="desc">
           
-            Full designated initializer &#8212; image fields plus
-            dataset metadata.
+            Designated initialiser combining image fields
+            with full dataset metadata.
           
         </div>
         <hr class="method-separator">
@@ -364,9 +428,9 @@
         - (instancetype) <b>initWithWidth:</b> (NSUInteger)width<b> height:</b> (NSUInteger)height<b> spectralPoints:</b> (NSUInteger)spectralPoints<b> tileSize:</b> (NSUInteger)tileSize<b> cube:</b> (NSData*)cube;<br />
         <div class="desc">
           
-            Convenience initializer for image-only
-            datasets. Inherited dataset fields are set to
-            empty / <code>nil</code> defaults.
+            Convenience initialiser for image-only
+            datasets. Inherited dataset fields default to
+            empty / <code>nil</code>.
           
         </div>
         <hr class="method-separator">

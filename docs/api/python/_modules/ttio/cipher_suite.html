@@ -362,19 +362,19 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.cipher_suite</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Cipher-suite catalog and algorithm-dispatched parameter helpers (v0.7 M48).</span>
+<span></span><span class="sd">&quot;&quot;&quot;Cipher-suite catalog and algorithm-dispatched parameter helpers ().</span>
 
 <span class="sd">Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit</span>
 <span class="sd">fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures,</span>
 <span class="sd">AES-KW-style wrap for KEK). Key sizes and nonce lengths were</span>
 <span class="sd">hardcoded module-level constants.</span>
 
-<span class="sd">v0.7 M48 generalises the public API with an ``algorithm=`` keyword</span>
+<span class="sd">generalises the public API with an ``algorithm=`` keyword</span>
 <span class="sd">parameter backed by this catalog. The intent was to shape the</span>
 <span class="sd">parameter hole so M49&#39;s post-quantum binding is a pure plug-in — no</span>
 <span class="sd">API change — once ML-KEM-1024 / ML-DSA-87 are ready.</span>
 
-<span class="sd">v0.8 M49 activates the post-quantum entries. ``&quot;ml-kem-1024&quot;`` (FIPS</span>
+<span class="sd">activates the post-quantum entries. ``&quot;ml-kem-1024&quot;`` (FIPS</span>
 <span class="sd">203) and ``&quot;ml-dsa-87&quot;`` (FIPS 204) transition from</span>
 <span class="sd">``status=&quot;reserved&quot;`` to ``status=&quot;active&quot;``. Activation requires</span>
 <span class="sd">the optional ``[pqc]`` extra (``pip install &#39;ttio[pqc]&#39;`` pulls in</span>
@@ -463,7 +463,7 @@
         <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
         <span class="n">tag_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>               <span class="c1"># ciphertext length is 1568, handled at the blob layer</span>
         <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
-        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;NIST FIPS 203 ML-KEM-1024. v0.8 M49; requires [pqc] extra &quot;</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;NIST FIPS 203 ML-KEM-1024.; requires [pqc] extra &quot;</span>
               <span class="s2">&quot;(liboqs-python + liboqs ≥ 0.14). Java path is Bouncy Castle &quot;</span>
               <span class="s2">&quot;(org.bouncycastle:bcprov-jdk18on ≥ 1.79).&quot;</span><span class="p">,</span>
     <span class="p">),</span>
@@ -485,7 +485,7 @@
         <span class="n">nonce_size</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
         <span class="n">tag_size</span><span class="o">=</span><span class="mi">4627</span><span class="p">,</span>            <span class="c1"># ML-DSA-87 signature size</span>
         <span class="n">status</span><span class="o">=</span><span class="s2">&quot;active&quot;</span><span class="p">,</span>
-        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;NIST FIPS 204 ML-DSA-87. v0.8 M49; requires [pqc] extra on &quot;</span>
+        <span class="n">notes</span><span class="o">=</span><span class="s2">&quot;NIST FIPS 204 ML-DSA-87.; requires [pqc] extra on &quot;</span>
               <span class="s2">&quot;Python / ObjC (liboqs), Bouncy Castle on Java. Emits v3: &quot;</span>
               <span class="s2">&quot;signature-attribute prefix.&quot;</span><span class="p">,</span>
     <span class="p">),</span>

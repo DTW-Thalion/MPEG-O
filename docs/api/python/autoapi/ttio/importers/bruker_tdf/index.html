@@ -370,7 +370,7 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.importers.bruker_tdf">
 <span id="ttio-importers-bruker-tdf"></span><h1>ttio.importers.bruker_tdf<a class="headerlink" href="#module-ttio.importers.bruker_tdf" title="Link to this heading">¶</a></h1>
-<p>Bruker timsTOF TDF importer — v0.8 M53.</p>
+<p>Bruker timsTOF TDF importer —.</p>
 <p>Bruker’s .d directory format holds two files:</p>
 <ul class="simple">
 <li><p><code class="docutils literal notranslate"><span class="pre">analysis.tdf</span></code>     — a plain SQLite database with metadata tables
@@ -391,7 +391,7 @@ entry with three parallel signal channels:</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">mz</span></code> — peak m/z values (float64 Da)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">intensity</span></code> — raw peak intensities (float64)</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">inv_ion_mobility</span></code> — inverse reduced ion mobility 1/K₀
-(float64 Vs/cm²) — the third signal channel is new in v0.8 M53.</p></li>
+(float64 Vs/cm²) — the third signal channel is new in.</p></li>
 </ul>
 <p>Ion mobility is preserved per-peak, not per-spectrum, because
 timsTOF frames are 2-D acquisitions (multiple ion-mobility slices
@@ -418,7 +418,7 @@ Both Java and ObjC readers parse the SQLite metadata natively (via
 <code class="docutils literal notranslate"><span class="pre">sqlite-jdbc</span></code> and <code class="docutils literal notranslate"><span class="pre">libsqlite3</span></code> respectively); binary frame data
 extraction delegates to this Python module via subprocess, matching
 the ThermoRawReader pattern (M38).</p>
-<p>API status: Provisional (v0.8 M53). Binary decompression via
+<p>API status: Provisional (). Binary decompression via
 <code class="docutils literal notranslate"><span class="pre">opentimspy</span></code> is the only supported path in v0.8; a native-C port
 of the frame decoder is deferred to v0.9.</p>
 <p>SPDX-License-Identifier: Apache-2.0</p>

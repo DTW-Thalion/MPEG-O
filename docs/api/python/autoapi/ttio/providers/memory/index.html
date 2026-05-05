@@ -370,7 +370,7 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.providers.memory">
 <span id="ttio-providers-memory"></span><h1>ttio.providers.memory<a class="headerlink" href="#module-ttio.providers.memory" title="Link to this heading">¶</a></h1>
-<p>In-memory storage provider — Milestone 39 Part D.</p>
+<p>In-memory storage provider — Part D.</p>
 <p>Holds the full group tree in Python dicts. Useful for tests and
 transient pipelines where no file I/O is needed, and the existence of
 this provider alongside <a class="reference internal" href="../hdf5/index.html#ttio.providers.hdf5.Hdf5Provider" title="ttio.providers.hdf5.Hdf5Provider"><code class="xref py py-class docutils literal notranslate"><span class="pre">Hdf5Provider</span></code></a>
@@ -416,8 +416,7 @@ Java:        <code class="docutils literal notranslate"><span class="pre">global
 <span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'r'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.providers.memory.MemoryProvider" title="ttio.providers.memory.MemoryProvider"><span class="pre">MemoryProvider</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/memory.html#MemoryProvider.open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.memory.MemoryProvider.open" title="Link to this definition">¶</a></dt>
 <dd><p>Open a MemoryProvider. Supports both factory
 (<code class="docutils literal notranslate"><span class="pre">MemoryProvider.open(url,</span> <span class="pre">mode=&quot;w&quot;)</span></code>) and instance
-(<code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">=</span> <span class="pre">MemoryProvider();</span> <span class="pre">p.open(url,</span> <span class="pre">mode=&quot;w&quot;)</span></code>) styles per
-Appendix B Gap 1.</p>
+(<code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">=</span> <span class="pre">MemoryProvider();</span> <span class="pre">p.open(url,</span> <span class="pre">mode=&quot;w&quot;)</span></code>) styles per</p>
 </dd></dl>
 
 <dl class="py method">
@@ -427,7 +426,7 @@ Appendix B Gap 1.</p>
 (<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>, …).</p>
 <p>Exposed as a method (not a property) to mirror the ObjC
 <code class="docutils literal notranslate"><span class="pre">-providerName</span></code> selector and Java <code class="docutils literal notranslate"><span class="pre">providerName()</span></code> getter.
-Appendix B Gap 5 — Provisional storage-provider convergence.</p>
+— Provisional storage-provider convergence.</p>
 </dd></dl>
 
 <dl class="py method">

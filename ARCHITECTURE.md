@@ -2,45 +2,42 @@
 
 TTI-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
 
-As of v1.2.0 (M80 TTI-O rebrand → M91 multi-omics integration →
-Phase 1+2 abstraction polish) there are three interoperable
-reference implementations:
+v1.0.0 ships three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md`
-  is rooted here. **3070 assertions / 0 failures.**
+  is rooted here. **3026 assertions / 0 failures.**
 - **Python (`ttio` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top
   of `h5py` + `numpy` that mirrors the Objective-C class
-  hierarchy 1-to-1. **1324 passed / 12 skipped / 4 xfailed.**
+  hierarchy 1-to-1.
 - **Java (`global.thalion.ttio`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. **755 / 0 / 0 / 0.**
+  mirroring the ObjC/Python class hierarchy. **783 / 0 / 0 / 4.**
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
   crypto dependency). HDF5 via system `libhdf5-java` bindings.
 
-Three-way cross-implementation conformance is asserted at every
-milestone: Python drives ObjC and Java subprocesses through
+Three-way cross-implementation conformance is asserted on every
+commit: Python drives ObjC and Java subprocesses through
 `tests/integration/` harnesses and compares byte-level artefacts.
-The shipped conformance matrix covers v0.10 per-AU encryption
+The shipped conformance matrix covers per-AU encryption
 (`test_per_au_cross_language.py`, 38 cells), the JCAMP-DX
 Raman/IR harness (`test_raman_ir_cross_language.py`, 6 cells),
-the M82.4 genomic data-model 9-cell matrix
-(`test_m82_3x3_matrix.py`), the M83–M86 genomic codec fixtures
+the genomic data-model 9-cell matrix
+(`test_genomic_3x3_matrix.py`), the genomic-codec fixtures
 (one per codec path under `python/tests/fixtures/codecs/` and
 `python/tests/fixtures/genomic/`; ObjC and Java each verify
 byte-exact decode against the Python-generated artefacts), the
-M89 transport extension (3×3 encode + decode for genomic AUs),
-the M90 per-region encryption + ML-DSA-87 signatures over the
-chromosomes VL compound, the M51 cross-language byte-parity
-harness (extended in Phase 2 with an `ms_per_run_provenance`
-section so per-run compound provenance dual-write is byte-
-identical), and the M91 multi-omics integration test (one `.tio`
-carrying WGS + proteomics MS + NMR metabolomics under a unified
-encryption envelope, query verified across all three languages).
-Any language pair can exchange encrypted files, transport
-streams, vibrational spectra, and genomic runs (with or without
-codec compression) bit-for-bit.
+genomic-transport extension (3×3 encode + decode for genomic
+AUs), per-region encryption + ML-DSA-87 signatures over the
+chromosomes VL compound, the cross-language byte-parity harness
+(with an `ms_per_run_provenance` section so per-run compound
+provenance dual-write is byte-identical), and the multi-omics
+integration test (one `.tio` carrying WGS + proteomics MS + NMR
+metabolomics under a unified encryption envelope, query verified
+across all three languages). Any language pair can exchange
+encrypted files, transport streams, vibrational spectra, and
+genomic runs (with or without codec compression) bit-for-bit.
 
 All three implementations express the architecture in three layers:
 
@@ -76,8 +73,8 @@ typedef NS_ENUM(NSUInteger, TTIOEncryptionLevel) {
 
 This mirrors MPEG-G's hierarchy of protection scopes, enabling selective encryption — for example, encrypting quantitative intensity values while leaving m/z and scan metadata readable for indexing and search.
 
-**v0.10 per-Access-Unit encryption.** The `AccessUnit` level was
-realised in v0.10.0 as the `opt_per_au_encryption` feature flag, with
+**Per-Access-Unit encryption.** The `AccessUnit` level is
+realised as the `opt_per_au_encryption` feature flag, with
 the on-disk layout documented in `docs/format-spec.md` §9.1 and the
 wire semantics in `docs/transport-spec.md` §4.3 and `docs/transport-
 encryption-design.md`. Each spectrum is a separate AES-256-GCM
@@ -93,11 +90,9 @@ ciphertext verbatim — servers never decrypt in transit.
 
 ## Layer 2 — Abstract Base Classes
 
-Conformance below reflects the **v0.1.0-alpha** implementation. Several
-classes that the original design declared as conforming to
+Several classes that the original design declared as conforming to
 `TTIOEncryptable` / `TTIOProvenanceable` / `TTIOCVAnnotatable` instead
-delegate to the relevant managers in v0.1; see "Implementation notes
-(v0.1.0-alpha)" below.
+delegate to the relevant managers; see "Implementation notes" below.
 
 | Class | Inherits | Conforms To | Key Properties |
 |---|---|---|---|
@@ -108,10 +103,10 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 | `TTIOCVParam` | `NSObject` | `NSCoding`, `NSCopying` | `ontologyRef`, `accession`, `name`, `value`, `unit` |
 | `TTIOSpectrum` | `NSObject` | — | `signalArrays` (NSDictionary), `axes`, `indexPosition`, `scanTimeSeconds`, `precursorMz`, `precursorCharge` |
 | `TTIOAcquisitionRun` | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `spectrumIndex`, `instrumentConfig`, `acquisitionMode`; lazy hyperslab reads when read from disk |
-| `TTIOGenomicRun` (v0.11, M82) | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `genomicIndex`, `referenceUri`, `platform`, `sampleName`, `acquisitionMode`; element type is `TTIOAlignedRead`, not `TTIOSpectrum`. Lazy hyperslab reads on `signal_channels/sequences` and `qualities`; compound rows (cigars, read_names, mate_info) cached on first access |
-| `TTIOGenomicIndex` (v0.11, M82) | `NSObject` | — | `offsets`, `lengths`, `chromosomes`, `positions`, `mappingQualities`, `flags` (parallel arrays); `indicesForRegion:`, `indicesForUnmapped`, `indicesForFlag:` query helpers |
-| `TTIOWrittenGenomicRun` (v0.11, M82) | `NSObject` | — | Pure write-side container passed to `+writeMinimalToPath:...:genomicRuns:`. Mirrors the field set of `TTIOWrittenRun` for the genomic side |
-| `TTIOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `genomicRuns` (v0.11, M82), `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
+| `TTIOGenomicRun` | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `genomicIndex`, `referenceUri`, `platform`, `sampleName`, `acquisitionMode`; element type is `TTIOAlignedRead`, not `TTIOSpectrum`. Lazy hyperslab reads on `signal_channels/sequences` and `qualities`; compound rows (cigars, read_names, mate_info) cached on first access |
+| `TTIOGenomicIndex` | `NSObject` | — | `offsets`, `lengths`, `chromosomes`, `positions`, `mappingQualities`, `flags` (parallel arrays); `indicesForRegion:`, `indicesForUnmapped`, `indicesForFlag:` query helpers |
+| `TTIOWrittenGenomicRun` | `NSObject` | — | Pure write-side container passed to `+writeMinimalToPath:...:genomicRuns:`. Mirrors the field set of `TTIOWrittenRun` for the genomic side |
+| `TTIOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `genomicRuns`, `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
 | `TTIOIdentification` | `NSObject` | `NSCopying` | `runName`, `spectrumIndex`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
 | `TTIOQuantification` | `NSObject` | `NSCopying` | `chemicalEntity`, `sampleRef`, `abundance`, `normalizationMethod` |
 | `TTIOProvenanceRecord` | `NSObject` | `NSCopying` | `inputRefs`, `software`, `parameters`, `outputRefs`, `timestampUnix` |
@@ -133,22 +128,22 @@ delegate to the relevant managers in v0.1; see "Implementation notes
 | `TTIOMassSpectrum` | `TTIOSpectrum` | `mzArray`, `intensityArray` (mandatory, equal length); `msLevel`, `polarity`, `scanWindow` (optional) |
 | `TTIONMRSpectrum` | `TTIOSpectrum` | `chemicalShiftArray`, `intensityArray`, `nucleusType`, `spectrometerFrequencyMHz` |
 | `TTIONMR2DSpectrum` | `TTIOSpectrum` | `intensityMatrix` (flattened row-major float64), `width`, `height`, `f1Axis`, `f2Axis`, `nucleusF1`, `nucleusF2` |
-| `TTIORamanSpectrum` (v0.11) | `TTIOSpectrum` | `wavenumberArray`, `intensityArray`, `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec` |
-| `TTIOIRSpectrum` (v0.11) | `TTIOSpectrum` | `wavenumberArray`, `intensityArray`, `mode` (`TTIOIRMode` — transmittance/absorbance), `resolutionCmInv`, `numberOfScans` |
-| `TTIORamanImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube` (float64[H][W][SP]), `wavenumbers` (float64[SP]), `excitationWavelengthNm`, `laserPowerMw` |
-| `TTIOIRImage` (v0.11) | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube`, `wavenumbers`, `mode`, `resolutionCmInv` |
-| `TTIOUVVisSpectrum` (v0.11.1) | `TTIOSpectrum` | `wavelengthArray` (nm), `absorbanceArray`, `pathLengthCm`, `solvent` |
-| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TTIOSpectrum` | `variableAxis` (float64[N]), `synchronousMatrix` (float64[N×N] row-major), `asynchronousMatrix` (float64[N×N] row-major); feature-flagged `opt_native_2d_cos` |
+| `TTIORamanSpectrum` | `TTIOSpectrum` | `wavenumberArray`, `intensityArray`, `excitationWavelengthNm`, `laserPowerMw`, `integrationTimeSec` |
+| `TTIOIRSpectrum` | `TTIOSpectrum` | `wavenumberArray`, `intensityArray`, `mode` (`TTIOIRMode` — transmittance/absorbance), `resolutionCmInv`, `numberOfScans` |
+| `TTIORamanImage` | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube` (float64[H][W][SP]), `wavenumbers` (float64[SP]), `excitationWavelengthNm`, `laserPowerMw` |
+| `TTIOIRImage` | `NSObject` | `width`, `height`, `spectralPoints`, `tileSize`, `intensityCube`, `wavenumbers`, `mode`, `resolutionCmInv` |
+| `TTIOUVVisSpectrum` | `TTIOSpectrum` | `wavelengthArray` (nm), `absorbanceArray`, `pathLengthCm`, `solvent` |
+| `TTIOTwoDimensionalCorrelationSpectrum` | `TTIOSpectrum` | `variableAxis` (float64[N]), `synchronousMatrix` (float64[N×N] row-major), `asynchronousMatrix` (float64[N×N] row-major); feature-flagged `opt_native_2d_cos` |
 | `TTIOFreeInductionDecay` | `TTIOSignalArray` | Complex128 buffer (interleaved real/imag), `dwellTimeSeconds`, `scanCount`, `receiverGain` |
 | `TTIOChromatogram` | `TTIOSpectrum` | `timeArray`, `intensityArray`, `type` (TIC / XIC / SRM), `targetMz`, `precursorProductMz`, `productMz` |
 | `TTIOTransition` / `TTIOTransitionList` | `NSObject` | precursor → product m/z, collision energy, RT window |
-| `TTIOAlignedRead` (v0.11, M82) | `NSObject` | `readName`, `chromosome`, `position`, `mappingQuality`, `cigar`, `sequence`, `qualities`, `flags`, `mateChromosome`, `matePosition`, `templateLength`. Pure value class — does **not** extend `TTIOSpectrum`. See "Genomic abstraction-layer divergence" below for why |
+| `TTIOAlignedRead` | `NSObject` | `readName`, `chromosome`, `position`, `mappingQuality`, `cigar`, `sequence`, `qualities`, `flags`, `mateChromosome`, `matePosition`, `templateLength`. Pure value class — does **not** extend `TTIOSpectrum`. See "Genomic abstraction-layer divergence" below for why |
 
 ---
 
-## Genomic abstraction-layer divergence (v0.11, M82)
+## Genomic abstraction-layer divergence
 
-M82 added a parallel run-and-element hierarchy alongside the
+TTI-O ships a parallel run-and-element hierarchy alongside the
 spectrum-based classes. The two hierarchies share API surface up to a
 point — and then diverge irreducibly. This section documents *where*
 that divergence is, layer by layer, so future maintainers know which
@@ -163,7 +158,7 @@ implementations (Objective-C, Python, Java).
 backends (HDF5, Memory, SQLite, Zarr) make no distinction between MS
 and genomic data. Compound datasets, VL_STRING handling, the
 AU/encryption layer, signature paths, feature flags — all of it is
-modality-agnostic. M82's only intrusions into this layer were:
+modality-agnostic. the only intrusions into this layer were:
 
 - One new `Precision.UINT64` enum value for genomic offset arrays.
 - One new `OPT_GENOMIC` feature flag and a format-version bump to
@@ -178,7 +173,7 @@ collections:
 
 ```java
 private final Map<String, AcquisitionRun>  msRuns;
-private final Map<String, GenomicRun>      genomicRuns;  // M82.3
+private final Map<String, GenomicRun>      genomicRuns;
 ```
 
 Everything else on `SpectralDataset` is modality-agnostic: `title`,
@@ -202,7 +197,7 @@ generic access protocols:
 `AcquisitionRun` also implements `Provenanceable` and `Encryptable`.
 `GenomicRun` implements `Provenanceable` (Phase 1+2) but does not
 yet implement `Encryptable` — encryption for genomic data ships at
-the dataset/AU level via M90 rather than through the run-level
+the dataset/AU level rather than through the run-level
 protocol surface. Beyond those interfaces the field sets diverge
 entirely:
 
@@ -221,7 +216,7 @@ entirely:
 Members exposed: `name`, `acquisition_mode`, length /
 `__getitem__` / `provenance_chain`. The earlier judgement that
 "adding one would only buy generic iteration" turned out to be
-exactly right *and* exactly the goal: M91 needed iteration over
+exactly right *and* exactly the goal: multi-omics integration needed iteration over
 mixed-modality runs for cross-omics queries, and the
 `runs_for_sample(uri)` / `runs_of_modality(cls)` helpers on
 `SpectralDataset` use the protocol to avoid bifurcating client
@@ -277,13 +272,13 @@ to make the parallel structure obvious:
 - `MassSpectrum.mzArray, .intensityArray` ↔ `AlignedRead.sequence,
   .qualities` (per-element typed channels)
 
-Pre-M82 readers (lacking the `OPT_GENOMIC` feature flag) simply see
+Readers that don't advertise the `OPT_GENOMIC` feature flag simply see
 `genomicRuns == {}` and an empty `/study/genomic_runs/` group; no
 existing MS-only client code path is affected.
 
 ---
 
-## Storage Provider Abstraction (v0.6, M39)
+## Storage Provider Abstraction
 
 The data model and API are the standard; the storage backend is a
 **pluggable implementation detail**. Two providers ship:
@@ -337,10 +332,10 @@ Two orthogonal axes:
 
 1. **Storage transport** — Python's `Hdf5Provider.open` routes cloud
    URLs (`s3://…`, `http://…`) through `fsspec`; ObjC adds ROS3 in
-   v0.7+. Memory / SQLite / Zarr backends are reached by URL scheme
+   . Memory / SQLite / Zarr backends are reached by URL scheme
    (`memory://…`, `sqlite://…`, `zarr://…`).
 
-2. **Streaming transport (v0.10)** — the `.tis` wire format
+2. **Streaming transport** — the `.tis` wire format
    documented in `docs/transport-spec.md`. 24-byte packet headers
    carry nine packet types (StreamHeader, DatasetHeader, AccessUnit,
    ProtectionMetadata, Annotation, Provenance, Chromatogram,
@@ -358,28 +353,28 @@ Two orthogonal axes:
 `TransportReader.materialize_to(path)` and the ObjC / Java
 equivalents write a `.tio` from a `.tis` stream; the inverse
 `TransportWriter.write_dataset(dataset)` emits the stream from a
-file. The bidirectional conformance test (M70) asserts that any
+file. The bidirectional conformance test asserts that any
 writer × reader pair across {Python, ObjC, Java} produces
 byte-identical round trips.
 
 ### Caller refactor status
 
-v0.6 shipped the abstraction and the entry-point refactor for HDF5;
-v0.9 M64.5 phase A wired bulk reads + writes through the protocol so
+shipped the abstraction and the entry-point refactor for HDF5;
+phase A wired bulk reads + writes through the protocol so
 Memory / SQLite / Zarr backends round-trip end-to-end:
 
 | Class | Status |
 |---|---|
-| `SpectralDataset.open` | **Provider-aware** — URL scheme dispatches to MemoryProvider / SqliteProvider / ZarrProvider; bare paths default to HDF5 (M64.5) |
-| `SpectralDataset.write_minimal` | **Provider-aware** — `provider=` kwarg picks backend; HDF5 fast path keeps legacy byte layout (M64.5) |
-| `_write_run` / `_write_identifications` / `_write_quantifications` / `_write_provenance` | **Provider-aware** via the StorageGroup protocol; HDF5 helpers in `_hdf5_io.py` dispatch on isinstance for byte parity (M64.5) |
-| `AcquisitionRun.open` + `_read_chromatograms` + `write_chromatograms_to_run_group` | **Provider-aware** — cold-path attribute and dataset reads go through StorageGroup primitives (M64.5) |
+| `SpectralDataset.open` | **Provider-aware** — URL scheme dispatches to MemoryProvider / SqliteProvider / ZarrProvider; bare paths default to HDF5 |
+| `SpectralDataset.write_minimal` | **Provider-aware** — `provider=` kwarg picks backend; HDF5 fast path keeps legacy byte layout |
+| `_write_run` / `_write_identifications` / `_write_quantifications` / `_write_provenance` | **Provider-aware** via the StorageGroup protocol; HDF5 helpers in `_hdf5_io.py` dispatch on isinstance for byte parity |
+| `AcquisitionRun.open` + `_read_chromatograms` + `write_chromatograms_to_run_group` | **Provider-aware** — cold-path attribute and dataset reads go through StorageGroup primitives |
 | `Hdf5Provider.native_handle()` | Returns underlying `h5py.File` / `Hdf5File` / `TTIOHDF5File` for byte-level code that hasn't been ported yet |
-| `EncryptionManager` (`encrypt_intensity_channel_in_group` + `read_encrypted_channel`) | **Provider-aware** — both helpers dispatch via isinstance: HDF5 keeps the legacy multi-dataset rewrite path, non-HDF5 routes through StorageGroup `create_dataset` / `open_dataset` / `delete_child` (M64.5 phase B) |
-| `SignatureManager` (`sign_dataset` / `verify_dataset`) | **Provider-aware** — h5py callers go through the legacy fast path; `StorageDataset` callers delegate to the M54.1 `sign_storage_dataset` / `verify_storage_dataset` siblings (M64.5 phase B) |
-| `Anonymizer.anonymize` | **Provider-aware** — accepts a `provider=` kwarg passed through to `write_minimal` (M64.5 phase B) |
-| `KeyRotationManager` (`enable_envelope_encryption` / `unwrap_dek` / `rotate_key` / `key_history` / `has_envelope_encryption`) | **Provider-aware** — accepts `h5py.File`, `StorageProvider`, or `SpectralDataset`. HDF5 keeps the legacy uint8 `dek_wrapped` layout; non-HDF5 providers pack the wrapped blob into a UINT32 array with a companion `dek_wrapped_byte_length` attribute (the protocol has no UINT8 precision). Internal helpers route via the new `_native_h5_from()` shim (M64.5 phase C) |
-| MSImage cube `create_dataset_nd` | **Provider-aware** — every shipping provider implements rank-3 `create_dataset_nd` for `[height, width, spectral_points]` cubes; cross-provider parity proven by `tests/integration/test_msimage_cube_cross_provider.py`. A higher-level MSImage *writer* on top of `SpectralDataset.write_minimal` is a v1.0+ item but not blocked by the protocol (M64.5 phase C) |
+| `EncryptionManager` (`encrypt_intensity_channel_in_group` + `read_encrypted_channel`) | **Provider-aware** — both helpers dispatch via isinstance: HDF5 keeps the legacy multi-dataset rewrite path, non-HDF5 routes through StorageGroup `create_dataset` / `open_dataset` / `delete_child` |
+| `SignatureManager` (`sign_dataset` / `verify_dataset`) | **Provider-aware** — h5py callers go through the legacy fast path; `StorageDataset` callers delegate to the `sign_storage_dataset` / `verify_storage_dataset` siblings |
+| `Anonymizer.anonymize` | **Provider-aware** — accepts a `provider=` kwarg passed through to `write_minimal` |
+| `KeyRotationManager` (`enable_envelope_encryption` / `unwrap_dek` / `rotate_key` / `key_history` / `has_envelope_encryption`) | **Provider-aware** — accepts `h5py.File`, `StorageProvider`, or `SpectralDataset`. HDF5 keeps the legacy uint8 `dek_wrapped` layout; non-HDF5 providers pack the wrapped blob into a UINT32 array with a companion `dek_wrapped_byte_length` attribute (the protocol has no UINT8 precision). Internal helpers route via the new `_native_h5_from()` shim |
+| MSImage cube `create_dataset_nd` | **Provider-aware** — every shipping provider implements rank-3 `create_dataset_nd` for `[height, width, spectral_points]` cubes; cross-provider parity proven by `tests/integration/test_msimage_cube_cross_provider.py`. A higher-level MSImage *writer* on top of `SpectralDataset.write_minimal` is a v1.0+ item but not blocked by the protocol |
 
 **Cross-provider proof.** Five integration matrices exercise the
 4-provider grid in CI: `test_mzml_roundtrip.py` (8 cells),
@@ -389,20 +384,20 @@ wrong-key, sign+verify), `test_key_rotation_cross_provider.py`
 (12 cells: wrap, wrong-KEK, rotate+history), and
 `test_msimage_cube_cross_provider.py` (4 cells: `[h,w,sp]` cube
 round-trip). All 39 cross-provider cells pass on HDF5, Memory,
-SQLite, and Zarr. The caller refactor is now complete for v0.9.0;
+SQLite, and Zarr. The caller refactor is now complete for;
 no rows in this table say "Still native".
 
-### Cross-language URL-scheme dispatch (v0.9 M64.5-objc-java)
+### Cross-language URL-scheme dispatch
 
 Python's `SpectralDataset.open(url)` detected URL schemes after
-M64.5 phase A; the v0.9 follow-up extends the same dispatch to the
+the cross-language follow-up extends the same dispatch to the
 Java and ObjC entry points:
 
 | Language | `open(url)` | `create(url, ...)` | Notes |
 |---|---|---|---|
-| Python  | All 4 providers | All 4 providers | HDF5 fast path + StorageGroup path (M64.5 phase A) |
-| Java    | All 4 providers | All 4 providers | M64.5-objc-java: `ProviderRegistry.open` + JSON-attribute metadata path. `ZarrProvider` reads gzip-compressed Zarr v3 chunks via JDK `GZIPInputStream`. |
-| ObjC    | All 4 providers | All 4 providers (MS-only datasets) | **Task 30 + 31 (2026-05-01) closed the M44 catch-up**: `+writeMinimalToPath:` and instance `-writeToFilePath:` both dispatch through `TTIOProviderRegistry`. The writer chain (`TTIOAcquisitionRun`, `TTIOSpectrumIndex`, `TTIOSpectrum`+subclasses, `TTIOInstrumentConfig`, `TTIOSignalArray`, `TTIOCompoundIO`) accepts `id<TTIOStorageGroup>`. NMR runs and Image-subclass datasets remain HDF5-only (H5DSset_scale dimension scales / native 3D cubes — same scope as Python and Java). |
+| Python  | All 4 providers | All 4 providers | HDF5 fast path + StorageGroup path |
+| Java    | All 4 providers | All 4 providers | `ProviderRegistry.open` + JSON-attribute metadata path. `ZarrProvider` reads gzip-compressed Zarr v3 chunks via JDK `GZIPInputStream`. |
+| ObjC    | All 4 providers | All 4 providers (MS-only datasets) | `+writeMinimalToPath:` and instance `-writeToFilePath:` both dispatch through `TTIOProviderRegistry`. The writer chain (`TTIOAcquisitionRun`, `TTIOSpectrumIndex`, `TTIOSpectrum`+subclasses, `TTIOInstrumentConfig`, `TTIOSignalArray`, `TTIOCompoundIO`) accepts `id<TTIOStorageGroup>`. NMR runs and Image-subclass datasets remain HDF5-only (H5DSset_scale dimension scales / native 3D cubes — same scope as Python and Java). |
 
 **Cross-language cross-provider interop** is tested by
 `python/tests/validation/test_cross_language_smoke.py` — 10 cells:
@@ -424,13 +419,13 @@ limit rather than an implementation gap. Persistent-file interop
 * ~~ObjC *write* via provider URL~~ — **shipped 2026-05-01 (Task 30 +
   31).** ObjC's `+writeMinimalToPath:` and instance
   `-writeToFilePath:` both dispatch through `TTIOProviderRegistry`,
-  matching Python's M44 and Java's M44 migrations. MS-only datasets
+  matching the Python and Java migrations. MS-only datasets
   write to memory:// / sqlite:// / zarr:// URLs; NMR runs and
   Image-subclass datasets stay HDF5-only by design.
-* Python SQLite `spectrum_index` UINT64 native support — v0.9
+* Python SQLite `spectrum_index` UINT64 native support.
   maps `<u8` to INT64 at the provider boundary (byte-lossless
   because offsets are always < 2^63).
-* Java / ObjC Zarr blosc / lz4 / zstd decode — v0.9 handles the
+* Java / ObjC Zarr blosc / lz4 / zstd decode — handles the
   `gzip` codec written by zarr-python's default `GzipCodec`.
   Python uses zarr-python's full codec catalog.
 
@@ -507,7 +502,7 @@ The signature takes the storage protocol abstraction (since Task 31,
 Zarr — can serve as the persistent backing store. Callers may pass
 either a `TTIOHDF5Group *` directly (it conforms to
 `<TTIOStorageGroup>`) or an `id<TTIOStorageGroup>` returned by
-`TTIOProviderRegistry`. Mirrors Python (M44) and Java (M44).
+`TTIOProviderRegistry`. Mirrors Python and Java.
 
 In-memory objects can be constructed, mutated, and held without
 touching the storage layer at all — persistence is explicit.
@@ -520,7 +515,7 @@ require an HDF5 backing file.
 
 ## Thread Safety
 
-**Opt-in reader-writer locking since v0.4 (Milestone 23).**
+**Opt-in reader-writer locking since.**
 
 ### Objective-C: `TTIOHDF5File`
 
@@ -573,21 +568,22 @@ libhdf5's thread-safety.
 
 HDF5's threadsafe mode uses a global library mutex, so "2-4× parallel
 read speedup" is not physically achievable for pure HDF5 I/O regardless
-of our wrapper — the library serialises below. The measured benefit of
-M23 is:
+of our wrapper — the library serialises below. The measured benefit
+of the threadsafe wrapper is:
 
 1. Crash-safety under concurrent access (safety, not speed).
 2. Writer exclusion — in-flight writes never interleave with readers,
    eliminating a class of torn-read bugs.
 3. Low single-thread overhead (<15 % in the benchmark, see
-   `python/tests/test_milestone23_benchmark.py`).
+   `python/tests/test_threadsafe_benchmark.py`).
 
 Parallel decode/decompress on top of the HDF5 critical path is a
-potential v0.5 optimisation (not in scope for M23).
+potential future optimisation, out of scope for the threadsafe
+wrapper.
 
 ---
 
-## Python class mapping (v0.3, M16)
+## Python class mapping
 
 The Python package mirrors the Objective-C hierarchy without the
 `TTIO` prefix. Files under `python/src/ttio/` are keyed by
@@ -600,17 +596,17 @@ snake_case module names.
 | `TTIOMassSpectrum`               | `MassSpectrum`                            | `ttio.mass_spectrum`              |
 | `TTIONMRSpectrum`                | `NMRSpectrum`                             | `ttio.nmr_spectrum`               |
 | `TTIONMR2DSpectrum`              | `NMR2DSpectrum`                           | `ttio.nmr_2d`                     |
-| `TTIORamanSpectrum` (v0.11)      | `RamanSpectrum`                           | `ttio.raman_spectrum`             |
-| `TTIOIRSpectrum` (v0.11)         | `IRSpectrum`                              | `ttio.ir_spectrum`                |
-| `TTIOUVVisSpectrum` (v0.11.1)    | `UVVisSpectrum`                           | `ttio.uv_vis_spectrum`            |
-| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `ttio.two_dimensional_correlation_spectrum` |
+| `TTIORamanSpectrum`      | `RamanSpectrum`                           | `ttio.raman_spectrum`             |
+| `TTIOIRSpectrum`         | `IRSpectrum`                              | `ttio.ir_spectrum`                |
+| `TTIOUVVisSpectrum`    | `UVVisSpectrum`                           | `ttio.uv_vis_spectrum`            |
+| `TTIOTwoDimensionalCorrelationSpectrum` | `TwoDimensionalCorrelationSpectrum` | `ttio.two_dimensional_correlation_spectrum` |
 | `TTIOFreeInductionDecay`         | `FreeInductionDecay`                      | `ttio.fid`                        |
 | `TTIOChromatogram`               | `Chromatogram`                            | `ttio.chromatogram`               |
 | `TTIOAcquisitionRun`             | `AcquisitionRun` + `SpectrumIndex`        | `ttio.acquisition_run`            |
 | `TTIOSpectralDataset`            | `SpectralDataset`                         | `ttio.spectral_dataset`           |
 | `TTIOMSImage`                    | `MSImage`                                 | `ttio.ms_image`                   |
-| `TTIORamanImage` (v0.11)         | `RamanImage`                              | `ttio.raman_image`                |
-| `TTIOIRImage` (v0.11)            | `IRImage`                                 | `ttio.ir_image`                   |
+| `TTIORamanImage`         | `RamanImage`                              | `ttio.raman_image`                |
+| `TTIOIRImage`            | `IRImage`                                 | `ttio.ir_image`                   |
 | `TTIOIdentification`             | `Identification`                          | `ttio.identification`             |
 | `TTIOQuantification`             | `Quantification`                          | `ttio.quantification`             |
 | `TTIOProvenanceRecord`           | `ProvenanceRecord`                        | `ttio.provenance`                 |
@@ -624,11 +620,11 @@ snake_case module names.
 | `TTIONmrMLReader` (Apache-2.0)   | `ttio.importers.nmrml`                  | `ttio.importers.nmrml`            |
 | `TTIOMzMLWriter` (Apache-2.0)    | `ttio.exporters.mzml`                   | `ttio.exporters.mzml`             |
 | `TTIOCVTermMapper`               | `ttio.importers.cv_term_mapper`         | `ttio.importers.cv_term_mapper`   |
-| *(new in v0.3)*                  | `ttio.remote` (fsspec URL dispatcher)   | `ttio.remote`                     |
+|                   | `ttio.remote` (fsspec URL dispatcher)   | `ttio.remote`                     |
 
 ---
 
-## Java Class Mapping (v0.5, M31–M35)
+## Java Class Mapping
 
 | ObjC Class | Java Class | Package |
 |------------|-----------|---------|
@@ -637,18 +633,18 @@ snake_case module names.
 | `TTIOMassSpectrum` | `MassSpectrum` | `global.thalion.ttio` |
 | `TTIONMRSpectrum` | `NMRSpectrum` | `global.thalion.ttio` |
 | `TTIONMR2DSpectrum` | `NMR2DSpectrum` | `global.thalion.ttio` |
-| `TTIORamanSpectrum` (v0.11) | `RamanSpectrum` | `global.thalion.ttio` |
-| `TTIOIRSpectrum` (v0.11) | `IRSpectrum` | `global.thalion.ttio` |
-| `TTIOUVVisSpectrum` (v0.11.1) | `UVVisSpectrum` | `global.thalion.ttio` |
-| `TTIOTwoDimensionalCorrelationSpectrum` (v0.11.1) | `TwoDimensionalCorrelationSpectrum` | `global.thalion.ttio` |
+| `TTIORamanSpectrum` | `RamanSpectrum` | `global.thalion.ttio` |
+| `TTIOIRSpectrum` | `IRSpectrum` | `global.thalion.ttio` |
+| `TTIOUVVisSpectrum` | `UVVisSpectrum` | `global.thalion.ttio` |
+| `TTIOTwoDimensionalCorrelationSpectrum` | `TwoDimensionalCorrelationSpectrum` | `global.thalion.ttio` |
 | `TTIOFreeInductionDecay` | `FreeInductionDecay` | `global.thalion.ttio` |
 | `TTIOChromatogram` | `Chromatogram` | `global.thalion.ttio` |
 | `TTIOSpectrumIndex` | `SpectrumIndex` | `global.thalion.ttio` |
 | `TTIOAcquisitionRun` | `AcquisitionRun` | `global.thalion.ttio` |
 | `TTIOSpectralDataset` | `SpectralDataset` | `global.thalion.ttio` |
 | `TTIOMSImage` | `MSImage` | `global.thalion.ttio` |
-| `TTIORamanImage` (v0.11) | `RamanImage` | `global.thalion.ttio` |
-| `TTIOIRImage` (v0.11) | `IRImage` | `global.thalion.ttio` |
+| `TTIORamanImage` | `RamanImage` | `global.thalion.ttio` |
+| `TTIOIRImage` | `IRImage` | `global.thalion.ttio` |
 | `TTIOFeatureFlags` | `FeatureFlags` | `global.thalion.ttio` |
 | `TTIOIdentification` | `Identification` | `global.thalion.ttio` (record) |
 | `TTIOQuantification` | `Quantification` | `global.thalion.ttio` (record) |
@@ -701,7 +697,7 @@ bindings (`libhdf5-java`).
 
 ---
 
-## Compression codec matrix (v0.3, M21)
+## Compression codec matrix
 
 | Codec              | Transport                                    | Lossy? | ObjC support                                          | Python support                                    |
 |--------------------|----------------------------------------------|--------|-------------------------------------------------------|---------------------------------------------------|
@@ -748,7 +744,7 @@ REF_DIFF_V2 is **context-aware** — its encode/decode contract takes
 more than the channel's bytes. The codec metadata registry
 (`ttio.codecs._codec_meta` / `TTIOCodecMeta.isContextAware:` /
 `codecs.CodecMeta.isContextAware`) declares which codec ids need
-plumbing for sibling channels and external resolvers; the M86
+plumbing for sibling channels and external resolvers; the codec-pipeline
 pipeline checks this flag before calling encode/decode and routes
 the extra arguments accordingly. For REF_DIFF_V2 the extras are
 `(positions, cigars, reference_resolver)`. The interface
@@ -770,7 +766,7 @@ per-instance cache means per-read access slices the in-memory
 decoded buffer rather than calling the codec on every read.
 
 Codec-channel applicability is enforced at write-time validation.
-Every M82 channel under `signal_channels/` accepts at least one
+Every genomic channel under `signal_channels/` accepts at least one
 codec (sequences take BASE_PACK / RANS_ORDER0 / RANS_ORDER1 /
 REF_DIFF_V2; qualities take RANS_ORDER0/1 / QUALITY_BINNED /
 FQZCOMP_NX16_Z; positions / flags / mapping_qualities take rANS via
@@ -782,7 +778,7 @@ documented in `docs/format-spec.md` §10.4–§10.10.
 
 ---
 
-## Cloud-native access (v0.3, M20, Python-only)
+## Cloud-native access
 
 `SpectralDataset.open("s3://bucket/file.tio")` detects URL schemes via `ttio.remote.is_remote_url` and routes them through `fsspec.open(url, "rb")`. The resulting seekable byte stream is handed to `h5py.File`, which then reads only the HDF5 chunks touched by the caller. Supported schemes include `file://`, `http(s)://`, `s3://`, `gs://`, `gcs://`, `az://`, `abfs(s)://`; the backend dependencies live behind the `cloud` optional extra.
 
@@ -791,20 +787,20 @@ Performance characteristics (observed on a 15 MB fixture served over localhost w
 - 10 random spectra from a 1,000-spectrum file: ~50 ms wall clock.
 - Fraction of file bytes actually transferred: ~24%.
 
-The Objective-C implementation reads only POSIX files in v0.3 because `libhdf5` consumes files via Virtual File Drivers (VFDs) rather than arbitrary byte streams. Integrating `libhdf5`'s ROS3 VFD (or a custom libcurl-backed VFD) is a tracked follow-up in `WORKPLAN.md`.
+The Objective-C implementation reads only POSIX files in because `libhdf5` consumes files via Virtual File Drivers (VFDs) rather than arbitrary byte streams. Integrating `libhdf5`'s ROS3 VFD (or a custom libcurl-backed VFD) is a tracked follow-up in `WORKPLAN.md`.
 
 ---
 
-## Implementation notes (v0.1.0-alpha)
+## Implementation notes
 
-A few deliberate simplifications keep v0.1's surface area small. None
+A few deliberate simplifications keep the surface area small. None
 affect on-disk readability via standard HDF5 tools.
 
 * **`TTIOEncryptable` is delegated, not directly conformed.**
   `TTIOAcquisitionRun` and `TTIOSpectralDataset` do not yet conform to
   `TTIOEncryptable` themselves; selective encryption of the intensity
   channel is performed via the static `TTIOEncryptionManager` API
-  against an open `.tio` path. A v0.2 milestone may thread the
+  against an open `.tio` path. A future revision may thread the
   protocol through both classes' init/read paths.
 
 * **`TTIOProvenanceable` is satisfied at the dataset level.**
@@ -820,7 +816,7 @@ affect on-disk readability via standard HDF5 tools.
   on-disk footprint than a packed compound layout.
 
 * **`TTIOSpectrumIndex` uses parallel 1-D datasets.** The MPEG-G design
-  spec calls for a single compound `headers` dataset; v0.1 stores eight
+  spec calls for a single compound `headers` dataset; TTI-O stores eight
   parallel datasets (offsets, lengths, retention_times, ms_levels,
   polarities, precursor_mzs, precursor_charges, base_peak_intensities)
   for simpler readout from non-Cocoa tools and a smaller HDF5 wrapper

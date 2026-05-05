@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,29 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          ``TTIOMzMLWriter`` emits an
-          ``indexedmzML`` file from a
-          :class:`TTIOSpectralDataset`.
-          The output is the ObjC side of the M19 mzML export pass;
-          the Python side lives in ``ttio.exporters.mzml`` and
-          mirrors the XML structure produced here. The current
-          scope (v0.3 M19) covers: - ``TTIOMassSpectrum`` runs
-          (``mz`` + ``intensity`` channels) - Optional zlib
-          compression of binary data arrays -
-          ``indexedmzML`` wrapper with byte-correct
-          offsets per spectrum - Minimal but conformant
-          ``cvList``, ``fileDescription``,
-          ``softwareList``,
-          ``instrumentConfigurationList``,
-          and ``dataProcessingList`` scaffolding so the output
-          re-parses with :class:`TTIOMzMLReader` and pwiz
-          tools. NMR runs, chromatograms, MSImage cubes, and
-          referenceable param groups are deliberately out
-          of scope for M19; extending the writer for them is a
-          straightforward follow-up. API status:
-          Stable. Cross-language equivalents: Python:
-          ttio.exporters.mzml Java:
-          global.thalion.ttio.exporters.MzMLWriter
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -298,14 +276,19 @@
         + (NSData*) <b>dataForDataset:</b> (<a rel="gsdoc" href="TTIOSpectralDataset.html#class$TTIOSpectralDataset">TTIOSpectralDataset</a>*)dataset<b> zlibCompression:</b> (BOOL)zlibCompression<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Serialize ``dataset`` to an in-memory ``NSData``
-            containing indexed mzML. The caller chooses the
-            first MS run whose spectra are ``TTIOMassSpectrum``
-            instances; additional runs are ignored. The
-            returned data is always ``UTF-8``. When
-            ``zlibCompression`` is <code>YES</code>
-            the m/z and intensity arrays are zlib-compressed before
-            base64 encoding and annotated with ``MS:1000574``.
+            Serialises <code><var>dataset</var></code> to an
+            in-memory <code>NSData</code> containing indexed
+            mzML. The first MS run whose spectra are
+            <code>TTIOMassSpectrum</code> instances is used;
+            additional runs are ignored. The returned data
+            is always UTF-8. @param <var>dataset</var> Dataset to
+            serialise. @param <var>zlibCompression</var>
+            When <code>YES</code>, m/z and intensity arrays are
+            zlib-compressed before base64 encoding and
+            annotated with <code>MS:1000574</code>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return UTF-8 mzML data, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -316,9 +299,19 @@
         <div class="desc">
           
             Convenience wrapper that writes
-            ``dataForDataset:...`` to a file
-            <var>path</var>. Overwrites an existing file
-            atomically.
+            <code>
+              <a rel="gsdoc" href="#method$TTIOMzMLWriter+dataForDataset$zlibCompression$error$">+dataForDataset:zlibCompression:error:</a>
+
+            </code>
+            output to a file <var>path</var>. Overwrites an
+            existing file atomically. @param
+            <var>dataset</var> Dataset to serialise. @param
+            <var>path</var> Destination <var>path</var>. @param
+            <var>zlibCompression</var> Whether to zlib-compress
+            binary data arrays. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success, <code>NO</code> on
+            failure.
           
         </div>
         <hr class="method-separator">

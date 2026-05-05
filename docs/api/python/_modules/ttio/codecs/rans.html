@@ -424,35 +424,35 @@
 
 <span class="c1"># ── Algorithm constants ─────────────────────────────────────────────</span>
 
-<span class="c1">#: Total of normalised frequency table.  Power of two so that ``x % M``</span>
-<span class="c1">#: reduces to ``x &amp; (M - 1)`` and the encoder can use a single shift.</span>
+<span class="c1"># Total of normalised frequency table.  Power of two so that ``x % M``</span>
+<span class="c1"># reduces to ``x &amp; (M - 1)`` and the encoder can use a single shift.</span>
 <div class="viewcode-block" id="M">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/rans/index.html#ttio.codecs.rans.M">[docs]</a>
 <span class="n">M</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">12</span>  <span class="c1"># 4096</span></div>
 
 
-<span class="c1">#: Number of bits to shift for the modulo / divide by M operations.</span>
+<span class="c1"># Number of bits to shift for the modulo / divide by M operations.</span>
 <span class="n">M_BITS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span>
 
-<span class="c1">#: Lower bound of the encoder state range.</span>
+<span class="c1"># Lower bound of the encoder state range.</span>
 <div class="viewcode-block" id="L">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/rans/index.html#ttio.codecs.rans.L">[docs]</a>
 <span class="n">L</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">23</span></div>
 
 
-<span class="c1">#: I/O width — encoder emits 8 bits at a time (one byte).</span>
+<span class="c1"># I/O width — encoder emits 8 bits at a time (one byte).</span>
 <span class="n">B_BITS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
 <span class="n">B</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">B_BITS</span>  <span class="c1"># 256</span>
 
-<span class="c1">#: Upper bound of the encoder state range — exclusive.</span>
-<span class="c1">#: ``state_max == b * L``; while ``x &gt;= x_max(s)`` the encoder must</span>
-<span class="c1">#: renormalise (emit a byte) before encoding symbol s.</span>
+<span class="c1"># Upper bound of the encoder state range — exclusive.</span>
+<span class="c1"># ``state_max == b * L``; while ``x &gt;= x_max(s)`` the encoder must</span>
+<span class="c1"># renormalise (emit a byte) before encoding symbol s.</span>
 <span class="n">STATE_MAX</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">B</span> <span class="o">*</span> <span class="n">L</span>  <span class="c1"># 2**31</span>
 
-<span class="c1">#: Mask for ``x % M`` (M is a power of two).</span>
+<span class="c1"># Mask for ``x % M`` (M is a power of two).</span>
 <span class="n">M_MASK</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">M</span> <span class="o">-</span> <span class="mi">1</span>
 
-<span class="c1">#: Header bytes: 1 (order) + 4 (orig_len) + 4 (payload_len) = 9.</span>
+<span class="c1"># Header bytes: 1 (order) + 4 (orig_len) + 4 (payload_len) = 9.</span>
 <span class="n">HEADER_LEN</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">9</span>
 
 
@@ -462,7 +462,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_normalise_freqs</span><span class="p">(</span><span class="n">cnt</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalise a 256-element count vector to sum exactly to ``M``.</span>
 
-<span class="sd">    Deterministic across languages (Binding Decision §78):</span>
+<span class="sd">    Deterministic across languages ():</span>
 
 <span class="sd">      1. Proportional scale: ``f[s] = max(1, cnt[s] * M // total)``</span>
 <span class="sd">         when ``cnt[s] &gt; 0``, else 0.</span>

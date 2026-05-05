@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,7 +260,67 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Genomics/TTIOAlignedRead.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            One aligned sequencing read &#8212; the genomic analogue of
+            <code>TTIOMassSpectrum</code>. Immutable value
+            object materialised by <code>TTIOGenomicRun</code>
+            from the signal channels under
+            <code>
+              /study/genomic_runs/&lt;name&gt;/signal_channels/
+            </code>
+            . The class itself does not perform any storage I/O.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.aligned_read.AlignedRead</code> <br />
+            Java:
+            <code>
+              global.thalion.ttio.genomics.AlignedRead
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -325,7 +385,8 @@
         - (instancetype) <b>initWithReadName:</b> (NSString*)readName<b> chromosome:</b> (NSString*)chromosome<b> position:</b> (int64_t)position<b> mappingQuality:</b> (uint8_t)mappingQuality<b> cigar:</b> (NSString*)cigar<b> sequence:</b> (NSString*)sequence<b> qualities:</b> (NSData*)qualities<b> flags:</b> (uint32_t)flags<b> mateChromosome:</b> (NSString*)mateChromosome<b> matePosition:</b> (int64_t)matePosition<b> templateLength:</b> (int32_t)templateLength;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @return An initialised
+            aligned read.
           
         </div>
         <hr class="method-separator">
@@ -335,7 +396,8 @@
         - (BOOL) <b>isMapped</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>YES</code> if the read is mapped (SAM
+            flag 0x4 not set).
           
         </div>
         <hr class="method-separator">
@@ -345,7 +407,8 @@
         - (BOOL) <b>isPaired</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>YES</code> if the read is part of a
+            paired alignment (SAM flag 0x1).
           
         </div>
         <hr class="method-separator">
@@ -355,7 +418,8 @@
         - (BOOL) <b>isReverse</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>YES</code> if the read is
+            reverse-complemented (SAM flag 0x10).
           
         </div>
         <hr class="method-separator">
@@ -365,7 +429,8 @@
         - (BOOL) <b>isSecondary</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>YES</code> if this is a secondary
+            alignment (SAM flag 0x100).
           
         </div>
         <hr class="method-separator">
@@ -375,7 +440,8 @@
         - (BOOL) <b>isSupplementary</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>YES</code> if this is a supplementary
+            alignment (SAM flag 0x800).
           
         </div>
         <hr class="method-separator">
@@ -440,7 +506,7 @@
         - (NSUInteger) <b>readLength</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Number of bases in the sequence.
           
         </div>
         <hr class="method-separator">

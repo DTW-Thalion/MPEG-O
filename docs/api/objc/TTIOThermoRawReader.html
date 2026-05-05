@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,20 +261,70 @@
         </blockquote>
         <div class="desc">
           
-          Milestone 29 &#8212; Thermo RAW stub. Defines the public
-          API for a future Thermo.raw reader. In v0.4 all methods
-          return <code>nil</code> / <code>NO</code> with an
-          ``NSError`` containing guidance on the Thermo
-          RawFileReader SDK dependency. This stub exists
-          so downstream code can reference the class and compile
-          against a stable interface that will be fulfilled in
-          a future release. API status: Stable (interface); v0.4 stub
-          &#8212; delegation to ThermoRawFileParser is a future milestone
-          in ObjC. Cross-language equivalents: Python:
-          ttio.importers.thermo_raw (M38
-          shipped; delegates to ThermoRawFileParser binary)
-          Java: global.thalion.ttio.importers.ThermoRawReader
-          (M38 shipped; delegates to ThermoRawFileParser binary)
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOThermoRawReader.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Public Objective-C entry point for reading Thermo
+            Fisher <code>.raw</code> mass-spectrometry files
+            into a <code>TTIOSpectralDataset</code>. The interface
+            is fixed; in the current ObjC build all methods return
+            <code>nil</code> / <code>NO</code> with an
+            <code>NSError</code> describing the missing Thermo
+            RawFileReader SDK dependency. Downstream code
+            can therefore link against the class today and gain
+            real functionality once the SDK delegation lands.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable interface;
+            ObjC delegation to ThermoRawFileParser pending.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.importers.thermo_raw</code> (delegates to
+            the ThermoRawFileParser binary) <br /> Java:
+            <code>
+              global.thalion.ttio.importers.ThermoRawReader
+            </code>
+            (delegates to the ThermoRawFileParser binary)
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -289,7 +339,14 @@
         + (<a rel="gsdoc" href="TTIOSpectralDataset.html#class$TTIOSpectralDataset">TTIOSpectralDataset</a>*) <b>readFromFilePath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads a Thermo <code>.raw</code> file and returns the
+            resulting dataset. @param <var>path</var>
+            Filesystem <var>path</var> to a Thermo
+            <code>.raw</code> file. @param <var>error</var>
+            Out-parameter populated with an
+            SDK-dependency-missing message in
+            the current build. @return The parsed dataset, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

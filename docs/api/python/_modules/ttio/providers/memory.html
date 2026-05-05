@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.providers.memory</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;In-memory storage provider — Milestone 39 Part D.</span>
+<span></span><span class="sd">&quot;&quot;&quot;In-memory storage provider — Part D.</span>
 
 <span class="sd">Holds the full group tree in Python dicts. Useful for tests and</span>
 <span class="sd">transient pipelines where no file I/O is needed, and the existence of</span>
@@ -623,7 +623,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Open a MemoryProvider. Supports both factory</span>
 <span class="sd">        (``MemoryProvider.open(url, mode=&quot;w&quot;)``) and instance</span>
 <span class="sd">        (``p = MemoryProvider(); p.open(url, mode=&quot;w&quot;)``) styles per</span>
-<span class="sd">        Appendix B Gap 1.&quot;&quot;&quot;</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">del</span> <span class="n">kwargs</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">self_or_path</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
             <span class="n">actual_path</span> <span class="o">=</span> <span class="n">self_or_path</span>

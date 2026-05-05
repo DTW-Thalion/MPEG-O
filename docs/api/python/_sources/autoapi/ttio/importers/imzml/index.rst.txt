@@ -5,7 +5,7 @@ ttio.importers.imzml
 
 .. autoapi-nested-parse::
 
-   imzML + .ibd importer (v0.9 M59).
+   imzML + .ibd importer ().
 
    imzML is the dominant interchange format for mass-spectrometry imaging
    data. The format is a pair of files:
@@ -90,7 +90,7 @@ Module Contents
    Raised when the .ibd binary disagrees with the .imzML metadata.
 
    Covers UUID mismatches and offset / length values that would read
-   past the end of the .ibd (HANDOFF gotcha 48-49).
+   past the end of the .ibd -49).
 
    Initialize self.  See help(type(self)) for accurate signature.
 

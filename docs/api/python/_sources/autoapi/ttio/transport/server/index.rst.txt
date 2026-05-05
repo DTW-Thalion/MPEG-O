@@ -5,7 +5,7 @@ ttio.transport.server
 
 .. autoapi-nested-parse::
 
-   WebSocket transport server (v0.10 M68).
+   WebSocket transport server ().
 
    The server hosts a single :class:`SpectralDataset` and accepts one or
    more simultaneous WebSocket clients. Each client sends a JSON query

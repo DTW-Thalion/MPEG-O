@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,16 +260,66 @@
         </blockquote>
         <div class="desc">
           
-          Thin wrapper around a 1-D HDF5 dataset. Owns its dataset
-          <strong>id</strong> and (for compound types) the
-          type <strong>id</strong>; both are released in
           
-            -dealloc
-          
+        </p>
+        <p>
 
-          . Datasets are created with a definite element count and
-          precision; the shape cannot be resized after
-          creation.
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> HDF5/TTIOHDF5Dataset.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Thin wrapper around a 1-D HDF5 dataset. Owns its
+            dataset <strong>id</strong> and (for compound
+            types) the type <strong>id</strong>; both are
+            released in
+            <code>
+              
+                -dealloc
+              
+
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Datasets are created with a definite element count
+            and precision; the shape cannot be resized after
+            creation. Hyperslab reads (
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5Dataset-readDataAtOffset$count$error$">
+                -readDataAtOffset:count:error:
+              </a>
+
+            </code>
+            ) support partial-spectrum access without materialising
+            the entire dataset.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -301,7 +351,17 @@
         - (instancetype) <b>initWithDatasetId:</b> (hid_t)did<b> precision:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a>)precision<b> length:</b> (NSUInteger)length<b> retainer:</b> (id)retainer;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Internal initialiser used by
+            <code>TTIOHDF5Group</code>. Not intended for
+            external use. @param <var>did</var> HDF5 dataset
+            <strong>id</strong> obtained from
+            <code>H5Dcreate2</code> / <code>H5Dopen2</code>.
+            @param <var>precision</var> Element
+            <var>precision</var>. @param <var>length</var>
+            Element count. @param <var>retainer</var> Object
+            whose lifetime keeps the parent file alive (normally
+            a <code>TTIOHDF5Group</code>). @return An initialised
+            dataset.
           
         </div>
         <hr class="method-separator">
@@ -333,9 +393,15 @@
         - (NSData*) <b>readDataAtOffset:</b> (NSUInteger)offset<b> count:</b> (NSUInteger)count<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Read a hyperslab &#8212; `count` elements starting at
-            element `offset`. Useful for partial-spectrum
-            reads.
+            Reads a hyperslab. @param <var>offset</var> Element
+            <var>offset</var> of the first element to read.
+            @param <var>count</var> Number of elements to read.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return Buffer of
+            <code>
+              <var>count</var> * elementSize(precision)
+            </code>
+            bytes, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -345,8 +411,11 @@
         - (NSData*) <b>readDataWithError:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Read all elements. Returns an NSData of length *
-            elementSize bytes.
+            Reads all elements. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            Buffer of
+            <code>length * elementSize(precision)</code> bytes,
+            or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -356,8 +425,11 @@
         - (BOOL) <b>writeData:</b> (NSData*)data<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Write all elements. The buffer length must match
-            length * elementSize.
+            Writes all elements. @param <var>data</var> Buffer;
+            <code><var>data</var>.length</code> must equal
+            <code>length * elementSize(precision)</code>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

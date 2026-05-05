@@ -9,7 +9,7 @@ ttio.exporters.cram
 
    Subclasses :class:`~ttio.exporters.bam.BamWriter` and overrides the
    samtools subprocess invocation to emit CRAM (reference-compressed)
-   output instead of BAM. Per Binding Decision §139 the reference
+   output instead of BAM. Per the reference
    FASTA is a positional constructor argument; samtools needs it for
    both the ``view -CS`` and the ``sort -O cram`` stages.
 

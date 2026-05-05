@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -277,11 +277,66 @@
         </blockquote>
         <div class="desc">
           
-          Milestone 28 &#8212; spectral anonymization. Applies
-          caller-selected policies to a dataset and
-          writes a new ``.tio`` file. The original is never
-          modified. Supported policies: redactSAAVSpectra &#8212;
-          remove spectra with SAAV identifications
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protection/TTIOAnonymizer.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Caller-supplied policy describing which
+            anonymisation transforms to apply. Passed to
+            <code>+[TTIOAnonymizer anonymizeDataset:...]</code>
+            alongside the source dataset; the anonymiser
+            writes a new <code>.tio</code> file. The original is
+            never modified.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.anonymization</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.protection.Anonymizer
+            </code>
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Spectral anonymisation transforms.
+                  </p>
+        <p>
+          
+          Supported policies: redactSAAVSpectra &#8212; remove
+          spectra with SAAV identifications
           maskIntensityBelowQuantile &#8212; zero
           intensities below a percentile
           maskRareMetabolites &#8212; suppress
@@ -404,7 +459,7 @@
             attributes (nonatomic, readwrite, assign). See
             also
             <a rel="gsdoc" href="#method$TTIOAnonymizationPolicy-setRandomiseQualities$">[TTIOAnonymizationPolicy -setRandomiseQualities:]</a>
- Replace every per-base Phred quality score with a single caller-specified constant (default 30). The &quot;randomise&quot; name matches the M90 spec language; the actual replacement is deterministic per-read so anonymised.tio files stay reproducible.
+ Replace every per-base Phred quality score with a single caller-specified constant (default 30). The replacement is deterministic per-read so anonymised.tio files stay reproducible.
           
         </div>
         <hr class="method-separator">
@@ -543,7 +598,7 @@
             attributes (nonatomic, readwrite, assign). See
             also
             <a rel="gsdoc" href="#method$TTIOAnonymizationPolicy-randomiseQualities">[TTIOAnonymizationPolicy -randomiseQualities]</a>
- Replace every per-base Phred quality score with a single caller-specified constant (default 30). The &quot;randomise&quot; name matches the M90 spec language; the actual replacement is deterministic per-read so anonymised.tio files stay reproducible.
+ Replace every per-base Phred quality score with a single caller-specified constant (default 30). The replacement is deterministic per-read so anonymised.tio files stay reproducible.
           
         </div>
         <hr class="method-separator">

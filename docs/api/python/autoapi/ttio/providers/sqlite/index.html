@@ -370,7 +370,7 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.providers.sqlite">
 <span id="ttio-providers-sqlite"></span><h1>ttio.providers.sqlite<a class="headerlink" href="#module-ttio.providers.sqlite" title="Link to this heading">¶</a></h1>
-<p>SQLite storage provider — Milestone 41 stress-test of Provisional ABCs.</p>
+<p>SQLite storage provider — stress-test of Provisional ABCs.</p>
 <p>Stores the full TTI-O group/dataset tree in a single SQLite file.
 Groups and datasets are rows in relational tables; primitive dataset
 data is stored as little-endian BLOBs; compound datasets are stored as
@@ -478,13 +478,13 @@ datasets, <code class="docutils literal notranslate"><span class="pre">data</spa
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.sqlite.SqliteDataset.attribute_names">
 <span class="sig-name descname"><span class="pre">attribute_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/sqlite.html#SqliteDataset.attribute_names"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.sqlite.SqliteDataset.attribute_names" title="Link to this definition">¶</a></dt>
-<dd><p>List attribute names; empty list if none. Appendix B Gap 8.</p>
+<dd><p>List attribute names; empty list if none.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.sqlite.SqliteDataset.delete_attribute">
 <span class="sig-name descname"><span class="pre">delete_attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/sqlite.html#SqliteDataset.delete_attribute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.sqlite.SqliteDataset.delete_attribute" title="Link to this definition">¶</a></dt>
-<dd><p>Remove an attribute. No-op if absent. Appendix B Gap 8.</p>
+<dd><p>Remove an attribute. No-op if absent.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -635,7 +635,7 @@ SPDX-License-Identifier: LGPL-3.0-or-later</p>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;w&quot;</span></code>        — create or truncate.</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span></code>        — read/write; create if absent.</p></li>
 </ul>
-<p>Implementation note: per Appendix B Gap 1, this method
+<p>Implementation note: per , this method
 intentionally does NOT use <code class="docutils literal notranslate"><span class="pre">&#64;classmethod</span></code> so that the
 instance-mutating call style works. When called as
 <code class="docutils literal notranslate"><span class="pre">SqliteProvider.open(path)</span></code>, Python passes the path string as
@@ -655,7 +655,7 @@ and construct a new instance accordingly.</p>
 (<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>, …).</p>
 <p>Exposed as a method (not a property) to mirror the ObjC
 <code class="docutils literal notranslate"><span class="pre">-providerName</span></code> selector and Java <code class="docutils literal notranslate"><span class="pre">providerName()</span></code> getter.
-Appendix B Gap 5 — Provisional storage-provider convergence.</p>
+— Provisional storage-provider convergence.</p>
 </dd></dl>
 
 <dl class="py method">

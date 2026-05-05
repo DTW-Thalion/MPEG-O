@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,7 +261,68 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (root protocol)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protocols/TTIOEncryptable.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Declares the interface for objects that support
+            multi-level cryptographic protection.
+            Encryption can be applied at dataset-group,
+            dataset, descriptor-stream, or access-unit
+            granularity, enabling selective protection
+            (e.g. encrypting intensity values while leaving m/z
+            and scan metadata readable for indexing and search).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The default cipher suite is AES-256-GCM with envelope
+            key wrapping. Concrete classes resolve the per-AU
+            encryption key via the supplied access policy or
+            via a key-management callback.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.protocols.Encryptable</code> <br /> Java:
+            <code>
+              global.thalion.ttio.protocols.Encryptable
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">

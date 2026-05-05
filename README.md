@@ -39,8 +39,8 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3025 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
-| **Python (`ttio`)**       | **1335 passed / 11 skipped / 4 xfailed.** Full parity with ObjC and Java. | `python/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3026 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
+| **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
 | **Java (`global.thalion.ttio`)** | **783/0/0/4 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
@@ -52,10 +52,8 @@ decrypt × headers and JCAMP-DX Raman/IR). See
 
 ## Features
 
-All features below are available today in the current release of TTI-O across
-the three implementation streams unless flagged otherwise. For the
-release-by-release narrative (*which version introduced what*), see
-[`docs/version-history.md`](docs/version-history.md).
+All features below are available in across the three
+implementation streams.
 
 ### Domain modalities
 
@@ -66,7 +64,7 @@ release-by-release narrative (*which version introduced what*), see
 * **2D correlation spectroscopy (2D-COS)** — `TwoDimensionalCorrelationSpectrum` holds synchronous + asynchronous rank-2 correlation matrices over a shared variable axis; gated behind `opt_native_2d_cos`.
 * **Chromatograms** — TIC / XIC / SRM traces persist as `Chromatogram` with a parallel-array chromatogram index, round-tripped via `<chromatogramList>` + `<index name="chromatogram">` in the mzML writer.
 * **MS imaging** — `MSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking (default 32×32 pixel tiles); inherits identifications / quantifications / provenance / access-policy from `SpectralDataset`.
-* **Genomic sequencing** (M82) — `GenomicRun` is a parallel run-and-element hierarchy alongside the spectrum-based classes. `AlignedRead` is the per-read value class (read_name, chromosome, position, mapping_quality, cigar, sequence, qualities, flags, mate-pair info — modelled on SAM/BAM). `GenomicIndex` carries parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags) for region / unmapped / flag queries. `WrittenGenomicRun` is the write-side container. Storage under `/study/genomic_runs/<name>/` with `signal_channels/` for per-base byte arrays (sequences, qualities) and per-read parallel arrays (positions, flags, mapping_qualities) plus VL_STRING compounds (cigars, read_names, mate_info). See [`docs/M82.md`](docs/M82.md) for the data-model walkthrough.
+* **Genomic sequencing** — `GenomicRun` is a parallel run-and-element hierarchy alongside the spectrum-based classes. `AlignedRead` is the per-read value class (read_name, chromosome, position, mapping_quality, cigar, sequence, qualities, flags, mate-pair info — modelled on SAM/BAM). `GenomicIndex` carries parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags) for region / unmapped / flag queries. `WrittenGenomicRun` is the write-side container. Storage under `/study/genomic_runs/<name>/` with `signal_channels/` for per-base byte arrays (sequences, qualities) and per-read parallel arrays (positions, flags, mapping_qualities) plus VL_STRING compounds (cigars, read_names, mate_info). See [`docs/genomic-runs.md`](docs/genomic-runs.md) for the data-model walkthrough.
 
 ### Genomic compression codecs
 
@@ -77,10 +75,10 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **QUALITY_BINNED** (codec id `7`) — fixed Illumina-8 / CRUMBLE-derived 8-bin Phred quantisation with 4-bit-packed bin indices. Lossy by construction; round-trip via bin centres. See [`docs/codecs/quality.md`](docs/codecs/quality.md).
 * **DELTA_RANS_ORDER0** (codec id `11`) — delta + zigzag + LEB128 + rANS order-0 wrapper for sorted-ascending integer channels. Auto-default for `positions` on genomic runs. See [`docs/codecs/delta_rans.md`](docs/codecs/delta_rans.md).
 * **FQZCOMP_NX16_Z** (codec id `12`) — CRAM-mimic lossless quality codec (V4 wire format, magic `M94Z`). Static-per-block frequency tables, 16-bit renormalisation, `T = 4096` fixed (`T | b·L` exactly — byte-pairing invariant). Default for the `qualities` channel. See [`docs/codecs/fqzcomp_nx16_z.md`](docs/codecs/fqzcomp_nx16_z.md).
-* **MATE_INLINE_V2** (codec id `13`) — inlined per-record mate_info (chrom + pos + tlen) as a single channel; replaces the M82 compound + per-field subgroup decomposition. See [`docs/codecs/mate_info_v2.md`](docs/codecs/mate_info_v2.md).
+* **MATE_INLINE_V2** (codec id `13`) — inlined per-record mate_info (chrom + pos + tlen) as a single channel. See [`docs/codecs/mate_info_v2.md`](docs/codecs/mate_info_v2.md).
 * **REF_DIFF_V2** (codec id `14`) — reference-aligned sequence-diff codec for genomic `sequences` channels. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`; closes ~80% of the chr22 sequence-channel compression gap to CRAM 3.1. Falls back to BASE_PACK silently when the reference is unavailable at write. See [`docs/codecs/ref_diff_v2.md`](docs/codecs/ref_diff_v2.md).
-* **NAME_TOKENIZED_V2** (codec id `15`) — 8-substream multi-token columnar codec for read names. FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT substreams; per-block reset every 4096 reads; auto-picked rANS-O0 vs raw passthrough per substream. ~67 MB savings on chr22 NA12878 vs the M82 VL-string compound layout. See [`docs/codecs/name_tokenizer_v2.md`](docs/codecs/name_tokenizer_v2.md).
-* **Pipeline wiring** — every M82 channel in `signal_channels/` accepts at least one codec via `WrittenGenomicRun.signal_codec_overrides`. Per-channel `@compression` attribute; lazy whole-channel decode + per-instance cache. The cigars channel accepts rANS-O0/O1; per-channel codec selection guidance is documented in [`docs/format-spec.md`](docs/format-spec.md) §10.4–§10.10.
+* **NAME_TOKENIZED_V2** (codec id `15`) — 8-substream multi-token columnar codec for read names. FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT substreams; per-block reset every 4096 reads; auto-picked rANS-O0 vs raw passthrough per substream. ~67 MB savings on chr22 NA12878 vs a VL-string compound layout. See [`docs/codecs/name_tokenizer_v2.md`](docs/codecs/name_tokenizer_v2.md).
+* **Pipeline wiring** — every genomic-run channel in `signal_channels/` accepts at least one codec via `WrittenGenomicRun.signal_codec_overrides`. Per-channel `@compression` attribute; lazy whole-channel decode + per-instance cache. The cigars channel accepts rANS-O0/O1; per-channel codec selection guidance is documented in [`docs/format-spec.md`](docs/format-spec.md) §10.4–§10.10.
 * **`libttio_rans`** — native C library at `native/` providing AVX2/SSE4.1/scalar SIMD-dispatched rANS kernels and the v2-codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`, `fqzcomp_qual` V4). Consumed by Python (ctypes), Java (JNI), and ObjC (direct linkage). **Required at runtime** for genomic-run write/read on all three bindings — set `TTIO_RANS_LIB_PATH` or place `libttio_rans.{so,dylib,jni}` on the loader search path. See [`docs/native-rans-library.md`](docs/native-rans-library.md).
 
 ### The six data primitives
@@ -96,7 +94,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 
 * **`.tio` HDF5 container** — root `SpectralDataset` holds named MS runs, NMR/Raman/IR/UV-Vis spectrum collections, identifications, quantifications, PROV provenance records, and SRM/MRM transition lists. Fully specified in [`docs/format-spec.md`](docs/format-spec.md); current format string is `ttio_format_version = "1.0"`.
 * **Feature flags** — root-level `@ttio_format_version` + JSON `@ttio_features`. `opt_`-prefixed flags are informational; unprefixed flags are required. Registry at [`docs/feature-flags.md`](docs/feature-flags.md).
-* **Storage-provider abstraction** — `StorageProvider` / `StorageGroup` / `StorageDataset` protocols. Four interchangeable backends: **HDF5** (reference), **Memory** (transient), **SQLite** (full group/dataset/attribute/compound tree as rows), **Zarr v3** (on-disk + in-memory + S3). `open_provider("scheme://...")` dispatches by URL scheme. All three language implementations (Python M44 v0.7, Java M44 v0.7, **ObjC Task 31 2026-05-01**) accept any provider URL through both `+writeMinimalToPath:` and `-writeToFilePath:` for MS-only datasets; NMR runs and Image-subclass datasets continue to require an HDF5 backing file (H5DSset_scale dimension scales / native 3D cubes have no protocol equivalents).
+* **Storage-provider abstraction** — `StorageProvider` / `StorageGroup` / `StorageDataset` protocols. Four interchangeable backends: **HDF5** (reference), **Memory** (transient), **SQLite** (full group/dataset/attribute/compound tree as rows), **Zarr v3** (on-disk + in-memory + S3). `open_provider("scheme://...")` dispatches by URL scheme. All three language implementations accept any provider URL through both `+writeMinimalToPath:` and `-writeToFilePath:` for MS-only datasets; NMR runs and Image-subclass datasets continue to require an HDF5 backing file (H5DSset_scale dimension scales / native 3D cubes have no protocol equivalents).
 * **Byte-level canonical bytes** — `read_canonical_bytes()` returns a little-endian byte stream regardless of backend or host endianness; every provider returns bit-equal bytes for the same logical data — the protocol-native path for signatures and encryption.
 * **Full-rank N-D datasets** — `create_dataset_nd` works across all providers via a flat-BLOB + `@__shape_<name>__` attribute pattern.
 * **VL_BYTES compound field kind** — variable-length byte segments in compound rows across all providers; Java's HDF5 provider uses a native `hvl_t` raw-buffer pool to work around JHI5 1.10's marshalling gap.
@@ -123,15 +121,15 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **imzML** — continuous + processed modes, UUID normalisation.
 * **mzTab** — proteomics 1.0 and metabolomics 2.0.0-M dialects.
 * **ISA-Tab / ISA-JSON** — investigation/study/assay TSV files + ISA-JSON from a `SpectralDataset`. Licensed Apache-2.0.
-* **SAM/BAM/CRAM** (M88, post-M87) — `BamWriter` / `CramWriter` (and ObjC / Java equivalents) compose SAM text in memory from a `WrittenGenomicRun` and pipe it through `samtools view -b` (BAM) or `samtools view -C | samtools sort -O cram` (CRAM, two-stage). All 11 SAM columns always emitted with sentinel fills; RNEXT collapses to `=` when mate matches a mapped read; QUAL is ASCII Phred+33 verbatim. Lossless BAM↔BAM, CRAM↔CRAM, and BAM↔CRAM round-trips through `.tio` per the M88 conformance suite. See [`docs/vendor-formats.md`](docs/vendor-formats.md) §SAM/BAM/CRAM Export.
+* **SAM/BAM/CRAM** — `BamWriter` / `CramWriter` (and ObjC / Java equivalents) compose SAM text in memory from a `WrittenGenomicRun` and pipe it through `samtools view -b` (BAM) or `samtools view -C | samtools sort -O cram` (CRAM, two-stage). All 11 SAM columns always emitted with sentinel fills; RNEXT collapses to `=` when mate matches a mapped read; QUAL is ASCII Phred+33 verbatim. Lossless BAM↔BAM, CRAM↔CRAM, and BAM↔CRAM round-trips through `.tio` per the genomic-export conformance suite. See [`docs/vendor-formats.md`](docs/vendor-formats.md) §SAM/BAM/CRAM Export.
 
 ### Streaming transport (`.tis`)
 
 * **Packet codec** — 24-byte headers, nine packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
 * **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.tio` as `.tis` over `ws://` / `wss://`.
 * **Acquisition simulator** — replays a fixture at wall-clock pace to exercise client/server scheduling.
-* **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`. M89 extends `AUFilter` with chromosome + position-range predicates so subscribers can scope a stream to a genomic region without decrypting AUs they won't read.
-* **Genomic AUs + multiplexing** (M89) — `.tis` carries genomic AUs with a `chromosome + position + mapq + flags` prefix when `spectrum_class == 5`; MS and genomic runs interleave in a single stream and dispatch per-AU on the `spectrum_class` byte. 3×3 cross-language transport matrix green for both encode and decode directions.
+* **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`. `AUFilter` includes chromosome + position-range predicates so subscribers can scope a stream to a genomic region without decrypting AUs they won't read.
+* **Genomic AUs + multiplexing** — `.tis` carries genomic AUs with a `chromosome + position + mapq + flags` prefix when `spectrum_class == 5`; MS and genomic runs interleave in a single stream and dispatch per-AU on the `spectrum_class` byte. 3×3 cross-language transport matrix green for both encode and decode directions.
 
 ### Protection: encryption, integrity, and key management
 
@@ -141,11 +139,11 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Versioned wrapped-key blob** — `[magic "MW" | version 0x02 | algorithm_id | ct_len | md_len | metadata | ciphertext]`.
 * **Crypto algorithm agility** — `CipherSuite` static catalog (AEAD / KEM / MAC / Signature / Hash / XOF). `encrypt_bytes`, `sign_dataset`, `enable_envelope_encryption` all take opt-in `algorithm=` parameters. Fixed allow-list, not plugin-registered.
 * **Per-Access-Unit encryption** — `opt_per_au_encryption` with the `<channel>_segments` VL_BYTES compound layout (see [`docs/format-spec.md`](docs/format-spec.md) §9.1). Each spectrum is a separate AES-256-GCM op with fresh IV and AAD = `dataset_id || au_sequence || channel_name`; ciphertext can't be replayed against a different AU or envelope. Optional `opt_encrypted_au_headers` also encrypts the 36-byte semantic header.
-* **HMAC-SHA256 signatures (`v2:`)** — canonical little-endian byte stream hashed field-by-field (VL strings as `u32_le(len) || bytes`). Cross-language byte-identical by construction. v0.2 native-byte signatures verified via automatic fallback.
+* **HMAC-SHA256 signatures (`v2:`)** — canonical little-endian byte stream hashed field-by-field (VL strings as `u32_le(len) || bytes`). Cross-language byte-identical by construction.
 * **Post-quantum signatures + KEM (`v3:`)** — ML-KEM-1024 (FIPS 203) envelope key-wrap and ML-DSA-87 (FIPS 204) dataset signatures. Python + ObjC via [`liboqs`](https://github.com/open-quantum-safe/liboqs); Java via Bouncy Castle 1.80+. Opt-in via `pip install 'ttio[pqc]'`; classical AES-256-GCM + HMAC-SHA256 remain the defaults. Feature flag: `opt_pqc_preview`. See [`docs/pqc.md`](docs/pqc.md).
 * **Access policy** — `AccessPolicy` persists JSON-encoded subject/stream/key-id metadata under `/protection/access_policies` independently of any key store.
 * **Spectral anonymization** — policy-based pipeline (SAAV redaction, intensity masking, m/z coarsening, rare-metabolite suppression, metadata stripping). Audit trail via provenance record. Feature flag: `opt_anonymized`.
-* **Genomic encryption + anonymisation** (M90) — per-AU AES-256-GCM on genomic signal channels with AAD = `dataset_id || au_sequence || channel_name`; ML-DSA-87 signatures over the chromosomes VL compound (M90.15); region-based encryption (encrypt chr6 / HLA, leave chr1 in clear) with a per-region key map keyed on the reserved `_headers` key (M90.11); genomic anonymiser (strip read names, randomise quality on a seeded RNG, mask SAM-overlapping regions). MPAD transport debug magic bumped to `"MPA1"` with a per-entry dtype byte (M90.12) so genomic UINT8 channels survive without a float64 cast.
+* **Genomic encryption + anonymisation** — per-AU AES-256-GCM on genomic signal channels with AAD = `dataset_id || au_sequence || channel_name`; ML-DSA-87 signatures over the chromosomes VL compound; region-based encryption (encrypt chr6 / HLA, leave chr1 in clear) with a per-region key map keyed on the reserved `_headers` key; genomic anonymiser (strip read names, randomise quality on a seeded RNG, mask SAM-overlapping regions). MPAD transport debug magic is `"MPA1"` with a per-entry dtype byte so genomic UINT8 channels survive without a float64 cast.
 
 ### Cross-language conformance
 
@@ -154,7 +152,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `TtioPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
 * **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).
 * **JCAMP-DX conformance** — 6 integration tests compare bit-for-bit parses across Python↔Java and Python↔ObjC. ObjC CLI `TtioJcampDxDump`.
-* **API stability audit** — every public API classified Stable / Provisional / Deprecated in [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md).
+* **API stability audit** — every public API classified Stable / Provisional / Deprecated in [`docs/api-stability.md`](docs/api-stability.md).
 
 ### Foundation
 
@@ -163,9 +161,14 @@ A complete genomic codec stack ships across all three languages with cross-langu
 
 ### Format compatibility
 
-Every version's files remain readable by later versions. Readers open v0.1–v0.11 files without ceremony. The current container version is 1.3; legacy v0.2 files at 1.1 and v0.10 per-AU-encrypted files still round-trip. Vibrational-spectroscopy and UV/Vis groups under `/study/` are silently ignored by pre-v0.11 readers (they don't match any known layout); `RamanSpectrum`, `IRSpectrum`, `UVVisSpectrum`, and `TwoDimensionalCorrelationSpectrum` persist through the generic Spectrum path with `@ttio_class` attributes, so pre-v0.11 readers fall back to the base class rather than failing. Classical AES-256-GCM wrapping and HMAC-SHA256 signatures verify indefinitely.
-
-Files written by the unreleased M80–M91 line (TTI-O rebrand + genomic data + codec stack + transport extension + genomic encryption + multi-omics integration + Phase 1+2 abstraction polish) are NOT readable by v0.11.x readers — the rebrand drops the `mpgo`/`MPGO` identifiers in favour of `ttio`/`TTIO` (Binding Decision §74 in WORKPLAN), the genomic codec wiring uses `@compression` attributes plus schema lifts (compound → flat / subgroup) that pre-M86 readers don't dispatch on, the M90.12 MPAD transport magic is `"MPA1"` rather than `"MPAD"`, and the Phase 2 per-run provenance writer emits a canonical `<run>/provenance/steps` compound dataset alongside the legacy `@provenance_json` attribute (the Phase 2 reader prefers compound; pre-Phase-2 readers fall through to the JSON attribute and round-trip unchanged). Files written WITHOUT genomic-codec overrides are still readable by any post-M82 reader.
+v1.0.0 is the first stable release of TTI-O. The container ABI, codec
+wire formats, encryption envelope, and digital-signature
+canonicalisations are contractually frozen at this point — the format
+string is `ttio_format_version = "1.0"`. earlier development files
+were never publicly released, so v1.0 readers are not expected to
+ingest them; that history lives in `git log`. Any future format
+revision will read v1.0 containers (forward compatibility is part of
+the contract).
 
 ### Continuous integration
 
@@ -191,8 +194,8 @@ Individual extras:
 | `codecs`      | `hdf5plugin>=4.0`                                                             | LZ4 signal-channel compression                                                            |
 | `zarr`        | `zarr>=3.0`                                                                   | `ZarrProvider` — `zarr://`, `zarr+s3://`, `zarr+memory://` URLs (Zarr v3 on-disk format) |
 | `pqc`         | `liboqs-python>=0.14`                                                         | Post-quantum signatures (ML-DSA-87) and KEM (ML-KEM-1024) — `v3:` envelope wrap          |
-| `bruker`      | `opentimspy`, `opentims-bruker-bridge`                                        | Bruker timsTOF `.d` importer (M53)                                                       |
-| `network`     | `websockets>=12.0`                                                            | `.tis` streaming transport over WebSocket (M68)                                          |
+| `bruker`      | `opentimspy`, `opentims-bruker-bridge`                                        | Bruker timsTOF `.d` importer                                                             |
+| `network`     | `websockets>=12.0`                                                            | `.tis` streaming transport over WebSocket                                                |
 | `integration` | `pyimzml`, `pyteomics`, `pymzml`, `isatools`                                  | Cross-tool validation harnesses (mzML XSD checks, mzTab importer fixtures, ISA-Tab tests) |
 | `test`        | pytest, pytest-asyncio, pytest-cov, hypothesis, **+ all of the above except `integration`** | Full local dev environment for `pytest`                                                   |
 | `all`         | `[crypto,import,cloud,codecs,zarr,pqc,bruker]`                                | Everything except `test` + `integration`                                                  |
@@ -230,11 +233,11 @@ pip install -e 'python[test,integration]'
 cd python && pytest
 ```
 
-Expected on a healthy install: **1121 passed, 0 failed, 12 skipped,
-4 xfailed** (the skips are platform-conditional fixtures and the
-xfails are documented future-work markers).
+Expected on a healthy install: full test suite passes; the only
+skips are platform-conditional fixtures and the xfails are documented
+future-work markers.
 
-Coverage report (V1 of the verification workplan):
+Coverage report:
 
 ```bash
 cd python && pytest --cov=src/ttio --cov-report=term --cov-report=html
@@ -253,7 +256,7 @@ mvn verify -B
 
 ## Building the Objective-C Reference Implementation
 
-Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.10), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `TTIOCompressionLZ4` support; M21 tests skip cleanly when the plugin isn't loadable.
+Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.10), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `TTIOCompressionLZ4` support; LZ4-dependent tests skip cleanly when the plugin isn't loadable.
 
 ### Ubuntu / Debian / WSL
 
@@ -310,23 +313,20 @@ works on both Debian/Ubuntu's apt packages and source builds against
 ## Documentation
 
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Full class hierarchy, protocols, and HDF5 container mapping
-- [`WORKPLAN.md`](WORKPLAN.md) — Milestone plan with acceptance criteria
-- [`HANDOFF.md`](HANDOFF.md) — Active development handoff (milestone status, binding decisions, gotchas)
-- [`docs/version-history.md`](docs/version-history.md) — Release-by-release feature narrative (v0.1.0-alpha → present)
+- [`CHANGELOG.md`](CHANGELOG.md) — Release notes
 - [`docs/architectural-primitives.md`](docs/architectural-primitives.md) — Background analysis: the six primitives, five container philosophies, and the case for an MPEG-G-derived multi-omics standard
 - [`docs/primitives.md`](docs/primitives.md) — The six data primitives specification
 - [`docs/container-design.md`](docs/container-design.md) — HDF5 container layout
 - [`docs/class-hierarchy.md`](docs/class-hierarchy.md) — UML-style class descriptions
 - [`docs/ontology-mapping.md`](docs/ontology-mapping.md) — CV annotation and BFO/PSI-MS/nmrCV mapping
-- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.tio` format specification (v1.3 container)
-- [`docs/transport-spec.md`](docs/transport-spec.md) — `.tis` streaming transport format (v0.10)
-- [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md) — Per-AU encryption design (v1.0 scope, shipped in v0.10.0)
+- [`docs/format-spec.md`](docs/format-spec.md) — On-disk `.tio` format specification (v1.0 container)
+- [`docs/transport-spec.md`](docs/transport-spec.md) — `.tis` streaming transport format
+- [`docs/transport-encryption-design.md`](docs/transport-encryption-design.md) — Per-AU encryption design
 - [`docs/feature-flags.md`](docs/feature-flags.md) — Feature-flag registry
 - [`docs/providers.md`](docs/providers.md) — Storage provider feature matrix (HDF5 / Memory / SQLite / Zarr) and compound-field-kind support
-- [`docs/api-stability-v0.8.md`](docs/api-stability-v0.8.md) — Per-symbol stability classification across all three languages
+- [`docs/api-stability.md`](docs/api-stability.md) — Per-symbol stability classification across all three languages
 - [`docs/pqc.md`](docs/pqc.md) — Post-quantum crypto: ML-KEM-1024 + ML-DSA-87
-- [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML and inter-version migration notes (includes v0.x → v0.10 per-AU encryption transcode)
-- [`docs/api-review-v0.7.md`](docs/api-review-v0.7.md) — Cross-language API review (v0.7 appendices A, B, C)
+- [`docs/migration-guide.md`](docs/migration-guide.md) — Migration guide from mzML / nmrML
 - [`docs/vendor-formats.md`](docs/vendor-formats.md) — Vendor format support (Thermo `.raw`, Bruker `.d`, Waters MassLynx, JCAMP-DX Raman/IR/UV-Vis incl. compressed dialects)
 
 ## License

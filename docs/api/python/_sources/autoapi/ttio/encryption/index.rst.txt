@@ -112,7 +112,7 @@ Module Contents
    Encrypt ``plaintext`` with the named AEAD cipher.
    Returns ciphertext/iv/tag tuple.
 
-   v0.7 M48: the algorithm is a parameter, not an invariant. Key and
+   : the algorithm is a parameter, not an invariant. Key and
    nonce lengths come from :mod:`ttio.cipher_suite`. Passing an
    unsupported algorithm raises
    :class:`~ttio.cipher_suite.UnsupportedAlgorithmError`.
@@ -127,7 +127,7 @@ Module Contents
 
    Decrypt a sealed blob with the named AEAD cipher. Raises on
    authentication failure. Key / IV / tag lengths dispatched via
-   :mod:`ttio.cipher_suite` (v0.7 M48).
+   :mod:`ttio.cipher_suite` ().
 
 
 .. py:function:: read_encrypted_channel(channels_group, channel: str, key: bytes, dtype: str = '<f8') -> numpy.ndarray
@@ -138,7 +138,7 @@ Module Contents
    little-endian float64, matching the ObjC writer). Raises ``KeyError`` if
    the channel is not encrypted in this group.
 
-   v0.9 M64.5 phase B: ``channels_group`` may be an ``h5py.Group``
+   phase B: ``channels_group`` may be an ``h5py.Group``
    (legacy fast path) or a :class:`StorageGroup`. The HDF5-backed
    StorageGroup unwraps to the native h5py path; non-HDF5 providers
    route through the protocol's ``open_dataset().read()`` and
@@ -175,7 +175,7 @@ Module Contents
 
    Use this variant when the caller already holds an open file handle
    (e.g. via :class:`~ttio.spectral_dataset.SpectralDataset`) and
-   cannot open the file a second time. v0.9 M64.5 phase B: accepts
+   cannot open the file a second time. phase B: accepts
    either an ``h5py.Group`` or a :class:`StorageGroup` so non-HDF5
    providers also encrypt in place.
 

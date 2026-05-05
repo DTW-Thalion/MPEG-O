@@ -370,7 +370,7 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.providers.hdf5">
 <span id="ttio-providers-hdf5"></span><h1>ttio.providers.hdf5<a class="headerlink" href="#module-ttio.providers.hdf5" title="Link to this heading">¶</a></h1>
-<p>HDF5 storage provider — Milestone 39 Part C.</p>
+<p>HDF5 storage provider — Part C.</p>
 <p>Adapter that exposes <code class="docutils literal notranslate"><span class="pre">h5py</span></code> through the <a class="reference internal" href="../base/index.html#module-ttio.providers.base" title="ttio.providers.base"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ttio.providers.base</span></code></a>
 contract. No behavioural change — callers that used <code class="docutils literal notranslate"><span class="pre">h5py.File</span></code>
 directly can switch to <code class="docutils literal notranslate"><span class="pre">Hdf5Provider.open(path)</span></code> and continue.</p>
@@ -410,7 +410,7 @@ Java:        <code class="docutils literal notranslate"><span class="pre">global
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.open">
 <span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'r'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.providers.hdf5.Hdf5Provider" title="ttio.providers.hdf5.Hdf5Provider"><span class="pre">Hdf5Provider</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.open" title="Link to this definition">¶</a></dt>
 <dd><p>Open an HDF5 file under this provider. Supports both factory
-and instance call styles per Appendix B Gap 1 — see
+and instance call styles per — see
 <a class="reference internal" href="../base/index.html#ttio.providers.base.StorageProvider.open" title="ttio.providers.base.StorageProvider.open"><code class="xref py py-class docutils literal notranslate"><span class="pre">ttio.providers.base.StorageProvider.open</span></code></a>.</p>
 </dd></dl>
 
@@ -421,7 +421,7 @@ and instance call styles per Appendix B Gap 1 — see
 (<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>, …).</p>
 <p>Exposed as a method (not a property) to mirror the ObjC
 <code class="docutils literal notranslate"><span class="pre">-providerName</span></code> selector and Java <code class="docutils literal notranslate"><span class="pre">providerName()</span></code> getter.
-Appendix B Gap 5 — Provisional storage-provider convergence.</p>
+— Provisional storage-provider convergence.</p>
 </dd></dl>
 
 <dl class="py method">

@@ -370,16 +370,16 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.cipher_suite">
 <span id="ttio-cipher-suite"></span><h1>ttio.cipher_suite<a class="headerlink" href="#module-ttio.cipher_suite" title="Link to this heading">¶</a></h1>
-<p>Cipher-suite catalog and algorithm-dispatched parameter helpers (v0.7 M48).</p>
+<p>Cipher-suite catalog and algorithm-dispatched parameter helpers ().</p>
 <p>Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit
 fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures,
 AES-KW-style wrap for KEK). Key sizes and nonce lengths were
 hardcoded module-level constants.</p>
-<p>v0.7 M48 generalises the public API with an <code class="docutils literal notranslate"><span class="pre">algorithm=</span></code> keyword
+<p>generalises the public API with an <code class="docutils literal notranslate"><span class="pre">algorithm=</span></code> keyword
 parameter backed by this catalog. The intent was to shape the
 parameter hole so M49’s post-quantum binding is a pure plug-in — no
 API change — once ML-KEM-1024 / ML-DSA-87 are ready.</p>
-<p>v0.8 M49 activates the post-quantum entries. <code class="docutils literal notranslate"><span class="pre">&quot;ml-kem-1024&quot;</span></code> (FIPS
+<p>activates the post-quantum entries. <code class="docutils literal notranslate"><span class="pre">&quot;ml-kem-1024&quot;</span></code> (FIPS
 203) and <code class="docutils literal notranslate"><span class="pre">&quot;ml-dsa-87&quot;</span></code> (FIPS 204) transition from
 <code class="docutils literal notranslate"><span class="pre">status=&quot;reserved&quot;</span></code> to <code class="docutils literal notranslate"><span class="pre">status=&quot;active&quot;</span></code>. Activation requires
 the optional <code class="docutils literal notranslate"><span class="pre">[pqc]</span></code> extra (<code class="docutils literal notranslate"><span class="pre">pip</span> <span class="pre">install</span> <span class="pre">'ttio[pqc]'</span></code> pulls in

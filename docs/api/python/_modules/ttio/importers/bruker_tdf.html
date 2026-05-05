@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.importers.bruker_tdf</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Bruker timsTOF TDF importer — v0.8 M53.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Bruker timsTOF TDF importer —.</span>
 
 <span class="sd">Bruker&#39;s .d directory format holds two files:</span>
 
@@ -385,7 +385,7 @@
 <span class="sd">* ``mz`` — peak m/z values (float64 Da)</span>
 <span class="sd">* ``intensity`` — raw peak intensities (float64)</span>
 <span class="sd">* ``inv_ion_mobility`` — inverse reduced ion mobility 1/K₀</span>
-<span class="sd">  (float64 Vs/cm²) — the third signal channel is new in v0.8 M53.</span>
+<span class="sd">  (float64 Vs/cm²) — the third signal channel is new in.</span>
 
 <span class="sd">Ion mobility is preserved per-peak, not per-spectrum, because</span>
 <span class="sd">timsTOF frames are 2-D acquisitions (multiple ion-mobility slices</span>
@@ -411,7 +411,7 @@
 <span class="sd">extraction delegates to this Python module via subprocess, matching</span>
 <span class="sd">the ThermoRawReader pattern (M38).</span>
 
-<span class="sd">API status: Provisional (v0.8 M53). Binary decompression via</span>
+<span class="sd">API status: Provisional (). Binary decompression via</span>
 <span class="sd">``opentimspy`` is the only supported path in v0.8; a native-C port</span>
 <span class="sd">of the frame decoder is deferred to v0.9.</span>
 

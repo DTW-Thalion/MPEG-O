@@ -73,7 +73,7 @@ Module Contents
    Cross-language: ObjC ``TTIOPrecision`` · Java
    ``Enums.Precision``.
 
-   Appendix B Gap 7: ``Precision`` is a pure enum. The HDF5 type
+   : ``Precision`` is a pure enum. The HDF5 type
    mapping (``H5T_NATIVE_DOUBLE`` &c.) lives in
    ``ttio.providers.hdf5`` so non-HDF5 providers (SQLite, Memory,
    future Zarr) can import ``Precision`` without pulling HDF5

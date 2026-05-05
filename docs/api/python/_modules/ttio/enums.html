@@ -408,7 +408,7 @@
 <span class="sd">    Cross-language: ObjC ``TTIOPrecision`` · Java</span>
 <span class="sd">    ``Enums.Precision``.</span>
 
-<span class="sd">    Appendix B Gap 7: ``Precision`` is a pure enum. The HDF5 type</span>
+<span class="sd">    : ``Precision`` is a pure enum. The HDF5 type</span>
 <span class="sd">    mapping (``H5T_NATIVE_DOUBLE`` &amp;c.) lives in</span>
 <span class="sd">    ``ttio.providers.hdf5`` so non-HDF5 providers (SQLite, Memory,</span>
 <span class="sd">    future Zarr) can import ``Precision`` without pulling HDF5</span>
@@ -442,7 +442,7 @@
 
 <div class="viewcode-block" id="Precision.UINT8">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.Precision.UINT8">[docs]</a>
-    <span class="n">UINT8</span> <span class="o">=</span> <span class="mi">6</span>           <span class="c1"># v0.11 M79: genomic quality scores + packed bases</span></div>
+    <span class="n">UINT8</span> <span class="o">=</span> <span class="mi">6</span>           <span class="c1"># genomic quality scores + packed bases</span></div>
 
 <div class="viewcode-block" id="Precision.UINT16">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.Precision.UINT16">[docs]</a>
@@ -450,7 +450,7 @@
 
 <div class="viewcode-block" id="Precision.UINT64">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.Precision.UINT64">[docs]</a>
-    <span class="n">UINT64</span> <span class="o">=</span> <span class="mi">9</span>          <span class="c1"># v0.11 M82: genomic index offsets (8 reserved for INT8)</span></div>
+    <span class="n">UINT64</span> <span class="o">=</span> <span class="mi">9</span>          <span class="c1"># genomic index offsets (8 reserved for INT8)</span></div>
 
 
 <div class="viewcode-block" id="Precision.numpy_dtype">
@@ -497,7 +497,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.Compression.NUMPRESS_DELTA">[docs]</a>
     <span class="n">NUMPRESS_DELTA</span> <span class="o">=</span> <span class="mi">3</span></div>
 
-    <span class="c1"># v0.11 M79: genomic codecs (clean-room implementations land in M75+).</span>
+    <span class="c1"># genomic codecs (clean-room implementations land in M75+).</span>
 <div class="viewcode-block" id="Compression.RANS_ORDER0">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.Compression.RANS_ORDER0">[docs]</a>
     <span class="n">RANS_ORDER0</span> <span class="o">=</span> <span class="mi">4</span></div>
@@ -517,12 +517,12 @@
     <span class="c1"># Slots 8 (NAME_TOKENIZED v1) and 9 (REF_DIFF v1) removed in the</span>
     <span class="c1"># v1.0 reset (Phase 2d). v2 successors live at slots 14/15.</span>
     <span class="c1"># Slot 10 was reserved for an experimental codec that never shipped.</span>
-    <span class="c1"># v1.2 M95: delta + zigzag + varint + rANS order-0 — sorted integer channels.</span>
+    <span class="c1"># delta + zigzag + varint + rANS order-0 — sorted integer channels.</span>
 <div class="viewcode-block" id="Compression.DELTA_RANS_ORDER0">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.Compression.DELTA_RANS_ORDER0">[docs]</a>
     <span class="n">DELTA_RANS_ORDER0</span> <span class="o">=</span> <span class="mi">11</span></div>
 
-    <span class="c1"># v1.2 M94.Z: CRAM-mimic rANS-Nx16 quality codec. Static-per-block</span>
+    <span class="c1">#.Z: CRAM-mimic rANS-Nx16 quality codec. Static-per-block</span>
     <span class="c1"># frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context.</span>
     <span class="c1"># Sole quality codec for the qualities channel; wire magic ``M94Z``.</span>
 <div class="viewcode-block" id="Compression.FQZCOMP_NX16_Z">
@@ -663,11 +663,11 @@
 
 <div class="viewcode-block" id="AcquisitionMode.GENOMIC_WGS">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.AcquisitionMode.GENOMIC_WGS">[docs]</a>
-    <span class="n">GENOMIC_WGS</span> <span class="o">=</span> <span class="mi">7</span>   <span class="c1"># v0.11 M79: whole-genome sequencing</span></div>
+    <span class="n">GENOMIC_WGS</span> <span class="o">=</span> <span class="mi">7</span>   <span class="c1"># whole-genome sequencing</span></div>
 
 <div class="viewcode-block" id="AcquisitionMode.GENOMIC_WES">
 <a class="viewcode-back" href="../../autoapi/ttio/enums/index.html#ttio.enums.AcquisitionMode.GENOMIC_WES">[docs]</a>
-    <span class="n">GENOMIC_WES</span> <span class="o">=</span> <span class="mi">8</span>   <span class="c1"># v0.11 M79: whole-exome sequencing</span></div>
+    <span class="n">GENOMIC_WES</span> <span class="o">=</span> <span class="mi">8</span>   <span class="c1"># whole-exome sequencing</span></div>
 </div>
 
 

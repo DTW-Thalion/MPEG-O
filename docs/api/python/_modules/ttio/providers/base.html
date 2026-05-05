@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.providers.base</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Abstract storage-provider contract — Milestone 39 Part A.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Abstract storage-provider contract — Part A.</span>
 
 <span class="sd">A storage provider exposes a hierarchical group tree where each group</span>
 <span class="sd">owns typed datasets (primitive 1-D arrays + compound records) and</span>
@@ -548,7 +548,7 @@
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Read ``count`` elements starting at ``offset``. ``count == -1``</span>
 <span class="sd">        reads from ``offset`` to the end.</span>
 
-<span class="sd">        Return type varies by backend (Appendix B Gap 2):</span>
+<span class="sd">        Return type varies by backend :</span>
 
 <span class="sd">        * **Primitive datasets**: always :class:`numpy.ndarray` with</span>
 <span class="sd">          dtype matching :meth:`precision`.</span>
@@ -586,7 +586,7 @@
 
 <span class="sd">        Non-compound datasets raise ``TypeError``.</span>
 
-<span class="sd">        Appendix B Gap 2 — backend-agnostic compound access.&quot;&quot;&quot;</span>
+<span class="sd">        — backend-agnostic compound access.&quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">compound_fields</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;read_rows() is only valid for compound datasets; &quot;</span>
@@ -608,7 +608,7 @@
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/index.html#ttio.providers.base.StorageDataset.read_canonical_bytes">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">read_canonical_bytes</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the dataset contents as a byte stream in the TTIO</span>
-<span class="sd">        canonical layout (v0.7 M43).</span>
+<span class="sd">        canonical layout ().</span>
 
 <span class="sd">        Semantics:</span>
 
@@ -630,7 +630,7 @@
 <span class="sd">        override when a zero-copy fast-path exists</span>
 <span class="sd">        (:class:`~ttio.providers.hdf5.Hdf5Provider` does this).</span>
 
-<span class="sd">        Appendix B Gap 2 follow-up — extends :meth:`read_rows` by</span>
+<span class="sd">        follow-up — extends :meth:`read_rows` by</span>
 <span class="sd">        promising a stable byte form, not just a stable row form.&quot;&quot;&quot;</span>
         <span class="c1"># Local import to keep the ABC&#39;s top-level import surface slim.</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_canonical</span>
@@ -677,14 +677,14 @@
 <div class="viewcode-block" id="StorageDataset.delete_attribute">
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/index.html#ttio.providers.base.StorageDataset.delete_attribute">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">delete_attribute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove an attribute. No-op if absent. Appendix B Gap 8.&quot;&quot;&quot;</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Remove an attribute. No-op if absent. &quot;&quot;&quot;</span></div>
 
 
     <span class="nd">@abstractmethod</span>
 <div class="viewcode-block" id="StorageDataset.attribute_names">
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/index.html#ttio.providers.base.StorageDataset.attribute_names">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">attribute_names</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;List attribute names; empty list if none. Appendix B Gap 8.&quot;&quot;&quot;</span></div>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;List attribute names; empty list if none. &quot;&quot;&quot;</span></div>
 
 
     <span class="c1"># ── Lifecycle ───────────────────────────────────────────────────</span>
@@ -891,7 +891,7 @@
 <span class="sd">        ``mode`` mirrors h5py semantics: ``&quot;r&quot;`` read-only, ``&quot;r+&quot;``</span>
 <span class="sd">        read/write existing, ``&quot;w&quot;`` create/truncate, ``&quot;a&quot;`` append.</span>
 
-<span class="sd">        Appendix B Gap 1 — unified open() dispatch. Both call styles</span>
+<span class="sd">        — unified open() dispatch. Both call styles</span>
 <span class="sd">        are supported and semantically equivalent:</span>
 
 <span class="sd">        * **Factory style** (returns a new instance)::</span>
@@ -925,7 +925,7 @@
 
 <span class="sd">        Exposed as a method (not a property) to mirror the ObjC</span>
 <span class="sd">        ``-providerName`` selector and Java ``providerName()`` getter.</span>
-<span class="sd">        Appendix B Gap 5 — Provisional storage-provider convergence.&quot;&quot;&quot;</span></div>
+<span class="sd">        — Provisional storage-provider convergence.&quot;&quot;&quot;</span></div>
 
 
     <span class="nd">@abstractmethod</span>
@@ -946,7 +946,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span> <span class="o">...</span></div>
 
 
-    <span class="c1"># ── Capabilities (Appendix B Gap 3) ──────────────────────────</span>
+    <span class="c1"># ── Capabilities ──────────────────────────</span>
 
 <div class="viewcode-block" id="StorageProvider.supports_chunking">
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/index.html#ttio.providers.base.StorageProvider.supports_chunking">[docs]</a>
@@ -970,7 +970,7 @@
         <span class="k">return</span> <span class="kc">False</span></div>
 
 
-    <span class="c1"># ── Transactions (Appendix B Gap 11) ─────────────────────────</span>
+    <span class="c1"># ── Transactions ─────────────────────────</span>
 
 <div class="viewcode-block" id="StorageProvider.begin_transaction">
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/index.html#ttio.providers.base.StorageProvider.begin_transaction">[docs]</a>

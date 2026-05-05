@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,29 +260,97 @@
         </blockquote>
         <div class="desc">
           
-          Incrementally append mass spectra to an `.tio`
-          file. Spectra accumulate in memory until
-          <a rel="gsdoc" href="#method$TTIOStreamWriter-flushWithError$">
-            -flushWithError:
-          </a>
+          
+        </p>
+        <p>
 
-          is called. On each flush the file is rewritten so that the
-          run group reflects every spectrum buffered so far &#8212; the
-          file remains a valid.tio after each flush, satisfying
-          the streaming-write acceptance criterion. Calling
-          <a rel="gsdoc" href="#method$TTIOStreamWriter-flushAndCloseWithError$">
-            -flushAndCloseWithError:
-          </a>
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
 
-          flushes one final time and tears down. For v0.1 the
-          writer&apos;s flush is whole-file regenerative: simple,
-          correct, and bounded for the streaming-demo case (&#8804;
-          a few thousand spectra). A future milestone may switch to
-          extendable HDF5 datasets. API status: Stable
-          (flush integration pending). Cross-language
-          equivalents: Python:
-          ttio.stream_writer.StreamWriter
-          Java: global.thalion.ttio.StreamWriter
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Query/TTIOStreamWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Incrementally appends mass spectra to a
+            <code>.tio</code> file.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Spectra accumulate in an in-memory buffer until
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamWriter-flushWithError$">
+                -flushWithError:
+              </a>
+
+            </code>
+            is called. On each flush the file is rewritten so that
+            the run group reflects every spectrum buffered so far
+            &#8212; the file remains a valid <code>.tio</code>
+            after each flush, satisfying the streaming-write
+            acceptance criterion. Calling
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamWriter-flushAndCloseWithError$">
+                -flushAndCloseWithError:
+              </a>
+
+            </code>
+            performs one final flush and tears down.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The flush implementation is whole-file regenerative:
+            simple, correct, and bounded for streaming demos
+            and modest run sizes (up to a few thousand spectra).
+            Larger workloads should write to extendable HDF5
+            datasets via a different writer.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable (flush
+            integration pending).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.stream_writer.StreamWriter</code> <br />
+            Java: <code>global.thalion.ttio.StreamWriter</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -301,7 +369,26 @@
         - (BOOL) <b>appendSpectrum:</b> (<a rel="gsdoc" href="TTIOMassSpectrum.html#class$TTIOMassSpectrum">TTIOMassSpectrum</a>*)spectrum<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Appends <code><var>spectrum</var></code> to the
+            in-memory buffer. Nothing reaches disk until
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamWriter-flushWithError$">
+                -flushWithError:
+              </a>
+
+            </code>
+            or
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamWriter-flushAndCloseWithError$">
+                -flushAndCloseWithError:
+              </a>
+
+            </code>
+            is called. @param <var>spectrum</var> Mass
+            <var>spectrum</var> to append. Must be non-nil.
+            @param <var>error</var> Out-parameter populated when
+            the writer has been closed. @return <code>YES</code> on
+            success, <code>NO</code> if the writer is closed.
           
         </div>
         <hr class="method-separator">
@@ -311,7 +398,18 @@
         - (BOOL) <b>flushAndCloseWithError:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Performs one final flush, then marks the writer
+            closed. Subsequent
+            <code>
+              <a rel="gsdoc" href="#method$TTIOStreamWriter-appendSpectrum$error$">
+                -appendSpectrum:error:
+              </a>
+
+            </code>
+            calls fail with <code>TTIOErrorInvalidArgument</code>
+            . @param <var>error</var> Out-parameter populated on
+            failure. @return <code>YES</code> on success,
+            <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -321,7 +419,13 @@
         - (BOOL) <b>flushWithError:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Rewrites the entire <code>.tio</code> file from
+            the current buffer. Safe to call repeatedly; on each
+            call the file remains a valid <code>.tio</code>
+            reflecting every spectrum buffered so far.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return <code>YES</code> on success,
+            <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -331,7 +435,21 @@
         - (instancetype) <b>initWithFilePath:</b> (NSString*)path<b> runName:</b> (NSString*)runName<b> acquisitionMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOAcquisitionMode">TTIOAcquisitionMode</a>)mode<b> instrumentConfig:</b> (<a rel="gsdoc" href="TTIOInstrumentConfig.html#class$TTIOInstrumentConfig">TTIOInstrumentConfig</a>*)config<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Creates an empty <code>.tio</code> file at
+            <code><var>path</var></code> and prepares the writer
+            to receive spectra. @param <var>path</var> Filesystem
+            <var>path</var> at which to create the
+            <code>.tio</code> file. Any existing file at this
+            <var>path</var> is overwritten. @param
+            <var>runName</var> Run group name to use on flush
+            (for example <code>@&quot;run_0001&quot;</code>). @param
+            <var>mode</var> Acquisition <var>mode</var> recorded
+            on the run group. @param <var>config</var>
+            Instrument-configuration metadata
+            recorded on the run group. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            An initialised writer with an empty buffer, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

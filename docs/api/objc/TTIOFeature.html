@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,19 +260,66 @@
         </blockquote>
         <div class="desc">
           
-          A feature-level observation: a peak detected in one run,
-          with retention time + m/z + charge + per-sample
-          abundances. Sits between {@link
-          TTIOIdentification} (spectrum-level) and
-          {@link TTIOQuantification} (entity-level): the
-          row-level record required by mzTab&apos;s PEP section
-          (peptide-level quantification in the 1.0
-          proteomics dialect) and by mzTab-M&apos;s SMF/SME
-          sections (small-molecule feature + evidence in the
-          2.0.0-M metabolomics dialect). API status:
-          Provisional (v0.12.0 M78). Cross-language
-          equivalents: Python: ttio.feature.Feature Java:
-          global.thalion.ttio.Feature
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOFeature.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            A feature-level observation: a peak detected in one run,
+            with retention time, m/z, charge, and per-sample
+            abundances. Sits between {@link
+            TTIOIdentification} (spectrum-level)
+            and {@link TTIOQuantification} (entity-level): the
+            row-level record required by mzTab&apos;s PEP section
+            (peptide-level quantification in the 1.0
+            proteomics dialect) and by mzTab-M&apos;s SMF / SME
+            sections (small-molecule feature + evidence in the
+            2.0.0-M metabolomics dialect).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.feature.Feature</code>
+            <br /> Java:
+            <code>global.thalion.ttio.Feature</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -297,8 +344,8 @@
         + (instancetype) <b>featureWithId:</b> (NSString*)featureId<b> runName:</b> (NSString*)runName<b> chemicalEntity:</b> (NSString*)chemicalEntity;<br />
         <div class="desc">
           
-            Minimal constructor; numeric + container fields
-            default to empty/zero.
+            Minimal convenience factory; numeric and container
+            fields default to zero / empty.
           
         </div>
         <hr class="method-separator">
@@ -385,7 +432,18 @@
         - (instancetype) <b>initWithFeatureId:</b> (NSString*)featureId<b> runName:</b> (NSString*)runName<b> chemicalEntity:</b> (NSString*)chemicalEntity<b> retentionTimeSeconds:</b> (double)rtSeconds<b> expMassToCharge:</b> (double)mz<b> charge:</b> (NSInteger)charge<b> adductIon:</b> (NSString*)adductIon<b> abundances:</b> (NSDictionary<NSString*,NSNumber*>*)abundances<b> evidenceRefs:</b> (NSArray<NSString*>*)evidenceRefs;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>featureId</var> Unique identifier. @param
+            <var>runName</var> Acquisition-run name. @param
+            <var>chemicalEntity</var> Identified entity. @param
+            <var>rtSeconds</var> Apex retention time. @param
+            <var>mz</var> Experimental precursor m/z. @param
+            <var>charge</var> Precursor <var>charge</var>. @param
+            <var>adductIon</var> Optional adduct ion identifier.
+            @param <var>abundances</var> Optional per-sample
+            <var>abundances</var>. @param <var>evidenceRefs</var>
+            Optional evidence references. @return An
+            initialised feature.
           
         </div>
         <hr class="method-separator">

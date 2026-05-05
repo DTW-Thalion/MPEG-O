@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -271,27 +271,83 @@
         </blockquote>
         <div class="desc">
           
-          An ordered run of spectra sharing an instrument
-          configuration and acquisition mode. Maps to the
-          MPEG-G Dataset concept; each spectrum is an Access
-          Unit. v0.2 update: runs accept any TTIOSpectrum
-          subclass (mass spectra, NMR spectra,...). Signal
-          channel serialization is name-driven, so an MS run
-          writes mz_values + intensity_values (binary-identical
-          to v0.1) and an NMR run writes chemical_shift_values +
-          intensity_values. The run group carries a
-          spectrum_class attribute identifying the
-          subclass; absence of that attribute triggers v0.1
-          fallback (TTIOMassSpectrum with hardcoded channel
-          names). Conformances (v0.2): TTIOProvenanceable
-          (per-run provenance chain), TTIOEncryptable
-          (delegates to TTIOEncryptionManager when the run
-          carries persistence context set by
-          TTIOSpectralDataset after load). API
-          status: Stable (Encryptable surface deferred to M41.5
-          in non-ObjC implementations). Cross-language equivalents:
-          Python: ttio.acquisition_run.AcquisitionRun Java:
-          global.thalion.ttio.AcquisitionRun
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> TTIOIndexable, TTIOStreamable,
+            TTIOProvenanceable, TTIOEncryptable,
+            TTIORun
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Run/TTIOAcquisitionRun.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            An ordered run of spectra sharing an instrument
+            configuration and acquisition mode. The
+            non-genomic counterpart of
+            <code>TTIOGenomicRun</code>; both conform to
+            <code>TTIORun</code> so cross-modality code can
+            iterate uniformly.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            A run accepts any <code>TTIOSpectrum</code> subclass
+            (mass spectra, NMR spectra, Raman, IR, UV-Vis,...)
+            but every spectrum within a single run must share a
+            single subclass. Signal-channel serialisation is
+            name-driven, so an MS run writes
+            <code>mz_values</code> +
+            <code>intensity_values</code> and an NMR run writes
+            <code>chemical_shift_values</code> +
+            <code>intensity_values</code>. The run group carries
+            a <code>spectrum_class</code> attribute identifying the
+            subclass.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.acquisition_run.AcquisitionRun</code>
+            <br /> Java:
+            <code>global.thalion.ttio.AcquisitionRun</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -333,7 +389,7 @@
         + (instancetype) <b>readFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads a run from <code>parent/name</code>.
           
         </div>
         <hr class="method-separator">
@@ -343,14 +399,14 @@
         + (instancetype) <b>readFromStorageGroup:</b> (id)parent<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.9 M64.5-objc-java: legacy alias for the
-            storage-protocol read path. Now identical
-            to
-            <a rel="gsdoc" href="#method$TTIOAcquisitionRun+readFromGroup$name$error$">
-              +readFromGroup:name:error:
-            </a>
+            Legacy alias for
+            <code>
+              <a rel="gsdoc" href="#method$TTIOAcquisitionRun+readFromGroup$name$error$">
+                +readFromGroup:name:error:
+              </a>
 
-            ; retained for source compatibility with v0.9 callers.
+            </code>
+            ; identical behaviour, retained for source compatibility.
           
         </div>
         <hr class="method-separator">
@@ -422,8 +478,10 @@
         - (NSArray<NSNumber*>*) <b>indicesInRetentionTimeRange:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)range;<br />
         <div class="desc">
           
-            Indices in the given retention-time
-            <var>range</var>, in ascending order.
+            @param <var>range</var> Closed retention-time
+            <var>range</var> in seconds. @return Indices in
+            ascending order whose retention time falls inside
+            the <var>range</var>.
           
         </div>
         <hr class="method-separator">
@@ -433,9 +491,12 @@
         - (instancetype) <b>initWithSpectra:</b> (NSArray*)spectra<b> acquisitionMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOAcquisitionMode">TTIOAcquisitionMode</a>)mode<b> instrumentConfig:</b> (<a rel="gsdoc" href="TTIOInstrumentConfig.html#class$TTIOInstrumentConfig">TTIOInstrumentConfig</a>*)config;<br />
         <div class="desc">
           
-            v0.2 generalized initializer. Accepts any TTIOSpectrum
-            subclass, but all <var>spectra</var> in the same
-            run must share a single subclass.
+            Convenience initialiser without chromatograms.
+            @param <var>spectra</var> Array of any single
+            <code>TTIOSpectrum</code> subclass. @param
+            <var>mode</var> Acquisition <var>mode</var>. @param
+            <var>config</var> Instrument configuration. @return
+            An initialised run.
           
         </div>
         <hr class="method-separator">
@@ -445,8 +506,15 @@
         - (instancetype) <b>initWithSpectra:</b> (NSArray*)spectra<b> chromatograms:</b> (NSArray<TTIOChromatogram*>*)chromatograms<b> acquisitionMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOAcquisitionMode">TTIOAcquisitionMode</a>)mode<b> instrumentConfig:</b> (<a rel="gsdoc" href="TTIOInstrumentConfig.html#class$TTIOInstrumentConfig">TTIOInstrumentConfig</a>*)config;<br />
         <div class="desc">
           
-            v0.4 M24 initializer. ``chromatograms`` may be
-            nil/empty.
+            Designated initialiser. @param
+            <var>spectra</var> Array of any single
+            <code>TTIOSpectrum</code> subclass. @param
+            <var>chromatograms</var> Optional
+            <var>chromatograms</var>; pass <code>nil</code> or
+            empty array for none. @param <var>mode</var>
+            Acquisition <var>mode</var>. @param
+            <var>config</var> Instrument configuration. @return
+            An initialised run.
           
         </div>
         <hr class="method-separator">
@@ -530,12 +598,16 @@
         - (void) <b>releaseHDF5Handles</b>;<br />
         <div class="desc">
           
-            Release all cached HDF5 handles (group +
-            per-channel datasets). After this call,
-            spectrumAtIndex: fails; the run keeps its
-            index metadata so count/headers remain queryable.
-            Used by TTIOSpectralDataset.closeFile to fully release
-            the underlying file before an encrypt/decrypt reopen.
+            Releases all cached HDF5 handles (group +
+            per-channel datasets). After this call
+            <code>
+              <a rel="gsdoc" href="#method$TTIOAcquisitionRun-spectrumAtIndex$error$">
+                -spectrumAtIndex:error:
+              </a>
+
+            </code>
+            fails; the run keeps its index metadata so
+            <code>count</code> / headers remain queryable.
           
         </div>
         <hr class="method-separator">
@@ -555,9 +627,9 @@
         - (void) <b>setPersistenceFilePath:</b> (NSString*)path<b> runName:</b> (NSString*)runName;<br />
         <div class="desc">
           
-            Attach file-path + run-name context after load so
-            protocol encryption methods have something to
-            delegate to. Internal API.
+            Attaches file-path + run-name context after load
+            so protocol encryption methods can delegate to the
+            in-place encryption manager. Internal API.
           
         </div>
         <hr class="method-separator">
@@ -571,7 +643,8 @@
             attributes (nonatomic, readwrite, assign). See
             also
             <a rel="gsdoc" href="#method$TTIOAcquisitionRun-signalCompression">[TTIOAcquisitionRun -signalCompression]</a>
- v0.3 M21: compression codec applied to signal channel datasets when persisting this run. Defaults to ``TTIOCompressionZlib`` so existing callers are unaffected. Writers may set LZ4 or Numpress-delta explicitly before calling ``writeToGroup:``.
+ Compression codec applied to signal-channel datasets when persisting this run. Defaults to <code>TTIOCompressionZlib</code>; writers may set <code>LZ4</code> or <code>NumpressDelta</code> explicitly before calling <code>-writeToGroup:
+</code>.
           
         </div>
         <hr class="method-separator">
@@ -585,7 +658,8 @@
             attributes (nonatomic, readwrite, assign). See
             also
             <a rel="gsdoc" href="#method$TTIOAcquisitionRun-setSignalCompression$">[TTIOAcquisitionRun -setSignalCompression:]</a>
- v0.3 M21: compression codec applied to signal channel datasets when persisting this run. Defaults to ``TTIOCompressionZlib`` so existing callers are unaffected. Writers may set LZ4 or Numpress-delta explicitly before calling ``writeToGroup:``.
+ Compression codec applied to signal-channel datasets when persisting this run. Defaults to <code>TTIOCompressionZlib</code>; writers may set <code>LZ4</code> or <code>NumpressDelta</code> explicitly before calling <code>-writeToGroup:
+</code>.
           
         </div>
         <hr class="method-separator">
@@ -606,8 +680,12 @@
         - (id) <b>spectrumAtIndex:</b> (NSUInteger)index<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.2: returns whatever TTIOSpectrum subclass the run
-            holds.
+            @param <var>index</var> Zero-based position; must
+            satisfy <code><var>index</var> &lt; count</code>.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return The materialised spectrum
+            (concrete subclass), or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -639,8 +717,10 @@
         - (BOOL) <b>writeToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.7 M44 / Task 31: I/O routed through StorageGroup /
-            StorageDataset.
+            Writes this run into a new sub-group named
+            <code><var>name</var></code> under
+            <code><var>parent</var></code> via the
+            <code>TTIOStorageGroup</code> protocol.
           
         </div>
         <hr class="method-separator">

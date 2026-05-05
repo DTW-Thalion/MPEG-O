@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -266,15 +266,102 @@
         </blockquote>
         <div class="desc">
           
-          The atomic unit of measured signal in TTI-O. A
-          SignalArray is a typed numeric buffer with an
-          encoding spec, an optional axis descriptor, and an
-          arbitrary number of CV annotations. Construction is
-          via
-          <a rel="gsdoc" href="#method$TTIOSignalArray-initWithBuffer$length$encoding$axis$">-initWithBuffer:length:encoding:axis:</a>
- with raw bytes; the caller is responsible for matching the buffer layout to the encoding&apos;s elementSize. HDF5 round-trip is via -writeToGroup:name:
- and +readFromGroup:name:
-. Not thread-safe. Mutating CV annotations from multiple threads is undefined. API status: Stable. Cross-language equivalents: Python: ttio.signal_array.SignalArray Java: global.thalion.ttio.SignalArray
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> TTIOCVAnnotatable
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Core/TTIOSignalArray.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The atomic unit of measured signal in TTI-O. A
+            SignalArray wraps a typed numeric buffer with
+            an encoding spec, an optional axis descriptor, and an
+            arbitrary number of controlled-vocabulary
+            annotations. It is the primitive every TTI-O
+            spectrum and run is built from.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Construction is via
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSignalArray-initWithBuffer$length$encoding$axis$">-initWithBuffer:length:encoding:axis:</a>
+
+            </code>
+            with raw bytes; the caller is responsible for matching
+            the buffer layout to the encoding&apos;s
+            <code>elementSize</code>. Provider-agnostic
+            round-trip is via
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSignalArray-writeToGroup$name$chunkSize$compressionLevel$error$">-writeToGroup:name:chunkSize:compressionLevel:error:</a>
+
+            </code>
+            and
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSignalArray+readFromGroup$name$error$">
+                +readFromGroup:name:error:
+              </a>
+
+            </code>
+            ; the storage provider (HDF5, Memory, SQLite, Zarr) is
+            resolved at the <code>TTIOStorageGroup</code>
+            protocol layer.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Not thread-safe. Mutating CV annotations from multiple
+            threads is undefined behaviour; callers requiring
+            concurrency must wrap the array externally.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.signal_array.SignalArray</code> <br />
+            Java: <code>global.thalion.ttio.SignalArray</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -297,7 +384,17 @@
         + (instancetype) <b>readFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)group<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads a signal array previously written by
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSignalArray-writeToGroup$name$chunkSize$compressionLevel$error$">-writeToGroup:name:chunkSize:compressionLevel:error:</a>
+
+            </code>
+            . @param <var>group</var> Source <var>group</var>. @param
+            <var>name</var> Dataset <var>name</var> within
+            <code><var>group</var></code>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The materialised SignalArray, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -340,7 +437,14 @@
         - (NSUInteger) <b>hash</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Hash consistent with
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSignalArray-isEqual$">
+                -isEqual:
+              </a>
+
+            </code>
+            .
           
         </div>
         <hr class="method-separator">
@@ -350,7 +454,19 @@
         - (instancetype) <b>initWithBuffer:</b> (NSData*)buffer<b> length:</b> (NSUInteger)length<b> encoding:</b> (<a rel="gsdoc" href="TTIOEncodingSpec.html#class$TTIOEncodingSpec">TTIOEncodingSpec</a>*)encoding<b> axis:</b> (<a rel="gsdoc" href="TTIOAxisDescriptor.html#class$TTIOAxisDescriptor">TTIOAxisDescriptor</a>*)axis;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. Creates a SignalArray
+            from a raw byte <var>buffer</var>. @param
+            <var>buffer</var> Raw bytes; must contain exactly
+            <code>
+              <var>length</var> * <var>encoding</var>.elementSize
+            </code>
+            bytes. @param <var>length</var> Number of signal
+            elements (not bytes). @param <var>encoding</var>
+            Wire-format <var>encoding</var>. @param
+            <var>axis</var> Optional <var>axis</var> descriptor;
+            pass <code>nil</code> if unknown. @return An
+            initialised SignalArray, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -360,7 +476,11 @@
         - (BOOL) <b>isEqual:</b> (id)other;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Value equality on (buffer, length, encoding, axis, CV
+            annotations). Two SignalArrays compare equal
+            iff every component is equal. @param <var>other</var>
+            Object to compare against. @return <code>YES</code>
+            if value-equal.
           
         </div>
         <hr class="method-separator">
@@ -381,10 +501,22 @@
         - (BOOL) <b>writeToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)group<b> name:</b> (NSString*)name<b> chunkSize:</b> (NSUInteger)chunkSize<b> compressionLevel:</b> (int)compressionLevel<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.7 M44: I/O routed through StorageGroup /
-            StorageDataset; this class no longer
-            references the low-level Hdf5Group / Hdf5Dataset
-            types.
+            Writes the signal buffer + encoding + axis + CV
+            annotations to a storage <var>group</var>
+            through the <code>TTIOStorageGroup</code> protocol.
+            Provider-agnostic &#8212; the same call
+            succeeds against HDF5, Memory, SQLite, and Zarr
+            providers with byte-equal canonical output.
+            @param <var>group</var> Destination <var>group</var>
+            . @param <var>name</var> Dataset <var>name</var> within
+            <code><var>group</var></code>. @param
+            <var>chunkSize</var> Chunk size in elements
+            (HDF5/Zarr); pass <code>0</code> for
+            contiguous storage. @param
+            <var>compressionLevel</var> zlib level for HDF5 (
+            <code>0</code> - <code>9</code>). @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,12 +260,79 @@
         </blockquote>
         <div class="desc">
           
-          Describes how a SignalArray&apos;s buffer is encoded:
-          numeric precision, compression algorithm, and byte
-          order. Immutable value class. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.encoding_spec.EncodingSpec
-          Java: global.thalion.ttio.EncodingSpec
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCoding, NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> ValueClasses/TTIOEncodingSpec.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Describes how a <code>TTIOSignalArray</code> &apos;s
+            buffer is encoded: numeric precision, compression
+            algorithm, and byte order. Immutable value class
+            with value-based equality.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The encoding spec is the wire-format contract for a
+            signal buffer. Storage providers consult
+            <code>precision</code> to compute element size and
+            to map onto the backend&apos;s native types (HDF5 datatype,
+            SQLite BLOB layout, in-memory typed array, Zarr
+            chunk dtype). <code>compressionAlgorithm</code>
+            selects between HDF5 filter pipeline codecs (NONE /
+            ZLIB / LZ4 / NUMPRESS_DELTA) and the dedicated
+            per-channel codecs declared in
+            <code>TTIOCompression</code>. <code>byteOrder</code>
+            is fixed at little-endian for cross-platform
+            byte-equality of canonical outputs.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.encoding_spec.EncodingSpec</code> <br />
+            Java: <code>global.thalion.ttio.EncodingSpec</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -285,7 +352,12 @@
         + (instancetype) <b>specWithPrecision:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a>)precision<b> compressionAlgorithm:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOCompression">TTIOCompression</a>)compression<b> byteOrder:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOByteOrder">TTIOByteOrder</a>)byteOrder;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience factory for the designated
+            initialiser. @param <var>precision</var>
+            Element <var>precision</var>. @param
+            <var>compression</var> Compression algorithm. @param
+            <var>byteOrder</var> Byte order. @return An
+            autoreleased encoding spec.
           
         </div>
         <hr class="method-separator">
@@ -317,8 +389,9 @@
         - (NSUInteger) <b>elementSize</b>;<br />
         <div class="desc">
           
-            Returns the size in bytes of a single element at
-            this precision.
+            @return The size in bytes of a single element at
+            this precision (e.g. 8 for Float64, 4 for Float32, 1
+            for UInt8, 16 for Complex128).
           
         </div>
         <hr class="method-separator">
@@ -328,7 +401,12 @@
         - (instancetype) <b>initWithPrecision:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a>)precision<b> compressionAlgorithm:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOCompression">TTIOCompression</a>)compression<b> byteOrder:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOByteOrder">TTIOByteOrder</a>)byteOrder;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>precision</var> Element <var>precision</var>
+            enum value. @param <var>compression</var> Compression
+            algorithm enum value. @param <var>byteOrder</var>
+            Byte order enum value. @return An initialised encoding
+            spec.
           
         </div>
         <hr class="method-separator">

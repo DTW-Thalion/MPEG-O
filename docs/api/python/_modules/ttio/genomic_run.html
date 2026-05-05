@@ -472,7 +472,7 @@
     <span class="c1"># @compression attribute names a TTIO codec (rANS / BASE_PACK).</span>
     <span class="c1"># Codec output is byte-stream non-sliceable, so the whole channel</span>
     <span class="c1"># is decoded once on first access and the decoded buffer is</span>
-    <span class="c1"># sliced from memory thereafter (Binding Decision §89). Cache</span>
+    <span class="c1"># sliced from memory thereafter (). Cache</span>
     <span class="c1"># lifetime is the GenomicRun instance — re-opening the file</span>
     <span class="c1"># incurs the decode cost again (Gotcha §101).</span>
     <span class="n">_decoded_byte_channels</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
@@ -483,7 +483,7 @@
     <span class="c1"># ``list[str]`` because the codec returns the decoded names</span>
     <span class="c1"># already split into per-read entries (different value type from</span>
     <span class="c1"># ``_decoded_byte_channels``, which holds raw concatenated</span>
-    <span class="c1"># bytes). Per Binding Decision §114 the two caches are kept</span>
+    <span class="c1"># bytes). Per the two caches are kept</span>
     <span class="c1"># separate. ``None`` until first access; when populated, the</span>
     <span class="c1"># whole list is materialised in memory (a few hundred MB for</span>
     <span class="c1"># 10M reads — acceptable for typical genomic workloads, see</span>
@@ -497,7 +497,7 @@
     <span class="c1"># codec paths produce per-read string entries — the rANS path</span>
     <span class="c1"># walks varint-length-prefix entries inside the decoded byte</span>
     <span class="c1"># buffer, and NAME_TOKENIZED returns ``list[str]`` directly.</span>
-    <span class="c1"># Per Binding Decision §123 (Option A from §2.3) this cache is</span>
+    <span class="c1"># Per (Option A from §2.3) this cache is</span>
     <span class="c1"># **separate** from ``_decoded_read_names`` — the lower-risk</span>
     <span class="c1"># choice that does not touch shipped Phase E code. A future</span>
     <span class="c1"># generalisation (Option B) could fold both into a</span>
@@ -508,7 +508,7 @@
         <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
     <span class="p">)</span>
     <span class="c1"># M86 Phase F: combined per-field cache for the mate_info subgroup</span>
-    <span class="c1"># layout (Binding Decision §129, Gotcha §144). Held as a single</span>
+    <span class="c1"># layout (Gotcha §144). Held as a single</span>
     <span class="c1"># ``dict[str, Any]`` keyed by field name (``&quot;chrom&quot;`` →</span>
     <span class="c1"># list[str]; ``&quot;pos&quot;`` → np.ndarray int64; ``&quot;tlen&quot;`` →</span>
     <span class="c1"># np.ndarray int32) because the three fields have three different</span>
@@ -623,7 +623,7 @@
         <span class="n">qualities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_byte_channel_slice</span><span class="p">(</span><span class="s2">&quot;qualities&quot;</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">length</span><span class="p">)</span>
 
         <span class="c1"># Compound / codec-lifted channels — dispatch on dataset</span>
-        <span class="c1"># shape (M86 Phases C and E). The compound path delegates</span>
+        <span class="c1"># shape (Phases C and E). The compound path delegates</span>
         <span class="c1"># to ``_compound`` (whole-dataset cached), the codec path</span>
         <span class="c1"># decodes once and caches ``list[str]``.</span>
         <span class="n">cigar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cigar_at</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
@@ -1078,7 +1078,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">_mate_info_is_subgroup</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;True iff ``signal_channels/mate_info`` is a group (Phase F).</span>
 
-<span class="sd">        Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5</span>
+<span class="sd">        Per / Gotcha §141, dispatch is on HDF5</span>
 <span class="sd">        link type, NOT on ``@compression`` attribute presence on the</span>
 <span class="sd">        bare link. The StorageGroup protocol&#39;s ``open_group`` raises</span>
 <span class="sd">        ``KeyError`` when the named child is a dataset (verified in</span>

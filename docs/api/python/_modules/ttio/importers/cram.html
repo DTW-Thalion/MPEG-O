@@ -413,7 +413,7 @@
 <span class="sd">        Filesystem path to a CRAM file.</span>
 <span class="sd">    reference_fasta : str or :class:`pathlib.Path`</span>
 <span class="sd">        Filesystem path to the reference FASTA against which the CRAM</span>
-<span class="sd">        was aligned. Required (Binding Decision §139); CRAM is a</span>
+<span class="sd">        was aligned. Required (); CRAM is a</span>
 <span class="sd">        reference-compressed format and cannot be decoded without it.</span>
 <span class="sd">        samtools auto-builds a ``.fai`` index alongside the FASTA on</span>
 <span class="sd">        first use if one isn&#39;t already present.</span>
@@ -424,7 +424,7 @@
 <span class="sd">    dependency. Construction succeeds without samtools on PATH;</span>
 <span class="sd">    :meth:`to_genomic_run` raises</span>
 <span class="sd">    :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools</span>
-<span class="sd">    cannot be located at first use (Binding Decision §135 from M87).</span>
+<span class="sd">    cannot be located at first use (from M87).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -277,11 +277,7 @@
         </blockquote>
         <div class="desc">
           
-          Result of parsing an mzTab file. Pure value object.
-          Mode dispatch follows the `MTD mzTab-version` line per
-          HANDOFF binding decision 47: - &quot;1.0&quot; &#8594; proteomics
-          dialect (PSM/PRT sections) - &quot;2.0.0-M&quot; &#8594; metabolomics
-          dialect (SML section)
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -447,32 +443,7 @@
         </blockquote>
         <div class="desc">
           
-          mzTab importer &#8212; v0.9 M60. Tab-separated text reader
-          that maps PSM / PRT / SML rows into {@link
-          TTIOIdentification} and {@link
-          TTIOQuantification} records suitable for
-          inclusion in an `.tio` container&apos;s compound
-          identification / quantification datasets. What
-          is parsed: - MTD section: mzTab-version, description,
-          ms_run[N]-location, assay[N]-sample_ref,
-          study_variable[N]-description,
-          software, psm_search_engine_score - PSM rows:
-          protein accession (or peptide sequence as fallback),
-          spectrum reference (ms_run[N]:scan=K), best
-          search-engine score, search engine name +
-          PSM_ID as evidence chain - PRT rows: protein abundance
-          per assay column &#8594; quantifications - SML rows: metabolite
-          database identifier + abundance per study-variable
-          column What is ignored (v0.9): - PEH/PEP peptide-level
-          quantification (deferred to v1.0+) - SFH/SMF
-          small-molecule features - SEH/SME
-          small-molecule evidence rows On malformed
-          input the reader returns <code>nil</code> and populates
-          `error` with an `NSError` in
-          `TTIOMzTabReaderErrorDomain`.
-          Cross-language equivalents: Python:
-          ttio.importers.mztab Java:
-          global.thalion.ttio.importers.MzTabReader
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,38 +260,101 @@
         </blockquote>
         <div class="desc">
           
-          BAM exporter &#8212; v0.12 M88. Writes a
-          :class:`TTIOWrittenGenomicRun`
-          to a BAM file by formatting the in-memory parallel-array
-          representation as SAM text and piping that
-          text via stdin to the user-installed ``samtools`` binary
-          (``samtools view
           
-            -bS
-          
+        </p>
+        <p>
 
-          -``, optionally piped through ``samtools sort
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
           
-            -O
           
+        </p>
+        <p>
 
-          bam``). Subprocess-only &#8212; no htslib linkage; SAM line
-          layout is from the public SAMv1 spec. Quality byte
-          encoding --------------------- M87&apos;s
-          :class:`TTIOBamReader` stores SAM&apos;s
-          QUAL field bytes verbatim into
-          ``WrittenGenomicRun.qualitiesData``
-          &#8212; i.e. the buffer holds **ASCII Phred+33** characters (so a
-          Phred-40 score is stored as the byte value 73, the
-          ASCII code for ``&apos;I&apos;``). This writer mirrors that
-          convention: each ``qualities[i]`` byte is written
-          directly as the SAM QUAL character with no
-          arithmetic adjustment. The pair is therefore
-          lossless byte-for-byte across the M87 read &#8594; M88
-          write round trip. API status: Provisional (v0.12 M88).
-          Cross-language equivalents: Python:
-          ttio.exporters.bam.BamWriter
-          Java: global.thalion.ttio.exporters.BamWriter
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOBamWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            BAM exporter. Writes a
+            <code>TTIOWrittenGenomicRun</code> to a BAM file by
+            formatting the in-memory parallel-array
+            representation as SAM text and piping that
+            text via stdin to the user-installed
+            <code>samtools</code> binary (
+            <code>
+              samtools view
+              
+                -bS
+              
+
+              -
+            </code>
+            , optionally piped through
+            <code>
+              samtools sort
+              
+                -O
+              
+
+              bam
+            </code>
+            ). Subprocess-only &#8212; no htslib linkage; SAM line
+            layout follows the public SAMv1 specification.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Quality byte encoding:</strong>
+            <code>TTIOBamReader</code> stores SAM&apos;s QUAL field
+            bytes verbatim into
+            <code>WrittenGenomicRun.qualitiesData</code> &#8212;
+            the buffer holds <em>ASCII Phred+33</em> characters (so
+            a Phred-40 score is stored as the byte value 73, the
+            ASCII code for <code>&apos;I&apos;</code>). This writer mirrors
+            that convention: each <code>qualities[i]</code> byte
+            is written directly as the SAM QUAL character with no
+            arithmetic adjustment. The pair is therefore
+            lossless byte-for-byte across read &#8594; write
+            round-trip.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.exporters.bam.BamWriter</code> <br />
+            Java:
+            <code>global.thalion.ttio.exporters.BamWriter</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -308,9 +371,9 @@
         - (instancetype) <b>initWithPath:</b> (NSString*)path;<br />
         <div class="desc">
           
-            Construct a writer for the BAM file at @a
-            <var>path</var>. Does NOT require samtools at
-            construction time per Binding Decision &#167;135.
+            Constructs a writer for the BAM file at @a
+            <var>path</var>. Does NOT require
+            <code>samtools</code> at construction time.
           
         </div>
         <hr class="method-separator">
@@ -331,24 +394,29 @@
         - (BOOL) <b>writeRun:</b> (<a rel="gsdoc" href="TTIOWrittenGenomicRun.html#class$TTIOWrittenGenomicRun">TTIOWrittenGenomicRun</a>*)run<b> provenanceRecords:</b> (NSArray<TTIOProvenanceRecord*>*)provenance<b> sort:</b> (BOOL)sort<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Serialise @a <var>run</var> to the configured
+            Serialises @a <var>run</var> to the configured
             output path. @param <var>run</var> The genomic-run
             container to write. @param <var>provenance</var>
             Optional <var>provenance</var> records to inject
-            as ``@PG`` header lines. May be <code>nil</code>. @param
-            <var>sort</var> When <code>YES</code> (the default
-            per Binding Decision &#167;137), pipes the SAM text through
-            ``samtools <var>sort</var>
-            
-              -O
-            
+            as <code>@PG</code> header lines. May be
+            <code>nil</code>. @param <var>sort</var> When
+            <code>YES</code> (the default), pipes the SAM text
+            through
+            <code>
+              samtools <var>sort</var>
+              
+                -O
+              
 
-            bam`` so the output BAM is coordinate-sorted. When
+              bam
+            </code>
+            so the output BAM is coordinate-sorted. When
             <code>NO</code>, output is written in the input
-            run&apos;s read order and the ``@HD SO:`` tag is set to
-            ``unsorted``. @param <var>error</var>
-            Out-param for failures. @returns <code>YES</code>
-            on success, <code>NO</code> on failure.
+            run&apos;s read order and the <code>@HD SO:</code> tag is
+            set to <code>unsorted</code>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success, <code>NO</code> on
+            failure.
           
         </div>
         <hr class="method-separator">

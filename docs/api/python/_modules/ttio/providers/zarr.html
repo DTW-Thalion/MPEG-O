@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.providers.zarr</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Zarr storage provider — Milestone 46 (Track A, stretch).</span>
+<span></span><span class="sd">&quot;&quot;&quot;Zarr storage provider — (Track A, stretch).</span>
 
 <span class="sd">Validates that the v0.7 storage-provider abstraction</span>
 <span class="sd">(M43/M44/M45 refinements) generalises beyond HDF5. Zarr is the most</span>
@@ -405,7 +405,7 @@
 
 <span class="sd">API status</span>
 <span class="sd">----------</span>
-<span class="sd">Provisional (v0.7 M46 stretch). The public surface is the</span>
+<span class="sd">Provisional (stretch). The public surface is the</span>
 <span class="sd">StorageProvider / StorageGroup / StorageDataset contract; internal</span>
 <span class="sd">layout conventions may evolve in v0.8 once Java + ObjC catch up.</span>
 
@@ -821,7 +821,7 @@
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/zarr/index.html#ttio.providers.zarr.ZarrProvider.open">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">open</span><span class="p">(</span><span class="n">self_or_path</span><span class="p">,</span> <span class="n">path_or_url</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">mode</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;r&quot;</span><span class="p">,</span>  <span class="c1"># type: ignore[override]</span>
              <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ZarrProvider&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Dual-style open() per Appendix B Gap 1 — mirrors HDF5 /</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Dual-style open() per — mirrors HDF5 /</span>
 <span class="sd">        Memory / SQLite providers.&quot;&quot;&quot;</span>
         <span class="k">del</span> <span class="n">kwargs</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">self_or_path</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>

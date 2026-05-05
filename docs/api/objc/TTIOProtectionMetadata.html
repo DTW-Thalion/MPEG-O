@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,7 +261,60 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em>
+            Transport/TTIOProtectionMetadata.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            ProtectionMetadata packet payload as
+            defined in <code>docs/transport-spec.md</code>
+            &#167;4.4. Carries the cipher-suite identifier, KEK
+            algorithm, wrapped DEK, signature algorithm, and
+            verifier public key for a per-AU-encrypted
+            transport stream.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: helpers in
+            <code>
+              tests/test_transport_selective_access.py
+            </code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.transport.ProtectionMetadata
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -283,7 +336,9 @@
         + (instancetype) <b>decodeFromData:</b> (NSData*)data;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Decodes a wire-format payload. @param
+            <var>data</var> Wire bytes. @return The decoded
+            metadata, or <code>nil</code> on malformed input.
           
         </div>
         <hr class="method-separator">
@@ -304,7 +359,7 @@
         - (NSData*) <b>encode</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return The wire-format payload bytes.
           
         </div>
         <hr class="method-separator">
@@ -314,7 +369,15 @@
         - (instancetype) <b>initWithCipherSuite:</b> (NSString*)cipherSuite<b> kekAlgorithm:</b> (NSString*)kekAlgorithm<b> wrappedDek:</b> (NSData*)wrappedDek<b> signatureAlgorithm:</b> (NSString*)signatureAlgorithm<b> publicKey:</b> (NSData*)publicKey;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>cipherSuite</var> Cipher-suite identifier (e.g.
+            <code>&quot;AES-256-GCM&quot;</code>). @param
+            <var>kekAlgorithm</var> KEK wrap algorithm. @param
+            <var>wrappedDek</var> DEK wrapped under the KEK.
+            @param <var>signatureAlgorithm</var> Signature
+            algorithm name. @param <var>publicKey</var>
+            Verifier public key bytes. @return An initialised
+            metadata payload.
           
         </div>
         <hr class="method-separator">

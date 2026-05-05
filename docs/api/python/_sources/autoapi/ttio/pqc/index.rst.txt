@@ -5,7 +5,7 @@ ttio.pqc
 
 .. autoapi-nested-parse::
 
-   Post-quantum crypto primitives — ML-KEM-1024 + ML-DSA-87 (v0.8 M49).
+   Post-quantum crypto primitives — ML-KEM-1024 + ML-DSA-87 ().
 
    Thin wrapper over ``liboqs-python`` (Open Quantum Safe) that gives the
    rest of :mod:`ttio` a stable surface for FIPS 203 (ML-KEM-1024) key

@@ -370,7 +370,7 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.providers.zarr">
 <span id="ttio-providers-zarr"></span><h1>ttio.providers.zarr<a class="headerlink" href="#module-ttio.providers.zarr" title="Link to this heading">¶</a></h1>
-<p>Zarr storage provider — Milestone 46 (Track A, stretch).</p>
+<p>Zarr storage provider — (Track A, stretch).</p>
 <p>Validates that the v0.7 storage-provider abstraction
 (M43/M44/M45 refinements) generalises beyond HDF5. Zarr is the most
 mature alternative chunked-array container with a first-class Python
@@ -414,7 +414,7 @@ decision from HANDOFF.md v0.6 §Gotchas).</p></li>
 </section>
 <section id="api-status">
 <h2>API status<a class="headerlink" href="#api-status" title="Link to this heading">¶</a></h2>
-<p>Provisional (v0.7 M46 stretch). The public surface is the
+<p>Provisional (stretch). The public surface is the
 StorageProvider / StorageGroup / StorageDataset contract; internal
 layout conventions may evolve in v0.8 once Java + ObjC catch up.</p>
 </section>
@@ -448,7 +448,7 @@ scheme details.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.zarr.ZarrProvider.open">
 <span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'r'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.providers.zarr.ZarrProvider" title="ttio.providers.zarr.ZarrProvider"><span class="pre">ZarrProvider</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/zarr.html#ZarrProvider.open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.zarr.ZarrProvider.open" title="Link to this definition">¶</a></dt>
-<dd><p>Dual-style open() per Appendix B Gap 1 — mirrors HDF5 /
+<dd><p>Dual-style open() per — mirrors HDF5 /
 Memory / SQLite providers.</p>
 </dd></dl>
 
@@ -459,7 +459,7 @@ Memory / SQLite providers.</p>
 (<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>, …).</p>
 <p>Exposed as a method (not a property) to mirror the ObjC
 <code class="docutils literal notranslate"><span class="pre">-providerName</span></code> selector and Java <code class="docutils literal notranslate"><span class="pre">providerName()</span></code> getter.
-Appendix B Gap 5 — Provisional storage-provider convergence.</p>
+— Provisional storage-provider convergence.</p>
 </dd></dl>
 
 <dl class="py method">

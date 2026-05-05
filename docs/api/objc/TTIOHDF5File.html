@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,30 +260,79 @@
         </blockquote>
         <div class="desc">
           
-          Thin Cocoa wrapper around an HDF5 file handle (hid_t
-          from H5Fcreate / H5Fopen). The handle is closed in
           
-            -dealloc
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
           
+          
+        </p>
+        <p>
 
-          ; callers may also force an early close via
-          <a rel="gsdoc" href="#method$TTIOHDF5File-close">
-            -close
-          </a>
+            <em>Declared In:</em> HDF5/TTIOHDF5File.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
 
-          . M23 thread-safety model: Each TTIOHDF5File owns a
-          pthread_rwlock_t that serialises access from
-          TTIOHDF5Group and TTIOHDF5Dataset instances
-          derived from it. Readers do not block readers;
-          writers are exclusive. The wrapper lock provides
-          call-site invariant protection; the HDF5 library
-          itself must also be compiled with --enable-threadsafe
-          (check
-          <a rel="gsdoc" href="#method$TTIOHDF5File-isThreadSafe">
-            -isThreadSafe
-          </a>
+            Thin Cocoa wrapper around an HDF5 file handle (
+            <code>hid_t</code> obtained from
+            <code>H5Fcreate</code> / <code>H5Fopen</code>). The
+            handle is closed in
+            <code>
+              
+                -dealloc
+              
 
-          at runtime).
+            </code>
+            ; callers may also force an early close via
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5File-close">
+                -close
+              </a>
+
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Thread safety.</strong> Each
+            <code>TTIOHDF5File</code> owns a
+            <code>pthread_rwlock_t</code> that serialises access
+            from <code>TTIOHDF5Group</code> and
+            <code>TTIOHDF5Dataset</code> instances derived from
+            it. Readers do not block readers; writers are
+            exclusive. The wrapper lock provides call-site
+            invariant protection; the underlying
+            <code>libhdf5</code> must also be compiled with
+            <code>--enable-threadsafe</code> (check
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5File-isThreadSafe">
+                -isThreadSafe
+              </a>
+
+            </code>
+            at runtime).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -311,8 +360,12 @@
         + (instancetype) <b>createAtPath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Create a new HDF5 file at <var>path</var>,
-            truncating any existing file.
+            Creates a new HDF5 file at the given
+            <var>path</var>, truncating any existing file. @param
+            <var>path</var> Filesystem <var>path</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return An open file, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -322,14 +375,15 @@
         + (BOOL) <b>isS3Supported</b>;<br />
         <div class="desc">
           
-            Returns <code>YES</code> if the linked libhdf5 was
-            built with ROS3 VFD support. <code>NO</code> means
-            
-              +openS3URL:
-            
+            @return <code>YES</code> if the linked libhdf5 was
+            built with ROS3 VFD support; <code>NO</code> means
+            <code>
+              
+                +openS3URL:
+              
 
-            will fail with TTIOErrorFileOpen and callers should
-            fall back to the download-then-open path.
+            </code>
+            will fail with <code>TTIOErrorFileOpen</code>.
           
         </div>
         <hr class="method-separator">
@@ -339,8 +393,12 @@
         + (instancetype) <b>openAtPath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Open an existing HDF5 file at <var>path</var> for
-            read/write.
+            Opens an existing HDF5 file at the given
+            <var>path</var> for read/write. @param
+            <var>path</var> Filesystem <var>path</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return An open file, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -350,8 +408,12 @@
         + (instancetype) <b>openReadOnlyAtPath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Open an existing HDF5 file at <var>path</var>
-            read-only.
+            Opens an existing HDF5 file at the given
+            <var>path</var> read-only. @param <var>path</var>
+            Filesystem <var>path</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return An open file, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -361,40 +423,60 @@
         + (instancetype) <b>openS3URL:</b> (NSString*)url<b> region:</b> (NSString*)awsRegion<b> accessKeyId:</b> (NSString*)accessKeyId<b> secretAccessKey:</b> (NSString*)secretAccessKey<b> sessionToken:</b> (NSString*)sessionToken<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Open a remote.tio file hosted on S3 (or any
-            S3-compatible endpoint &#8212; MinIO, LocalStack,
-            etc.) read-only via libhdf5&apos;s ROS3 VFD. WORKPLAN v0.3
-            deferred follow-up (M20). Requires libhdf5 to have
-            been built with --with-ros3-vfd (apt&apos;s libhdf5 ships
-            it enabled; custom builds may not &#8212; use
-            <a rel="gsdoc" href="#method$TTIOHDF5File+isS3Supported">
-              +isS3Supported
-            </a>
+            Opens a remote.tio file hosted on S3 (or any
+            S3-compatible endpoint such as MinIO or
+            LocalStack) read-only via libhdf5&apos;s ROS3 VFD.
+            
+        </p>
+        <p>
 
-            to probe at runtime). @param <var>url</var> S3 URL in
-            either canonical form (``s3://bucket/key``) or
-            virtual-hosted style HTTPS
-            (``https://bucket.s3.region.amazonaws.com/key``).
-            The canonical form is translated to a region-aware
+              Requires the linked libhdf5 to have been built
+              with <code>--with-ros3-vfd</code>. Probe at runtime
+              with
+              <code>
+                <a rel="gsdoc" href="#method$TTIOHDF5File+isS3Supported">
+                  +isS3Supported
+                </a>
+
+              </code>
+              ; on a build without ROS3 the call fails with
+              <code>TTIOErrorFileOpen</code>.
+                    </p>
+        <p>
+          
+            
+        </p>
+        <p>
+
+              <strong>Security.</strong> Credentials are
+              passed through to libhdf5 which stores them in the
+              file-access property list for the lifetime of
+              the opened handle. Do not pass credentials a caller
+              would not otherwise feel comfortable exposing to
+              the HDF5 process.
+                    </p>
+        <p>
+          
+            @param <var>url</var> S3 URL in canonical form (
+            <code>s3://bucket/key</code>) or
+            virtual-hosted-style HTTPS (
+            <code>
+              https://bucket.s3.region.amazonaws.com/key
+            </code>
+            ). The canonical form is translated to a region-aware
             HTTPS URL internally. @param <var>awsRegion</var>
-            e.g. ``@&quot;us-east-1&quot;``. Pass <code>nil</code> to fall
-            back to the ``AWS_REGION`` environment variable or
-            ``us-east-1``. @param <var>accessKeyId</var>
-            AWS access key; pass <code>nil</code> for anonymous
-            (public bucket) access. Prefer the
-            ``AWS_ACCESS_KEY_ID`` env var when
-            building credentials at deploy time. @param
-            <var>secretAccessKey</var> AWS secret; pass
-            <code>nil</code> for anonymous access. @param
-            <var>sessionToken</var> Optional STS session token;
-            pass <code>nil</code> if not using temporary
-            credentials. @param <var>error</var> populated
-            on failure. Security: credentials are passed through
-            as-is to libhdf5 which stores them in the file-access
-            property list for the lifetime of the opened
-            handle. Do not pass credentials a caller would not
-            otherwise feel comfortable exposing to the HDF5
-            process.
+            e.g. <code>@&quot;us-east-1&quot;</code>. Pass <code>nil</code>
+            to fall back to the <code>AWS_REGION</code> environment
+            variable or <code>us-east-1</code>. @param
+            <var>accessKeyId</var> AWS access key; pass
+            <code>nil</code> for anonymous (public bucket)
+            access. @param <var>secretAccessKey</var> AWS
+            secret; pass <code>nil</code> for anonymous access.
+            @param <var>sessionToken</var> Optional STS session
+            token; pass <code>nil</code> if not using temporary
+            credentials. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            An open file, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -404,8 +486,8 @@
         - (BOOL) <b>close</b>;<br />
         <div class="desc">
           
-            Close the file handle early. Idempotent. Returns
-            <code>NO</code> on close failure.
+            Closes the file handle early. @return
+            <code>YES</code> on success. Idempotent.
           
         </div>
         <hr class="method-separator">
@@ -415,12 +497,14 @@
         - (BOOL) <b>isThreadSafe</b>;<br />
         <div class="desc">
           
-            Returns <code>YES</code> iff both (a) the linked
+            @return <code>YES</code> if both (a) the linked
             libhdf5 reports
-            
-              H5is_library_threadsafe()
-            
+            <code>
+              
+                H5is_library_threadsafe()
+              
 
+            </code>
             and (b) this file&apos;s wrapper rwlock initialised
             successfully. When <code>NO</code>, callers
             must serialise access externally; concurrent use is
@@ -434,13 +518,15 @@
         - (void) <b>lockForReading</b>;<br />
         <div class="desc">
           
-            Acquire the wrapper&apos;s read (shared) lock. Multiple
-            readers may hold it concurrently. Must be paired
-            with
-            <a rel="gsdoc" href="#method$TTIOHDF5File-unlockForReading">
-              -unlockForReading
-            </a>
+            Acquires the wrapper&apos;s read (shared) lock.
+            Multiple readers may hold it concurrently. Must be
+            paired with
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5File-unlockForReading">
+                -unlockForReading
+              </a>
 
+            </code>
             .
           
         </div>
@@ -451,13 +537,15 @@
         - (void) <b>lockForWriting</b>;<br />
         <div class="desc">
           
-            Acquire the wrapper&apos;s write (exclusive) lock.
+            Acquires the wrapper&apos;s write (exclusive) lock.
             Blocks readers and other writers. Must be paired
             with
-            <a rel="gsdoc" href="#method$TTIOHDF5File-unlockForWriting">
-              -unlockForWriting
-            </a>
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5File-unlockForWriting">
+                -unlockForWriting
+              </a>
 
+            </code>
             .
           
         </div>
@@ -468,8 +556,9 @@
         - (<a rel="gsdoc" href="#class$TTIOHDF5File">TTIOHDF5File</a>*) <b>owningFile</b>;<br />
         <div class="desc">
           
-            Walks the retainer chain to the owning file.
-            TTIOHDF5File returns self.
+            @return The owning file by walking the retainer
+            chain. <code>TTIOHDF5File</code> returns
+            <code>self</code>.
           
         </div>
         <hr class="method-separator">
@@ -490,7 +579,8 @@
         - (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*) <b>rootGroup</b>;<br />
         <div class="desc">
           
-            The root group (&quot;/&quot;) of this file. Lazily constructed.
+            @return The root group (&quot;/&quot;) of this file. Lazily
+            constructed.
           
         </div>
         <hr class="method-separator">
@@ -500,7 +590,7 @@
         - (void) <b>unlockForReading</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Releases the wrapper&apos;s read lock.
           
         </div>
         <hr class="method-separator">
@@ -510,7 +600,7 @@
         - (void) <b>unlockForWriting</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Releases the wrapper&apos;s write lock.
           
         </div>
         <hr class="method-separator">

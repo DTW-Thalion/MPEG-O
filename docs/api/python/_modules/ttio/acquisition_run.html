@@ -397,7 +397,7 @@
 
 
 <span class="k">def</span><span class="w"> </span><span class="nf">_wrap_hdf5_group</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StorageGroup</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;v0.7 M44 helper: adapt an h5py.Group (legacy caller) to a</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;helper: adapt an h5py.Group (legacy caller) to a</span>
 <span class="sd">    :class:`StorageGroup` view. Pass-through for StorageGroup inputs.&quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">StorageGroup</span><span class="p">):</span>
         <span class="k">return</span> <span class="n">obj</span>
@@ -462,18 +462,18 @@
 <span class="sd">    base_peak_intensities : numpy.ndarray</span>
 <span class="sd">        Base-peak intensity for each spectrum.</span>
 <span class="sd">    activation_methods : numpy.ndarray | None</span>
-<span class="sd">        (M74, optional) Activation method int value per spectrum; see</span>
+<span class="sd">        (optional) Activation method int value per spectrum; see</span>
 <span class="sd">        :class:`~ttio.enums.ActivationMethod`. Present only when the</span>
 <span class="sd">        file was written with the ``opt_ms2_activation_detail`` feature</span>
 <span class="sd">        flag; absent columns indicate MS1-only or legacy files.</span>
 <span class="sd">    isolation_target_mzs : numpy.ndarray | None</span>
-<span class="sd">        (M74, optional) Target m/z of the isolation window per spectrum.</span>
+<span class="sd">        (optional) Target m/z of the isolation window per spectrum.</span>
 <span class="sd">        Zero when no isolation applied.</span>
 <span class="sd">    isolation_lower_offsets : numpy.ndarray | None</span>
-<span class="sd">        (M74, optional) Lower offset of the isolation window per</span>
+<span class="sd">        (optional) Lower offset of the isolation window per</span>
 <span class="sd">        spectrum. Zero when no isolation applied.</span>
 <span class="sd">    isolation_upper_offsets : numpy.ndarray | None</span>
-<span class="sd">        (M74, optional) Upper offset of the isolation window per</span>
+<span class="sd">        (optional) Upper offset of the isolation window per</span>
 <span class="sd">        spectrum. Zero when no isolation applied.</span>
 
 <span class="sd">    Notes</span>
@@ -660,7 +660,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">read</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">idx_group</span><span class="p">:</span> <span class="n">StorageGroup</span> <span class="o">|</span> <span class="s2">&quot;h5py.Group&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;SpectrumIndex&quot;</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Load all index columns.</span>
 
-<span class="sd">        Accepts either a :class:`StorageGroup` (v0.7 M44 protocol path)</span>
+<span class="sd">        Accepts either a :class:`StorageGroup` (protocol path)</span>
 <span class="sd">        or an :class:`h5py.Group` (legacy). The h5py path is retained</span>
 <span class="sd">        via ``_native_h5py`` so existing callers that dereferenced</span>
 <span class="sd">        child groups with ``group[&quot;spectrum_index&quot;]`` continue to work.</span>
@@ -756,7 +756,7 @@
 
 <div class="viewcode-block" id="AcquisitionRun.group">
 <a class="viewcode-back" href="../../autoapi/ttio/acquisition_run/index.html#ttio.acquisition_run.AcquisitionRun.group">[docs]</a>
-    <span class="n">group</span><span class="p">:</span> <span class="n">StorageGroup</span>  <span class="c1"># v0.7 M44: was h5py.Group; wrap legacy callers via _wrap_hdf5_group.</span></div>
+    <span class="n">group</span><span class="p">:</span> <span class="n">StorageGroup</span>  <span class="c1"># was h5py.Group; wrap legacy callers via _wrap_hdf5_group.</span></div>
 
 <div class="viewcode-block" id="AcquisitionRun.spectrum_class">
 <a class="viewcode-back" href="../../autoapi/ttio/acquisition_run/index.html#ttio.acquisition_run.AcquisitionRun.spectrum_class">[docs]</a>
@@ -786,7 +786,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/acquisition_run/index.html#ttio.acquisition_run.AcquisitionRun.provenance_json">[docs]</a>
     <span class="n">provenance_json</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span></div>
 
-    <span class="c1"># v0.11 M79: top-level modality string. Read-side only — write-side</span>
+    <span class="c1"># top-level modality string. Read-side only — write-side</span>
     <span class="c1"># support arrives with GenomicRun in M74. Defaults to mass-spec for</span>
     <span class="c1"># backward-compat with files written by v0.10 and earlier (which</span>
     <span class="c1"># didn&#39;t carry the attribute at all).</span>
@@ -799,7 +799,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/acquisition_run/index.html#ttio.acquisition_run.AcquisitionRun.chromatograms">[docs]</a>
     <span class="n">chromatograms</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">Chromatogram</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
 
-    <span class="c1"># v0.7 M44: signal cache holds protocol datasets, not h5py.Dataset.</span>
+    <span class="c1"># signal cache holds protocol datasets, not h5py.Dataset.</span>
     <span class="n">_signal_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">StorageDataset</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
     <span class="c1"># M21: eagerly decoded Numpress-delta channels, keyed by channel</span>
     <span class="c1"># name. When present, :meth:`_materialize_spectrum` slices from</span>
@@ -826,11 +826,11 @@
 <div class="viewcode-block" id="AcquisitionRun.open">
 <a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.acquisition_run.AcquisitionRun.open">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">open</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">group</span><span class="p">:</span> <span class="n">StorageGroup</span> <span class="o">|</span> <span class="s2">&quot;h5py.Group&quot;</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;AcquisitionRun&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open a run from a storage-provider group .</span>
 
 <span class="sd">        Accepts either a :class:`StorageGroup` (protocol path) or an</span>
 <span class="sd">        :class:`h5py.Group` (legacy path — wrapped transparently via</span>
-<span class="sd">        :class:`~ttio.providers.hdf5._Group`). v0.9 M64.5 made every</span>
+<span class="sd">        :class:`~ttio.providers.hdf5._Group`). made every</span>
 <span class="sd">        cold-path read route through the StorageGroup protocol so</span>
 <span class="sd">        Memory / SQLite / Zarr backends work without touching h5py.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
@@ -885,7 +885,7 @@
 
         <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
             <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
-            <span class="n">group</span><span class="o">=</span><span class="n">sgroup</span><span class="p">,</span>  <span class="c1"># v0.7 M44: StorageGroup protocol value.</span>
+            <span class="n">group</span><span class="o">=</span><span class="n">sgroup</span><span class="p">,</span>  <span class="c1"># StorageGroup protocol value.</span>
             <span class="n">spectrum_class</span><span class="o">=</span><span class="n">spectrum_class</span><span class="p">,</span>
             <span class="n">acquisition_mode</span><span class="o">=</span><span class="n">AcquisitionMode</span><span class="p">(</span><span class="n">mode_raw</span><span class="p">),</span>
             <span class="n">index</span><span class="o">=</span><span class="n">idx</span><span class="p">,</span>
@@ -923,7 +923,7 @@
 <span class="sd">        falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2</span>
 <span class="sd">        files (no per-run provenance of any kind) return an empty list.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="c1"># v0.7 M44: cold-path — cast to native h5py handle for the</span>
+        <span class="c1"># cold-path — cast to native h5py handle for the</span>
         <span class="c1"># compound-provenance reader, which uses the h5py typed-read</span>
         <span class="c1"># API directly. Protocol-native compound reads are a v0.8</span>
         <span class="c1"># follow-up.</span>
@@ -1093,7 +1093,7 @@
                 <span class="s2">&quot;context; call via a run obtained from SpectralDataset.open&quot;</span>
             <span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.encryption</span><span class="w"> </span><span class="kn">import</span> <span class="n">encrypt_intensity_channel_in_group</span>
-        <span class="c1"># v0.9 M64.5 phase B: the in-place encrypter now accepts either</span>
+        <span class="c1"># phase B: the in-place encrypter now accepts either</span>
         <span class="c1"># h5py.Group or StorageGroup, so route through the protocol —</span>
         <span class="c1"># works on Memory / SQLite / Zarr backends without</span>
         <span class="c1"># _native_h5py.</span>
@@ -1125,7 +1125,7 @@
                 <span class="s2">&quot;context; call via a run obtained from SpectralDataset.open&quot;</span>
             <span class="p">)</span>
         <span class="kn">from</span><span class="w"> </span><span class="nn">.encryption</span><span class="w"> </span><span class="kn">import</span> <span class="n">read_encrypted_channel</span>
-        <span class="c1"># v0.9 M64.5 phase B: read_encrypted_channel accepts both h5py</span>
+        <span class="c1"># phase B: read_encrypted_channel accepts both h5py</span>
         <span class="c1"># and StorageGroup; no native unwrap needed.</span>
         <span class="n">sig_group</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
         <span class="n">arr</span> <span class="o">=</span> <span class="n">read_encrypted_channel</span><span class="p">(</span><span class="n">sig_group</span><span class="p">,</span> <span class="s2">&quot;intensity&quot;</span><span class="p">,</span> <span class="n">key</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="s2">&quot;&lt;f8&quot;</span><span class="p">)</span>
@@ -1149,7 +1149,7 @@
 
     <span class="k">def</span><span class="w"> </span><span class="nf">_signal_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">channel</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">StorageDataset</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve ``channel`` to its ``&lt;channel&gt;_values`` StorageDataset</span>
-<span class="sd">        (v0.7 M44). Cached across calls; missing channels raise</span>
+<span class="sd">        (). Cached across calls; missing channels raise</span>
 <span class="sd">        :class:`KeyError` so :meth:`_materialize_spectrum` can skip.&quot;&quot;&quot;</span>
         <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_cache</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">channel</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">ds</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
@@ -1179,7 +1179,7 @@
                     <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_dataset</span><span class="p">(</span><span class="n">c</span><span class="p">)</span>
                 <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
                     <span class="k">continue</span>
-                <span class="c1"># v0.7 M44: read through the storage protocol, not</span>
+                <span class="c1"># read through the storage protocol, not</span>
                 <span class="c1"># h5py slicing. Works uniformly across Hdf5/Memory/</span>
                 <span class="c1"># Sqlite providers — the cross-backend byte-identity</span>
                 <span class="c1"># tests in M43 guarantee equivalence.</span>
@@ -1273,7 +1273,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Read ``&lt;run&gt;/chromatograms/`` into a list of :class:`Chromatogram`.</span>
 
 <span class="sd">    Accepts either an ``h5py.Group`` or a :class:`StorageGroup`</span>
-<span class="sd">    (v0.9 M64.5). Returns an empty list when the group is absent</span>
+<span class="sd">    (). Returns an empty list when the group is absent</span>
 <span class="sd">    (v0.3 backward compat).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="n">sgroup</span> <span class="o">=</span> <span class="n">_wrap_hdf5_group</span><span class="p">(</span><span class="n">run_group</span><span class="p">)</span>

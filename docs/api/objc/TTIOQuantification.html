@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,13 +261,62 @@
         </blockquote>
         <div class="desc">
           
-          Abundance value for a chemical entity in a sample,
-          with optional normalization metadata. Stored alongside
-          identifications under /study/quantifications/
-          in the TTI-O container. API status: Stable. Cross-language
-          equivalents: Python:
-          ttio.quantification.Quantification
-          Java: global.thalion.ttio.Quantification
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOQuantification.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Abundance value for a chemical entity in a
+            sample, with optional normalisation metadata.
+            Persisted alongside identifications as a row in
+            the <code>/study/quantifications</code> compound
+            dataset.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.quantification.Quantification</code>
+            <br /> Java:
+            <code>global.thalion.ttio.Quantification</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -288,7 +337,15 @@
         + (instancetype) <b>fromPlist:</b> (NSDictionary*)plist;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>plist</var> Plist representation
+            produced by
+            <code>
+              <a rel="gsdoc" href="#method$TTIOQuantification-asPlist">
+                -asPlist
+              </a>
+
+            </code>
+            . @return The reconstructed quantification.
           
         </div>
         <hr class="method-separator">
@@ -309,7 +366,7 @@
         - (NSDictionary*) <b>asPlist</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Plist-friendly dictionary representation.
           
         </div>
         <hr class="method-separator">
@@ -330,7 +387,13 @@
         - (instancetype) <b>initWithChemicalEntity:</b> (NSString*)entity<b> sampleRef:</b> (NSString*)sampleRef<b> abundance:</b> (double)abundance<b> normalizationMethod:</b> (NSString*)method;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>entity</var>
+            Identified <var>entity</var>. @param
+            <var>sampleRef</var> Sample identifier. @param
+            <var>abundance</var> Abundance value. @param
+            <var>method</var> Optional normalisation
+            <var>method</var>; pass <code>nil</code> for raw
+            values. @return An initialised quantification.
           
         </div>
         <hr class="method-separator">

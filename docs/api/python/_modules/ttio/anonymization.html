@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.anonymization</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;Milestone 28 — Spectral anonymization.</span>
+<span></span><span class="sd">&quot;&quot;&quot;Spectral anonymization.</span>
 
 <span class="sd">Applies caller-selected policies to a :class:`SpectralDataset` and</span>
 <span class="sd">writes a **new** ``.tio`` file. The original is never modified.</span>
@@ -555,7 +555,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Apply ``policy`` to ``source`` and write a new ``.tio`` to ``output_path``.</span>
 
 <span class="sd">    The source dataset must be open for reading. The original is not</span>
-<span class="sd">    modified. v0.9 M64.5 phase B: the optional ``provider`` kwarg is</span>
+<span class="sd">    modified. phase B: the optional ``provider`` kwarg is</span>
 <span class="sd">    threaded through to :meth:`SpectralDataset.write_minimal` so the</span>
 <span class="sd">    anonymized output can land on any registered backend</span>
 <span class="sd">    (``&quot;hdf5&quot;`` / ``&quot;memory&quot;`` / ``&quot;sqlite&quot;`` / ``&quot;zarr&quot;``).</span>

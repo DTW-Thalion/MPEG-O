@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,7 +260,84 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> TTIOBamReader : NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOCramReader.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            CRAM importer. Subclass of <code>TTIOBamReader</code>
+            that adds a required reference-FASTA argument so the
+            underlying <code>samtools view</code> invocation
+            can decode the reference-compressed sequence bytes. Per
+            the cross-language binding decision, the reference path
+            is a positional constructor argument; there is no
+            environment-variable fallback and no
+            RefGet HTTP support.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Internally re-implements
+            <code>
+              <a rel="gsdoc" href="TTIOBamReader.html#method$TTIOBamReader-toGenomicRunWithName$region$sampleName$error$">-toGenomicRunWithName:region:sampleName:error:</a>
+
+            </code>
+            with the same SAM-text parsing path as the parent
+            class but with a
+            <code>--reference &lt;fasta&gt;</code> argument
+            injected into the <code>samtools view</code>
+            command line.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.importers.cram.CramReader</code> <br />
+            Java:
+            <code>
+              global.thalion.ttio.importers.CramReader
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -277,9 +354,9 @@
         - (instancetype) <b>initWithPath:</b> (NSString*)path<b> NS_UNAVAILABLE</b>;<br />
         <div class="desc">
           
-            Disabled &#8212; the parent&apos;s single-arg initialiser is
-            not valid for CRAM (CRAM cannot be decoded without a
-            reference; Binding Decision &#167;139).
+            Disabled &#8212; the parent&apos;s single-argument
+            initialiser is not valid for CRAM (CRAM cannot
+            be decoded without a reference).
           
         </div>
         <hr class="method-separator">
@@ -289,8 +366,11 @@
         - (instancetype) <b>initWithPath:</b> (NSString*)path<b> referenceFasta:</b> (NSString*)referenceFasta;<br />
         <div class="desc">
           
-            Construct a CRAM reader. Both arguments are
-            required.
+            Designated initialiser. Both arguments are
+            required. @param <var>path</var> Path to the CRAM
+            file. @param <var>referenceFasta</var> Path to the
+            reference FASTA against which the CRAM was
+            aligned. @return An initialised CRAM reader.
           
         </div>
         <hr class="method-separator">

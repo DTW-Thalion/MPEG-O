@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,7 +261,81 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (root protocol)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protocols/TTIOCVAnnotatable.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Declares the interface for attaching and querying
+            controlled-vocabulary (CV)
+            annotations on a TTI-O object. Annotations are
+            <code>TTIOCVParam</code> instances keyed by ontology
+            reference and accession number, drawn from any
+            external ontology (PSI-MS, nmrCV, CHEBI, BFO,...).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            This is the primary extensibility mechanism in TTI-O:
+            the schema stays minimal while semantic richness lives
+            in curated external ontologies. Concrete spectrum
+            classes, <code>TTIOSignalArray</code>, and
+            <code>TTIOAcquisitionRun</code> conform to this
+            protocol.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Conforming classes are not required to be
+            thread-safe; mutating CV annotations from
+            multiple threads is undefined behaviour unless the
+            concrete class documents otherwise.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.protocols.CVAnnotatable</code> <br />
+            Java:
+            <code>
+              global.thalion.ttio.protocols.CVAnnotatable
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">

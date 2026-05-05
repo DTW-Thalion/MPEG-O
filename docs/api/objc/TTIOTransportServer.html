@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,7 +261,57 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Transport/TTIOTransportServer.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            WebSocket transport server built on
+            libwebsockets. Serves a
+            <code>TTIOSpectralDataset</code> to connecting
+            clients with full server-side filtering (ms_level,
+            RT range, precursor m/z range, polarity, dataset_id,
+            max_au cap). Wire protocol identical to Python
+            <code>ttio.transport.server.TransportServer</code>
+            and Java
+            <code>
+              global.thalion.ttio.transport.TransportServer
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Provisional.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -290,14 +340,19 @@
         - (instancetype) <b>initWithDatasetPath:</b> (NSString*)datasetPath<b> host:</b> (NSString*)host<b> port:</b> (uint16_t)port;<br />
         <div class="desc">
           
-            Create a server bound to ``host:port``. ``port ==
-            0`` picks a free ephemeral <var>port</var>; query
-            ``actualPort`` after
-            
-              -start
-            
+            Creates a server bound to <code>host:port</code>.
+            @param <var>datasetPath</var> Path to the.tio file
+            to serve. @param <var>host</var> Bind address. @param
+            <var>port</var> TCP <var>port</var>; <code>0</code>
+            picks a free ephemeral <var>port</var> (query
+            <code>actualPort</code> after
+            <code>
+              <a rel="gsdoc" href="#method$TTIOTransportServer-startAndReturnError$">
+                -startAndReturnError:
+              </a>
 
-            .
+            </code>
+            ). @return An initialised but not yet started server.
           
         </div>
         <hr class="method-separator">
@@ -307,8 +362,11 @@
         - (BOOL) <b>startAndReturnError:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Start the server&apos;s event loop on a background thread.
-            Returns only after the listen socket is bound.
+            Starts the server&apos;s event loop on a background
+            thread. Returns only after the listen socket is
+            bound. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success, <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -318,8 +376,9 @@
         - (void) <b>stopWithTimeout:</b> (NSTimeInterval)timeoutSeconds;<br />
         <div class="desc">
           
-            Signal the event loop to exit. Blocks until the
-            thread joins or ``timeoutSeconds`` elapses.
+            Signals the event loop to exit. @param
+            <var>timeoutSeconds</var> Maximum time to wait for
+            the thread to join.
           
         </div>
         <hr class="method-separator">

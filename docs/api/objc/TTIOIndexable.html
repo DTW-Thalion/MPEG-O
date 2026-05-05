@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,7 +260,72 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (root protocol)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protocols/TTIOIndexable.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Declares the interface for collections that
+            support O(1) random access by integer index and,
+            optionally, by key or range. This is the
+            primary access protocol for collections of spectra,
+            runs, and access units in TTI-O.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Conforming classes must guarantee constant-time
+            <code>
+              <a rel="gsdoc" href="#method$(TTIOIndexable)-objectAtIndex$">
+                -objectAtIndex:
+              </a>
+
+            </code>
+            within the bounds <code>[0, count)</code>;
+            out-of-range accesses raise
+            <code>NSRangeException</code>. The optional
+            key-based and range-based accessors are provided
+            when the underlying storage permits efficient lookup.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.protocols.Indexable</code>
+            <br /> Java:
+            <code>global.thalion.ttio.protocols.Indexable</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">

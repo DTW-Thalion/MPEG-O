@@ -5,7 +5,7 @@ ttio.transport
 
 .. autoapi-nested-parse::
 
-   TTI-O streaming transport codec (v0.10 M67).
+   TTI-O streaming transport codec ().
 
    Implements the wire format specified in ``docs/transport-spec.md``:
 

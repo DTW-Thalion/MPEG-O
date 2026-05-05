@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,23 +261,7 @@
         </blockquote>
         <div class="desc">
           
-          Waters MassLynx ``.raw`` directory importer &#8212; v0.9
-          M63. Delegates to the user-installed ``masslynxraw``
-          converter (proprietary Waters tool) via NSTask.
-          Semantics mirror :class:`TTIOThermoRawReader`: the
-          converter emits an mzML in a temp directory, which
-          we parse via TTIOMzMLReader. No Waters proprietary code is
-          compiled into libTTIO. Binary resolution order: 1.
-          Explicit ``converter`` argument (non-nil). 2.
-          ``MASSLYNXRAW`` environment variable. 3.
-          ``masslynxraw`` on PATH (native). 4.
-          ``MassLynxRaw.exe`` on PATH &#8212; invoked via
-          ``mono``. Waters ``.raw`` inputs are directories,
-          not files. API status: Provisional (v0.9 M63).
-          Cross-language equivalents: Python:
-          ttio.importers.waters_masslynx
-          Java:
-          global.thalion.ttio.importers.WatersMassLynxReader
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -293,7 +277,14 @@
         + (<a rel="gsdoc" href="TTIOSpectralDataset.html#class$TTIOSpectralDataset">TTIOSpectralDataset</a>*) <b>readFromDirectoryPath:</b> (NSString*)path<b> converter:</b> (NSString*)converter<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads a Waters <code>.raw</code> directory using an
+            explicit <var>converter</var> binary. @param
+            <var>path</var> Path to the Waters <code>.raw</code>
+            directory. @param <var>converter</var> Path to
+            the <code>masslynxraw</code> <var>converter</var>.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return The parsed dataset, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -303,7 +294,13 @@
         + (<a rel="gsdoc" href="TTIOSpectralDataset.html#class$TTIOSpectralDataset">TTIOSpectralDataset</a>*) <b>readFromDirectoryPath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience variant that resolves the converter
+            via the standard resolution order described in the
+            class summary. @param <var>path</var> Path to the
+            Waters <code>.raw</code> directory. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The parsed dataset, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">

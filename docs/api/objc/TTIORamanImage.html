@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,18 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          Raman imaging / mapping dataset: a width x height grid
-          of pixels, each pixel a spectral profile of
-          `spectralPoints` float64 values indexed by a
-          shared 1-D `wavenumbers` array (cm^-1). Mirrors
-          TTIOMSImage&apos;s composition over
-          TTIOSpectralDataset. The cube is
-          persisted under `/study/raman_image_cube/` with
-          tile-aligned chunking for efficient hyperslab
-          reads. Buffer layout (row-major): `cube[(y * width +
-          x) * spectralPoints + s]`. Cross-language equivalents:
-          Python: ttio.raman_image.RamanImage Java:
-          global.thalion.ttio.RamanImage
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -331,7 +320,7 @@
         - (instancetype) <b>initWithTitle:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> width:</b> (NSUInteger)width<b> height:</b> (NSUInteger)height<b> spectralPoints:</b> (NSUInteger)spectralPoints<b> tileSize:</b> (NSUInteger)tileSize<b> pixelSizeX:</b> (double)pixelSizeX<b> pixelSizeY:</b> (double)pixelSizeY<b> scanPattern:</b> (NSString*)scanPattern<b> excitationWavelengthNm:</b> (double)excitationNm<b> laserPowerMw:</b> (double)laserPowerMw<b> cube:</b> (NSData*)cube<b> wavenumbers:</b> (NSData*)wavenumbers;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser.
           
         </div>
         <hr class="method-separator">
@@ -341,7 +330,8 @@
         - (instancetype) <b>initWithWidth:</b> (NSUInteger)width<b> height:</b> (NSUInteger)height<b> spectralPoints:</b> (NSUInteger)spectralPoints<b> tileSize:</b> (NSUInteger)tileSize<b> cube:</b> (NSData*)cube<b> wavenumbers:</b> (NSData*)wavenumbers<b> excitationWavelengthNm:</b> (double)excitationNm<b> laserPowerMw:</b> (double)laserPowerMw;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience initialiser for image-only
+            datasets.
           
         </div>
         <hr class="method-separator">

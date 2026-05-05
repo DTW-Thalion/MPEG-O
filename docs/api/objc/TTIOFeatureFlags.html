@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,18 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          Versioning and feature-flag utility for TTIO file
-          format v0.2+. Every file written by v0.2+ carries two
-          root-group attributes: @ttio_format_version =
-          &quot;1.1&quot; (major.minor string) @ttio_features = JSON array
-          of feature strings v0.1 files have @ttio_version = &quot;1.0.0&quot;
-          instead and no @ttio_features &#8212; readers detect the
-          old format by the absence of the feature-flags attribute
-          and fall back to the v0.1 JSON paths. Features without an
-          `opt_` prefix are required: a reader must refuse a
-          file that names a required feature it does not support.
-          Features with `opt_` are informational &#8212; readers may
-          skip them.
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -307,7 +296,7 @@
         + (NSString*) <b>featureAnonymized</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_anonymized&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -317,7 +306,7 @@
         + (NSString*) <b>featureBaseV1</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;base_v1&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -327,7 +316,7 @@
         + (NSString*) <b>featureCanonicalSignatures</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_canonical_signatures&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -337,7 +326,7 @@
         + (NSString*) <b>featureCompoundHeaders</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_compound_headers&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -347,7 +336,7 @@
         + (NSString*) <b>featureCompoundIdentifications</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;compound_identifications&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -357,7 +346,7 @@
         + (NSString*) <b>featureCompoundPerRunProvenance</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;compound_per_run_provenance&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -367,7 +356,7 @@
         + (NSString*) <b>featureCompoundProvenance</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;compound_provenance&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -377,7 +366,7 @@
         + (NSString*) <b>featureCompoundQuantifications</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;compound_quantifications&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -387,7 +376,7 @@
         + (NSString*) <b>featureDatasetEncryption</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_dataset_encryption&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -397,7 +386,7 @@
         + (NSString*) <b>featureDigitalSignatures</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_digital_signatures&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -407,7 +396,7 @@
         + (NSString*) <b>featureKeyRotation</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_key_rotation&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -417,7 +406,9 @@
         + (NSString*) <b>featureMS2ActivationDetail</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_ms2_activation_detail&quot;</code> &#8212;
+            opt-in for per-spectrum activation method + energy
+            in <code>spectrum_index</code>.
           
         </div>
         <hr class="method-separator">
@@ -427,7 +418,7 @@
         + (NSString*) <b>featureNative2DNMR</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_native_2d_nmr&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -437,7 +428,7 @@
         + (NSString*) <b>featureNativeMSImageCube</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_native_msimage_cube&quot;</code>
           
         </div>
         <hr class="method-separator">
@@ -447,7 +438,9 @@
         + (NSString*) <b>featureNoSignalIntDups</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_no_signal_int_dups&quot;</code> &#8212;
+            file omits the legacy integer-channel duplicates from
+            <code>signal_channels/</code>.
           
         </div>
         <hr class="method-separator">
@@ -457,7 +450,9 @@
         + (NSString*) <b>featureOptGenomic</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_genomic&quot;</code> &#8212; file declares
+            genomic alignment-run content under
+            <code>/study/genomic_runs/</code>.
           
         </div>
         <hr class="method-separator">
@@ -467,7 +462,9 @@
         + (NSString*) <b>featurePQCPreview</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>@&quot;opt_pqc_preview&quot;</code> &#8212;
+            post-quantum signature / encapsulation
+            envelope preview.
           
         </div>
         <hr class="method-separator">
@@ -477,7 +474,9 @@
         + (NSArray<NSString*>*) <b>featuresForRoot:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)root;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>root</var> Root group of the file.
+            @return The parsed <code>@ttio_features</code> JSON
+            array, or an empty array if absent.
           
         </div>
         <hr class="method-separator">
@@ -487,7 +486,10 @@
         + (NSString*) <b>formatVersionForRoot:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)root;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>root</var> Root group of the file.
+            @return The <code>@ttio_format_version</code>
+            string, or <code>nil</code> if absent (legacy
+            file).
           
         </div>
         <hr class="method-separator">
@@ -497,8 +499,14 @@
         + (BOOL) <b>isLegacyV1File:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)root;<br />
         <div class="desc">
           
-            A v0.1 file has neither @ttio_format_version nor
-            @ttio_features; it only has @ttio_version.
+            Detects a legacy file that pre-dates the
+            <code>@ttio_format_version</code> +
+            <code>@ttio_features</code> preamble. Such files
+            carry a single <code>@ttio_version</code> attribute
+            instead. @param <var>root</var> Root group of the
+            file. @return <code>YES</code> if neither
+            <code>@ttio_format_version</code> nor
+            <code>@ttio_features</code> is present.
           
         </div>
         <hr class="method-separator">
@@ -508,7 +516,11 @@
         + (BOOL) <b>root:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)root<b> supportsFeature:</b> (NSString*)feature;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>root</var> Root group of the file.
+            @param <var>feature</var> Feature string to test
+            for. @return <code>YES</code> if the
+            <var>feature</var> is listed in
+            <code>@ttio_features</code>.
           
         </div>
         <hr class="method-separator">
@@ -518,8 +530,14 @@
         + (BOOL) <b>writeFormatVersion:</b> (NSString*)version<b> features:</b> (NSArray<NSString*>*)features<b> toRoot:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)root<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Write format <var>version</var> + feature list to the
-            <var>root</var> group.
+            Writes the format <var>version</var> + feature list
+            to the <var>root</var> group. @param <var>version</var>
+            Format-version string (e.g.
+            <code>@&quot;1.0&quot;</code>). @param <var>features</var>
+            Feature string list. @param <var>root</var> Root
+            group of the file. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

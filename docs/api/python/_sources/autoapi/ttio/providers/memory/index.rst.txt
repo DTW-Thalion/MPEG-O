@@ -5,7 +5,7 @@ ttio.providers.memory
 
 .. autoapi-nested-parse::
 
-   In-memory storage provider — Milestone 39 Part D.
+   In-memory storage provider — Part D.
 
    Holds the full group tree in Python dicts. Useful for tests and
    transient pipelines where no file I/O is needed, and the existence of
@@ -57,7 +57,6 @@ Module Contents
       Open a MemoryProvider. Supports both factory
       (``MemoryProvider.open(url, mode="w")``) and instance
       (``p = MemoryProvider(); p.open(url, mode="w")``) styles per
-      Appendix B Gap 1.
 
 
 
@@ -68,7 +67,7 @@ Module Contents
 
       Exposed as a method (not a property) to mirror the ObjC
       ``-providerName`` selector and Java ``providerName()`` getter.
-      Appendix B Gap 5 — Provisional storage-provider convergence.
+      — Provisional storage-provider convergence.
 
 
 

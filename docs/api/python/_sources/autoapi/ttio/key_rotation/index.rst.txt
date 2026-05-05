@@ -5,7 +5,7 @@ ttio.key_rotation
 
 .. autoapi-nested-parse::
 
-   Milestone 25 — envelope encryption + key rotation.
+   envelope encryption + key rotation.
 
    Mirrors the Objective-C ``TTIOKeyRotationManager``. The wrapping
    primitive is AES-256-GCM (matching :mod:`ttio.encryption`). A DEK
@@ -118,7 +118,7 @@ Module Contents
 
    True iff ``/protection/key_info/dek_wrapped`` is present.
 
-   v0.9 M64.5 phase C: ``f`` may be ``h5py.File``, a
+   phase C: ``f`` may be ``h5py.File``, a
    :class:`StorageProvider`, or a :class:`SpectralDataset`.
 
 
@@ -135,7 +135,7 @@ Module Contents
    * ``"aes-256-gcm"`` — ``kek`` is a 32-byte symmetric key.
    * ``"ml-kem-1024"`` — ``kek`` is a 1568-byte ML-KEM *public* key.
      This writes the ``opt_pqc_preview`` feature flag onto the file
-     (v0.8 M49).
+     ().
 
 
 .. py:function:: unwrap_dek(f: Any, kek: bytes, *, algorithm: str = 'aes-256-gcm') -> bytes
@@ -154,7 +154,7 @@ Module Contents
 
    Signal datasets are not touched, so the cost is O(1) in file size.
 
-   v0.8 M49: ``new_algorithm`` may differ from ``algorithm`` to migrate
+   : ``new_algorithm`` may differ from ``algorithm`` to migrate
    a file from classical AES-256-GCM to ML-KEM-1024 (or back). When
    ``new_algorithm`` is omitted, the wrap stays on the same primitive.
 
