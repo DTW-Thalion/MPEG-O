@@ -172,8 +172,8 @@ Throws on invalid or corrupt input.
 
 ## 5. Auto-default channel assignments (v1.5)
 
-When a `WrittenGenomicRun` meets v1.5 candidacy, the following
-integer-channel codec defaults apply:
+For a `WrittenGenomicRun`, the following integer-channel codec
+defaults apply (channels stored under `genomic_index/`):
 
 | Channel            | Default codec       | Id  |
 |--------------------|---------------------|-----|
@@ -181,15 +181,11 @@ integer-channel codec defaults apply:
 | flags              | RANS_ORDER0         | 4   |
 | mapping_qualities  | RANS_ORDER0         | 4   |
 | template_lengths   | RANS_ORDER0         | 4   |
-| mate_info_pos      | RANS_ORDER0         | 4   |
-| mate_info_tlen     | RANS_ORDER0         | 4   |
-| mate_info_chrom    | NAME_TOKENIZED      | 8   |
 
 `positions` is the only channel that gets DELTA_RANS_ORDER0 by
 default. Other integer channels use RANS_ORDER0 because their values
-are not sorted-ascending (e.g. `mate_info_pos` is non-monotonic, so
-delta encoding would produce high-entropy deltas and compress poorly).
-`mate_info_chrom` is string-valued and uses NAME_TOKENIZED.
+are not sorted-ascending. The `mate_info` channel is encoded via the
+inline MATE_INLINE_V2 codec (id 13) — see `docs/codecs/mate_info_v2.md`.
 
 ---
 

@@ -303,53 +303,30 @@ input.
 
 ## 7. Wired into / forward references
 
-- **M86 Phase A** (shipped) — rANS order-0 and order-1 are wired
-  into the genomic signal-channel write/read path for the
-  `sequences` and `qualities` byte channels. Use
-  `WrittenGenomicRun.signal_codec_overrides={"sequences":
-  Compression.RANS_ORDER0}` (or `RANS_ORDER1`) at write time; the
-  reader dispatches on the per-dataset `@compression` attribute
-  automatically. See `docs/format-spec.md` §10.5 for the on-disk
-  attribute scheme.
-- **M86 Phase B** (shipped 2026-04-26) — rANS order-0 and
-  order-1 are also wired into the **integer channels**
-  (`positions` int64, `flags` uint32, `mapping_qualities`
-  uint8). Integer arrays are serialised to little-endian bytes
-  per element before encoding; the reader looks up the
-  channel's natural dtype by name. Integer channels accept
-  ONLY rANS codecs (other codecs are wrong-content for
-  integer fields). See `docs/format-spec.md` §10.7 for the
-  int↔byte serialisation contract.
-- **M86 Phase C** (shipped 2026-04-26) — rANS order-0 and
-  order-1 are now also wired into the **cigars channel** (a
-  list of CIGAR strings) via length-prefix-concat
-  serialisation: each CIGAR is emitted as `varint(len) +
-  bytes` and the concatenated stream is fed to rANS. **rANS is
-  the recommended default for cigars on real WGS data**
-  (mixed indels/clips break NAME_TOKENIZED's columnar mode
-  back to verbatim/no-compression; rANS exploits byte-level
-  repetition over the limited CIGAR alphabet for ~3-17×
-  compression). NAME_TOKENIZED is the niche choice when
-  CIGARs are known to be uniform (e.g. perfect-match-only
-  synthetic data). See `docs/codecs/name_tokenizer.md` §8 for
-  the full selection table, and `docs/format-spec.md` §10.8
-  for the cigars schema-lift contract.
-- **M86 Phase F** (shipped 2026-04-26) — rANS order-0 and
-  order-1 are also wired into the per-field **mate_info**
-  channels (`mate_info_chrom`, `mate_info_pos`,
-  `mate_info_tlen`) under the new mate_info subgroup layout.
-  The `mate_info_chrom` rANS path uses length-prefix-concat
-  (same contract as cigars); `mate_info_pos` and
-  `mate_info_tlen` use Phase B-style LE byte serialisation
-  (`<i8` and `<i4` respectively). See
-  `docs/format-spec.md` §10.9 for the mate_info subgroup
-  pattern.
-- **M84** (shipped) — base-pack codec (2-bit nucleotide packing
-  + sidecar mask), see `docs/codecs/base_pack.md`.
-- **M85** (shipped) — quality-quantiser
-  (`docs/codecs/quality.md`) and read-name-tokeniser
-  (`docs/codecs/name_tokenizer.md`) codecs in the same
-  sub-package.
+- **`sequences` / `qualities` byte channels** — rANS order-0 and
+  order-1 are accepted as overrides via
+  `WrittenGenomicRun.signal_codec_overrides`; the reader dispatches
+  on the per-dataset `@compression` attribute. The v1.0 default for
+  `sequences` is REF_DIFF_V2 (with BASE_PACK fallback); the default
+  for `qualities` is FQZCOMP_NX16_Z. See `docs/format-spec.md`
+  §10.5 for the on-disk attribute scheme.
+- **`cigars` channel** — rANS order-0 and order-1 are the only
+  accepted codecs. The encoder serialises the list of CIGAR
+  strings via length-prefix-concat (`varint(len) + bytes` per
+  CIGAR) before passing to rANS. RANS_ORDER1 is the default;
+  rANS exploits byte-level repetition over the limited CIGAR
+  alphabet for ~17× compression on real WGS data. See
+  `docs/format-spec.md` §10.8.
+- **Embedded integer streams** — rANS order-0 / order-1 are also
+  used inside the codec wire formats for MATE_INLINE_V2 (NS / NP /
+  TS substreams) and REF_DIFF_V2 (slice bodies). Integer values
+  are serialised to little-endian bytes per element before
+  encoding. See `docs/format-spec.md` §10.7 for the LE
+  serialisation contract.
+- **`base_pack` codec** — 2-bit nucleotide packing + sidecar mask;
+  see `docs/codecs/base_pack.md`.
+- **`quality` codec** — Illumina-8 binning; see
+  `docs/codecs/quality.md`.
 
 The `codecs/` sub-package layout (`python/src/ttio/codecs/`,
 `objc/Source/Codecs/`, `java/src/main/java/global/thalion/ttio/codecs/`)

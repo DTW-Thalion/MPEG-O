@@ -1,15 +1,14 @@
-# NAME_TOKENIZED v2 codec (codec id 15)
+# NAME_TOKENIZED_V2 codec (codec id 15)
 
-> **Status:** shipped v1.9, 2026-05-04. Reference implementation in C
+> **Status:** shipped in v1.0.0. Reference implementation in C
 > (`native/src/name_tok_v2.{c,h}`); language wrappers in Python
 > (ctypes), Java (JNI), Objective-C (direct link). All three produce
 > byte-identical encoded streams across the four canonical corpora
 > (chr22, WES, HG002 Illumina, HG002 PacBio HiFi).
 
-This document specifies the NAME_TOKENIZED v2 codec used by TTI-O for
-the genomic `read_names` channel, the default in v1.9+. v1
-NAME_TOKENIZED (codec id 8) remains supported for read-compat
-indefinitely.
+This document specifies the NAME_TOKENIZED_V2 codec used by TTI-O
+for the genomic `read_names` channel — the only supported encoding
+in v1.0.
 
 ## 1. Algorithm
 
@@ -131,16 +130,10 @@ ttio_name_tok_v2_decode(out, out_len, &recovered, &n);
 
 ## 5. Channel routing
 
-In v1.9+, NAME_TOKENIZED v2 is automatically applied to the
-`read_names` signal channel. Three writer paths:
-
-| Caller setup | Layout |
-|--------------|--------|
-| Default (no override, no opt-out, native lib loaded) | codec id 15 |
-| `signal_codec_overrides[read_names] = Compression.NAME_TOKENIZED` | codec id 8 (v1) |
-| `opt_disable_name_tokenized_v2 = True` AND no override | M82 compound (pre-v1.9) |
-
-Readers dispatch on `@compression` attribute on the dataset.
+NAME_TOKENIZED_V2 is the only codec applied to the `read_names`
+signal channel. The writer always emits a flat 1-D `UINT8` dataset
+with `@compression = 15`. Readers reject any other layout for
+`read_names` with a v1.0 migration error.
 
 ## 6. Out of scope
 

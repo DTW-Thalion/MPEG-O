@@ -139,10 +139,13 @@ M79 also reserves on-disk integers without introducing flags:
 
 - `TTIOPrecision.UINT8 = 6` — byte-typed datasets, round-trippable
   through every storage provider (HDF5, Memory, SQLite, Zarr).
-- `TTIOCompression` ids `4`–`8`: `RANS_ORDER0`, `RANS_ORDER1`,
-  `BASE_PACK`, `QUALITY_BINNED`, `NAME_TOKENIZED` — placeholders
-  for genomic codecs that ship with M74. Readers must surface
-  `UnsupportedCodec` for ids ≥ 4 until the matching encoder ships.
+- `TTIOCompression` ids `4`–`7` (`RANS_ORDER0`, `RANS_ORDER1`,
+  `BASE_PACK`, `QUALITY_BINNED`), `11` (`DELTA_RANS_ORDER0`),
+  `12` (`FQZCOMP_NX16_Z`), `13` (`MATE_INLINE_V2`), `14`
+  (`REF_DIFF_V2`), `15` (`NAME_TOKENIZED_V2`) — the v1.0 genomic
+  codec id assignments. Ids 8 / 9 / 10 are reserved-on-the-wire for
+  the v1 NAME_TOKENIZED / REF_DIFF / FQZCOMP_NX16 codecs (removed in
+  v1.0); readers reject them with a v1.0 migration error.
 - `TTIOAcquisitionMode.GENOMIC_WGS = 7`, `GENOMIC_WES = 8` —
   reserved acquisition modes for whole-genome / whole-exome runs.
 - Transport `spectrumClass = 5` (GenomicRead) — generic over the

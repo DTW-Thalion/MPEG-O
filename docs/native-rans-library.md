@@ -1,15 +1,16 @@
 # `libttio_rans` — Native rANS Acceleration Library
 
-> **Status:** shipping in v1.2.0 (Phase 10, 2026-04-30). Optional
-> runtime dependency; opt-in via `prefer_native` parameter or the
-> `TTIO_M94Z_USE_NATIVE` environment variable. The default writers
-> in all three language bindings continue to emit M94.Z V1 streams
-> via Cython (Python), pure-Java, and pure-ObjC encoders; the
-> `libttio_rans` path emits V2 streams.
+> **Status:** required at runtime in v1.0.0. Set
+> `TTIO_RANS_LIB_PATH` or place `libttio_rans.{so,dylib,jni}` on the
+> loader search path. All v1.0 genomic-run write/read paths (codec ids
+> 4-7 + 11-15) call into this library; without it, genomic codec
+> dispatch raises an error at write time and rejects compressed
+> channels at read time.
 
 This document describes the native C library at `native/` that
-provides SIMD-accelerated rANS encode/decode kernels and a multi-block
-V2 wire format. The library is consumed by:
+provides SIMD-accelerated rANS encode/decode kernels plus the v2
+codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`,
+`fqzcomp_qual` V4). The library is consumed by:
 
 - **Python** via `ctypes` (loader in
   `python/src/ttio/codecs/fqzcomp_nx16_z.py`).
