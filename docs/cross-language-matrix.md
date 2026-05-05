@@ -62,7 +62,7 @@ contract levels per language pair. Footnotes follow the table.
 | **M83** rANS order-0 / order-1 codec | `=` (17) | `=` (17) | `=` (17) | `=` | `python/tests/test_m83_rans.py` (Python golden producer; ObjC/Java goldens consumed by their own tests) |
 | **M84** BASE_PACK genomic-sequence codec | `=` (17) | `=` (17) | `=` (17) | `=` | `python/tests/test_m84_base_pack.py` |
 | **M85a** QUALITY_BINNED codec | `=` (17) | `=` (17) | `=` (17) | `=` | `python/tests/test_m85_quality.py` |
-| **M85b** NAME_TOKENIZED codec | `=` (17) | `=` (17) | `=` (17) | `=` | `python/tests/test_m85b_name_tokenizer.py` |
+| **NAME_TOKENIZED_V2 codec** (id 15) | `=` | `=` | `=` | `=` | `python/tests/integration/test_name_tok_v2_cross_language.py` |
 | **M86** genomic codec wiring (`.tio` byte-exact across 8 fixtures) | `=` (18) | `=` (18) | `=` (18) | `=` | `python/tests/test_m86_genomic_codec_wiring.py` (+ Java `M86CodecWiringTest`, ObjC `TestM86GenomicCodecWiring`) |
 | **M87** SAM/BAM importer canonical JSON | `=` | `=` | `=` (19) | `=` | `python/tests/integration/test_m87_cross_language.py` |
 | **M88** BAM round-trip + 5-read fixture canonical JSON | `=` | `=` | `=` (19) | `=` | `python/tests/integration/test_m88_cross_language.py` |

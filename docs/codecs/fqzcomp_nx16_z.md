@@ -7,22 +7,16 @@
 > vectors. Applies to genomic-`qualities` channels; codec id `12`.
 
 This document specifies the FQZCOMP_NX16_Z codec used by TTI-O for
-lossless quality-score compression starting with v1.2.0. It is a
-clean-room implementation of CRAM 3.1's `rANS-Nx16` discipline (htscodecs
-master), built to the design spec at
+lossless quality-score compression in v1.0. It is a clean-room
+implementation of CRAM 3.1's `rANS-Nx16` discipline (htscodecs master),
+built to the design spec at
 `docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md`.
-
-M94.Z runs alongside M94 v1 (`FQZCOMP_NX16`, codec id `10`); both codecs
-are kept in the codebase. M94 v1 fixtures decode unchanged; new files
-written under the v1.5 default codec stack use M94.Z (id `12`) on the
-`qualities` channel. The two codecs share neither magic nor wire format.
 
 The combination of static-per-block freq tables, 16-bit renormalisation,
 and a fixed power-of-two total `T = 4096` makes byte-pairing
-mathematically exact (see §8 below for why the prior M94.X attempt
+mathematically exact (see §8 below for why the prior M94.X prototype
 failed and how M94.Z's invariant fixes it). The codec compute on chr22
-lean is now ~4% of the full-pipeline wall-clock (down from ~93% under
-M94 v1), and the M94.Z encode itself is ~22x faster end-to-end.
+lean is ~4% of the full-pipeline wall-clock.
 
 ---
 
