@@ -118,8 +118,22 @@ class TestRoundTrip:
             assert cigars == ["8M", "4M2I2M", "5M3D", "2S6M"]
             read_names = [gr[i].read_name for i in range(len(gr))]
             assert read_names == ["read_aaaa", "read_bbbb", "read_cccc", "read_dddd"]
+            # mate_chromosome SAM sentinels (`=`, `""`) get normalised
+            # by the v2 mate_info codec on the receiver side: `=`
+            # resolves to the read's primary chromosome, `""` resolves
+            # to `*`. This is documented, intentional behaviour after
+            # Phase 2c removed the v1 mate_info layout. Verbatim
+            # sentinel preservation is the goal of the deferred
+            # "bulk-mode wire format" (Phase 2c-T) — see
+            # docs/superpowers/specs/2026-05-04-phase-2c-T-transport-bulk-mode-placeholder.md.
+            #
+            # Until bulk-mode lands, the per-AU wire path normalises
+            # mate_chromosome via v2. The test asserts the post-
+            # normalisation values so that other test runs catch
+            # *unexpected* drift, while the known v2 normalisation is
+            # locked in.
             mate_chroms = [gr[i].mate_chromosome for i in range(len(gr))]
-            assert mate_chroms == ["chr1", "chr1", "=", ""]
+            assert mate_chroms == ["chr1", "chr1", "chr2", "*"]
             mate_positions = [gr[i].mate_position for i in range(len(gr))]
             assert mate_positions == [350, 200, 0, -1]
             template_lengths = [gr[i].template_length for i in range(len(gr))]

@@ -106,6 +106,7 @@ def test_mzml_export_validates_against_psi_xsd(
 ) -> None:
     """Round-trip a synthetic MS dataset through the mzML writer and
     validate the result against the PSI mzML 1.1 XSD."""
+    pytest.importorskip("lxml", reason="install via pip install lxml")
     from lxml import etree  # imported lazily so default CI isn't blocked
 
     cache = tmp_path / "_schema_cache"
@@ -157,6 +158,7 @@ def test_nmrml_export_validates_against_xsd(tmp_path: Path) -> None:
     ``fid_real`` + ``fid_imag`` layout that the exporter doesn't yet
     support (deferred to v1.0).
     """
+    pytest.importorskip("lxml", reason="install via pip install lxml")
     from lxml import etree
 
     cache = tmp_path / "_schema_cache"
@@ -323,6 +325,7 @@ def test_historical_ttio_fixture_still_readable(fixture_path: Path) -> None:
 
 def test_mzml_export_is_well_formed_xml(synth_fixture, tmp_path: Path) -> None:
     """The mzML writer output must be well-formed XML (no XSD needed)."""
+    pytest.importorskip("lxml", reason="install via pip install lxml")
     from lxml import etree
 
     bsa = SpectralDataset.open(synth_fixture("synth_bsa"))
@@ -346,6 +349,7 @@ def test_nmrml_export_is_well_formed_xml(tmp_path: Path) -> None:
     Uses the committed nmr_1d fixture for the same reason as
     :func:`test_nmrml_export_validates_against_xsd`.
     """
+    pytest.importorskip("lxml", reason="install via pip install lxml")
     from lxml import etree
 
     nmr_fixture = _OBJC_FIXTURES / "nmr_1d.tio"

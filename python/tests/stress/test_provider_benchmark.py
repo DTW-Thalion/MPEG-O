@@ -72,6 +72,7 @@ def _build_run(n: int, n_peaks: int, rng: np.random.Generator) -> WrittenRun:
 @pytest.fixture()
 def fixture_10k(provider: str, tmp_path: Path) -> str:
     """10K-spectrum dataset on the parametrized provider."""
+    _maybe_skip_provider(provider)
     rng = np.random.default_rng(7)
     run = _build_run(10_000, 16, rng)
     url = _provider_url(provider, tmp_path, "bench10k")
