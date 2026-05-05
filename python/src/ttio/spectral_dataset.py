@@ -1527,6 +1527,21 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # signal_channels/ — readers ignore them; the genomic_index/ copy
     # is canonical.
     if (
+        run.bulk_v2_blobs is not None
+        and run.bulk_v2_blobs.ref_diff_blob is not None
+    ):
+        # Phase 2c-T verbatim path: skip codec encode and write the
+        # wire blob bytes directly.
+        if run.bulk_v2_blobs.ref_diff_reference_uri != run.reference_uri:
+            raise ValueError(
+                f"BulkV2Blobs.ref_diff_reference_uri "
+                f"{run.bulk_v2_blobs.ref_diff_reference_uri!r} != "
+                f"run.reference_uri {run.reference_uri!r}"
+            )
+        _write_sequences_ref_diff_bulk_verbatim(
+            sc, run.bulk_v2_blobs.ref_diff_blob,
+        )
+    elif (
         _seq_codec is not None
         and _is_valid_compression(_seq_codec)
         and _Compression(_seq_codec) == _Compression.REF_DIFF_V2
@@ -1631,7 +1646,13 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # path.
     from .codecs import name_tokenizer_v2 as _nt2
     from .enums import Precision as _Precision
-    if len(run.read_names) == 0:
+    if (
+        run.bulk_v2_blobs is not None
+        and run.bulk_v2_blobs.name_tok_blob is not None
+    ):
+        # Phase 2c-T verbatim path.
+        _write_read_names_bulk_verbatim(sc, run.bulk_v2_blobs.name_tok_blob)
+    elif len(run.read_names) == 0:
         # Short-circuit: write a zero-length uint8 dataset tagged with
         # the v2 codec id so readers dispatch to the v2 path uniformly.
         ds = sc.create_dataset(
@@ -1679,7 +1700,18 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     # are reads but the native library is unavailable, raise a clear
     # RuntimeError pointing at the install path.
     from .codecs import mate_info_v2 as _miv2
-    if len(run.mate_chromosomes) > 0:
+    if (
+        run.bulk_v2_blobs is not None
+        and run.bulk_v2_blobs.mate_info_blob is not None
+    ):
+        # Phase 2c-T verbatim path: skip codec encode entirely and write
+        # the wire blob bytes + chrom_names table.
+        _write_mate_info_bulk_verbatim(
+            sc,
+            run.bulk_v2_blobs.mate_info_blob,
+            run.bulk_v2_blobs.mate_info_chrom_names or [],
+        )
+    elif len(run.mate_chromosomes) > 0:
         if not _miv2.HAVE_NATIVE_LIB:
             raise RuntimeError(
                 "MATE_INLINE_V2 codec requires the native libttio_rans "
@@ -1739,6 +1771,81 @@ def _resolve_mate_chrom_ids(
                 local_map[name] = len(local_map)
             out[i] = local_map[name]
     return out
+
+
+def _write_bulk_v2_blob(
+    parent, *, dataset_name: str, blob: bytes, codec_id: int
+) -> None:
+    """Write a verbatim v2 codec blob as a 1-D uint8 dataset.
+
+    Used by the transport bulk-mode receiver (Phase 2c-T) to bypass
+    the v2 codec encode step and write the wire bytes directly. The
+    ``@compression`` attribute is stamped with ``codec_id`` so the
+    file remains self-describing — readers dispatch on the same
+    compression byte they would for a freshly-encoded blob.
+    """
+    from .enums import Compression as _Compression, Precision as _Precision
+
+    arr = np.frombuffer(bytes(blob), dtype=np.uint8)
+    ds = parent.create_dataset(
+        dataset_name,
+        _Precision.UINT8,
+        length=int(arr.shape[0]),
+        chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+        compression=_Compression.NONE,
+    )
+    if arr.shape[0] > 0:
+        ds.write(arr)
+    io.write_int_attr(ds, "compression", int(codec_id), dtype="<u1")
+
+
+def _write_mate_info_bulk_verbatim(
+    sc, blob: bytes, chrom_names: list[str]
+) -> None:
+    """Phase 2c-T: write a verbatim ``inline_v2`` blob + chrom_names
+    table. Mirrors the layout produced by
+    :func:`_write_mate_info_inline_v2` but skips the codec encode."""
+    from .enums import Compression as _Compression
+    mate_group = sc.create_group("mate_info")
+    _write_bulk_v2_blob(
+        mate_group,
+        dataset_name="inline_v2",
+        blob=blob,
+        codec_id=int(_Compression.MATE_INLINE_V2),
+    )
+    io.write_compound_dataset(
+        mate_group,
+        "chrom_names",
+        [{"name": n} for n in chrom_names],
+        [("name", io.vl_str())],
+    )
+
+
+def _write_sequences_ref_diff_bulk_verbatim(sc, blob: bytes) -> None:
+    """Phase 2c-T: write a verbatim ``refdiff_v2`` blob under
+    ``signal_channels/sequences/refdiff_v2``. Mirrors the v1.8 v2
+    layout produced by :func:`_write_sequences_ref_diff_v2`."""
+    from .enums import Compression as _Compression
+    seq_group = sc.create_group("sequences")
+    _write_bulk_v2_blob(
+        seq_group,
+        dataset_name="refdiff_v2",
+        blob=blob,
+        codec_id=int(_Compression.REF_DIFF_V2),
+    )
+
+
+def _write_read_names_bulk_verbatim(sc, blob: bytes) -> None:
+    """Phase 2c-T: write a verbatim ``name_tok_v2`` blob to
+    ``signal_channels/read_names``. Mirrors the v1.8 v2 layout
+    produced by the inline NAME_TOKENIZED_V2 path."""
+    from .enums import Compression as _Compression
+    _write_bulk_v2_blob(
+        sc,
+        dataset_name="read_names",
+        blob=blob,
+        codec_id=int(_Compression.NAME_TOKENIZED_V2),
+    )
 
 
 def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:

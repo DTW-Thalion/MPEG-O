@@ -1412,4 +1412,112 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
     return records ? [records copy] : @[];
 }
 
+#pragma mark - Phase 2c-T verbatim v2 blob accessors
+
+- (nullable NSData *)readMateInfoInlineV2BlobBytes
+{
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if (!sig) return nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        if (![hg hasChildNamed:@"mate_info"]) return nil;
+        TTIOHDF5Group *mateGrp = [hg openGroupNamed:@"mate_info" error:NULL];
+        if (!mateGrp || ![mateGrp hasChildNamed:@"inline_v2"]) return nil;
+        TTIOHDF5Dataset *ds = [mateGrp openDatasetNamed:@"inline_v2" error:NULL];
+        if (!ds) return nil;
+        id raw = [ds readDataWithError:NULL];
+        return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : nil;
+    }
+    NSError *gErr = nil;
+    id<TTIOStorageGroup> mateProt = [sig openGroupNamed:@"mate_info" error:&gErr];
+    if (!mateProt) return nil;
+    id<TTIOStorageDataset> ds = [mateProt openDatasetNamed:@"inline_v2" error:NULL];
+    if (!ds) return nil;
+    id raw = [ds readAll:NULL];
+    return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : nil;
+}
+
+- (NSArray<NSString *> *)readMateInfoChromNamesTable
+{
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if (!sig) return out;
+    NSArray *rows = nil;
+    TTIOCompoundField *nameField =
+        [TTIOCompoundField fieldWithName:@"name"
+                                    kind:TTIOCompoundFieldKindVLString];
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        if (![hg hasChildNamed:@"mate_info"]) return out;
+        TTIOHDF5Group *mateGrp = [hg openGroupNamed:@"mate_info" error:NULL];
+        if (!mateGrp || ![mateGrp hasChildNamed:@"chrom_names"]) return out;
+        rows = [TTIOCompoundIO readGenericFromGroup:mateGrp
+                                       datasetNamed:@"chrom_names"
+                                             fields:@[nameField]
+                                              error:NULL];
+    } else {
+        id<TTIOStorageGroup> mateProt = [sig openGroupNamed:@"mate_info" error:NULL];
+        if (!mateProt) return out;
+        id<TTIOStorageDataset> ds = [mateProt openDatasetNamed:@"chrom_names" error:NULL];
+        if (ds) rows = [ds readAll:NULL];
+    }
+    for (NSDictionary *row in rows) {
+        id v = row[@"name"];
+        NSString *s = [v isKindOfClass:[NSData class]]
+            ? [[NSString alloc] initWithData:v encoding:NSUTF8StringEncoding]
+            : (NSString *)v;
+        [out addObject:s ?: @""];
+    }
+    return out;
+}
+
+- (nullable NSData *)readNameTokV2BlobBytes
+{
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if (!sig) return nil;
+    uint8_t codec = [self wireCompressionForChannel:@"read_names"];
+    // 15 = TTIOCompressionNameTokenizedV2 (avoid Transport→Genomics
+    // import inversion).
+    if (codec != 15) return nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        if (![hg hasChildNamed:@"read_names"]) return nil;
+        TTIOHDF5Dataset *ds = [hg openDatasetNamed:@"read_names" error:NULL];
+        if (!ds) return nil;
+        id raw = [ds readDataWithError:NULL];
+        return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : [NSData data];
+    }
+    id<TTIOStorageDataset> ds = [sig openDatasetNamed:@"read_names" error:NULL];
+    if (!ds) return nil;
+    id raw = [ds readAll:NULL];
+    return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : [NSData data];
+}
+
+- (nullable NSData *)readRefDiffV2BlobBytes
+{
+    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
+    if (!sig) return nil;
+    if ([sig respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
+        if (![hg hasChildNamed:@"sequences"]) return nil;
+        H5O_info_t info; memset(&info, 0, sizeof(info));
+        if (H5Oget_info_by_name([hg groupId], "sequences",
+                                &info, H5P_DEFAULT) < 0) return nil;
+        if (info.type != H5O_TYPE_GROUP) return nil;
+        TTIOHDF5Group *seqGrp = [hg openGroupNamed:@"sequences" error:NULL];
+        if (!seqGrp || ![seqGrp hasChildNamed:@"refdiff_v2"]) return nil;
+        TTIOHDF5Dataset *ds = [seqGrp openDatasetNamed:@"refdiff_v2" error:NULL];
+        if (!ds) return nil;
+        id raw = [ds readDataWithError:NULL];
+        return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : nil;
+    }
+    NSError *gErr = nil;
+    id<TTIOStorageGroup> seqGrp = [sig openGroupNamed:@"sequences" error:&gErr];
+    if (!seqGrp) return nil;
+    id<TTIOStorageDataset> ds = [seqGrp openDatasetNamed:@"refdiff_v2" error:NULL];
+    if (!ds) return nil;
+    id raw = [ds readAll:NULL];
+    return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : nil;
+}
+
 @end

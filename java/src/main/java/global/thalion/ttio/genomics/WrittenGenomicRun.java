@@ -116,7 +116,9 @@ public record WrittenGenomicRun(
     List<ProvenanceRecord> provenanceRecords,
     boolean embedReference,
     Map<String, byte[]> referenceChromSeqs,
-    Path externalReferencePath
+    Path externalReferencePath,
+    /** Phase 2c-T verbatim v2 codec blobs; null disables. */
+    BulkV2Blobs bulkV2Blobs
 ) {
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
@@ -171,7 +173,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null);
+             false, null, null, null);
     }
 
     /**
@@ -206,7 +208,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null);
+             false, null, null, null);
     }
 
     /**
@@ -242,7 +244,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null);
+             false, null, null, null);
     }
 
     /**
@@ -259,7 +261,21 @@ public record WrittenGenomicRun(
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
-            embed, chromSeqs, externalPath);
+            embed, chromSeqs, externalPath, bulkV2Blobs);
+    }
+
+    /** Phase 2c-T builder: returns a new instance with the given
+     *  verbatim v2 blobs attached. Used by the transport bulk-mode
+     *  receiver to bypass the v2 codec encode in the writer. */
+    public WrittenGenomicRun withBulkV2Blobs(BulkV2Blobs blobs) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            blobs);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

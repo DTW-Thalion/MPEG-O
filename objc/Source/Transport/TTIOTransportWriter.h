@@ -43,6 +43,13 @@ NS_ASSUME_NONNULL_BEGIN
  *  decompresses automatically regardless of this flag. Default NO. */
 @property (nonatomic) BOOL useCompression;
 
+/** Phase 2c-T: when YES, probe each genomic run for v2 codec blobs
+ *  and emit BlobV2* packets carrying them verbatim. Allows the
+ *  receiver to skip the v2 codec encode pass on the receiver side
+ *  and preserves blob byte-identity across deterministic codecs.
+ *  See docs/transport-spec.md §6.4. Default NO. */
+@property (nonatomic) BOOL useBulkMode;
+
 - (instancetype)initWithOutputPath:(NSString *)path;
 - (instancetype)initWithMutableData:(NSMutableData *)data;
 
@@ -76,6 +83,23 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)writeEndOfDatasetWithDatasetId:(uint16_t)datasetId
                        finalAUSequence:(uint32_t)finalAUSequence
                                   error:(NSError * _Nullable *)error;
+
+/** Phase 2c-T (transport-spec §4.10). */
+- (BOOL)writeBlobV2MateInfoWithDatasetId:(uint16_t)datasetId
+                              chromNames:(NSArray<NSString *> *)chromNames
+                                    blob:(NSData *)blob
+                                    error:(NSError * _Nullable *)error;
+
+/** Phase 2c-T (transport-spec §4.11). */
+- (BOOL)writeBlobV2RefDiffWithDatasetId:(uint16_t)datasetId
+                            referenceUri:(NSString *)referenceUri
+                                    blob:(NSData *)blob
+                                    error:(NSError * _Nullable *)error;
+
+/** Phase 2c-T (transport-spec §4.12). */
+- (BOOL)writeBlobV2NameTokWithDatasetId:(uint16_t)datasetId
+                                    blob:(NSData *)blob
+                                    error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 

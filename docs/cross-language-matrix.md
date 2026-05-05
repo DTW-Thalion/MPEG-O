@@ -72,6 +72,8 @@ contract levels per language pair. Footnotes follow the table.
 | **FASTA / FASTQ → `.tio` → FASTA / FASTQ** (full container cycle) | n/a (per-lang) | n/a (per-lang) | n/a (per-lang) | n/a | `test_fasta_fastq_tio_roundtrip.py` (Py), `FastaFastqTioRoundTripTest` (Java), `TestFastaFastqTioRoundTrip` (ObjC) |
 | **v1.0 per-AU encryption** (`.mpad` decrypt parity) | `=` (20) | `=` (20) | `=` (20) | `=` | `python/tests/integration/test_per_au_cross_language.py` |
 | **v1.0 per-AU transport** (`.tis` send/recv) | `=` (20) | `=` (20) | `=` (20) | `=` | `python/tests/integration/test_per_au_cross_language.py` |
+| **M89.6 genomic transport per-AU** (3×3 writer × reader) | `=` | `=` | `=` | `=` | `python/tests/validation/test_m89_cross_language.py` |
+| **Phase 2c-T transport bulk-mode** (3×3 writer × reader, byte-identity on `mate_info` + `read_names` blobs) | `=` | `=` | `=` | `=` | `python/tests/validation/test_phase_2c_t_bulk_mode.py` |
 | **M51** Numpress codec (delta + slof) cross-lang structural | `S` (21) | — | — | — | `python/tests/test_compression_codecs.py` |
 | **MS-fixture archive backward-compat** (5 ObjC-built `.tio` fixtures) | `~` (22) | — | — | — | `python/tests/test_cross_compat.py`, `python/tests/validation/test_m64_cross_tool_validation.py` |
 

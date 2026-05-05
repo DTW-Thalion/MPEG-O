@@ -39,6 +39,7 @@ libTTIO_HEADER_FILES = \
 	Run/TTIOSpectrumIndex.h \
 	Run/TTIOAcquisitionRun.h \
 	Genomics/TTIOAlignedRead.h \
+	Genomics/TTIOBulkV2Blobs.h \
 	Genomics/TTIOGenomicIndex.h \
 	Genomics/TTIOWrittenGenomicRun.h \
 	Genomics/TTIOGenomicRun.h \
@@ -153,6 +154,7 @@ libTTIO_OBJC_FILES = \
 	Run/TTIOSpectrumIndex.m \
 	Run/TTIOAcquisitionRun.m \
 	Genomics/TTIOAlignedRead.m \
+	Genomics/TTIOBulkV2Blobs.m \
 	Genomics/TTIOGenomicIndex.m \
 	Genomics/TTIOWrittenGenomicRun.m \
 	Genomics/TTIOGenomicRun.m \

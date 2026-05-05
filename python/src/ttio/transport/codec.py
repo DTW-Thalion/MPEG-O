@@ -34,6 +34,10 @@ from ..spectral_dataset import SpectralDataset, WrittenRun
 from ..spectrum import Spectrum
 from .._hdf5_io import read_int_attr as io_attr_int  # M90.10 wire codec probe
 from .packets import (
+    BULK_MODE_V2_BLOBS_FEATURE,
+    CODEC_ID_MATE_INLINE_V2,
+    CODEC_ID_NAME_TOKENIZED_V2,
+    CODEC_ID_REF_DIFF_V2,
     HEADER_MAGIC,
     HEADER_SIZE,
     VERSION,
@@ -49,7 +53,13 @@ from .packets import (
     _HEADER_STRUCT,
     crc32c,
     now_ns,
+    pack_blob_mate_info,
+    pack_blob_name_tok,
+    pack_blob_ref_diff,
     pack_string,
+    unpack_blob_mate_info,
+    unpack_blob_name_tok,
+    unpack_blob_ref_diff,
     unpack_string,
 )
 
@@ -84,6 +94,20 @@ _WIRE_TO_SPECTRUM_CLASS = {v: k for k, v in _SPECTRUM_CLASS_TO_WIRE.items()}
 _RANS_ORDER0_WIRE = int(Compression.RANS_ORDER0)
 _RANS_ORDER1_WIRE = int(Compression.RANS_ORDER1)
 _BASE_PACK_WIRE = int(Compression.BASE_PACK)
+
+
+def _read_mate_chrom_names_table(mate_grp) -> list[str]:
+    """Read the ``mate_info/chrom_names`` compound dataset into a list
+    of names ordered by row index (matches the chrom_id encoding used
+    by MATE_INLINE_V2). Returns ``[]`` when the table is missing
+    (mate_info/inline_v2 is allowed without a name table on empty
+    runs)."""
+    from .. import _hdf5_io as _io
+    try:
+        records = _io.read_compound_dataset(mate_grp, "chrom_names")
+    except (KeyError, ValueError):
+        return []
+    return [str(r.get("name", "")) for r in records]
 
 
 def _apply_wire_codec(plaintext: bytes, codec: int) -> bytes:
@@ -133,6 +157,7 @@ class TransportWriter:
         *,
         use_checksum: bool = False,
         use_compression: bool = False,
+        use_bulk_mode: bool = False,
     ):
         self._owns_stream = isinstance(output, (str, Path))
         if self._owns_stream:
@@ -141,6 +166,13 @@ class TransportWriter:
             self._stream = output  # type: ignore[assignment]
         self._use_checksum = use_checksum
         self._use_compression = use_compression
+        # Phase 2c-T: when True, the writer probes each genomic run for
+        # v2 blobs on disk and emits BlobV2* packets carrying them
+        # verbatim. The receiver writes the blobs back without going
+        # through the v2 codec encode step, preserving SAM mate
+        # sentinels (`=`, `""`) byte-for-byte. When the source has no
+        # v2 blobs, bulk mode is silently a no-op for that channel.
+        self._use_bulk_mode = use_bulk_mode
         self._stream_header_written = False
 
     @property
@@ -240,6 +272,42 @@ class TransportWriter:
             au_sequence=au_sequence,
         )
 
+    def write_blob_v2_mate_info(
+        self, *, dataset_id: int, chrom_names: list[str], blob: bytes
+    ) -> None:
+        """Emit a :data:`PacketType.BLOB_V2_MATE_INFO` packet (§4.10)."""
+        self._emit(
+            PacketType.BLOB_V2_MATE_INFO,
+            pack_blob_mate_info(
+                dataset_id=dataset_id, chrom_names=chrom_names, blob=blob,
+            ),
+            dataset_id=dataset_id,
+        )
+
+    def write_blob_v2_ref_diff(
+        self, *, dataset_id: int, reference_uri: str, blob: bytes
+    ) -> None:
+        """Emit a :data:`PacketType.BLOB_V2_REF_DIFF` packet (§4.11)."""
+        self._emit(
+            PacketType.BLOB_V2_REF_DIFF,
+            pack_blob_ref_diff(
+                dataset_id=dataset_id,
+                reference_uri=reference_uri,
+                blob=blob,
+            ),
+            dataset_id=dataset_id,
+        )
+
+    def write_blob_v2_name_tok(
+        self, *, dataset_id: int, blob: bytes
+    ) -> None:
+        """Emit a :data:`PacketType.BLOB_V2_NAME_TOK` packet (§4.12)."""
+        self._emit(
+            PacketType.BLOB_V2_NAME_TOK,
+            pack_blob_name_tok(dataset_id=dataset_id, blob=blob),
+            dataset_id=dataset_id,
+        )
+
     def write_end_of_dataset(
         self, *, dataset_id: int, final_au_sequence: int
     ) -> None:
@@ -261,6 +329,17 @@ class TransportWriter:
         runs = list(dataset.all_runs.items())
         genomic_runs = list(getattr(dataset, "genomic_runs", {}).items())
         features = list(dataset.feature_flags.features)
+        # Phase 2c-T: declare bulk-mode in the StreamHeader features
+        # list when the writer is bulk-enabled AND there is at least
+        # one genomic run that has v2 blobs to carry. Receivers see
+        # this flag and dispatch to the bulk path.
+        bulk_active = (
+            self._use_bulk_mode
+            and len(genomic_runs) > 0
+            and BULK_MODE_V2_BLOBS_FEATURE not in features
+        )
+        if bulk_active:
+            features = features + [BULK_MODE_V2_BLOBS_FEATURE]
         self.write_stream_header(
             format_version="1.2",
             title=dataset.title or "",
@@ -293,6 +372,8 @@ class TransportWriter:
             self._emit_run_access_units(dataset_id=i, run=run)
             self.write_end_of_dataset(dataset_id=i, final_au_sequence=len(run))
         for j, (name, grun) in enumerate(genomic_runs, start=len(runs) + 1):
+            if self._use_bulk_mode:
+                self._emit_genomic_run_v2_blobs(dataset_id=j, run=grun)
             self._emit_genomic_run_access_units(dataset_id=j, run=grun)
             self.write_end_of_dataset(dataset_id=j, final_au_sequence=len(grun))
         self.write_end_of_stream()
@@ -319,6 +400,72 @@ class TransportWriter:
         self.write_end_of_dataset(
             dataset_id=dataset_id, final_au_sequence=len(run)
         )
+
+    def _emit_genomic_run_v2_blobs(self, *, dataset_id: int, run) -> None:
+        """Phase 2c-T: probe ``run`` for v2 codec blobs and emit the
+        matching ``BlobV2*`` packets.
+
+        Each blob is independently optional — a run with no
+        ``mate_info/inline_v2`` group (rare; happens when
+        ``len(mate_chromosomes) == 0`` at write time) emits no
+        ``BLOB_V2_MATE_INFO`` packet, and so on. The receiver fills
+        the missing channels from the per-AU stream just as in
+        per-AU mode.
+        """
+        sig = run.group.open_group("signal_channels")
+
+        # mate_info/inline_v2 + chrom_names table
+        try:
+            mate_grp = sig.open_group("mate_info")
+            try:
+                mate_ds = mate_grp.open_dataset("inline_v2")
+                mate_blob = bytes(
+                    mate_ds.read(offset=0, count=int(mate_ds.length))
+                )
+                # chrom_names compound dataset → list of strings.
+                chrom_names = _read_mate_chrom_names_table(mate_grp)
+                self.write_blob_v2_mate_info(
+                    dataset_id=dataset_id,
+                    chrom_names=chrom_names,
+                    blob=mate_blob,
+                )
+            except KeyError:
+                pass
+        except KeyError:
+            pass
+
+        # read_names — flat uint8 dataset with @compression=15.
+        try:
+            rn_ds = sig.open_dataset("read_names")
+            codec_id = io_attr_int(rn_ds, "compression", default=0) or 0
+            if codec_id == CODEC_ID_NAME_TOKENIZED_V2 and int(rn_ds.length) > 0:
+                rn_blob = bytes(
+                    rn_ds.read(offset=0, count=int(rn_ds.length))
+                )
+                self.write_blob_v2_name_tok(
+                    dataset_id=dataset_id, blob=rn_blob,
+                )
+        except KeyError:
+            pass
+
+        # sequences — group with refdiff_v2 child dataset (v1.8 layout).
+        try:
+            seq_grp = sig.open_group("sequences")
+            try:
+                rd_ds = seq_grp.open_dataset("refdiff_v2")
+                rd_blob = bytes(
+                    rd_ds.read(offset=0, count=int(rd_ds.length))
+                )
+                self.write_blob_v2_ref_diff(
+                    dataset_id=dataset_id,
+                    reference_uri=run.reference_uri or "",
+                    blob=rd_blob,
+                )
+            except KeyError:
+                pass
+        except KeyError:
+            # sequences is a flat dataset (no ref-diff) — nothing to ship.
+            pass
 
     def _emit_genomic_run_access_units(self, *, dataset_id: int, run) -> None:
         """Emit one ACCESS_UNIT packet per AlignedRead in ``run``.
@@ -716,8 +863,13 @@ class TransportReader:
         dataset_metas: dict[int, dict] = {}
         run_data: dict[int, dict] = {}
         genomic_data: dict[int, dict] = {}
+        # Phase 2c-T: per-genomic-dataset_id buffers for verbatim
+        # v2 blobs. Populated when BlobV2* packets arrive, drained
+        # into the WrittenGenomicRun before write_minimal.
+        bulk_blobs: dict[int, dict] = {}
         last_seq: dict[int, int] = {}
         saw_stream_header = False
+        bulk_mode_required = False
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -726,6 +878,10 @@ class TransportReader:
                     raise ValueError("duplicate StreamHeader")
                 stream_meta = _decode_stream_header(payload)
                 saw_stream_header = True
+                bulk_mode_required = (
+                    BULK_MODE_V2_BLOBS_FEATURE
+                    in stream_meta.get("features", [])
+                )
                 continue
             if not saw_stream_header:
                 raise ValueError(
@@ -770,6 +926,47 @@ class TransportReader:
                     )
                 else:
                     _ingest_access_unit_bytes(run_data[did], payload)
+            elif ptype == int(PacketType.BLOB_V2_MATE_INFO):
+                # Phase 2c-T: verbatim mate_info blob for one
+                # genomic dataset_id. At most one per dataset.
+                ds_id, chrom_names, blob = unpack_blob_mate_info(payload)
+                if ds_id != header.dataset_id:
+                    raise ValueError(
+                        f"BlobV2MateInfo dataset_id {ds_id} != "
+                        f"header.dataset_id {header.dataset_id}"
+                    )
+                slot = bulk_blobs.setdefault(ds_id, {})
+                if "mate_info" in slot:
+                    raise ValueError(
+                        f"duplicate BlobV2MateInfo for dataset_id {ds_id}"
+                    )
+                slot["mate_info"] = (chrom_names, blob)
+            elif ptype == int(PacketType.BLOB_V2_REF_DIFF):
+                ds_id, ref_uri, blob = unpack_blob_ref_diff(payload)
+                if ds_id != header.dataset_id:
+                    raise ValueError(
+                        f"BlobV2RefDiff dataset_id {ds_id} != "
+                        f"header.dataset_id {header.dataset_id}"
+                    )
+                slot = bulk_blobs.setdefault(ds_id, {})
+                if "ref_diff" in slot:
+                    raise ValueError(
+                        f"duplicate BlobV2RefDiff for dataset_id {ds_id}"
+                    )
+                slot["ref_diff"] = (ref_uri, blob)
+            elif ptype == int(PacketType.BLOB_V2_NAME_TOK):
+                ds_id, blob = unpack_blob_name_tok(payload)
+                if ds_id != header.dataset_id:
+                    raise ValueError(
+                        f"BlobV2NameTok dataset_id {ds_id} != "
+                        f"header.dataset_id {header.dataset_id}"
+                    )
+                slot = bulk_blobs.setdefault(ds_id, {})
+                if "name_tok" in slot:
+                    raise ValueError(
+                        f"duplicate BlobV2NameTok for dataset_id {ds_id}"
+                    )
+                slot["name_tok"] = blob
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -779,6 +976,15 @@ class TransportReader:
                 # ProtectionMetadata — recognized but not yet
                 # materialized (M70/M71 scope).
                 continue
+
+        # Phase 2c-T: fail closed when bulk-mode was declared but no
+        # blobs arrived for any genomic dataset. The feature flag is
+        # required, so a bulk stream that ships zero blobs is malformed.
+        if bulk_mode_required and not bulk_blobs:
+            raise ValueError(
+                f"StreamHeader declared {BULK_MODE_V2_BLOBS_FEATURE!r} "
+                "but no BlobV2* packets were received"
+            )
 
         runs: dict[str, WrittenRun] = {}
         for did, meta in dataset_metas.items():
@@ -809,12 +1015,28 @@ class TransportReader:
             )
 
         # M89.2: build WrittenGenomicRun for each genomic dataset.
-        from ..written_genomic_run import WrittenGenomicRun
+        from ..written_genomic_run import BulkV2Blobs, WrittenGenomicRun
         genomic_runs: dict[str, WrittenGenomicRun] = {}
         for did, gd in genomic_data.items():
             meta = dataset_metas[did]
             n = len(gd["chromosomes"])
             instrument_meta = json.loads(meta.get("instrument_json") or "{}")
+            # Phase 2c-T: attach any verbatim blobs collected for this
+            # dataset_id so write_minimal skips the v2 codec encode
+            # for those channels.
+            slot = bulk_blobs.get(did, {})
+            bulk_obj: BulkV2Blobs | None = None
+            if slot:
+                mate = slot.get("mate_info")
+                rdif = slot.get("ref_diff")
+                ntok = slot.get("name_tok")
+                bulk_obj = BulkV2Blobs(
+                    mate_info_blob=mate[1] if mate else None,
+                    mate_info_chrom_names=list(mate[0]) if mate else None,
+                    ref_diff_blob=rdif[1] if rdif else None,
+                    ref_diff_reference_uri=rdif[0] if rdif else None,
+                    name_tok_blob=ntok if ntok is not None else None,
+                )
             genomic_runs[meta["name"]] = WrittenGenomicRun(
                 acquisition_mode=meta["acquisition_mode"],
                 reference_uri=instrument_meta.get("reference_uri", ""),
@@ -850,6 +1072,7 @@ class TransportReader:
                                    if gd["template_lengths"]
                                    else np.zeros(n, dtype=np.int32)),
                 chromosomes=list(gd["chromosomes"]),
+                bulk_v2_blobs=bulk_obj,
             )
 
         path = SpectralDataset.write_minimal(
@@ -1118,12 +1341,18 @@ def file_to_transport(
     *,
     use_checksum: bool = False,
     use_compression: bool = False,
+    use_bulk_mode: bool = False,
 ) -> None:
-    """Convert a ``.tio`` file to a transport stream."""
+    """Convert a ``.tio`` file to a transport stream.
+
+    ``use_bulk_mode=True`` enables Phase 2c-T verbatim v2-blob
+    carriage for genomic runs. See ``docs/transport-spec.md`` §6.4.
+    """
     with SpectralDataset.open(ttio_path) as ds, \
             TransportWriter(output,
                               use_checksum=use_checksum,
-                              use_compression=use_compression) as tw:
+                              use_compression=use_compression,
+                              use_bulk_mode=use_bulk_mode) as tw:
         tw.write_dataset(ds)
 
 

@@ -18,6 +18,7 @@
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOBulkV2Blobs.h"
 #import "Codecs/TTIORans.h"        // M90.10: rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // M90.10: BASE_PACK wire codec dispatch
 #import "ValueClasses/TTIOEnums.h"
@@ -209,9 +210,13 @@ typedef struct {
     // TTIOWrittenGenomicRun.
     NSMutableDictionary<NSNumber *, NSMutableDictionary *> *genomicData =
         [NSMutableDictionary dictionary];
+    // Phase 2c-T: per-dataset_id verbatim v2 blob accumulators.
+    NSMutableDictionary<NSNumber *, TTIOBulkV2Blobs *> *bulkBlobs =
+        [NSMutableDictionary dictionary];
     NSMutableDictionary<NSNumber *, NSNumber *> *lastSeq =
         [NSMutableDictionary dictionary];
     BOOL sawStreamHeader = NO;
+    BOOL bulkModeRequired = NO;
 
     for (TTIOTransportPacketRecord *rec in packets) {
         TTIOTransportPacketHeader *h = rec.header;
@@ -228,7 +233,10 @@ typedef struct {
             if (off + 2 > len) break;
             uint16_t nFeatures = readU16(&bytes[off]); off += 2;
             for (uint16_t i = 0; i < nFeatures; i++) {
-                (void)readLEString(bytes, len, &off, 2);
+                NSString *f = readLEString(bytes, len, &off, 2);
+                if ([f isEqualToString:TTIOTransportBulkModeV2BlobsFeature]) {
+                    bulkModeRequired = YES;
+                }
             }
             // n_datasets (not needed on the read side)
             continue;
@@ -525,9 +533,68 @@ typedef struct {
             continue;
         }
 
+        if (h.packetType == TTIOTransportPacketBlobV2MateInfo) {
+            if (off + 5 > len) continue;
+            uint16_t did = readU16(&bytes[off]); off += 2;
+            uint8_t codecId = bytes[off]; off += 1;
+            (void)codecId;
+            uint16_t nNames = readU16(&bytes[off]); off += 2;
+            NSMutableArray<NSString *> *names = [NSMutableArray array];
+            for (uint16_t i = 0; i < nNames; i++) {
+                NSString *n = readLEString(bytes, len, &off, 2);
+                if (n) [names addObject:n];
+            }
+            if (off + 4 > len) continue;
+            uint32_t blobLen = readU32(&bytes[off]); off += 4;
+            if (off + blobLen > len) continue;
+            NSData *blob = [NSData dataWithBytes:&bytes[off] length:blobLen];
+            TTIOBulkV2Blobs *slot = bulkBlobs[@(did)];
+            if (!slot) { slot = [TTIOBulkV2Blobs new]; bulkBlobs[@(did)] = slot; }
+            slot.mateInfoBlob = blob;
+            slot.mateInfoChromNames = names;
+            continue;
+        }
+        if (h.packetType == TTIOTransportPacketBlobV2RefDiff) {
+            if (off + 3 > len) continue;
+            uint16_t did = readU16(&bytes[off]); off += 2;
+            (void)bytes[off]; off += 1;  // codec_id
+            NSString *refUri = readLEString(bytes, len, &off, 2);
+            if (off + 4 > len) continue;
+            uint32_t blobLen = readU32(&bytes[off]); off += 4;
+            if (off + blobLen > len) continue;
+            NSData *blob = [NSData dataWithBytes:&bytes[off] length:blobLen];
+            TTIOBulkV2Blobs *slot = bulkBlobs[@(did)];
+            if (!slot) { slot = [TTIOBulkV2Blobs new]; bulkBlobs[@(did)] = slot; }
+            slot.refDiffBlob = blob;
+            slot.refDiffReferenceUri = refUri ?: @"";
+            continue;
+        }
+        if (h.packetType == TTIOTransportPacketBlobV2NameTok) {
+            if (off + 7 > len) continue;
+            uint16_t did = readU16(&bytes[off]); off += 2;
+            (void)bytes[off]; off += 1;  // codec_id
+            uint32_t blobLen = readU32(&bytes[off]); off += 4;
+            if (off + blobLen > len) continue;
+            NSData *blob = [NSData dataWithBytes:&bytes[off] length:blobLen];
+            TTIOBulkV2Blobs *slot = bulkBlobs[@(did)];
+            if (!slot) { slot = [TTIOBulkV2Blobs new]; bulkBlobs[@(did)] = slot; }
+            slot.nameTokBlob = blob;
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
+    }
+
+    // Phase 2c-T: a stream that declared bulk_mode_v2_blobs but
+    // shipped zero blob packets is malformed.
+    if (bulkModeRequired && bulkBlobs.count == 0) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 @"StreamHeader declared bulk_mode_v2_blobs "
+                                 @"but no BlobV2* packets were received"}];
+        return NO;
     }
 
     // Build TTIOWrittenRun objects.
@@ -723,6 +790,9 @@ typedef struct {
                     templateLengths:tlenData
                         chromosomes:[gd[@"chromosomes"] copy]
                   signalCompression:TTIOCompressionNone];
+        // Phase 2c-T: attach verbatim blobs collected for this dataset_id.
+        TTIOBulkV2Blobs *slot = bulkBlobs[didKey];
+        if (slot) wgr.bulkV2Blobs = slot;
         genomicRuns[(NSString *)meta[@"name"]] = wgr;
     }
 

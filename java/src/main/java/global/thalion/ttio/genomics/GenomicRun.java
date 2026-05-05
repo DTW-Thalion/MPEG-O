@@ -895,4 +895,85 @@ public class GenomicRun
             return fallback;
         }
     }
+
+    // ---------------------------------------------------------- Phase 2c-T
+    //
+    // Verbatim v2 blob accessors used by TransportWriter in bulk mode.
+    // Each returns the raw on-disk codec blob bytes (or null when the
+    // channel is absent from this run's signal_channels/ group).
+
+    /** Phase 2c-T: read the verbatim {@code mate_info/inline_v2} blob.
+     *  Returns null when the run has no inline_v2 layout (empty
+     *  mate_chromosomes at write time). */
+    @SuppressWarnings("unchecked")
+    public byte[] readMateInfoInlineV2BlobBytes() {
+        ensureSignalChannels();
+        if (!signalChannels.hasChild("mate_info")) return null;
+        try (StorageGroup mateGrp = signalChannels.openGroup("mate_info")) {
+            if (!mateGrp.hasChild("inline_v2")) return null;
+            try (StorageDataset ds = mateGrp.openDataset("inline_v2")) {
+                long total = ds.shape()[0];
+                return (byte[]) ds.readSlice(0L, total);
+            }
+        }
+    }
+
+    /** Phase 2c-T: read the {@code mate_info/chrom_names} sidecar
+     *  table. Returns an empty list when the table is missing. */
+    @SuppressWarnings("unchecked")
+    public List<String> readMateInfoChromNamesTable() {
+        ensureSignalChannels();
+        List<String> out = new ArrayList<>();
+        if (!signalChannels.hasChild("mate_info")) return out;
+        try (StorageGroup mateGrp = signalChannels.openGroup("mate_info")) {
+            if (!mateGrp.hasChild("chrom_names")) return out;
+            try (StorageDataset nameDs = mateGrp.openDataset("chrom_names")) {
+                List<Object[]> rows = (List<Object[]>) nameDs.readAll();
+                for (Object[] row : rows) {
+                    Object v = row[0];
+                    if (v instanceof byte[] b) {
+                        out.add(new String(b, StandardCharsets.UTF_8));
+                    } else {
+                        out.add(v == null ? "" : v.toString());
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Phase 2c-T: read the verbatim {@code read_names} blob when
+     *  {@code @compression == NAME_TOKENIZED_V2 (15)}. Returns null
+     *  when read_names is absent or carries a different codec. */
+    public byte[] readNameTokV2BlobBytes() {
+        ensureSignalChannels();
+        if (!signalChannels.hasChild("read_names")) return null;
+        try (StorageDataset ds = signalChannels.openDataset("read_names")) {
+            int codec = signalChannelCompressionCode("read_names");
+            if (codec != 15) return null;  // not NAME_TOKENIZED_V2
+            long total = ds.shape()[0];
+            if (total <= 0) return new byte[0];
+            return (byte[]) ds.readSlice(0L, total);
+        }
+    }
+
+    /** Phase 2c-T: read the verbatim
+     *  {@code sequences/refdiff_v2} blob when sequences is the v1.8
+     *  group layout. Returns null otherwise. */
+    public byte[] readRefDiffV2BlobBytes() {
+        ensureSignalChannels();
+        if (!signalChannels.hasChild("sequences")) return null;
+        // sequences may be a flat dataset or a group containing refdiff_v2.
+        try (StorageGroup seqGrp = signalChannels.openGroup("sequences")) {
+            if (!seqGrp.hasChild("refdiff_v2")) return null;
+            try (StorageDataset ds = seqGrp.openDataset("refdiff_v2")) {
+                long total = ds.shape()[0];
+                if (total <= 0) return new byte[0];
+                return (byte[]) ds.readSlice(0L, total);
+            }
+        } catch (Exception e) {
+            // sequences is a flat dataset, not a group.
+            return null;
+        }
+    }
 }

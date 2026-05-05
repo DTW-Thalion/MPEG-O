@@ -1,5 +1,18 @@
 # Phase 2c-T placeholder — transport bulk-mode wire format (carries v2 blobs natively)
 
+> **STATUS: SUPERSEDED (2026-05-05).** The full spec lives at
+> [`2026-05-05-phase-2c-T-transport-bulk-mode-spec.md`](./2026-05-05-phase-2c-T-transport-bulk-mode-spec.md)
+> and has been folded into `docs/transport-spec.md` §3.2/§4.10–4.12/§5.8/§6.4.
+> The implementation shipped 2026-05-05 across Python, Java, and ObjC
+> with the cross-language verification suite at
+> `python/tests/validation/test_phase_2c_t_bulk_mode.py` (9-cell matrix,
+> green). One framing correction from this placeholder: the SAM
+> sentinels `=` and `""` are normalized at v2 codec **write** time, not
+> transport time — bulk-mode delivers receiver-side perf and
+> cross-language byte-identity insurance, not sentinel preservation
+> (which is impossible once data hits a v2 blob). See the 2026-05-05
+> spec §1 for the corrected framing.
+
 **Date:** 2026-05-04
 **Status:** PLACEHOLDER — needs brainstorm + full spec before implementation.
 **Trigger:** scheduled after Phase 2c lands. User decision 2026-05-04

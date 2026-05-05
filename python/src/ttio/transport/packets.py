@@ -33,7 +33,20 @@ class PacketType(IntEnum):
     PROVENANCE = 0x06
     CHROMATOGRAM = 0x07
     END_OF_DATASET = 0x08
+    # Bulk-mode v2-blob carriage (Phase 2c-T, transport-spec §4.10-§4.12).
+    # Emitted only when the StreamHeader features list contains
+    # "bulk_mode_v2_blobs". One packet per (dataset_id, codec_id) at
+    # most, between the matching DatasetHeader and EndOfDataset.
+    BLOB_V2_MATE_INFO = 0x09
+    BLOB_V2_REF_DIFF = 0x0A
+    BLOB_V2_NAME_TOK = 0x0B
     END_OF_STREAM = 0xFF
+
+
+# Bulk-mode feature flag — appears in StreamHeader.features when v2
+# codec blobs ride on the wire. Receivers without bulk-mode support
+# MUST refuse the stream (no opt_ prefix → required).
+BULK_MODE_V2_BLOBS_FEATURE = "bulk_mode_v2_blobs"
 
 
 class PacketFlag(IntFlag):
@@ -388,3 +401,129 @@ def unpack_string(buf: bytes, offset: int, *, width: int = 2) -> tuple[str, int]
         raise ValueError(f"unsupported prefix width: {width}")
     value = bytes(buf[offset:offset + length]).decode("utf-8")
     return value, offset + length
+
+
+# ----------------------------------------------- Bulk-mode blob payloads
+#
+# See ``docs/transport-spec.md`` §4.10-§4.12. Each packet ships one
+# v2 codec blob verbatim so the receiver writes it byte-for-byte to
+# the matching HDF5 path, bypassing the v2 codec encode step.
+
+CODEC_ID_MATE_INLINE_V2 = 13
+CODEC_ID_REF_DIFF_V2 = 14
+CODEC_ID_NAME_TOKENIZED_V2 = 15
+
+
+def pack_blob_mate_info(
+    *, dataset_id: int, chrom_names: list[str], blob: bytes
+) -> bytes:
+    """Encode a :data:`PacketType.BLOB_V2_MATE_INFO` payload.
+
+    Mirrors transport-spec §4.10. The chromosome name table is the
+    one written alongside ``signal_channels/mate_info/inline_v2`` and
+    is required to resolve mate chromosome ids back to strings.
+    """
+    chrom_table = b"".join(pack_string(n, width=2) for n in chrom_names)
+    return b"".join((
+        struct.pack("<HBH", dataset_id & 0xFFFF,
+                    CODEC_ID_MATE_INLINE_V2, len(chrom_names) & 0xFFFF),
+        chrom_table,
+        struct.pack("<I", len(blob) & 0xFFFFFFFF),
+        bytes(blob),
+    ))
+
+
+def unpack_blob_mate_info(payload: bytes) -> tuple[int, list[str], bytes]:
+    """Inverse of :func:`pack_blob_mate_info`. Returns
+    ``(dataset_id, chrom_names, blob)``.
+    """
+    if len(payload) < 5:
+        raise ValueError(f"BlobV2MateInfo payload too short: {len(payload)}")
+    dataset_id, codec_id, n_names = struct.unpack_from("<HBH", payload, 0)
+    if codec_id != CODEC_ID_MATE_INLINE_V2:
+        raise ValueError(
+            f"BlobV2MateInfo codec_id {codec_id} != {CODEC_ID_MATE_INLINE_V2}"
+        )
+    offset = 5
+    chrom_names: list[str] = []
+    for _ in range(n_names):
+        n, offset = unpack_string(payload, offset, width=2)
+        chrom_names.append(n)
+    if len(payload) - offset < 4:
+        raise ValueError("BlobV2MateInfo missing blob_length")
+    (blob_length,) = struct.unpack_from("<I", payload, offset)
+    offset += 4
+    if len(payload) - offset != blob_length:
+        raise ValueError(
+            f"BlobV2MateInfo trailing bytes mismatch: "
+            f"declared {blob_length}, actual {len(payload) - offset}"
+        )
+    blob = bytes(payload[offset:offset + blob_length])
+    return dataset_id, chrom_names, blob
+
+
+def pack_blob_ref_diff(
+    *, dataset_id: int, reference_uri: str, blob: bytes
+) -> bytes:
+    """Encode a :data:`PacketType.BLOB_V2_REF_DIFF` payload (§4.11)."""
+    return b"".join((
+        struct.pack("<HB", dataset_id & 0xFFFF, CODEC_ID_REF_DIFF_V2),
+        pack_string(reference_uri, width=2),
+        struct.pack("<I", len(blob) & 0xFFFFFFFF),
+        bytes(blob),
+    ))
+
+
+def unpack_blob_ref_diff(payload: bytes) -> tuple[int, str, bytes]:
+    """Inverse of :func:`pack_blob_ref_diff`. Returns
+    ``(dataset_id, reference_uri, blob)``.
+    """
+    if len(payload) < 3:
+        raise ValueError(f"BlobV2RefDiff payload too short: {len(payload)}")
+    dataset_id, codec_id = struct.unpack_from("<HB", payload, 0)
+    if codec_id != CODEC_ID_REF_DIFF_V2:
+        raise ValueError(
+            f"BlobV2RefDiff codec_id {codec_id} != {CODEC_ID_REF_DIFF_V2}"
+        )
+    offset = 3
+    reference_uri, offset = unpack_string(payload, offset, width=2)
+    if len(payload) - offset < 4:
+        raise ValueError("BlobV2RefDiff missing blob_length")
+    (blob_length,) = struct.unpack_from("<I", payload, offset)
+    offset += 4
+    if len(payload) - offset != blob_length:
+        raise ValueError(
+            f"BlobV2RefDiff trailing bytes mismatch: "
+            f"declared {blob_length}, actual {len(payload) - offset}"
+        )
+    return dataset_id, reference_uri, bytes(payload[offset:offset + blob_length])
+
+
+def pack_blob_name_tok(*, dataset_id: int, blob: bytes) -> bytes:
+    """Encode a :data:`PacketType.BLOB_V2_NAME_TOK` payload (§4.12)."""
+    return b"".join((
+        struct.pack("<HB", dataset_id & 0xFFFF, CODEC_ID_NAME_TOKENIZED_V2),
+        struct.pack("<I", len(blob) & 0xFFFFFFFF),
+        bytes(blob),
+    ))
+
+
+def unpack_blob_name_tok(payload: bytes) -> tuple[int, bytes]:
+    """Inverse of :func:`pack_blob_name_tok`. Returns
+    ``(dataset_id, blob)``.
+    """
+    if len(payload) < 7:
+        raise ValueError(f"BlobV2NameTok payload too short: {len(payload)}")
+    dataset_id, codec_id = struct.unpack_from("<HB", payload, 0)
+    if codec_id != CODEC_ID_NAME_TOKENIZED_V2:
+        raise ValueError(
+            f"BlobV2NameTok codec_id {codec_id} != {CODEC_ID_NAME_TOKENIZED_V2}"
+        )
+    (blob_length,) = struct.unpack_from("<I", payload, 3)
+    offset = 7
+    if len(payload) - offset != blob_length:
+        raise ValueError(
+            f"BlobV2NameTok trailing bytes mismatch: "
+            f"declared {blob_length}, actual {len(payload) - offset}"
+        )
+    return dataset_id, bytes(payload[offset:offset + blob_length])

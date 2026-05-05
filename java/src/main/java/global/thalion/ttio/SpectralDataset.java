@@ -5,6 +5,7 @@
  */
 package global.thalion.ttio;
 
+import global.thalion.ttio.genomics.BulkV2Blobs;          // Phase 2c-T
 import global.thalion.ttio.genomics.GenomicIndex;        // M82.3
 import global.thalion.ttio.genomics.GenomicRun;          // M82.3
 import global.thalion.ttio.genomics.WrittenGenomicRun;   // M82.3
@@ -997,11 +998,24 @@ public class SpectralDataset implements
                 // default ZLIB, and referenceChromSeqs is supplied.
                 Enums.Compression seqCodec =
                     run.signalCodecOverrides().get("sequences");
+                BulkV2Blobs bulkBlobs = run.bulkV2Blobs();
                 boolean useRefDiffPath =
                     seqCodec == null
                     && run.signalCompression() == Enums.Compression.ZLIB
                     && run.referenceChromSeqs() != null;
-                if (useRefDiffPath) {
+                if (bulkBlobs != null && bulkBlobs.refDiffBlob() != null) {
+                    // Phase 2c-T: skip codec encode and write the
+                    // verbatim ref-diff blob.
+                    if (!java.util.Objects.equals(
+                            bulkBlobs.refDiffReferenceUri(),
+                            run.referenceUri())) {
+                        throw new IllegalArgumentException(
+                            "BulkV2Blobs.refDiffReferenceUri "
+                            + bulkBlobs.refDiffReferenceUri()
+                            + " != run.referenceUri " + run.referenceUri());
+                    }
+                    writeBulkSequencesRefDiff(sc, bulkBlobs.refDiffBlob());
+                } else if (useRefDiffPath) {
                     writeSequencesRefDiff(sc, run);
                 } else {
                     writeByteChannelWithCodec(sc, "sequences",
@@ -1102,7 +1116,10 @@ public class SpectralDataset implements
                 //   IllegalStateException (no fallback in v1.0+; the v1
                 //   M82-compound and v1 NAME_TOKENIZED paths were removed
                 //   in Phase 2c).
-                if (run.readCount() == 0) {
+                if (bulkBlobs != null && bulkBlobs.nameTokBlob() != null) {
+                    // Phase 2c-T: skip codec encode.
+                    writeBulkReadNames(sc, bulkBlobs.nameTokBlob());
+                } else if (run.readCount() == 0) {
                     global.thalion.ttio.providers.StorageDataset emptyRn;
                     try {
                         emptyRn = sc.createDataset("read_names",
@@ -1153,7 +1170,11 @@ public class SpectralDataset implements
                 // mate_info group entirely (cross-language convention
                 // shared with Python; ObjC was reconciled to the same).
                 // Readers treat an absent group as "no mate info".
-                if (run.readCount() == 0) {
+                if (bulkBlobs != null && bulkBlobs.mateInfoBlob() != null) {
+                    // Phase 2c-T: skip codec encode.
+                    writeBulkMateInfo(sc, bulkBlobs.mateInfoBlob(),
+                        bulkBlobs.mateInfoChromNames());
+                } else if (run.readCount() == 0) {
                     // Omit the group — readers handle absence as no mates.
                 } else if (!global.thalion.ttio.codecs.MateInfoV2.isAvailable()) {
                     throw new IllegalStateException(
@@ -1344,6 +1365,87 @@ public class SpectralDataset implements
     // longer has a code path. mate_info is v2-only (inline_v2 blob)
     // in v1.0+; non-empty runs without the native lib raise
     // IllegalStateException at the call site (see writeGenomicRunSubtree).
+
+    /** Phase 2c-T (v1.0): write a verbatim {@code mate_info/inline_v2}
+     *  blob plus the {@code chrom_names} sidecar table, BYPASSING the
+     *  v2 codec encode. Used by the transport bulk-mode receiver. */
+    private static void writeBulkMateInfo(
+            global.thalion.ttio.providers.StorageGroup sc,
+            byte[] blob, List<String> chromNames) {
+        try (var mateGroup = sc.createGroup("mate_info")) {
+            global.thalion.ttio.providers.StorageDataset blobDs;
+            try {
+                blobDs = mateGroup.createDataset("inline_v2",
+                    Enums.Precision.UINT8, blob.length,
+                    65536, Enums.Compression.NONE, 0);
+            } catch (UnsupportedOperationException e) {
+                blobDs = mateGroup.createDataset("inline_v2",
+                    Enums.Precision.UINT8, blob.length,
+                    0, Enums.Compression.NONE, 0);
+            }
+            try (var closeMe = blobDs) {
+                if (blob.length > 0) closeMe.writeAll(blob);
+                closeMe.setAttribute("compression",
+                    codecIdFor(Enums.Compression.MATE_INLINE_V2));
+            }
+            List<global.thalion.ttio.providers.CompoundField> nameFields = List.of(
+                new global.thalion.ttio.providers.CompoundField("name",
+                    global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
+            List<Object[]> nameRows = new ArrayList<>(chromNames.size());
+            for (String chromName : chromNames) {
+                nameRows.add(new Object[]{ chromName });
+            }
+            try (var ds = mateGroup.createCompoundDataset(
+                    "chrom_names", nameFields, nameRows.size())) {
+                ds.writeAll(nameRows);
+            }
+        }
+    }
+
+    /** Phase 2c-T: write a verbatim {@code read_names} blob, bypassing
+     *  the NameTokenizerV2 codec encode. */
+    private static void writeBulkReadNames(
+            global.thalion.ttio.providers.StorageGroup sc, byte[] blob) {
+        global.thalion.ttio.providers.StorageDataset rnDs;
+        try {
+            rnDs = sc.createDataset("read_names",
+                Enums.Precision.UINT8, blob.length,
+                65536, Enums.Compression.NONE, 0);
+        } catch (UnsupportedOperationException e) {
+            rnDs = sc.createDataset("read_names",
+                Enums.Precision.UINT8, blob.length,
+                0, Enums.Compression.NONE, 0);
+        }
+        try (var closeMe = rnDs) {
+            if (blob.length > 0) closeMe.writeAll(blob);
+            closeMe.setAttribute("compression",
+                codecIdFor(Enums.Compression.NAME_TOKENIZED_V2));
+        }
+    }
+
+    /** Phase 2c-T: write a verbatim {@code sequences/refdiff_v2} blob
+     *  inside a {@code sequences} group, bypassing the RefDiffV2
+     *  codec encode. */
+    private static void writeBulkSequencesRefDiff(
+            global.thalion.ttio.providers.StorageGroup sc, byte[] blob) {
+        try (var seqGroup = sc.createGroup("sequences")) {
+            global.thalion.ttio.providers.StorageDataset blobDs;
+            try {
+                blobDs = seqGroup.createDataset("refdiff_v2",
+                    Enums.Precision.UINT8, blob.length,
+                    65536, Enums.Compression.NONE, 0);
+            } catch (UnsupportedOperationException e) {
+                blobDs = seqGroup.createDataset("refdiff_v2",
+                    Enums.Precision.UINT8, blob.length,
+                    0, Enums.Compression.NONE, 0);
+            }
+            try (var closeMe = blobDs) {
+                if (blob.length > 0) closeMe.writeAll(blob);
+                closeMe.setAttribute("compression",
+                    codecIdFor(Enums.Compression.REF_DIFF_V2));
+            }
+        }
+    }
 
     /** Compute the canonical reference MD5 for a run as
      *  {@code md5(concat(referenceChromSeqs[k] for k in sorted(keys)))}.

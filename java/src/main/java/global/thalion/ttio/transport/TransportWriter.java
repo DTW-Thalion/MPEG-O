@@ -43,6 +43,9 @@ public final class TransportWriter implements AutoCloseable {
     private final boolean ownsStream;
     private boolean useChecksum = false;
     private boolean useCompression = false;
+    /** Phase 2c-T: when true, probe each genomic run for v2 codec
+     *  blobs and emit BlobV2* packets carrying them verbatim. */
+    private boolean useBulkMode = false;
 
     public TransportWriter(OutputStream out) {
         this.out = out;
@@ -56,7 +59,9 @@ public final class TransportWriter implements AutoCloseable {
 
     public void setUseChecksum(boolean v) { this.useChecksum = v; }
     public void setUseCompression(boolean v) { this.useCompression = v; }
+    public void setUseBulkMode(boolean v) { this.useBulkMode = v; }
     public boolean useCompression() { return useCompression; }
+    public boolean useBulkMode() { return useBulkMode; }
 
     @Override
     public void close() throws IOException {
@@ -159,6 +164,46 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.ACCESS_UNIT, au.encode(), datasetId, auSequence);
     }
 
+    /** Phase 2c-T (transport-spec §4.10). */
+    public void writeBlobV2MateInfo(int datasetId, List<String> chromNames,
+                                      byte[] blob) throws IOException {
+        int size = 5;  // dataset_id(2) + codec_id(1) + n_chrom_names(2)
+        for (String n : chromNames) size += sizeLEString(n, 2);
+        size += 4 + blob.length;
+        ByteBuffer buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putShort((short) (datasetId & 0xFFFF));
+        buf.put((byte) PacketType.CODEC_ID_MATE_INLINE_V2);
+        buf.putShort((short) (chromNames.size() & 0xFFFF));
+        for (String n : chromNames) appendLEString(buf, n, 2);
+        buf.putInt(blob.length);
+        buf.put(blob);
+        emit(PacketType.BLOB_V2_MATE_INFO, buf.array(), datasetId, 0);
+    }
+
+    /** Phase 2c-T (transport-spec §4.11). */
+    public void writeBlobV2RefDiff(int datasetId, String referenceUri,
+                                     byte[] blob) throws IOException {
+        int size = 3 + sizeLEString(referenceUri, 2) + 4 + blob.length;
+        ByteBuffer buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putShort((short) (datasetId & 0xFFFF));
+        buf.put((byte) PacketType.CODEC_ID_REF_DIFF_V2);
+        appendLEString(buf, referenceUri, 2);
+        buf.putInt(blob.length);
+        buf.put(blob);
+        emit(PacketType.BLOB_V2_REF_DIFF, buf.array(), datasetId, 0);
+    }
+
+    /** Phase 2c-T (transport-spec §4.12). */
+    public void writeBlobV2NameTok(int datasetId, byte[] blob) throws IOException {
+        int size = 3 + 4 + blob.length;
+        ByteBuffer buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putShort((short) (datasetId & 0xFFFF));
+        buf.put((byte) PacketType.CODEC_ID_NAME_TOKENIZED_V2);
+        buf.putInt(blob.length);
+        buf.put(blob);
+        emit(PacketType.BLOB_V2_NAME_TOK, buf.array(), datasetId, 0);
+    }
+
     public void writeEndOfDataset(int datasetId, long finalAUSequence) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) (datasetId & 0xFFFF));
@@ -177,6 +222,14 @@ public final class TransportWriter implements AutoCloseable {
         Map<String, GenomicRun> genomicRuns = dataset.genomicRuns();
         List<String> features = new ArrayList<>();
         for (String f : dataset.featureFlags().features()) features.add(f);
+
+        // Phase 2c-T: declare bulk-mode in StreamHeader features when
+        // the writer is bulk-enabled AND there is at least one
+        // genomic run with v2 blobs to carry.
+        if (useBulkMode && !genomicRuns.isEmpty()
+            && !features.contains(PacketType.BULK_MODE_V2_BLOBS_FEATURE)) {
+            features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
+        }
 
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
@@ -225,13 +278,38 @@ public final class TransportWriter implements AutoCloseable {
             id++;
         }
 
-        // M89.2: Then genomic AUs.
+        // M89.2: Then genomic AUs. Phase 2c-T: in bulk mode, emit
+        // verbatim v2 codec blobs first, then per-AU AccessUnits.
         for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
+            if (useBulkMode) {
+                emitGenomicRunV2Blobs(id, e.getValue());
+            }
             emitGenomicRunAccessUnits(id, e.getValue());
             writeEndOfDataset(id, e.getValue().readCount());
             id++;
         }
         writeEndOfStream();
+    }
+
+    /** Phase 2c-T: probe a {@link GenomicRun} for verbatim v2
+     *  codec blobs and emit the matching BlobV2* packets. Each
+     *  blob is independently optional. */
+    private void emitGenomicRunV2Blobs(int datasetId, GenomicRun run)
+            throws IOException {
+        byte[] mateBlob = run.readMateInfoInlineV2BlobBytes();
+        if (mateBlob != null) {
+            List<String> names = run.readMateInfoChromNamesTable();
+            writeBlobV2MateInfo(datasetId, names, mateBlob);
+        }
+        byte[] nameBlob = run.readNameTokV2BlobBytes();
+        if (nameBlob != null) {
+            writeBlobV2NameTok(datasetId, nameBlob);
+        }
+        byte[] refDiffBlob = run.readRefDiffV2BlobBytes();
+        if (refDiffBlob != null) {
+            String refUri = run.referenceUri() == null ? "" : run.referenceUri();
+            writeBlobV2RefDiff(datasetId, refUri, refDiffBlob);
+        }
     }
 
     /** M89.2: Write a single {@link GenomicRun} as a stream segment.

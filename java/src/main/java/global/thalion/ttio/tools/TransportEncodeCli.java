@@ -24,14 +24,22 @@ import java.nio.file.Path;
 public final class TransportEncodeCli {
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 2) {
-            System.err.println("usage: TransportEncodeCli <input.tio> <output.tis>");
+        // Parse positional + flag args. Accepts --bulk (Phase 2c-T).
+        String input = null, output = null;
+        boolean bulk = false;
+        for (String a : args) {
+            if ("--bulk".equals(a)) { bulk = true; continue; }
+            if (input == null) { input = a; }
+            else if (output == null) { output = a; }
+        }
+        if (input == null || output == null) {
+            System.err.println(
+                "usage: TransportEncodeCli [--bulk] <input.tio> <output.tis>");
             System.exit(2);
         }
-        String input = args[0];
-        String output = args[1];
         try (SpectralDataset ds = SpectralDataset.open(input);
              TransportWriter tw = new TransportWriter(Path.of(output))) {
+            tw.setUseBulkMode(bulk);
             tw.writeDataset(ds);
         }
     }

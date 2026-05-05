@@ -15,20 +15,30 @@
 int main(int argc, const char **argv)
 {
     @autoreleasepool {
-        if (argc < 3) {
-            fprintf(stderr, "usage: TtioTransportEncode <input.tio> <output.tis>\n");
+        // Parse positional + flag args. Accepts --bulk (Phase 2c-T).
+        const char *input = NULL;
+        const char *output = NULL;
+        BOOL bulk = NO;
+        for (int i = 1; i < argc; i++) {
+            if (strcmp(argv[i], "--bulk") == 0) { bulk = YES; continue; }
+            if (input == NULL) { input = argv[i]; }
+            else if (output == NULL) { output = argv[i]; }
+        }
+        if (input == NULL || output == NULL) {
+            fprintf(stderr, "usage: TtioTransportEncode [--bulk] <input.tio> <output.tis>\n");
             return 2;
         }
-        NSString *input = [NSString stringWithUTF8String:argv[1]];
-        NSString *output = [NSString stringWithUTF8String:argv[2]];
+        NSString *inputS = [NSString stringWithUTF8String:input];
+        NSString *outputS = [NSString stringWithUTF8String:output];
         NSError *err = nil;
-        TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:input error:&err];
+        TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:inputS error:&err];
         if (!ds) {
             fprintf(stderr, "open failed: %s\n",
                     err.localizedDescription.UTF8String ?: "unknown");
             return 1;
         }
-        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:output];
+        TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:outputS];
+        tw.useBulkMode = bulk;
         BOOL ok = [tw writeDataset:ds error:&err];
         [tw close];
         if (!ok) {

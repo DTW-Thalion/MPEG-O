@@ -12,6 +12,7 @@ import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.MiniJson;
 import global.thalion.ttio.codecs.BasePack;
 import global.thalion.ttio.codecs.Rans;
+import global.thalion.ttio.genomics.BulkV2Blobs;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 
 import java.io.ByteArrayInputStream;
@@ -115,8 +116,12 @@ public final class TransportReader implements AutoCloseable {
         Map<Integer, RunAccumulator> runAccs = new LinkedHashMap<>();
         // M89.2: parallel accumulator for genomic datasets.
         Map<Integer, GenomicAccumulator> genomicAccs = new LinkedHashMap<>();
+        // Phase 2c-T: per-genomic-dataset_id buffers for verbatim
+        // v2 blobs. Populated when BlobV2* packets arrive.
+        Map<Integer, BulkV2BlobsBuilder> bulkBlobs = new LinkedHashMap<>();
         Map<Integer, Long> lastSeq = new LinkedHashMap<>();
         boolean sawStreamHeader = false;
+        boolean bulkModeRequired = false;
 
         for (PacketRecord rec : packets) {
             PacketHeader h = rec.header;
@@ -129,7 +134,12 @@ public final class TransportReader implements AutoCloseable {
                 title = readLEString(buf, 2);
                 isa = readLEString(buf, 2);
                 int nFeatures = buf.getShort() & 0xFFFF;
-                for (int i = 0; i < nFeatures; i++) readLEString(buf, 2);
+                for (int i = 0; i < nFeatures; i++) {
+                    String f = readLEString(buf, 2);
+                    if (PacketType.BULK_MODE_V2_BLOBS_FEATURE.equals(f)) {
+                        bulkModeRequired = true;
+                    }
+                }
                 // n_datasets - we don't need it; the headers carry their own ids.
                 continue;
             }
@@ -177,9 +187,84 @@ public final class TransportReader implements AutoCloseable {
                 }
                 continue;
             }
+            if (h.packetType == PacketType.BLOB_V2_MATE_INFO) {
+                int dsId = buf.getShort() & 0xFFFF;
+                int codecId = buf.get() & 0xFF;
+                if (codecId != PacketType.CODEC_ID_MATE_INLINE_V2) {
+                    throw new IOException("BlobV2MateInfo bad codec_id " + codecId);
+                }
+                if (dsId != h.datasetId) {
+                    throw new IOException("BlobV2MateInfo dataset_id " + dsId
+                        + " != header.datasetId " + h.datasetId);
+                }
+                int nNames = buf.getShort() & 0xFFFF;
+                List<String> names = new ArrayList<>(nNames);
+                for (int i = 0; i < nNames; i++) names.add(readLEString(buf, 2));
+                int blobLength = buf.getInt();
+                byte[] blob = new byte[blobLength];
+                buf.get(blob);
+                BulkV2BlobsBuilder slot = bulkBlobs.computeIfAbsent(
+                    dsId, k -> new BulkV2BlobsBuilder());
+                if (slot.mateBlob != null) {
+                    throw new IOException("duplicate BlobV2MateInfo for dataset_id " + dsId);
+                }
+                slot.mateBlob = blob;
+                slot.mateChromNames = names;
+                continue;
+            }
+            if (h.packetType == PacketType.BLOB_V2_REF_DIFF) {
+                int dsId = buf.getShort() & 0xFFFF;
+                int codecId = buf.get() & 0xFF;
+                if (codecId != PacketType.CODEC_ID_REF_DIFF_V2) {
+                    throw new IOException("BlobV2RefDiff bad codec_id " + codecId);
+                }
+                if (dsId != h.datasetId) {
+                    throw new IOException("BlobV2RefDiff dataset_id mismatch");
+                }
+                String refUri = readLEString(buf, 2);
+                int blobLength = buf.getInt();
+                byte[] blob = new byte[blobLength];
+                buf.get(blob);
+                BulkV2BlobsBuilder slot = bulkBlobs.computeIfAbsent(
+                    dsId, k -> new BulkV2BlobsBuilder());
+                if (slot.refDiffBlob != null) {
+                    throw new IOException("duplicate BlobV2RefDiff for dataset_id " + dsId);
+                }
+                slot.refDiffBlob = blob;
+                slot.refDiffReferenceUri = refUri;
+                continue;
+            }
+            if (h.packetType == PacketType.BLOB_V2_NAME_TOK) {
+                int dsId = buf.getShort() & 0xFFFF;
+                int codecId = buf.get() & 0xFF;
+                if (codecId != PacketType.CODEC_ID_NAME_TOKENIZED_V2) {
+                    throw new IOException("BlobV2NameTok bad codec_id " + codecId);
+                }
+                if (dsId != h.datasetId) {
+                    throw new IOException("BlobV2NameTok dataset_id mismatch");
+                }
+                int blobLength = buf.getInt();
+                byte[] blob = new byte[blobLength];
+                buf.get(blob);
+                BulkV2BlobsBuilder slot = bulkBlobs.computeIfAbsent(
+                    dsId, k -> new BulkV2BlobsBuilder());
+                if (slot.nameTokBlob != null) {
+                    throw new IOException("duplicate BlobV2NameTok for dataset_id " + dsId);
+                }
+                slot.nameTokBlob = blob;
+                continue;
+            }
             if (h.packetType == PacketType.END_OF_DATASET) continue;
             if (h.packetType == PacketType.END_OF_STREAM) break;
             // Annotation / Provenance / Chromatogram / Protection: skipped in M67.
+        }
+
+        // Phase 2c-T: a stream that declared bulk_mode_v2_blobs but
+        // shipped zero blob packets is malformed.
+        if (bulkModeRequired && bulkBlobs.isEmpty()) {
+            throw new IOException(
+                "StreamHeader declared " + PacketType.BULK_MODE_V2_BLOBS_FEATURE
+                + " but no BlobV2* packets were received");
         }
 
         List<AcquisitionRun> runs = new ArrayList<>();
@@ -199,10 +284,21 @@ public final class TransportReader implements AutoCloseable {
         }
 
         // M89.2: build WrittenGenomicRun for each genomic dataset.
+        // Phase 2c-T: attach any verbatim v2 blobs collected for this
+        // dataset_id so write_minimal skips the v2 codec encode for
+        // those channels.
         List<WrittenGenomicRun> genomicRuns = new ArrayList<>();
         for (Map.Entry<Integer, GenomicAccumulator> e : genomicAccs.entrySet()) {
             DatasetMeta meta = datasetMetas.get(e.getKey());
-            genomicRuns.add(e.getValue().toWrittenGenomicRun(meta));
+            WrittenGenomicRun gr = e.getValue().toWrittenGenomicRun(meta);
+            BulkV2BlobsBuilder slot = bulkBlobs.get(e.getKey());
+            if (slot != null && slot.hasAny()) {
+                gr = gr.withBulkV2Blobs(new BulkV2Blobs(
+                    slot.mateBlob, slot.mateChromNames,
+                    slot.nameTokBlob,
+                    slot.refDiffBlob, slot.refDiffReferenceUri));
+            }
+            genomicRuns.add(gr);
         }
 
         // Create the file then re-open so the returned dataset's
@@ -230,6 +326,19 @@ public final class TransportReader implements AutoCloseable {
     }
 
     // ---------------------------------------------------------- accumulators
+
+    /** Phase 2c-T: per-dataset verbatim v2 blob accumulator. */
+    private static final class BulkV2BlobsBuilder {
+        byte[] mateBlob;
+        List<String> mateChromNames;
+        byte[] nameTokBlob;
+        byte[] refDiffBlob;
+        String refDiffReferenceUri;
+
+        boolean hasAny() {
+            return mateBlob != null || nameTokBlob != null || refDiffBlob != null;
+        }
+    }
 
     private static final class DatasetMeta {
         final int datasetId;
