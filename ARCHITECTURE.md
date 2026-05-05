@@ -711,86 +711,74 @@ bindings (`libhdf5-java`).
 
 LZ4 availability is runtime-detected via `H5Zfilter_avail(32004)` in ObjC and `hdf5plugin.PLUGIN_PATH` + `h5py.h5z.filter_avail(32004)` in Python; both implementations skip their LZ4 tests cleanly when the filter is absent. Numpress-delta is always available because it is a pure-library transform that produces an ordinary int64 HDF5 dataset.
 
-## Genomic compression codec stack (M83–M86 + M93/M94/M94.Z/M95, v1.2)
+## Genomic compression codec stack
 
-Nine codecs ship for genomic signal channels (six in v1.1.x, three
-new in v1.2 — REF_DIFF, FQZCOMP_NX16, FQZCOMP_NX16_Z — plus the
-planned DELTA_RANS_ORDER0). Clean-room implementations from
-public-domain literature, with cross-language byte-exact conformance
-fixtures across Python, ObjC, and Java. Codec ids are reserved in the
-M79 `Compression` enum:
+Nine live codecs ship for genomic signal channels, plus three
+reserved-on-the-wire slots from removed v1 codecs. Clean-room
+implementations from public-domain literature, with cross-language
+byte-exact conformance fixtures across Python, ObjC, and Java. Codec
+ids are reserved in the `Compression` enum:
 
-| Codec id | Codec               | Algorithm                                        | Lossy? | M79 enum            |
-|----------|---------------------|--------------------------------------------------|--------|---------------------|
-| `4`      | RANS_ORDER0         | Range Asymmetric Numeral Systems, marginal model | No     | `RANS_ORDER0`       |
-| `5`      | RANS_ORDER1         | rANS with 256 per-context frequency tables       | No     | `RANS_ORDER1`       |
-| `6`      | BASE_PACK           | 2-bit ACGT packing + sparse position+byte mask   | No     | `BASE_PACK`         |
-| `7`      | QUALITY_BINNED      | Fixed Illumina-8 / CRUMBLE Phred → 4-bit indices | Yes    | `QUALITY_BINNED`    |
-| `8`      | NAME_TOKENIZED      | Lean two-token columnar (numeric / string runs)  | No     | `NAME_TOKENIZED`    |
-| `9`      | REF_DIFF (M93, v1.2)| Reference-based diff: bit-packed M-op flags + I/S-op bases, slice-based wire format with rANS body | No | `REF_DIFF`          |
-| `10`     | FQZCOMP_NX16 (M94, v1.2) | fqzcomp-Nx16 (Bonfield 2022) — context model + interleaved 4-way rANS, **per-symbol adaptive**, 8-bit renorm. **Retained** for v1.1.x backward compatibility. | No | `FQZCOMP_NX16` |
-| `11`     | DELTA_RANS_ORDER0 (M95, planned) | Running delta + zigzag-varint + rANS_ORDER0 on sorted-ascending integer arrays | No | `DELTA_RANS_ORDER0` |
-| `12`     | FQZCOMP_NX16_Z (M94.Z, v1.2) | CRAM-mimic rANS-Nx16 — **static-per-block** freq tables + 16-bit renorm + `T = 4096` fixed (`T \| b·L` exactly). ~22× faster encode than M94 v1 on chr22 lean. **Default for v1.5 quality channels.** | No | `FQZCOMP_NX16_Z` |
+| Codec id | Codec               | Algorithm                                                                       | Lossy? | Status                |
+|----------|---------------------|---------------------------------------------------------------------------------|--------|-----------------------|
+| `4`      | RANS_ORDER0         | Range Asymmetric Numeral Systems, marginal model                                | No     | live                  |
+| `5`      | RANS_ORDER1         | rANS with 256 per-context frequency tables                                      | No     | live                  |
+| `6`      | BASE_PACK           | 2-bit ACGT packing + sparse position+byte mask                                  | No     | live                  |
+| `7`      | QUALITY_BINNED      | Fixed Illumina-8 / CRUMBLE Phred → 4-bit indices                                | Yes    | live                  |
+| `8`      | _RESERVED_8         | (was NAME_TOKENIZED v1; superseded by id 15)                                    | —      | reserved              |
+| `9`      | _RESERVED_9         | (was REF_DIFF v1; superseded by id 14)                                          | —      | reserved              |
+| `10`     | _RESERVED_10        | (was FQZCOMP_NX16; superseded by id 12)                                         | —      | reserved              |
+| `11`     | DELTA_RANS_ORDER0   | Running delta + zigzag-varint + rANS_ORDER0 on sorted-ascending integer arrays  | No     | live                  |
+| `12`     | FQZCOMP_NX16_Z      | CRAM-mimic rANS-Nx16: static-per-block freq tables + 16-bit renorm + `T = 4096` fixed (`T | b·L` exactly). Magic `M94Z`, V4 wire format. | No | live, default qualities |
+| `13`     | MATE_INLINE_V2      | Inlined mate_info v2: chrom + pos + tlen as a single channel                    | No     | live                  |
+| `14`     | REF_DIFF_V2         | Reference-based diff v2: bit-packed M-op flags + I/S-op bases, slice-based with rANS body | No | live, default sequences (ref-aligned) |
+| `15`     | NAME_TOKENIZED_V2   | 8-substream multi-token columnar codec for read names                           | No     | live, default read_names |
 
-M94 v1 (id `10`) and M94.Z (id `12`) coexist in the codebase. The
-on-disk `@compression` attribute carries the codec id; readers
-dispatch by attribute and (defensively) by codec magic (`FQZN` for
-v1, `M94Z` for v1.Z). Existing v1.1.x M94 v1 fixtures decode
-unchanged; new files written under the v1.5 default codec stack use
-id `12` on the `qualities` channel.
+Reserved ids 8/9/10 retain their wire-format slots so cross-language
+readers can defensively reject removed-codec files with a clear v1.0
+migration error. The Java enum keeps `_RESERVED_8` / `_RESERVED_9` /
+`_RESERVED_10` placeholders to stabilise subsequent ordinals
+(`MATE_INLINE_V2 = 13`, etc.); the Python `Compression` enum drops
+the symbols outright (constructing `Compression(8)` raises
+`ValueError`); the ObjC `NS_ENUM` likewise drops them.
 
-### Context-aware codec interface (M93+)
+### Context-aware codec interface
 
-REF_DIFF is the first **context-aware** codec — its encode/decode
-contract takes more than the channel's bytes. The codec metadata
-registry (`ttio.codecs._codec_meta` /
-`TTIOCodecMeta.isContextAware:` / `codecs.CodecMeta.isContextAware`)
-declares which codec ids need plumbing for sibling channels and
-external resolvers; the M86 pipeline checks this flag before
-calling encode/decode and routes the extra arguments accordingly.
-For REF_DIFF the extras are `(positions, cigars,
-reference_resolver)`. The interface generalises cleanly to future
-cross-channel codecs (e.g. mate-info encoders correlated with
-positions) without further reshuffles.
+REF_DIFF_V2 is **context-aware** — its encode/decode contract takes
+more than the channel's bytes. The codec metadata registry
+(`ttio.codecs._codec_meta` / `TTIOCodecMeta.isContextAware:` /
+`codecs.CodecMeta.isContextAware`) declares which codec ids need
+plumbing for sibling channels and external resolvers; the M86
+pipeline checks this flag before calling encode/decode and routes
+the extra arguments accordingly. For REF_DIFF_V2 the extras are
+`(positions, cigars, reference_resolver)`. The interface
+generalises cleanly to other cross-channel codecs.
 
 The codecs ship as standalone primitives in
 `python/src/ttio/codecs/`, `objc/Source/Codecs/`, and
 `java/src/main/java/global/thalion/ttio/codecs/` — each with a
 self-contained byte-stream wire format documented in
-`docs/codecs/<codec>.md`.
+`docs/codecs/<codec>.md`. The C kernels for all v2 codecs live in
+the native `libttio_rans` library, consumed by all three bindings.
 
-The pipeline-wiring layer (M86 Phases A–F, all shipped) hooks
-the codecs into `signal_channels/` write/read paths via a
-per-channel `signal_codec_overrides` dict on
+The pipeline-wiring layer hooks the codecs into `signal_channels/`
+write/read paths via a per-channel `signal_codec_overrides` dict on
 `WrittenGenomicRun`. Each compressed channel carries an
-`@compression` uint8 attribute holding the M79 codec id; the
-reader dispatches on that attribute (and, for the read_names /
-cigars / mate_info channels, on the HDF5 link type — schema
-lift from compound to flat or to subgroup). Lazy whole-channel
-decode + per-instance cache means per-read access slices the
-in-memory decoded buffer rather than calling the codec on every
-read.
+`@compression` uint8 attribute holding the codec id; the reader
+dispatches on that attribute. Lazy whole-channel decode +
+per-instance cache means per-read access slices the in-memory
+decoded buffer rather than calling the codec on every read.
 
-Codec-channel applicability is enforced at write-time
-validation. Every M82 channel under `signal_channels/` accepts
-at least one codec (sequences/qualities take the byte codecs;
-positions/flags/mapping_qualities take rANS via LE byte
-serialisation; read_names + cigars + mate_info_chrom take
-NAME_TOKENIZED and rANS; mate_info_pos/tlen take rANS). Wrong-
+Codec-channel applicability is enforced at write-time validation.
+Every M82 channel under `signal_channels/` accepts at least one
+codec (sequences take BASE_PACK / RANS_ORDER0 / RANS_ORDER1 /
+REF_DIFF_V2; qualities take RANS_ORDER0/1 / QUALITY_BINNED /
+FQZCOMP_NX16_Z; positions / flags / mapping_qualities take rANS via
+LE byte serialisation; read_names defaults to NAME_TOKENIZED_V2;
+mate_info defaults to MATE_INLINE_V2; cigars take rANS). Wrong-
 content combinations (e.g. QUALITY_BINNED on sequences) are
 rejected with a clear error. The full applicability matrix is
-documented in `docs/format-spec.md` §10.5–§10.9.
-
-Selection guidance for the channels accepting multiple codecs
-(cigars, mate_info_chrom): rANS is the recommended default for
-real WGS data; NAME_TOKENIZED is the niche choice for
-known-uniform inputs (synthetic / perfect-match-only filtered
-subsets). NAME_TOKENIZED's columnar mode wins big when the
-input has uniform token-count shape, but degrades to verbatim
-mode (no compression) on mixed inputs. rANS exploits
-byte-level repetition across the whole stream regardless of
-shape and produces ~3-17× compression on realistic mixed
-data.
+documented in `docs/format-spec.md` §10.4–§10.10.
 
 ---
 
