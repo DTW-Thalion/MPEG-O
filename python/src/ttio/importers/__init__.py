@@ -17,6 +17,6 @@ API status: Stable.
 from __future__ import annotations
 
 from .import_result import ImportResult
-from . import mzml, nmrml
+from . import mzml, nmrml, fasta, fastq
 
-__all__ = ["ImportResult", "mzml", "nmrml"]
+__all__ = ["ImportResult", "mzml", "nmrml", "fasta", "fastq"]
