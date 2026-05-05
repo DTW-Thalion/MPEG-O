@@ -104,6 +104,7 @@ extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
 extern void testTask30MSProviderURL(void);
 extern void testTask31InstanceWriterParity(void);
+extern void testFastaFastqIo(void);
 
 int main(int argc, const char *argv[])
 {
@@ -523,6 +524,10 @@ int main(int argc, const char *argv[])
         START_SET("Task 31: instance writer (-writeToFilePath:) via memory/sqlite/zarr URL")
             testTask31InstanceWriterParity();
         END_SET("Task 31: instance writer (-writeToFilePath:) via memory/sqlite/zarr URL")
+
+        START_SET("FASTA / FASTQ I/O")
+            testFastaFastqIo();
+        END_SET("FASTA / FASTQ I/O")
     }
     return 0;
 }
