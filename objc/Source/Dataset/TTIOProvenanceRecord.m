@@ -1,3 +1,18 @@
+/*
+ * TTIOProvenanceRecord.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOProvenanceRecord
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying
+ * Declared In:   Dataset/TTIOProvenanceRecord.h
+ *
+ * W3C PROV-compatible processing record (inputs, software,
+ * parameters, outputs, timestamp).
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOProvenanceRecord.h"
 
 @implementation TTIOProvenanceRecord

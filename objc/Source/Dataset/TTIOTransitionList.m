@@ -1,3 +1,18 @@
+/*
+ * TTIOTransitionList.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOTransition, TTIOTransitionList
+ * Inherits From: NSObject
+ * Declared In:   Dataset/TTIOTransitionList.h
+ *
+ * SRM/MRM transition value class (TTIOTransition) and ordered list
+ * container (TTIOTransitionList) persisted as a JSON-encoded
+ * attribute under /study/transitions/.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOTransitionList.h"
 #import "ValueClasses/TTIOValueRange.h"
 

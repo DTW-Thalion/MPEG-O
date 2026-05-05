@@ -1,5 +1,18 @@
 /*
+ * TTIOFeature.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOFeature
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying
+ * Declared In:   Dataset/TTIOFeature.h
+ *
+ * Feature-level value object (peak detected in one run with
+ * retention time, m/z, charge, per-sample abundances) — the row
+ * type required by mzTab PEP and mzTab-M SMF/SME sections.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOFeature.h"
 
