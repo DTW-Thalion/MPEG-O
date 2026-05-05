@@ -1,4 +1,16 @@
 /*
+ * TTIOTransportPacket.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOTransportPacketHeader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOTransportPacket.h
+ *
+ * 24-byte transport packet header value class plus CRC-32C
+ * (Castagnoli, reflected) helper. Validates magic 'TI', version
+ * 0x01, and bounds-checks payloadLength on decode.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOTransportPacket.h"

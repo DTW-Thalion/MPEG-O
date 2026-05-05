@@ -1,4 +1,18 @@
 /*
+ * TTIOAcquisitionSimulator.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOAcquisitionSimulator
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOAcquisitionSimulator.h
+ *
+ * Synthetic LC-MS acquisition simulator. Produces deterministic
+ * (per-seed) StreamHeader → DatasetHeader → AccessUnit{N} →
+ * EndOfDataset → EndOfStream sequences into a TTIOTransportWriter.
+ * Within-language reproducible; not byte-identical across
+ * languages.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOAcquisitionSimulator.h"

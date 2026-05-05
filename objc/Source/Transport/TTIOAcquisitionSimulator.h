@@ -1,15 +1,4 @@
 /*
- * TTIOAcquisitionSimulator — v0.10 M69.
- *
- * Synthetic LC-MS acquisition simulator. Produces transport packets
- * into an TTIOTransportWriter. Deterministic under a fixed seed;
- * byte-identity across languages is NOT guaranteed (each language
- * uses its own RNG). Use for within-language reproducibility.
- *
- * Cross-language equivalents:
- *   Python: ttio.transport.simulator.AcquisitionSimulator
- *   Java:   global.thalion.ttio.transport.AcquisitionSimulator
- *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #ifndef TTIO_ACQUISITION_SIMULATOR_H
@@ -20,6 +9,25 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/**
+ * <heading>TTIOAcquisitionSimulator</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOAcquisitionSimulator.h</p>
+ *
+ * <p>Synthetic LC-MS acquisition simulator. Produces transport
+ * packets into a <code>TTIOTransportWriter</code>. Deterministic
+ * under a fixed seed; byte-identity across languages is <em>not</em>
+ * guaranteed (each language uses its own RNG). Use for
+ * within-language reproducibility.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python:
+ * <code>ttio.transport.simulator.AcquisitionSimulator</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.transport.AcquisitionSimulator</code></p>
+ */
 @interface TTIOAcquisitionSimulator : NSObject
 
 /** Scans per second. Default: 10.0. */

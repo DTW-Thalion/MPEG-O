@@ -1,4 +1,17 @@
 /*
+ * TTIOTransportServer.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOTransportServer
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOTransportServer.h
+ *
+ * libwebsockets-backed transport server. Serves a TTIOSpectralDataset
+ * to connecting clients with server-side filtering (ms_level, RT
+ * range, precursor m/z range, polarity, dataset_id, max_au cap). Wire
+ * protocol identical to the Python and Java transport servers.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #define _GNU_SOURCE 1

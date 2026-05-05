@@ -1,4 +1,16 @@
 /*
+ * TTIOAUFilter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOAUFilter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOAUFilter.h
+ *
+ * Server-side AccessUnit filter. Parses query JSON into an opaque
+ * value object and evaluates each predicate against an AccessUnit;
+ * MS predicates short-circuit on genomic AUs and vice-versa.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOAUFilter.h"

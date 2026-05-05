@@ -1,4 +1,18 @@
 /*
+ * TTIOTransportWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOTransportWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOTransportWriter.h
+ *
+ * Serialises a TTIOSpectralDataset (or fine-grained packet stream)
+ * onto a transport byte stream. Walks msRuns then genomicRuns,
+ * emitting StreamHeader → DatasetHeaders → AccessUnits →
+ * EndOfDataset → EndOfStream with optional per-packet CRC-32C and
+ * zlib compression of channel payloads.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOTransportWriter.h"

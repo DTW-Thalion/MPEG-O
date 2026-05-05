@@ -1,13 +1,4 @@
 /*
- * TTIOTransportReader — v0.10 M67.
- *
- * Parses a transport byte stream into packet (header, payload) pairs
- * or materializes the stream into a new .tio file.
- *
- * Cross-language equivalents:
- *   Python: ttio.transport.codec.TransportReader
- *   Java:   global.thalion.ttio.transport.TransportReader
- *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #ifndef TTIO_TRANSPORT_READER_H
@@ -19,7 +10,15 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/** One parsed packet as a header + payload pair. */
+/**
+ * <heading>TTIOTransportPacketRecord</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOTransportReader.h</p>
+ *
+ * <p>One parsed packet as a header + payload pair.</p>
+ */
 @interface TTIOTransportPacketRecord : NSObject
 @property (nonatomic, readonly, strong) TTIOTransportPacketHeader *header;
 @property (nonatomic, readonly, strong) NSData *payload;
@@ -27,6 +26,22 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 
+/**
+ * <heading>TTIOTransportReader</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOTransportReader.h</p>
+ *
+ * <p>Parses a transport byte stream into packet (header, payload)
+ * pairs or materialises the stream into a new <code>.tio</code>
+ * file.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.transport.codec.TransportReader</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.transport.TransportReader</code></p>
+ */
 @interface TTIOTransportReader : NSObject
 
 /** Initialize from a file path. */
@@ -48,9 +63,7 @@ NS_ASSUME_NONNULL_BEGIN
  * Materialize the transport stream into a ``.tio`` file at
  * ``outputPath``. Returns YES on success.
  *
- * v0.10 M67 scope: HDF5 provider; float64 + NONE compression; mass
- * spectra only. Full protection / chromatogram / annotation
- * round-trips arrive in M70/M71.
+ * Scope: HDF5 provider; float64 + NONE compression; mass spectra.
  */
 - (BOOL)writeTtioToPath:(NSString *)outputPath error:(NSError * _Nullable *)error;
 

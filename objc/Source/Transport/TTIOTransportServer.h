@@ -1,13 +1,4 @@
 /*
- * TTIOTransportServer — v0.10 M68.5 parity backfill.
- *
- * WebSocket transport server built on libwebsockets. Serves an
- * TTIOSpectralDataset to connecting clients with full server-side
- * filtering (ms_level, rt range, precursor m/z range, polarity,
- * dataset_id, max_au cap). Wire protocol identical to Python
- * ttio.transport.server.TransportServer and Java
- * global.thalion.ttio.transport.TransportServer.
- *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #ifndef TTIO_TRANSPORT_SERVER_H
@@ -17,23 +8,58 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/**
+ * <heading>TTIOTransportServer</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOTransportServer.h</p>
+ *
+ * <p>WebSocket transport server built on libwebsockets. Serves a
+ * <code>TTIOSpectralDataset</code> to connecting clients with full
+ * server-side filtering (ms_level, RT range, precursor m/z range,
+ * polarity, dataset_id, max_au cap). Wire protocol identical to
+ * Python <code>ttio.transport.server.TransportServer</code> and Java
+ * <code>global.thalion.ttio.transport.TransportServer</code>.</p>
+ *
+ * <p><strong>API status:</strong> Provisional.</p>
+ */
 @interface TTIOTransportServer : NSObject
 
-/** Create a server bound to ``host:port``. ``port == 0`` picks a
- *  free ephemeral port; query ``actualPort`` after -start. */
+/**
+ * Creates a server bound to <code>host:port</code>.
+ *
+ * @param datasetPath Path to the .tio file to serve.
+ * @param host        Bind address.
+ * @param port        TCP port; <code>0</code> picks a free
+ *                    ephemeral port (query
+ *                    <code>actualPort</code> after
+ *                    <code>-startAndReturnError:</code>).
+ * @return An initialised but not yet started server.
+ */
 - (instancetype)initWithDatasetPath:(NSString *)datasetPath
                                  host:(NSString *)host
                                  port:(uint16_t)port;
 
-/** Start the server's event loop on a background thread. Returns
- *  only after the listen socket is bound. */
+/**
+ * Starts the server's event loop on a background thread. Returns
+ * only after the listen socket is bound.
+ *
+ * @param error Out-parameter populated on failure.
+ * @return <code>YES</code> on success, <code>NO</code> on failure.
+ */
 - (BOOL)startAndReturnError:(NSError * _Nullable *)error;
 
-/** Signal the event loop to exit. Blocks until the thread joins
- *  or ``timeoutSeconds`` elapses. */
+/**
+ * Signals the event loop to exit.
+ *
+ * @param timeoutSeconds Maximum time to wait for the thread to
+ *                       join.
+ */
 - (void)stopWithTimeout:(NSTimeInterval)timeoutSeconds;
 
-/** Actual port the server is listening on (useful when port=0). */
+/** Actual port the server is listening on (useful when
+ *  <code>port == 0</code> was passed to the initialiser). */
 @property (nonatomic, readonly) uint16_t actualPort;
 
 @end

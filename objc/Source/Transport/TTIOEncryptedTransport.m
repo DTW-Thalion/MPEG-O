@@ -1,4 +1,17 @@
 /*
+ * TTIOEncryptedTransport.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOEncryptedTransport
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOEncryptedTransport.h
+ *
+ * Transport layer for per-AU encrypted .tio files. Pushes
+ * ciphertext from <channel>_segments compounds onto the wire
+ * unmodified (the server never decrypts in transit) and rebuilds an
+ * encrypted .tio on the receiver side with the same wrapped DEK.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOEncryptedTransport.h"

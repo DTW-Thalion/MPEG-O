@@ -1,4 +1,18 @@
 /*
+ * TTIOTransportClient.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOTransportClient
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOTransportClient.h
+ *
+ * libwebsockets-backed transport client. Connects to a
+ * TTIOTransportServer over ws://, sends a JSON query, and collects
+ * every packet through EndOfStream into TTIOTransportPacketRecord
+ * instances; -streamToFilePath: materialises the filtered stream as
+ * a fresh .tio file.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOTransportClient.h"
