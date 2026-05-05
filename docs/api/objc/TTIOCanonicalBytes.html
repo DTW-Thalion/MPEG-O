@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,14 +261,7 @@
         </blockquote>
         <div class="desc">
           
-          Shared helpers used by every provider&apos;s @c
-          <a rel="gsdoc" href="TTIOStorageProtocols.html#method$(TTIOStorageDataset)-readCanonicalBytes$">
-            -readCanonicalBytes:
-          </a>
-
-          implementation. Usable independently as well
-          &#8212; tests and byte-parity tooling walk rows with the same
-          layout. @since 0.7
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -284,11 +277,15 @@
         + (NSData*) <b>canonicalBytesForCompoundRows:</b> (NSArray<NSDictionary<NSString*,id>*>*)rows<b> fields:</b> (NSArray<TTIOCompoundField*>*)fields;<br />
         <div class="desc">
           
-            Canonicalise a list-of-dicts compound result.
-            Rows are walked in order; each row&apos;s <var>fields</var>
-            are emitted in the declared @c <var>fields</var> order
-            (NOT the dictionary&apos;s internal iteration order, which
-            is unspecified).
+            Canonicalises a list-of-dicts compound
+            result. Rows are walked in order; each row&apos;s
+            <var>fields</var> are emitted in the declared
+            <code><var>fields</var></code> order (not the
+            dictionary&apos;s internal iteration order, which
+            is unspecified). @param <var>rows</var> Compound
+            <var>rows</var> in storage order. @param
+            <var>fields</var> Field schema in declaration order.
+            @return The canonicalised byte stream.
           
         </div>
         <hr class="method-separator">
@@ -298,13 +295,16 @@
         + (NSData*) <b>canonicalBytesForNumericData:</b> (NSData*)data<b> precision:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a>)precision;<br />
         <div class="desc">
           
-            Canonicalise a primitive numeric buffer to
-            little-endian. On x86/x86_64 (little-endian
-            native) this is an identity copy. On big-endian
-            hosts each element is byteswapped. @c
-            <var>precision</var> selects the element width;
-            TTIOPrecisionComplex128 is treated
-            as a pair of float64 values per element.
+            Canonicalises a primitive numeric buffer to
+            little-endian. On x86 / x86_64
+            (little-endian native) this is an identity
+            copy. On big-endian hosts each element is
+            byte-swapped.
+            <code>TTIOPrecisionComplex128</code> is treated as a
+            pair of float64 values per element. @param
+            <var>data</var> Primitive numeric buffer. @param
+            <var>precision</var> Element width selector. @return
+            The canonicalised little-endian buffer.
           
         </div>
         <hr class="method-separator">

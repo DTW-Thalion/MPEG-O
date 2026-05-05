@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,14 +260,71 @@
         </blockquote>
         <div class="desc">
           
-          JCAMP-DX 5.01 compressed-XYDATA decoder (SQZ / DIF /
-          DUP / PAC). Implements &#167;5.9 of JCAMP-DX 5.01. The AFFN
-          dialect is handled directly by TTIOJcampDxReader;
-          this class is consulted only when `hasCompression:`
-          reports a compression sentinel. Cross-language
-          equivalents: Java:
-          global.thalion.ttio.importers.JcampDxDecode
-          Python: ttio.importers._jcamp_decode
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOJcampDxDecode.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            JCAMP-DX 5.01 compressed-XYDATA decoder (SQZ / DIF
+            / DUP / PAC). Implements &#167;5.9 of JCAMP-DX 5.01. The AFFN
+            dialect is handled directly by
+            <code>TTIOJcampDxReader</code>; this class is
+            consulted only when
+            <code>
+              <a rel="gsdoc" href="#method$TTIOJcampDxDecode+hasCompression$">
+                +hasCompression:
+              </a>
+
+            </code>
+            reports a compression sentinel.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.importers._jcamp_decode</code> <br />
+            Java:
+            <code>
+              global.thalion.ttio.importers.JcampDxDecode
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -283,19 +340,23 @@
         + (BOOL) <b>decodeLines:</b> (NSArray<NSString*>*)lines<b> firstx:</b> (double)firstx<b> deltax:</b> (double)deltax<b> xfactor:</b> (double)xfactor<b> yfactor:</b> (double)yfactor<b> outXs:</b> (NSMutableArray<NSNumber*>*)outXs<b> outYs:</b> (NSMutableArray<NSNumber*>*)outYs<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Decode a compressed XYDATA body. @param
+            Decodes a compressed XYDATA body. @param
             <var>lines</var> Raw text <var>lines</var> of the
-            XYDATA block (no LDR headers, no terminal `##END=`).
-            @param <var>firstx</var> First X value from
-            `##FIRSTX=`. @param <var>deltax</var> `(LASTX
-            - FIRSTX) / (NPOINTS - 1)`. @param <var>xfactor</var>
-            `##XFACTOR=` scale factor (default 1). @param
-            <var>yfactor</var> `##YFACTOR=` scale factor (default
-            1). @param <var>outXs</var> On success, filled with
-            `NSNumber *` doubles. @param <var>outYs</var> On
-            success, filled with `NSNumber *` doubles. @return
-            <code>YES</code> on success, <code>NO</code> on
-            malformed input (populates <var>error</var>).
+            XYDATA block (no LDR headers, no terminal
+            <code>##END=</code>). @param <var>firstx</var> First
+            X value from <code>##FIRSTX=</code>. @param
+            <var>deltax</var>
+            <code>(LASTX - FIRSTX) / (NPOINTS - 1)</code>.
+            @param <var>xfactor</var> <code>##XFACTOR=</code>
+            scale factor (default 1). @param <var>yfactor</var>
+            <code>##YFACTOR=</code> scale factor (default 1).
+            @param <var>outXs</var> On success, filled with
+            <code>NSNumber *</code> doubles. @param
+            <var>outYs</var> On success, filled with
+            <code>NSNumber *</code> doubles. @param
+            <var>error</var> Out-parameter populated on malformed
+            input. @return <code>YES</code> on success,
+            <code>NO</code> on malformed input.
           
         </div>
         <hr class="method-separator">
@@ -305,8 +366,10 @@
         + (BOOL) <b>hasCompression:</b> (NSString*)body;<br />
         <div class="desc">
           
-            Returns <code>YES</code> iff `body` carries any
-            SQZ/DIF/DUP sentinel.
+            @param <var>body</var> XYDATA section text
+            <var>body</var>. @return <code>YES</code> iff
+            <code><var>body</var></code> carries any SQZ / DIF /
+            DUP sentinel character.
           
         </div>
         <hr class="method-separator">

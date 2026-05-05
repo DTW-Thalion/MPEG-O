@@ -415,20 +415,20 @@
 
 <span class="c1"># ── Wire-format constants ──────────────────────────────────────────</span>
 
-<span class="c1">#: Version byte — first byte of every BASE_PACK stream.</span>
+<span class="c1"># Version byte — first byte of every BASE_PACK stream.</span>
 <div class="viewcode-block" id="VERSION">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/base_pack/index.html#ttio.codecs.base_pack.VERSION">[docs]</a>
 <span class="n">VERSION</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mh">0x00</span></div>
 
 
-<span class="c1">#: Header bytes: 1 (version) + 4 (orig_len) + 4 (packed_len) +</span>
-<span class="c1">#: 4 (mask_count) = 13.</span>
+<span class="c1"># Header bytes: 1 (version) + 4 (orig_len) + 4 (packed_len) +</span>
+<span class="c1"># 4 (mask_count) = 13.</span>
 <div class="viewcode-block" id="HEADER_LEN">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/base_pack/index.html#ttio.codecs.base_pack.HEADER_LEN">[docs]</a>
 <span class="n">HEADER_LEN</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">13</span></div>
 
 
-<span class="c1">#: Mask entry size: uint32 BE position + uint8 original byte.</span>
+<span class="c1"># Mask entry size: uint32 BE position + uint8 original byte.</span>
 <div class="viewcode-block" id="MASK_ENTRY_LEN">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/base_pack/index.html#ttio.codecs.base_pack.MASK_ENTRY_LEN">[docs]</a>
 <span class="n">MASK_ENTRY_LEN</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">5</span></div>
@@ -436,9 +436,9 @@
 
 <span class="c1"># ── Pack lookup tables ─────────────────────────────────────────────</span>
 
-<span class="c1">#: 256-entry ``bytes.translate`` table mapping every input byte to a</span>
-<span class="c1">#: 2-bit slot value: A→0, C→1, G→2, T→3, every other byte → 0</span>
-<span class="c1">#: (the placeholder written into the body for non-ACGT slots).</span>
+<span class="c1"># 256-entry ``bytes.translate`` table mapping every input byte to a</span>
+<span class="c1"># 2-bit slot value: A→0, C→1, G→2, T→3, every other byte → 0</span>
+<span class="c1"># (the placeholder written into the body for non-ACGT slots).</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_build_translate_table</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
     <span class="n">tbl</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>  <span class="c1"># default 0 — placeholder for non-ACGT</span>
     <span class="n">tbl</span><span class="p">[</span><span class="nb">ord</span><span class="p">(</span><span class="s2">&quot;A&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="mb">0b00</span>
@@ -448,9 +448,9 @@
     <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">tbl</span><span class="p">)</span>
 
 
-<span class="c1">#: Companion table for non-ACGT detection: ACGT bytes map to 0x00,</span>
-<span class="c1">#: every other byte to 0x01. A single ``b&quot;\x01&quot; in marks`` check</span>
-<span class="c1">#: tells us whether any mask entries are needed.</span>
+<span class="c1"># Companion table for non-ACGT detection: ACGT bytes map to 0x00,</span>
+<span class="c1"># every other byte to 0x01. A single ``b&quot;\x01&quot; in marks`` check</span>
+<span class="c1"># tells us whether any mask entries are needed.</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_build_mark_table</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
     <span class="n">tbl</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="sa">b</span><span class="s2">&quot;</span><span class="se">\x01</span><span class="s2">&quot;</span> <span class="o">*</span> <span class="mi">256</span><span class="p">)</span>
     <span class="n">tbl</span><span class="p">[</span><span class="nb">ord</span><span class="p">(</span><span class="s2">&quot;A&quot;</span><span class="p">)]</span> <span class="o">=</span> <span class="mh">0x00</span>
@@ -463,14 +463,14 @@
 <span class="n">_PACK_TRANSLATE</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">_build_translate_table</span><span class="p">()</span>
 <span class="n">_MARK_TRANSLATE</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">_build_mark_table</span><span class="p">()</span>
 
-<span class="c1">#: 4-entry table mapping 2-bit slot values back to ASCII bytes.</span>
+<span class="c1"># 4-entry table mapping 2-bit slot values back to ASCII bytes.</span>
 <span class="n">_UNPACK_TABLE</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="sa">b</span><span class="s2">&quot;ACGT&quot;</span>
 
-<span class="c1">#: 256-entry decode lookup: each body byte maps to its 4-byte ACGT</span>
-<span class="c1">#: expansion (high two bits → first base, low two bits → fourth).</span>
-<span class="c1">#: Used by :func:`decode` to unpack the body in a single C-driven</span>
-<span class="c1">#: ``b&quot;&quot;.join(...)`` over a list comprehension, which is several</span>
-<span class="c1">#: times faster than a per-slot Python shift-and-mask loop.</span>
+<span class="c1"># 256-entry decode lookup: each body byte maps to its 4-byte ACGT</span>
+<span class="c1"># expansion (high two bits → first base, low two bits → fourth).</span>
+<span class="c1"># Used by :func:`decode` to unpack the body in a single C-driven</span>
+<span class="c1"># ``b&quot;&quot;.join(...)`` over a list comprehension, which is several</span>
+<span class="c1"># times faster than a per-slot Python shift-and-mask loop.</span>
 <span class="n">_UNPACK_BYTE_TABLE</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="o">...</span><span class="p">]</span> <span class="o">=</span> <span class="nb">tuple</span><span class="p">(</span>
     <span class="nb">bytes</span><span class="p">(</span>
         <span class="p">(</span>

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -267,7 +267,89 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> TTIOIndexable, TTIORun
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Genomics/TTIOGenomicRun.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Lazy view over one
+            <code>/study/genomic_runs/&lt;name&gt;/</code>
+            group. Materialises <code>TTIOAlignedRead</code>
+            objects on demand from the signal channels. The
+            <code>TTIOGenomicIndex</code> is loaded eagerly at
+            open time for cheap filtering and offset lookups; the
+            heavy signal channels (sequences, qualities, plus the
+            inline codec channels) stay lazy on disk.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Genomic analogue of <code>TTIOAcquisitionRun</code>
+            ; both conform to <code>TTIORun</code> so cross-modality
+            code can iterate uniformly via
+            <code>
+              <a rel="gsdoc" href="#method$TTIOGenomicRun-objectAtIndex$">
+                -objectAtIndex:
+              </a>
+
+            </code>
+            /
+            <code>
+              <a rel="gsdoc" href="#method$TTIOGenomicRun-count">
+                -count
+              </a>
+
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.genomic_run.GenomicRun</code> <br />
+            Java:
+            <code>global.thalion.ttio.genomics.GenomicRun</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -298,7 +380,15 @@
         + (instancetype) <b>openFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)runGroup<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Opens an existing
+            <code>/study/genomic_runs/&lt;name&gt;/</code>
+            group. The caller resolves the run group and passes
+            it as <code><var>runGroup</var></code>. @param
+            <var>runGroup</var> The run sub-group. @param
+            <var>name</var> Run <var>name</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The opened run, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -319,19 +409,16 @@
         - (NSString*) <b>cigarAtIndex:</b> (NSUInteger)index<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Return the CIGAR string at `index`. Dispatches on
-            the on-disk cigars dataset shape (M86 Phase C): -
-            Compound `{value: VL_STRING}`: existing M82 read
-            path. - Flat 1-D uint8 with `@compression`: * `4`
-            (RANS_ORDER0) or `5` (RANS_ORDER1):
-            TTIORansDecode then walk varint(len)+bytes
-            per CIGAR. * `8` (NAME_TOKENIZED):
-            TTIONameTokenizerDecode directly.
-            Decoded list is materialised on first call and held
-            for the lifetime of this run instance per Binding
-            Decision &#167;123 &#8212; a separate cache from
-            `_decodedReadNames` since the two
-            channels have independent dispatch shapes.
+            Returns the CIGAR string at
+            <code><var>index</var></code>. Decodes the cigars
+            channel (rANS-O0 or rANS-O1, length-prefix-concat
+            varint+bytes); the decoded list is
+            materialised on first call and cached for the
+            lifetime of this run instance. @param
+            <var>index</var> Zero-based read position. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The CIGAR string, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -341,25 +428,8 @@
         - (NSUInteger) <b>count</b>;<br />
         <div class="desc">
           
-            Phase 1 TTIORun + TTIOIndexable conformance.
-            <a rel="gsdoc" href="#method$TTIOGenomicRun-count">
-              -count
-            </a>
-
-            returns the same value as
-            <a rel="gsdoc" href="#method$TTIOGenomicRun-readCount">
-              -readCount
-            </a>
-
-            ;
-            <a rel="gsdoc" href="#method$TTIOGenomicRun-objectAtIndex$">
-              -objectAtIndex:
-            </a>
-
-            returns the TTIOAlignedRead at ``index`` (or
-            <code>nil</code> on error / out-of-range, matching
-            the lenient TTIOIndexable contract used by
-            TTIOAcquisitionRun).
+            @return <code>readCount</code> (TTIOIndexable
+            conformance).
           
         </div>
         <hr class="method-separator">
@@ -402,7 +472,10 @@
         - (id) <b>objectAtIndex:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>index</var> Zero-based read position.
+            @return The <code>TTIOAlignedRead</code> at
+            <code><var>index</var></code>, or <code>nil</code>
+            on error / out-of-range.
           
         </div>
         <hr class="method-separator">
@@ -423,7 +496,10 @@
         - (NSArray<TTIOProvenanceRecord*>*) <b>provenanceChain</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Per-run provenance records in insertion
+            order, read from
+            <code>&lt;run&gt;/provenance/steps</code>. Empty
+            array when the run carries no provenance.
           
         </div>
         <hr class="method-separator">
@@ -433,9 +509,12 @@
         - (<a rel="gsdoc" href="TTIOAlignedRead.html#class$TTIOAlignedRead">TTIOAlignedRead</a>*) <b>readAtIndex:</b> (NSUInteger)index<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Materialise the read at `index`. Returns
-            <code>nil</code> and sets *error on invalid
-            <var>index</var> or I/O failure.
+            Materialises the read at
+            <code><var>index</var></code>. @param
+            <var>index</var> Zero-based read position. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The aligned read, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -445,7 +524,7 @@
         - (NSUInteger) <b>readCount</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Number of reads in the run.
           
         </div>
         <hr class="method-separator">
@@ -455,14 +534,16 @@
         - (NSString*) <b>readNameAtIndex:</b> (NSUInteger)index<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Return the read name at `index`. Dispatches on the
-            on-disk read_names dataset shape (M86 Phase E): -
-            Compound `{value: VL_STRING}`: existing M82 read
-            path. - Flat 1-D uint8 with `@compression == 8`:
-            NAME_TOKENIZED decode-once-and-cache. The
-            decoded list is materialised on first call and held
-            for the lifetime of this run instance per Binding
-            Decision &#167;114.
+            Returns the read name at
+            <code><var>index</var></code>. Decodes from the
+            NAME_TOKENIZED_V2 stream stored under the
+            <code>signal_channels/read_names</code> dataset; the
+            decoded list is materialised on first call and
+            cached for the lifetime of this run instance. @param
+            <var>index</var> Zero-based read position. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The read name, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -472,8 +553,13 @@
         - (NSArray<TTIOAlignedRead*>*) <b>readsInRegion:</b> (NSString*)chromosome<b> start:</b> (int64_t)start<b> end:</b> (int64_t)end;<br />
         <div class="desc">
           
-            Reads on `chromosome` whose mapping position is in [
-            <var>start</var>, <var>end</var>).
+            @param <var>chromosome</var> Reference
+            <var>chromosome</var>. @param <var>start</var>
+            Inclusive lower bound on position. @param
+            <var>end</var> Exclusive upper bound on position.
+            @return Reads on <code><var>chromosome</var></code>
+            whose mapping position is in
+            <code>[<var>start</var>, <var>end</var>)</code>.
           
         </div>
         <hr class="method-separator">
@@ -505,14 +591,17 @@
         - (uint8_t) <b>wireCompressionForChannel:</b> (NSString*)name;<br />
         <div class="desc">
           
-            M90.10: return the M86 codec <strong>id</strong>
-            (TTIOCompression value) declared on the
-            named signal channel via its `@compression`
-            attribute, or 0 (NONE) if the attribute is
-            absent. The transport writer probes this for
-            sequences/qualities to decide whether
-            each per-AU slice should be re-encoded with that codec
-            on the wire.
+            Returns the codec <strong>id</strong> (
+            <code>TTIOCompression</code> value) declared on the
+            named signal channel via its
+            <code>@compression</code> attribute, or
+            <code>0</code> (NONE) when the attribute is absent.
+            The transport writer probes this for sequences /
+            qualities to decide whether each per-AU slice
+            should be re-encoded with that codec on the wire.
+            @param <var>name</var> Signal-channel dataset
+            <var>name</var>. @return Codec <strong>id</strong>,
+            or <code>0</code> when no codec is declared.
           
         </div>
         <hr class="method-separator">

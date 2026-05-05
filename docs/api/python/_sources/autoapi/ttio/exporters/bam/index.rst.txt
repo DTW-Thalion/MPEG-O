@@ -62,7 +62,7 @@ Module Contents
    The ``samtools`` binary is a runtime dependency. Construction
    succeeds without samtools on PATH; :meth:`write` raises
    :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
-   is missing at first call (Binding Decision §135 from M87).
+   is missing at first call (from M87).
 
 
    .. py:property:: path
@@ -82,7 +82,7 @@ Module Contents
                                  ObjC pass this explicitly because their
                                  ``WrittenGenomicRun`` analogues don't carry provenance.
       :type provenance_records: list[ProvenanceRecord] or None
-      :param sort: When ``True`` (the default per Binding Decision §137),
+      :param sort: When ``True`` (the default ),
                    pipes the SAM text through ``samtools sort -O bam`` so
                    the output BAM is coordinate-sorted (the precondition
                    most BAM consumers expect — IGV, GATK, ``samtools

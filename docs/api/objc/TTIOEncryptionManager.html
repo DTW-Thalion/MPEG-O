@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,19 +261,67 @@
         </blockquote>
         <div class="desc">
           
-          AES-256-GCM encryption helpers for selectively
-          protecting sensitive datasets inside an `.tio`
-          file. Uses OpenSSL EVP under the hood. Keys are 32
-          bytes (256-bit). IVs are 12 bytes (96-bit) and are
-          generated with RAND_bytes per encryption. Auth tags
-          are 16 bytes (128-bit). Wrong-key decrypts fail cleanly
-          via GCM tag mismatch with a populated NSError; no
-          plaintext is returned on failure. The
-          intensity-channel methods operate on a
-          closed `.tio` file path so callers don&apos;t need to
-          thread an open TTIOHDF5File handle through. They open
-          the file in read-write mode, mutate the dataset
-          structure, and close it. API status: Stable.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em>
+            Protection/TTIOEncryptionManager.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            AES-256-GCM encryption helpers for selectively
+            protecting sensitive datasets inside a
+            <code>.tio</code> file. Uses OpenSSL EVP under the
+            hood.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Keys are 32 bytes (256-bit). IVs are 12 bytes (96-bit)
+            and are generated with <code>RAND_bytes</code> per
+            encryption. Auth tags are 16 bytes (128-bit).
+            Wrong-key decrypts fail cleanly via GCM tag
+            mismatch with a populated <code>NSError</code>; no
+            plaintext is returned on failure.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The intensity-channel methods operate on a closed
+            <code>.tio</code> file path so callers do not need
+            to thread an open <code>TTIOHDF5File</code> handle
+            through. They open the file in read-write mode,
+            mutate the dataset structure, and close it.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
           Cross-language equivalents: Python:
           ttio.encryption Java:
           global.thalion.ttio.protection.EncryptionManager

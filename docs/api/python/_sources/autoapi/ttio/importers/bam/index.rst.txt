@@ -17,7 +17,7 @@ ttio.importers.bam
    (M38) and :mod:`ttio.importers.bruker_tdf` (M53). ``samtools`` is a
    runtime dependency only — ``import ttio.importers.bam`` succeeds on
    systems without samtools; only :meth:`BamReader.to_genomic_run`
-   requires the binary on PATH (Binding Decision §135).
+   requires the binary on PATH ().
 
    samtools auto-detects SAM vs BAM format from magic bytes; one parser
    handles both. The companion :class:`~ttio.importers.sam.SamReader`
@@ -78,7 +78,7 @@ Module Contents
    The ``samtools`` binary is a runtime dependency, not a build
    dependency. Construction succeeds without samtools on PATH;
    :meth:`to_genomic_run` raises :class:`SamtoolsNotFoundError` when
-   samtools cannot be located at first use (Binding Decision §135).
+   samtools cannot be located at first use ().
 
 
    .. py:property:: path

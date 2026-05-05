@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -258,13 +258,16 @@
           Native HDF5 type <strong>id</strong> for a given
           <var>precision</var>. The returned <strong>id</strong>
           is owned by the caller for compound types (Complex128) and
-          must be closed with H5Tclose; for primitive types it is
-          a builtin <strong>id</strong> (H5T_NATIVE_*) which must NOT
-          be closed. Use
-          <a rel="gsdoc" href="#function$TTIOHDF5TypeIsBuiltin">
-            TTIOHDF5TypeIsBuiltin()
-          </a>
+          must be closed with <code>H5Tclose</code>; for primitive
+          types it is a builtin <strong>id</strong> (
+          <code>H5T_NATIVE_*</code>) which must NOT be closed.
+          Use
+          <code>
+            <a rel="gsdoc" href="#function$TTIOHDF5TypeIsBuiltin">
+              TTIOHDF5TypeIsBuiltin()
+            </a>
 
+          </code>
           to decide which.
         
         </div>
@@ -273,7 +276,11 @@
         BOOL TTIOHDF5TypeIsBuiltin(<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a> <b>precision</b>);<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Returns <code>YES</code> if the <var>precision</var>
+          maps to a builtin HDF5 type (callers must NOT close the
+          returned hid_t), <code>NO</code> if it maps to a
+          caller-owned compound type (callers MUST close
+          the returned hid_t).
         
         </div>
         <hr class="method-separator">
@@ -281,9 +288,12 @@
         NSUInteger TTIOPrecisionElementSize(<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a> <b>precision</b>);<br />
         <div class="desc">
           
-          Element size in bytes for a given
-          <var>precision</var>. Mirrors -[TTIOEncodingSpec
-          elementSize].
+          Returns the size in bytes of a single element at the
+          given <var>precision</var>. Mirrors
+          <code>-[TTIOEncodingSpec elementSize]</code>;
+          available as a free function so callers that do not
+          hold an encoding-spec instance can still compute buffer
+          sizes.
         
         </div>
         <hr class="method-separator">

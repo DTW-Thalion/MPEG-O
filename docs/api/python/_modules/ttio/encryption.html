@@ -413,7 +413,7 @@
 <span class="n">ALGORITHM_NAME</span> <span class="o">=</span> <span class="s2">&quot;AES-256-GCM&quot;</span></div>
 
 
-<span class="c1"># v0.7 M48: default algorithm identifier used by the cipher_suite</span>
+<span class="c1"># default algorithm identifier used by the cipher_suite</span>
 <span class="c1"># catalog. Pre-v0.7 code hardcoded the constants above; new code paths</span>
 <span class="c1"># go through :mod:`ttio.cipher_suite` so the algorithm is a</span>
 <span class="c1"># parameter, not an invariant.</span>
@@ -467,7 +467,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Encrypt ``plaintext`` with the named AEAD cipher.</span>
 <span class="sd">    Returns ciphertext/iv/tag tuple.</span>
 
-<span class="sd">    v0.7 M48: the algorithm is a parameter, not an invariant. Key and</span>
+<span class="sd">    : the algorithm is a parameter, not an invariant. Key and</span>
 <span class="sd">    nonce lengths come from :mod:`ttio.cipher_suite`. Passing an</span>
 <span class="sd">    unsupported algorithm raises</span>
 <span class="sd">    :class:`~ttio.cipher_suite.UnsupportedAlgorithmError`.</span>
@@ -510,7 +510,7 @@
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Decrypt a sealed blob with the named AEAD cipher. Raises on</span>
 <span class="sd">    authentication failure. Key / IV / tag lengths dispatched via</span>
-<span class="sd">    :mod:`ttio.cipher_suite` (v0.7 M48).&quot;&quot;&quot;</span>
+<span class="sd">    :mod:`ttio.cipher_suite` ().&quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">cipher_suite</span>
     <span class="n">cipher_suite</span><span class="o">.</span><span class="n">validate_key</span><span class="p">(</span><span class="n">algorithm</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span>
     <span class="n">nonce_len</span> <span class="o">=</span> <span class="n">cipher_suite</span><span class="o">.</span><span class="n">nonce_length</span><span class="p">(</span><span class="n">algorithm</span><span class="p">)</span>
@@ -544,7 +544,7 @@
 <span class="sd">    little-endian float64, matching the ObjC writer). Raises ``KeyError`` if</span>
 <span class="sd">    the channel is not encrypted in this group.</span>
 
-<span class="sd">    v0.9 M64.5 phase B: ``channels_group`` may be an ``h5py.Group``</span>
+<span class="sd">    phase B: ``channels_group`` may be an ``h5py.Group``</span>
 <span class="sd">    (legacy fast path) or a :class:`StorageGroup`. The HDF5-backed</span>
 <span class="sd">    StorageGroup unwraps to the native h5py path; non-HDF5 providers</span>
 <span class="sd">    route through the protocol&#39;s ``open_dataset().read()`` and</span>
@@ -604,7 +604,7 @@
 <span class="sd">    :meth:`~ttio.acquisition_run.AcquisitionRun.encrypt_with_key`</span>
 <span class="sd">    (group API, which avoids re-opening the file).</span>
 
-<span class="sd">    v0.9 M64.5 phase B: ``sig`` may be an ``h5py.Group`` or a</span>
+<span class="sd">    phase B: ``sig`` may be an ``h5py.Group`` or a</span>
 <span class="sd">    :class:`StorageGroup`; non-HDF5 providers route through</span>
 <span class="sd">    StorageGroup primitives.</span>
 
@@ -719,7 +719,7 @@
 
 <span class="sd">    Use this variant when the caller already holds an open file handle</span>
 <span class="sd">    (e.g. via :class:`~ttio.spectral_dataset.SpectralDataset`) and</span>
-<span class="sd">    cannot open the file a second time. v0.9 M64.5 phase B: accepts</span>
+<span class="sd">    cannot open the file a second time. phase B: accepts</span>
 <span class="sd">    either an ``h5py.Group`` or a :class:`StorageGroup` so non-HDF5</span>
 <span class="sd">    providers also encrypt in place.</span>
 

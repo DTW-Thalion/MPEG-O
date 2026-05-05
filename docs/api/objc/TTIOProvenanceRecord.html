@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,14 +261,64 @@
         </blockquote>
         <div class="desc">
           
-          W3C PROV-compatible processing record: a list of input
-          entity URIs, a software activity (name + parameters),
-          a list of output entity URIs, and a Unix timestamp. Stored
-          in /study/&lt;run&gt;/provenance/steps as a JSON-encoded
-          array on disk. API status: Stable. Cross-language
-          equivalents: Python:
-          ttio.provenance.ProvenanceRecord
-          Java: global.thalion.ttio.ProvenanceRecord
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOProvenanceRecord.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            W3C PROV-compatible processing record: a list of input
+            entity URIs, a software activity (name +
+            parameters), a list of output entity URIs, and
+            a Unix timestamp. Persisted as a row in the
+            <code>/study/provenance</code> compound dataset and
+            per-run under
+            <code>&lt;run&gt;/provenance/steps</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.provenance.ProvenanceRecord</code> <br />
+            Java:
+            <code>global.thalion.ttio.ProvenanceRecord</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -291,7 +341,15 @@
         + (instancetype) <b>fromPlist:</b> (NSDictionary*)plist;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>plist</var> Plist representation
+            produced by
+            <code>
+              <a rel="gsdoc" href="#method$TTIOProvenanceRecord-asPlist">
+                -asPlist
+              </a>
+
+            </code>
+            . @return The reconstructed record.
           
         </div>
         <hr class="method-separator">
@@ -301,7 +359,7 @@
         - (NSDictionary*) <b>asPlist</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Plist-friendly dictionary representation.
           
         </div>
         <hr class="method-separator">
@@ -311,7 +369,9 @@
         - (BOOL) <b>containsInputRef:</b> (NSString*)ref;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>ref</var> Entity URI to test for.
+            @return <code>YES</code> if <code>inputRefs</code>
+            contains <code><var>ref</var></code>.
           
         </div>
         <hr class="method-separator">
@@ -321,7 +381,13 @@
         - (instancetype) <b>initWithInputRefs:</b> (NSArray<NSString*>*)inputs<b> software:</b> (NSString*)software<b> parameters:</b> (NSDictionary<NSString*,id>*)parameters<b> outputRefs:</b> (NSArray<NSString*>*)outputs<b> timestampUnix:</b> (int64_t)timestamp;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>inputs</var>
+            Input-entity URIs. @param <var>software</var>
+            Software identifier. @param <var>parameters</var>
+            Activity <var>parameters</var>. @param
+            <var>outputs</var> Output-entity URIs. @param
+            <var>timestamp</var> Unix <var>timestamp</var>.
+            @return An initialised provenance record.
           
         </div>
         <hr class="method-separator">

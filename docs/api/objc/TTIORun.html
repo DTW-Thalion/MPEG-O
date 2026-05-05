@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -266,7 +266,76 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> TTIOIndexable, NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protocols/TTIORun.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Modality-agnostic interface for an
+            acquisition or sequencing run inside a
+            <code>TTIOSpectralDataset</code>. A run is a
+            sequence of measurements (mass / NMR spectra in
+            the spectroscopy case, aligned reads in the genomic
+            case) that share an acquisition mode, an instrument
+            context, and a provenance chain.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Both <code>TTIOAcquisitionRun</code> and
+            <code>TTIOGenomicRun</code> conform to this protocol
+            so callers can iterate uniformly without knowing the
+            underlying modality. Modality-specific work
+            (e.g. extracting a CIGAR string from an aligned read,
+            or a precursor m/z from a mass spectrum) requires
+            narrowing via
+            <code>
+              
+                -isKindOfClass:
+              
+
+            </code>
+            to the concrete class.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.protocols.run.Run</code>
+            <br /> Java:
+            <code>global.thalion.ttio.protocols.Run</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">

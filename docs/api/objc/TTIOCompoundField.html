@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -271,10 +271,67 @@
         </blockquote>
         <div class="desc">
           
-          One field inside a compound-dataset record. API status:
-          Stable. Cross-language equivalents: Python:
-          ttio.providers.base.CompoundField
-          Java: global.thalion.ttio.providers.CompoundField
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying, NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Providers/TTIOCompoundField.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            One field inside a compound-dataset record: a name plus
+            a <code>TTIOCompoundFieldKind</code> selecting the
+            storage type. Used by
+            <code>
+              <a rel="gsdoc" href="TTIOStorageProtocols.html#method$(TTIOStorageGroup)-createCompoundDatasetNamed$fields$count$error$">-createCompoundDatasetNamed:fields:count:error:</a>
+
+            </code>
+            to declare the row schema.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.providers.base.CompoundField</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.providers.CompoundField
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -292,7 +349,9 @@
         + (instancetype) <b>fieldWithName:</b> (NSString*)name<b> kind:</b> (<a rel="gsdoc" href="#type$TTIOCompoundFieldKind">TTIOCompoundFieldKind</a>)kind;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience constructor. @param <var>name</var>
+            Field <var>name</var>. @param <var>kind</var> Element
+            type. @return A new field schema entry.
           
         </div>
         <hr class="method-separator">
@@ -302,7 +361,9 @@
         - (instancetype) <b>initWithName:</b> (NSString*)name<b> kind:</b> (<a rel="gsdoc" href="#type$TTIOCompoundFieldKind">TTIOCompoundFieldKind</a>)kind;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>name</var>
+            Field <var>name</var>. @param <var>kind</var> Element
+            type. @return An initialised field schema entry.
           
         </div>
         <hr class="method-separator">
@@ -337,7 +398,56 @@
         typedef NS_ENUM(NSInteger) TTIOCompoundFieldKind;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Type:</em> NS_ENUM (NSInteger)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Providers/TTIOCompoundField.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Element type tag used in compound-dataset field
+            schemas. <code>VLBytes</code> stores
+            variable-length byte buffers (used for the
+            per-AU encryption
+            <code>&lt;channel&gt;_segments</code> compound&apos;s
+            ciphertext column and for fixed-length inline IV
+            / TAG / semantic-header blobs). Providers serialise
+            <code>VLBytes</code> values as <code>NSData</code>.
+                  </p>
+        <p>
+          
+          
+          <dl>
+            <dt><em>TTIOCompoundFieldKindUInt32</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompoundFieldKindInt64</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompoundFieldKindFloat64</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompoundFieldKindVLString</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompoundFieldKindVLBytes</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">

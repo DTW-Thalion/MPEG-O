@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,20 +260,66 @@
         </blockquote>
         <div class="desc">
           
-          Per-spectrum offsets, lengths, and queryable
-          scan metadata for one TTIOAcquisitionRun. Kept as
-          parallel C arrays inside NSData buffers for compact
-          storage and fast iteration. Persisted as five
-          parallel 1-D HDF5 datasets under the run&apos;s
-          `spectrum_index/` sub-group plus a sixth
-          one for precursor charge. Range queries (RT, ms_level,
-          polarity) operate on the in-memory arrays and do
-          not touch the signal channels &#8212; this is the
-          &quot;compressed-domain query&quot; property of the
-          MPEG-G access-unit model. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.acquisition_run.SpectrumIndex
-          Java: global.thalion.ttio.SpectrumIndex
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Run/TTIOSpectrumIndex.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Per-spectrum offsets, lengths, and queryable
+            scan metadata for one <code>TTIOAcquisitionRun</code>.
+            Kept as parallel C arrays inside <code>NSData</code>
+            buffers for compact storage and fast iteration.
+            Persisted as parallel 1-D datasets under the
+            run&apos;s <code>spectrum_index/</code> sub-group.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Range queries (RT, ms_level, polarity) operate on the
+            in-memory arrays and do not touch the signal
+            channels &#8212; this is the compressed-domain query
+            property of the access-unit storage model.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.acquisition_run.SpectrumIndex</code>
+            <br /> Java:
+            <code>global.thalion.ttio.SpectrumIndex</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -306,7 +352,12 @@
         + (instancetype) <b>readFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads the index from
+            <code>parent/spectrum_index/</code>. @param
+            <var>parent</var> Source <var>parent</var> group.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return The materialised index, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -316,8 +367,14 @@
         + (instancetype) <b>readFromStorageGroup:</b> (id)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.9 M64.5-objc-java: legacy alias kept for source
-            compatibility.
+            Legacy alias for
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectrumIndex+readFromGroup$error$">
+                +readFromGroup:error:
+              </a>
+
+            </code>
+            ; identical behaviour, retained for source compatibility.
           
         </div>
         <hr class="method-separator">
@@ -327,11 +384,11 @@
         - (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOActivationMethod">TTIOActivationMethod</a>) <b>activationMethodAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            (M74) Activation method for spectrum `index`. Returns
-            `TTIOActivationMethodNone` when
-            the file was written without the
-            `opt_ms2_activation_detail`
-            feature flag (M74 columns absent).
+            @return Activation method for spectrum
+            <code><var>index</var></code>;
+            <code>TTIOActivationMethodNone</code> when the file
+            was written without the
+            <code>opt_ms2_activation_detail</code> feature flag.
           
         </div>
         <hr class="method-separator">
@@ -341,7 +398,7 @@
         - (double) <b>basePeakIntensityAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Base-peak intensity.
           
         </div>
         <hr class="method-separator">
@@ -373,7 +430,8 @@
         - (NSIndexSet*) <b>indicesForMsLevel:</b> (uint8_t)msLevel;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>msLevel</var> MS level to filter on.
+            @return Indices whose MS level matches.
           
         </div>
         <hr class="method-separator">
@@ -383,8 +441,9 @@
         - (NSIndexSet*) <b>indicesInRetentionTimeRange:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)range;<br />
         <div class="desc">
           
-            Indices whose retention time falls within [
-            <var>range</var>.minimum, <var>range</var>.maximum].
+            @param <var>range</var> Closed retention-time
+            <var>range</var> in seconds. @return Indices whose
+            retention time falls inside the <var>range</var>.
           
         </div>
         <hr class="method-separator">
@@ -394,8 +453,10 @@
         - (instancetype) <b>initWithOffsets:</b> (NSData*)offsets<b> lengths:</b> (NSData*)lengths<b> retentionTimes:</b> (NSData*)retentionTimes<b> msLevels:</b> (NSData*)msLevels<b> polarities:</b> (NSData*)polarities<b> precursorMzs:</b> (NSData*)precursorMzs<b> precursorCharges:</b> (NSData*)precursorCharges<b> basePeakIntensities:</b> (NSData*)basePeakIntensities;<br />
         <div class="desc">
           
-            Pre-M74 initializer; delegates to the full form
-            with <code>nil</code> M74 columns.
+            Convenience initialiser without optional
+            activation-detail columns. Delegates to
+            the designated initialiser with <code>nil</code>
+            trailing arguments.
           
         </div>
         <hr class="method-separator">
@@ -405,13 +466,16 @@
         - (instancetype) <b>initWithOffsets:</b> (NSData*)offsets<b> lengths:</b> (NSData*)lengths<b> retentionTimes:</b> (NSData*)retentionTimes<b> msLevels:</b> (NSData*)msLevels<b> polarities:</b> (NSData*)polarities<b> precursorMzs:</b> (NSData*)precursorMzs<b> precursorCharges:</b> (NSData*)precursorCharges<b> basePeakIntensities:</b> (NSData*)basePeakIntensities<b> activationMethods:</b> (NSData*)activationMethods<b> isolationTargetMzs:</b> (NSData*)isolationTargetMzs<b> isolationLowerOffsets:</b> (NSData*)isolationLowerOffsets<b> isolationUpperOffsets:</b> (NSData*)isolationUpperOffsets;<br />
         <div class="desc">
           
-            (M74) Designated initializer. The four trailing
-            `NSData *` arguments must all be <code>nil</code>
-            (legacy file) or all non-nil (M74 columns present &#8212;
-            writer emits them when the
-            `opt_ms2_activation_detail`
-            flag is set by the author). Mixed nil/non-nil is
-            rejected.
+            Designated initialiser. The four trailing
+            optional columns (
+            <code><var>activationMethods</var></code>,
+            <code><var>isolationTargetMzs</var></code>,
+            <code><var>isolationLowerOffsets</var></code>,
+            <code><var>isolationUpperOffsets</var></code>) must
+            all be <code>nil</code> (legacy file) or all non-
+            <code>nil</code> (activation-detail columns
+            present); mixed <code>nil</code> / non-
+            <code>nil</code> is rejected.
           
         </div>
         <hr class="method-separator">
@@ -421,8 +485,9 @@
         - (<a rel="gsdoc" href="TTIOIsolationWindow.html#class$TTIOIsolationWindow">TTIOIsolationWindow</a>*) <b>isolationWindowAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            (M74) Isolation window for spectrum `index`, or `nil`
-            when the M74 columns are absent or the stored
+            @return Isolation window for spectrum
+            <code><var>index</var></code>, or <code>nil</code>
+            when the optional columns are absent or the stored
             target+offsets are all zero (MS1 sentinel).
           
         </div>
@@ -433,8 +498,8 @@
         - (uint32_t) <b>lengthAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            lengths[i] is the number of elements (peaks) in
-            spectrum i.
+            @return Number of elements (peaks) in spectrum
+            <code><var>index</var></code>.
           
         </div>
         <hr class="method-separator">
@@ -444,7 +509,7 @@
         - (uint8_t) <b>msLevelAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return MS level (1, 2, 3,...).
           
         </div>
         <hr class="method-separator">
@@ -454,8 +519,9 @@
         - (uint64_t) <b>offsetAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            offsets[i] is the starting element
-            <var>index</var> of spectrum i in mz_values.
+            @return Starting element <var>index</var> of
+            spectrum <code><var>index</var></code> within
+            <code>mz_values</code>.
           
         </div>
         <hr class="method-separator">
@@ -465,7 +531,7 @@
         - (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPolarity">TTIOPolarity</a>) <b>polarityAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Scan polarity.
           
         </div>
         <hr class="method-separator">
@@ -475,7 +541,8 @@
         - (uint8_t) <b>precursorChargeAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Precursor charge state; <code>0</code> if
+            unknown.
           
         </div>
         <hr class="method-separator">
@@ -485,7 +552,7 @@
         - (double) <b>precursorMzAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Precursor m/z; <code>0</code> for MS1.
           
         </div>
         <hr class="method-separator">
@@ -495,7 +562,7 @@
         - (double) <b>retentionTimeAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Retention time in seconds.
           
         </div>
         <hr class="method-separator">
@@ -505,8 +572,12 @@
         - (BOOL) <b>writeToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.7 M44 / Task 31: I/O routed through StorageGroup /
-            StorageDataset.
+            Writes the index under
+            <code>parent/spectrum_index/</code>. @param
+            <var>parent</var> Destination <var>parent</var>
+            group. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success.
           
         </div>
         <hr class="method-separator">

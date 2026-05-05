@@ -822,7 +822,7 @@ was not reported by the source instrument.</p>
 <p>Numeric precision of a signal buffer.</p>
 <p>Cross-language: ObjC <code class="docutils literal notranslate"><span class="pre">TTIOPrecision</span></code> · Java
 <code class="docutils literal notranslate"><span class="pre">Enums.Precision</span></code>.</p>
-<p>Appendix B Gap 7: <code class="docutils literal notranslate"><span class="pre">Precision</span></code> is a pure enum. The HDF5 type
+<p>: <code class="docutils literal notranslate"><span class="pre">Precision</span></code> is a pure enum. The HDF5 type
 mapping (<code class="docutils literal notranslate"><span class="pre">H5T_NATIVE_DOUBLE</span></code> &amp;c.) lives in
 <code class="docutils literal notranslate"><span class="pre">ttio.providers.hdf5</span></code> so non-HDF5 providers (SQLite, Memory,
 future Zarr) can import <code class="docutils literal notranslate"><span class="pre">Precision</span></code> without pulling HDF5
@@ -1863,7 +1863,7 @@ proteomics.</p></li>
 </dd>
 </dl>
 <p class="rubric">Notes</p>
-<p>API status: Provisional (v0.12.0 M78).</p>
+<p>API status: Provisional ().</p>
 <section id="id15">
 <h3>Cross-language equivalents<a class="headerlink" href="#id15" title="Link to this heading">¶</a></h3>
 <p>Objective-C: <code class="docutils literal notranslate"><span class="pre">TTIOFeature</span></code> · Java:
@@ -2164,10 +2164,10 @@ the dataset bytes it needs.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.AcquisitionRun.open">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">group</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="providers/base/index.html#ttio.providers.base.StorageGroup" title="ttio.providers.base.StorageGroup"><span class="pre">ttio.providers.base.StorageGroup</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.h5py.org/en/stable/high/group.html#h5py.Group" title="(in h5py v3.16)"><span class="pre">h5py.Group</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.AcquisitionRun" title="ttio.AcquisitionRun"><span class="pre">AcquisitionRun</span></a></span></span><a class="reference internal" href="../../_modules/ttio/acquisition_run.html#AcquisitionRun.open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.AcquisitionRun.open" title="Link to this definition">¶</a></dt>
-<dd><p>Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).</p>
+<dd><p>Open a run from a storage-provider group .</p>
 <p>Accepts either a <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageGroup</span></code> (protocol path) or an
 <a class="reference external" href="https://docs.h5py.org/en/stable/high/group.html#h5py.Group" title="(in h5py v3.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">h5py.Group</span></code></a> (legacy path — wrapped transparently via
-<code class="xref py py-class docutils literal notranslate"><span class="pre">_Group</span></code>). v0.9 M64.5 made every
+<code class="xref py py-class docutils literal notranslate"><span class="pre">_Group</span></code>). made every
 cold-path read route through the StorageGroup protocol so
 Memory / SQLite / Zarr backends work without touching h5py.</p>
 </dd></dl>
@@ -2336,15 +2336,15 @@ cheap to hold in memory; signal channels remain lazy.</p>
 <li><p><strong>precursor_mzs</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a>) – Precursor m/z for each spectrum (0.0 for MS1).</p></li>
 <li><p><strong>precursor_charges</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a>) – Precursor charge state for each spectrum (0 for MS1).</p></li>
 <li><p><strong>base_peak_intensities</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a>) – Base-peak intensity for each spectrum.</p></li>
-<li><p><strong>activation_methods</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (M74, optional) Activation method int value per spectrum; see
+<li><p><strong>activation_methods</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (optional) Activation method int value per spectrum; see
 <a class="reference internal" href="enums/index.html#ttio.enums.ActivationMethod" title="ttio.enums.ActivationMethod"><code class="xref py py-class docutils literal notranslate"><span class="pre">ActivationMethod</span></code></a>. Present only when the
 file was written with the <code class="docutils literal notranslate"><span class="pre">opt_ms2_activation_detail</span></code> feature
 flag; absent columns indicate MS1-only or legacy files.</p></li>
-<li><p><strong>isolation_target_mzs</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (M74, optional) Target m/z of the isolation window per spectrum.
+<li><p><strong>isolation_target_mzs</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (optional) Target m/z of the isolation window per spectrum.
 Zero when no isolation applied.</p></li>
-<li><p><strong>isolation_lower_offsets</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (M74, optional) Lower offset of the isolation window per
+<li><p><strong>isolation_lower_offsets</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (optional) Lower offset of the isolation window per
 spectrum. Zero when no isolation applied.</p></li>
-<li><p><strong>isolation_upper_offsets</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (M74, optional) Upper offset of the isolation window per
+<li><p><strong>isolation_upper_offsets</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><em>numpy.ndarray</em></a><em> | </em><em>None</em>) – (optional) Upper offset of the isolation window per
 spectrum. Zero when no isolation applied.</p></li>
 </ul>
 </dd>
@@ -2501,7 +2501,7 @@ or the stored target+offsets are all zero (MS1 sentinel).</p>
 <dt class="sig sig-object py" id="ttio.SpectrumIndex.read">
 <span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">idx_group</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="providers/base/index.html#ttio.providers.base.StorageGroup" title="ttio.providers.base.StorageGroup"><span class="pre">ttio.providers.base.StorageGroup</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.h5py.org/en/stable/high/group.html#h5py.Group" title="(in h5py v3.16)"><span class="pre">h5py.Group</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.SpectrumIndex" title="ttio.SpectrumIndex"><span class="pre">SpectrumIndex</span></a></span></span><a class="reference internal" href="../../_modules/ttio/acquisition_run.html#SpectrumIndex.read"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.SpectrumIndex.read" title="Link to this definition">¶</a></dt>
 <dd><p>Load all index columns.</p>
-<p>Accepts either a <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageGroup</span></code> (v0.7 M44 protocol path)
+<p>Accepts either a <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageGroup</span></code> (protocol path)
 or an <a class="reference external" href="https://docs.h5py.org/en/stable/high/group.html#h5py.Group" title="(in h5py v3.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">h5py.Group</span></code></a> (legacy). The h5py path is retained
 via <code class="docutils literal notranslate"><span class="pre">_native_h5py</span></code> so existing callers that dereferenced
 child groups with <code class="docutils literal notranslate"><span class="pre">group[&quot;spectrum_index&quot;]</span></code> continue to work.</p>
@@ -2633,7 +2633,7 @@ implemented in Task 6 of the M82.1 plan; until then they raise
 <a class="reference external" href="https://docs.python.org/3/library/exceptions.html#NotImplementedError" title="(in Python v3.14)"><code class="xref py py-class docutils literal notranslate"><span class="pre">NotImplementedError</span></code></a>.</p>
 <section id="id21">
 <h3>Cross-language equivalents<a class="headerlink" href="#id21" title="Link to this heading">¶</a></h3>
-<p>Objective-C: <code class="docutils literal notranslate"><span class="pre">TTIOGenomicIndex</span></code> (M82.2 — to be implemented) ·
+<p>Objective-C: <code class="docutils literal notranslate"><span class="pre">TTIOGenomicIndex</span></code> (— to be implemented) ·
 Java: <code class="docutils literal notranslate"><span class="pre">global.thalion.ttio.genomics.GenomicIndex</span></code> (M82.3 — to
 be implemented).</p>
 <dl class="py attribute">

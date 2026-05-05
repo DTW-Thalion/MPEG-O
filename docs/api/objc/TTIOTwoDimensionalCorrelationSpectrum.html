@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -262,15 +262,7 @@
         </blockquote>
         <div class="desc">
           
-          2D correlation spectrum (Noda 2D-COS): a synchronous
-          (in-phase) and an asynchronous (quadrature) rank-2
-          correlation matrix keyed on a single
-          spectral-variable axis (nu_1 == nu_2). Both
-          matrices are size-by-size row-major float64 buffers.
-          Cross-language equivalents: Java:
-          global.thalion.ttio.TwoDimensionalCorrelationSpectrum
-          Python: ttio.two_dimensional_correlation_spectrum
-          .TwoDimensionalCorrelationSpectrum
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -303,7 +295,19 @@
         - (instancetype) <b>initWithSynchronousMatrix:</b> (NSData*)sync<b> asynchronousMatrix:</b> (NSData*)asyn<b> matrixSize:</b> (NSUInteger)size<b> variableAxis:</b> (<a rel="gsdoc" href="TTIOAxisDescriptor.html#class$TTIOAxisDescriptor">TTIOAxisDescriptor</a>*)axis<b> perturbation:</b> (NSString*)perturbation<b> perturbationUnit:</b> (NSString*)perturbationUnit<b> sourceModality:</b> (NSString*)sourceModality<b> indexPosition:</b> (NSUInteger)indexPosition<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>sync</var>
+            Synchronous matrix bytes. @param
+            <var>asyn</var> Asynchronous matrix bytes. @param
+            <var>size</var> Matrix dimension <code>n</code>.
+            @param <var>axis</var> Shared spectral-variable
+            <var>axis</var>. @param <var>perturbation</var>
+            Perturbation identifier. @param
+            <var>perturbationUnit</var> Perturbation unit string.
+            @param <var>sourceModality</var> Source modality
+            identifier. @param <var>indexPosition</var>
+            Position in parent run. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            An initialised spectrum, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

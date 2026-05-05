@@ -322,7 +322,7 @@ Module Contents
 
       Write a minimal v1.1 ``.tio`` file from in-memory data.
 
-      :param provider: v0.9 M64.5: which storage backend to write through. The
+      :param provider: : which storage backend to write through. The
                        string ``"hdf5"`` (default) keeps byte-for-byte parity with
                        pre-M64.5 files. Other values dispatch through
                        :func:`open_provider` — ``"memory"``, ``"sqlite"``,

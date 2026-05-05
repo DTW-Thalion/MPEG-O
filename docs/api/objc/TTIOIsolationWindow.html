@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,17 +261,77 @@
         </blockquote>
         <div class="desc">
           
-          Precursor isolation window for MS/MS scans,
-          expressed as a target m/z with asymmetric
-          lower/upper offsets in Th (Da). Immutable value
-          class. The instrument-reported window spans `[targetMz
-          - lowerOffset, targetMz + upperOffset]`. Offsets are
-          non-negative by convention; the lower and upper
-          may differ when the quadrupole is offset from the
-          monoisotopic m/z (common in DIA). API status:
-          Stable (v1.1, M74). Cross-language equivalents:
-          Python: ttio.isolation_window.IsolationWindow Java:
-          global.thalion.ttio.IsolationWindow
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCoding, NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em>
+            ValueClasses/TTIOIsolationWindow.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Precursor isolation window for MS/MS scans,
+            expressed as a target m/z with asymmetric
+            lower/upper offsets in Th (Da). Immutable value
+            class with value-based equality.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The instrument-reported window spans
+            <code>
+              [targetMz - lowerOffset, targetMz +
+              upperOffset]
+            </code>
+            . Offsets are non-negative by convention; the lower and
+            upper may differ when the quadrupole is offset from
+            the monoisotopic m/z (common in DIA acquisitions).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.isolation_window.IsolationWindow</code>
+            <br /> Java:
+            <code>global.thalion.ttio.IsolationWindow</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -293,7 +353,11 @@
         + (instancetype) <b>windowWithTargetMz:</b> (double)targetMz<b> lowerOffset:</b> (double)lowerOffset<b> upperOffset:</b> (double)upperOffset;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience factory for the designated
+            initialiser. @param <var>targetMz</var> Target
+            m/z. @param <var>lowerOffset</var> Lower offset.
+            @param <var>upperOffset</var> Upper offset. @return
+            An autoreleased isolation window.
           
         </div>
         <hr class="method-separator">
@@ -303,7 +367,13 @@
         - (instancetype) <b>initWithTargetMz:</b> (double)targetMz<b> lowerOffset:</b> (double)lowerOffset<b> upperOffset:</b> (double)upperOffset;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>targetMz</var> Target m/z of the isolation.
+            @param <var>lowerOffset</var> Lower offset from
+            <code><var>targetMz</var></code>. @param
+            <var>upperOffset</var> Upper offset from
+            <code><var>targetMz</var></code>. @return An
+            initialised isolation window.
           
         </div>
         <hr class="method-separator">
@@ -313,7 +383,7 @@
         - (double) <b>lowerBound</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>targetMz - lowerOffset</code>.
           
         </div>
         <hr class="method-separator">
@@ -345,7 +415,7 @@
         - (double) <b>upperBound</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>targetMz + upperOffset</code>.
           
         </div>
         <hr class="method-separator">
@@ -366,7 +436,8 @@
         - (double) <b>width</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return <code>lowerOffset + upperOffset</code> (the
+            total width).
           
         </div>
         <hr class="method-separator">

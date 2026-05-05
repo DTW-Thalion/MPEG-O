@@ -370,7 +370,7 @@
         <article role="main" id="furo-main-content">
           <section id="module-ttio.providers">
 <span id="ttio-providers"></span><h1>ttio.providers<a class="headerlink" href="#module-ttio.providers" title="Link to this heading">¶</a></h1>
-<p>Storage/transport provider abstraction — Milestone 39.</p>
+<p>Storage/transport provider abstraction — .</p>
 <p>The TTI-O data model and API are the standard; the storage backend is
 a pluggable implementation detail. Providers register via
 <code class="docutils literal notranslate"><span class="pre">importlib.metadata</span></code> entry points (group <code class="docutils literal notranslate"><span class="pre">ttio.providers</span></code>) and
@@ -573,7 +573,7 @@ primitive datasets.</p>
 <span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">read</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">count</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="reference internal" href="../../../_modules/ttio/providers/base.html#StorageDataset.read"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.StorageDataset.read" title="Link to this definition">¶</a></dt>
 <dd><p>Read <code class="docutils literal notranslate"><span class="pre">count</span></code> elements starting at <code class="docutils literal notranslate"><span class="pre">offset</span></code>. <code class="docutils literal notranslate"><span class="pre">count</span> <span class="pre">==</span> <span class="pre">-1</span></code>
 reads from <code class="docutils literal notranslate"><span class="pre">offset</span></code> to the end.</p>
-<p>Return type varies by backend (Appendix B Gap 2):</p>
+<p>Return type varies by backend :</p>
 <ul class="simple">
 <li><p><strong>Primitive datasets</strong>: always <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a> with
 dtype matching <a class="reference internal" href="#ttio.providers.StorageDataset.precision" title="ttio.providers.StorageDataset.precision"><code class="xref py py-meth docutils literal notranslate"><span class="pre">precision()</span></code></a>.</p></li>
@@ -607,14 +607,14 @@ ndarray or a <code class="docutils literal notranslate"><span class="pre">list[d
 of backend. Default implementation converts a structured
 ndarray; SQLite and other list-of-dicts backends pass through.</p>
 <p>Non-compound datasets raise <code class="docutils literal notranslate"><span class="pre">TypeError</span></code>.</p>
-<p>Appendix B Gap 2 — backend-agnostic compound access.</p>
+<p>— backend-agnostic compound access.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.StorageDataset.read_canonical_bytes">
 <span class="sig-name descname"><span class="pre">read_canonical_bytes</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">offset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">count</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">-1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/providers/base.html#StorageDataset.read_canonical_bytes"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.StorageDataset.read_canonical_bytes" title="Link to this definition">¶</a></dt>
 <dd><p>Return the dataset contents as a byte stream in the TTIO
-canonical layout (v0.7 M43).</p>
+canonical layout ().</p>
 <p>Semantics:</p>
 <ul class="simple">
 <li><p><strong>Primitive numeric dataset.</strong> Little-endian packed values,
@@ -634,7 +634,7 @@ provider wrote it. The default implementation delegates to
 <code class="xref py py-mod docutils literal notranslate"><span class="pre">ttio.providers._canonical</span></code>; concrete providers may
 override when a zero-copy fast-path exists
 (<a class="reference internal" href="hdf5/index.html#ttio.providers.hdf5.Hdf5Provider" title="ttio.providers.hdf5.Hdf5Provider"><code class="xref py py-class docutils literal notranslate"><span class="pre">Hdf5Provider</span></code></a> does this).</p>
-<p>Appendix B Gap 2 follow-up — extends <a class="reference internal" href="#ttio.providers.StorageDataset.read_rows" title="ttio.providers.StorageDataset.read_rows"><code class="xref py py-meth docutils literal notranslate"><span class="pre">read_rows()</span></code></a> by
+<p>follow-up — extends <a class="reference internal" href="#ttio.providers.StorageDataset.read_rows" title="ttio.providers.StorageDataset.read_rows"><code class="xref py py-meth docutils literal notranslate"><span class="pre">read_rows()</span></code></a> by
 promising a stable byte form, not just a stable row form.</p>
 </dd></dl>
 
@@ -656,13 +656,13 @@ promising a stable byte form, not just a stable row form.</p>
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.StorageDataset.delete_attribute">
 <span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">delete_attribute</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/providers/base.html#StorageDataset.delete_attribute"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.StorageDataset.delete_attribute" title="Link to this definition">¶</a></dt>
-<dd><p>Remove an attribute. No-op if absent. Appendix B Gap 8.</p>
+<dd><p>Remove an attribute. No-op if absent.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.StorageDataset.attribute_names">
 <span class="property"><span class="k"><span class="pre">abstractmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">attribute_names</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/ttio/providers/base.html#StorageDataset.attribute_names"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.StorageDataset.attribute_names" title="Link to this definition">¶</a></dt>
-<dd><p>List attribute names; empty list if none. Appendix B Gap 8.</p>
+<dd><p>List attribute names; empty list if none.</p>
 </dd></dl>
 
 <dl class="py method">
@@ -814,7 +814,7 @@ to higher ranks.</p>
 <dd><p>Open a backing store and bind it to this provider.</p>
 <p><code class="docutils literal notranslate"><span class="pre">mode</span></code> mirrors h5py semantics: <code class="docutils literal notranslate"><span class="pre">&quot;r&quot;</span></code> read-only, <code class="docutils literal notranslate"><span class="pre">&quot;r+&quot;</span></code>
 read/write existing, <code class="docutils literal notranslate"><span class="pre">&quot;w&quot;</span></code> create/truncate, <code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span></code> append.</p>
-<p>Appendix B Gap 1 — unified open() dispatch. Both call styles
+<p>— unified open() dispatch. Both call styles
 are supported and semantically equivalent:</p>
 <ul>
 <li><p><strong>Factory style</strong> (returns a new instance):</p>
@@ -848,7 +848,7 @@ uniformly so the call site reads the same across languages.</p>
 (<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>, …).</p>
 <p>Exposed as a method (not a property) to mirror the ObjC
 <code class="docutils literal notranslate"><span class="pre">-providerName</span></code> selector and Java <code class="docutils literal notranslate"><span class="pre">providerName()</span></code> getter.
-Appendix B Gap 5 — Provisional storage-provider convergence.</p>
+— Provisional storage-provider convergence.</p>
 </dd></dl>
 
 <dl class="py method">

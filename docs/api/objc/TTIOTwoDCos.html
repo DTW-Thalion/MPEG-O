@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,15 +260,71 @@
         </blockquote>
         <div class="desc">
           
-          2D-COS compute primitives &#8212; Noda
-          synchronous/asynchronous
-          decomposition via the Hilbert-transform
-          approach (M77). All matrices are row-major float64
-          buffers. The dynamic-spectra input is ``(m, n)``: m
-          perturbation points x n spectral variables.
-          Cross-language equivalents: Python:
-          ttio.analysis.two_d_cos Java:
-          global.thalion.ttio.analysis.TwoDCos
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Analysis/TTIOTwoDCos.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Two-dimensional correlation spectroscopy
+            (2D-COS) compute primitives. Implements Noda
+            synchronous / asynchronous decomposition via
+            the Hilbert-transform approach.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            All matrices are row-major float64 buffers. The
+            dynamic-spectra input is
+            <code>(m, n)</code> : <em>m</em> perturbation points
+            by <em>n</em> spectral variables.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.analysis.two_d_cos</code>
+            <br /> Java:
+            <code>global.thalion.ttio.analysis.TwoDCos</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -285,22 +341,24 @@
         + (<a rel="gsdoc" href="TTIOTwoDimensionalCorrelationSpectrum.html#class$TTIOTwoDimensionalCorrelationSpectrum">TTIOTwoDimensionalCorrelationSpectrum</a>*) <b>computeWithDynamicSpectra:</b> (NSData*)dynamicSpectra<b> perturbationPoints:</b> (NSUInteger)m<b> spectralVariables:</b> (NSUInteger)n<b> reference:</b> (NSData*)reference<b> variableAxis:</b> (<a rel="gsdoc" href="TTIOAxisDescriptor.html#class$TTIOAxisDescriptor">TTIOAxisDescriptor</a>*)variableAxis<b> perturbation:</b> (NSString*)perturbation<b> perturbationUnit:</b> (NSString*)perturbationUnit<b> sourceModality:</b> (NSString*)sourceModality<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Compute the mean-centered 2D-COS decomposition.
-            @param <var>dynamicSpectra</var> row-major float64
-            NSData of length m*n*8. @param <var>m</var>
-            <var>perturbation</var> points (rows). @param
-            <var>n</var> spectral variables (cols). @param
-            <var>reference</var> length-n float64 baseline (
-            <code>nil</code> = column mean). @param
-            <var>variableAxis</var> forwarded to the returned
-            spectrum (may be <code>nil</code>). @param
-            <var>perturbation</var> forwarded (may be
-            <code>nil</code>; treated as &quot;&quot;). @param
-            <var>perturbationUnit</var> forwarded (may be
-            <code>nil</code>; treated as &quot;&quot;). @param
-            <var>sourceModality</var> forwarded (may be
-            <code>nil</code>; treated as &quot;&quot;). @param
-            <var>error</var> out-parameter on failure.
+            Computes the mean-centred 2D-COS decomposition.
+            @param <var>dynamicSpectra</var> Row-major float64
+            <code>NSData</code> of length
+            <code><var>m</var> * <var>n</var> * 8</code>. @param
+            <var>m</var> Perturbation points (rows). @param
+            <var>n</var> Spectral variables (cols). @param
+            <var>reference</var> Length- <em><var>n</var></em>
+            float64 baseline (<code>nil</code> = column mean).
+            @param <var>variableAxis</var> Forwarded to the
+            returned spectrum (may be <code>nil</code>).
+            @param <var>perturbation</var> Forwarded (may be
+            <code>nil</code>; treated as <code>@&quot;&quot;</code>).
+            @param <var>perturbationUnit</var> Forwarded (may be
+            <code>nil</code>). @param <var>sourceModality</var>
+            Forwarded (may be <code>nil</code>). @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The decomposed correlation spectrum, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -310,11 +368,16 @@
         + (NSData*) <b>disrelationSpectrumFromSynchronous:</b> (NSData*)synchronous<b> asynchronous:</b> (NSData*)asynchronous<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Return |Phi|/(|Phi|+|Psi|) element-wise as row-major
-            float64 bytes. Cells where both matrices vanish
-            return NaN. Both inputs must have identical length.
-            On length mismatch returns <code>nil</code> and sets
-            <var>error</var>.
+            Returns <code>|Phi| / (|Phi| + |Psi|)</code>
+            element-wise as row-major float64 bytes. Cells
+            where both matrices vanish return NaN. Both inputs
+            must have identical length. @param
+            <var>synchronous</var> Synchronous correlation matrix
+            bytes. @param <var>asynchronous</var> Asynchronous
+            correlation matrix bytes. @param
+            <var>error</var> Out-parameter populated on length
+            mismatch. @return The disrelation matrix bytes,
+            or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -324,7 +387,20 @@
         + (NSData*) <b>hilbertNodaMatrixOfOrder:</b> (NSUInteger)m<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Returns the Hilbert-Noda transform matrix of order
+            <code><var>m</var></code> as row-major float64 bytes
+            (length =
+            <code>
+              <var>m</var> * <var>m</var> * sizeof(
+              <strong>double</strong>)
+            </code>
+            ). <code>N[j, k] = 0</code> if <code>j == k</code>, else
+            <code>1 / (pi * (k - j))</code>. The matrix is
+            antisymmetric. @param <var>m</var> Matrix
+            order. @param <var>error</var> Out-parameter
+            populated when <code><var>m</var> &lt; 1</code>.
+            @return The matrix bytes, or <code>nil</code> on
+            invalid input.
           
         </div>
         <hr class="method-separator">

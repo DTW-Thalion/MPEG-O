@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,7 +261,67 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em>
+            Transport/TTIOEncryptedTransport.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Transport layer for per-AU encrypted files. The
+            writer pushes ciphertext from a
+            <code>&lt;channel&gt;_segments</code> compound onto
+            the wire unmodified (the server never decrypts in
+            transit, per <code>docs/transport-spec.md</code>
+            &#167;6.2). The reader materialises an encrypted
+            <code>.tio</code> on the receiver side with the same
+            wrapped DEK.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.transport.encrypted</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.transport.EncryptedTransport
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -278,8 +338,13 @@
         + (BOOL) <b>isPerAUEncryptedAtPath:</b> (NSString*)path<b> providerName:</b> (NSString*)providerName;<br />
         <div class="desc">
           
-            <code>YES</code> if the file on disk carries
-            ``opt_per_au_encryption``.
+            @param <var>path</var> Path to the candidate
+            <code>.tio</code> file. @param
+            <var>providerName</var> Optional explicit provider
+            name; pass <code>nil</code> for scheme-based routing.
+            @return <code>YES</code> if the file on disk
+            carries <code>opt_per_au_encryption</code>;
+            <code>NO</code> otherwise.
           
         </div>
         <hr class="method-separator">
@@ -289,9 +354,16 @@
         + (BOOL) <b>readEncryptedToPath:</b> (NSString*)outputPath<b> fromStream:</b> (NSData*)streamData<b> providerName:</b> (NSString*)providerName<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Materialise an encrypted transport stream from
-            ``streamData`` into ``outputPath``.
-            Preserves ciphertext bytes verbatim.
+            Materialises an encrypted transport stream
+            from <code><var>streamData</var></code> into
+            <code><var>outputPath</var></code>. Preserves
+            ciphertext bytes verbatim. @param
+            <var>outputPath</var> Destination <code>.tio</code>
+            path. @param <var>streamData</var> Source transport
+            bytes. @param <var>providerName</var> Optional
+            explicit provider name. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -301,10 +373,16 @@
         + (BOOL) <b>writeEncryptedDataset:</b> (NSString*)ttioPath<b> writer:</b> (<a rel="gsdoc" href="TTIOTransportWriter.html#class$TTIOTransportWriter">TTIOTransportWriter</a>*)writer<b> providerName:</b> (NSString*)providerName<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Emit a full transport stream from a per-AU-encrypted
-            file through ``writer``. ProtectionMetadata precedes
-            encrypted AUs; AU flag bits set per
-            transport-spec &#167;3.1.1.
+            Emits a full transport stream from a per-AU-encrypted
+            file through <code><var>writer</var></code>.
+            ProtectionMetadata precedes encrypted
+            AUs; AU flag bits set per transport-spec &#167;3.1.1.
+            @param <var>ttioPath</var> Source <code>.tio</code>
+            file path. @param <var>writer</var> Destination
+            <var>writer</var>. @param <var>providerName</var>
+            Optional explicit provider name. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

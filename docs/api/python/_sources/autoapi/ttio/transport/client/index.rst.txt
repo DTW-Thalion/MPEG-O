@@ -5,7 +5,7 @@ ttio.transport.client
 
 .. autoapi-nested-parse::
 
-   WebSocket transport client (v0.10 M68).
+   WebSocket transport client ().
 
 
 

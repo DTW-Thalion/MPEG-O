@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -281,8 +281,40 @@
         </blockquote>
         <div class="desc">
           
-          Result of parsing an imzML +.ibd pair. Pure value
-          object; the importer does no I/O beyond construction.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOImzMLReader.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Result of parsing an imzML +.ibd pair. Pure value
+            object; the importer does no I/O beyond
+            construction.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -437,13 +469,54 @@
         </blockquote>
         <div class="desc">
           
-          One pixel&apos;s worth of parsed imzML data: spatial
-          coordinates plus the mass-spectrometry intensity
-          / m/z arrays that came out of the.ibd binary at the offsets
-          named in the.imzML XML. In continuous mode every
-          pixel&apos;s `mzArray` aliases the same shared NSData
-          (allocated once for the run) &#8212; the v0.9 Python
-          reference implementation makes the same guarantee.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOImzMLReader.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            One pixel&apos;s worth of parsed imzML data: spatial
+            coordinates plus the mass-spectrometry
+            intensity / m/z arrays that came out of the
+            <code>.ibd</code> binary at the offsets named in the
+            <code>.imzML</code> XML.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            In continuous mode every pixel&apos;s <code>mzArray</code>
+            aliases the same shared <code>NSData</code>
+            (allocated once for the run) &#8212; the Python
+            reference implementation makes the same
+            guarantee.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -464,16 +537,22 @@
         - (instancetype) <b>initWithX:</b> (NSInteger)x<b> y:</b> (NSInteger)y<b> z:</b> (NSInteger)z<b> mzArray:</b> (NSData*)mzArray<b> intensityArray:</b> (NSData*)intensityArray<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.9+: public initializer for callers that construct
-            pixel spectra from in-memory buffers (e.g.
-            TTIOImzMLWriter, tests). The importer
+            Public initialiser for callers that construct pixel
+            spectra from in-memory buffers (for example
+            <code>TTIOImzMLWriter</code> or tests). The importer
             itself uses a private init; this one accepts
-            equal-length float64 mz + intensity NSData
-            buffers and derives mzCount. Returns
-            <code>nil</code> + <var>error</var> when
-            <var>mzArray</var> / <var>intensityArray</var> aren&apos;t
-            both non-zero multiples of 8 bytes, or when their
-            element counts differ.
+            equal-length float64 mz + intensity
+            <code>NSData</code> buffers and derives
+            <code>mzCount</code>. @param <var>x</var> X
+            coordinate of the pixel. @param <var>y</var> Y
+            coordinate of the pixel. @param <var>z</var> Z
+            coordinate of the pixel. @param
+            <var>mzArray</var> Float64 m/z buffer. @param
+            <var>intensityArray</var> Float64 intensity buffer of
+            equal length. @param <var>error</var> Out-parameter
+            populated when array sizes are invalid or
+            unequal. @return An initialised pixel spectrum, or
+            <code>nil</code> on malformed input.
           
         </div>
         <hr class="method-separator">
@@ -572,7 +651,14 @@
         + (<a rel="gsdoc" href="#class$TTIOImzMLImport">TTIOImzMLImport</a>*) <b>readFromImzMLPath:</b> (NSString*)imzmlPath<b> ibdPath:</b> (NSString*)ibdPath<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads an imzML +.ibd pair. @param
+            <var>imzmlPath</var> Path to the <code>.imzML</code>
+            XML metadata file. @param <var>ibdPath</var> Path to
+            the <code>.ibd</code> binary, or <code>nil</code> to
+            use the sibling <code>&lt;stem&gt;.ibd</code>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return A populated <code>TTIOImzMLImport</code>,
+            or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

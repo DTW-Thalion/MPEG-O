@@ -419,21 +419,21 @@
 
 <span class="c1"># ── Wire-format constants ──────────────────────────────────────────</span>
 
-<span class="c1">#: Version byte — first byte of every QUALITY_BINNED stream.</span>
+<span class="c1"># Version byte — first byte of every QUALITY_BINNED stream.</span>
 <div class="viewcode-block" id="VERSION">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/quality/index.html#ttio.codecs.quality.VERSION">[docs]</a>
 <span class="n">VERSION</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mh">0x00</span></div>
 
 
-<span class="c1">#: Scheme id for Illumina-8 — second byte of every stream. v0 of</span>
-<span class="c1">#: this codec defines this single scheme; future schemes (NCBI 4-bin,</span>
-<span class="c1">#: Bonfield variable-width, etc.) would get distinct scheme_ids.</span>
+<span class="c1"># Scheme id for Illumina-8 — second byte of every stream. v0 of</span>
+<span class="c1"># this codec defines this single scheme; future schemes (NCBI 4-bin,</span>
+<span class="c1"># Bonfield variable-width, etc.) would get distinct scheme_ids.</span>
 <div class="viewcode-block" id="SCHEME_ILLUMINA_8">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/quality/index.html#ttio.codecs.quality.SCHEME_ILLUMINA_8">[docs]</a>
 <span class="n">SCHEME_ILLUMINA_8</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mh">0x00</span></div>
 
 
-<span class="c1">#: Header bytes: 1 (version) + 1 (scheme_id) + 4 (orig_len) = 6.</span>
+<span class="c1"># Header bytes: 1 (version) + 1 (scheme_id) + 4 (orig_len) = 6.</span>
 <div class="viewcode-block" id="HEADER_LEN">
 <a class="viewcode-back" href="../../../autoapi/ttio/codecs/quality/index.html#ttio.codecs.quality.HEADER_LEN">[docs]</a>
 <span class="n">HEADER_LEN</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">6</span></div>
@@ -490,18 +490,18 @@
 <span class="n">_BIN_INDEX_TABLE</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">_build_bin_index_table</span><span class="p">()</span>
 <span class="n">_CENTRE_TABLE</span><span class="p">:</span> <span class="nb">bytes</span> <span class="o">=</span> <span class="n">_build_centre_table</span><span class="p">()</span>
 
-<span class="c1">#: Two 256-entry ``bytes.translate`` tables for fast decode:</span>
-<span class="c1">#: ``_HI_TO_CENTRE[b]`` = bin centre for the high nibble of byte b;</span>
-<span class="c1">#: ``_LO_TO_CENTRE[b]`` = bin centre for the low nibble of byte b.</span>
-<span class="c1">#: The decoder runs ``body.translate`` twice (once per table — both</span>
-<span class="c1">#: in C, both O(len(body))) then interleaves the two output streams</span>
-<span class="c1">#: via ``bytearray[0::2] = hi; bytearray[1::2] = lo`` slice</span>
-<span class="c1">#: assignment, which is also C-driven. This combination is roughly</span>
-<span class="c1">#: an order of magnitude faster than a per-byte Python loop on</span>
-<span class="c1">#: multi-MiB inputs. Nibbles 8..15 are unreachable from a</span>
-<span class="c1">#: well-formed stream (the encoder only produces 0..7); we map them</span>
-<span class="c1">#: to centre 0, mirroring the encoder&#39;s &quot;trust the producer&quot;</span>
-<span class="c1">#: policy from binding decision §92.</span>
+<span class="c1"># Two 256-entry ``bytes.translate`` tables for fast decode:</span>
+<span class="c1"># ``_HI_TO_CENTRE[b]`` = bin centre for the high nibble of byte b;</span>
+<span class="c1"># ``_LO_TO_CENTRE[b]`` = bin centre for the low nibble of byte b.</span>
+<span class="c1"># The decoder runs ``body.translate`` twice (once per table — both</span>
+<span class="c1"># in C, both O(len(body))) then interleaves the two output streams</span>
+<span class="c1"># via ``bytearray[0::2] = hi; bytearray[1::2] = lo`` slice</span>
+<span class="c1"># assignment, which is also C-driven. This combination is roughly</span>
+<span class="c1"># an order of magnitude faster than a per-byte Python loop on</span>
+<span class="c1"># multi-MiB inputs. Nibbles 8..15 are unreachable from a</span>
+<span class="c1"># well-formed stream (the encoder only produces 0..7); we map them</span>
+<span class="c1"># to centre 0, mirroring the encoder&#39;s &quot;trust the producer&quot;</span>
+<span class="c1"># policy from binding decision §92.</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">_build_nibble_tables</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]:</span>
     <span class="n">centres</span> <span class="o">=</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="mi">27</span><span class="p">,</span> <span class="mi">32</span><span class="p">,</span> <span class="mi">37</span><span class="p">,</span> <span class="mi">40</span><span class="p">)</span>
     <span class="n">hi</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span>

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -271,15 +271,54 @@
         </blockquote>
         <div class="desc">
           
-          Higher-level verification API. Collapses the
-          three outcomes of a sign-and-verify cycle (valid /
-          invalid / not-signed) into a single enum, plus an
-          error fallback for I/O failures. Use this instead of
-          TTIOSignatureManager when you want to
-          render a status to an end user. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.verifier.Verifier Java:
-          global.thalion.ttio.protection.Verifier
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protection/TTIOVerifier.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Higher-level verification API. Collapses the
+            three outcomes of a sign-and-verify cycle (valid /
+            invalid / not-signed) into a single enum, plus an
+            error fallback for I/O failures. Use this instead of
+            <code>TTIOSignatureManager</code> when you want to
+            render a status to an end user.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.verifier.Verifier</code>
+            <br /> Java:
+            <code>global.thalion.ttio.protection.Verifier</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -295,7 +334,13 @@
         + (<a rel="gsdoc" href="#type$TTIOVerificationStatus">TTIOVerificationStatus</a>) <b>verifyDataset:</b> (NSString*)datasetPath<b> inFile:</b> (NSString*)filePath<b> withKey:</b> (NSData*)key<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Verifies a dataset&apos;s HMAC-SHA256 (or PQC)
+            signature. @param <var>datasetPath</var> HDF5
+            path to the <strong>signed</strong> dataset. @param
+            <var>filePath</var> Filesystem path to the.tio file.
+            @param <var>key</var> Verification <var>key</var>.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return Verification status.
           
         </div>
         <hr class="method-separator">
@@ -305,7 +350,13 @@
         + (<a rel="gsdoc" href="#type$TTIOVerificationStatus">TTIOVerificationStatus</a>) <b>verifyProvenanceInRun:</b> (NSString*)runPath<b> inFile:</b> (NSString*)filePath<b> withKey:</b> (NSData*)key<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Verifies a run&apos;s per-run provenance signature.
+            @param <var>runPath</var> HDF5 path to the run
+            group. @param <var>filePath</var> Filesystem path to
+            the.tio file. @param <var>key</var> Verification
+            <var>key</var>. @param <var>error</var> Out-parameter
+            populated on failure. @return Verification
+            status.
           
         </div>
         <hr class="method-separator">
@@ -318,7 +369,36 @@
         typedef NS_ENUM(NSUInteger) TTIOVerificationStatus;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Outcome of a signature verification cycle.
+          
+          <dl>
+            <dt><em>TTIOVerificationStatusValid</em></dt>
+            <dd>
+              
+              Signature present and valid for the supplied
+              key.
+            
+            </dd>
+            <dt><em>TTIOVerificationStatusInvalid</em></dt>
+            <dd>
+              
+              Signature present but failed verification.
+            
+            </dd>
+            <dt>
+              <em>TTIOVerificationStatusNotSigned</em>
+            </dt>
+            <dd>
+              
+              No signature attached to the dataset / run.
+            
+            </dd>
+            <dt><em>TTIOVerificationStatusError</em></dt>
+            <dd>
+              I/O or other operational failure.
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">

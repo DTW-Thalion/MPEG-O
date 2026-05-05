@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,7 +260,95 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (root protocol)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protocols/TTIOStreamable.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Declares the interface for sequential access with
+            explicit positioning. Conforming classes enable
+            efficient iteration over large datasets without
+            materializing the entire collection in
+            memory; the cursor advances on each
+            <code>
+              <a rel="gsdoc" href="#method$(TTIOStreamable)-nextObject">
+                -nextObject
+              </a>
+
+            </code>
+            call and may be repositioned via
+            <code>
+              <a rel="gsdoc" href="#method$(TTIOStreamable)-seekToPosition$">
+                -seekToPosition:
+              </a>
+
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The streaming protocol is one-pass-by-default: callers
+            iterate forward via
+            <code>
+              <a rel="gsdoc" href="#method$(TTIOStreamable)-nextObject">
+                -nextObject
+              </a>
+
+            </code>
+            until
+            <code>
+              <a rel="gsdoc" href="#method$(TTIOStreamable)-hasMore">
+                -hasMore
+              </a>
+
+            </code>
+            returns <code>NO</code>. Random repositioning is
+            supported when the underlying storage permits
+            seeking (HDF5 datasets, memory-backed providers);
+            for stream-only sources, a seek may raise.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.protocols.Streamable</code> <br /> Java:
+            <code>
+              global.thalion.ttio.protocols.Streamable
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">

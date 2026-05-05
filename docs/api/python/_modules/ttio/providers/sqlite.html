@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.providers.sqlite</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;SQLite storage provider — Milestone 41 stress-test of Provisional ABCs.</span>
+<span></span><span class="sd">&quot;&quot;&quot;SQLite storage provider — stress-test of Provisional ABCs.</span>
 
 <span class="sd">Stores the full TTI-O group/dataset tree in a single SQLite file.</span>
 <span class="sd">Groups and datasets are rows in relational tables; primitive dataset</span>
@@ -1072,7 +1072,7 @@
 <span class="sd">        * ``&quot;w&quot;``        — create or truncate.</span>
 <span class="sd">        * ``&quot;a&quot;``        — read/write; create if absent.</span>
 
-<span class="sd">        Implementation note: per Appendix B Gap 1, this method</span>
+<span class="sd">        Implementation note: per , this method</span>
 <span class="sd">        intentionally does NOT use ``@classmethod`` so that the</span>
 <span class="sd">        instance-mutating call style works. When called as</span>
 <span class="sd">        ``SqliteProvider.open(path)``, Python passes the path string as</span>
@@ -1178,7 +1178,7 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_conn</span></div>
 
 
-    <span class="c1"># ── Transactions (Appendix B Gap 11) ─────────────────────────</span>
+    <span class="c1"># ── Transactions ─────────────────────────</span>
 
 <div class="viewcode-block" id="SqliteProvider.begin_transaction">
 <a class="viewcode-back" href="../../../autoapi/ttio/providers/sqlite/index.html#ttio.providers.sqlite.SqliteProvider.begin_transaction">[docs]</a>

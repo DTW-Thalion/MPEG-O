@@ -5,7 +5,7 @@ ttio.providers.zarr
 
 .. autoapi-nested-parse::
 
-   Zarr storage provider — Milestone 46 (Track A, stretch).
+   Zarr storage provider — (Track A, stretch).
 
    Validates that the v0.7 storage-provider abstraction
    (M43/M44/M45 refinements) generalises beyond HDF5. Zarr is the most
@@ -48,7 +48,7 @@ ttio.providers.zarr
 
    API status
    ----------
-   Provisional (v0.7 M46 stretch). The public surface is the
+   Provisional (stretch). The public surface is the
    StorageProvider / StorageGroup / StorageDataset contract; internal
    layout conventions may evolve in v0.8 once Java + ObjC catch up.
 
@@ -85,7 +85,7 @@ Module Contents
 
    .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> ZarrProvider
 
-      Dual-style open() per Appendix B Gap 1 — mirrors HDF5 /
+      Dual-style open() per — mirrors HDF5 /
       Memory / SQLite providers.
 
 
@@ -97,7 +97,7 @@ Module Contents
 
       Exposed as a method (not a property) to mirror the ObjC
       ``-providerName`` selector and Java ``providerName()`` getter.
-      Appendix B Gap 5 — Provisional storage-provider convergence.
+      — Provisional storage-provider convergence.
 
 
 

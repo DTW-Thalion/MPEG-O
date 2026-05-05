@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,13 +261,62 @@
         </blockquote>
         <div class="desc">
           
-          Immutable value class describing the instrument
-          used to acquire a run. Persisted as a small group of
-          string attributes under `instrument_config/` within
-          the parent run group. API status: Stable. Cross-language
-          equivalents: Python:
-          ttio.instrument_config.InstrumentConfig
-          Java: global.thalion.ttio.InstrumentConfig
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCoding, NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Run/TTIOInstrumentConfig.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Immutable value class describing the instrument
+            used to acquire a run. Persisted as a small group of
+            string attributes under
+            <code>instrument_config/</code> within the parent
+            run group.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.instrument_config.InstrumentConfig</code>
+            <br /> Java:
+            <code>global.thalion.ttio.InstrumentConfig</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -290,7 +339,12 @@
         + (instancetype) <b>readFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads the configuration from
+            <code>parent/instrument_config/</code>. @param
+            <var>parent</var> Source group. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The materialised configuration, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -322,7 +376,14 @@
         - (instancetype) <b>initWithManufacturer:</b> (NSString*)manufacturer<b> model:</b> (NSString*)model<b> serialNumber:</b> (NSString*)serialNumber<b> sourceType:</b> (NSString*)sourceType<b> analyzerType:</b> (NSString*)analyzerType<b> detectorType:</b> (NSString*)detectorType;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>manufacturer</var> Manufacturer name. @param
+            <var>model</var> Model identifier. @param
+            <var>serialNumber</var> Serial number. @param
+            <var>sourceType</var> Ion source type. @param
+            <var>analyzerType</var> Mass analyser type. @param
+            <var>detectorType</var> Detector type. @return An
+            initialised instrument configuration.
           
         </div>
         <hr class="method-separator">
@@ -376,7 +437,11 @@
         - (BOOL) <b>writeToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes the configuration to
+            <code>parent/instrument_config/</code>. @param
+            <var>parent</var> Destination group. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

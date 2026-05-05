@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,13 +260,54 @@
         </blockquote>
         <div class="desc">
           
-          Chromatogram: time-vs-intensity trace, with
-          TIC, XIC, or SRM type. For XIC the targetMz field is
-          meaningful; for SRM the precursorMz + productMz
-          fields apply (transition); both are zero for TIC.
-          Cross-language equivalents: Python:
-          ttio.chromatogram.Chromatogram
-          Java: global.thalion.ttio.Chromatogram
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> TTIOSpectrum : NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Spectra/TTIOChromatogram.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Chromatogram: time-vs-intensity trace, with
+            TIC, XIC, or SRM type. For XIC the
+            <code>targetMz</code> field is meaningful; for SRM
+            the <code>precursorProductMz</code> +
+            <code>productMz</code> fields apply (transition);
+            both are zero for TIC.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.chromatogram.Chromatogram</code> <br />
+            Java: <code>global.thalion.ttio.Chromatogram</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -287,7 +328,17 @@
         - (instancetype) <b>initWithTimeArray:</b> (<a rel="gsdoc" href="TTIOSignalArray.html#class$TTIOSignalArray">TTIOSignalArray</a>*)time<b> intensityArray:</b> (<a rel="gsdoc" href="TTIOSignalArray.html#class$TTIOSignalArray">TTIOSignalArray</a>*)intensity<b> type:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOChromatogramType">TTIOChromatogramType</a>)type<b> targetMz:</b> (double)targetMz<b> precursorMz:</b> (double)precursorMz<b> productMz:</b> (double)productMz<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>time</var>
+            Time values. @param <var>intensity</var> Intensity
+            values; same length. @param <var>type</var> Trace
+            <var>type</var>. @param <var>targetMz</var> XIC
+            target m/z (or <code>0</code>). @param
+            <var>precursorMz</var> SRM precursor m/z (or
+            <code>0</code>). @param <var>productMz</var> SRM
+            product m/z (or <code>0</code>). @param
+            <var>error</var> Out-parameter populated on failure.
+            @return An initialised chromatogram, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

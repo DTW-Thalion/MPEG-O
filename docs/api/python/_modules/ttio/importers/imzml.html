@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.importers.imzml</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;imzML + .ibd importer (v0.9 M59).</span>
+<span></span><span class="sd">&quot;&quot;&quot;imzML + .ibd importer ().</span>
 
 <span class="sd">imzML is the dominant interchange format for mass-spectrometry imaging</span>
 <span class="sd">data. The format is a pair of files:</span>
@@ -425,7 +425,7 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Raised when the .ibd binary disagrees with the .imzML metadata.</span>
 
 <span class="sd">    Covers UUID mismatches and offset / length values that would read</span>
-<span class="sd">    past the end of the .ibd (HANDOFF gotcha 48-49).</span>
+<span class="sd">    past the end of the .ibd -49).</span>
 <span class="sd">    &quot;&quot;&quot;</span></div>
 
 
@@ -681,7 +681,7 @@
     <span class="n">in_spectrum</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">in_binary_array</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">in_position</span> <span class="o">=</span> <span class="kc">False</span>
-    <span class="n">in_scan_settings</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># v0.9 M64: disambiguate IMS:1000042 by context</span>
+    <span class="n">in_scan_settings</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># disambiguate IMS:1000042 by context</span>
     <span class="n">array_kind</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>  <span class="c1"># &quot;mz&quot; or &quot;intensity&quot;</span>
 
     <span class="k">for</span> <span class="n">event</span><span class="p">,</span> <span class="n">elem</span> <span class="ow">in</span> <span class="n">iterparse</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">imzml</span><span class="p">),</span> <span class="n">events</span><span class="o">=</span><span class="p">(</span><span class="s2">&quot;start&quot;</span><span class="p">,</span> <span class="s2">&quot;end&quot;</span><span class="p">)):</span>

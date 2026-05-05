@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -255,7 +255,40 @@
         typedef NS_ENUM(NSUInteger) TTIOAcquisitionMode;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Acquisition mode of a run, identifying the
+          instrument or protocol context. Stored on each run
+          group&apos;s <code>@acquisition_mode</code> attribute.
+          
+          <dl>
+            <dt><em>TTIOAcquisitionModeMS1DDA</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionModeMS2DDA</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionModeDIA</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionModeSRM</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionMode1DNMR</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionMode2DNMR</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionModeImaging</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionModeGenomicWGS</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOAcquisitionModeGenomicWES</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -264,14 +297,18 @@
         <div class="desc">
           
           MS/MS precursor activation (dissociation) method.
-          Stored as int32 in the optional `activation_methods`
-          column of `spectrum_index` (gated by feature flag
-          `opt_ms2_activation_detail`).
-          `None` is the sentinel for MS1 scans and for MS2+
-          scans whose activation method was not reported by the
-          source instrument. Cross-language equivalents: Python:
-          ttio.enums.ActivationMethod Java:
-          global.thalion.ttio.Enums.ActivationMethod
+          Stored as int32 in the optional
+          <code>activation_methods</code> column of
+          <code>spectrum_index</code> (gated by feature flag
+          <code>opt_ms2_activation_detail</code>).
+          <code>None</code> is the sentinel for MS1 scans and
+          for MS2+ scans whose activation method was not reported
+          by the source instrument. Cross-language equivalents:
+          Python <code>ttio.enums.ActivationMethod</code>, Java
+          <code>
+            global.thalion.ttio.Enums.ActivationMethod
+          </code>
+          .
           
           <dl>
             <dt><em>TTIOActivationMethodNone</em></dt>
@@ -304,7 +341,20 @@
         typedef NS_ENUM(NSUInteger) TTIOByteOrder;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Byte order for multi-byte numeric values inside a signal
+          buffer. TTI-O canonicalises to little-endian on disk;
+          big-endian is supported only for legacy ingest
+          paths.
+          
+          <dl>
+            <dt><em>TTIOByteOrderLittleEndian</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOByteOrderBigEndian</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -312,7 +362,20 @@
         typedef NS_ENUM(NSUInteger) TTIOChromatogramType;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Type of chromatogram trace.
+          
+          <dl>
+            <dt><em>TTIOChromatogramTypeTIC</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOChromatogramTypeXIC</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOChromatogramTypeSRM</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -320,7 +383,58 @@
         typedef NS_ENUM(NSUInteger) TTIOCompression;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Compression / codec applied to a signal channel.
+          Codec ids 0-3 map onto HDF5 filter pipeline stages. Ids
+          4+ are dedicated per-channel codecs signalled via the
+          per-dataset <code>@compression</code> uint8
+          attribute. Slots 8 (NAME_TOKENIZED v1), 9
+          (REF_DIFF v1), and 10 (FQZCOMP_NX16 v1) are
+          reserved on the wire for backward-compatibility
+          ordinal stability; v1.0 readers reject them with a
+          migration error.
+          
+          <dl>
+            <dt><em>TTIOCompressionNone</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionZlib</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionLZ4</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionNumpressDelta</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionRansOrder0</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionRansOrder1</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionBasePack</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionQualityBinned</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionDeltaRansOrder0</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionFqzcompNx16Z</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionMateInlineV2</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionRefDiffV2</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOCompressionNameTokenizedV2</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -328,7 +442,32 @@
         typedef NS_ENUM(NSUInteger) TTIOEncryptionLevel;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Granularity at which dataset-level encryption is
+          applied. See the <code>TTIOEncryptable</code>
+          protocol.
+          
+          <dl>
+            <dt><em>TTIOEncryptionLevelNone</em></dt>
+            <dd>
+            </dd>
+            <dt>
+              <em>TTIOEncryptionLevelDatasetGroup</em>
+            </dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOEncryptionLevelDataset</em></dt>
+            <dd>
+            </dd>
+            <dt>
+              <em>TTIOEncryptionLevelDescriptorStream</em>
+            </dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOEncryptionLevelAccessUnit</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -336,9 +475,9 @@
         typedef NS_ENUM(NSUInteger) TTIOIRMode;<br />
         <div class="desc">
           
-          Mid-IR measurement mode. `absorbance =
-          -log10(transmittance)`; the two are
-          convertible so the exporter/importer preserves
+          Mid-IR measurement mode.
+          <code>absorbance = -log10(transmittance)</code>; the
+          two are convertible so the exporter / importer preserves
           whichever the source specified.
           
           <dl>
@@ -357,7 +496,24 @@
         typedef NS_ENUM(NSInteger) TTIOPolarity;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Polarity of a mass-spectrometry scan. Stored as
+          int32 in the <code>polarities</code> column of
+          <code>spectrum_index</code>; <code>Unknown</code> is
+          the sentinel for non-MS modalities and for scans whose
+          polarity was not reported.
+          
+          <dl>
+            <dt><em>TTIOPolarityUnknown</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPolarityPositive</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPolarityNegative</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -365,7 +521,38 @@
         typedef NS_ENUM(NSUInteger) TTIOPrecision;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Numeric precision of a signal buffer.
+          
+          <dl>
+            <dt><em>TTIOPrecisionFloat32</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionFloat64</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionInt32</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionInt64</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionUInt32</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionComplex128</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionUInt8</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionUInt16</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOPrecisionUInt64</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -373,7 +560,19 @@
         typedef NS_ENUM(NSUInteger) TTIOSamplingMode;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Sampling regime for an axis: uniformly-spaced
+          (constant step) or non-uniformly spaced (centroided
+          peak lists, irregular timepoints).
+          
+          <dl>
+            <dt><em>TTIOSamplingModeUniform</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOSamplingModeNonUniform</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">

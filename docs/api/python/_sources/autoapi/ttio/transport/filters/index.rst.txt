@@ -5,7 +5,7 @@ ttio.transport.filters
 
 .. autoapi-nested-parse::
 
-   Query filters for selective-access streaming (v0.10 M68).
+   Query filters for selective-access streaming ().
 
 
 

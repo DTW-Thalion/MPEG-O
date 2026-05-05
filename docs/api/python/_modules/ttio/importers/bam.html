@@ -374,7 +374,7 @@
 <span class="sd">(M38) and :mod:`ttio.importers.bruker_tdf` (M53). ``samtools`` is a</span>
 <span class="sd">runtime dependency only — ``import ttio.importers.bam`` succeeds on</span>
 <span class="sd">systems without samtools; only :meth:`BamReader.to_genomic_run`</span>
-<span class="sd">requires the binary on PATH (Binding Decision §135).</span>
+<span class="sd">requires the binary on PATH ().</span>
 
 <span class="sd">samtools auto-detects SAM vs BAM format from magic bytes; one parser</span>
 <span class="sd">handles both. The companion :class:`~ttio.importers.sam.SamReader`</span>
@@ -438,7 +438,7 @@
 
 <span class="sd">    Performs the PATH check via :func:`shutil.which` and additionally</span>
 <span class="sd">    invokes ``samtools --version`` to verify the binary is callable.</span>
-<span class="sd">    Per Binding Decision §135 this happens at first use, NOT at module</span>
+<span class="sd">    Per this happens at first use, NOT at module</span>
 <span class="sd">    import time.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">_samtools_on_path</span><span class="p">():</span>
@@ -480,7 +480,7 @@
 <span class="sd">    The ``samtools`` binary is a runtime dependency, not a build</span>
 <span class="sd">    dependency. Construction succeeds without samtools on PATH;</span>
 <span class="sd">    :meth:`to_genomic_run` raises :class:`SamtoolsNotFoundError` when</span>
-<span class="sd">    samtools cannot be located at first use (Binding Decision §135).</span>
+<span class="sd">    samtools cannot be located at first use ().</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">os</span><span class="o">.</span><span class="n">PathLike</span><span class="p">[</span><span class="nb">str</span><span class="p">]):</span>
@@ -565,7 +565,7 @@
         <span class="n">qual_chunks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">bytes</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">running_offset</span> <span class="o">=</span> <span class="mi">0</span>
 
-        <span class="c1"># Provenance timestamp comes from the file mtime per HANDOFF §2.4.</span>
+        <span class="c1"># Provenance timestamp comes from the file mtime per</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">file_mtime</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_path</span><span class="o">.</span><span class="n">stat</span><span class="p">()</span><span class="o">.</span><span class="n">st_mtime</span><span class="p">)</span>
         <span class="k">except</span> <span class="ne">OSError</span><span class="p">:</span>
@@ -620,7 +620,7 @@
                         <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2"> — </span><span class="si">{</span><span class="n">line</span><span class="p">[:</span><span class="mi">120</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
                     <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
 
-                <span class="c1"># RNEXT special handling — Binding Decision §131:</span>
+                <span class="c1"># RNEXT special handling — :</span>
                 <span class="c1"># &quot;=&quot; expands to RNAME so downstream consumers don&#39;t</span>
                 <span class="c1"># need to remember the convention.</span>
                 <span class="k">if</span> <span class="n">rnext</span> <span class="o">==</span> <span class="s2">&quot;=&quot;</span><span class="p">:</span>
@@ -699,10 +699,10 @@
                 <span class="k">except</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">TimeoutExpired</span><span class="p">:</span>
                     <span class="n">proc</span><span class="o">.</span><span class="n">kill</span><span class="p">()</span>
 
-        <span class="c1"># Apply sample_name override per Binding Decision §133.</span>
+        <span class="c1"># Apply sample_name override .</span>
         <span class="n">effective_sample</span> <span class="o">=</span> <span class="n">sample_name</span> <span class="k">if</span> <span class="n">sample_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="k">else</span> <span class="n">rg_sample</span>
 
-        <span class="c1"># reference_uri: first @SQ wins for v0 of M87 (HANDOFF §2.4).</span>
+        <span class="c1"># reference_uri: first @SQ wins for v0 of M87</span>
         <span class="c1"># Empty string when no @SQ present.</span>
         <span class="n">reference_uri</span> <span class="o">=</span> <span class="n">sq_names</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="k">if</span> <span class="n">sq_names</span> <span class="k">else</span> <span class="s2">&quot;&quot;</span>
 
@@ -780,9 +780,9 @@
 
 <span class="sd">        Only @SQ and @PG are accumulated into structured state here;</span>
 <span class="sd">        @RG is handled inline in :meth:`to_genomic_run` so the</span>
-<span class="sd">        first-wins rule (Binding Decision §133) is obvious at the</span>
+<span class="sd">        first-wins rule () is obvious at the</span>
 <span class="sd">        callsite. @HD and @CO are read but not mapped to TTI-O</span>
-<span class="sd">        fields in v0 (HANDOFF §2.4).</span>
+<span class="sd">        fields in v0</span>
 <span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;@SQ&quot;</span><span class="p">):</span>
             <span class="n">fields</span> <span class="o">=</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_parse_header_fields</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>

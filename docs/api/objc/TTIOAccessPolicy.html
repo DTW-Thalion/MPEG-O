@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,19 +260,78 @@
         </blockquote>
         <div class="desc">
           
-          Access policy describing who may decrypt which streams
-          in a `.tio` file. Stored as a JSON string under
-          /protection/access_policies, so
-          the policy is human-inspectable and recoverable
-          independently of any key-management system. The
-          policy is intentionally schema-free at this layer: the
-          JSON is a dictionary of arbitrary key/value pairs that
-          the application is free to interpret (typical fields:
-          `subjects`, `streams`, `expiry`, `key_id`,
-          `audit_contact`). API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.access_policy.AccessPolicy
-          Java: global.thalion.ttio.protection.AccessPolicy
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Protection/TTIOAccessPolicy.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Access policy describing who may decrypt which
+            streams in a <code>.tio</code> file. Stored as a
+            JSON string under
+            <code>/protection/access_policies</code>, so the
+            policy is human-inspectable and recoverable
+            independently of any key-management system.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The policy is intentionally schema-free at this layer:
+            the JSON is a dictionary of arbitrary key/value pairs
+            that the application is free to interpret. Typical
+            fields: <code>subjects</code>, <code>streams</code>
+            , <code>expiry</code>, <code>key_id</code>,
+            <code>audit_contact</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.access_policy.AccessPolicy</code> <br />
+            Java:
+            <code>
+              global.thalion.ttio.protection.AccessPolicy
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -290,8 +349,12 @@
         + (instancetype) <b>readFromFile:</b> (<a rel="gsdoc" href="TTIOHDF5File.html#class$TTIOHDF5File">TTIOHDF5File</a>*)file<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Read /protection/access_policies. Returns
-            <code>nil</code> with <var>error</var> if missing.
+            Reads <code>/protection/access_policies</code>.
+            @param <var>file</var> Source <var>file</var>.
+            @param <var>error</var> Out-parameter populated on
+            failure (including attribute-absent). @return The
+            materialised policy, or <code>nil</code> on
+            failure.
           
         </div>
         <hr class="method-separator">
@@ -301,7 +364,9 @@
         - (instancetype) <b>initWithPolicy:</b> (NSDictionary*)policy;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>policy</var>
+            Free-form <var>policy</var> dictionary. @return
+            An initialised access <var>policy</var>.
           
         </div>
         <hr class="method-separator">
@@ -322,8 +387,12 @@
         - (BOOL) <b>writeToFile:</b> (<a rel="gsdoc" href="TTIOHDF5File.html#class$TTIOHDF5File">TTIOHDF5File</a>*)file<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Write to /protection/access_policies in the file&apos;s
-            root group.
+            Writes the policy to
+            <code>/protection/access_policies</code> in the
+            file&apos;s root group. @param <var>file</var>
+            Destination <var>file</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

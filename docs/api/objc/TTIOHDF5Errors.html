@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -269,7 +269,64 @@
         typedef NS_ENUM(NSInteger) TTIOErrorCode;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          Error codes shared across the storage, codec, and
+          protection layers. Codes are stable across
+          releases; new codes are appended.
+          
+          <dl>
+            <dt><em>TTIOErrorUnknown</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorFileNotFound</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorFileCreate</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorFileOpen</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorFileClose</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorGroupCreate</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorGroupOpen</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorDatasetCreate</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorDatasetOpen</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorDatasetWrite</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorDatasetRead</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorAttributeCreate</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorAttributeRead</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorAttributeWrite</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorInvalidArgument</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorTypeMismatch</em></dt>
+            <dd>
+            </dd>
+            <dt><em>TTIOErrorOutOfRange</em></dt>
+            <dd>
+            </dd>
+          </dl>
+          
         
         </div>
         <hr class="method-separator">
@@ -281,7 +338,12 @@
         NSString* const TTIOErrorDomain;<br />
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          TTIOErrorDomain &#8212; NSError domain for every
+          error raised by the TTI-O Objective-C implementation.
+          Always paired with a <code>TTIOErrorCode</code> value
+          in <code>NSError.code</code> and a printf-formatted
+          localised description in
+          <code>userInfo[NSLocalizedDescriptionKey]</code>.
         
         </div>
         <hr class="method-separator">
@@ -293,8 +355,13 @@
         NSError* TTIOMakeError(<a rel="gsdoc" href="#type$TTIOErrorCode">TTIOErrorCode</a> <b>code</b>, NSString* <b>format</b><b>,...</b>);<br />
         <div class="desc">
           
-          Build an NSError in TTIOErrorDomain with
-          <var>code</var> and printf-style message.
+          Build an NSError in TTIOErrorDomain with a
+          printf-formatted description. @param
+          <var>code</var> Error <var>code</var> from
+          <code>TTIOErrorCode</code>. @param <var>format</var>
+          printf-style <var>format</var> string. @return
+          An autoreleased NSError ready to assign to an
+          <code>NSError **</code> out-parameter.
         
         </div>
         <hr class="method-separator">

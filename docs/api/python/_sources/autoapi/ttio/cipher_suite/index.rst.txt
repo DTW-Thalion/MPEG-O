@@ -5,19 +5,19 @@ ttio.cipher_suite
 
 .. autoapi-nested-parse::
 
-   Cipher-suite catalog and algorithm-dispatched parameter helpers (v0.7 M48).
+   Cipher-suite catalog and algorithm-dispatched parameter helpers ().
 
    Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit
    fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures,
    AES-KW-style wrap for KEK). Key sizes and nonce lengths were
    hardcoded module-level constants.
 
-   v0.7 M48 generalises the public API with an ``algorithm=`` keyword
+   generalises the public API with an ``algorithm=`` keyword
    parameter backed by this catalog. The intent was to shape the
    parameter hole so M49's post-quantum binding is a pure plug-in — no
    API change — once ML-KEM-1024 / ML-DSA-87 are ready.
 
-   v0.8 M49 activates the post-quantum entries. ``"ml-kem-1024"`` (FIPS
+   activates the post-quantum entries. ``"ml-kem-1024"`` (FIPS
    203) and ``"ml-dsa-87"`` (FIPS 204) transition from
    ``status="reserved"`` to ``status="active"``. Activation requires
    the optional ``[pqc]`` extra (``pip install 'ttio[pqc]'`` pulls in

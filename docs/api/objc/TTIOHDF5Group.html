@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,21 +260,64 @@
         </blockquote>
         <div class="desc">
           
-          Thin wrapper around an HDF5 group handle. Created by
-          -[TTIOHDF5File rootGroup] or by another
-          group&apos;s
           
-            -createGroupNamed:
-          
+        </p>
+        <p>
 
-          /
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
           
-            -openGroupNamed:
           
+        </p>
+        <p>
 
-          . Non-owning: the parent file&apos;s lifetime is retained by
-          every group derived from it, so closing the file closes
-          all groups transitively.
+            <em>Declared In:</em> HDF5/TTIOHDF5Group.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Thin wrapper around an HDF5 group handle. Created by
+            <code>-[TTIOHDF5File rootGroup]</code> or by another
+            group&apos;s
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5Group-createGroupNamed$error$">
+                -createGroupNamed:error:
+              </a>
+
+            </code>
+            /
+            <code>
+              <a rel="gsdoc" href="#method$TTIOHDF5Group-openGroupNamed$error$">
+                -openGroupNamed:error:
+              </a>
+
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Non-owning: the parent file&apos;s lifetime is
+            retained by every group derived from it, so
+            closing the file closes all groups transitively.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -306,7 +349,7 @@
         - (NSArray<NSString*>*) <b>attributeNames</b>;<br />
         <div class="desc">
           
-            Alphabetically ordered names of every
+            @return Alphabetically-ordered names of every
             attribute on this group.
           
         </div>
@@ -317,8 +360,8 @@
         - (NSArray<NSString*>*) <b>childNames</b>;<br />
         <div class="desc">
           
-            Names of every link (group or dataset) directly under
-            this group.
+            @return Names of every link (group or dataset)
+            directly under this group.
           
         </div>
         <hr class="method-separator">
@@ -328,15 +371,34 @@
         - (<a rel="gsdoc" href="TTIOHDF5Dataset.html#class$TTIOHDF5Dataset">TTIOHDF5Dataset</a>*) <b>createDatasetNamed:</b> (NSString*)name<b> precision:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a>)precision<b> length:</b> (NSUInteger)length<b> chunkSize:</b> (NSUInteger)chunkSize<b> compression:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOCompression">TTIOCompression</a>)compression<b> compressionLevel:</b> (int)compressionLevel<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Create a dataset with an explicit
-            ``TTIOCompression`` choice. v0.3 M21:
-            adds LZ4 (filter 32004) alongside zlib and &quot;no
-            compression&quot;. The ``compressionLevel``
-            parameter is honoured for zlib (0&#8211;9); LZ4 ignores
-            it. ``TTIOCompressionLZ4`` requires the plugin to be
-            loadable at runtime; if ``H5Zfilter_avail(32004)``
-            is false the call fails with ``TTIOErrorDatasetCreate``
-            and a descriptive <var>error</var> message.
+            Creates a dataset with an explicit
+            <code>TTIOCompression</code> choice. Honours
+            <code><var>compressionLevel</var></code> for zlib (
+            <code>0</code> - <code>9</code>); LZ4 ignores the
+            level.
+            
+        </p>
+        <p>
+
+              <code>TTIOCompressionLZ4</code> requires the LZ4
+              plugin to be loadable at runtime; if
+              <code>H5Zfilter_avail(32004)</code> is false the
+              call fails with <code>TTIOErrorDatasetCreate</code>
+              and a descriptive <var>error</var> message.
+                    </p>
+        <p>
+          
+            @param <var>name</var> Dataset <var>name</var>.
+            @param <var>precision</var> Element
+            <var>precision</var>. @param <var>length</var>
+            Element count. @param <var>chunkSize</var> Chunk
+            size in elements; pass <code>0</code> for contiguous
+            storage. @param <var>compression</var> Compression
+            algorithm enum value. @param
+            <var>compressionLevel</var> zlib level (ignored for
+            LZ4 / NONE). @param <var>error</var> Out-parameter
+            populated on failure. @return The new dataset, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -346,11 +408,18 @@
         - (<a rel="gsdoc" href="TTIOHDF5Dataset.html#class$TTIOHDF5Dataset">TTIOHDF5Dataset</a>*) <b>createDatasetNamed:</b> (NSString*)name<b> precision:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPrecision">TTIOPrecision</a>)precision<b> length:</b> (NSUInteger)length<b> chunkSize:</b> (NSUInteger)chunkSize<b> compressionLevel:</b> (int)compressionLevel<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Create a new dataset under this group with the given
-            <var>precision</var>, <var>length</var>, chunked
-            storage, and zlib compression level (0 = none, 1&#8211;9
-            = deflate level). Pass <var>chunkSize</var> == 0 to use a
-            single contiguous chunk.
+            Creates a new dataset under this group with chunked
+            storage and zlib compression. @param
+            <var>name</var> Dataset <var>name</var>. @param
+            <var>precision</var> Element <var>precision</var>.
+            @param <var>length</var> Element count. @param
+            <var>chunkSize</var> Chunk size in elements; pass
+            <code>0</code> to use a single contiguous chunk.
+            @param <var>compressionLevel</var> zlib level (
+            <code>0</code> = none, <code>1</code> -
+            <code>9</code> = deflate). @param <var>error</var>
+            Out-parameter populated on failure. @return
+            The new dataset, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -360,7 +429,10 @@
         - (<a rel="gsdoc" href="#class$TTIOHDF5Group">TTIOHDF5Group</a>*) <b>createGroupNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Creates a child group. @param <var>name</var> Child
+            <var>name</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            The new group, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -370,8 +442,11 @@
         - (BOOL) <b>deleteAttributeNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Delete the named attribute. No-op when the attribute
-            is absent.
+            Deletes the named attribute. No-op when the
+            attribute is absent. @param <var>name</var>
+            Attribute <var>name</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -381,9 +456,11 @@
         - (BOOL) <b>deleteChildNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Delete the named link (child group / dataset). No-op
-            when the child is absent. Used by M25 key rotation to
-            overwrite dek_wrapped.
+            Deletes the named link (child group or dataset).
+            No-op when the child is absent. @param
+            <var>name</var> Child <var>name</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -404,7 +481,8 @@
         - (NSString*) <b>groupName</b>;<br />
         <div class="desc">
           
-            Short (last-path-segment) name, or &quot;/&quot; for root.
+            @return Last-path-segment name, or <code>&quot;/&quot;</code>
+            for root.
           
         </div>
         <hr class="method-separator">
@@ -414,7 +492,9 @@
         - (BOOL) <b>hasAttributeNamed:</b> (NSString*)name;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>name</var> Attribute <var>name</var>.
+            @return <code>YES</code> if the attribute exists on
+            this group.
           
         </div>
         <hr class="method-separator">
@@ -424,7 +504,9 @@
         - (BOOL) <b>hasChildNamed:</b> (NSString*)name;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>name</var> Child <var>name</var>.
+            @return <code>YES</code> if a child group or
+            dataset with the given <var>name</var> exists.
           
         </div>
         <hr class="method-separator">
@@ -434,8 +516,14 @@
         - (instancetype) <b>initWithGroupId:</b> (hid_t)gid<b> retainer:</b> (id)retainer;<br />
         <div class="desc">
           
-            Internal initializer; not intended for external
-            use.
+            Internal initialiser used by
+            <code>TTIOHDF5File</code> and parent groups. Not
+            intended for external use. @param <var>gid</var>
+            HDF5 group <strong>id</strong> obtained from
+            <code>H5Gcreate2</code> / <code>H5Gopen2</code>.
+            @param <var>retainer</var> Object whose lifetime
+            keeps the parent file alive. @return An initialised
+            group.
           
         </div>
         <hr class="method-separator">
@@ -445,7 +533,16 @@
         - (int64_t) <b>integerAttributeNamed:</b> (NSString*)name<b> exists:</b> (BOOL*)outExists<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads an int64 attribute from this group. @param
+            <var>name</var> Attribute <var>name</var>. @param
+            <var>outExists</var> Optional out-parameter set to
+            <code>YES</code> if the attribute exists,
+            <code>NO</code> otherwise. When <code>NO</code> the
+            return value is <code>0</code> and
+            <code><var>error</var></code> is not populated.
+            @param <var>error</var> Out-parameter populated on
+            read-time failure. @return The attribute value (
+            <code>0</code> if absent).
           
         </div>
         <hr class="method-separator">
@@ -455,7 +552,10 @@
         - (<a rel="gsdoc" href="TTIOHDF5Dataset.html#class$TTIOHDF5Dataset">TTIOHDF5Dataset</a>*) <b>openDatasetNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Opens an existing dataset. @param <var>name</var>
+            Dataset <var>name</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            The opened dataset, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -465,7 +565,10 @@
         - (<a rel="gsdoc" href="#class$TTIOHDF5Group">TTIOHDF5Group</a>*) <b>openGroupNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Opens an existing child group. @param <var>name</var>
+            Child <var>name</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            The opened group, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -475,7 +578,12 @@
         - (BOOL) <b>setIntegerAttribute:</b> (NSString*)name<b> value:</b> (int64_t)value<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Sets an int64 attribute on this group, creating it if
+            absent. @param <var>name</var> Attribute
+            <var>name</var>. @param <var>value</var> int64
+            <var>value</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -485,7 +593,12 @@
         - (BOOL) <b>setStringAttribute:</b> (NSString*)name<b> value:</b> (NSString*)value<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Sets a string attribute on this group, creating it if
+            absent. @param <var>name</var> Attribute
+            <var>name</var>. @param <var>value</var> String
+            <var>value</var>. @param <var>error</var>
+            Out-parameter populated on failure. @return
+            <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -495,7 +608,11 @@
         - (NSString*) <b>stringAttributeNamed:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads a string attribute from this group. @param
+            <var>name</var> Attribute <var>name</var>. @param
+            <var>error</var> Out-parameter populated on failure
+            (including attribute-absent). @return The
+            attribute value, or <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">

@@ -141,9 +141,10 @@ Package Contents
 
       Persist the parsed result as a ``.tio`` container.
 
-      v0.9 M64.5: ``provider`` selects the storage backend
-      (``"hdf5"``, ``"memory"``, ``"sqlite"``, ``"zarr"``). Passed
-      through to :meth:`SpectralDataset.write_minimal` unchanged.
+      : ``provider`` selects the storage backend
+              (``"hdf5"``, ``"memory"``, ``"sqlite"``, ``"zarr"``). Passed
+              through to :meth:`SpectralDataset.write_minimal` unchanged.
+
 
 
 

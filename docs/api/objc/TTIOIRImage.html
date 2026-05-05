@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,15 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          Mid-IR (FTIR microscopy) imaging dataset: a width x
-          height grid of pixels, each pixel a spectral profile
-          of `spectralPoints` float64 values indexed by a shared 1-D
-          `wavenumbers` array (cm^-1). The cube values
-          are either transmittance or absorbance per `mode`.
-          Persisted under `/study/ir_image_cube/`.
-          Cross-language equivalents: Python:
-          ttio.ir_image.IRImage Java:
-          global.thalion.ttio.IRImage
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -317,7 +309,7 @@
         - (instancetype) <b>initWithTitle:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> width:</b> (NSUInteger)width<b> height:</b> (NSUInteger)height<b> spectralPoints:</b> (NSUInteger)spectralPoints<b> tileSize:</b> (NSUInteger)tileSize<b> pixelSizeX:</b> (double)pixelSizeX<b> pixelSizeY:</b> (double)pixelSizeY<b> scanPattern:</b> (NSString*)scanPattern<b> mode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOIRMode">TTIOIRMode</a>)mode<b> resolutionCmInv:</b> (double)resolutionCmInv<b> cube:</b> (NSData*)cube<b> wavenumbers:</b> (NSData*)wavenumbers;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser.
           
         </div>
         <hr class="method-separator">
@@ -327,7 +319,8 @@
         - (instancetype) <b>initWithWidth:</b> (NSUInteger)width<b> height:</b> (NSUInteger)height<b> spectralPoints:</b> (NSUInteger)spectralPoints<b> tileSize:</b> (NSUInteger)tileSize<b> cube:</b> (NSData*)cube<b> wavenumbers:</b> (NSData*)wavenumbers<b> mode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOIRMode">TTIOIRMode</a>)mode<b> resolutionCmInv:</b> (double)resolutionCmInv;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience initialiser for image-only
+            datasets.
           
         </div>
         <hr class="method-separator">

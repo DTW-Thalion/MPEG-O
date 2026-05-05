@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,7 +260,60 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Transport/TTIOAUFilter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Server-side AccessUnit filter. Every predicate
+            is <code>NSNumber</code> - or <code>NSString</code>
+            
+              -wrapped
+            
+
+            so <code>nil</code> means &quot;no constraint&quot;. Genomic
+            predicates (<code>chromosome</code>,
+            <code>positionMin</code>, <code>positionMax</code>)
+            exclude any AU whose <code>spectrumClass</code>
+            indicates a non-genomic record.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.transport.filters.AUFilter</code> <br />
+            Java:
+            <code>global.thalion.ttio.transport.AUFilter</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -277,7 +330,8 @@
         + (instancetype) <b>emptyFilter</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return A filter with no constraints (matches
+            everything).
           
         </div>
         <hr class="method-separator">
@@ -287,8 +341,10 @@
         + (instancetype) <b>filterFromQueryJSON:</b> (NSString*)json;<br />
         <div class="desc">
           
-            Parse ``{&quot;type&quot;:&quot;query&quot;,&quot;filters&quot;:{...}}`` into an
-            TTIOAUFilter.
+            Parses <code>{&quot;type&quot;:&quot;query&quot;,&quot;filters&quot;:{...}}</code>
+            into a filter. @param <var>json</var> The query JSON
+            string. @return A filter populated from the JSON,
+            or an empty filter on malformed input.
           
         </div>
         <hr class="method-separator">
@@ -298,8 +354,12 @@
         - (BOOL) <b>matches:</b> (<a rel="gsdoc" href="TTIOAccessUnit.html#class$TTIOAccessUnit">TTIOAccessUnit</a>*)au<b> datasetId:</b> (uint16_t)datasetId;<br />
         <div class="desc">
           
-            Evaluate against an AccessUnit + dataset
-            <strong>id</strong>.
+            Evaluates the filter against an AccessUnit +
+            dataset <strong>id</strong>. @param <var>au</var>
+            AccessUnit candidate. @param
+            <var>datasetId</var> Dataset identifier of the
+            enclosing run. @return <code>YES</code> when
+            every predicate matches.
           
         </div>
         <hr class="method-separator">

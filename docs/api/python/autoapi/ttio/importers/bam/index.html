@@ -380,7 +380,7 @@ the public SAMv1 specification (<a class="reference external" href="https://samt
 (M38) and <a class="reference internal" href="../bruker_tdf/index.html#module-ttio.importers.bruker_tdf" title="ttio.importers.bruker_tdf"><code class="xref py py-mod docutils literal notranslate"><span class="pre">ttio.importers.bruker_tdf</span></code></a> (M53). <code class="docutils literal notranslate"><span class="pre">samtools</span></code> is a
 runtime dependency only — <code class="docutils literal notranslate"><span class="pre">import</span> <span class="pre">ttio.importers.bam</span></code> succeeds on
 systems without samtools; only <a class="reference internal" href="#ttio.importers.bam.BamReader.to_genomic_run" title="ttio.importers.bam.BamReader.to_genomic_run"><code class="xref py py-meth docutils literal notranslate"><span class="pre">BamReader.to_genomic_run()</span></code></a>
-requires the binary on PATH (Binding Decision §135).</p>
+requires the binary on PATH ().</p>
 <p>samtools auto-detects SAM vs BAM format from magic bytes; one parser
 handles both. The companion <a class="reference internal" href="../sam/index.html#ttio.importers.sam.SamReader" title="ttio.importers.sam.SamReader"><code class="xref py py-class docutils literal notranslate"><span class="pre">SamReader</span></code></a>
 exists as a discoverable convenience alias.</p>
@@ -441,7 +441,7 @@ the format from magic bytes.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">samtools</span></code> binary is a runtime dependency, not a build
 dependency. Construction succeeds without samtools on PATH;
 <a class="reference internal" href="#ttio.importers.bam.BamReader.to_genomic_run" title="ttio.importers.bam.BamReader.to_genomic_run"><code class="xref py py-meth docutils literal notranslate"><span class="pre">to_genomic_run()</span></code></a> raises <a class="reference internal" href="#ttio.importers.bam.SamtoolsNotFoundError" title="ttio.importers.bam.SamtoolsNotFoundError"><code class="xref py py-class docutils literal notranslate"><span class="pre">SamtoolsNotFoundError</span></code></a> when
-samtools cannot be located at first use (Binding Decision §135).</p>
+samtools cannot be located at first use ().</p>
 <dl class="py property">
 <dt class="sig sig-object py" id="ttio.importers.bam.BamReader.path">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span><a class="reference internal" href="../../../../_modules/ttio/importers/bam.html#BamReader.path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.importers.bam.BamReader.path" title="Link to this definition">¶</a></dt>

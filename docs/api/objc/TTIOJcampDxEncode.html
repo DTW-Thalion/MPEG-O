@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -266,15 +266,41 @@
          TTIO_JCAMP_VALUES_PER_LINE<br />
         <div class="desc">
           
-          JCAMP-DX 5.01 compressed-XYDATA encoder (PAC / SQZ /
-          DIF). Byte-for-byte mirror of Python
-          `ttio.exporters._jcamp_encode`
-          and Java `global.thalion.ttio.exporters.JcampDxEncode`.
-          The conformance fixtures under `conformance/jcamp_dx/`
-          are the gate &#8212; if this encoder and the Python/Java
-          encoders diverge, one of them is wrong. Private
-          implementation detail of TTIOJcampDxWriter;
-          not part of the public API.
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Export/TTIOJcampDxEncode.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            JCAMP-DX 5.01 compressed-XYDATA encoder (PAC / SQZ
+            / DIF). Byte-for-byte mirror of Python
+            <code>ttio.exporters._jcamp_encode</code> and Java
+            <code>
+              global.thalion.ttio.exporters.JcampDxEncode
+            </code>
+            . The conformance fixtures under
+            <code>conformance/jcamp_dx/</code> are the gate
+            &#8212; if this encoder and the Python / Java
+            encoders diverge, one of them is wrong.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Private implementation detail of
+            <code>TTIOJcampDxWriter</code>; not part of the
+            public API.
+                  </p>
+        <p>
+          
         
         </div>
         <hr class="method-separator">
@@ -286,8 +312,12 @@
         double TTIOJcampChooseYFactor(const double* <b>ys</b>, NSUInteger <b>n</b>, int <b>sigDigits</b>);<br />
         <div class="desc">
           
-          Pick a YFACTOR scaling `ys` to ~`sigDigits`-digit
-          integers.
+          Picks a YFACTOR scaling <code><var>ys</var></code> to ~
+          <code><var>sigDigits</var></code> digit integers.
+          @param <var>ys</var> Sample values. @param
+          <var>n</var> Length of <code><var>ys</var></code>.
+          @param <var>sigDigits</var> Target significant digits
+          after integer scaling. @return The chosen YFACTOR.
         
         </div>
         <hr class="method-separator">
@@ -295,8 +325,10 @@
         NSString* TTIOJcampEncodeDif(int64_t <b>delta</b>);<br />
         <div class="desc">
           
-          DIF-encode a Y-difference using the `%JKLMNOPQR` /
-          `%jklmnopqr` tables.
+          DIF-encodes a Y-difference using the
+          <code>%JKLMNOPQR</code> / <code>%jklmnopqr</code>
+          tables. @param <var>delta</var> Y difference. @return
+          The DIF token.
         
         </div>
         <hr class="method-separator">
@@ -304,8 +336,9 @@
         NSString* TTIOJcampEncodePacY(int64_t <b>v</b>);<br />
         <div class="desc">
           
-          PAC-encode a Y value with explicit sign (token
-          delimiter per &#167;5.9).
+          PAC-encodes a Y value with explicit sign (token
+          delimiter per &#167;5.9). @param <var>v</var> Y value.
+          @return The PAC token.
         
         </div>
         <hr class="method-separator">
@@ -313,8 +346,10 @@
         NSString* TTIOJcampEncodeSqz(int64_t <b>v</b>);<br />
         <div class="desc">
           
-          SQZ-encode a <strong>signed</strong> integer using
-          the `@ABCDEFGHI` / `@abcdefghi` tables.
+          SQZ-encodes a <strong>signed</strong> integer
+          using the <code>@ABCDEFGHI</code> /
+          <code>@abcdefghi</code> tables. @param <var>v</var>
+          Integer to encode. @return The SQZ token.
         
         </div>
         <hr class="method-separator">
@@ -322,10 +357,17 @@
         NSString* TTIOJcampEncodeXYData(const double* <b>ys</b>, NSUInteger <b>n</b>, double <b>firstx</b>, double <b>deltax</b>, double <b>yfactor</b>, <a rel="gsdoc" href="TTIOJcampDxEncoding.html#type$TTIOJcampDxEncoding">TTIOJcampDxEncoding</a> <b>mode</b>);<br />
         <div class="desc">
           
-          Return the body of an `##XYDATA=(X++(Y..Y))` block for
-          a PAC / SQZ / DIF encoding. AFFN is NOT routed through
-          here. Output is newline-separated with a trailing
-          newline.
+          Returns the body of an
+          <code>##XYDATA=(X++(Y..Y))</code> block for a PAC /
+          SQZ / DIF encoding. AFFN is NOT routed through here.
+          Output is newline-separated with a trailing newline.
+          @param <var>ys</var> Sample Y values. @param
+          <var>n</var> Length of <code><var>ys</var></code>.
+          @param <var>firstx</var> First X value. @param
+          <var>deltax</var> X step. @param <var>yfactor</var>
+          Shared YFACTOR. @param <var>mode</var> Encoding
+          <var>mode</var> (must be PAC, SQZ, or DIF). @return The
+          block body string.
         
         </div>
         <hr class="method-separator">
@@ -333,8 +375,13 @@
         NSString* TTIOJcampFormatG10(double <b>x</b>);<br />
         <div class="desc">
           
-          Python-`%.10g`-equivalent formatter
-          (strips trailing zeros).
+          Python- <code>%.10g</code>
+          
+            -equivalent
+          
+
+          formatter (strips trailing zeros). @param
+          <var>x</var> Input value. @return The formatted string.
         
         </div>
         <hr class="method-separator">
@@ -343,7 +390,8 @@
         <div class="desc">
           
           Half-away-from-zero rounding (matches
-          Python + Java exactly).
+          Python and Java exactly). @param <var>v</var> Input
+          value. @return The rounded integer.
         
         </div>
         <hr class="method-separator">

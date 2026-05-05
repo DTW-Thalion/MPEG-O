@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -272,13 +272,7 @@
         </blockquote>
         <div class="desc">
           
-          Transport-layer Access Unit: one spectrum as
-          a transport payload. ``spectrumClass`` wire values: 0 =
-          MassSpectrum, 1 = NMRSpectrum, 2 = NMR2D, 3 =
-          FID, 4 = MSImagePixel, 5 = GenomicRead ``polarity`` wire
-          values (differs from TTIOPolarity which uses -1 for
-          negative; the wire uses nonneg only): 0 = positive,
-          1 = negative, 2 = unknown
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -401,10 +395,11 @@
         - (instancetype) <b>initWithSpectrumClass:</b> (uint8_t)spectrumClass<b> acquisitionMode:</b> (uint8_t)acquisitionMode<b> msLevel:</b> (uint8_t)msLevel<b> polarity:</b> (uint8_t)polarity<b> retentionTime:</b> (double)retentionTime<b> precursorMz:</b> (double)precursorMz<b> precursorCharge:</b> (uint8_t)precursorCharge<b> ionMobility:</b> (double)ionMobility<b> basePeakIntensity:</b> (double)basePeakIntensity<b> channels:</b> (NSArray<TTIOTransportChannelData*>*)channels<b> pixelX:</b> (uint32_t)pixelX<b> pixelY:</b> (uint32_t)pixelY<b> pixelZ:</b> (uint32_t)pixelZ<b> chromosome:</b> (NSString*)chromosome<b> position:</b> (int64_t)position<b> mappingQuality:</b> (uint8_t)mappingQuality<b> flags:</b> (uint16_t)flags;<br />
         <div class="desc">
           
-            M89.1 initialiser including the GenomicRead suffix
-            fields. Delegates to the M90.9 designated
-            initialiser with matePosition=-1,
-            templateLength=0.
+            Genomic-aware initialiser including the
+            GenomicRead suffix fields. Delegates to the
+            designated initialiser with
+            <code>matePosition = -1</code>,
+            <code>templateLength = 0</code>.
           
         </div>
         <hr class="method-separator">
@@ -414,11 +409,13 @@
         - (instancetype) <b>initWithSpectrumClass:</b> (uint8_t)spectrumClass<b> acquisitionMode:</b> (uint8_t)acquisitionMode<b> msLevel:</b> (uint8_t)msLevel<b> polarity:</b> (uint8_t)polarity<b> retentionTime:</b> (double)retentionTime<b> precursorMz:</b> (double)precursorMz<b> precursorCharge:</b> (uint8_t)precursorCharge<b> ionMobility:</b> (double)ionMobility<b> basePeakIntensity:</b> (double)basePeakIntensity<b> channels:</b> (NSArray<TTIOTransportChannelData*>*)channels<b> pixelX:</b> (uint32_t)pixelX<b> pixelY:</b> (uint32_t)pixelY<b> pixelZ:</b> (uint32_t)pixelZ<b> chromosome:</b> (NSString*)chromosome<b> position:</b> (int64_t)position<b> mappingQuality:</b> (uint8_t)mappingQuality<b> flags:</b> (uint16_t)flags<b> matePosition:</b> (int64_t)matePosition<b> templateLength:</b> (int32_t)templateLength;<br />
         <div class="desc">
           
-            M90.9 designated initialiser including the mate
-            extension fields (<var>matePosition</var> +
-            <var>templateLength</var>). Older initialisers
-            delegate here with matePosition=-1,
-            templateLength=0.
+            Designated initialiser including the mate
+            extension fields (
+            <code><var>matePosition</var></code> +
+            <code><var>templateLength</var></code>). Older
+            initialisers delegate here with
+            <code><var>matePosition</var> = -1</code>,
+            <code><var>templateLength</var> = 0</code>.
           
         </div>
         <hr class="method-separator">
@@ -591,7 +588,40 @@
         </blockquote>
         <div class="desc">
           
-          One signal channel inside an TTIOAccessUnit.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Transport/TTIOAccessUnit.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            One signal channel inside a <code>TTIOAccessUnit</code>
+            : channel name, precision, optional compression, element
+            count, and the encoded payload bytes.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">

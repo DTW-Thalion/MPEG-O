@@ -54,18 +54,18 @@ Module Contents
    :type precursor_charges: numpy.ndarray
    :param base_peak_intensities: Base-peak intensity for each spectrum.
    :type base_peak_intensities: numpy.ndarray
-   :param activation_methods: (M74, optional) Activation method int value per spectrum; see
+   :param activation_methods: (optional) Activation method int value per spectrum; see
                               :class:`~ttio.enums.ActivationMethod`. Present only when the
                               file was written with the ``opt_ms2_activation_detail`` feature
                               flag; absent columns indicate MS1-only or legacy files.
    :type activation_methods: numpy.ndarray | None
-   :param isolation_target_mzs: (M74, optional) Target m/z of the isolation window per spectrum.
+   :param isolation_target_mzs: (optional) Target m/z of the isolation window per spectrum.
                                 Zero when no isolation applied.
    :type isolation_target_mzs: numpy.ndarray | None
-   :param isolation_lower_offsets: (M74, optional) Lower offset of the isolation window per
+   :param isolation_lower_offsets: (optional) Lower offset of the isolation window per
                                    spectrum. Zero when no isolation applied.
    :type isolation_lower_offsets: numpy.ndarray | None
-   :param isolation_upper_offsets: (M74, optional) Upper offset of the isolation window per
+   :param isolation_upper_offsets: (optional) Upper offset of the isolation window per
                                    spectrum. Zero when no isolation applied.
    :type isolation_upper_offsets: numpy.ndarray | None
 
@@ -223,7 +223,7 @@ Module Contents
 
       Load all index columns.
 
-      Accepts either a :class:`StorageGroup` (v0.7 M44 protocol path)
+      Accepts either a :class:`StorageGroup` (protocol path)
       or an :class:`h5py.Group` (legacy). The h5py path is retained
       via ``_native_h5py`` so existing callers that dereferenced
       child groups with ``group["spectrum_index"]`` continue to work.
@@ -311,11 +311,11 @@ Module Contents
       :classmethod:
 
 
-      Open a run from a storage-provider group (v0.7 M44, v0.9 M64.5).
+      Open a run from a storage-provider group .
 
       Accepts either a :class:`StorageGroup` (protocol path) or an
       :class:`h5py.Group` (legacy path — wrapped transparently via
-      :class:`~ttio.providers.hdf5._Group`). v0.9 M64.5 made every
+      :class:`~ttio.providers.hdf5._Group`). made every
       cold-path read route through the StorageGroup protocol so
       Memory / SQLite / Zarr backends work without touching h5py.
 

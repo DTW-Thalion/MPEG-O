@@ -486,15 +486,15 @@ implementation — see <code class="docutils literal notranslate"><span class="p
 <dd><p>Sign <code class="docutils literal notranslate"><span class="pre">dataset</span></code> with a canonical signature.</p>
 <p>For <code class="docutils literal notranslate"><span class="pre">algorithm=&quot;hmac-sha256&quot;</span></code> (default) <code class="docutils literal notranslate"><span class="pre">key</span></code> is a shared secret
 and the output is <code class="docutils literal notranslate"><span class="pre">&quot;v2:&quot;</span> <span class="pre">+</span> <span class="pre">base64(hmac)</span></code>. For
-<code class="docutils literal notranslate"><span class="pre">algorithm=&quot;ml-dsa-87&quot;</span></code> (v0.8 M49) <code class="docutils literal notranslate"><span class="pre">key</span></code> is the 4896-byte
+<code class="docutils literal notranslate"><span class="pre">algorithm=&quot;ml-dsa-87&quot;</span></code> () <code class="docutils literal notranslate"><span class="pre">key</span></code> is the 4896-byte
 ML-DSA-87 signing private key and the output is
 <code class="docutils literal notranslate"><span class="pre">&quot;v3:&quot;</span> <span class="pre">+</span> <span class="pre">base64(signature)</span></code>. Use <a class="reference internal" href="#ttio.signatures.verify_dataset" title="ttio.signatures.verify_dataset"><code class="xref py py-func docutils literal notranslate"><span class="pre">verify_dataset()</span></code></a> to
 validate; it dispatches on the stored prefix.</p>
-<p>v0.9 M64.5 phase B: <code class="docutils literal notranslate"><span class="pre">dataset</span></code> may be either an <code class="docutils literal notranslate"><span class="pre">h5py.Dataset</span></code>
+<p>phase B: <code class="docutils literal notranslate"><span class="pre">dataset</span></code> may be either an <code class="docutils literal notranslate"><span class="pre">h5py.Dataset</span></code>
 (legacy fast path) or a <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageDataset</span></code> from any provider.
 Non-h5py inputs delegate to <a class="reference internal" href="#ttio.signatures.sign_storage_dataset" title="ttio.signatures.sign_storage_dataset"><code class="xref py py-func docutils literal notranslate"><span class="pre">sign_storage_dataset()</span></code></a> so the
 same signature ends up on Memory / SQLite / Zarr backends.</p>
-<p>v0.8 M49: ML-DSA-87 requires the <code class="docutils literal notranslate"><span class="pre">[pqc]</span></code> optional extra (Python /
+<p>: ML-DSA-87 requires the <code class="docutils literal notranslate"><span class="pre">[pqc]</span></code> optional extra (Python /
 ObjC backend is <code class="docutils literal notranslate"><span class="pre">liboqs</span></code>; Java uses Bouncy Castle — see
 <code class="file docutils literal notranslate"><span class="pre">docs/pqc.md</span></code>).</p>
 </dd></dl>
@@ -507,7 +507,7 @@ ObjC backend is <code class="docutils literal notranslate"><span class="pre">lib
 canonical HMAC, and v0.8 <code class="docutils literal notranslate"><span class="pre">v3:</span></code> ML-DSA-87 signatures. Uses
 timing-safe comparison for HMAC; ML-DSA verification itself runs
 in constant time via liboqs.</p>
-<p>v0.9 M64.5 phase B: <code class="docutils literal notranslate"><span class="pre">dataset</span></code> may be either an <code class="docutils literal notranslate"><span class="pre">h5py.Dataset</span></code>
+<p>phase B: <code class="docutils literal notranslate"><span class="pre">dataset</span></code> may be either an <code class="docutils literal notranslate"><span class="pre">h5py.Dataset</span></code>
 or a <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageDataset</span></code>; non-h5py inputs delegate to
 <a class="reference internal" href="#ttio.signatures.verify_storage_dataset" title="ttio.signatures.verify_storage_dataset"><code class="xref py py-func docutils literal notranslate"><span class="pre">verify_storage_dataset()</span></code></a>.</p>
 <p>The <code class="docutils literal notranslate"><span class="pre">algorithm</span></code> keyword tells the verifier what key shape to
@@ -563,7 +563,7 @@ signature is identical regardless of backend.</p>
 <p>Used by the M54.1 cross-language conformance matrix. The dataset
 must support <code class="docutils literal notranslate"><span class="pre">set_attribute(&quot;ttio_signature&quot;,</span> <span class="pre">str)</span></code> — every
 shipping provider does.</p>
-<p>&#64;since 0.8 (v0.8 M54.1)</p>
+<p>&#64;since 0.8 ()</p>
 </dd></dl>
 
 <dl class="py function">
@@ -575,7 +575,7 @@ stored <code class="docutils literal notranslate"><span class="pre">&#64;ttio_si
 <code class="docutils literal notranslate"><span class="pre">algorithm=&quot;hmac-sha256&quot;</span></code> raises
 <a class="reference internal" href="../cipher_suite/index.html#ttio.cipher_suite.UnsupportedAlgorithmError" title="ttio.cipher_suite.UnsupportedAlgorithmError"><code class="xref py py-class docutils literal notranslate"><span class="pre">UnsupportedAlgorithmError</span></code></a> so silent
 acceptance of a wrong-scheme file is impossible.</p>
-<p>&#64;since 0.8 (v0.8 M54.1)</p>
+<p>&#64;since 0.8 ()</p>
 </dd></dl>
 
 </section>

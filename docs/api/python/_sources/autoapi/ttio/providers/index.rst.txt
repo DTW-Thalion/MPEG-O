@@ -5,7 +5,7 @@ ttio.providers
 
 .. autoapi-nested-parse::
 
-   Storage/transport provider abstraction — Milestone 39.
+   Storage/transport provider abstraction — .
 
    The TTI-O data model and API are the standard; the storage backend is
    a pluggable implementation detail. Providers register via
@@ -198,7 +198,7 @@ Package Contents
       Read ``count`` elements starting at ``offset``. ``count == -1``
       reads from ``offset`` to the end.
 
-      Return type varies by backend (Appendix B Gap 2):
+      Return type varies by backend :
 
       * **Primitive datasets**: always :class:`numpy.ndarray` with
         dtype matching :meth:`precision`.
@@ -237,14 +237,14 @@ Package Contents
 
       Non-compound datasets raise ``TypeError``.
 
-      Appendix B Gap 2 — backend-agnostic compound access.
+      — backend-agnostic compound access.
 
 
 
    .. py:method:: read_canonical_bytes(offset: int = 0, count: int = -1) -> bytes
 
       Return the dataset contents as a byte stream in the TTIO
-      canonical layout (v0.7 M43).
+      canonical layout ().
 
       Semantics:
 
@@ -266,7 +266,7 @@ Package Contents
       override when a zero-copy fast-path exists
       (:class:`~ttio.providers.hdf5.Hdf5Provider` does this).
 
-      Appendix B Gap 2 follow-up — extends :meth:`read_rows` by
+      follow-up — extends :meth:`read_rows` by
       promising a stable byte form, not just a stable row form.
 
 
@@ -290,7 +290,7 @@ Package Contents
       :abstractmethod:
 
 
-      Remove an attribute. No-op if absent. Appendix B Gap 8.
+      Remove an attribute. No-op if absent.
 
 
 
@@ -298,7 +298,7 @@ Package Contents
       :abstractmethod:
 
 
-      List attribute names; empty list if none. Appendix B Gap 8.
+      List attribute names; empty list if none.
 
 
 
@@ -451,7 +451,7 @@ Package Contents
       ``mode`` mirrors h5py semantics: ``"r"`` read-only, ``"r+"``
       read/write existing, ``"w"`` create/truncate, ``"a"`` append.
 
-      Appendix B Gap 1 — unified open() dispatch. Both call styles
+      — unified open() dispatch. Both call styles
       are supported and semantically equivalent:
 
       * **Factory style** (returns a new instance)::
@@ -486,7 +486,7 @@ Package Contents
 
       Exposed as a method (not a property) to mirror the ObjC
       ``-providerName`` selector and Java ``providerName()`` getter.
-      Appendix B Gap 5 — Provisional storage-provider convergence.
+      — Provisional storage-provider convergence.
 
 
 

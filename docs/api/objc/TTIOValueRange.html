@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,12 +260,85 @@
         </blockquote>
         <div class="desc">
           
-          Closed numeric range [minimum, maximum]. Immutable
-          value class. Used by TTIOAxisDescriptor to describe the
-          bounds of a signal axis. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.value_range.ValueRange Java:
-          global.thalion.ttio.ValueRange
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCoding, NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> ValueClasses/TTIOValueRange.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Closed numeric range <code>[minimum, maximum]</code>
+            . Immutable value class used by
+            <code>TTIOAxisDescriptor</code> to describe the
+            bounds of a signal axis. Equality is value-based on
+            the two doubles;
+            <code>
+              
+                -copyWithZone:
+              
+
+            </code>
+            returns <code>self</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Construction does not enforce
+            <code>minimum &lt;= maximum</code>; a degenerate or
+            inverted range is well-defined for storage but
+            <code>
+              <a rel="gsdoc" href="#method$TTIOValueRange-containsValue$">
+                -containsValue:
+              </a>
+
+            </code>
+            will always return <code>NO</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.value_range.ValueRange</code> <br />
+            Java: <code>global.thalion.ttio.ValueRange</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -285,7 +358,16 @@
         + (instancetype) <b>rangeWithMinimum:</b> (double)minimum<b> maximum:</b> (double)maximum;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience factory for
+            <code>
+              <a rel="gsdoc" href="#method$TTIOValueRange-initWithMinimum$maximum$">
+                -initWithMinimum:maximum:
+              </a>
+
+            </code>
+            . @param <var>minimum</var> Lower bound. @param
+            <var>maximum</var> Upper bound. @return An
+            autoreleased range.
           
         </div>
         <hr class="method-separator">
@@ -295,7 +377,13 @@
         - (BOOL) <b>containsValue:</b> (double)value;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Tests whether a <var>value</var> lies within the
+            closed range. @param <var>value</var> The
+            <var>value</var> to test. @return <code>YES</code> if
+            <code>
+              minimum &lt;= <var>value</var> &lt;= maximum
+            </code>
+            .
           
         </div>
         <hr class="method-separator">
@@ -305,7 +393,10 @@
         - (instancetype) <b>initWithMinimum:</b> (double)minimum<b> maximum:</b> (double)maximum;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>minimum</var> Lower bound. @param
+            <var>maximum</var> Upper bound. @return An
+            initialised range.
           
         </div>
         <hr class="method-separator">
@@ -337,7 +428,9 @@
         - (double) <b>span</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return The width of the range,
+            <code>maximum - minimum</code>. Negative for
+            inverted ranges.
           
         </div>
         <hr class="method-separator">

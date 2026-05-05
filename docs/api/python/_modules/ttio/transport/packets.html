@@ -666,7 +666,7 @@
 <span class="c1"># default these to -1 / 0 (preserves M89.1 wire compatibility).</span>
 <span class="n">_AU_GENOMIC_MATE_STRUCT</span> <span class="o">=</span> <span class="n">struct</span><span class="o">.</span><span class="n">Struct</span><span class="p">(</span><span class="s2">&quot;&lt;qi&quot;</span><span class="p">)</span>
 
-<span class="c1"># Named spectrum_class values. v0.11 M79 reserved the GenomicRead value;</span>
+<span class="c1"># Named spectrum_class values. reserved the GenomicRead value;</span>
 <span class="c1"># the genomic-specific AU payload extension (chromosome, position, mapq,</span>
 <span class="c1"># flags) ships in M89.1.</span>
 <div class="viewcode-block" id="SPECTRUM_CLASS_MASS_SPECTRUM">
@@ -709,7 +709,7 @@
 <a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.spectrum_class">[docs]</a>
     <span class="n">spectrum_class</span><span class="p">:</span> <span class="nb">int</span>  <span class="c1"># 0=MassSpectrum, 1=NMRSpectrum, 2=NMR2D,</span></div>
 
-    <span class="c1">#                     3=FID, 4=MSImagePixel, 5=GenomicRead (v0.11 M79)</span>
+    <span class="c1">#                     3=FID, 4=MSImagePixel, 5=GenomicRead ()</span>
 <div class="viewcode-block" id="AccessUnit.acquisition_mode">
 <a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.acquisition_mode">[docs]</a>
     <span class="n">acquisition_mode</span><span class="p">:</span> <span class="nb">int</span></div>
@@ -783,7 +783,7 @@
     <span class="n">flags</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span></div>
 
     <span class="c1"># M90.9: mate extension fields. Optional on the wire — when</span>
-    <span class="c1"># absent (M89.1 file or empty AU) they default to BAM unmapped</span>
+    <span class="c1"># absent (file or empty AU) they default to BAM unmapped</span>
     <span class="c1"># sentinels (-1 mate_position, 0 template_length).</span>
 <div class="viewcode-block" id="AccessUnit.mate_position">
 <a class="viewcode-back" href="../../../autoapi/ttio/transport/packets/index.html#ttio.transport.AccessUnit.mate_position">[docs]</a>

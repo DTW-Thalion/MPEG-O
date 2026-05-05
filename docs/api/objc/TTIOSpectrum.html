@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,19 +260,77 @@
         </blockquote>
         <div class="desc">
           
-          Base class for any spectrum. Holds an ordered dictionary
-          of named TTIOSignalArrays plus the coordinate axes that
-          index them, the spectrum&apos;s position in its parent run,
-          scan time, and optional precursor info for tandem MS.
-          Concrete subclasses (TTIOMassSpectrum,
-          TTIONMRSpectrum,...) add their own typed
-          metadata and validation. HDF5 representation: each
-          spectrum is an HDF5 group whose immediate children
-          are TTIOSignalArray sub-groups (one per named array) plus
-          scalar attributes for the metadata fields. API status:
-          Stable. Cross-language equivalents: Python:
-          ttio.spectrum.Spectrum Java:
-          global.thalion.ttio.Spectrum
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Spectra/TTIOSpectrum.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Base class for any spectrum. Holds an ordered
+            dictionary of named <code>TTIOSignalArray</code>
+            s plus the coordinate axes that index them, the
+            spectrum&apos;s position in its parent run, scan
+            time, and optional precursor info for tandem MS.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Concrete subclasses (<code>TTIOMassSpectrum</code>
+            , <code>TTIONMRSpectrum</code>,...) add their own typed
+            metadata and validation.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Storage representation.</strong> Each
+            spectrum is a group whose immediate children are
+            <code>TTIOSignalArray</code> sub-groups (one per
+            named array) plus scalar attributes for the metadata
+            fields. The provider-agnostic
+            <code>TTIOStorageGroup</code> protocol resolves the
+            actual backend (HDF5, Memory, SQLite, Zarr).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python: <code>ttio.spectrum.Spectrum</code>
+            <br /> Java:
+            <code>global.thalion.ttio.Spectrum</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -297,10 +355,18 @@
         + (instancetype) <b>readFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Read a spectrum sub-group. The receiving class chooses
-            what to read; subclasses override
-            <a rel="gsdoc" href="#method$TTIOSpectrum-readAdditionalAttributesFromGroup$error$">-readAdditionalAttributesFromGroup:error:</a>
- to pull their typed metadata.
+            Reads a spectrum sub-group. The receiving class
+            chooses what to read; subclasses override
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectrum-readAdditionalAttributesFromGroup$error$">-readAdditionalAttributesFromGroup:error:</a>
+
+            </code>
+            to pull their typed metadata. @param <var>parent</var>
+            Source <var>parent</var> group. @param
+            <var>name</var> Sub-group <var>name</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return The materialised spectrum, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -332,7 +398,15 @@
         - (instancetype) <b>initWithSignalArrays:</b> (NSDictionary<NSString*,TTIOSignalArray*>*)arrays<b> axes:</b> (NSArray<TTIOAxisDescriptor*>*)axes<b> indexPosition:</b> (NSUInteger)indexPosition<b> scanTimeSeconds:</b> (double)scanTime<b> precursorMz:</b> (double)precursorMz<b> precursorCharge:</b> (NSUInteger)precursorCharge;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>arrays</var>
+            Named signal <var>arrays</var>. @param
+            <var>axes</var> Coordinate <var>axes</var>. @param
+            <var>indexPosition</var> Position in parent run.
+            @param <var>scanTime</var> Scan time in seconds.
+            @param <var>precursorMz</var> Precursor m/z (0 if
+            not tandem). @param <var>precursorCharge</var>
+            Precursor charge (0 if unknown). @return An
+            initialised spectrum.
           
         </div>
         <hr class="method-separator">
@@ -364,8 +438,8 @@
         - (BOOL) <b>readAdditionalAttributesFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)group<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Override to read subclass-specific attributes.
-            Default is a no-op.
+            Override hook for subclass-specific attribute
+            reading. Default is a no-op.
           
         </div>
         <hr class="method-separator">
@@ -397,8 +471,8 @@
         - (BOOL) <b>writeAdditionalAttributesToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)group<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Override to write subclass-specific attributes.
-            Default is a no-op.
+            Override hook for subclass-specific attribute
+            writing. Default is a no-op.
           
         </div>
         <hr class="method-separator">
@@ -408,10 +482,19 @@
         - (BOOL) <b>writeToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)parent<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Write this spectrum into a new sub-group named `name`
-            under `parent`. Subclasses override
-            <a rel="gsdoc" href="#method$TTIOSpectrum-writeAdditionalAttributesToGroup$error$">-writeAdditionalAttributesToGroup:error:</a>
- to add their typed metadata after the base class has written the common fields.
+            Writes this spectrum into a new sub-group named
+            <code><var>name</var></code> under
+            <code><var>parent</var></code>. Subclasses override
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectrum-writeAdditionalAttributesToGroup$error$">-writeAdditionalAttributesToGroup:error:</a>
+
+            </code>
+            to add their typed metadata after the base class has
+            written the common fields. @param <var>parent</var>
+            Destination <var>parent</var> group. @param
+            <var>name</var> Sub-group <var>name</var>. @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">

@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,17 +260,74 @@
         </blockquote>
         <div class="desc">
           
-          Base64 decoding utilities for mzML binaryDataArray
-          content. mzML &lt;binaryDataArray&gt; elements wrap
-          their numeric payload in base64 and optionally compress
-          with zlib. This class decodes the string, optionally
-          inflates, and returns the raw bytes as NSData. Not
-          thread-safe; callers are responsible for
-          synchronization. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.importers._base64_zlib
-          (private helper) Java: java.util.Base64 (standard
-          library &#8212; no TTIO wrapper)
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOBase64.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Base64 encoding / decoding utilities for mzML
+            <code>&lt;binaryDataArray&gt;</code> content. mzML
+            elements wrap their numeric payload in base64 and
+            optionally compress with zlib; this class
+            decodes the string, optionally inflates, and
+            returns the raw bytes as <code>NSData</code>.
+            Encode-side helpers perform the inverse for the
+            mzML writer.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Not thread-safe; callers are responsible for
+            synchronisation.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.importers._base64_zlib</code> (private
+            helper) <br /> Java: <code>java.util.Base64</code>
+            (standard library; no TTIO wrapper)
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -288,8 +345,10 @@
         + (NSData*) <b>decodeString:</b> (NSString*)base64String;<br />
         <div class="desc">
           
-            Decode a base64 string. Whitespace and newlines are
-            tolerated. Returns <code>nil</code> on malformed
+            Decodes a base64 string. Whitespace and newlines
+            are tolerated. @param <var>base64String</var> The
+            base64-encoded text payload. @return The
+            decoded bytes, or <code>nil</code> on malformed
             input.
           
         </div>
@@ -300,19 +359,21 @@
         + (NSData*) <b>decodeString:</b> (NSString*)base64String<b> zlibInflate:</b> (BOOL)inflate;<br />
         <div class="desc">
           
-            Decode and optionally zlib-inflate. If
-            <var>inflate</var> is <code>NO</code>, behaves like
-            
-              -decodeString:
-            
+            Decodes and optionally zlib-inflates. @param
+            <var>base64String</var> The base64-encoded text
+            payload. @param <var>inflate</var> When
+            <code>YES</code>, runs
+            <code>
+              
+                uncompress()
+              
 
-            . If <code>YES</code>, runs
-            
-              uncompress()
-            
-
-            on the decoded bytes; returns <code>nil</code> if the
-            output is not a valid zlib stream.
+            </code>
+            on the decoded bytes and returns the inflated payload.
+            @return The decoded (and possibly inflated) bytes,
+            or <code>nil</code> on malformed input or when
+            <code><var>inflate</var></code> is <code>YES</code>
+            but the bytes are not a valid zlib stream.
           
         </div>
         <hr class="method-separator">
@@ -322,8 +383,10 @@
         + (NSString*) <b>encodeData:</b> (NSData*)data;<br />
         <div class="desc">
           
-            Base64-encode ``data``. Returns ``@&quot;&quot;`` for
-            <code>nil</code> input.
+            Base64-encodes <code><var>data</var></code>.
+            @param <var>data</var> Bytes to encode.
+            <code>nil</code> yields <code>@&quot;&quot;</code>. @return
+            The base64-encoded string.
           
         </div>
         <hr class="method-separator">
@@ -333,10 +396,14 @@
         + (NSString*) <b>encodeData:</b> (NSData*)data<b> zlibDeflate:</b> (BOOL)deflateFlag;<br />
         <div class="desc">
           
-            Optionally zlib-compress ``data`` before
-            base64-encoding so the output matches what
-            mzML readers expect for arrays annotated with
-            ``MS:1000574`` (zlib compression).
+            Optionally zlib-compresses
+            <code><var>data</var></code> before base64 encoding
+            so the output matches what mzML readers expect for
+            arrays annotated with <code>MS:1000574</code> (zlib
+            compression). @param <var>data</var> Bytes to
+            encode. @param <var>deflateFlag</var> When
+            <code>YES</code>, deflates before encoding. @return
+            The base64-encoded (and possibly deflated) string.
           
         </div>
         <hr class="method-separator">

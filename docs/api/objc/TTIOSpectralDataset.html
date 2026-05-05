@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -267,28 +267,97 @@
         </blockquote>
         <div class="desc">
           
-          Root container for an TTI-O `.tio` file. Owns a
-          top-level `study/` group plus zero or more named MS
-          acquisition runs, zero or more named NMR-spectrum
-          collections, and the dataset-wide
-          identifications, quantifications, provenance
-          records, and (optionally) a transition list.
-          Persistence is via
-          <a rel="gsdoc" href="#method$TTIOSpectralDataset-writeToFilePath$error$">
-            -writeToFilePath:error:
-          </a>
+          
+        </p>
+        <p>
 
-          /
-          <a rel="gsdoc" href="#method$TTIOSpectralDataset+readFromFilePath$error$">
-            +readFromFilePath:error:
-          </a>
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
 
-          which open or create the underlying HDF5 file directly.
-          API status: Stable. Encryptable conformance delivered in
-          M41.5 in non-ObjC implementations. Cross-language
-          equivalents: Python:
-          ttio.spectral_dataset.SpectralDataset
-          Java: global.thalion.ttio.SpectralDataset
+            <em>Conforms To:</em> TTIOEncryptable
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOSpectralDataset.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Root container for a TTI-O <code>.tio</code> file.
+            Owns a top-level <code>study/</code> group plus zero
+            or more named MS acquisition runs, NMR spectrum
+            collections, genomic runs, and the
+            dataset-wide identifications, quantifications,
+            provenance records, and an optional transition
+            list.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Persistence is via
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectralDataset-writeToFilePath$error$">
+                -writeToFilePath:error:
+              </a>
+
+            </code>
+            /
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectralDataset+readFromFilePath$error$">
+                +readFromFilePath:error:
+              </a>
+
+            </code>
+            which open or create the underlying HDF5 file
+            directly. The class also provides several
+            <code>
+              
+                +writeMinimalToPath:
+              
+
+            </code>
+            overloads &#8212; flat-buffer fast paths that bypass
+            per-spectrum object construction for callers
+            with already-flattened channel data (importers,
+            numerical producers).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.spectral_dataset.SpectralDataset</code>
+            <br /> Java:
+            <code>global.thalion.ttio.SpectralDataset</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -334,26 +403,38 @@
         + (BOOL) <b>decryptInPlaceAtPath:</b> (NSString*)path<b> withKey:</b> (NSData*)key<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v1.1.1: persist-to-disk decrypt. Strips AES-256-GCM
-            encryption from the `.tio` file at `path`: for
-            every MS run with an encrypted intensity channel,
-            writes the plaintext back as `intensity_values` and
-            removes the encrypted siblings. Finally clears the
-            root `@encrypted` attribute so
-            <a rel="gsdoc" href="#method$TTIOSpectralDataset-isEncrypted">
-              -isEncrypted
-            </a>
+            Persist-to-disk decrypt. Strips AES-256-GCM
+            encryption from the <code>.tio</code> file at
+            <code><var>path</var></code> : for every MS run with
+            an encrypted intensity channel, writes the plaintext
+            back as <code>intensity_values</code> and removes the
+            encrypted siblings. Finally clears the root
+            <code>@encrypted</code> attribute so
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectralDataset-isEncrypted">
+                -isEncrypted
+              </a>
 
+            </code>
             returns <code>NO</code> when the file is reopened.
-            Symmetric with
-            <a rel="gsdoc" href="#method$TTIOSpectralDataset-encryptWithKey$level$error$">
-              -encryptWithKey:level:error:
-            </a>
+            
+        </p>
+        <p>
 
-            (which leaves the root attribute set). After this
-            call the file is byte-compatible with the
-            pre-encryption layout. The file must not be
-            held open by another writer.
+              Symmetric with
+              <code>
+                <a rel="gsdoc" href="#method$TTIOSpectralDataset-encryptWithKey$level$error$">
+                  -encryptWithKey:level:error:
+                </a>
+
+              </code>
+              (which leaves the root attribute set). After this
+              call the file is byte-compatible with the
+              pre-encryption layout. The file must not
+              be held open by another writer.
+                    </p>
+        <p>
+          
           
         </div>
         <hr class="method-separator">
@@ -363,7 +444,7 @@
         + (instancetype) <b>readFromFilePath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads a dataset from <code><var>path</var></code>.
           
         </div>
         <hr class="method-separator">
@@ -373,25 +454,31 @@
         + (BOOL) <b>writeMinimalToPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> mixedRuns:</b> (NSDictionary<NSString*,id>*)mixedRuns<b> genomicRuns:</b> (NSDictionary<NSString*,TTIOWrittenGenomicRun*>*)genomicRuns<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Phase 2 (post-M91) canonical mixed-dict write API.
-            Accepts a single ``mixedRuns`` dict whose values
-            may be either TTIOWrittenRun (MS) or
-            TTIOWrittenGenomicRun (genomic);
+            Canonical mixed-dictionary write API. Accepts a
+            single <code><var>mixedRuns</var></code> dict whose
+            values may be either <code>TTIOWrittenRun</code>
+            (MS) or <code>TTIOWrittenGenomicRun</code> (genomic);
             dispatches per-value via
-            
-              -isKindOfClass:
-            
+            <code>
+              
+                -isKindOfClass:
+              
 
-            to the right write <var>path</var>. ``genomicRuns`` may
-            also be supplied for backward compatibility; a name
-            appearing in BOTH dicts raises NSError (returns
-            <code>NO</code> with the <var>error</var> populated)
-            rather than silently picking one &#8212; matches Python&apos;s
-            ValueError on collision. Other-typed values in
-            ``mixedRuns`` produce an NSError. Mirrors
-            Python&apos;s Phase 2
-            ``SpectralDataset.write_minimal(runs=&#8230;)``
-            shape where ``runs`` may carry both kinds.
+            </code>
+            to the right write <var>path</var>.
+            
+        </p>
+        <p>
+
+              <code><var>genomicRuns</var></code> may also be
+              supplied; a name appearing in BOTH dicts
+              populates <code><var>error</var></code> rather
+              than silently picking one. Unsupported value classes
+              in <code><var>mixedRuns</var></code> also produce an
+              <var>error</var>.
+                    </p>
+        <p>
+          
           
         </div>
         <hr class="method-separator">
@@ -401,12 +488,19 @@
         + (BOOL) <b>writeMinimalToPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> msRuns:</b> (NSDictionary<NSString*,TTIOWrittenRun*>*)runs<b> genomicRuns:</b> (NSDictionary<NSString*,TTIOWrittenGenomicRun*>*)genomicRuns<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            v0.11 M82: extended write_minimal accepting genomic
-            <var>runs</var> alongside MS <var>runs</var>. Setting
-            <var>genomicRuns</var> to a non-empty dict adds the
-            `opt_genomic` feature flag and bumps
-            format_version to 1.4. The shorter overload
-            above delegates here with genomicRuns:nil.
+            Extended
+            <code>
+              
+                +writeMinimalToPath:
+              
+
+            </code>
+            accepting genomic <var>runs</var> alongside MS
+            <var>runs</var>. Setting
+            <code><var>genomicRuns</var></code> to a non-empty
+            dictionary adds the <code>opt_genomic</code>
+            feature flag. The shorter overload above delegates
+            here with <code>genomicRuns:nil</code>.
           
         </div>
         <hr class="method-separator">
@@ -416,28 +510,38 @@
         + (BOOL) <b>writeMinimalToPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> msRuns:</b> (NSDictionary<NSString*,TTIOWrittenRun*>*)runs<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Flat-buffer fast <var>path</var>. Bypasses
-            per-spectrum object construction and the
-            write-time channel concat that
-            <a rel="gsdoc" href="#method$TTIOSpectralDataset-writeToFilePath$error$">
-              -writeToFilePath:error:
-            </a>
+            Flat-buffer fast write <var>path</var>.
+            Bypasses per-spectrum object construction and the
+            channel-concat that
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectralDataset-writeToFilePath$error$">
+                -writeToFilePath:error:
+              </a>
 
-            performs when given an TTIOAcquisitionRun of
-            TTIOMassSpectrum objects. Callers that
+            </code>
+            performs when given a
+            <code>TTIOAcquisitionRun</code> of
+            <code>TTIOMassSpectrum</code> objects. Callers that
             already have flat buffers (e.g. importers reading
-            mzML in bulk, numerical producers) pass TTIOWrittenRun
-            instances and skip both costs. Writes the same
-            on-disk layout as
+            mzML in bulk, numerical producers) pass
+            <code>TTIOWrittenRun</code> instances and skip both
+            costs.
             
-              -writeToFilePath:
-            
+        </p>
+        <p>
 
-            , so readers don&apos;t distinguish files produced by the two
-            paths. Mirrors Python +[SpectralDataset
-            write_minimal] and gives the ObjC
-            implementation parity with Python&apos;s fastest
-            write API. v1.1.
+              Writes the same on-disk layout as
+              <code>
+                
+                  -writeToFilePath:
+                
+
+              </code>
+              , so readers do not distinguish files produced by the
+              two paths.
+                    </p>
+        <p>
+          
           
         </div>
         <hr class="method-separator">
@@ -457,8 +561,14 @@
         - (NSDictionary<NSString*,id<TTIORun>>*) <b>allRunsUnified</b>;<br />
         <div class="desc">
           
-            Phase 1 alias for :attr:`runs`. Kept for the brief
-            Phase 1 &#8594; Phase 2 transition window.
+            Alias for
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectralDataset-runs">
+                -runs
+              </a>
+
+            </code>
+            retained for source compatibility.
           
         </div>
         <hr class="method-separator">
@@ -468,11 +578,17 @@
         - (BOOL) <b>closeFile</b>;<br />
         <div class="desc">
           
-            Release the underlying HDF5 file handle. After this
-            call, any further lazy hyperslab reads on contained
-            runs will fail. Required before calling
-            encryptWithKey: so the encryption manager
-            can reopen the file read-write. Idempotent.
+            Releases the underlying HDF5 file handle. After
+            this call any further lazy hyperslab reads on
+            contained runs will fail. Required before calling
+            <code>
+              <a rel="gsdoc" href="#method$TTIOSpectralDataset-encryptWithKey$level$error$">
+                -encryptWithKey:level:error:
+              </a>
+
+            </code>
+            so the encryption manager can reopen the file
+            read-write. Idempotent.
           
         </div>
         <hr class="method-separator">
@@ -546,7 +662,19 @@
         - (instancetype) <b>initWithTitle:</b> (NSString*)title<b> isaInvestigationId:</b> (NSString*)isaId<b> msRuns:</b> (NSDictionary*)msRuns<b> nmrRuns:</b> (NSDictionary*)nmrRuns<b> identifications:</b> (NSArray*)identifications<b> quantifications:</b> (NSArray*)quantifications<b> provenanceRecords:</b> (NSArray*)provenance<b> transitions:</b> (<a rel="gsdoc" href="TTIOTransitionList.html#class$TTIOTransitionList">TTIOTransitionList</a>*)transitions;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>title</var>
+            Dataset <var>title</var>. @param <var>isaId</var>
+            ISA-Tab investigation identifier. @param
+            <var>msRuns</var> MS acquisition runs. @param
+            <var>nmrRuns</var> NMR spectrum collections. @param
+            <var>identifications</var> Dataset-wide
+            <var>identifications</var>. @param
+            <var>quantifications</var> Dataset-wide
+            <var>quantifications</var>. @param
+            <var>provenance</var> Dataset-wide
+            <var>provenance</var> records. @param
+            <var>transitions</var> Optional transition list.
+            @return An initialised dataset.
           
         </div>
         <hr class="method-separator">
@@ -611,8 +739,9 @@
         - (NSArray<TTIOProvenanceRecord*>*) <b>provenanceRecordsForInputRef:</b> (NSString*)ref;<br />
         <div class="desc">
           
-            Provenance records whose inputRefs contain
-            `ref`.
+            @param <var>ref</var> Entity URI to query. @return
+            Provenance records whose <code>inputRefs</code>
+            contain <code><var>ref</var></code>.
           
         </div>
         <hr class="method-separator">
@@ -644,9 +773,9 @@
         - (BOOL) <b>readAdditionalStudyContent:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)studyGroup<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Subclasses override to read their own datasets
-            under /study/ after the base dataset has been loaded.
-            Default is a no-op.
+            Override hook for subclasses to read their own
+            datasets under <code>/study/</code> after the base
+            dataset has been loaded. Default is a no-op.
           
         </div>
         <hr class="method-separator">
@@ -656,21 +785,12 @@
         - (NSDictionary<NSString*,id<TTIORun>>*) <b>runs</b>;<br />
         <div class="desc">
           
-            Phase 2 canonical accessor: every run in the file (MS
-            + NMR + genomic) keyed by run name. Values conform to
-            TTIORun so callers can iterate uniformly across
-            modalities without forking on ms_runs vs
-            genomic_runs. NMR runs (legacy plain
-            NSArray-of-spectra values) are
-            intentionally omitted because they do not yet
-            conform to TTIORun in the ObjC tree; that aligns
-            with the Python reference impl&apos;s intent that values be
-            Run-protocol-conforming. Mirrors
-            Python ``SpectralDataset.runs``. Phase 1 added
-            :meth:`allRunsUnified` as the same
-            intent under a longer name; Phase 2 promotes the
-            accessor to ``runs`` and keeps the alias for the
-            brief transition window.
+            @return Every run in the file (MS + genomic) keyed
+            by run name. Values conform to <code>TTIORun</code> so
+            callers can iterate uniformly across modalities.
+            NMR runs (legacy plain <code>NSArray</code> values) are
+            omitted because they do not yet conform to
+            <code>TTIORun</code>.
           
         </div>
         <hr class="method-separator">
@@ -680,14 +800,13 @@
         - (NSDictionary<NSString*,id<TTIORun>>*) <b>runsForSample:</b> (NSString*)sampleURI;<br />
         <div class="desc">
           
-            Return every run associated with ``sampleURI``. A
-            run is considered associated when its :meth:`-[TTIORun
-            provenanceChain]` carries ``sampleURI``
-            in any record&apos;s ``inputRefs``. Walks all modalities (MS,
-            genomic) uniformly via the TTIORun protocol &#8212;
-            closes the M91 cross- modality query gap that
-            previously had to fork on access pattern.
-            Returns an empty dict when no run matches.
+            @param <var>sampleURI</var> Sample URI to filter by.
+            @return Every run whose
+            <code>-[TTIORun provenanceChain]</code> carries
+            <code><var>sampleURI</var></code> in any record&apos;s
+            <code>inputRefs</code>. Walks all modalities
+            uniformly via the <code>TTIORun</code> protocol.
+            Empty when no run matches.
           
         </div>
         <hr class="method-separator">
@@ -697,11 +816,11 @@
         - (NSDictionary<NSString*,id<TTIORun>>*) <b>runsOfModality:</b> (Class)runClass;<br />
         <div class="desc">
           
-            Return every run whose value is an instance of
-            ``runClass``. Pass [TTIOAcquisitionRun class]
-            to get MS+NMR runs of the flat-buffer kind; pass
-            [TTIOGenomicRun class] for genomic only.
-            Thin filter over :meth:`runs`.
+            @param <var>runClass</var> A class object &#8212; pass
+            <code>[TTIOAcquisitionRun class]</code> to filter to
+            MS runs, <code>[TTIOGenomicRun class]</code> for genomic
+            runs. @return Runs whose value is an instance of
+            <code><var>runClass</var></code>.
           
         </div>
         <hr class="method-separator">
@@ -743,9 +862,10 @@
         - (BOOL) <b>writeAdditionalStudyContent:</b> (<a rel="gsdoc" href="TTIOHDF5Group.html#class$TTIOHDF5Group">TTIOHDF5Group</a>*)studyGroup<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            Subclasses (e.g. TTIOMSImage) override to add
-            their own datasets under /study/ after the base
-            dataset has been written. The default is a no-op.
+            Override hook for subclasses (e.g.
+            <code>TTIOMSImage</code>) to write their own
+            datasets under <code>/study/</code> after the base
+            dataset has been written. Default is a no-op.
             Return <code>NO</code> to abort the write.
           
         </div>
@@ -756,7 +876,8 @@
         - (BOOL) <b>writeToFilePath:</b> (NSString*)path<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes the dataset to <code><var>path</var></code>,
+            opening or truncating the underlying HDF5 file.
           
         </div>
         <hr class="method-separator">

@@ -5,7 +5,7 @@ ttio.providers.sqlite
 
 .. autoapi-nested-parse::
 
-   SQLite storage provider — Milestone 41 stress-test of Provisional ABCs.
+   SQLite storage provider — stress-test of Provisional ABCs.
 
    Stores the full TTI-O group/dataset tree in a single SQLite file.
    Groups and datasets are rows in relational tables; primitive dataset
@@ -117,13 +117,13 @@ Module Contents
 
    .. py:method:: attribute_names() -> list[str]
 
-      List attribute names; empty list if none. Appendix B Gap 8.
+      List attribute names; empty list if none.
 
 
 
    .. py:method:: delete_attribute(name: str) -> None
 
-      Remove an attribute. No-op if absent. Appendix B Gap 8.
+      Remove an attribute. No-op if absent.
 
 
 
@@ -260,7 +260,7 @@ Module Contents
       * ``"w"``        — create or truncate.
       * ``"a"``        — read/write; create if absent.
 
-      Implementation note: per Appendix B Gap 1, this method
+      Implementation note: per , this method
       intentionally does NOT use ``@classmethod`` so that the
       instance-mutating call style works. When called as
       ``SqliteProvider.open(path)``, Python passes the path string as
@@ -279,7 +279,7 @@ Module Contents
 
       Exposed as a method (not a property) to mirror the ObjC
       ``-providerName`` selector and Java ``providerName()`` getter.
-      Appendix B Gap 5 — Provisional storage-provider convergence.
+      — Provisional storage-provider convergence.
 
 
 

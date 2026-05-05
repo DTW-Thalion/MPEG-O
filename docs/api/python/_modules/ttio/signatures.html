@@ -411,8 +411,7 @@
 
 <div class="viewcode-block" id="SIGNATURE_V3_PREFIX">
 <a class="viewcode-back" href="../../autoapi/ttio/signatures/index.html#ttio.signatures.SIGNATURE_V3_PREFIX">[docs]</a>
-<span class="n">SIGNATURE_V3_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;v3:&quot;</span>  <span class="c1"># ML-DSA-87, v0.8 M49</span></div>
-
+<span class="n">SIGNATURE_V3_PREFIX</span> <span class="o">=</span> <span class="s2">&quot;v3:&quot;</span>  <span class="c1"># ML-DSA-87,</span></div>
 
 
 <div class="viewcode-block" id="hmac_sha256">
@@ -451,7 +450,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">_dataset_canonical_bytes</span><span class="p">(</span><span class="n">dataset</span><span class="p">:</span> <span class="n">h5py</span><span class="o">.</span><span class="n">Dataset</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the canonical little-endian byte stream for ``dataset`` (v2).</span>
 
-<span class="sd">    v0.7 M43: this helper now delegates to the storage-provider</span>
+<span class="sd">    : this helper now delegates to the storage-provider</span>
 <span class="sd">    protocol&#39;s :meth:`StorageDataset.read_canonical_bytes`, so the byte</span>
 <span class="sd">    stream is guaranteed bit-identical across HDF5, Memory, and SQLite</span>
 <span class="sd">    backends — a file signed through any provider verifies through any</span>
@@ -474,17 +473,17 @@
 
 <span class="sd">    For ``algorithm=&quot;hmac-sha256&quot;`` (default) ``key`` is a shared secret</span>
 <span class="sd">    and the output is ``&quot;v2:&quot; + base64(hmac)``. For</span>
-<span class="sd">    ``algorithm=&quot;ml-dsa-87&quot;`` (v0.8 M49) ``key`` is the 4896-byte</span>
+<span class="sd">    ``algorithm=&quot;ml-dsa-87&quot;`` () ``key`` is the 4896-byte</span>
 <span class="sd">    ML-DSA-87 signing private key and the output is</span>
 <span class="sd">    ``&quot;v3:&quot; + base64(signature)``. Use :func:`verify_dataset` to</span>
 <span class="sd">    validate; it dispatches on the stored prefix.</span>
 
-<span class="sd">    v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``</span>
+<span class="sd">    phase B: ``dataset`` may be either an ``h5py.Dataset``</span>
 <span class="sd">    (legacy fast path) or a :class:`StorageDataset` from any provider.</span>
 <span class="sd">    Non-h5py inputs delegate to :func:`sign_storage_dataset` so the</span>
 <span class="sd">    same signature ends up on Memory / SQLite / Zarr backends.</span>
 
-<span class="sd">    v0.8 M49: ML-DSA-87 requires the ``[pqc]`` optional extra (Python /</span>
+<span class="sd">    : ML-DSA-87 requires the ``[pqc]`` optional extra (Python /</span>
 <span class="sd">    ObjC backend is ``liboqs``; Java uses Bouncy Castle — see</span>
 <span class="sd">    :file:`docs/pqc.md`).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
@@ -526,7 +525,7 @@
 <span class="sd">    timing-safe comparison for HMAC; ML-DSA verification itself runs</span>
 <span class="sd">    in constant time via liboqs.</span>
 
-<span class="sd">    v0.9 M64.5 phase B: ``dataset`` may be either an ``h5py.Dataset``</span>
+<span class="sd">    phase B: ``dataset`` may be either an ``h5py.Dataset``</span>
 <span class="sd">    or a :class:`StorageDataset`; non-h5py inputs delegate to</span>
 <span class="sd">    :func:`verify_storage_dataset`.</span>
 
@@ -696,7 +695,7 @@
 
 
 
-<span class="c1"># ── Provider-agnostic sign / verify (v0.8 M54.1) ─────────────────────────</span>
+<span class="c1"># ── Provider-agnostic sign / verify () ─────────────────────────</span>
 
 
 <div class="viewcode-block" id="sign_storage_dataset">
@@ -719,7 +718,7 @@
 <span class="sd">    must support ``set_attribute(&quot;ttio_signature&quot;, str)`` — every</span>
 <span class="sd">    shipping provider does.</span>
 
-<span class="sd">    @since 0.8 (v0.8 M54.1)</span>
+<span class="sd">    @since 0.8 ()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">cipher_suite</span>
     <span class="n">canonical</span> <span class="o">=</span> <span class="n">dataset</span><span class="o">.</span><span class="n">read_canonical_bytes</span><span class="p">()</span>
@@ -757,7 +756,7 @@
 <span class="sd">    :class:`~ttio.cipher_suite.UnsupportedAlgorithmError` so silent</span>
 <span class="sd">    acceptance of a wrong-scheme file is impossible.</span>
 
-<span class="sd">    @since 0.8 (v0.8 M54.1)</span>
+<span class="sd">    @since 0.8 ()</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">cipher_suite</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">dataset</span><span class="o">.</span><span class="n">has_attribute</span><span class="p">(</span><span class="n">SIGNATURE_ATTR</span><span class="p">):</span>

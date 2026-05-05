@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -271,7 +271,72 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Genomics/TTIOGenomicIndex.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Per-read offsets, lengths, positions, mapping
+            qualities, flags, and chromosome strings for one
+            <code>TTIOGenomicRun</code>. Held in memory as
+            <code>NSData</code> buffers backing typed C arrays;
+            exposed via typed accessors. Loaded eagerly when
+            the run is opened; persisted under
+            <code>
+              /study/genomic_runs/&lt;name&gt;/genomic_index/
+            </code>
+            .
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Genomic analogue of <code>TTIOSpectrumIndex</code>.
+            Range queries (region, unmapped, flag mask) operate
+            on the in-memory arrays without touching the heavy
+            signal channels.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.genomic_index.GenomicIndex</code> <br />
+            Java:
+            <code>
+              global.thalion.ttio.genomics.GenomicIndex
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -298,7 +363,12 @@
         + (instancetype) <b>readFromGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)group<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Reads the index from
+            <code>group/genomic_index/</code>. @param
+            <var>group</var> Source parent <var>group</var>.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return The materialised index, or
+            <code>nil</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -308,7 +378,7 @@
         - (NSString*) <b>chromosomeAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Reference chromosome name.
           
         </div>
         <hr class="method-separator">
@@ -329,7 +399,7 @@
         - (uint32_t) <b>flagsAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return SAM flags bit-field.
           
         </div>
         <hr class="method-separator">
@@ -339,7 +409,9 @@
         - (NSIndexSet*) <b>indicesForFlag:</b> (uint32_t)flagMask;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @param <var>flagMask</var> SAM-flag bit mask to
+            test. @return Indices where
+            <code>(flags &amp; <var>flagMask</var>) != 0</code>.
           
         </div>
         <hr class="method-separator">
@@ -349,7 +421,16 @@
         - (NSIndexSet*) <b>indicesForRegion:</b> (NSString*)chromosome<b> start:</b> (int64_t)start<b> end:</b> (int64_t)end;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Region query. @param <var>chromosome</var> Reference
+            <var>chromosome</var>. @param <var>start</var>
+            Inclusive lower bound on position. @param
+            <var>end</var> Exclusive upper bound on position.
+            @return Indices on
+            <code><var>chromosome</var></code> with
+            <code>
+              <var>start</var> &lt;= position &lt; <var>end</var>
+            </code>
+            .
           
         </div>
         <hr class="method-separator">
@@ -359,7 +440,9 @@
         - (NSIndexSet*) <b>indicesForUnmapped</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Indices where
+            <code>(flags &amp; 0x4) != 0</code> (unmapped
+            reads).
           
         </div>
         <hr class="method-separator">
@@ -369,7 +452,15 @@
         - (instancetype) <b>initWithOffsets:</b> (NSData*)offsets<b> lengths:</b> (NSData*)lengths<b> chromosomes:</b> (NSArray<NSString*>*)chromosomes<b> positions:</b> (NSData*)positions<b> mappingQualities:</b> (NSData*)mappingQualities<b> flags:</b> (NSData*)flags;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param
+            <var>offsets</var> uint64 byte <var>offsets</var> per
+            read. @param <var>lengths</var> uint32 base counts
+            per read. @param <var>chromosomes</var> Per-read
+            chromosome names. @param <var>positions</var>
+            int64 mapping <var>positions</var>. @param
+            <var>mappingQualities</var> uint8 mapping qualities.
+            @param <var>flags</var> uint32 SAM <var>flags</var>.
+            @return An initialised index.
           
         </div>
         <hr class="method-separator">
@@ -379,7 +470,8 @@
         - (uint32_t) <b>lengthAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Number of bases in read
+            <code><var>index</var></code>.
           
         </div>
         <hr class="method-separator">
@@ -389,7 +481,7 @@
         - (uint8_t) <b>mappingQualityAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return SAM mapping quality (Phred-scaled).
           
         </div>
         <hr class="method-separator">
@@ -399,7 +491,9 @@
         - (uint64_t) <b>offsetAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Starting byte offset of read
+            <code><var>index</var></code> &apos;s sequence/quality
+            data.
           
         </div>
         <hr class="method-separator">
@@ -409,7 +503,7 @@
         - (int64_t) <b>positionAt:</b> (NSUInteger)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            @return Zero-based mapping position.
           
         </div>
         <hr class="method-separator">
@@ -419,7 +513,11 @@
         - (BOOL) <b>writeToGroup:</b> (id<<a rel="gsdoc" href="TTIOStorageProtocols.html#protocol$(TTIOStorageGroup)">TTIOStorageGroup</a>>)group<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes the index under
+            <code>group/genomic_index/</code>. @param
+            <var>group</var> Destination parent <var>group</var>.
+            @param <var>error</var> Out-parameter populated on
+            failure. @return <code>YES</code> on success.
           
         </div>
         <hr class="method-separator">
@@ -432,10 +530,13 @@
         NSData* TTIOOffsetsFromLengths(NSData* <b>lengths</b>);<br />
         <div class="desc">
           
-          v1.10 #10 helper: synthesize per-record byte offsets
-          from a uint32 <var>lengths</var> array. offsets[i] =
-          sum(lengths[0..i]), produced as a uint64
-          NSData blob. Empty input returns 0-byte NSData.
+          Synthesises per-record byte offsets from a
+          <code>uint32</code> <var>lengths</var> array.
+          <code>offsets[i] = sum(lengths[0..i])</code>, produced
+          as a <code>uint64</code> <code>NSData</code> blob. Empty
+          input returns a zero-byte <code>NSData</code>. @param
+          <var>lengths</var> Per-record uint32 <var>lengths</var>
+          . @return uint64 cumulative offsets.
         
         </div>
         <hr class="method-separator">

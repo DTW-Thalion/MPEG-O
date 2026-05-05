@@ -448,7 +448,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset.path">[docs]</a>
     <span class="n">path</span><span class="p">:</span> <span class="n">Path</span></div>
 
-    <span class="c1"># ``file`` is the legacy h5py handle. v0.9 M64.5: when the dataset</span>
+    <span class="c1"># ``file`` is the legacy h5py handle.: when the dataset</span>
     <span class="c1"># was opened via a non-HDF5 provider (memory/sqlite/zarr) this is</span>
     <span class="c1"># ``None`` and call sites must use :attr:`provider` instead. New</span>
     <span class="c1"># code paths route through the StorageGroup protocol.</span>
@@ -557,7 +557,7 @@
                 <span class="n">fileobj</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
                 <span class="k">raise</span>
 
-        <span class="c1"># v0.9 M64.5: URL scheme detection routes non-HDF5 providers</span>
+        <span class="c1"># URL scheme detection routes non-HDF5 providers</span>
         <span class="c1"># (``memory://...``, ``sqlite://...``, ``dir://...``) through</span>
         <span class="c1"># the storage protocol. Bare paths still open via HDF5 for</span>
         <span class="c1"># byte-parity with pre-M64.5 files.</span>
@@ -1144,7 +1144,7 @@
 <span class="sd">        Parameters</span>
 <span class="sd">        ----------</span>
 <span class="sd">        provider</span>
-<span class="sd">            v0.9 M64.5: which storage backend to write through. The</span>
+<span class="sd">            : which storage backend to write through. The</span>
 <span class="sd">            string ``&quot;hdf5&quot;`` (default) keeps byte-for-byte parity with</span>
 <span class="sd">            pre-M64.5 files. Other values dispatch through</span>
 <span class="sd">            :func:`open_provider` — ``&quot;memory&quot;``, ``&quot;sqlite&quot;``,</span>
@@ -1339,7 +1339,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.base_peak_intensities">[docs]</a>
     <span class="n">base_peak_intensities</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span></div>
 
-    <span class="c1"># v0.11 M74: optional parallel per-spectrum arrays. Writer emits the</span>
+    <span class="c1"># optional parallel per-spectrum arrays. Writer emits the</span>
     <span class="c1"># four datasets only when all four are non-None (schema-gating per</span>
     <span class="c1"># the opt_ms2_activation_detail feature flag).</span>
 <div class="viewcode-block" id="WrittenRun.activation_methods">
@@ -1366,7 +1366,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.provenance_records">[docs]</a>
     <span class="n">provenance_records</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ProvenanceRecord</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span></div>
 
-    <span class="c1"># v0.3 M21: signal compression codec. Valid values are the strings</span>
+    <span class="c1"># signal compression codec. Valid values are the strings</span>
     <span class="c1"># recognised by :func:`ttio._hdf5_io.write_signal_channel` plus</span>
     <span class="c1"># the TTIO-level ``&quot;numpress_delta&quot;`` codec, which transforms the</span>
     <span class="c1"># float64 buffer into an int64 first-difference array and stores</span>
@@ -1375,7 +1375,7 @@
 <a class="viewcode-back" href="../../autoapi/ttio/spectral_dataset/index.html#ttio.spectral_dataset.WrittenRun.signal_compression">[docs]</a>
     <span class="n">signal_compression</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;gzip&quot;</span></div>
 
-    <span class="c1"># v0.4 M24: optional chromatogram traces for this run. Empty list</span>
+    <span class="c1"># optional chromatogram traces for this run. Empty list</span>
     <span class="c1"># results in no /chromatograms/ group, preserving byte parity with</span>
     <span class="c1"># v0.3 files written by callers that don&#39;t supply chromatograms.</span>
 <div class="viewcode-block" id="WrittenRun.chromatograms">
@@ -1819,7 +1819,7 @@
     <span class="c1"># the file. The override surface covers the four byte/string</span>
     <span class="c1"># channels (sequences, qualities, read_names, cigars). Anything</span>
     <span class="c1"># outside the per-channel whitelist is a caller error and must</span>
-    <span class="c1"># surface immediately (Binding Decision §88).</span>
+    <span class="c1"># surface immediately ().</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">Compression</span> <span class="k">as</span> <span class="n">_Compression</span>
     <span class="n">_ALLOWED_OVERRIDE_CODECS_BY_CHANNEL</span> <span class="o">=</span> <span class="p">{</span>
         <span class="s2">&quot;sequences&quot;</span><span class="p">:</span> <span class="nb">frozenset</span><span class="p">({</span>
@@ -1874,7 +1874,7 @@
                 <span class="s2">&quot;inline_v2 codec encodes all three mate fields into &quot;</span>
                 <span class="s2">&quot;a single blob with no per-field codec choice.&quot;</span>
             <span class="p">)</span>
-        <span class="c1"># M86 Phase F Binding Decision §126 / Gotcha §143: the bare</span>
+        <span class="c1"># M86 Phase F / Gotcha §143: the bare</span>
         <span class="c1"># &quot;mate_info&quot; key is reserved and rejected with a message</span>
         <span class="c1"># pointing at the three per-field names. Without the</span>
         <span class="c1"># explicit reject, the bare key would fall through to the</span>
@@ -1905,7 +1905,7 @@
             <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
         <span class="n">allowed</span> <span class="o">=</span> <span class="n">_ALLOWED_OVERRIDE_CODECS_BY_CHANNEL</span><span class="p">[</span><span class="n">ch_name</span><span class="p">]</span>
         <span class="k">if</span> <span class="n">codec_enum</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">allowed</span><span class="p">:</span>
-            <span class="c1"># Phase D Binding Decision §110: explicit message for the</span>
+            <span class="c1"># Phase D : explicit message for the</span>
             <span class="c1"># (sequences, QUALITY_BINNED) category error — naming the</span>
             <span class="c1"># codec, the channel, and the lossy-quantisation rationale.</span>
             <span class="k">if</span> <span class="p">(</span>
@@ -2199,7 +2199,7 @@
     <span class="c1"># v1.0 reset (Phase 2c) — mate_info is always written via the</span>
     <span class="c1"># inline_v2 codec (codec id 13) under</span>
     <span class="c1"># signal_channels/mate_info/inline_v2. The v1 per-field subgroup</span>
-    <span class="c1"># writer (M86 Phase F) and the M82 compound fallback were both</span>
+    <span class="c1"># writer (Phase F) and the M82 compound fallback were both</span>
     <span class="c1"># removed; per-field mate_info_* overrides are rejected earlier</span>
     <span class="c1"># in this function.</span>
     <span class="c1">#</span>

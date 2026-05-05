@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,7 +260,89 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Dataset/TTIOWrittenRun.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Flat-buffer value object for
+            <code>
+              +[TTIOSpectralDataset
+              writeMinimalToPath:...]
+            </code>
+            . Mirrors Python&apos;s
+            <code>ttio.spectral_dataset.WrittenRun</code>
+            dataclass.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The high-level <code>TTIOAcquisitionRun</code> /
+            <code>TTIOMassSpectrum</code> API requires one
+            <code>NSData</code> per spectrum per channel; at
+            write time the writer iterates every spectrum and
+            memcpy-concatenates the per-spectrum
+            buffers into a flat channel. Callers with
+            already-flat arrays can skip both costs by
+            building an <code>TTIOWrittenRun</code> and
+            calling
+            <code>
+              
+                +writeMinimalToPath:
+              
+
+            </code>
+            on <code>TTIOSpectralDataset</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            All buffer fields must be little-endian and typed as
+            documented. No validation beyond length; the
+            writer trusts the caller.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.spectral_dataset.WrittenRun</code> <br />
+            Java: <code>global.thalion.ttio.WrittenRun</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -325,7 +407,8 @@
         - (instancetype) <b>initWithSpectrumClassName:</b> (NSString*)spectrumClassName<b> acquisitionMode:</b> (int64_t)acquisitionMode<b> channelData:</b> (NSDictionary<NSString*,NSData*>*)channelData<b> offsets:</b> (NSData*)offsets<b> lengths:</b> (NSData*)lengths<b> retentionTimes:</b> (NSData*)retentionTimes<b> msLevels:</b> (NSData*)msLevels<b> polarities:</b> (NSData*)polarities<b> precursorMzs:</b> (NSData*)precursorMzs<b> precursorCharges:</b> (NSData*)precursorCharges<b> basePeakIntensities:</b> (NSData*)basePeakIntensities;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @return An initialised
+            written-run buffer.
           
         </div>
         <hr class="method-separator">
@@ -360,7 +443,7 @@
             Getter for property &apos;nucleusType&apos; with attributes
             (readwrite, nonatomic, copy). See also
             <a rel="gsdoc" href="#method$TTIOWrittenRun-setNucleusType$">[TTIOWrittenRun -setNucleusType:]</a>
- Optional &#8212; NMR runs set this; MS runs leave empty.
+ Optional NMR run-level nucleus identifier; empty for MS runs.
           
         </div>
         <hr class="method-separator">
@@ -418,7 +501,7 @@
             attributes (readwrite, nonatomic, copy). See
             also
             <a rel="gsdoc" href="#method$TTIOWrittenRun-setProvenanceRecords$">[TTIOWrittenRun -setProvenanceRecords:]</a>
- Per-run provenance records. Persisted under the run&apos;s group as ``provenance/steps`` (compound dataset) plus a legacy ``@provenance_json`` attribute mirror &#8212; matches the layout that ``-[TTIOAcquisitionRun writeToGroup:name:error:]`` emits, and the cross-language wire format Python&apos;s ``WrittenRun.provenance_records`` / Java&apos;s ``WrittenRun.provenanceRecords`` write to. Defaults to ``@[]`` so callers that don&apos;t ship per-run provenance get byte-parity with pre-v0.6 files.
+ Per-run provenance records. Persisted under the run&apos;s group as <code>provenance/steps</code> (compound dataset) plus a legacy <code>@provenance_json</code> attribute mirror for backward compatibility. Defaults to an empty array.
           
         </div>
         <hr class="method-separator">
@@ -442,7 +525,7 @@
             Setter for property &apos;nucleusType&apos; with attributes
             (readwrite, nonatomic, copy). See also
             <a rel="gsdoc" href="#method$TTIOWrittenRun-nucleusType">[TTIOWrittenRun -nucleusType]</a>
- Optional &#8212; NMR runs set this; MS runs leave empty.
+ Optional NMR run-level nucleus identifier; empty for MS runs.
           
         </div>
         <hr class="method-separator">
@@ -456,7 +539,7 @@
             attributes (readwrite, nonatomic, copy). See
             also
             <a rel="gsdoc" href="#method$TTIOWrittenRun-provenanceRecords">[TTIOWrittenRun -provenanceRecords]</a>
- Per-run provenance records. Persisted under the run&apos;s group as ``provenance/steps`` (compound dataset) plus a legacy ``@provenance_json`` attribute mirror &#8212; matches the layout that ``-[TTIOAcquisitionRun writeToGroup:name:error:]`` emits, and the cross-language wire format Python&apos;s ``WrittenRun.provenance_records`` / Java&apos;s ``WrittenRun.provenanceRecords`` write to. Defaults to ``@[]`` so callers that don&apos;t ship per-run provenance get byte-parity with pre-v0.6 files.
+ Per-run provenance records. Persisted under the run&apos;s group as <code>provenance/steps</code> (compound dataset) plus a legacy <code>@provenance_json</code> attribute mirror for backward compatibility. Defaults to an empty array.
           
         </div>
         <hr class="method-separator">
@@ -470,7 +553,7 @@
             attributes (readwrite, nonatomic, copy). See
             also
             <a rel="gsdoc" href="#method$TTIOWrittenRun-signalCompression">[TTIOWrittenRun -signalCompression]</a>
- v0.3 M21. &quot;gzip&quot;, &quot;none&quot;, &quot;lz4&quot;, or &quot;numpress_delta&quot;. Defaults to &quot;gzip&quot;.
+ Compression codec identifier for non-genomic-codec channels. One of <code>@&quot;gzip&quot;</code>, <code>@&quot;none&quot;</code>, <code>@&quot;lz4&quot;</code>, or <code>@&quot;numpress_delta&quot;</code>. Defaults to <code>@&quot;gzip&quot;</code>.
           
         </div>
         <hr class="method-separator">
@@ -484,7 +567,7 @@
             attributes (readwrite, nonatomic, copy). See
             also
             <a rel="gsdoc" href="#method$TTIOWrittenRun-setSignalCompression$">[TTIOWrittenRun -setSignalCompression:]</a>
- v0.3 M21. &quot;gzip&quot;, &quot;none&quot;, &quot;lz4&quot;, or &quot;numpress_delta&quot;. Defaults to &quot;gzip&quot;.
+ Compression codec identifier for non-genomic-codec channels. One of <code>@&quot;gzip&quot;</code>, <code>@&quot;none&quot;</code>, <code>@&quot;lz4&quot;</code>, or <code>@&quot;numpress_delta&quot;</code>. Defaults to <code>@&quot;gzip&quot;</code>.
           
         </div>
         <hr class="method-separator">

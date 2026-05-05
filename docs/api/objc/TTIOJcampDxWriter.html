@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,21 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          JCAMP-DX 5.01 writer for 1-D vibrational spectra.
-          Two `##XYDATA=(X++(Y..Y))` encoding families are
-          supported: - AFFN (default): one free-format (X,
-          Y) pair per line. This is the original M73 dialect and
-          remains the default. - PAC / SQZ / DIF (JCAMP-DX 5.01
-          &#167;5.9, M76): compressed forms. Equispaced X is required;
-          a shared YFACTOR is chosen to carry ~7 significant digits
-          of integer-scaled Y precision. Byte-for-byte identical to
-          the Python and Java writers, gated by the fixtures under
-          `conformance/jcamp_dx/`. 2-D /
-          imaging cubes are NOT supported &#8212; use HDF5 round-trip
-          for RamanImage / IRImage, or wait for M73.1 NTUPLES
-          support. Cross-language equivalents: Python:
-          ttio.exporters.jcamp_dx.write_*_spectrum
-          Java: global.thalion.ttio.exporters.JcampDxWriter
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -294,7 +280,14 @@
         + (BOOL) <b>writeIRSpectrum:</b> (<a rel="gsdoc" href="TTIOIRSpectrum.html#class$TTIOIRSpectrum">TTIOIRSpectrum</a>*)spec<b> toPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> encoding:</b> (<a rel="gsdoc" href="TTIOJcampDxEncoding.html#type$TTIOJcampDxEncoding">TTIOJcampDxEncoding</a>)encoding<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes an IR spectrum in a caller-chosen
+            <var>encoding</var>. @param <var>spec</var> IR
+            spectrum. @param <var>path</var> Destination
+            <var>path</var>. @param <var>title</var> LDR
+            <var>title</var>. @param <var>encoding</var> Encoding
+            family. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success, <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -304,7 +297,13 @@
         + (BOOL) <b>writeIRSpectrum:</b> (<a rel="gsdoc" href="TTIOIRSpectrum.html#class$TTIOIRSpectrum">TTIOIRSpectrum</a>*)spec<b> toPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes an IR spectrum in AFFN encoding. @param
+            <var>spec</var> IR spectrum to serialise. @param
+            <var>path</var> Destination <var>path</var>. @param
+            <var>title</var> <code>##TITLE=</code> value for the
+            LDR header. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success, <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -314,7 +313,15 @@
         + (BOOL) <b>writeRamanSpectrum:</b> (<a rel="gsdoc" href="TTIORamanSpectrum.html#class$TTIORamanSpectrum">TTIORamanSpectrum</a>*)spec<b> toPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> encoding:</b> (<a rel="gsdoc" href="TTIOJcampDxEncoding.html#type$TTIOJcampDxEncoding">TTIOJcampDxEncoding</a>)encoding<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes a Raman spectrum in a caller-chosen
+            <var>encoding</var>. @param <var>spec</var> Raman
+            spectrum. @param <var>path</var> Destination
+            <var>path</var>. @param <var>title</var> LDR
+            <var>title</var>. @param <var>encoding</var> Encoding
+            family (AFFN / PAC / SQZ / DIF). @param
+            <var>error</var> Out-parameter populated on failure.
+            @return <code>YES</code> on success,
+            <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -324,7 +331,13 @@
         + (BOOL) <b>writeRamanSpectrum:</b> (<a rel="gsdoc" href="TTIORamanSpectrum.html#class$TTIORamanSpectrum">TTIORamanSpectrum</a>*)spec<b> toPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes a Raman spectrum in AFFN encoding. @param
+            <var>spec</var> Raman spectrum to serialise. @param
+            <var>path</var> Destination <var>path</var>. @param
+            <var>title</var> <code>##TITLE=</code> value for the
+            LDR header. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success, <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -334,7 +347,14 @@
         + (BOOL) <b>writeUVVisSpectrum:</b> (<a rel="gsdoc" href="TTIOUVVisSpectrum.html#class$TTIOUVVisSpectrum">TTIOUVVisSpectrum</a>*)spec<b> toPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> encoding:</b> (<a rel="gsdoc" href="TTIOJcampDxEncoding.html#type$TTIOJcampDxEncoding">TTIOJcampDxEncoding</a>)encoding<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes a UV-Vis spectrum in a caller-chosen
+            <var>encoding</var>. @param <var>spec</var> UV-Vis
+            spectrum. @param <var>path</var> Destination
+            <var>path</var>. @param <var>title</var> LDR
+            <var>title</var>. @param <var>encoding</var> Encoding
+            family. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success, <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">
@@ -344,7 +364,13 @@
         + (BOOL) <b>writeUVVisSpectrum:</b> (<a rel="gsdoc" href="TTIOUVVisSpectrum.html#class$TTIOUVVisSpectrum">TTIOUVVisSpectrum</a>*)spec<b> toPath:</b> (NSString*)path<b> title:</b> (NSString*)title<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Writes a UV-Vis spectrum in AFFN encoding. @param
+            <var>spec</var> UV-Vis spectrum to serialise. @param
+            <var>path</var> Destination <var>path</var>. @param
+            <var>title</var> <code>##TITLE=</code> value for the
+            LDR header. @param <var>error</var> Out-parameter
+            populated on failure. @return <code>YES</code> on
+            success, <code>NO</code> on failure.
           
         </div>
         <hr class="method-separator">

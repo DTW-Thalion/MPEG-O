@@ -362,7 +362,7 @@
         </div>
         <article role="main" id="furo-main-content">
           <h1>Source code for ttio.importers.mztab</h1><div class="highlight"><pre>
-<span></span><span class="sd">&quot;&quot;&quot;mzTab importer (v0.9 M60).</span>
+<span></span><span class="sd">&quot;&quot;&quot;mzTab importer ().</span>
 
 <span class="sd">mzTab is a results-level interchange format from PSI. It is a</span>
 <span class="sd">tab-separated text file divided into sections by a one-line prefix:</span>
@@ -387,11 +387,11 @@
 <span class="sd">|---------------|------------------------------|---------------------------------------------------------------|</span>
 <span class="sd">| PSM           | :class:`Identification`     | ``run_name`` from ``spectra_ref``; score from best search engine score |</span>
 <span class="sd">| PRT           | :class:`Quantification`     | one record per ``protein_abundance_assay[N]`` column           |</span>
-<span class="sd">| PEP           | :class:`Feature`            | peptide-level feature (v0.12.0 M78)                            |</span>
+<span class="sd">| PEP           | :class:`Feature`            | peptide-level feature ()                            |</span>
 <span class="sd">| SML           | :class:`Identification`     | metabolite annotation; ``run_name=&#39;metabolomics&#39;`` placeholder |</span>
 <span class="sd">| SML abundance | :class:`Quantification`     | one record per ``abundance_study_variable[N]`` column          |</span>
-<span class="sd">| SMF           | :class:`Feature`            | small-molecule feature row (v0.12.0 M78)                       |</span>
-<span class="sd">| SME           | :class:`Identification`     | small-molecule evidence row (v0.12.0 M78)                      |</span>
+<span class="sd">| SMF           | :class:`Feature`            | small-molecule feature row ()                       |</span>
+<span class="sd">| SME           | :class:`Identification`     | small-molecule evidence row ()                      |</span>
 <span class="sd">| MTD           | :class:`ProvenanceRecord`   | software, search engine and ms_run locations                   |</span>
 
 <span class="sd">Cross-language equivalents</span>
@@ -898,7 +898,7 @@
 
 
 <span class="c1"># --------------------------------------------------------------------------- #</span>
-<span class="c1"># PEP / SMF / SME section handlers (v0.12.0 M78).</span>
+<span class="c1"># PEP / SMF / SME section handlers ().</span>
 <span class="c1"># --------------------------------------------------------------------------- #</span>
 
 <span class="n">_PEP_ACCESSION</span> <span class="o">=</span> <span class="s2">&quot;accession&quot;</span>

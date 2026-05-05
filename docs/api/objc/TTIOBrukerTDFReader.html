@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
           <hr class="section-separator">
@@ -274,8 +274,40 @@
         </blockquote>
         <div class="desc">
           
-          SQLite-level metadata snapshot &#8212; no binary
-          extraction required.
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Import/TTIOBrukerTDFReader.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            SQLite-level metadata snapshot of a Bruker
+            timsTOF <code>.d</code> directory &#8212; no binary
+            extraction required.
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -418,24 +450,7 @@
         </blockquote>
         <div class="desc">
           
-          Bruker timsTOF `.d` importer &#8212; v0.8 M53. The `.d`
-          directory holds two files: - `analysis.tdf` &#8212; a
-          plain SQLite database with metadata tables (`Frames`,
-          `GlobalMetadata`, `Properties`,
-          `Precursors`,...). - `analysis.tdf_bin` or
-          `analysis.tdf_raw` &#8212; a binary blob with
-          ZSTD-compressed frame data and a scan-to-ion
-          index. This ObjC reader consumes the SQLite metadata
-          directly via `libsqlite3` (already linked for
-          TTIOSqliteProvider). Binary frame
-          decompression delegates to the Python
-          `ttio.importers.bruker_tdf_cli`
-          tool via `NSTask`, matching the Java `BrukerTDFReader`
-          pattern. A native port of the frame decoder (ZSTD +
-          Bruker&apos;s scan-to-ion index) is a v0.9 concern. API
-          status: Provisional (v0.8 M53). Cross-language
-          equivalents: Python: ttio.importers.bruker_tdf
-          Java: global.thalion.ttio.importers.BrukerTDFReader
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">

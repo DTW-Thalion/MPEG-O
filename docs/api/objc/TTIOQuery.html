@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -260,23 +260,7 @@
         </blockquote>
         <div class="desc">
           
-          Compressed-domain query against an
-          TTIOSpectrumIndex. Predicates are combined
-          with AND (intersection). The query operates entirely on
-          the in-memory index arrays &#8212; signal-channel datasets are
-          never opened, so a 10k-spectrum scan completes in under
-          a millisecond and never touches the encrypted intensity
-          stream. Builder-style chaining: NSIndexSet *hits =
-          [[[[TTIOQuery queryOnIndex:run.spectrumIndex]
-          withMsLevel:2]
-          withRetentionTimeRange:[TTIOValueRange
-          rangeWithMinimum:600 maximum:720]]
-          withPrecursorMzRange:[TTIOValueRange
-          rangeWithMinimum:500 maximum:550]]
-          matchingIndices]; API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.query.Query Java:
-          global.thalion.ttio.Query
+          <em>Description forthcoming.</em>
         
         </div>
         <p class="global_method_index">
@@ -297,7 +281,26 @@
         + (instancetype) <b>queryOnIndex:</b> (<a rel="gsdoc" href="TTIOSpectrumIndex.html#class$TTIOSpectrumIndex">TTIOSpectrumIndex</a>*)index;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Returns a freshly initialised query with no
+            predicates set. @param <var>index</var> Spectrum
+            <var>index</var> to query against. Must be non-nil;
+            the returned query holds a strong reference for the
+            duration of its lifetime. @return A new query
+            instance. Apply predicates with the
+            <code>
+              
+                -withXxx:
+              
+
+            </code>
+            chain, then read results via
+            <code>
+              <a rel="gsdoc" href="#method$TTIOQuery-matchingIndices">
+                -matchingIndices
+              </a>
+
+            </code>
+            .
           
         </div>
         <hr class="method-separator">
@@ -307,7 +310,12 @@
         - (NSIndexSet*) <b>matchingIndices</b>;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Evaluates the accumulated predicates against the
+            bound spectrum index and returns the matching
+            positions in ascending order. @return An
+            <code>NSIndexSet</code> containing every spectrum
+            index that satisfies <em>all</em> applied predicates.
+            Empty if none match. Never <code>nil</code>.
           
         </div>
         <hr class="method-separator">
@@ -317,7 +325,12 @@
         - (<a rel="gsdoc" href="#class$TTIOQuery">TTIOQuery</a>*) <b>withBasePeakIntensityAtLeast:</b> (double)threshold;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Restricts results to spectra whose base-peak
+            intensity meets or exceeds
+            <code><var>threshold</var></code>. @param
+            <var>threshold</var> Minimum acceptable base-peak
+            intensity (counts or arbitrary units, as recorded
+            in the index). @return <code>self</code> for chaining.
           
         </div>
         <hr class="method-separator">
@@ -327,7 +340,10 @@
         - (<a rel="gsdoc" href="#class$TTIOQuery">TTIOQuery</a>*) <b>withMsLevel:</b> (uint8_t)level;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Restricts results to spectra acquired at the
+            given MS <var>level</var> (1 = MS1, 2 = MS2,...).
+            @param <var>level</var> MS <var>level</var> to match
+            exactly. @return <code>self</code> for chaining.
           
         </div>
         <hr class="method-separator">
@@ -337,7 +353,10 @@
         - (<a rel="gsdoc" href="#class$TTIOQuery">TTIOQuery</a>*) <b>withPolarity:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOPolarity">TTIOPolarity</a>)polarity;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Restricts results to spectra acquired with the
+            given ionisation <var>polarity</var>. @param
+            <var>polarity</var> Polarity enum value to match
+            exactly. @return <code>self</code> for chaining.
           
         </div>
         <hr class="method-separator">
@@ -347,7 +366,19 @@
         - (<a rel="gsdoc" href="#class$TTIOQuery">TTIOQuery</a>*) <b>withPrecursorMzRange:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)range;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Restricts MSn results to spectra whose precursor
+            m/z falls inside <code><var>range</var></code> (closed
+            interval). Has no effect on MS1 spectra unless
+            combined with
+            <code>
+              <a rel="gsdoc" href="#method$TTIOQuery-withMsLevel$">
+                -withMsLevel:
+              </a>
+
+            </code>
+            . @param <var>range</var> Inclusive precursor-m/z
+            <var>range</var>. @return <code>self</code> for
+            chaining.
           
         </div>
         <hr class="method-separator">
@@ -357,7 +388,11 @@
         - (<a rel="gsdoc" href="#class$TTIOQuery">TTIOQuery</a>*) <b>withRetentionTimeRange:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)range;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Restricts results to spectra whose retention time
+            falls inside <code><var>range</var></code> (closed
+            interval, seconds). @param <var>range</var>
+            Inclusive retention-time <var>range</var>.
+            @return <code>self</code> for chaining.
           
         </div>
         <hr class="method-separator">

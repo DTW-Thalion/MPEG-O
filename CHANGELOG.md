@@ -5,7 +5,7 @@ implementation.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/); the
-public API is stable from v1.0.0 onward.
+public API is stable from onward.
 
 ---
 
@@ -14,8 +14,8 @@ public API is stable from v1.0.0 onward.
 This is the first stable release of TTI-O. The format string is
 `ttio_format_version = "1.0"`; container ABI, codec wire formats,
 encryption envelope, and digital-signature canonicalisations are
-contractually frozen at this point. Pre-v1.0 development never had
-a public release; that history lives in `git log`.
+contractually frozen at this point. Pre-v1.0 development was never
+publicly released; that history lives in `git log`.
 
 ### Format
 
@@ -42,14 +42,14 @@ a public release; that history lives in `git log`.
 | 5  | RANS_ORDER1          | rANS order-1 entropy coder                           | sequences / qualities / cigars / integers             |
 | 6  | BASE_PACK            | 2-bit ACGT pack with sidecar mask for IUPAC bases    | sequences                                             |
 | 7  | QUALITY_BINNED       | Illumina-8 binning (lossy, CRUMBLE-derived)          | qualities                                             |
-| 11 | DELTA_RANS_ORDER0    | Delta + rANS-O0 (M95)                                | sortable integer channels                             |
+| 11 | DELTA_RANS_ORDER0    | Delta + rANS-O0                                      | sortable integer channels                             |
 | 12 | FQZCOMP_NX16_Z       | CRAM-mimic adaptive quality (V4 only, magic `M94Z`)  | qualities                                             |
 | 13 | MATE_INLINE_V2       | Inlined mate_info v2 (single channel)                | mate_info compound                                    |
 | 14 | REF_DIFF_V2          | Reference-diff v2 (slice-based, embedded reference)  | sequences                                             |
 | 15 | NAME_TOKENIZED_V2    | 8-substream multi-token columnar codec               | read_names                                            |
 
 Ids 8, 9, 10 are reserved on the wire (Java enum ordinal stability)
-but carry no live codec. Reader paths reject them with v1.0 migration
+but carry no live codec. Reader paths reject them with migration
 errors. Codec wire formats are documented in `docs/codecs/*.md`;
 per-channel pipeline wiring is documented in `docs/format-spec.md`
 §10.4–§10.10.
@@ -63,18 +63,18 @@ per-channel pipeline wiring is documented in `docs/format-spec.md`
 - UV-Vis spectra.
 - Two-dimensional correlation spectroscopy (2DCOS).
 - Chromatograms.
-- Genomic alignment runs: full BAM/CRAM importer parity, M82
-  per-record metadata, M86 codec wiring.
+- Genomic alignment runs: full BAM/CRAM importer parity, per-record
+  metadata, codec-aware channel wiring.
 
 ### Encryption + signing
 
 - **Per-AU encryption** (AES-256-GCM) on signal-channel datasets and
-  compound-metadata payloads. Wrapped-key blob (M25) carries DEK
+  compound-metadata payloads. Versioned wrapped-key blob carries DEK
   rotation history; envelope decryption supported via local key, KMS,
   or user-supplied callback.
 - **Digital signatures**: HMAC-SHA256 (canonical) plus post-quantum
-  ML-DSA via liboqs (M49). Signatures verify identically across all
-  three reference implementations.
+  ML-DSA via liboqs. Signatures verify identically across all three
+  reference implementations.
 
 ### Language bindings
 
@@ -104,7 +104,7 @@ language bindings (`TTIO_RANS_LIB_PATH` env var, or `libttio_rans.so` /
 
 ### Known limitations
 
-- Genomic-run cross-language transport (the m89 bulk-mode wire
-  format) is deferred. Per-channel v2 dispatch is byte-equal across
-  languages, but the m82/m89 transport conformance suite reports
-  same-set failures pending the bulk-mode spec.
+- Genomic-run cross-language transport (bulk-mode wire format) is
+  deferred. Per-channel v2 dispatch is byte-equal across languages,
+  but the genomic-transport conformance suite reports same-set
+  failures pending the bulk-mode spec.

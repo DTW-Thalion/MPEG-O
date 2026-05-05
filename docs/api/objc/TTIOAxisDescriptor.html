@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,12 +261,78 @@
         </blockquote>
         <div class="desc">
           
-          Describes a single axis of a SignalArray: its
-          semantic name, unit, numeric range, and sampling
-          mode. Immutable value class. API status: Stable.
-          Cross-language equivalents: Python:
-          ttio.axis_descriptor.AxisDescriptor
-          Java: global.thalion.ttio.AxisDescriptor
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSCoding, NSCopying
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em>
+            ValueClasses/TTIOAxisDescriptor.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Describes a single axis of a
+            <code>TTIOSignalArray</code> : its semantic name
+            (e.g. <code>@&quot;m/z&quot;</code>, <code>@&quot;intensity&quot;</code>,
+            <code>@&quot;chemical_shift&quot;</code>), unit string
+            (UCUM-compatible, e.g. <code>@&quot;Th&quot;</code>
+            or <code>@&quot;ppm&quot;</code>), numeric range, and sampling
+            mode. Immutable value class with value-based
+            equality.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            The sampling mode distinguishes between
+            uniformly-spaced (e.g. constant-time
+            mass-spectrum scans) and irregularly-spaced
+            (e.g. centroided peak lists) axes; see
+            <code>TTIOSamplingMode</code>.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>API status:</strong> Stable.
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.axis_descriptor.AxisDescriptor</code>
+            <br /> Java:
+            <code>global.thalion.ttio.AxisDescriptor</code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -286,7 +352,16 @@
         + (instancetype) <b>descriptorWithName:</b> (NSString*)name<b> unit:</b> (NSString*)unit<b> valueRange:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)valueRange<b> samplingMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOSamplingMode">TTIOSamplingMode</a>)samplingMode;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Convenience factory for
+            <code>
+              <a rel="gsdoc" href="#method$TTIOAxisDescriptor-initWithName$unit$valueRange$samplingMode$">-initWithName:unit:valueRange:samplingMode:</a>
+
+            </code>
+            . @param <var>name</var> Semantic axis <var>name</var>.
+            @param <var>unit</var> Unit string. @param
+            <var>valueRange</var> Numeric bounds. @param
+            <var>samplingMode</var> Sampling mode enum value.
+            @return An autoreleased descriptor.
           
         </div>
         <hr class="method-separator">
@@ -296,7 +371,14 @@
         - (instancetype) <b>initWithName:</b> (NSString*)name<b> unit:</b> (NSString*)unit<b> valueRange:</b> (<a rel="gsdoc" href="TTIOValueRange.html#class$TTIOValueRange">TTIOValueRange</a>*)valueRange<b> samplingMode:</b> (<a rel="gsdoc" href="TTIOEnums.html#type$TTIOSamplingMode">TTIOSamplingMode</a>)samplingMode;<br />
         <div class="desc">
           
-            <em>Description forthcoming.</em>
+            Designated initialiser. @param <var>name</var>
+            Semantic axis <var>name</var>; must not be
+            <code>nil</code>. @param <var>unit</var> Unit
+            string; must not be <code>nil</code>. @param
+            <var>valueRange</var> Numeric bounds; must not be
+            <code>nil</code>. @param <var>samplingMode</var>
+            Sampling mode enum value. @return An initialised
+            descriptor.
           
         </div>
         <hr class="method-separator">

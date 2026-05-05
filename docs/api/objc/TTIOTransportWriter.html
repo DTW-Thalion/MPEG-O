@@ -243,7 +243,7 @@
           <dd>
           </dd>
         </dl>
-        <p><b>Date:</b> Generated at 2026-05-04</p>
+        <p><b>Date:</b> Generated at 2026-05-05</p>
 
             <div>
         </div>
@@ -261,7 +261,60 @@
         </blockquote>
         <div class="desc">
           
-          <em>Description forthcoming.</em>
+          
+        </p>
+        <p>
+
+            <em>Inherits From:</em> NSObject
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Conforms To:</em> NSObject (NSObject)
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <em>Declared In:</em> Transport/TTIOTransportWriter.h
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            Serialises a <code>TTIOSpectralDataset</code> as
+            a transport byte stream. Walks <code>msRuns</code>, emits
+            StreamHeader &#8594; DatasetHeaders &#8594;
+            AccessUnits &#8594; EndOfDataset &#8594;
+            EndOfStream. A fine-grained API is also
+            exposed for callers that synthesise streams
+            packet-by-packet (
+            <code>TTIOAcquisitionSimulator</code>,
+            <code>TTIOEncryptedTransport</code>).
+                  </p>
+        <p>
+          
+          
+        </p>
+        <p>
+
+            <strong>Cross-language equivalents:</strong>
+            <br /> Python:
+            <code>ttio.transport.codec.TransportWriter</code>
+            <br /> Java:
+            <code>
+              global.thalion.ttio.transport.TransportWriter
+            </code>
+                  </p>
+        <p>
+          
         
         </div>
         <p class="global_method_index">
@@ -422,19 +475,41 @@
         - (BOOL) <b>writeGenomicRun:</b> (<a rel="gsdoc" href="TTIOGenomicRun.html#class$TTIOGenomicRun">TTIOGenomicRun</a>*)run<b> datasetId:</b> (uint16_t)datasetId<b> name:</b> (NSString*)name<b> error:</b> (NSError**)error;<br />
         <div class="desc">
           
-            M89.2: emit a single GenomicRun as a stream segment.
-            Writes the dataset header
-            (spectrum_class=&quot;TTIOGenomicRead&quot;,
-            channel_names=[&quot;sequences&quot;,
-            &quot;qualities&quot;], reference/platform metadata in
-            the instrument_json slot), then one ACCESS_UNIT per
-            read with the genomic suffix populated, then
-            end-of-dataset. The caller is responsible
-            for stream framing
-            (writeStreamHeader&#8230;/writeEndOfStream&#8230;).
-            For full-dataset emission use ``writeDataset:`` which
-            calls this internally for each genomic <var>run</var>
-            after the MS runs.
+            Emits a single GenomicRun as a stream segment. Writes
+            the dataset header (
+            <code>spectrum_class = &quot;TTIOGenomicRead&quot;</code>,
+            <code>
+              channel_names = [&quot;sequences&quot;, &quot;qualities&quot;]
+            </code>
+            , reference / platform metadata in the
+            <code>instrument_json</code> slot), then one
+            ACCESS_UNIT per read with the genomic suffix
+            populated, then end-of-dataset. The caller is
+            responsible for stream framing (
+            <code>
+              
+                -writeStreamHeader
+              
+
+              ...
+            </code>
+            /
+            <code>
+              
+                -writeEndOfStream
+              
+
+              ...
+            </code>
+            ). For full-dataset emission use
+            <code>
+              <a rel="gsdoc" href="#method$TTIOTransportWriter-writeDataset$error$">
+                -writeDataset:error:
+              </a>
+
+            </code>
+            , which calls this internally for each genomic
+            <var>run</var> after the MS runs.
           
         </div>
         <hr class="method-separator">
