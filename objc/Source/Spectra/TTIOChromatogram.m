@@ -1,3 +1,16 @@
+/*
+ * TTIOChromatogram.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOChromatogram
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIOChromatogram.h
+ *
+ * Time-vs-intensity chromatographic trace (TIC / XIC / SRM).
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOChromatogram.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"

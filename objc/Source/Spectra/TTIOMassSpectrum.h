@@ -9,27 +9,71 @@
 @class TTIOSignalArray;
 
 /**
- * A mass spectrum: m/z + intensity arrays plus MS level, polarity, scan
- * window, and optional precursor activation / isolation metadata.
- * Construction enforces equal-length m/z and intensity arrays.
+ * <heading>TTIOMassSpectrum</heading>
  *
- * Cross-language equivalents:
- *   Python  — ttio.mass_spectrum.MassSpectrum
- *   Java    — global.thalion.ttio.MassSpectrum
+ * <p><em>Inherits From:</em> TTIOSpectrum : NSObject</p>
+ * <p><em>Declared In:</em> Spectra/TTIOMassSpectrum.h</p>
+ *
+ * <p>A mass spectrum: m/z + intensity arrays plus MS level,
+ * polarity, scan window, and optional precursor activation /
+ * isolation metadata. Construction enforces equal-length m/z and
+ * intensity arrays; mismatched lengths return <code>nil</code> and
+ * populate <code>error</code>.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.mass_spectrum.MassSpectrum</code><br/>
+ * Java: <code>global.thalion.ttio.MassSpectrum</code></p>
  */
 @interface TTIOMassSpectrum : TTIOSpectrum
 
+/** m/z values. */
 @property (readonly, strong) TTIOSignalArray *mzArray;
+
+/** Intensity values; same length as <code>mzArray</code>. */
 @property (readonly, strong) TTIOSignalArray *intensityArray;
-@property (readonly) NSUInteger msLevel;       // 1, 2, 3, ...
+
+/** MS level (<code>1</code>, <code>2</code>, <code>3</code>, ...). */
+@property (readonly) NSUInteger msLevel;
+
+/** Scan polarity. */
 @property (readonly) TTIOPolarity polarity;
-@property (readonly, strong) TTIOValueRange *scanWindow;  // nullable
-@property (readonly) TTIOActivationMethod activationMethod;  // M74; None=MS1/unreported
-@property (readonly, strong) TTIOIsolationWindow *isolationWindow;  // M74; nullable
+
+/** Optional scan-window m/z range; <code>nil</code> when not
+ *  reported. */
+@property (readonly, strong) TTIOValueRange *scanWindow;
+
+/** Activation method for MS2+ scans;
+ *  <code>TTIOActivationMethodNone</code> for MS1 or unreported. */
+@property (readonly) TTIOActivationMethod activationMethod;
+
+/** Optional isolation window for tandem MS; <code>nil</code> when
+ *  not reported. */
+@property (readonly, strong) TTIOIsolationWindow *isolationWindow;
 
 /**
- * Designated initializer (M74). Returns nil and populates `error` if mz
- * and intensity have different lengths.
+ * Designated initialiser.
+ *
+ * @param mz                m/z values.
+ * @param intensity         Intensity values; must match
+ *                          <code>mz.length</code>.
+ * @param msLevel           MS level (1, 2, 3, ...).
+ * @param polarity          Scan polarity.
+ * @param scanWindow        Optional scan window; pass
+ *                          <code>nil</code> when not reported.
+ * @param activationMethod  Activation method for MS2+;
+ *                          pass <code>TTIOActivationMethodNone</code>
+ *                          for MS1.
+ * @param isolationWindow   Optional isolation window.
+ * @param indexPosition     Position in parent run.
+ * @param scanTime          Scan time in seconds.
+ * @param precursorMz       Precursor m/z; <code>0</code> for MS1.
+ * @param precursorCharge   Precursor charge; <code>0</code> if
+ *                          unknown.
+ * @param error             Out-parameter populated on failure
+ *                          (e.g. mismatched array lengths).
+ * @return An initialised spectrum, or <code>nil</code> on failure.
  */
 - (instancetype)initWithMzArray:(TTIOSignalArray *)mz
                  intensityArray:(TTIOSignalArray *)intensity
@@ -45,9 +89,10 @@
                           error:(NSError **)error;
 
 /**
- * Backward-compatible initializer (pre-M74): defaults
- * `activationMethod` to `TTIOActivationMethodNone` and
- * `isolationWindow` to `nil`.
+ * Convenience initialiser without activation / isolation metadata.
+ * Defaults <code>activationMethod</code> to
+ * <code>TTIOActivationMethodNone</code> and
+ * <code>isolationWindow</code> to <code>nil</code>.
  */
 - (instancetype)initWithMzArray:(TTIOSignalArray *)mz
                  intensityArray:(TTIOSignalArray *)intensity

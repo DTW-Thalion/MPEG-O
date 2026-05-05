@@ -6,26 +6,67 @@
 @class TTIOAxisDescriptor;
 
 /**
- * 2D correlation spectrum (Noda 2D-COS): a synchronous (in-phase) and
- * an asynchronous (quadrature) rank-2 correlation matrix keyed on a
- * single spectral-variable axis (nu_1 == nu_2). Both matrices are
- * size-by-size row-major float64 buffers.
+ * <heading>TTIOTwoDimensionalCorrelationSpectrum</heading>
  *
- * Cross-language equivalents:
- *   Java:   global.thalion.ttio.TwoDimensionalCorrelationSpectrum
- *   Python: ttio.two_dimensional_correlation_spectrum
- *           .TwoDimensionalCorrelationSpectrum
+ * <p><em>Inherits From:</em> TTIOSpectrum : NSObject</p>
+ * <p><em>Declared In:</em>
+ * Spectra/TTIOTwoDimensionalCorrelationSpectrum.h</p>
+ *
+ * <p>Noda 2-D correlation spectrum (2D-COS): a synchronous
+ * (in-phase) and an asynchronous (quadrature) rank-2 correlation
+ * matrix keyed on a single spectral-variable axis (&nu;<sub>1</sub>
+ * == &nu;<sub>2</sub>). Both matrices are
+ * <code>matrixSize &times; matrixSize</code> row-major float64
+ * buffers.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python:
+ * <code>ttio.two_dimensional_correlation_spectrum.TwoDimensionalCorrelationSpectrum</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.TwoDimensionalCorrelationSpectrum</code></p>
  */
 @interface TTIOTwoDimensionalCorrelationSpectrum : TTIOSpectrum
 
-@property (readonly, copy)   NSData             *synchronousMatrix;   // float64, row-major
-@property (readonly, copy)   NSData             *asynchronousMatrix;  // float64, row-major
-@property (readonly)         NSUInteger          matrixSize;          // n such that matrices are n x n
-@property (readonly, strong) TTIOAxisDescriptor *variableAxis;        // shared F1 = F2 axis
-@property (readonly, copy)   NSString           *perturbation;
-@property (readonly, copy)   NSString           *perturbationUnit;
-@property (readonly, copy)   NSString           *sourceModality;      // "raman", "ir", "uv-vis", ...
+/** Row-major float64 synchronous (in-phase) correlation matrix. */
+@property (readonly, copy) NSData *synchronousMatrix;
 
+/** Row-major float64 asynchronous (quadrature) correlation matrix. */
+@property (readonly, copy) NSData *asynchronousMatrix;
+
+/** <code>n</code> such that both matrices are
+ *  <code>n &times; n</code>. */
+@property (readonly) NSUInteger matrixSize;
+
+/** Shared spectral-variable axis (F<sub>1</sub> = F<sub>2</sub>). */
+@property (readonly, strong) TTIOAxisDescriptor *variableAxis;
+
+/** Perturbation identifier (e.g. <code>@"temperature"</code>). */
+@property (readonly, copy) NSString *perturbation;
+
+/** Perturbation unit string (UCUM-compatible). */
+@property (readonly, copy) NSString *perturbationUnit;
+
+/** Source modality for the underlying spectra (e.g.
+ *  <code>@"raman"</code>, <code>@"ir"</code>,
+ *  <code>@"uv-vis"</code>). */
+@property (readonly, copy) NSString *sourceModality;
+
+/**
+ * Designated initialiser.
+ *
+ * @param sync             Synchronous matrix bytes.
+ * @param asyn             Asynchronous matrix bytes.
+ * @param size             Matrix dimension <code>n</code>.
+ * @param axis             Shared spectral-variable axis.
+ * @param perturbation     Perturbation identifier.
+ * @param perturbationUnit Perturbation unit string.
+ * @param sourceModality   Source modality identifier.
+ * @param indexPosition    Position in parent run.
+ * @param error            Out-parameter populated on failure.
+ * @return An initialised spectrum, or <code>nil</code> on failure.
+ */
 - (instancetype)initWithSynchronousMatrix:(NSData *)sync
                        asynchronousMatrix:(NSData *)asyn
                                matrixSize:(NSUInteger)size

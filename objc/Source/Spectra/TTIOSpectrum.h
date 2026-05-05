@@ -9,44 +9,67 @@
 @class TTIOAxisDescriptor;
 
 /**
- * Base class for any spectrum. Holds an ordered dictionary of named
- * TTIOSignalArrays plus the coordinate axes that index them, the
- * spectrum's position in its parent run, scan time, and optional
- * precursor info for tandem MS.
+ * <heading>TTIOSpectrum</heading>
  *
- * Concrete subclasses (TTIOMassSpectrum, TTIONMRSpectrum, ...) add
- * their own typed metadata and validation.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Spectra/TTIOSpectrum.h</p>
  *
- * HDF5 representation: each spectrum is an HDF5 group whose immediate
- * children are TTIOSignalArray sub-groups (one per named array) plus
- * scalar attributes for the metadata fields.
+ * <p>Base class for any spectrum. Holds an ordered dictionary of
+ * named <code>TTIOSignalArray</code>s plus the coordinate axes
+ * that index them, the spectrum's position in its parent run, scan
+ * time, and optional precursor info for tandem MS.</p>
  *
- * API status: Stable.
+ * <p>Concrete subclasses (<code>TTIOMassSpectrum</code>,
+ * <code>TTIONMRSpectrum</code>, ...) add their own typed metadata
+ * and validation.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.spectrum.Spectrum
- *   Java:   global.thalion.ttio.Spectrum
+ * <p><strong>Storage representation.</strong> Each spectrum is a
+ * group whose immediate children are <code>TTIOSignalArray</code>
+ * sub-groups (one per named array) plus scalar attributes for the
+ * metadata fields. The provider-agnostic
+ * <code>TTIOStorageGroup</code> protocol resolves the actual
+ * backend (HDF5, Memory, SQLite, Zarr).</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.spectrum.Spectrum</code><br/>
+ * Java: <code>global.thalion.ttio.Spectrum</code></p>
  */
 @interface TTIOSpectrum : NSObject
 
-/** Named SignalArrays — e.g. @"mz" / @"intensity". */
+/** Named signal arrays (e.g. <code>@"mz"</code> /
+ *  <code>@"intensity"</code>). */
 @property (readonly, copy) NSDictionary<NSString *, TTIOSignalArray *> *signalArrays;
 
-/** Coordinate axes describing the SignalArrays. */
+/** Coordinate axes describing the signal arrays. */
 @property (readonly, copy) NSArray<TTIOAxisDescriptor *> *axes;
 
-/** Position in the parent AcquisitionRun (0-based). 0 if standalone. */
+/** Position in the parent <code>TTIOAcquisitionRun</code> (0-based);
+ *  <code>0</code> if standalone. */
 @property (readonly) NSUInteger indexPosition;
 
-/** Scan time in seconds from run start. 0 if not applicable. */
+/** Scan time in seconds from run start; <code>0</code> if not
+ *  applicable. */
 @property (readonly) double scanTimeSeconds;
 
-/** Precursor m/z for tandem MS. 0 if not tandem. */
+/** Precursor m/z for tandem MS; <code>0</code> if not tandem. */
 @property (readonly) double precursorMz;
 
-/** Precursor charge state. 0 if unknown. */
+/** Precursor charge state; <code>0</code> if unknown. */
 @property (readonly) NSUInteger precursorCharge;
 
+/**
+ * Designated initialiser.
+ *
+ * @param arrays           Named signal arrays.
+ * @param axes             Coordinate axes.
+ * @param indexPosition    Position in parent run.
+ * @param scanTime         Scan time in seconds.
+ * @param precursorMz      Precursor m/z (0 if not tandem).
+ * @param precursorCharge  Precursor charge (0 if unknown).
+ * @return An initialised spectrum.
+ */
 - (instancetype)initWithSignalArrays:(NSDictionary<NSString *, TTIOSignalArray *> *)arrays
                                 axes:(NSArray<TTIOAxisDescriptor *> *)axes
                        indexPosition:(NSUInteger)indexPosition
@@ -54,21 +77,33 @@
                          precursorMz:(double)precursorMz
                      precursorCharge:(NSUInteger)precursorCharge;
 
-#pragma mark - HDF5 round-trip
+#pragma mark - Storage round-trip
 
 /**
- * Write this spectrum into a new sub-group named `name` under `parent`.
- * Subclasses override -writeAdditionalAttributesToGroup:error: to add
- * their typed metadata after the base class has written the common fields.
+ * Writes this spectrum into a new sub-group named <code>name</code>
+ * under <code>parent</code>. Subclasses override
+ * <code>-writeAdditionalAttributesToGroup:error:</code> to add their
+ * typed metadata after the base class has written the common fields.
+ *
+ * @param parent Destination parent group.
+ * @param name   Sub-group name.
+ * @param error  Out-parameter populated on failure.
+ * @return <code>YES</code> on success.
  */
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
                 name:(NSString *)name
                error:(NSError **)error;
 
 /**
- * Read a spectrum sub-group. The receiving class chooses what to read;
- * subclasses override -readAdditionalAttributesFromGroup:error: to pull
+ * Reads a spectrum sub-group. The receiving class chooses what to
+ * read; subclasses override
+ * <code>-readAdditionalAttributesFromGroup:error:</code> to pull
  * their typed metadata.
+ *
+ * @param parent Source parent group.
+ * @param name   Sub-group name.
+ * @param error  Out-parameter populated on failure.
+ * @return The materialised spectrum, or <code>nil</code> on failure.
  */
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent
                          name:(NSString *)name
@@ -76,11 +111,17 @@
 
 #pragma mark - Subclass hooks
 
-/** Override to write subclass-specific attributes. Default is a no-op. */
+/**
+ * Override hook for subclass-specific attribute writing. Default is
+ * a no-op.
+ */
 - (BOOL)writeAdditionalAttributesToGroup:(id<TTIOStorageGroup>)group
                                    error:(NSError **)error;
 
-/** Override to read subclass-specific attributes. Default is a no-op. */
+/**
+ * Override hook for subclass-specific attribute reading. Default is
+ * a no-op.
+ */
 - (BOOL)readAdditionalAttributesFromGroup:(id<TTIOStorageGroup>)group
                                     error:(NSError **)error;
 

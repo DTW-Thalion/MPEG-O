@@ -1,3 +1,17 @@
+/*
+ * TTIOUVVisSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOUVVisSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIOUVVisSpectrum.h
+ *
+ * 1-D UV-visible absorption spectrum: wavelength + absorbance +
+ * path length + solvent.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOUVVisSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"

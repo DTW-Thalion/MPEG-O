@@ -1,3 +1,16 @@
+/*
+ * TTIOIRSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOIRSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIOIRSpectrum.h
+ *
+ * 1-D mid-IR spectrum (transmittance or absorbance).
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOIRSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"

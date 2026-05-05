@@ -1,3 +1,17 @@
+/*
+ * TTIOMassSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOMassSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIOMassSpectrum.h
+ *
+ * Mass spectrum with m/z + intensity + MS level + polarity + scan
+ * window + optional precursor activation / isolation metadata.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOMassSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"

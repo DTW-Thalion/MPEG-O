@@ -1,3 +1,19 @@
+/*
+ * TTIOSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOSpectrum
+ * Inherits From: NSObject
+ * Declared In:   Spectra/TTIOSpectrum.h
+ *
+ * Base class for any spectrum. Owns the named signal arrays + axes
+ * + run-position metadata; subclasses add typed metadata via the
+ * -writeAdditionalAttributesToGroup: / -readAdditionalAttributesFromGroup:
+ * hook pair.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"
