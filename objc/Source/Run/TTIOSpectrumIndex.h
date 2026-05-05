@@ -10,58 +10,96 @@
 @class TTIOIsolationWindow;
 
 /**
- * Per-spectrum offsets, lengths, and queryable scan metadata for one
- * TTIOAcquisitionRun. Kept as parallel C arrays inside NSData buffers
- * for compact storage and fast iteration. Persisted as five parallel
- * 1-D HDF5 datasets under the run's `spectrum_index/` sub-group plus
- * a sixth one for precursor charge.
+ * <heading>TTIOSpectrumIndex</heading>
  *
- * Range queries (RT, ms_level, polarity) operate on the in-memory
- * arrays and do not touch the signal channels — this is the
- * "compressed-domain query" property of the MPEG-G access-unit model.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Run/TTIOSpectrumIndex.h</p>
  *
- * API status: Stable.
+ * <p>Per-spectrum offsets, lengths, and queryable scan metadata for
+ * one <code>TTIOAcquisitionRun</code>. Kept as parallel C arrays
+ * inside <code>NSData</code> buffers for compact storage and fast
+ * iteration. Persisted as parallel 1-D datasets under the run's
+ * <code>spectrum_index/</code> sub-group.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.acquisition_run.SpectrumIndex
- *   Java:   global.thalion.ttio.SpectrumIndex
+ * <p>Range queries (RT, ms_level, polarity) operate on the
+ * in-memory arrays and do not touch the signal channels — this is
+ * the compressed-domain query property of the access-unit storage
+ * model.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.acquisition_run.SpectrumIndex</code><br/>
+ * Java: <code>global.thalion.ttio.SpectrumIndex</code></p>
  */
 @interface TTIOSpectrumIndex : NSObject
 
+/** Number of indexed spectra. */
 @property (readonly) NSUInteger count;
 
-/** offsets[i] is the starting element index of spectrum i in mz_values. */
+/** @return Starting element index of spectrum <code>index</code>
+ *          within <code>mz_values</code>. */
 - (uint64_t)offsetAt:(NSUInteger)index;
-/** lengths[i] is the number of elements (peaks) in spectrum i. */
+
+/** @return Number of elements (peaks) in spectrum <code>index</code>. */
 - (uint32_t)lengthAt:(NSUInteger)index;
 
+/** @return Retention time in seconds. */
 - (double)retentionTimeAt:(NSUInteger)index;
+
+/** @return MS level (1, 2, 3, ...). */
 - (uint8_t)msLevelAt:(NSUInteger)index;
+
+/** @return Scan polarity. */
 - (TTIOPolarity)polarityAt:(NSUInteger)index;
+
+/** @return Precursor m/z; <code>0</code> for MS1. */
 - (double)precursorMzAt:(NSUInteger)index;
+
+/** @return Precursor charge state; <code>0</code> if unknown. */
 - (uint8_t)precursorChargeAt:(NSUInteger)index;
+
+/** @return Base-peak intensity. */
 - (double)basePeakIntensityAt:(NSUInteger)index;
 
-/** (M74) Activation method for spectrum `index`. Returns
- *  `TTIOActivationMethodNone` when the file was written without the
- *  `opt_ms2_activation_detail` feature flag (M74 columns absent). */
+/**
+ * @return Activation method for spectrum <code>index</code>;
+ *         <code>TTIOActivationMethodNone</code> when the file was
+ *         written without the
+ *         <code>opt_ms2_activation_detail</code> feature flag.
+ */
 - (TTIOActivationMethod)activationMethodAt:(NSUInteger)index;
 
-/** (M74) Isolation window for spectrum `index`, or `nil` when the
- *  M74 columns are absent or the stored target+offsets are all zero
- *  (MS1 sentinel). */
+/**
+ * @return Isolation window for spectrum <code>index</code>, or
+ *         <code>nil</code> when the optional columns are absent or
+ *         the stored target+offsets are all zero (MS1 sentinel).
+ */
 - (TTIOIsolationWindow *)isolationWindowAt:(NSUInteger)index;
 
-/** (M74) YES when all four optional parallel columns are present. */
+/** <code>YES</code> when all four optional activation-detail
+ *  parallel columns are present. */
 @property (readonly) BOOL hasActivationDetail;
 
-/** Indices whose retention time falls within [range.minimum, range.maximum]. */
+/**
+ * @param range Closed retention-time range in seconds.
+ * @return Indices whose retention time falls inside the range.
+ */
 - (NSIndexSet *)indicesInRetentionTimeRange:(TTIOValueRange *)range;
+
+/**
+ * @param msLevel MS level to filter on.
+ * @return Indices whose MS level matches.
+ */
 - (NSIndexSet *)indicesForMsLevel:(uint8_t)msLevel;
 
 #pragma mark - Construction
 
-/** Pre-M74 initializer; delegates to the full form with nil M74 columns. */
+/**
+ * Convenience initialiser without optional activation-detail
+ * columns. Delegates to the designated initialiser with
+ * <code>nil</code> trailing arguments.
+ */
 - (instancetype)initWithOffsets:(NSData *)offsets
                         lengths:(NSData *)lengths
                  retentionTimes:(NSData *)retentionTimes
@@ -69,12 +107,18 @@
                      polarities:(NSData *)polarities
                    precursorMzs:(NSData *)precursorMzs
                precursorCharges:(NSData *)precursorCharges
-             basePeakIntensities:(NSData *)basePeakIntensities;
+            basePeakIntensities:(NSData *)basePeakIntensities;
 
-/** (M74) Designated initializer. The four trailing `NSData *` arguments
- *  must all be nil (legacy file) or all non-nil (M74 columns present
- *  — writer emits them when the `opt_ms2_activation_detail` flag is
- *  set by the author). Mixed nil/non-nil is rejected. */
+/**
+ * Designated initialiser. The four trailing optional columns
+ * (<code>activationMethods</code>,
+ * <code>isolationTargetMzs</code>,
+ * <code>isolationLowerOffsets</code>,
+ * <code>isolationUpperOffsets</code>) must all be <code>nil</code>
+ * (legacy file) or all non-<code>nil</code> (activation-detail
+ * columns present); mixed <code>nil</code> / non-<code>nil</code>
+ * is rejected.
+ */
 - (instancetype)initWithOffsets:(NSData *)offsets
                         lengths:(NSData *)lengths
                  retentionTimes:(NSData *)retentionTimes
@@ -82,19 +126,36 @@
                      polarities:(NSData *)polarities
                    precursorMzs:(NSData *)precursorMzs
                precursorCharges:(NSData *)precursorCharges
-             basePeakIntensities:(NSData *)basePeakIntensities
-               activationMethods:(NSData *)activationMethods
+            basePeakIntensities:(NSData *)basePeakIntensities
+              activationMethods:(NSData *)activationMethods
              isolationTargetMzs:(NSData *)isolationTargetMzs
           isolationLowerOffsets:(NSData *)isolationLowerOffsets
           isolationUpperOffsets:(NSData *)isolationUpperOffsets;
 
-#pragma mark - Storage round-trip (provider-agnostic)
+#pragma mark - Storage round-trip
 
-/** v0.7 M44 / Task 31: I/O routed through StorageGroup / StorageDataset. */
+/**
+ * Writes the index under <code>parent/spectrum_index/</code>.
+ *
+ * @param parent Destination parent group.
+ * @param error  Out-parameter populated on failure.
+ * @return <code>YES</code> on success.
+ */
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
+
+/**
+ * Reads the index from <code>parent/spectrum_index/</code>.
+ *
+ * @param parent Source parent group.
+ * @param error  Out-parameter populated on failure.
+ * @return The materialised index, or <code>nil</code> on failure.
+ */
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent error:(NSError **)error;
 
-/** v0.9 M64.5-objc-java: legacy alias kept for source compatibility. */
+/**
+ * Legacy alias for <code>+readFromGroup:error:</code>; identical
+ * behaviour, retained for source compatibility.
+ */
 + (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error;
 
 @end

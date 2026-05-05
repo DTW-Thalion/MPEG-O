@@ -21,28 +21,32 @@
 @class TTIOAccessPolicy;
 
 /**
- * An ordered run of spectra sharing an instrument configuration and
- * acquisition mode. Maps to the MPEG-G Dataset concept; each spectrum
- * is an Access Unit.
+ * <heading>TTIOAcquisitionRun</heading>
  *
- * v0.2 update: runs accept any TTIOSpectrum subclass (mass spectra,
- * NMR spectra, ...). Signal channel serialization is name-driven, so
- * an MS run writes mz_values + intensity_values (binary-identical to
- * v0.1) and an NMR run writes chemical_shift_values + intensity_values.
- * The run group carries a spectrum_class attribute identifying the
- * subclass; absence of that attribute triggers v0.1 fallback
- * (TTIOMassSpectrum with hardcoded channel names).
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> TTIOIndexable, TTIOStreamable,
+ * TTIOProvenanceable, TTIOEncryptable, TTIORun</p>
+ * <p><em>Declared In:</em> Run/TTIOAcquisitionRun.h</p>
  *
- * Conformances (v0.2): TTIOProvenanceable (per-run provenance chain),
- * TTIOEncryptable (delegates to TTIOEncryptionManager when the run
- * carries persistence context set by TTIOSpectralDataset after load).
+ * <p>An ordered run of spectra sharing an instrument configuration
+ * and acquisition mode. The non-genomic counterpart of
+ * <code>TTIOGenomicRun</code>; both conform to <code>TTIORun</code>
+ * so cross-modality code can iterate uniformly.</p>
  *
- * API status: Stable (Encryptable surface deferred to M41.5 in
- * non-ObjC implementations).
+ * <p>A run accepts any <code>TTIOSpectrum</code> subclass (mass
+ * spectra, NMR spectra, Raman, IR, UV-Vis, ...) but every spectrum
+ * within a single run must share a single subclass. Signal-channel
+ * serialisation is name-driven, so an MS run writes
+ * <code>mz_values</code> + <code>intensity_values</code> and an NMR
+ * run writes <code>chemical_shift_values</code> +
+ * <code>intensity_values</code>. The run group carries a
+ * <code>spectrum_class</code> attribute identifying the subclass.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.acquisition_run.AcquisitionRun
- *   Java:   global.thalion.ttio.AcquisitionRun
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.acquisition_run.AcquisitionRun</code><br/>
+ * Java: <code>global.thalion.ttio.AcquisitionRun</code></p>
  */
 @interface TTIOAcquisitionRun : NSObject <TTIOIndexable,
                                           TTIOStreamable,
@@ -50,100 +54,140 @@
                                           TTIOEncryptable,
                                           TTIORun>
 
-/** Phase 1: run identifier as stored in the .tio file (e.g.
- *  ``@"run_0001"``). Set after load by -setPersistenceFilePath:runName:
- *  or by the in-memory write path; defaults to the empty string for
- *  freshly constructed in-memory runs that have not yet been persisted.
- *  Required by the TTIORun protocol so callers can iterate uniformly
- *  across modalities. */
+/** Run identifier as stored in the .tio file (e.g.
+ *  <code>@"run_0001"</code>). Defaults to the empty string for
+ *  freshly constructed in-memory runs that have not yet been
+ *  persisted. */
 @property (readonly, copy) NSString *name;
 
+/** Acquisition mode enum value identifying the protocol context. */
 @property (readonly) TTIOAcquisitionMode acquisitionMode;
+
+/** Instrument-configuration metadata. */
 @property (readonly, strong) TTIOInstrumentConfig *instrumentConfig;
+
+/** Per-spectrum offsets, lengths, and queryable scan metadata. */
 @property (readonly, strong) TTIOSpectrumIndex *spectrumIndex;
 
 /** Name of the dominant spectrum class for this run, e.g.
- *  @"TTIOMassSpectrum" or @"TTIONMRSpectrum". Set from the first
- *  spectrum at init or read from the HDF5 attribute. */
+ *  <code>@"TTIOMassSpectrum"</code> or
+ *  <code>@"TTIONMRSpectrum"</code>. */
 @property (readonly, copy) NSString *spectrumClassName;
 
-/** v0.11 M79: omics modality this run carries. Wire/storage attribute
- *  ``@modality`` (UTF-8 string). Defaults to ``@"mass_spectrometry"``;
- *  pre-v0.11 files lack the attribute and are interpreted as mass-spec
- *  runs. v0.11 M74 will introduce ``@"genomics"`` for genomic-read
- *  runs. */
+/** Omics modality this run carries. Storage attribute
+ *  <code>@modality</code> (UTF-8). Defaults to
+ *  <code>@"mass_spectrometry"</code>. */
 @property (readonly, copy) NSString *modality;
 
-/** NMR-only run-level metadata (zero/nil for MS runs). Propagated to
- *  every reconstructed TTIONMRSpectrum. */
+/** Nucleus identifier for NMR runs (zero / <code>nil</code> for
+ *  non-NMR). Propagated to every reconstructed
+ *  <code>TTIONMRSpectrum</code>. */
 @property (readonly, copy) NSString *nucleusType;
+
+/** Spectrometer frequency in MHz for NMR runs. */
 @property (readonly) double spectrometerFrequencyMHz;
 
-/** v0.3 M21: compression codec applied to signal channel datasets
- *  when persisting this run. Defaults to ``TTIOCompressionZlib`` so
- *  existing callers are unaffected. Writers may set LZ4 or
- *  Numpress-delta explicitly before calling ``writeToGroup:``. */
+/** Compression codec applied to signal-channel datasets when
+ *  persisting this run. Defaults to <code>TTIOCompressionZlib</code>;
+ *  writers may set <code>LZ4</code> or <code>NumpressDelta</code>
+ *  explicitly before calling <code>-writeToGroup:</code>. */
 @property (nonatomic) TTIOCompression signalCompression;
 
-/** v0.4 M24: chromatogram traces associated with this run (TIC / XIC /
- *  SRM). Empty by default so v0.3 files read back as zero-chromatogram
- *  runs without a schema bump. Persisted under
- *  ``&lt;run&gt;/chromatograms/`` with concatenated ``time_values`` +
- *  ``intensity_values`` datasets and a ``chromatogram_index/`` subgroup
- *  of parallel metadata arrays. */
+/** Chromatogram traces associated with this run (TIC / XIC / SRM).
+ *  Empty by default. */
 @property (readonly, copy) NSArray<TTIOChromatogram *> *chromatograms;
 
 #pragma mark - In-memory construction
 
-/** v0.2 generalized initializer. Accepts any TTIOSpectrum subclass,
- *  but all spectra in the same run must share a single subclass. */
+/**
+ * Convenience initialiser without chromatograms.
+ *
+ * @param spectra Array of any single <code>TTIOSpectrum</code>
+ *                subclass.
+ * @param mode    Acquisition mode.
+ * @param config  Instrument configuration.
+ * @return An initialised run.
+ */
 - (instancetype)initWithSpectra:(NSArray *)spectra
                 acquisitionMode:(TTIOAcquisitionMode)mode
                instrumentConfig:(TTIOInstrumentConfig *)config;
 
-/** v0.4 M24 initializer. ``chromatograms`` may be nil/empty. */
+/**
+ * Designated initialiser.
+ *
+ * @param spectra        Array of any single <code>TTIOSpectrum</code>
+ *                       subclass.
+ * @param chromatograms  Optional chromatograms; pass <code>nil</code>
+ *                       or empty array for none.
+ * @param mode           Acquisition mode.
+ * @param config         Instrument configuration.
+ * @return An initialised run.
+ */
 - (instancetype)initWithSpectra:(NSArray *)spectra
                   chromatograms:(NSArray<TTIOChromatogram *> *)chromatograms
                 acquisitionMode:(TTIOAcquisitionMode)mode
                instrumentConfig:(TTIOInstrumentConfig *)config;
 
-#pragma mark - Storage round-trip (provider-agnostic)
+#pragma mark - Storage round-trip
 
-/** v0.7 M44 / Task 31: I/O routed through StorageGroup / StorageDataset. */
+/**
+ * Writes this run into a new sub-group named <code>name</code>
+ * under <code>parent</code> via the
+ * <code>TTIOStorageGroup</code> protocol.
+ */
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)parent
                 name:(NSString *)name
                error:(NSError **)error;
 
+/**
+ * Reads a run from <code>parent/name</code>.
+ */
 + (instancetype)readFromGroup:(id<TTIOStorageGroup>)parent
                          name:(NSString *)name
                         error:(NSError **)error;
 
-/** v0.9 M64.5-objc-java: legacy alias for the storage-protocol read
- *  path. Now identical to +readFromGroup:name:error:; retained for
- *  source compatibility with v0.9 callers. */
+/**
+ * Legacy alias for
+ * <code>+readFromGroup:name:error:</code>; identical behaviour,
+ * retained for source compatibility.
+ */
 + (instancetype)readFromStorageGroup:(id)parent
-                                 name:(NSString *)name
-                                error:(NSError **)error;
+                                name:(NSString *)name
+                               error:(NSError **)error;
 
 #pragma mark - Random access
 
-/** v0.2: returns whatever TTIOSpectrum subclass the run holds. */
+/**
+ * @param index Zero-based position; must satisfy
+ *              <code>index &lt; count</code>.
+ * @param error Out-parameter populated on failure.
+ * @return The materialised spectrum (concrete subclass), or
+ *         <code>nil</code> on failure.
+ */
 - (id)spectrumAtIndex:(NSUInteger)index error:(NSError **)error;
 
-/** Indices in the given retention-time range, in ascending order. */
+/**
+ * @param range Closed retention-time range in seconds.
+ * @return Indices in ascending order whose retention time falls
+ *         inside the range.
+ */
 - (NSArray<NSNumber *> *)indicesInRetentionTimeRange:(TTIOValueRange *)range;
 
-#pragma mark - Persistence context (used by TTIOSpectralDataset)
+#pragma mark - Persistence context
 
-/** Attach file-path + run-name context after load so protocol
- *  encryption methods have something to delegate to. Internal API. */
+/**
+ * Attaches file-path + run-name context after load so protocol
+ * encryption methods can delegate to the in-place encryption
+ * manager. Internal API.
+ */
 - (void)setPersistenceFilePath:(NSString *)path runName:(NSString *)runName;
 
-/** Release all cached HDF5 handles (group + per-channel datasets).
- *  After this call, spectrumAtIndex: fails; the run keeps its index
- *  metadata so count/headers remain queryable. Used by
- *  TTIOSpectralDataset.closeFile to fully release the underlying file
- *  before an encrypt/decrypt reopen. */
+/**
+ * Releases all cached HDF5 handles (group + per-channel datasets).
+ * After this call <code>-spectrumAtIndex:error:</code> fails; the
+ * run keeps its index metadata so <code>count</code> / headers
+ * remain queryable.
+ */
 - (void)releaseHDF5Handles;
 
 #pragma mark - TTIOProvenanceable

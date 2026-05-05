@@ -1,3 +1,18 @@
+/*
+ * TTIOInstrumentConfig.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOInstrumentConfig
+ * Inherits From: NSObject
+ * Conforms To:   NSCoding, NSCopying
+ * Declared In:   Run/TTIOInstrumentConfig.h
+ *
+ * Immutable instrument-configuration value class. Persisted as a
+ * small group of string attributes under instrument_config/.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOInstrumentConfig.h"
 #import "HDF5/TTIOHDF5Errors.h"
 

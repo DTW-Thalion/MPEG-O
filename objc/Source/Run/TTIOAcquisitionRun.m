@@ -1,3 +1,20 @@
+/*
+ * TTIOAcquisitionRun.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOAcquisitionRun
+ * Inherits From: NSObject
+ * Conforms To:   TTIOIndexable, TTIOStreamable, TTIOProvenanceable,
+ *                TTIOEncryptable, TTIORun
+ * Declared In:   Run/TTIOAcquisitionRun.h
+ *
+ * Ordered run of spectra sharing instrument configuration and
+ * acquisition mode. Provider-agnostic write/read; cooperates with
+ * TTIOSpectralDataset for in-place encryption / decryption.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOAcquisitionRun.h"
 #import "TTIOInstrumentConfig.h"
 #import "TTIOSpectrumIndex.h"
