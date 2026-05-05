@@ -1,3 +1,21 @@
+/*
+ * TTIOSignalArray.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOSignalArray
+ * Inherits From: NSObject
+ * Conforms To:   TTIOCVAnnotatable
+ * Declared In:   Core/TTIOSignalArray.h
+ *
+ * The atomic unit of measured signal in TTI-O. Wraps a typed
+ * numeric buffer with encoding metadata, an optional axis
+ * descriptor, and CV annotations. This file implements
+ * provider-agnostic storage round-trip, equality, hashing, and
+ * the CVAnnotatable protocol methods.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
