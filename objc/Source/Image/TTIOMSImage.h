@@ -7,50 +7,75 @@
 @class TTIOHDF5Group;
 
 /**
- * Mass-spectrometry imaging dataset: a width x height grid of pixels,
- * each pixel a spectral profile of `spectralPoints` float64 values.
+ * <heading>TTIOMSImage</heading>
  *
- * As of v0.2 (Milestone 12), TTIOMSImage inherits from
- * TTIOSpectralDataset, so it carries identifications, quantifications,
- * provenance records, and TTIOEncryptable / closeFile semantics for
- * free. The image cube itself is persisted under `/study/image_cube/`
- * as a 3-D HDF5 dataset with tile-aligned chunking.
+ * <p><em>Inherits From:</em> TTIOSpectralDataset : NSObject</p>
+ * <p><em>Conforms To:</em> TTIOEncryptable (inherited)</p>
+ * <p><em>Declared In:</em> Image/TTIOMSImage.h</p>
  *
- * v0.1 layout (cube at `/image_cube/` in the root group) remains
- * readable as a fallback via +readFromFilePath:.
+ * <p>Mass-spectrometry imaging dataset: a
+ * <code>width &times; height</code> grid of pixels, each pixel a
+ * spectral profile of <code>spectralPoints</code> float64 values.
+ * Inherits from <code>TTIOSpectralDataset</code> so it carries
+ * identifications, quantifications, provenance records, and the
+ * <code>TTIOEncryptable</code> / <code>-closeFile</code>
+ * semantics for free.</p>
  *
- * Buffer layout (row-major): `cube[(y * width + x) * spectralPoints + s]`.
+ * <p>The image cube is persisted under
+ * <code>/study/image_cube/</code> as a 3-D HDF5 dataset with
+ * tile-aligned chunking. Buffer layout is row-major:
+ * <code>cube[(y * width + x) * spectralPoints + s]</code>.</p>
  *
- * API status: Stable.
+ * <p><strong>API status:</strong> Stable.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.ms_image.MSImage
- *   Java:   global.thalion.ttio.MSImage
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.ms_image.MSImage</code><br/>
+ * Java: <code>global.thalion.ttio.MSImage</code></p>
  */
 @interface TTIOMSImage : TTIOSpectralDataset
 
+/** Image width in pixels. */
 @property (readonly) NSUInteger width;
-@property (readonly) NSUInteger height;
-@property (readonly) NSUInteger spectralPoints;
-@property (readonly) NSUInteger tileSize;
-@property (readonly, copy) NSData *cube;     // float64[height * width * spectralPoints]
 
-/** Spatial metadata — optional, zero/empty when unknown. */
+/** Image height in pixels. */
+@property (readonly) NSUInteger height;
+
+/** Spectral points per pixel. */
+@property (readonly) NSUInteger spectralPoints;
+
+/** Tile size in pixels for chunked storage. */
+@property (readonly) NSUInteger tileSize;
+
+/** Float64 row-major image cube. */
+@property (readonly, copy) NSData *cube;
+
+/** Pixel size in the X dimension (units instrument-specific);
+ *  <code>0</code> when unknown. */
 @property (readonly) double pixelSizeX;
+
+/** Pixel size in the Y dimension; <code>0</code> when unknown. */
 @property (readonly) double pixelSizeY;
+
+/** Scan pattern identifier (e.g. <code>@"raster"</code>); empty
+ *  when unknown. */
 @property (readonly, copy) NSString *scanPattern;
 
-#pragma mark - Initialization
+#pragma mark - Initialisation
 
-/** Convenience initializer for image-only datasets. Inherited dataset
- *  fields are set to empty / nil defaults. */
+/**
+ * Convenience initialiser for image-only datasets. Inherited
+ * dataset fields default to empty / nil.
+ */
 - (instancetype)initWithWidth:(NSUInteger)width
                        height:(NSUInteger)height
                spectralPoints:(NSUInteger)spectralPoints
                      tileSize:(NSUInteger)tileSize
                          cube:(NSData *)cube;
 
-/** Full designated initializer — image fields plus dataset metadata. */
+/**
+ * Designated initialiser combining image fields with full dataset
+ * metadata.
+ */
 - (instancetype)initWithTitle:(NSString *)title
            isaInvestigationId:(NSString *)isaId
               identifications:(NSArray *)identifications
@@ -67,14 +92,18 @@
 
 #pragma mark - Persistence
 
-/** Override of TTIOSpectralDataset's read; falls back to v0.1
- *  `/image_cube/` if `/study/image_cube` is missing. */
+/**
+ * Reads an MS image from <code>path</code>. Auto-detects the
+ * canonical <code>/study/image_cube/</code> layout and falls back
+ * to the legacy root <code>/image_cube/</code> path when the
+ * canonical group is absent.
+ */
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
 
 /**
- * Read a `tileWidth x tileHeight` tile starting at `(x, y)`. Supports
- * both the v0.2 /study/image_cube layout and the v0.1 /image_cube
- * layout by auto-detecting.
+ * Reads a <code>tileWidth &times; tileHeight</code> tile starting
+ * at <code>(x, y)</code>. Supports both the canonical and legacy
+ * cube paths.
  */
 + (NSData *)readTileFromFilePath:(NSString *)path
                              atX:(NSUInteger)x
