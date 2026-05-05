@@ -134,23 +134,30 @@ class TestSimulatorBasics:
 
 
 class TestAsyncStream:
+    """Wall-clock pacing of the async simulator stream.
 
-    async def test_async_stream_respects_rate(self, tmp_path):
+    Driven via ``asyncio.run`` so the test works whether or not the
+    optional ``pytest-asyncio`` plugin is installed. Previous form
+    used ``@pytest.mark.asyncio``, which silently produced
+    "async def functions are not natively supported" failures when
+    the plugin was absent — i.e. on the default ``pip install -e
+    'python[test]'`` environment.
+    """
+
+    def test_async_stream_respects_rate(self, tmp_path):
         """5 Hz over 0.5s should take roughly 0.5s of wall-clock
         time. Allow 2x slack for CI noise."""
+        import asyncio
         import time as _t
         buf = io.BytesIO()
         sim = AcquisitionSimulator(scan_rate=5, duration=0.5, seed=11)
-        with TransportWriter(buf) as tw:
-            start = _t.monotonic()
-            n = await sim.stream(tw)
-            elapsed = _t.monotonic() - start
+
+        async def _run() -> tuple[int, float]:
+            with TransportWriter(buf) as tw:
+                start = _t.monotonic()
+                n = await sim.stream(tw)
+                return n, _t.monotonic() - start
+
+        n, elapsed = asyncio.run(_run())
         assert n == 2
         assert 0.3 <= elapsed <= 1.5, f"elapsed={elapsed}"
-
-
-# pytest-asyncio: declare the async test.
-import pytest
-TestAsyncStream.test_async_stream_respects_rate = pytest.mark.asyncio(
-    TestAsyncStream.test_async_stream_respects_rate
-)

@@ -97,9 +97,26 @@ def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
         "TTIO_JAVA_LIB_PATH",
         "/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial",
     )
+    # Append the libttio_rans build dir so Java's TtioRansNative
+    # System.loadLibrary("ttio_rans") resolves in the subprocess.
+    # Prefer TTIO_RANS_LIB_PATH (file path) — strip the filename so
+    # only its parent directory ends up on java.library.path. Fall
+    # back to the conventional native/_build location next to the
+    # repo root.
+    rans_lib_dir = None
+    rans_path = os.environ.get("TTIO_RANS_LIB_PATH", "")
+    if rans_path and os.path.isfile(rans_path):
+        rans_lib_dir = os.path.dirname(rans_path)
+    else:
+        candidate = _REPO_ROOT / "native" / "_build"
+        if candidate.is_dir():
+            rans_lib_dir = str(candidate)
+    java_lib_path = env["TTIO_JAVA_LIB_PATH"]
+    if rans_lib_dir and rans_lib_dir not in java_lib_path:
+        java_lib_path = f"{java_lib_path}:{rans_lib_dir}"
     argv = [
         "java",
-        f"-Djava.library.path={env['TTIO_JAVA_LIB_PATH']}",
+        f"-Djava.library.path={java_lib_path}",
         "-cp", full_cp,
         "global.thalion.ttio.tools.TtioVerify",
     ]
@@ -312,6 +329,14 @@ def test_java_reads_python_4_provider_matrix(
     Non-HDF5 cross-language cells are expected-failure (xfail) with
     specific documented reasons — see ``_CROSSLANG_XFAIL_REASONS``.
     """
+    if provider == "zarr":
+        try:
+            import zarr  # noqa: F401
+        except ImportError:
+            pytest.skip(
+                "provider 'zarr' requires the optional 'zarr' package; "
+                "install via 'pip install ttio[zarr]'"
+            )
     java = _resolve_java_verify()
     if java is None:
         pytest.skip("Java TtioVerify classpath not available")
@@ -363,6 +388,14 @@ def test_objc_rejects_non_hdf5_url_cleanly(tmp_path: Path) -> None:
 def test_objc_reads_python_non_hdf5(provider: str, tmp_path: Path) -> None:
     """Python writes through a non-HDF5 provider; ObjC's new
     readViaProviderURL path reads the same summary."""
+    if provider == "zarr":
+        try:
+            import zarr  # noqa: F401
+        except ImportError:
+            pytest.skip(
+                "provider 'zarr' requires the optional 'zarr' package; "
+                "install via 'pip install ttio[zarr]'"
+            )
     objc = _resolve_objc_verify()
     if objc is None:
         pytest.skip("ObjC TtioVerify binary not built")

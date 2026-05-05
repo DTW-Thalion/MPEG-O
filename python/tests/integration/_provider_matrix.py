@@ -29,14 +29,40 @@ WRITE_PROVIDERS_WIRED: bool = True
 _NATIVE_WRITE_ONLY: frozenset[str] = frozenset({"memory", "sqlite", "zarr"})
 
 
+def _zarr_available() -> bool:
+    """Cached check for the optional ``zarr`` package."""
+    global _ZARR_AVAILABLE
+    if _ZARR_AVAILABLE is None:
+        try:
+            import zarr  # noqa: F401
+            _ZARR_AVAILABLE = True
+        except ImportError:
+            _ZARR_AVAILABLE = False
+    return _ZARR_AVAILABLE
+
+
+_ZARR_AVAILABLE: bool | None = None
+
+
 def maybe_skip_provider(provider: str) -> None:
     """Skip the calling test if ``provider`` cannot accept writes yet.
 
-    With :data:`WRITE_PROVIDERS_WIRED` set this is a no-op; left in
-    place so subsequent v0.9 milestones (encryption / signature /
-    anonymization through providers — M64.5 phase B+) can re-enable
-    selective skipping for paths that aren't yet provider-aware.
+    Two skip paths:
+
+    * The optional ``zarr`` package is not installed in this
+      environment — `zarr` cells skip cleanly. Install via
+      ``pip install ttio[zarr]`` to enable.
+    * Pre-M64.5 caller-refactor: any non-HDF5 provider when
+      :data:`WRITE_PROVIDERS_WIRED` is ``False``. With M64.5 phase A
+      shipped this is a no-op; left in place so subsequent
+      milestones can re-enable selective skipping for paths that
+      aren't yet provider-aware.
     """
+    if provider == "zarr" and not _zarr_available():
+        pytest.skip(
+            "provider 'zarr' requires the optional 'zarr' package; "
+            "install via 'pip install ttio[zarr]' or 'pip install zarr'"
+        )
     if WRITE_PROVIDERS_WIRED:
         return
     if provider in _NATIVE_WRITE_ONLY:

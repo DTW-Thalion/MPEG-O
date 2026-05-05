@@ -60,7 +60,21 @@ def _samtools_cram_size(bam: Path, ref: Path, work_dir: Path) -> int:
 
 def _ttio_size(bam: Path, ref: Path, work_dir: Path) -> int:
     """Encode ``bam`` to TTI-O via the benchmark harness pipeline and return size."""
-    from tools.benchmarks.formats import ttio_compress
+    # The benchmark harness lives under <repo>/tools/, not the
+    # python package — add the repo root to sys.path so the bare
+    # ``tools.benchmarks.formats`` import resolves regardless of
+    # the pytest invocation directory.
+    import sys
+    if str(REPO_ROOT) not in sys.path:
+        sys.path.insert(0, str(REPO_ROOT))
+    try:
+        from tools.benchmarks.formats import ttio_compress
+    except ImportError:
+        pytest.skip(
+            "benchmark harness not importable from "
+            f"{REPO_ROOT}/tools/benchmarks — chr22 gate test requires the "
+            "repo-root tools/ tree on sys.path"
+        )
     out = work_dir / "ttio_for_gate.tio"
     result = ttio_compress(bam, ref, out)
     assert result.output_size_bytes == out.stat().st_size

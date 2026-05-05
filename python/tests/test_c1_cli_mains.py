@@ -32,6 +32,41 @@ import importlib
 import pytest
 
 
+def _skip_if_optional_dep_missing(modname: str) -> None:
+    """Skip CLI smoke tests whose module imports an optional 3rd-party
+    package that may not be installed in the dev env.
+
+    Maps each CLI module to the optional package(s) its import chain
+    needs; if any are missing, the test SKIPs cleanly instead of
+    surfacing the optional-extra install hint as a failure.
+    """
+    deps = {
+        "ttio.tools.transport_server_cli": ["websockets"],
+        # ttio_pqc_cli imports ttio.pqc only on subcommand dispatch,
+        # but the keygen-writes-key-files tests force the import.
+        "ttio.tools.ttio_pqc_cli": [],  # tested per-test instead
+    }.get(modname, [])
+    for pkg in deps:
+        try:
+            importlib.import_module(pkg)
+        except ImportError:
+            pytest.skip(
+                f"{modname} requires optional package '{pkg}'; install via "
+                f"the matching ttio[...] extra"
+            )
+
+
+def _skip_if_no_liboqs() -> None:
+    """Skip ttio-pqc tests when liboqs-python is not installed."""
+    try:
+        importlib.import_module("oqs")
+    except ImportError:
+        pytest.skip(
+            "ttio.pqc requires the optional 'liboqs-python' dependency; "
+            "install via 'pip install ttio[pqc]'"
+        )
+
+
 CLI_MODULES = [
     "ttio.tools.dump_identifications",
     "ttio.tools.per_au_cli",
@@ -59,6 +94,7 @@ def test_cli_help_exits_zero(modname, capsys):
     hand-rolled ones (ttio_pqc_cli, dump_identifications) return 0
     or 1 directly. Both are acceptable as long as usage text prints.
     """
+    _skip_if_optional_dep_missing(modname)
     mod = importlib.import_module(modname)
     rc: int | None = None
     try:
@@ -97,6 +133,7 @@ def test_cli_no_args_errors(modname, capsys):
     Some CLIs accept no args and run a default behaviour — those
     are still allowed by this test (we accept any non-crash exit).
     """
+    _skip_if_optional_dep_missing(modname)
     mod = importlib.import_module(modname)
     try:
         result = mod.main([])
@@ -119,6 +156,7 @@ def test_cli_no_args_errors(modname, capsys):
 @pytest.mark.parametrize("modname", CLI_MODULES)
 def test_cli_unknown_flag_errors(modname, capsys):
     """Every CLI rejects an unknown --flag with non-zero exit."""
+    _skip_if_optional_dep_missing(modname)
     mod = importlib.import_module(modname)
     rc: int | None = None
     try:
@@ -484,6 +522,7 @@ def test_ttio_verify_with_wrong_key_fails(tmp_path):
 
 def test_ttio_pqc_sig_keygen_writes_key_files(tmp_path):
     """ttio-pqc sig-keygen actually writes the public + secret key files."""
+    _skip_if_no_liboqs()
     from ttio.tools import ttio_pqc_cli
 
     pk = tmp_path / "pk.bin"
@@ -496,6 +535,7 @@ def test_ttio_pqc_sig_keygen_writes_key_files(tmp_path):
 
 def test_ttio_pqc_kem_keygen_writes_key_files(tmp_path):
     """ttio-pqc kem-keygen writes ML-KEM-1024 key files."""
+    _skip_if_no_liboqs()
     from ttio.tools import ttio_pqc_cli
 
     pk = tmp_path / "kem_pk.bin"

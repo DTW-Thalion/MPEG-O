@@ -27,6 +27,7 @@ from ttio.providers import open_provider
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _provider_matrix import (  # type: ignore[import-not-found]
     PROVIDERS as _PROVIDERS,
+    maybe_skip_provider as _maybe_skip_provider,
     provider_url as _provider_url,
 )
 
@@ -43,6 +44,7 @@ def _provider_for_cube(provider: str, tmp_path: Path) -> tuple[str, str]:
 @pytest.mark.parametrize("provider", _PROVIDERS)
 def test_msimage_cube_nd_roundtrip(provider: str, tmp_path: Path) -> None:
     """Write a small 3-D intensity cube, read it back, compare bytes."""
+    _maybe_skip_provider(provider)
     rng = np.random.default_rng(42)
     h, w, sp = 4, 5, 8
     cube = rng.uniform(0.0, 1e6, size=(h, w, sp)).astype(np.float64)
