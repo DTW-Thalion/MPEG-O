@@ -1,3 +1,19 @@
+/*
+ * TTIOAlignedRead.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOAlignedRead
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying
+ * Declared In:   Genomics/TTIOAlignedRead.h
+ *
+ * Immutable per-read aligned-sequencing value object. No storage
+ * I/O on this class directly — TTIOGenomicRun materialises
+ * instances from the signal channels.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOAlignedRead.h"
 
 @implementation TTIOAlignedRead

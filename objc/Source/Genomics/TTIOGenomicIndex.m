@@ -1,3 +1,20 @@
+/*
+ * TTIOGenomicIndex.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOGenomicIndex
+ * Inherits From: NSObject
+ * Declared In:   Genomics/TTIOGenomicIndex.h
+ *
+ * Per-read offsets, lengths, positions, mapping qualities, flags,
+ * and chromosome strings for one genomic run. Loaded eagerly at
+ * open time; range queries (region, unmapped, flag mask) operate
+ * on the in-memory parallel arrays without touching the heavy
+ * signal channels.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOGenomicIndex.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"

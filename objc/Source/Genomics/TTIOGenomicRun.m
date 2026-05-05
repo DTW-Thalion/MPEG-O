@@ -1,3 +1,20 @@
+/*
+ * TTIOGenomicRun.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOGenomicRun
+ * Inherits From: NSObject
+ * Conforms To:   TTIOIndexable, TTIORun
+ * Declared In:   Genomics/TTIOGenomicRun.h
+ *
+ * Lazy view over /study/genomic_runs/<name>/. The genomic_index/
+ * subgroup is loaded eagerly; per-read materialisation of
+ * TTIOAlignedRead happens on demand. Decoded read-name and CIGAR
+ * lists are cached for the lifetime of the run instance.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOGenomicRun.h"
 #import "TTIOAlignedRead.h"
 #import "TTIOGenomicIndex.h"
