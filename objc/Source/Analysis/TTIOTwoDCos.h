@@ -7,39 +7,60 @@
 @class TTIOTwoDimensionalCorrelationSpectrum;
 
 /**
- * 2D-COS compute primitives — Noda synchronous/asynchronous
- * decomposition via the Hilbert-transform approach (M77).
+ * <heading>TTIOTwoDCos</heading>
  *
- * All matrices are row-major float64 buffers. The dynamic-spectra
- * input is ``(m, n)``: m perturbation points x n spectral variables.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Analysis/TTIOTwoDCos.h</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.analysis.two_d_cos
- *   Java:   global.thalion.ttio.analysis.TwoDCos
+ * <p>Two-dimensional correlation spectroscopy (2D-COS) compute
+ * primitives. Implements Noda synchronous / asynchronous
+ * decomposition via the Hilbert-transform approach.</p>
+ *
+ * <p>All matrices are row-major float64 buffers. The dynamic-spectra
+ * input is <code>(m, n)</code>: <em>m</em> perturbation points by
+ * <em>n</em> spectral variables.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.analysis.two_d_cos</code><br/>
+ * Java: <code>global.thalion.ttio.analysis.TwoDCos</code></p>
  */
 @interface TTIOTwoDCos : NSObject
 
 /**
- * Return the Hilbert-Noda transform matrix of order ``m`` as row-major
- * float64 bytes (length = m * m * sizeof(double)). N[j, k] = 0 if
- * j==k else 1 / (pi * (k - j)). The matrix is antisymmetric.
- * Returns nil and sets error on ``m < 1``.
+ * Returns the Hilbert-Noda transform matrix of order <code>m</code>
+ * as row-major float64 bytes
+ * (length = <code>m * m * sizeof(double)</code>).
+ * <code>N[j, k] = 0</code> if <code>j == k</code>, else
+ * <code>1 / (pi * (k - j))</code>. The matrix is antisymmetric.
+ *
+ * @param m     Matrix order.
+ * @param error Out-parameter populated when <code>m &lt; 1</code>.
+ * @return The matrix bytes, or <code>nil</code> on invalid input.
  */
 + (NSData *)hilbertNodaMatrixOfOrder:(NSUInteger)m
                                 error:(NSError **)error;
 
 /**
- * Compute the mean-centered 2D-COS decomposition.
+ * Computes the mean-centred 2D-COS decomposition.
  *
- * @param dynamicSpectra  row-major float64 NSData of length m*n*8.
- * @param m               perturbation points (rows).
- * @param n               spectral variables (cols).
- * @param reference       length-n float64 baseline (nil = column mean).
- * @param variableAxis    forwarded to the returned spectrum (may be nil).
- * @param perturbation    forwarded (may be nil; treated as "").
- * @param perturbationUnit forwarded (may be nil; treated as "").
- * @param sourceModality  forwarded (may be nil; treated as "").
- * @param error           out-parameter on failure.
+ * @param dynamicSpectra   Row-major float64 <code>NSData</code> of
+ *                         length <code>m * n * 8</code>.
+ * @param m                Perturbation points (rows).
+ * @param n                Spectral variables (cols).
+ * @param reference        Length-<em>n</em> float64 baseline
+ *                         (<code>nil</code> = column mean).
+ * @param variableAxis     Forwarded to the returned spectrum (may
+ *                         be <code>nil</code>).
+ * @param perturbation     Forwarded (may be <code>nil</code>;
+ *                         treated as <code>@""</code>).
+ * @param perturbationUnit Forwarded (may be <code>nil</code>).
+ * @param sourceModality   Forwarded (may be <code>nil</code>).
+ * @param error            Out-parameter populated on failure.
+ * @return The decomposed correlation spectrum, or <code>nil</code>
+ *         on failure.
  */
 + (TTIOTwoDimensionalCorrelationSpectrum *)computeWithDynamicSpectra:(NSData *)dynamicSpectra
                                                     perturbationPoints:(NSUInteger)m
@@ -52,9 +73,15 @@
                                                                  error:(NSError **)error;
 
 /**
- * Return |Phi|/(|Phi|+|Psi|) element-wise as row-major float64 bytes.
- * Cells where both matrices vanish return NaN. Both inputs must have
- * identical length. On length mismatch returns nil and sets error.
+ * Returns <code>|Phi| / (|Phi| + |Psi|)</code> element-wise as
+ * row-major float64 bytes. Cells where both matrices vanish return
+ * NaN. Both inputs must have identical length.
+ *
+ * @param synchronous  Synchronous correlation matrix bytes.
+ * @param asynchronous Asynchronous correlation matrix bytes.
+ * @param error        Out-parameter populated on length mismatch.
+ * @return The disrelation matrix bytes, or <code>nil</code> on
+ *         failure.
  */
 + (NSData *)disrelationSpectrumFromSynchronous:(NSData *)synchronous
                                    asynchronous:(NSData *)asynchronous

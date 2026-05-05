@@ -1,3 +1,21 @@
+/*
+ * TTIOTwoDCos.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOTwoDCos
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Analysis/TTIOTwoDCos.h
+ *
+ * Two-dimensional correlation spectroscopy (2D-COS) compute kernel.
+ * Implements the Hilbert-Noda decomposition: builds the
+ * antisymmetric Hilbert-Noda transform matrix, mean-centres the
+ * dynamic-spectra block, and emits the synchronous / asynchronous
+ * correlation matrices plus the disrelation spectrum.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOTwoDCos.h"
 #import "Spectra/TTIOTwoDimensionalCorrelationSpectrum.h"
 #import "HDF5/TTIOHDF5Errors.h"
