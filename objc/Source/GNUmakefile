@@ -42,6 +42,7 @@ libTTIO_HEADER_FILES = \
 	Genomics/TTIOGenomicIndex.h \
 	Genomics/TTIOWrittenGenomicRun.h \
 	Genomics/TTIOGenomicRun.h \
+	Genomics/TTIOReferenceImport.h \
 	Dataset/TTIOFeature.h \
 	Dataset/TTIOIdentification.h \
 	Dataset/TTIOQuantification.h \
@@ -80,6 +81,8 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOWatersMassLynxReader.h \
 	Import/TTIOJcampDxReader.h \
 	Import/TTIOJcampDxDecode.h \
+	Import/TTIOFastaReader.h \
+	Import/TTIOFastqReader.h \
 	Export/TTIOMzMLWriter.h \
 	Export/TTIOBamWriter.h \
 	Export/TTIOCramWriter.h \
@@ -90,6 +93,8 @@ libTTIO_HEADER_FILES = \
 	Export/TTIOJcampDxWriter.h \
 	Export/TTIOJcampDxEncoding.h \
 	Export/TTIOJcampDxEncode.h \
+	Export/TTIOFastaWriter.h \
+	Export/TTIOFastqWriter.h \
 	Providers/TTIOCompoundField.h \
 	Providers/TTIOStorageProtocols.h \
 	Providers/TTIOProviderRegistry.h \
@@ -151,6 +156,7 @@ libTTIO_OBJC_FILES = \
 	Genomics/TTIOGenomicIndex.m \
 	Genomics/TTIOWrittenGenomicRun.m \
 	Genomics/TTIOGenomicRun.m \
+	Genomics/TTIOReferenceImport.m \
 	Dataset/TTIOFeature.m \
 	Dataset/TTIOIdentification.m \
 	Dataset/TTIOQuantification.m \
@@ -189,6 +195,8 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOWatersMassLynxReader.m \
 	Import/TTIOJcampDxReader.m \
 	Import/TTIOJcampDxDecode.m \
+	Import/TTIOFastaReader.m \
+	Import/TTIOFastqReader.m \
 	Export/TTIOMzMLWriter.m \
 	Export/TTIOBamWriter.m \
 	Export/TTIOCramWriter.m \
@@ -198,6 +206,8 @@ libTTIO_OBJC_FILES = \
 	Export/TTIOISAExporter.m \
 	Export/TTIOJcampDxWriter.m \
 	Export/TTIOJcampDxEncode.m \
+	Export/TTIOFastaWriter.m \
+	Export/TTIOFastqWriter.m \
 	Providers/TTIOCompoundField.m \
 	Providers/TTIOProviderRegistry.m \
 	Providers/TTIOCanonicalBytes.m \
