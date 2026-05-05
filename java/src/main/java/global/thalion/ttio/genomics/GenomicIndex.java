@@ -22,7 +22,7 @@ import java.util.Objects;
  *
  * <p>Genomic analogue of {@link global.thalion.ttio.SpectrumIndex}.</p>
  *
- * <p><b>API status:</b> Stable (v0.11 M82.3).</p>
+ * <p><b>API status:</b> Stable ().</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOGenomicIndex}, Python {@code ttio.genomic_index.GenomicIndex}.</p>

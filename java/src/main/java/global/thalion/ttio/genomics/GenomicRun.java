@@ -28,7 +28,7 @@ import java.util.NoSuchElementException;
  * <p>Genomic analogue of
  * {@link global.thalion.ttio.AcquisitionRun}.</p>
  *
- * <p><b>API status:</b> Stable (v0.11 M82.3).</p>
+ * <p><b>API status:</b> Stable ().</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOGenomicRun}, Python {@code ttio.genomic_run.GenomicRun}.</p>
@@ -61,14 +61,14 @@ public class GenomicRun
     // @compression attribute names a TTI-O codec (rANS / BASE_PACK).
     // Codec output is byte-stream non-sliceable, so the whole channel
     // is decoded once on first access and the decoded buffer is sliced
-    // from memory thereafter (Binding Decision §89). Cache lifetime is
+    // from memory thereafter (). Cache lifetime is
     // this GenomicRun instance — re-opening the file incurs the decode
     // cost again (Gotcha §101). Mutable HashMap, not Map.of(), so the
     // dispatch helper can populate it.
     private final Map<String, byte[]> decodedByteChannels = new HashMap<>();
     // M86 Phase E: lazy decode cache for the read_names channel when it
     // carries a NAME_TOKENIZED codec override. Held as a List<String>
-    // (not byte[]) per Binding Decision §114 — different value type and
+    // (not byte[]) — different value type and
     // semantics from decodedByteChannels (which holds raw byte buffers
     // sliced by per-read offset/length). The whole list is materialised
     // on first access regardless of the access pattern.
@@ -76,7 +76,7 @@ public class GenomicRun
     // M86 Phase C: lazy decode cache for the cigars channel when it
     // carries an RANS_ORDER0 / RANS_ORDER1 / NAME_TOKENIZED codec
     // override. Held as a List<String> mirroring decodedReadNames per
-    // Binding Decision §123 — separate cache from decodedReadNames
+    // — separate cache from decodedReadNames
     // (Option A from §2.3, lower-risk than a generalised dict).
     private List<String> decodedCigars = null;
     // M86 Phase B: lazy decode cache for integer channels. Per Binding
@@ -346,7 +346,7 @@ public class GenomicRun
      *  {@code signal_channels/sequences} is a GROUP containing a
      *  {@code refdiff_v2} child dataset (v1.8 layout).
      *
-     *  <p>Uses a try-openGroup pattern (Binding Decision §128): an
+     *  <p>Uses a try-openGroup pattern (): an
      *  exception from {@code openGroup} means it's a dataset, not a
      *  group. Result is cached in {@link #sequencesIsV2Cached}. */
     private boolean isSequencesRefDiffV2() {
@@ -411,7 +411,7 @@ public class GenomicRun
         } else if (codecId == global.thalion.ttio.Enums.Compression.BASE_PACK.ordinal()) {
             decoded = global.thalion.ttio.codecs.BasePack.decode(all);
         } else if (codecId == global.thalion.ttio.Enums.Compression.QUALITY_BINNED.ordinal()) {
-            // M86 Phase D: lossy Phred bin quantisation (M85 §97).
+            // M86 Phase D: lossy Phred bin quantisation (§97).
             // Caller of byteChannelSlice gets the bin-centre values,
             // not the original Phred bytes.
             decoded = global.thalion.ttio.codecs.Quality.decode(all);
@@ -563,7 +563,7 @@ public class GenomicRun
      *  <ul>
      *    <li>flat uint8 + {@code @compression == NAME_TOKENIZED (8)} →
      *        v1 codec rejected, see message.</li>
-     *    <li>VL-string compound dataset (M82 layout) → also rejected;
+     *    <li>VL-string compound dataset (layout) → also rejected;
      *        the v1.0 writer produces flat uint8 v2 only.</li>
      *  </ul>
      *
@@ -603,7 +603,7 @@ public class GenomicRun
                     + "NAME_TOKENIZED_V2 = 15 is recognised in v1.0+)");
             }
         }
-        // Compound (M82 VL_STRING) path was removed in Phase 2c — the
+        // Compound (VL_STRING) path was removed in Phase 2c — the
         // v1.0+ writer always emits a flat uint8 dataset (or an empty
         // group for readCount == 0). Files with the M82 compound were
         // produced by older writers; reject with a clear message.
@@ -625,7 +625,7 @@ public class GenomicRun
      *    <li><b>rANS codec</b> (override active): flat 1-D uint8
      *        dataset. The whole channel is read, decoded once, and
      *        cached as a {@code List<String>} on this instance per
-     *        Binding Decision §123. The decoded byte buffer is a
+     *        . The decoded byte buffer is a
      *        length-prefix-concat sequence ({@code varint(len) + bytes}
      *        per CIGAR); walk the buffer to reconstruct the list.</li>
      *  </ul>
@@ -848,12 +848,12 @@ public class GenomicRun
         throw mateInfoLegacyLayoutError();
     }
 
-    /** Common error for legacy mate_info layouts (M86 Phase F
+    /** Common error for legacy mate_info layouts (Phase F
      *  per-field subgroup or M82 compound). Both were removed in
      *  Phase 2c; only the v2 inline_v2 blob is read. */
     private static IllegalStateException mateInfoLegacyLayoutError() {
         return new IllegalStateException(
-            "signal_channels/mate_info legacy layout (M86 Phase F "
+            "signal_channels/mate_info legacy layout (Phase F "
             + "per-field subgroup or M82 compound dataset) is no "
             + "longer supported in v1.0; this file was written with "
             + "an older TTI-O version. Re-encode with v1.0+ which "

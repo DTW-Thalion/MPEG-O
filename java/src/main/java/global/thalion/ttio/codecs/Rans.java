@@ -176,7 +176,7 @@ public final class Rans {
     /**
      * Normalise a 256-element count vector to sum exactly to {@code M}.
      *
-     * <p>Deterministic across languages (Binding Decision §78):
+     * <p>Deterministic across languages ():
      * <ol>
      *   <li>Proportional scale {@code f[s] = max(1, cnt[s] * M / total)}
      *       when {@code cnt[s] > 0}, else 0.</li>

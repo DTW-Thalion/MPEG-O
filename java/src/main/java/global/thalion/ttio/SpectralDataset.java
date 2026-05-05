@@ -127,7 +127,7 @@ public class SpectralDataset implements
     public String title() { return title; }
     public String isaInvestigationId() { return isaInvestigationId; }
     public Map<String, AcquisitionRun> msRuns() { return msRuns; }
-    /** v0.11 M82.3: zero or more named genomic runs. Empty for pre-M82
+    /** zero or more named genomic runs. Empty for pre-M82
      *  files; populated when {@code /study/genomic_runs/} is present. */
     public Map<String, GenomicRun> genomicRuns() { return genomicRuns; }
 
@@ -239,7 +239,7 @@ public class SpectralDataset implements
 
     // ── Open (read) ─────────────────────────────────────────────────
 
-    /** Open an existing .tio file for reading. v0.9 M64.5 (Java):
+    /** Open an existing .tio file for reading. (Java):
      *  a URL scheme ({@code memory://}, {@code sqlite://},
      *  {@code zarr://}) dispatches to the matching StorageProvider
      *  and reads the whole dataset through the protocol
@@ -281,7 +281,7 @@ public class SpectralDataset implements
                                 for (String rn : names.split(",")) {
                                     String name = rn.strip();
                                     if (!name.isEmpty() && msRunsGroup.hasChild(name)) {
-                                        // v0.7 M44: AcquisitionRun.readFrom takes
+                                        // AcquisitionRun.readFrom takes
                                         // StorageGroup; wrap the raw Hdf5Group.
                                         AcquisitionRun run = AcquisitionRun.readFrom(
                                                 Hdf5Provider.adapterForGroup(msRunsGroup), name);
@@ -322,7 +322,7 @@ public class SpectralDataset implements
         }
     }
 
-    // ── URL-scheme detection (v0.9 M64.5) ───────────────────────────
+    // ── URL-scheme detection () ───────────────────────────
 
     private static final java.util.regex.Pattern NON_HDF5_URL =
             java.util.regex.Pattern.compile("^(memory|sqlite|zarr)://.*");
@@ -331,7 +331,7 @@ public class SpectralDataset implements
         return NON_HDF5_URL.matcher(pathOrUrl).matches();
     }
 
-    // ── Provider-aware read path (v0.9 M64.5) ───────────────────────
+    // ── Provider-aware read path () ───────────────────────
 
     private static SpectralDataset openViaProvider(String url) {
         StorageProvider provider = global.thalion.ttio.providers
@@ -533,7 +533,7 @@ public class SpectralDataset implements
         return new FeatureFlags("1.3", withFlag);
     }
 
-    /** v0.11 M82.3: Convenience overload that delegates to the
+    /** Convenience overload that delegates to the
      *  {@code genomicRuns}-aware variant with an empty genomic list. */
     public static SpectralDataset create(String pathOrUrl, String title,
                                           String isaInvestigationId,
@@ -627,7 +627,7 @@ public class SpectralDataset implements
                            provenanceRecords, featureFlags);
     }
 
-    /** v0.11 M82.3: full create signature accepting genomic runs
+    /** full create signature accepting genomic runs
      *  alongside MS runs. When {@code genomicRuns} is non-empty,
      *  {@link FeatureFlags#OPT_GENOMIC} is added (idempotent if the
      *  caller-supplied {@code featureFlags} already includes it) and
@@ -722,7 +722,7 @@ public class SpectralDataset implements
                             AcquisitionRun run = runs.get(i);
                             if (i > 0) names.append(",");
                             names.append(run.name());
-                            // v0.7 M44: writeTo takes StorageGroup; wrap the
+                            // writeTo takes StorageGroup; wrap the
                             // raw Hdf5Group via the provider adapter.
                             run.writeTo(Hdf5Provider.adapterForGroup(msRunsGroup));
                             runMap.put(run.name(), run);
@@ -779,16 +779,16 @@ public class SpectralDataset implements
         }
     }
 
-    /** v0.11 M82.3: write one {@code /study/genomic_runs/<name>/}
+    /** write one {@code /study/genomic_runs/<name>/}
      *  subtree via the StorageGroup protocol. Provider-agnostic — used
      *  by both the HDF5 fast path and the {@code memory://} /
      *  {@code sqlite://} / {@code zarr://} paths.
      *
      *  <p>M86: validates {@link WrittenGenomicRun#signalCodecOverrides}
-     *  before any file mutation (Binding Decision §88: only sequences
+     *  before any file mutation (: only sequences
      *  / qualities accept overrides). Phase A allowed RANS_ORDER0 /
      *  RANS_ORDER1 / BASE_PACK on either byte channel. Phase D
-     *  (Binding Decision §108) adds QUALITY_BINNED but restricts it to
+     *  () adds QUALITY_BINNED but restricts it to
      *  the {@code qualities} channel only — applying it to ACGT bytes
      *  would silently destroy the sequence via Phred-bin quantisation.
      *  Validation throws {@link IllegalArgumentException} so the caller
@@ -801,7 +801,7 @@ public class SpectralDataset implements
         // Sequences accepts RANS+BASE_PACK; qualities additionally
         // accepts QUALITY_BINNED. Phase B adds
         // positions/flags/mapping_qualities which accept ONLY the rANS
-        // codecs (Binding Decision §117 — BASE_PACK / QUALITY_BINNED
+        // codecs (— BASE_PACK / QUALITY_BINNED
         // would silently corrupt the integer values).
         // Runs BEFORE any group/dataset is created so the file is
         // untouched on a bad override (Gotcha §96 — no half-written run).
@@ -908,7 +908,7 @@ public class SpectralDataset implements
             java.util.Set<Enums.Compression> allowed =
                 allowedCodecsByChannel.get(chName);
             if (codec == null || !allowed.contains(codec)) {
-                // Phase D Binding Decision §110: explicit message for
+                // Phase D : explicit message for
                 // the (sequences, QUALITY_BINNED) category error —
                 // names the codec, the channel, and the
                 // lossy-quantisation rationale.
@@ -925,7 +925,7 @@ public class SpectralDataset implements
                         + "channel for QUALITY_BINNED, or RANS_ORDER0/"
                         + "RANS_ORDER1/BASE_PACK on sequences.");
                 }
-                // Phase C Binding Decision §120: explicit messages for
+                // Phase C : explicit messages for
                 // wrong-content codecs on the cigars channel. CIGAR
                 // strings are 7-bit ASCII per the SAM spec; BASE_PACK
                 // assumes ACGT bytes and QUALITY_BINNED assumes Phred
@@ -1066,7 +1066,7 @@ public class SpectralDataset implements
                 // mutually exclusive within a single run; readers
                 // dispatch on dataset shape and the @compression
                 // attribute. No HDF5 filter is applied — codec output
-                // is high-entropy (Binding Decision §87).
+                // is high-entropy ().
                 if (run.signalCodecOverrides().containsKey("cigars")) {
                     Enums.Compression cigarsCodec =
                         run.signalCodecOverrides().get("cigars");
@@ -1652,14 +1652,14 @@ public class SpectralDataset implements
      *  via the default HDF5-filter path (identical to M82 behaviour,
      *  no {@code @compression} attribute set). When it names a TTI-O
      *  codec, the raw bytes are encoded, written as an unfiltered
-     *  uint8 dataset (Binding Decision §87 — no double-compression),
+     *  uint8 dataset (— no double-compression),
      *  and the codec id is stored on the dataset's
      *  {@code @compression} attribute (uint8).
      *
-     *  <p>Phase D: QUALITY_BINNED (M85 Phase A codec id 7) added.
+     *  <p>Phase D: QUALITY_BINNED (Phase A codec id 7) added.
      *  Caller-side validation in {@link #writeGenomicRunSubtree}
      *  guarantees this branch only fires for the {@code qualities}
-     *  channel (Binding Decision §108).</p> */
+     *  channel ().</p> */
     private static void writeByteChannelWithCodec(
             global.thalion.ttio.providers.StorageGroup sc,
             String name, byte[] data,
@@ -1810,7 +1810,7 @@ public class SpectralDataset implements
         }
     }
 
-    /** v0.11 M82.3: same as {@link #writeCompoundOneCol} but encodes
+    /** same as {@link #writeCompoundOneCol} but encodes
      *  values as UTF-8 byte[] for compound VL_BYTES fields (the
      *  Java-side workaround for the JHI5 VL_STRING-in-compound limit). */
     private static void writeCompoundOneColBytes(
@@ -1948,7 +1948,7 @@ public class SpectralDataset implements
         return List.of();
     }
 
-    // ── StorageGroup-based JSON metadata (v0.9 M64.5) ───────────────
+    // ── StorageGroup-based JSON metadata () ───────────────
 
     private static List<Identification> readIdentificationsFromJson(
             global.thalion.ttio.providers.StorageGroup study) {

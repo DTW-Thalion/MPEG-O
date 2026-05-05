@@ -175,7 +175,7 @@ public record WrittenGenomicRun(
     }
 
     /**
-     * Backwards-compatible constructor (M86 era, 19 components) that
+     * Backwards-compatible constructor (era, 19 components) that
      * defaults {@link #provenanceRecords} to {@link List#of() empty}.
      * Existing callers built before Phase 1 (post-M91) continue to
      * work unchanged.

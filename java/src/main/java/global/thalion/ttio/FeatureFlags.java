@@ -32,7 +32,7 @@ public final class FeatureFlags {
     public static final String OPT_CANONICAL_SIGNATURES = "opt_canonical_signatures";
     public static final String OPT_KEY_ROTATION = "opt_key_rotation";
     public static final String OPT_ANONYMIZED = "opt_anonymized";
-    /** v0.8 M49: file uses post-quantum crypto (ML-KEM-1024 and/or
+    /** file uses post-quantum crypto (ML-KEM-1024 and/or
      *  ML-DSA-87). Opt-flag — a reader without PQC can still open the
      *  file and read unencrypted datasets. */
     public static final String OPT_PQC_PREVIEW = "opt_pqc_preview";
@@ -40,7 +40,7 @@ public final class FeatureFlags {
     public static final String OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption";
     /** v1.0: AU semantic header encrypted. */
     public static final String OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers";
-    /** v1.0 M90.4: per-AU encryption keyed by chromosome (region-based).
+    /** per-AU encryption keyed by chromosome (region-based).
      *  Set in addition to {@link #OPT_PER_AU_ENCRYPTION} when a file
      *  was encrypted via the per-chromosome key-map dispatch path.
      *  Clear AUs encode as a {@code <channel>_segments} row with
@@ -48,13 +48,13 @@ public final class FeatureFlags {
      *  encrypted AUs use the standard 12/16-byte AES-GCM layout.
      * M90.4 */
     public static final String OPT_REGION_KEYED_ENCRYPTION = "opt_region_keyed_encryption";
-    /** v0.12.0 M74: {@code spectrum_index} carries four optional
+    /** {@code spectrum_index} carries four optional
      *  parallel columns recording MS/MS activation method and precursor
      *  isolation window. Files that set this flag are written with
      *  format version {@code "1.3"}; pre-M74 readers that ignore the
      *  flag still parse the base columns. */
     public static final String OPT_MS2_ACTIVATION_DETAIL = "opt_ms2_activation_detail";
-    /** v0.11 M82: file contains one or more genomic runs under
+    /** file contains one or more genomic runs under
      *  {@code /study/genomic_runs/}. Files that set this flag are
      *  written with format version {@code "1.4"}; pre-M82 readers
      *  that ignore the flag still parse the MS pipeline normally

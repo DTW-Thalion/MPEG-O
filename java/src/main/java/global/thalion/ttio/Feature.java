@@ -19,7 +19,7 @@ import java.util.Map;
  * SMF/SME sections (small-molecule feature + evidence in the
  * 2.0.0-M metabolomics dialect).</p>
  *
- * <p><b>API status:</b> Provisional (v0.12.0 M78).</p>
+ * <p><b>API status:</b> Provisional ().</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOFeature}, Python {@code ttio.feature.Feature}.</p>

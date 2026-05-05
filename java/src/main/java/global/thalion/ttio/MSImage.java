@@ -19,7 +19,7 @@ import java.util.List;
  * ({@code height × width × spectralPoints}) under
  * {@code /study/image_cube/}.</p>
  *
- * <p>v0.7 M44: I/O routed through {@link StorageGroup} /
+ * <p>I/O routed through {@link StorageGroup} /
  * {@link StorageDataset}; this class no longer references the low-level
  * {@code Hdf5Group} / {@code Hdf5Dataset} types.</p>
  *
@@ -118,7 +118,7 @@ public class MSImage {
 
     /** Write this image cube to a storage study group.
      *
-     *  <p>v0.7 M44: emits the cube as a 3-D dataset via
+     *  <p>emits the cube as a 3-D dataset via
      *  {@link StorageGroup#createDatasetND} so every backend can
      *  round-trip the spatial+spectral rank.</p> */
     public void writeTo(StorageGroup studyGroup) {
@@ -143,7 +143,7 @@ public class MSImage {
 
     /** Read an image cube from a storage file.
      *
-     *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup}.</p> */
+     *  <p>parameter type relaxed to {@link StorageGroup}.</p> */
     public static MSImage readFrom(StorageGroup studyGroup) {
         if (!studyGroup.hasChild("image_cube")) return null;
         try (StorageGroup ic = studyGroup.openGroup("image_cube")) {
@@ -161,7 +161,7 @@ public class MSImage {
 
             double[] cube;
             try (StorageDataset ds = ic.openDataset("intensity")) {
-                // v0.7 M44: route through the storage protocol.
+                // route through the storage protocol.
                 cube = (double[]) ds.readAll();
             }
             return new MSImage(width, height, spectralPoints,
