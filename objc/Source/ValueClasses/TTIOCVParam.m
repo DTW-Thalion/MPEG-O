@@ -1,3 +1,20 @@
+/*
+ * TTIOCVParam.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCVParam
+ * Inherits From: NSObject
+ * Conforms To:   NSCoding, NSCopying
+ * Declared In:   ValueClasses/TTIOCVParam.h
+ *
+ * Single controlled-vocabulary parameter — the unit of semantic
+ * annotation in TTI-O. Immutable value class with value-based
+ * equality on the (ontologyRef, accession, name, value, unit)
+ * tuple.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOCVParam.h"
 
 @implementation TTIOCVParam

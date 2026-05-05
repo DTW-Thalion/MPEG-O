@@ -1,3 +1,19 @@
+/*
+ * TTIOValueRange.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOValueRange
+ * Inherits From: NSObject
+ * Conforms To:   NSCoding, NSCopying
+ * Declared In:   ValueClasses/TTIOValueRange.h
+ *
+ * Closed numeric range [minimum, maximum]. Immutable value class
+ * with value-based equality. -copyWithZone: returns self because
+ * the class is immutable.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOValueRange.h"
 
 @implementation TTIOValueRange

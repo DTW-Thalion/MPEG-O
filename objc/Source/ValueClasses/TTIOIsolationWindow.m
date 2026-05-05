@@ -1,3 +1,18 @@
+/*
+ * TTIOIsolationWindow.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOIsolationWindow
+ * Inherits From: NSObject
+ * Conforms To:   NSCoding, NSCopying
+ * Declared In:   ValueClasses/TTIOIsolationWindow.h
+ *
+ * Precursor isolation window for MS/MS scans. Immutable value
+ * class with value-based equality.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOIsolationWindow.h"
 
 @implementation TTIOIsolationWindow
