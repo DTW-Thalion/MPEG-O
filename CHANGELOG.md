@@ -66,6 +66,33 @@ per-channel pipeline wiring is documented in `docs/format-spec.md`
 - Genomic alignment runs: full BAM/CRAM importer parity, per-record
   metadata, codec-aware channel wiring.
 
+### Format I/O — FASTA / FASTQ
+
+- **FASTA importer**: `FastaReader` reads reference genomes (for
+  embedding at `/study/references/<uri>/`, paired with BAM/CRAM
+  input) or unaligned reads (panels, target lists, quality-stripped
+  reads → `WrittenGenomicRun` with SAM unmapped sentinels). gzip
+  auto-detected via magic bytes regardless of extension.
+- **FASTA exporter**: `FastaWriter` writes a `ReferenceImport` or a
+  `WrittenGenomicRun` to FASTA with configurable line wrap
+  (default 60 chars) and a samtools-compatible `.fai` index
+  emitted alongside.
+- **FASTQ importer**: `FastqReader` parses 4-line records into
+  unaligned `WrittenGenomicRun` instances. Phred offset is auto-
+  detected (`33` modern Illumina / Sanger vs `64` legacy
+  Illumina); detected source recorded for round-trip planning.
+  Internal storage normalises to Phred+33.
+- **FASTQ exporter**: `FastqWriter` writes a run to FASTQ with
+  Phred+33 default and Phred+64 selectable. The `0xFF` "qualities
+  unknown" sentinel is mapped to Phred 0 (`!`) on output so the
+  result is always parseable.
+- **Cross-language byte equality**: Python, Java, and ObjC produce
+  byte-identical FASTA + FASTQ output for the same input — proven
+  by the `test_fasta_fastq_cross_language.py` 3-way harness.
+- **CLIs**: Python `python -m ttio.tools.{fasta,fastq}_{import,export}_cli`,
+  Java `FastaRoundTrip` / `FastqRoundTrip`, ObjC `TtioFastaRoundTrip`
+  / `TtioFastqRoundTrip`.
+
 ### Encryption + signing
 
 - **Per-AU encryption** (AES-256-GCM) on signal-channel datasets and
