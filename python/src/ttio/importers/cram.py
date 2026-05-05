@@ -47,7 +47,7 @@ class CramReader(BamReader):
         Filesystem path to a CRAM file.
     reference_fasta : str or :class:`pathlib.Path`
         Filesystem path to the reference FASTA against which the CRAM
-        was aligned. Required (Binding Decision §139); CRAM is a
+        was aligned. Required (); CRAM is a
         reference-compressed format and cannot be decoded without it.
         samtools auto-builds a ``.fai`` index alongside the FASTA on
         first use if one isn't already present.
@@ -58,7 +58,7 @@ class CramReader(BamReader):
     dependency. Construction succeeds without samtools on PATH;
     :meth:`to_genomic_run` raises
     :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
-    cannot be located at first use (Binding Decision §135 from M87).
+    cannot be located at first use (from M87).
     """
 
     def __init__(

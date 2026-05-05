@@ -1,4 +1,4 @@
-"""mzTab importer (v0.9 M60).
+"""mzTab importer ().
 
 mzTab is a results-level interchange format from PSI. It is a
 tab-separated text file divided into sections by a one-line prefix:
@@ -23,11 +23,11 @@ Mapping into TTI-O records
 |---------------|------------------------------|---------------------------------------------------------------|
 | PSM           | :class:`Identification`     | ``run_name`` from ``spectra_ref``; score from best search engine score |
 | PRT           | :class:`Quantification`     | one record per ``protein_abundance_assay[N]`` column           |
-| PEP           | :class:`Feature`            | peptide-level feature (v0.12.0 M78)                            |
+| PEP           | :class:`Feature`            | peptide-level feature ()                            |
 | SML           | :class:`Identification`     | metabolite annotation; ``run_name='metabolomics'`` placeholder |
 | SML abundance | :class:`Quantification`     | one record per ``abundance_study_variable[N]`` column          |
-| SMF           | :class:`Feature`            | small-molecule feature row (v0.12.0 M78)                       |
-| SME           | :class:`Identification`     | small-molecule evidence row (v0.12.0 M78)                      |
+| SMF           | :class:`Feature`            | small-molecule feature row ()                       |
+| SME           | :class:`Identification`     | small-molecule evidence row ()                      |
 | MTD           | :class:`ProvenanceRecord`   | software, search engine and ms_run locations                   |
 
 Cross-language equivalents
@@ -483,7 +483,7 @@ def _build_provenance(state: _ParserState, source: Path) -> ProvenanceRecord | N
 
 
 # --------------------------------------------------------------------------- #
-# PEP / SMF / SME section handlers (v0.12.0 M78).
+# PEP / SMF / SME section handlers ().
 # --------------------------------------------------------------------------- #
 
 _PEP_ACCESSION = "accession"

@@ -1,4 +1,4 @@
-"""TTI-O streaming transport codec (v0.10 M67).
+"""TTI-O streaming transport codec ().
 
 Implements the wire format specified in ``docs/transport-spec.md``:
 
@@ -56,7 +56,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    # v0.10 M68: lazy re-export of server / client so importing
+    # lazy re-export of server / client so importing
     # ``ttio.transport`` works without ``websockets`` installed.
     if name in ("TransportServer", "serving"):
         from .server import TransportServer, serving

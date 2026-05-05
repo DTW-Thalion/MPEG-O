@@ -1,4 +1,4 @@
-"""Storage/transport provider abstraction — Milestone 39.
+"""Storage/transport provider abstraction — .
 
 The TTI-O data model and API are the standard; the storage backend is
 a pluggable implementation detail. Providers register via

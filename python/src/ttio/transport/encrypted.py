@@ -286,7 +286,7 @@ def write_encrypted_dataset(
             g_acquisition_mode = io.read_int_attr(g_run_group,
                                                     "acquisition_mode",
                                                     default=0) or 0
-            # Genomic-run metadata JSON (M89.2 convention).
+            # Genomic-run metadata JSON (convention).
             g_metadata_json = json.dumps({
                 "modality": io.read_string_attr(g_run_group,
                                                   "modality") or "",

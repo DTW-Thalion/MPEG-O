@@ -1,4 +1,4 @@
-"""Decode a .tis transport stream into a .tio file (v0.10 M70).
+"""Decode a .tis transport stream into a .tio file ().
 
 Parallel to Java {@code global.thalion.ttio.tools.TransportDecodeCli}
 and ObjC {@code TtioTransportDecode}.

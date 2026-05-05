@@ -194,7 +194,7 @@ _AU_GENOMIC_FIXED_STRUCT = struct.Struct("<qBH")
 # default these to -1 / 0 (preserves M89.1 wire compatibility).
 _AU_GENOMIC_MATE_STRUCT = struct.Struct("<qi")
 
-# Named spectrum_class values. v0.11 M79 reserved the GenomicRead value;
+# Named spectrum_class values. reserved the GenomicRead value;
 # the genomic-specific AU payload extension (chromosome, position, mapq,
 # flags) ships in M89.1.
 SPECTRUM_CLASS_MASS_SPECTRUM = 0
@@ -214,7 +214,7 @@ class AccessUnit:
     """
 
     spectrum_class: int  # 0=MassSpectrum, 1=NMRSpectrum, 2=NMR2D,
-    #                     3=FID, 4=MSImagePixel, 5=GenomicRead (v0.11 M79)
+    #                     3=FID, 4=MSImagePixel, 5=GenomicRead ()
     acquisition_mode: int
     ms_level: int
     polarity: int  # wire: 0=positive, 1=negative, 2=unknown
@@ -240,7 +240,7 @@ class AccessUnit:
     mapping_quality: int = 0
     flags: int = 0
     # M90.9: mate extension fields. Optional on the wire — when
-    # absent (M89.1 file or empty AU) they default to BAM unmapped
+    # absent (file or empty AU) they default to BAM unmapped
     # sentinels (-1 mate_position, 0 template_length).
     mate_position: int = -1
     template_length: int = 0

@@ -1,4 +1,4 @@
-"""Abstract storage-provider contract — Milestone 39 Part A.
+"""Abstract storage-provider contract — Part A.
 
 A storage provider exposes a hierarchical group tree where each group
 owns typed datasets (primitive 1-D arrays + compound records) and
@@ -135,7 +135,7 @@ class StorageDataset(ABC):
         """Read ``count`` elements starting at ``offset``. ``count == -1``
         reads from ``offset`` to the end.
 
-        Return type varies by backend (Appendix B Gap 2):
+        Return type varies by backend :
 
         * **Primitive datasets**: always :class:`numpy.ndarray` with
           dtype matching :meth:`precision`.
@@ -167,7 +167,7 @@ class StorageDataset(ABC):
 
         Non-compound datasets raise ``TypeError``.
 
-        Appendix B Gap 2 — backend-agnostic compound access."""
+        — backend-agnostic compound access."""
         if self.compound_fields is None:
             raise TypeError(
                 f"read_rows() is only valid for compound datasets; "
@@ -186,7 +186,7 @@ class StorageDataset(ABC):
 
     def read_canonical_bytes(self, offset: int = 0, count: int = -1) -> bytes:
         """Return the dataset contents as a byte stream in the TTIO
-        canonical layout (v0.7 M43).
+        canonical layout ().
 
         Semantics:
 
@@ -208,7 +208,7 @@ class StorageDataset(ABC):
         override when a zero-copy fast-path exists
         (:class:`~ttio.providers.hdf5.Hdf5Provider` does this).
 
-        Appendix B Gap 2 follow-up — extends :meth:`read_rows` by
+        follow-up — extends :meth:`read_rows` by
         promising a stable byte form, not just a stable row form."""
         # Local import to keep the ABC's top-level import surface slim.
         from . import _canonical
@@ -243,11 +243,11 @@ class StorageDataset(ABC):
 
     @abstractmethod
     def delete_attribute(self, name: str) -> None:
-        """Remove an attribute. No-op if absent. Appendix B Gap 8."""
+        """Remove an attribute. No-op if absent. """
 
     @abstractmethod
     def attribute_names(self) -> list[str]:
-        """List attribute names; empty list if none. Appendix B Gap 8."""
+        """List attribute names; empty list if none. """
 
     # ── Lifecycle ───────────────────────────────────────────────────
 
@@ -382,7 +382,7 @@ class StorageProvider(ABC):
         ``mode`` mirrors h5py semantics: ``"r"`` read-only, ``"r+"``
         read/write existing, ``"w"`` create/truncate, ``"a"`` append.
 
-        Appendix B Gap 1 — unified open() dispatch. Both call styles
+        — unified open() dispatch. Both call styles
         are supported and semantically equivalent:
 
         * **Factory style** (returns a new instance)::
@@ -413,7 +413,7 @@ class StorageProvider(ABC):
 
         Exposed as a method (not a property) to mirror the ObjC
         ``-providerName`` selector and Java ``providerName()`` getter.
-        Appendix B Gap 5 — Provisional storage-provider convergence."""
+        — Provisional storage-provider convergence."""
 
     @abstractmethod
     def root_group(self) -> StorageGroup: ...
@@ -424,7 +424,7 @@ class StorageProvider(ABC):
     @abstractmethod
     def close(self) -> None: ...
 
-    # ── Capabilities (Appendix B Gap 3) ──────────────────────────
+    # ── Capabilities ──────────────────────────
 
     def supports_chunking(self) -> bool:
         """Returns True if the backend honors ``chunk_size`` in
@@ -442,7 +442,7 @@ class StorageProvider(ABC):
         and SQLite return False."""
         return False
 
-    # ── Transactions (Appendix B Gap 11) ─────────────────────────
+    # ── Transactions ─────────────────────────
 
     def begin_transaction(self) -> None:
         """Start a write-batching transaction. Calls to

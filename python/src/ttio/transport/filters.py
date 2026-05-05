@@ -1,4 +1,4 @@
-"""Query filters for selective-access streaming (v0.10 M68)."""
+"""Query filters for selective-access streaming ()."""
 from __future__ import annotations
 
 from dataclasses import dataclass

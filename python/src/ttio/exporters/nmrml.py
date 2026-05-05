@@ -1,4 +1,4 @@
-"""nmrML writer — Milestone 29.
+"""nmrML writer — .
 
 Serializes an :class:`ttio.NMRSpectrum` (and optionally its FID) to
 an nmrML XML document. Output mirrors the elements parsed by

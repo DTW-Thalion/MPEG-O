@@ -1,6 +1,6 @@
 """Canonical byte-layout for cross-backend cryptographic hashing.
 
-v0.7 M43 moves canonical-bytes generation from ``signatures.py`` (which
+moves canonical-bytes generation from ``signatures.py`` (which
 used h5py directly) into the storage provider protocol. Every backend
 — HDF5, Memory, SQLite, future Zarr — emits the **same** bytes for the
 same logical data so that a file signed through one provider verifies

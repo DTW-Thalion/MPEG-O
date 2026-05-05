@@ -1,4 +1,4 @@
-"""Acquisition simulator (v0.10 M69).
+"""Acquisition simulator ().
 
 Produces synthetic TTI-O transport packets that mimic an LC-MS
 instrument acquiring in real time. Two output modes:

@@ -1,4 +1,4 @@
-"""SQLite storage provider — Milestone 41 stress-test of Provisional ABCs.
+"""SQLite storage provider — stress-test of Provisional ABCs.
 
 Stores the full TTI-O group/dataset tree in a single SQLite file.
 Groups and datasets are rows in relational tables; primitive dataset
@@ -611,7 +611,7 @@ class SqliteProvider(StorageProvider):
         * ``"w"``        — create or truncate.
         * ``"a"``        — read/write; create if absent.
 
-        Implementation note: per Appendix B Gap 1, this method
+        Implementation note: per , this method
         intentionally does NOT use ``@classmethod`` so that the
         instance-mutating call style works. When called as
         ``SqliteProvider.open(path)``, Python passes the path string as
@@ -701,7 +701,7 @@ class SqliteProvider(StorageProvider):
         """Return the raw ``sqlite3.Connection``. Escape hatch."""
         return self._conn
 
-    # ── Transactions (Appendix B Gap 11) ─────────────────────────
+    # ── Transactions ─────────────────────────
 
     def begin_transaction(self) -> None:
         if self._conn is None:

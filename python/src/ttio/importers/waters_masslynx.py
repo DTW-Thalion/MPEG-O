@@ -1,4 +1,4 @@
-"""Waters MassLynx importer — v0.9 M63.
+"""Waters MassLynx importer —.
 
 Delegates to the user-installed Waters conversion tool
 (``masslynxraw`` is the usual CLI wrapper around the proprietary
@@ -25,7 +25,7 @@ Cross-language equivalents
 Objective-C: ``TTIOWatersMassLynxReader``
 Java:        ``global.thalion.ttio.importers.WatersMassLynxReader``
 
-API status: Provisional (v0.9 M63) — delegates to an external tool;
+API status: Provisional () — delegates to an external tool;
 the CLI flag names below match the common ``masslynxraw`` wrapper
 used by the proteomics community. Sites that deploy a different
 wrapper (Waters Connect API, in-house scripts) can pass an

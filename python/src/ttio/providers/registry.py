@@ -1,4 +1,4 @@
-"""Provider registry + factory — Milestone 39 Part B/E.
+"""Provider registry + factory — Part B/E.
 
 Providers register via ``importlib.metadata`` entry points in the
 ``ttio.providers`` group. In-process registration
