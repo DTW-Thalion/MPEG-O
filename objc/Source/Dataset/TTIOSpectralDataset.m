@@ -1065,6 +1065,81 @@ static BOOL _TTIO_PhaseT_WriteRefDiffV2BulkHDF5(TTIOHDF5Group *sc,
     return YES;
 }
 
+// Phase 2c-T storage-protocol path mirrors of the HDF5-fast-path
+// helpers above. Used by writeGenomicRunStorage so memory:// /
+// sqlite:// / zarr:// receivers also honor bulk_v2_blobs.
+
+static BOOL _TTIO_PhaseT_WriteMateInfoBulkStorage(
+        id<TTIOStorageGroup> sc,
+        NSData *blob, NSArray<NSString *> *chromNames,
+        NSError **error)
+{
+    id<TTIOStorageGroup> mateGrp = [sc createGroupNamed:@"mate_info" error:error];
+    if (!mateGrp) return NO;
+    id<TTIOStorageDataset> ds = [mateGrp createDatasetNamed:@"inline_v2"
+                                                  precision:TTIOPrecisionUInt8
+                                                     length:blob.length
+                                                  chunkSize:65536
+                                                compression:TTIOCompressionNone
+                                           compressionLevel:0
+                                                      error:error];
+    if (!ds) return NO;
+    if (blob.length > 0 && ![ds writeAll:blob error:error]) return NO;
+    if (![ds setAttributeValue:@((uint8_t)TTIOCompressionMateInlineV2)
+                       forName:@"compression"
+                         error:error]) return NO;
+    NSArray *vlNameField = @[
+        [TTIOCompoundField fieldWithName:@"name"
+                                    kind:TTIOCompoundFieldKindVLString]
+    ];
+    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:chromNames.count];
+    for (NSString *cn in chromNames) [rows addObject:@{@"name": cn}];
+    id<TTIOStorageDataset> namesDs = [mateGrp createCompoundDatasetNamed:@"chrom_names"
+                                                                     fields:vlNameField
+                                                                      count:chromNames.count
+                                                                      error:error];
+    if (!namesDs || ![namesDs writeAll:rows error:error]) return NO;
+    return YES;
+}
+
+static BOOL _TTIO_PhaseT_WriteReadNamesBulkStorage(
+        id<TTIOStorageGroup> sc, NSData *blob, NSError **error)
+{
+    id<TTIOStorageDataset> ds = [sc createDatasetNamed:@"read_names"
+                                             precision:TTIOPrecisionUInt8
+                                                length:blob.length
+                                             chunkSize:65536
+                                           compression:TTIOCompressionNone
+                                      compressionLevel:0
+                                                 error:error];
+    if (!ds) return NO;
+    if (blob.length > 0 && ![ds writeAll:blob error:error]) return NO;
+    if (![ds setAttributeValue:@((uint8_t)TTIOCompressionNameTokenizedV2)
+                       forName:@"compression"
+                         error:error]) return NO;
+    return YES;
+}
+
+static BOOL _TTIO_PhaseT_WriteRefDiffV2BulkStorage(
+        id<TTIOStorageGroup> sc, NSData *blob, NSError **error)
+{
+    id<TTIOStorageGroup> seqGrp = [sc createGroupNamed:@"sequences" error:error];
+    if (!seqGrp) return NO;
+    id<TTIOStorageDataset> ds = [seqGrp createDatasetNamed:@"refdiff_v2"
+                                                 precision:TTIOPrecisionUInt8
+                                                    length:blob.length
+                                                 chunkSize:65536
+                                               compression:TTIOCompressionNone
+                                          compressionLevel:0
+                                                     error:error];
+    if (!ds) return NO;
+    if (blob.length > 0 && ![ds writeAll:blob error:error]) return NO;
+    if (![ds setAttributeValue:@((uint8_t)TTIOCompressionRefDiffV2)
+                       forName:@"compression"
+                         error:error]) return NO;
+    return YES;
+}
+
 static BOOL _TTIO_V17_WriteMateInfoInlineV2HDF5(TTIOHDF5Group *sc,
                                                   TTIOWrittenGenomicRun *run,
                                                   NSError **error)
@@ -2027,9 +2102,21 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // M86 byte-channel writer with whatever explicit override the
     // caller supplied. The v1 REF_DIFF override is no longer
     // accepted (override-validation rejects codec id 9).
+    // Phase 2c-T: when bulk_v2_blobs.refDiffBlob is set, write the
+    // verbatim wire blob and skip the codec encode entirely.
+    TTIOBulkV2Blobs *_bulkObjC = (TTIOBulkV2Blobs *)run.bulkV2Blobs;
     {
         NSNumber *seqOvr = run.signalCodecOverrides[@"sequences"];
-        if (seqOvr == nil && _TTIO_V18_UseRefDiffV2(run)) {
+        if (_bulkObjC != nil && _bulkObjC.refDiffBlob != nil) {
+            if (![_bulkObjC.refDiffReferenceUri isEqualToString:run.referenceUri]) {
+                if (error) *error = [NSError
+                    errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2110
+                           userInfo:@{NSLocalizedDescriptionKey:
+                               @"BulkV2Blobs.refDiffReferenceUri does not match run.referenceUri"}];
+                return NO;
+            }
+            if (!_TTIO_PhaseT_WriteRefDiffV2BulkStorage(sc, _bulkObjC.refDiffBlob, error)) return NO;
+        } else if (seqOvr == nil && _TTIO_V18_UseRefDiffV2(run)) {
             if (!_TTIO_V18_WriteRefDiffV2SequencesStorage(sc, run, error)) return NO;
         } else {
             if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
@@ -2093,7 +2180,10 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // The v1 NAME_TOKENIZED override (id 8) and the M82 compound
     // fallback are gone. Empty-run short-circuit writes a zero-length
     // uint8 dataset with @compression=15 + @count=0.
-    if (run.readCount == 0) {
+    if (_bulkObjC != nil && _bulkObjC.nameTokBlob != nil) {
+        // Phase 2c-T: skip codec encode.
+        if (!_TTIO_PhaseT_WriteReadNamesBulkStorage(sc, _bulkObjC.nameTokBlob, error)) return NO;
+    } else if (run.readCount == 0) {
         id<TTIOStorageDataset> nameDs = [sc createDatasetNamed:@"read_names"
                                                      precision:TTIOPrecisionUInt8
                                                         length:0
@@ -2144,7 +2234,12 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // Empty-run short-circuit OMITS the mate_info group entirely
     // (cross-language convention shared with Python and Java; readers
     // treat absence as "no mate info").
-    if (run.readCount == 0) {
+    if (_bulkObjC != nil && _bulkObjC.mateInfoBlob != nil) {
+        // Phase 2c-T: skip codec encode.
+        if (!_TTIO_PhaseT_WriteMateInfoBulkStorage(sc,
+                _bulkObjC.mateInfoBlob,
+                _bulkObjC.mateInfoChromNames ?: @[], error)) return NO;
+    } else if (run.readCount == 0) {
         // Omit the mate_info group — no children to write.
     } else if ([TTIOMateInfoV2 nativeAvailable]) {
         if (!_TTIO_V17_WriteMateInfoInlineV2Storage(sc, run, error)) return NO;
