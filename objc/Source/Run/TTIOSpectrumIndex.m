@@ -1,3 +1,20 @@
+/*
+ * TTIOSpectrumIndex.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOSpectrumIndex
+ * Inherits From: NSObject
+ * Declared In:   Run/TTIOSpectrumIndex.h
+ *
+ * Per-spectrum offsets, lengths, and queryable metadata for one
+ * acquisition run. Range queries (RT, ms_level, polarity) operate
+ * on the in-memory parallel arrays without touching the signal
+ * channels — the compressed-domain query property of the
+ * access-unit storage model.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOSpectrumIndex.h"
 #import "ValueClasses/TTIOValueRange.h"
 #import "ValueClasses/TTIOIsolationWindow.h"
