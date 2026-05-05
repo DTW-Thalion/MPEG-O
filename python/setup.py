@@ -7,45 +7,56 @@ because Cython extensions need ``Extension`` declarations that PEP 621
 When ``Cython`` is unavailable, the build silently emits no extension
 modules — the pure-Python references provide byte-identical output, just
 slower. ObjC + Java implementations are unaffected.
+
+Extensions whose ``.pyx`` source files are missing on disk are also
+silently skipped — `_ref_diff` and `_name_tokenizer` are placeholders
+for future Cython acceleration; the pure-Python implementations under
+``ttio.codecs.ref_diff_v2`` and ``ttio.codecs.name_tokenizer_v2``
+already cover the codec. Skipping a missing source keeps
+``pip install -e .`` working on a fresh clone.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from setuptools import setup
+
+_HERE = Path(__file__).parent
+
+# (extension_name, source_path) pairs. Only extensions whose source
+# file exists on disk get built; missing sources are silently skipped.
+_CYTHON_TARGETS = [
+    (
+        "ttio.codecs._fqzcomp_nx16_z._fqzcomp_nx16_z",
+        "src/ttio/codecs/_fqzcomp_nx16_z/_fqzcomp_nx16_z.pyx",
+    ),
+    (
+        "ttio.codecs._ref_diff._ref_diff",
+        "src/ttio/codecs/_ref_diff/_ref_diff.pyx",
+    ),
+    (
+        "ttio.codecs._name_tokenizer._name_tokenizer",
+        "src/ttio/codecs/_name_tokenizer/_name_tokenizer.pyx",
+    ),
+    (
+        "ttio.codecs._rans._rans",
+        "src/ttio/codecs/_rans/_rans.pyx",
+    ),
+]
 
 ext_modules: list = []
 try:
     from Cython.Build import cythonize  # type: ignore[import-not-found]
     from setuptools import Extension
 
-    ext_modules = cythonize(
-        [
-            Extension(
-                name="ttio.codecs._fqzcomp_nx16_z._fqzcomp_nx16_z",
-                sources=[
-                    "src/ttio/codecs/_fqzcomp_nx16_z/_fqzcomp_nx16_z.pyx",
-                ],
-            ),
-            Extension(
-                name="ttio.codecs._ref_diff._ref_diff",
-                sources=[
-                    "src/ttio/codecs/_ref_diff/_ref_diff.pyx",
-                ],
-            ),
-            Extension(
-                name="ttio.codecs._name_tokenizer._name_tokenizer",
-                sources=[
-                    "src/ttio/codecs/_name_tokenizer/_name_tokenizer.pyx",
-                ],
-            ),
-            Extension(
-                name="ttio.codecs._rans._rans",
-                sources=[
-                    "src/ttio/codecs/_rans/_rans.pyx",
-                ],
-            ),
-        ],
-        compiler_directives={"language_level": "3"},
-    )
+    extensions = []
+    for name, source in _CYTHON_TARGETS:
+        if (_HERE / source).is_file():
+            extensions.append(Extension(name=name, sources=[source]))
+    if extensions:
+        ext_modules = cythonize(
+            extensions,
+            compiler_directives={"language_level": "3"},
+        )
 except ImportError:  # pragma: no cover — Cython optional
     ext_modules = []
 
