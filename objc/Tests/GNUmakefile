@@ -101,7 +101,8 @@ TTIOTests_OBJC_FILES = \
 	TestPhase12RunProtocol.m \
 	TestTask30MSProviderURL.m \
 	TestTask31InstanceWriterParity.m \
-	TestFastaFastqIo.m
+	TestFastaFastqIo.m \
+	TestFastaFastqTioRoundTrip.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

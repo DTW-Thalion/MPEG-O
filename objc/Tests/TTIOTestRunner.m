@@ -105,6 +105,7 @@ extern void testPhase12RunProtocol(void);
 extern void testTask30MSProviderURL(void);
 extern void testTask31InstanceWriterParity(void);
 extern void testFastaFastqIo(void);
+extern void testFastaFastqTioRoundTrip(void);
 
 int main(int argc, const char *argv[])
 {
@@ -528,6 +529,10 @@ int main(int argc, const char *argv[])
         START_SET("FASTA / FASTQ I/O")
             testFastaFastqIo();
         END_SET("FASTA / FASTQ I/O")
+
+        START_SET("FASTA / FASTQ -> .tio -> FASTA / FASTQ round-trip")
+            testFastaFastqTioRoundTrip();
+        END_SET("FASTA / FASTQ -> .tio -> FASTA / FASTQ round-trip")
     }
     return 0;
 }

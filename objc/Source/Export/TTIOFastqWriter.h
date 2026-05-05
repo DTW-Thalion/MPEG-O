@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 
 @class TTIOWrittenGenomicRun;
+@class TTIOGenomicRun;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -43,6 +44,16 @@ NS_ASSUME_NONNULL_BEGIN
       gzipOutput:(int)gzipOutput
      phredOffset:(uint8_t)phredOffset
            error:(NSError **)error;
+
+/**
+ * Write a read-side <code>TTIOGenomicRun</code> to FASTQ. Used by
+ * the FASTQ-from-<code>.tio</code> export path.
+ */
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+              gzipOutput:(int)gzipOutput
+             phredOffset:(uint8_t)phredOffset
+                   error:(NSError **)error;
 
 @end
 
