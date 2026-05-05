@@ -30,7 +30,7 @@ import java.util.stream.Stream;
  *
  * <p>Waters {@code .raw} inputs are <b>directories</b>, not files.</p>
  *
- * <p><b>API status:</b> Provisional (v0.9 M63).</p>
+ * <p><b>API status:</b> Provisional ().</p>
  *
  * <p><b>Cross-language equivalents:</b><br>
  * Objective-C: {@code TTIOWatersMassLynxReader} &middot;

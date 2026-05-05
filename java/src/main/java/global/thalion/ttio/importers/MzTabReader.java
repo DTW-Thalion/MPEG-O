@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
  *   <li>{@code "2.0.0-M"} — metabolomics dialect (SML)</li>
  * </ul></p>
  *
- * <p>API status: Provisional (v0.9 M60).</p>
+ * <p>API status: Provisional ().</p>
  *
  * <p>Cross-language equivalents: Python
  * {@code ttio.importers.mztab}, Objective-C

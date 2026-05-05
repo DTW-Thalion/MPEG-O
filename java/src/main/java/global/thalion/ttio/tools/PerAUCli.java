@@ -40,7 +40,7 @@ import java.util.TreeMap;
  * <p>Decryption emits a minimal, language-agnostic binary dump
  * compatible with the Python side's NPZ convention so cross-language
  * byte-equality checks work without depending on the Python
- * interpreter to read Java output. Layout (M90.12 — MPAD v1):
+ * interpreter to read Java output. Layout (— MPAD v1):
  * <pre>
  *   MAGIC "MPA1" (4 bytes) | u32 n_entries
  *   per entry: u16 key_len | utf8 key bytes |

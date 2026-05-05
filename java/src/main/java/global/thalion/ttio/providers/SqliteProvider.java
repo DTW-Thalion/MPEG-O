@@ -159,7 +159,7 @@ public final class SqliteProvider implements StorageProvider {
         }
     }
 
-    // ── Transactions (Appendix B Gap 11) ──────────────────────────────────
+    // ── Transactions ──────────────────────────────────
 
     /** Opens an explicit batch: subsequent mutating ops suppress their
      *  per-call commits until {@link #commitTransaction()} flushes them
@@ -344,7 +344,7 @@ public final class SqliteProvider implements StorageProvider {
                 for (double v : arr) buf.putDouble(v);
             }
             case UINT8 -> {
-                // v0.11 M79: raw bytes — genomic base/quality channels.
+                // raw bytes — genomic base/quality channels.
                 byte[] arr = toByteArray(data);
                 buf.put(arr);
             }
@@ -398,7 +398,7 @@ public final class SqliteProvider implements StorageProvider {
                 yield arr;
             }
             case UINT8 -> {
-                // v0.11 M79: raw byte channel.
+                // raw byte channel.
                 byte[] arr = new byte[n];
                 buf.get(arr);
                 yield arr;

@@ -9,7 +9,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 /**
- * ProtectionMetadata packet payload (v0.10 M71) per
+ * ProtectionMetadata packet payload () per
  * {@code docs/transport-spec.md} §4.4.
  *
  * <p>Wire order: {@code cipher_suite} / {@code kek_algorithm} /

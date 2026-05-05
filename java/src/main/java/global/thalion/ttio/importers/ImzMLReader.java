@@ -36,7 +36,7 @@ import java.util.List;
  *   <li>{@code <stem>.ibd} — concatenated binary mass / intensity
  *       arrays prefixed by a 16-byte UUID that must match the
  *       {@code IMS:1000042 universally unique identifier} cvParam
- *       in the metadata (HANDOFF gotcha 49).</li>
+ *       in the metadata </li>
  * </ul>
  *
  * <p>Two storage modes:
@@ -47,7 +47,7 @@ import java.util.List;
  *       intensity arrays.</li>
  * </ul>
  *
- * <p>API status: Provisional (v0.9 M59).</p>
+ * <p>API status: Provisional ().</p>
  *
  * <p>Cross-language equivalents: Python
  * {@code ttio.importers.imzml}, Objective-C

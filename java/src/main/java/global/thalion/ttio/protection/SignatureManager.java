@@ -73,7 +73,7 @@ public final class SignatureManager {
     // -------------------------------------------------- algorithm-dispatched
 
     /**
-     * Sign {@code data} with the named signature algorithm. v0.8 M49.
+     * Sign {@code data} with the named signature algorithm..
      *
      * <ul>
      *   <li>{@code "hmac-sha256"} — {@code key} is a 32-byte HMAC

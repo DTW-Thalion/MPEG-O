@@ -74,7 +74,7 @@ public class KeyRotationManager {
                 ki.setStringAttribute("wrapped_at", Instant.now().toString());
                 ki.setStringAttribute("key_history_json", historyToJson());
 
-                // Write wrapped DEK as UINT32 array (v0.7 M47: default
+                // Write wrapped DEK as UINT32 array (: default
                 // wrap is the v1.2 versioned blob, 71 bytes for AES-GCM,
                 // padded with zero bytes to the next 4-byte boundary).
                 // Legacy v1.1 (60 bytes → 15 int32) still readable; the

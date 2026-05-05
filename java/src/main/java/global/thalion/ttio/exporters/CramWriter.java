@@ -15,7 +15,7 @@ import java.util.Objects;
  *
  * <p>Subclass of {@link BamWriter} that overrides the samtools
  * subprocess invocation to emit CRAM (reference-compressed) output
- * instead of BAM. Per Binding Decision §139 the reference FASTA is
+ * instead of BAM. Per the reference FASTA is
  * a positional constructor argument; samtools needs it for both the
  * {@code view -CS} and the {@code sort -O cram} stages.</p>
  *
@@ -45,7 +45,7 @@ public class CramWriter extends BamWriter {
     public CramWriter(Path path, Path referenceFasta) {
         super(path);
         this.referenceFasta = Objects.requireNonNull(referenceFasta,
-            "referenceFasta is required for CramWriter (Binding Decision §139)");
+            "referenceFasta is required for CramWriter ()");
     }
 
     /** @return the reference FASTA path passed at construction time. */

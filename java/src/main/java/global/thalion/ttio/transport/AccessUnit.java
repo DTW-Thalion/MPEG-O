@@ -16,7 +16,7 @@ import java.util.List;
  *
  * <p>Wire value for {@code spectrumClass}: 0=MassSpectrum,
  * 1=NMRSpectrum, 2=NMR2D, 3=FID, 4=MSImagePixel, 5=GenomicRead
- * (v0.11 M79; suffix carrying chromosome / position / mapq / flags
+ * (; suffix carrying chromosome / position / mapq / flags
  * shipped in M89.1).</p>
  *
  * <p>Wire value for {@code polarity} (differs from
@@ -51,7 +51,7 @@ public final class AccessUnit {
     public final int flags;
 
     // M90.9 mate extension (written only when {@code spectrumClass == 5}).
-    // Optional on the wire — when absent (M89.1 fixture or empty AU)
+    // Optional on the wire — when absent (fixture or empty AU)
     // these default to BAM unmapped sentinels: -1 mate_position,
     // 0 template_length. Decoder is OPTIONAL: payloads ending right
     // after flags decode unchanged.

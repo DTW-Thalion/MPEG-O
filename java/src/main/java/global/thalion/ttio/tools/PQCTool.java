@@ -177,7 +177,7 @@ public final class PQCTool {
         System.exit(ok ? 0 : 1);
     }
 
-    // ── Provider-agnostic sign/verify (v0.8 M54.1) ───────────────────
+    // ── Provider-agnostic sign/verify () ───────────────────
 
     private static void providerSign(String[] args) throws Exception {
         require(args, 4, "provider-sign URL DATASET_PATH SK_IN");

@@ -24,7 +24,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 /**
- * WebSocket transport server (v0.10 M68.5 parity backfill).
+ * WebSocket transport server (parity backfill).
  *
  * <p>Serves a {@link SpectralDataset} to WebSocket clients. Clients
  * send a JSON query; the server streams StreamHeader + DatasetHeaders

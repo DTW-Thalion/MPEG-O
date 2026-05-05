@@ -40,7 +40,7 @@ import java.util.Map;
  * binary extraction must have Python + {@code opentimspy} reachable
  * on {@code PATH} or via the {@code TTIO_PYTHON} env var.</p>
  *
- * <p>API status: Provisional (v0.8 M53).</p>
+ * <p>API status: Provisional ().</p>
  *
  * <p>Cross-language equivalents: Python
  * {@code ttio.importers.bruker_tdf}, Objective-C

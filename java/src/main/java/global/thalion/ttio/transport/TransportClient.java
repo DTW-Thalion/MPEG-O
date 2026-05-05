@@ -22,7 +22,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Java client for the TTI-O streaming transport protocol (v0.10 M68).
+ * Java client for the TTI-O streaming transport protocol ().
  *
  * <p>Connects to a {@link global.thalion.ttio.transport.TransportClient}-compatible
  * WebSocket server (the Python reference server ships in

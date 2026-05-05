@@ -95,7 +95,7 @@ public class BamWriter {
      *                   explicitly because the Java/ObjC
      *                   {@code WrittenGenomicRun} analogues don't
      *                   carry it".
-     * @param sort       when {@code true} (Binding Decision §137
+     * @param sort       when {@code true} (
      *                   default), pipe the SAM text through
      *                   {@code samtools sort -O bam} so the output
      *                   BAM is coordinate-sorted (precondition most

@@ -110,7 +110,7 @@ public final class NmrMLReader {
         // Spectrum data
         private String xAxisBase64 = null;
         private String yAxisBase64 = null;
-        // v0.9 M64: canonical nmrML form stores spectrum1D as a single
+        // canonical nmrML form stores spectrum1D as a single
         // <spectrumDataArray> with interleaved (x,y) doubles +
         // attribute-only <xAxis>. Detect via encodedLength ==
         // 2 * numberOfDataPoints * 8.
@@ -127,7 +127,7 @@ public final class NmrMLReader {
         private boolean inYAxis = false;
         private boolean inSpectrumDataArray = false;
         private boolean inAcquisitionParameterSet = false;
-        // v0.9 M64: DirectDimensionParameterSet carries the canonical
+        // DirectDimensionParameterSet carries the canonical
         // acquisitionNucleus/sweepWidth/irradiationFrequency triplet in
         // modern nmrML. Track it so the reader prefers these over the
         // legacy cvParam-in-acquisitionParameterSet form.

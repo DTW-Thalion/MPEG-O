@@ -257,7 +257,7 @@ public final class TransportReader implements AutoCloseable {
      *  additional UINT8 string channels (per-AU). mate_position +
      *  template_length ride on the M90.9 mate extension at the end of
      *  the AU genomic suffix; the {@link AccessUnit#decode} path
-     *  defaults them to -1 / 0 when absent (M89.1 fixtures).</p>
+     *  defaults them to -1 / 0 when absent (fixtures).</p>
      *
      *  <p>M90.10: dispatches on the wire {@code compression} byte to
      *  pick the M86 codec decoder (rANS / BASE_PACK) for the
