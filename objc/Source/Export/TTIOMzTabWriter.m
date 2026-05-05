@@ -1,4 +1,17 @@
 /*
+ * TTIOMzTabWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOMzTabWriteResult, TTIOMzTabWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOMzTabWriter.h
+ *
+ * mzTab exporter. Reverses TTIOMzTabReader: emits a tab-separated
+ * mzTab file from identifications + quantifications (plus optional
+ * features). Both proteomics (1.0) and metabolomics (2.0.0-M)
+ * dialects are supported.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOMzTabWriter.h"

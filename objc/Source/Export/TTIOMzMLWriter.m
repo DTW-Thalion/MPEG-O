@@ -1,4 +1,17 @@
 /*
+ * TTIOMzMLWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOMzMLWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOMzMLWriter.h
+ *
+ * indexedmzML writer. Serialises a TTIOSpectralDataset to mzML 1.1
+ * with byte-correct per-spectrum offsets. Optional zlib compression
+ * of binary data arrays via MS:1000574 annotation. Output re-parses
+ * with TTIOMzMLReader and pwiz tools.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

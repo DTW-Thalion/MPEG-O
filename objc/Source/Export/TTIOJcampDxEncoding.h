@@ -4,18 +4,26 @@
 #import <Foundation/Foundation.h>
 
 /**
- * JCAMP-DX 5.01 `##XYDATA=(X++(Y..Y))` encoding modes supported by
- * `TTIOJcampDxWriter`.
+ * <heading>TTIOJcampDxEncoding</heading>
  *
- * `AFFN` emits one free-format (X, Y) pair per line — the default
- * and the only mode available prior to M76. `PAC` / `SQZ` / `DIF`
- * emit the JCAMP-DX 5.01 §5.9 compressed forms; equispaced X is
- * required and a shared YFACTOR is chosen to carry ~7 significant
- * digits of integer-scaled Y precision.
+ * <p><em>Type:</em> NS_ENUM (NSInteger)</p>
+ * <p><em>Declared In:</em> Export/TTIOJcampDxEncoding.h</p>
  *
- * Cross-language equivalents:
- *   Java:    global.thalion.ttio.exporters.JcampDxEncoding
- *   Python:  encoding="..." keyword on write_*_spectrum
+ * <p>JCAMP-DX 5.01 <code>##XYDATA=(X++(Y..Y))</code> encoding modes
+ * supported by <code>TTIOJcampDxWriter</code>.</p>
+ *
+ * <p><code>AFFN</code> emits one free-format (X, Y) pair per line and
+ * is the default. <code>PAC</code> / <code>SQZ</code> /
+ * <code>DIF</code> emit the JCAMP-DX 5.01 §5.9 compressed forms;
+ * equispaced X is required and a shared YFACTOR is chosen to carry
+ * approximately seven significant digits of integer-scaled Y
+ * precision.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Java:
+ * <code>global.thalion.ttio.exporters.JcampDxEncoding</code><br/>
+ * Python: <code>encoding="..."</code> keyword on
+ * <code>write_*_spectrum</code></p>
  */
 typedef NS_ENUM(NSInteger, TTIOJcampDxEncoding) {
     TTIOJcampDxEncodingAFFN = 0,

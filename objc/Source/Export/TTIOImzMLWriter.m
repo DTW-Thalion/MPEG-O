@@ -1,4 +1,17 @@
 /*
+ * TTIOImzMLWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOImzMLWriteResult, TTIOImzMLWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOImzMLWriter.h
+ *
+ * imzML + .ibd exporter. Reverses TTIOImzMLReader: emits the canonical
+ * paired .imzML / .ibd files for both continuous and processed mode
+ * mass-spectrometry imaging data. Output passes pyimzml's ImzMLParser
+ * and round-trips through TTIOImzMLReader bit-identically.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOImzMLWriter.h"
