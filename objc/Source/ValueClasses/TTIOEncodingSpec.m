@@ -1,3 +1,18 @@
+/*
+ * TTIOEncodingSpec.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOEncodingSpec
+ * Inherits From: NSObject
+ * Conforms To:   NSCoding, NSCopying
+ * Declared In:   ValueClasses/TTIOEncodingSpec.h
+ *
+ * Wire-format spec for a TTIOSignalArray buffer (precision,
+ * compression algorithm, byte order). Immutable value class.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOEncodingSpec.h"
 
 @implementation TTIOEncodingSpec
