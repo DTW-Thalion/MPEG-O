@@ -1,0 +1,108 @@
+ttio.codecs.rans
+================
+
+.. py:module:: ttio.codecs.rans
+
+.. autoapi-nested-parse::
+
+   rANS entropy codec — order-0 and order-1.
+
+   Clean-room implementation from Jarek Duda, "Asymmetric numeral
+   systems: entropy coding combining speed of Huffman coding with
+   compression rate of arithmetic coding", arXiv:1311.2540, 2014.
+   Public domain algorithm. No htslib (or other third-party rANS)
+   source code consulted.
+
+   Cross-language equivalents:
+       Objective-C: TTIORans (objc/Source/Codecs/TTIORans.{h,m})
+       Java:        global.thalion.ttio.codecs.Rans
+
+   Wire format (big-endian, self-contained):
+
+       Offset  Size   Field
+       ──────  ─────  ─────────────────────────────
+       0       1      order (0x00 or 0x01)
+       1       4      original_length      (uint32 BE)
+       5       4      payload_length       (uint32 BE)
+       9       var    frequency_table
+                        order-0: 256 × uint32 BE = 1024 bytes
+                        order-1: for each context 0..255:
+                                   uint16 BE  n_nonzero
+                                   n_nonzero × (uint8 sym, uint16 BE freq)
+       9+ft    var    payload (rANS encoded bytes)
+
+   The payload itself is laid out as
+
+       [4 bytes: final encoder state, big-endian uint32]
+       [renormalisation byte stream — read forward by the decoder]
+
+   Algorithm parameters (Binding Decisions §75-§78):
+
+       state width:   64-bit unsigned  (Python int — unbounded but used
+                      as if 64-bit for the C/Java ports)
+       L            = 2**23
+       b            = 2**8 (one byte renormalisation)
+       M            = 2**12 = 4096
+       initial x    = L
+       encode order = reverse (last input byte first)
+       initial ctx  = 0  (order-1 first symbol uses null-byte context)
+
+   Frequency table normalisation is fully deterministic across all
+   three languages (see ``_normalise_freqs``).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.rans.M
+   ttio.codecs.rans.L
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.rans.encode
+   ttio.codecs.rans.decode
+
+
+Module Contents
+---------------
+
+.. py:data:: M
+   :type:  int
+   :value: 4096
+
+
+.. py:data:: L
+   :type:  int
+   :value: 8388608
+
+
+.. py:function:: encode(data: bytes, order: int = 0) -> bytes
+
+   Encode ``data`` using rANS with the given context order.
+
+   :param data: Input byte string.  May be empty.
+   :type data: bytes
+   :param order: ``0`` (marginal frequencies) or ``1`` (frequencies conditioned
+                 on the previous byte).
+   :type order: int
+
+   :returns: *bytes* -- Self-contained encoded stream — see module docstring for the
+             wire format.
+
+
+.. py:function:: decode(encoded: bytes) -> bytes
+
+   Decode a stream produced by :func:`encode`.
+
+   :raises ValueError: If the input is too short, has an unknown order byte, has a
+       truncated frequency table, or the declared payload length
+       does not match the bytes that follow.
+
+

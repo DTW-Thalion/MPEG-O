@@ -18,6 +18,14 @@ ttio.spectral_dataset
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.spectral_dataset.SAM_REVERSE_FLAG
+
+
 Classes
 -------
 
@@ -82,6 +90,10 @@ Module Contents
       :type:  dict[str, ttio.acquisition_run.AcquisitionRun]
 
 
+   .. py:attribute:: genomic_runs
+      :type:  dict[str, ttio.genomic_run.GenomicRun]
+
+
    .. py:attribute:: encrypted_algorithm
       :type:  str
       :value: ''
@@ -94,7 +106,7 @@ Module Contents
 
 
 
-   .. py:method:: open(path: str | pathlib.Path, *, thread_safe: bool = False, writable: bool = False, **fsspec_kwargs: Any) -> SpectralDataset
+   .. py:method:: open(path: str | pathlib.Path, *, provider: str | None = None, thread_safe: bool = False, writable: bool = False, **fsspec_kwargs: Any) -> SpectralDataset
       :classmethod:
 
 
@@ -165,6 +177,69 @@ Module Contents
 
 
       Union of MS and NMR runs, keyed by run name.
+
+      Note: This DOES NOT include ``genomic_runs`` — those have a
+      different return type (:class:`GenomicRun` rather than
+      :class:`AcquisitionRun`). For modality-agnostic iteration
+      across all run types, use :meth:`all_runs_unified` (Phase 1).
+
+
+   .. py:property:: runs
+      :type: Mapping[str, Run]
+
+
+      Canonical mapping over every run in the file (MS + NMR +
+      genomic), keyed by run name.
+
+      Values conform to the :class:`ttio.protocols.run.Run`
+      Protocol so callers can iterate uniformly without knowing
+      the underlying modality:
+
+          for name, run in ds.runs.items():
+              print(f"{name}: {len(run)} measurements")
+
+      Use :meth:`runs_of_modality` to narrow by class, or
+      :meth:`runs_for_sample` to filter by provenance sample URI.
+
+      Phase 2 promotes this to the canonical access pattern.
+      Backward-compat: the legacy ``ms_runs`` / ``nmr_runs`` /
+      ``genomic_runs`` dicts and the MS+NMR-only ``all_runs``
+      property continue to work; new code should prefer ``runs``.
+
+
+   .. py:property:: all_runs_unified
+      :type: Mapping[str, Run]
+
+
+      Deprecated alias for :attr:`runs`. Kept for the brief
+      Phase 1 → Phase 2 transition; remove in v1.0.
+
+
+   .. py:method:: runs_for_sample(sample_uri: str) -> Mapping[str, Run]
+
+      Return every run associated with ``sample_uri``.
+
+      A run is considered associated when its
+      :meth:`ttio.protocols.run.Run.provenance_chain` carries
+      ``sample_uri`` in any record's ``input_refs``. Walks all
+      modalities (MS, NMR, genomic) uniformly via the Run
+      Protocol — closes the M91 cross-modality query gap that
+      previously had to fork on access pattern.
+
+      Returns a dict keyed by run name; empty when no run
+      matches.
+
+
+
+   .. py:method:: runs_of_modality(run_type: type) -> Mapping[str, Run]
+
+      Return every run whose value is an instance of ``run_type``.
+
+      Pass :class:`AcquisitionRun` to get the union of MS + NMR
+      runs (any spectrum-class subtype); pass :class:`GenomicRun`
+      to get genomic only. The return is a thin filter over
+      :attr:`all_runs_unified`.
+
 
 
    .. py:method:: identifications() -> list[ttio.identification.Identification]
@@ -241,7 +316,7 @@ Module Contents
 
 
 
-   .. py:method:: write_minimal(path: str | pathlib.Path, *, title: str, isa_investigation_id: str, runs: Mapping[str, WrittenRun], identifications: list[ttio.identification.Identification] | None = None, quantifications: list[ttio.quantification.Quantification] | None = None, provenance: list[ttio.provenance.ProvenanceRecord] | None = None, features: list[str] | None = None, provider: str | ttio.providers.StorageProvider = 'hdf5') -> pathlib.Path
+   .. py:method:: write_minimal(path: str | pathlib.Path, *, title: str, isa_investigation_id: str, runs: Mapping[str, WrittenRun], genomic_runs: Mapping[str, ttio.written_genomic_run.WrittenGenomicRun] | None = None, identifications: list[ttio.identification.Identification] | None = None, quantifications: list[ttio.quantification.Quantification] | None = None, provenance: list[ttio.provenance.ProvenanceRecord] | None = None, features: list[str] | None = None, provider: str | ttio.providers.StorageProvider = 'hdf5') -> pathlib.Path
       :classmethod:
 
 
@@ -352,5 +427,9 @@ Module Contents
       :type:  list
       :value: []
 
+
+
+.. py:data:: SAM_REVERSE_FLAG
+   :value: 16
 
 

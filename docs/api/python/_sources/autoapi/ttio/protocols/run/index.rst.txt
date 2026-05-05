@@ -1,0 +1,101 @@
+ttio.protocols.run
+==================
+
+.. py:module:: ttio.protocols.run
+
+.. autoapi-nested-parse::
+
+   Run — modality-agnostic Protocol for an acquisition or sequencing
+   run inside a TTI-O SpectralDataset.
+
+   A "run" is a sequence of measurements (spectra in the MS / NMR / FID
+   case, aligned reads in the genomic case) that share an acquisition
+   mode, instrument context, and provenance chain. Both
+   :class:`ttio.acquisition_run.AcquisitionRun` and
+   :class:`ttio.genomic_run.GenomicRun` conform structurally — no
+   explicit subclassing required.
+
+   Code that wants to operate uniformly on either modality should type-
+   hint against :class:`Run` and use only the methods listed below.
+   Modality-specific work (e.g. extracting a CIGAR string from an
+   aligned read, or a precursor m/z from a mass spectrum) requires
+   narrowing via ``isinstance()`` to the concrete class.
+
+   API status: Provisional (Phase 1 abstraction polish, post-M91).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.protocols.run.Run
+
+
+Module Contents
+---------------
+
+.. py:class:: Run
+
+   Bases: :py:obj:`Protocol`
+
+
+   Common surface shared by every run type (MS, NMR, FID,
+   MSImage, Genomic).
+
+   .. attribute:: name
+
+      Run identifier as stored in the .tio file (e.g.
+      ``"run_0001"`` or ``"genomic_0001"``).
+
+      :type: str
+
+   .. attribute:: acquisition_mode
+
+      Acquisition mode enum value identifying the instrument /
+      protocol context.
+
+      :type: AcquisitionMode
+
+   .. method:: __len__() -> int
+
+      Number of measurements in the run.
+
+   .. method:: __iter__() -> Iterator
+
+      Yield each measurement in storage order. The yielded type
+      is modality-specific (Spectrum / AlignedRead).
+
+   .. method:: __getitem__(i: int)
+
+      Return the i-th measurement. Negative indices count from
+      the end. Raises IndexError on out-of-bounds.
+
+   .. method:: provenance_chain() -> list[ProvenanceRecord]
+
+      Return the per-run provenance records in insertion order.
+      Empty list when the run has no provenance attached.
+      
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  ttio.enums.AcquisitionMode
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[Any]
+
+
+   .. py:method:: __getitem__(i: int) -> Any
+
+
+   .. py:method:: provenance_chain() -> list[ttio.provenance.ProvenanceRecord]
+
+

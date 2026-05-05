@@ -1,0 +1,998 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.codecs.rans - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/aligned_read/index.html">ttio.aligned_read</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/codecs/index.html">ttio.codecs</a><input aria-label="Toggle navigation of ttio.codecs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/base_pack/index.html">ttio.codecs.base_pack</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/delta_rans/index.html">ttio.codecs.delta_rans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/fqzcomp_nx16_z/index.html">ttio.codecs.fqzcomp_nx16_z</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/mate_info_v2/index.html">ttio.codecs.mate_info_v2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/name_tokenizer_v2/index.html">ttio.codecs.name_tokenizer_v2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/quality/index.html">ttio.codecs.quality</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/rans/index.html">ttio.codecs.rans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/codecs/ref_diff_v2/index.html">ttio.codecs.ref_diff_v2</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/bam/index.html">ttio.exporters.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/cram/index.html">ttio.exporters.cram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/genomic/index.html">ttio.genomic</a><input aria-label="Toggle navigation of ttio.genomic" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/genomic/reference_resolver/index.html">ttio.genomic.reference_resolver</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/genomic_index/index.html">ttio.genomic_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/genomic_run/index.html">ttio.genomic_run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bam/index.html">ttio.importers.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bam_dump/index.html">ttio.importers.bam_dump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/cram/index.html">ttio.importers.cram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/sam/index.html">ttio.importers.sam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/run/index.html">ttio.protocols.run</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../../autoapi/ttio/written_genomic_run/index.html">ttio.written_genomic_run</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.codecs.rans</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;rANS entropy codec — order-0 and order-1.</span>
+
+<span class="sd">Clean-room implementation from Jarek Duda, &quot;Asymmetric numeral</span>
+<span class="sd">systems: entropy coding combining speed of Huffman coding with</span>
+<span class="sd">compression rate of arithmetic coding&quot;, arXiv:1311.2540, 2014.</span>
+<span class="sd">Public domain algorithm. No htslib (or other third-party rANS)</span>
+<span class="sd">source code consulted.</span>
+
+<span class="sd">Cross-language equivalents:</span>
+<span class="sd">    Objective-C: TTIORans (objc/Source/Codecs/TTIORans.{h,m})</span>
+<span class="sd">    Java:        global.thalion.ttio.codecs.Rans</span>
+
+<span class="sd">Wire format (big-endian, self-contained):</span>
+
+<span class="sd">    Offset  Size   Field</span>
+<span class="sd">    ──────  ─────  ─────────────────────────────</span>
+<span class="sd">    0       1      order (0x00 or 0x01)</span>
+<span class="sd">    1       4      original_length      (uint32 BE)</span>
+<span class="sd">    5       4      payload_length       (uint32 BE)</span>
+<span class="sd">    9       var    frequency_table</span>
+<span class="sd">                     order-0: 256 × uint32 BE = 1024 bytes</span>
+<span class="sd">                     order-1: for each context 0..255:</span>
+<span class="sd">                                uint16 BE  n_nonzero</span>
+<span class="sd">                                n_nonzero × (uint8 sym, uint16 BE freq)</span>
+<span class="sd">    9+ft    var    payload (rANS encoded bytes)</span>
+
+<span class="sd">The payload itself is laid out as</span>
+
+<span class="sd">    [4 bytes: final encoder state, big-endian uint32]</span>
+<span class="sd">    [renormalisation byte stream — read forward by the decoder]</span>
+
+<span class="sd">Algorithm parameters (Binding Decisions §75-§78):</span>
+
+<span class="sd">    state width:   64-bit unsigned  (Python int — unbounded but used</span>
+<span class="sd">                   as if 64-bit for the C/Java ports)</span>
+<span class="sd">    L            = 2**23</span>
+<span class="sd">    b            = 2**8 (one byte renormalisation)</span>
+<span class="sd">    M            = 2**12 = 4096</span>
+<span class="sd">    initial x    = L</span>
+<span class="sd">    encode order = reverse (last input byte first)</span>
+<span class="sd">    initial ctx  = 0  (order-1 first symbol uses null-byte context)</span>
+
+<span class="sd">Frequency table normalisation is fully deterministic across all</span>
+<span class="sd">three languages (see ``_normalise_freqs``).</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">List</span><span class="p">,</span> <span class="n">Tuple</span>
+
+<span class="c1"># ── Optional Cython acceleration ────────────────────────────────────</span>
+<span class="c1"># Loaded lazily; absence is silently fine — the pure-Python reference</span>
+<span class="c1"># below is byte-exact and acts as the fallback. See setup.py for the</span>
+<span class="c1"># extension declaration.</span>
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">._rans</span><span class="w"> </span><span class="kn">import</span> <span class="n">_rans</span> <span class="k">as</span> <span class="n">_crans</span>  <span class="c1"># type: ignore[import-not-found]</span>
+    <span class="n">_HAVE_C_EXTENSION</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>  <span class="c1"># pragma: no cover — Cython optional</span>
+    <span class="n">_crans</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">_HAVE_C_EXTENSION</span> <span class="o">=</span> <span class="kc">False</span>
+
+<span class="c1"># ── Algorithm constants ─────────────────────────────────────────────</span>
+
+<span class="c1">#: Total of normalised frequency table.  Power of two so that ``x % M``</span>
+<span class="c1">#: reduces to ``x &amp; (M - 1)`` and the encoder can use a single shift.</span>
+<div class="viewcode-block" id="M">
+<a class="viewcode-back" href="../../../autoapi/ttio/codecs/rans/index.html#ttio.codecs.rans.M">[docs]</a>
+<span class="n">M</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">12</span>  <span class="c1"># 4096</span></div>
+
+
+<span class="c1">#: Number of bits to shift for the modulo / divide by M operations.</span>
+<span class="n">M_BITS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">12</span>
+
+<span class="c1">#: Lower bound of the encoder state range.</span>
+<div class="viewcode-block" id="L">
+<a class="viewcode-back" href="../../../autoapi/ttio/codecs/rans/index.html#ttio.codecs.rans.L">[docs]</a>
+<span class="n">L</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="mi">23</span></div>
+
+
+<span class="c1">#: I/O width — encoder emits 8 bits at a time (one byte).</span>
+<span class="n">B_BITS</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8</span>
+<span class="n">B</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">1</span> <span class="o">&lt;&lt;</span> <span class="n">B_BITS</span>  <span class="c1"># 256</span>
+
+<span class="c1">#: Upper bound of the encoder state range — exclusive.</span>
+<span class="c1">#: ``state_max == b * L``; while ``x &gt;= x_max(s)`` the encoder must</span>
+<span class="c1">#: renormalise (emit a byte) before encoding symbol s.</span>
+<span class="n">STATE_MAX</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">B</span> <span class="o">*</span> <span class="n">L</span>  <span class="c1"># 2**31</span>
+
+<span class="c1">#: Mask for ``x % M`` (M is a power of two).</span>
+<span class="n">M_MASK</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="n">M</span> <span class="o">-</span> <span class="mi">1</span>
+
+<span class="c1">#: Header bytes: 1 (order) + 4 (orig_len) + 4 (payload_len) = 9.</span>
+<span class="n">HEADER_LEN</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">9</span>
+
+
+<span class="c1"># ── Frequency normalisation ─────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalise_freqs</span><span class="p">(</span><span class="n">cnt</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalise a 256-element count vector to sum exactly to ``M``.</span>
+
+<span class="sd">    Deterministic across languages (Binding Decision §78):</span>
+
+<span class="sd">      1. Proportional scale: ``f[s] = max(1, cnt[s] * M // total)``</span>
+<span class="sd">         when ``cnt[s] &gt; 0``, else 0.</span>
+<span class="sd">      2. ``delta = M - sum(f)``.</span>
+<span class="sd">      3. If ``delta &gt; 0``: distribute +1 to symbols sorted by</span>
+<span class="sd">         **descending original count**, with **ascending symbol</span>
+<span class="sd">         value** as the tiebreaker.  Repeat until ``delta == 0``.</span>
+<span class="sd">      4. If ``delta &lt; 0``: subtract 1 from symbols sorted by</span>
+<span class="sd">         **ascending original count**, ascending symbol value</span>
+<span class="sd">         tiebreaker, but never reduce any frequency below 1.</span>
+
+<span class="sd">    Postcondition: ``sum(f) == M`` and ``f[s] &gt;= 1`` iff</span>
+<span class="sd">    ``cnt[s] &gt; 0``.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">cnt</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">256</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;count vector must have length 256&quot;</span><span class="p">)</span>
+    <span class="n">total</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">cnt</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">total</span> <span class="o">&lt;=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;cannot normalise empty count vector&quot;</span><span class="p">)</span>
+
+    <span class="n">freq</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">cnt</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">c</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">scaled</span> <span class="o">=</span> <span class="p">(</span><span class="n">c</span> <span class="o">*</span> <span class="n">M</span><span class="p">)</span> <span class="o">//</span> <span class="n">total</span>
+            <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">=</span> <span class="n">scaled</span> <span class="k">if</span> <span class="n">scaled</span> <span class="o">&gt;=</span> <span class="mi">1</span> <span class="k">else</span> <span class="mi">1</span>
+
+    <span class="n">delta</span> <span class="o">=</span> <span class="n">M</span> <span class="o">-</span> <span class="nb">sum</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">delta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Distribute +1 to most-frequent first, ties broken by symbol value.</span>
+        <span class="c1"># Only symbols with cnt &gt; 0 are eligible (others must remain 0).</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span> <span class="k">if</span> <span class="n">cnt</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="p">(</span><span class="o">-</span><span class="n">cnt</span><span class="p">[</span><span class="n">s</span><span class="p">],</span> <span class="n">s</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">order</span><span class="p">:</span>  <span class="c1"># cannot happen because total &gt; 0</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;normalise: no eligible symbols&quot;</span><span class="p">)</span>
+        <span class="n">i</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">while</span> <span class="n">delta</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">freq</span><span class="p">[</span><span class="n">order</span><span class="p">[</span><span class="n">i</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)]]</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="n">delta</span> <span class="o">-=</span> <span class="mi">1</span>
+    <span class="k">elif</span> <span class="n">delta</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="c1"># Subtract 1 from least-frequent first, ties by symbol value.</span>
+        <span class="c1"># Repeatedly walk the eligible list, skipping any that have</span>
+        <span class="c1"># already reached freq == 1.</span>
+        <span class="n">order</span> <span class="o">=</span> <span class="nb">sorted</span><span class="p">(</span>
+            <span class="p">(</span><span class="n">s</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span> <span class="k">if</span> <span class="n">cnt</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">),</span>
+            <span class="n">key</span><span class="o">=</span><span class="k">lambda</span> <span class="n">s</span><span class="p">:</span> <span class="p">(</span><span class="n">cnt</span><span class="p">[</span><span class="n">s</span><span class="p">],</span> <span class="n">s</span><span class="p">),</span>
+        <span class="p">)</span>
+        <span class="c1"># Use a round-robin walk because a single pass may not be</span>
+        <span class="c1"># enough if many symbols are pinned at 1.</span>
+        <span class="n">idx</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">guard</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">order</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">delta</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">order</span><span class="p">[</span><span class="n">idx</span> <span class="o">%</span> <span class="n">n</span><span class="p">]</span>
+            <span class="k">if</span> <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">-=</span> <span class="mi">1</span>
+                <span class="n">delta</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="n">guard</span> <span class="o">=</span> <span class="mi">0</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="n">guard</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="k">if</span> <span class="n">guard</span> <span class="o">&gt;</span> <span class="n">n</span><span class="p">:</span>
+                    <span class="c1"># All remaining frequencies are 1; cannot reduce.</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="s2">&quot;normalise: cannot reduce freq table below M; &quot;</span>
+                        <span class="s2">&quot;input alphabet too large for M=4096&quot;</span>
+                    <span class="p">)</span>
+            <span class="n">idx</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="n">freq</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_cumulative</span><span class="p">(</span><span class="n">freq</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return cumulative frequencies ``c[s] = sum(freq[0:s])``.&quot;&quot;&quot;</span>
+    <span class="n">cum</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">257</span>
+    <span class="n">s</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">cum</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
+        <span class="n">s</span> <span class="o">+=</span> <span class="n">freq</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">cum</span><span class="p">[</span><span class="mi">256</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
+    <span class="k">return</span> <span class="n">cum</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_slot_to_symbol</span><span class="p">(</span><span class="n">freq</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build a M-element lookup mapping ``slot`` to the decoded symbol.</span>
+
+<span class="sd">    Used only by the decoder; constructed once per context.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">table</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">M</span><span class="p">)</span>
+    <span class="n">pos</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">f</span><span class="p">:</span>
+            <span class="k">for</span> <span class="n">j</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">f</span><span class="p">):</span>
+                <span class="n">table</span><span class="p">[</span><span class="n">pos</span> <span class="o">+</span> <span class="n">j</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
+            <span class="n">pos</span> <span class="o">+=</span> <span class="n">f</span>
+    <span class="k">return</span> <span class="nb">list</span><span class="p">(</span><span class="n">table</span><span class="p">)</span>
+
+
+<span class="c1"># ── Order-0 core ────────────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_encode_order0</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode ``data`` with a single (order-0) frequency table.</span>
+
+<span class="sd">    Returns ``(payload, freq)`` where ``payload`` is the byte</span>
+<span class="sd">    sequence ``[final_state_be32 || renorm_bytes_forward]`` and</span>
+<span class="sd">    ``freq`` is the 256-element normalised frequency table.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+        <span class="c1"># Empty input: no symbols to encode.  Use a flat default</span>
+        <span class="c1"># frequency table just so the (always-encoded) header still</span>
+        <span class="c1"># carries one; the payload is just the initial state.</span>
+        <span class="n">freq</span> <span class="o">=</span> <span class="p">[</span><span class="n">M</span> <span class="o">//</span> <span class="mi">256</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+        <span class="c1"># M=4096, 4096/256 = 16 — sums to exactly 4096, so no fix-up.</span>
+        <span class="n">payload</span> <span class="o">=</span> <span class="n">L</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">payload</span><span class="p">,</span> <span class="n">freq</span>
+
+    <span class="n">cnt</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+        <span class="n">cnt</span><span class="p">[</span><span class="n">byte</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="n">freq</span> <span class="o">=</span> <span class="n">_normalise_freqs</span><span class="p">(</span><span class="n">cnt</span><span class="p">)</span>
+    <span class="n">cum</span> <span class="o">=</span> <span class="n">_cumulative</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span>
+
+    <span class="c1"># Pre-compute per-symbol renormalisation thresholds:</span>
+    <span class="c1"># the canonical rANS rule &quot;while x &gt;= (L/M) * b * f_s&quot; simplifies</span>
+    <span class="c1"># (with our parameters) to  x &gt;= (1&lt;&lt;19) * f_s.</span>
+    <span class="n">x_max</span> <span class="o">=</span> <span class="p">[((</span><span class="n">L</span> <span class="o">&gt;&gt;</span> <span class="n">M_BITS</span><span class="p">)</span> <span class="o">&lt;&lt;</span> <span class="n">B_BITS</span><span class="p">)</span> <span class="o">*</span> <span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">freq</span><span class="p">]</span>
+    <span class="c1"># i.e. (2**23 &gt;&gt; 12) &lt;&lt; 8 == 2**19 == 524288</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">L</span>
+    <span class="c1"># Encode in REVERSE: last byte of input is consumed first.</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">reversed</span><span class="p">(</span><span class="n">data</span><span class="p">):</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">cum</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="n">xm</span> <span class="o">=</span> <span class="n">x_max</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="c1"># Renormalise BEFORE encoding (canonical rANS).</span>
+        <span class="k">while</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="n">xm</span><span class="p">:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">&gt;&gt;=</span> <span class="mi">8</span>
+        <span class="c1"># Encode the symbol.</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">//</span> <span class="n">f</span><span class="p">)</span> <span class="o">*</span> <span class="n">M</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">c</span>
+
+    <span class="c1"># The decoder needs the final state to bootstrap.  Prepend it as</span>
+    <span class="c1"># 4 big-endian bytes.  After encoding (in reverse) the renorm</span>
+    <span class="c1"># byte stream is in ``out`` in reverse-of-emission order; the</span>
+    <span class="c1"># decoder reads bytes in the order they were emitted by the</span>
+    <span class="c1"># encoder, which is LIFO, so we reverse ``out`` here.</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+    <span class="n">payload</span> <span class="o">+=</span> <span class="n">x</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+    <span class="n">payload</span> <span class="o">+=</span> <span class="n">out</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">),</span> <span class="n">freq</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_order0</span><span class="p">(</span><span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">orig_len</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">freq</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Inverse of :func:`_encode_order0`.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">orig_len</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: payload too short to contain bootstrap state&quot;</span><span class="p">)</span>
+
+    <span class="n">cum</span> <span class="o">=</span> <span class="n">_cumulative</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span>
+    <span class="n">sym_for_slot</span> <span class="o">=</span> <span class="n">_slot_to_symbol</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span>
+
+    <span class="n">x</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="n">pos</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">orig_len</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">orig_len</span><span class="p">):</span>
+        <span class="n">slot</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&amp;</span> <span class="n">M_MASK</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">sym_for_slot</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">cum</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">f</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;&gt;</span> <span class="n">M_BITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">slot</span> <span class="o">-</span> <span class="n">c</span>
+        <span class="c1"># Renormalise — pull bytes in until x is back in [L, b*L).</span>
+        <span class="k">while</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">L</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">pos</span> <span class="o">&gt;=</span> <span class="n">n</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: unexpected end of payload&quot;</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">payload</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+            <span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+
+
+<span class="c1"># ── Order-1 core ────────────────────────────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_build_order1_counts</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Count transition frequencies into 256 context tables.</span>
+
+<span class="sd">    For each i in 0..len(data)-1, increment</span>
+<span class="sd">    ``tables[prev][data[i]]`` where ``prev = data[i-1]`` (or 0 if</span>
+<span class="sd">    i == 0).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">tables</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)]</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">tables</span>
+    <span class="n">prev</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="n">data</span><span class="p">:</span>
+        <span class="n">tables</span><span class="p">[</span><span class="n">prev</span><span class="p">][</span><span class="n">byte</span><span class="p">]</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">byte</span>
+    <span class="k">return</span> <span class="n">tables</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_normalise_order1</span><span class="p">(</span><span class="n">counts</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Normalise each non-empty context row independently.&quot;&quot;&quot;</span>
+    <span class="n">out</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span> <span class="o">=</span> <span class="p">[]</span>
+    <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">counts</span><span class="p">:</span>
+        <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">([</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">_normalise_freqs</span><span class="p">(</span><span class="n">row</span><span class="p">))</span>
+    <span class="k">return</span> <span class="n">out</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_encode_order1</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="nb">bytes</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]]:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">data</span><span class="p">:</span>
+        <span class="c1"># No transitions seen — every row is empty.</span>
+        <span class="k">return</span> <span class="n">L</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">),</span> <span class="p">[[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)]</span>
+
+    <span class="n">counts</span> <span class="o">=</span> <span class="n">_build_order1_counts</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="n">freqs</span> <span class="o">=</span> <span class="n">_normalise_order1</span><span class="p">(</span><span class="n">counts</span><span class="p">)</span>
+
+    <span class="c1"># Pre-compute cumulative tables and renorm thresholds for every</span>
+    <span class="c1"># context row that has any nonzero entry.</span>
+    <span class="n">cums</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="n">x_maxes</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="n">L</span> <span class="o">&gt;&gt;</span> <span class="n">M_BITS</span>  <span class="c1"># 2**11</span>
+    <span class="k">for</span> <span class="n">ctx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">freqs</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">cums</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_cumulative</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+        <span class="n">x_maxes</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span> <span class="o">=</span> <span class="p">[(</span><span class="n">base</span> <span class="o">&lt;&lt;</span> <span class="n">B_BITS</span><span class="p">)</span> <span class="o">*</span> <span class="n">f</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">row</span><span class="p">]</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">L</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+
+    <span class="c1"># Encode in REVERSE.  When encoding data[i] in reverse order,</span>
+    <span class="c1"># its predecessor context is data[i-1] (or 0 if i == 0).</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n</span> <span class="o">-</span> <span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="n">ctx</span> <span class="o">=</span> <span class="n">data</span><span class="p">[</span><span class="n">i</span> <span class="o">-</span> <span class="mi">1</span><span class="p">]</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">freqs</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">f</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="c1"># Cannot happen if counts are correct: any (ctx, s)</span>
+            <span class="c1"># transition that occurs has non-zero count by</span>
+            <span class="c1"># construction, hence non-zero normalised frequency.</span>
+            <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;order-1 encode: zero freq for ctx=</span><span class="si">{</span><span class="n">ctx</span><span class="si">}</span><span class="s2"> sym=</span><span class="si">{</span><span class="n">s</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">cums</span><span class="p">[</span><span class="n">ctx</span><span class="p">][</span><span class="n">s</span><span class="p">]</span>  <span class="c1"># type: ignore[index]</span>
+        <span class="n">xm</span> <span class="o">=</span> <span class="n">x_maxes</span><span class="p">[</span><span class="n">ctx</span><span class="p">][</span><span class="n">s</span><span class="p">]</span>  <span class="c1"># type: ignore[index]</span>
+        <span class="k">while</span> <span class="n">x</span> <span class="o">&gt;=</span> <span class="n">xm</span><span class="p">:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">x</span> <span class="o">&amp;</span> <span class="mh">0xFF</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">&gt;&gt;=</span> <span class="mi">8</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">//</span> <span class="n">f</span><span class="p">)</span> <span class="o">*</span> <span class="n">M</span> <span class="o">+</span> <span class="p">(</span><span class="n">x</span> <span class="o">%</span> <span class="n">f</span><span class="p">)</span> <span class="o">+</span> <span class="n">c</span>
+
+    <span class="n">payload</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+    <span class="n">payload</span> <span class="o">+=</span> <span class="n">x</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="n">out</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+    <span class="n">payload</span> <span class="o">+=</span> <span class="n">out</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">),</span> <span class="n">freqs</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_decode_order1</span><span class="p">(</span>
+    <span class="n">payload</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">orig_len</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">freqs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]]</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="k">if</span> <span class="n">orig_len</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">return</span> <span class="sa">b</span><span class="s2">&quot;&quot;</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span> <span class="o">&lt;</span> <span class="mi">4</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: payload too short to contain bootstrap state&quot;</span><span class="p">)</span>
+
+    <span class="c1"># Build per-context cumulative + slot tables lazily — only for</span>
+    <span class="c1"># contexts actually referenced during decode.  We don&#39;t know</span>
+    <span class="c1"># which contexts will be used in advance, so just build them</span>
+    <span class="c1"># all up-front for any row with non-zero sum (cheap on 256 rows).</span>
+    <span class="n">cums</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="n">slot_tables</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="kc">None</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">ctx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">freqs</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span>
+        <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">row</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">cums</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_cumulative</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+            <span class="n">slot_tables</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span> <span class="o">=</span> <span class="n">_slot_to_symbol</span><span class="p">(</span><span class="n">row</span><span class="p">)</span>
+
+    <span class="n">x</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">payload</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="n">pos</span> <span class="o">=</span> <span class="mi">4</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span>
+
+    <span class="n">out</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">orig_len</span><span class="p">)</span>
+    <span class="n">prev</span> <span class="o">=</span> <span class="mi">0</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">orig_len</span><span class="p">):</span>
+        <span class="n">slot_table</span> <span class="o">=</span> <span class="n">slot_tables</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span>
+        <span class="n">cum</span> <span class="o">=</span> <span class="n">cums</span><span class="p">[</span><span class="n">prev</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">slot_table</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="n">cum</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;rANS: order-1 context </span><span class="si">{</span><span class="n">prev</span><span class="si">}</span><span class="s2"> has empty frequency table&quot;</span>
+            <span class="p">)</span>
+        <span class="n">slot</span> <span class="o">=</span> <span class="n">x</span> <span class="o">&amp;</span> <span class="n">M_MASK</span>
+        <span class="n">s</span> <span class="o">=</span> <span class="n">slot_table</span><span class="p">[</span><span class="n">slot</span><span class="p">]</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">s</span>
+        <span class="n">f</span> <span class="o">=</span> <span class="n">freqs</span><span class="p">[</span><span class="n">prev</span><span class="p">][</span><span class="n">s</span><span class="p">]</span>
+        <span class="n">c</span> <span class="o">=</span> <span class="n">cum</span><span class="p">[</span><span class="n">s</span><span class="p">]</span>
+        <span class="n">x</span> <span class="o">=</span> <span class="n">f</span> <span class="o">*</span> <span class="p">(</span><span class="n">x</span> <span class="o">&gt;&gt;</span> <span class="n">M_BITS</span><span class="p">)</span> <span class="o">+</span> <span class="n">slot</span> <span class="o">-</span> <span class="n">c</span>
+        <span class="k">while</span> <span class="n">x</span> <span class="o">&lt;</span> <span class="n">L</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">pos</span> <span class="o">&gt;=</span> <span class="n">n</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: unexpected end of payload&quot;</span><span class="p">)</span>
+            <span class="n">x</span> <span class="o">=</span> <span class="p">(</span><span class="n">x</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">|</span> <span class="n">payload</span><span class="p">[</span><span class="n">pos</span><span class="p">]</span>
+            <span class="n">pos</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">prev</span> <span class="o">=</span> <span class="n">s</span>
+
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+
+
+<span class="c1"># ── Frequency table (de)serialisation ───────────────────────────────</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_serialise_freqs_o0</span><span class="p">(</span><span class="n">freq</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="mi">1024</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">s</span> <span class="o">*</span> <span class="mi">4</span> <span class="p">:</span> <span class="n">s</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">+</span> <span class="mi">4</span><span class="p">]</span> <span class="o">=</span> <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_deserialise_freqs_o0</span><span class="p">(</span><span class="n">buf</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">off</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="k">if</span> <span class="n">off</span> <span class="o">+</span> <span class="mi">1024</span> <span class="o">&gt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: order-0 freq table truncated&quot;</span><span class="p">)</span>
+    <span class="n">freq</span> <span class="o">=</span> <span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">freq</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="n">off</span> <span class="o">+</span> <span class="n">s</span> <span class="o">*</span> <span class="mi">4</span> <span class="p">:</span> <span class="n">off</span> <span class="o">+</span> <span class="n">s</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">+</span> <span class="mi">4</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">sum</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span> <span class="o">!=</span> <span class="n">M</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;rANS: order-0 freq table sum </span><span class="si">{</span><span class="nb">sum</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span><span class="si">}</span><span class="s2"> != M=</span><span class="si">{</span><span class="n">M</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+    <span class="k">return</span> <span class="n">freq</span><span class="p">,</span> <span class="n">off</span> <span class="o">+</span> <span class="mi">1024</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_serialise_freqs_o1</span><span class="p">(</span><span class="n">freqs</span><span class="p">:</span> <span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]])</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">()</span>
+    <span class="k">for</span> <span class="n">ctx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="n">row</span> <span class="o">=</span> <span class="n">freqs</span><span class="p">[</span><span class="n">ctx</span><span class="p">]</span>
+        <span class="n">nonzero</span> <span class="o">=</span> <span class="p">[(</span><span class="n">s</span><span class="p">,</span> <span class="n">row</span><span class="p">[</span><span class="n">s</span><span class="p">])</span> <span class="k">for</span> <span class="n">s</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)</span> <span class="k">if</span> <span class="n">row</span><span class="p">[</span><span class="n">s</span><span class="p">]</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">]</span>
+        <span class="n">out</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">nonzero</span><span class="p">)</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">s</span><span class="p">,</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">nonzero</span><span class="p">:</span>
+            <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">s</span><span class="p">)</span>
+            <span class="n">out</span> <span class="o">+=</span> <span class="n">f</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_deserialise_freqs_o1</span><span class="p">(</span>
+    <span class="n">buf</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">off</span><span class="p">:</span> <span class="nb">int</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Tuple</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="n">List</span><span class="p">[</span><span class="nb">int</span><span class="p">]],</span> <span class="nb">int</span><span class="p">]:</span>
+    <span class="n">freqs</span> <span class="o">=</span> <span class="p">[[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="mi">256</span> <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">)]</span>
+    <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span>
+    <span class="k">for</span> <span class="n">ctx</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">256</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">off</span> <span class="o">+</span> <span class="mi">2</span> <span class="o">&gt;</span> <span class="n">n</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: order-1 freq table truncated (count)&quot;</span><span class="p">)</span>
+        <span class="n">n_nonzero</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="n">off</span> <span class="p">:</span> <span class="n">off</span> <span class="o">+</span> <span class="mi">2</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+        <span class="n">off</span> <span class="o">+=</span> <span class="mi">2</span>
+        <span class="k">if</span> <span class="n">n_nonzero</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">continue</span>
+        <span class="n">row_sum</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">n_nonzero</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">off</span> <span class="o">+</span> <span class="mi">3</span> <span class="o">&gt;</span> <span class="n">n</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;rANS: order-1 freq table truncated (entry)&quot;</span>
+                <span class="p">)</span>
+            <span class="n">s</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[</span><span class="n">off</span><span class="p">]</span>
+            <span class="n">f</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="n">off</span> <span class="o">+</span> <span class="mi">1</span> <span class="p">:</span> <span class="n">off</span> <span class="o">+</span> <span class="mi">3</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">f</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;rANS: order-1 nonzero entry has freq 0&quot;</span>
+                <span class="p">)</span>
+            <span class="n">freqs</span><span class="p">[</span><span class="n">ctx</span><span class="p">][</span><span class="n">s</span><span class="p">]</span> <span class="o">=</span> <span class="n">f</span>
+            <span class="n">row_sum</span> <span class="o">+=</span> <span class="n">f</span>
+            <span class="n">off</span> <span class="o">+=</span> <span class="mi">3</span>
+        <span class="k">if</span> <span class="n">row_sum</span> <span class="o">!=</span> <span class="n">M</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;rANS: order-1 row </span><span class="si">{</span><span class="n">ctx</span><span class="si">}</span><span class="s2"> sums to </span><span class="si">{</span><span class="n">row_sum</span><span class="si">}</span><span class="s2"> != M=</span><span class="si">{</span><span class="n">M</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+    <span class="k">return</span> <span class="n">freqs</span><span class="p">,</span> <span class="n">off</span>
+
+
+<span class="c1"># ── Public API ──────────────────────────────────────────────────────</span>
+
+
+<div class="viewcode-block" id="encode">
+<a class="viewcode-back" href="../../../autoapi/ttio/codecs/rans/index.html#ttio.codecs.rans.encode">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">encode</span><span class="p">(</span><span class="n">data</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">,</span> <span class="n">order</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">0</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Encode ``data`` using rANS with the given context order.</span>
+
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    data : bytes</span>
+<span class="sd">        Input byte string.  May be empty.</span>
+<span class="sd">    order : int</span>
+<span class="sd">        ``0`` (marginal frequencies) or ``1`` (frequencies conditioned</span>
+<span class="sd">        on the previous byte).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    bytes</span>
+<span class="sd">        Self-contained encoded stream — see module docstring for the</span>
+<span class="sd">        wire format.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">order</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;rANS: unsupported order </span><span class="si">{</span><span class="n">order</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="p">(</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">bytearray</span><span class="p">,</span> <span class="nb">memoryview</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;rANS encode: data must be bytes-like&quot;</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mh">0xFFFFFFFF</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS encode: input exceeds 4 GiB header limit&quot;</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">order</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_HAVE_C_EXTENSION</span><span class="p">:</span>
+            <span class="n">payload</span><span class="p">,</span> <span class="n">freq</span> <span class="o">=</span> <span class="n">_crans</span><span class="o">.</span><span class="n">encode_order0_c</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">payload</span><span class="p">,</span> <span class="n">freq</span> <span class="o">=</span> <span class="n">_encode_order0</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">ft</span> <span class="o">=</span> <span class="n">_serialise_freqs_o0</span><span class="p">(</span><span class="n">freq</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_HAVE_C_EXTENSION</span><span class="p">:</span>
+            <span class="n">payload</span><span class="p">,</span> <span class="n">freqs</span> <span class="o">=</span> <span class="n">_crans</span><span class="o">.</span><span class="n">encode_order1_c</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">payload</span><span class="p">,</span> <span class="n">freqs</span> <span class="o">=</span> <span class="n">_encode_order1</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+        <span class="n">ft</span> <span class="o">=</span> <span class="n">_serialise_freqs_o1</span><span class="p">(</span><span class="n">freqs</span><span class="p">)</span>
+
+    <span class="n">header</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">HEADER_LEN</span><span class="p">)</span>
+    <span class="n">header</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="n">order</span>
+    <span class="n">header</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="n">header</span><span class="p">[</span><span class="mi">5</span><span class="p">:</span><span class="mi">9</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">payload</span><span class="p">)</span><span class="o">.</span><span class="n">to_bytes</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">header</span><span class="p">)</span> <span class="o">+</span> <span class="n">ft</span> <span class="o">+</span> <span class="n">payload</span></div>
+
+
+
+<div class="viewcode-block" id="decode">
+<a class="viewcode-back" href="../../../autoapi/ttio/codecs/rans/index.html#ttio.codecs.rans.decode">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">decode</span><span class="p">(</span><span class="n">encoded</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Decode a stream produced by :func:`encode`.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    ValueError</span>
+<span class="sd">        If the input is too short, has an unknown order byte, has a</span>
+<span class="sd">        truncated frequency table, or the declared payload length</span>
+<span class="sd">        does not match the bytes that follow.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">encoded</span><span class="p">,</span> <span class="p">(</span><span class="nb">bytes</span><span class="p">,</span> <span class="nb">bytearray</span><span class="p">,</span> <span class="nb">memoryview</span><span class="p">)):</span>
+        <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">(</span><span class="s2">&quot;rANS decode: input must be bytes-like&quot;</span><span class="p">)</span>
+    <span class="n">encoded</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">HEADER_LEN</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;rANS: stream shorter than header&quot;</span><span class="p">)</span>
+
+    <span class="n">order</span> <span class="o">=</span> <span class="n">encoded</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="k">if</span> <span class="n">order</span> <span class="ow">not</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;rANS: unsupported order byte </span><span class="si">{</span><span class="n">order</span><span class="si">!r}</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="n">orig_len</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">encoded</span><span class="p">[</span><span class="mi">1</span><span class="p">:</span><span class="mi">5</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+    <span class="n">payload_len</span> <span class="o">=</span> <span class="nb">int</span><span class="o">.</span><span class="n">from_bytes</span><span class="p">(</span><span class="n">encoded</span><span class="p">[</span><span class="mi">5</span><span class="p">:</span><span class="mi">9</span><span class="p">],</span> <span class="s2">&quot;big&quot;</span><span class="p">)</span>
+
+    <span class="n">off</span> <span class="o">=</span> <span class="n">HEADER_LEN</span>
+    <span class="k">if</span> <span class="n">order</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">freq</span><span class="p">,</span> <span class="n">off</span> <span class="o">=</span> <span class="n">_deserialise_freqs_o0</span><span class="p">(</span><span class="n">encoded</span><span class="p">,</span> <span class="n">off</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">freqs</span><span class="p">,</span> <span class="n">off</span> <span class="o">=</span> <span class="n">_deserialise_freqs_o1</span><span class="p">(</span><span class="n">encoded</span><span class="p">,</span> <span class="n">off</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">off</span> <span class="o">+</span> <span class="n">payload_len</span> <span class="o">!=</span> <span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;rANS: declared total length </span><span class="si">{</span><span class="n">off</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="n">payload_len</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;!= actual </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">encoded</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+        <span class="p">)</span>
+    <span class="n">payload</span> <span class="o">=</span> <span class="n">encoded</span><span class="p">[</span><span class="n">off</span> <span class="p">:</span> <span class="n">off</span> <span class="o">+</span> <span class="n">payload_len</span><span class="p">]</span>
+
+    <span class="k">if</span> <span class="n">order</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_HAVE_C_EXTENSION</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_crans</span><span class="o">.</span><span class="n">decode_order0_c</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">orig_len</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_decode_order0</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">orig_len</span><span class="p">,</span> <span class="n">freq</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">_HAVE_C_EXTENSION</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">_crans</span><span class="o">.</span><span class="n">decode_order1_c</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">orig_len</span><span class="p">,</span> <span class="n">freqs</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">_decode_order1</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">orig_len</span><span class="p">,</span> <span class="n">freqs</span><span class="p">)</span></div>
+
+
+
+<span class="n">__all__</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;encode&quot;</span><span class="p">,</span> <span class="s2">&quot;decode&quot;</span><span class="p">,</span> <span class="s2">&quot;M&quot;</span><span class="p">,</span> <span class="s2">&quot;L&quot;</span><span class="p">]</span>
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The Thalion Initiative
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

@@ -1,0 +1,56 @@
+ttio.importers.bam_dump
+=======================
+
+.. py:module:: ttio.importers.bam_dump
+
+.. autoapi-nested-parse::
+
+   bam_dump — canonical-JSON dump of a SAM/BAM/CRAM file for the
+   M87 / M88.1 cross-language conformance harness.
+
+   Usage::
+
+       # BAM/SAM (M87):
+       python -m ttio.importers.bam_dump <path>
+
+       # CRAM (M88.1):
+       python -m ttio.importers.bam_dump <path.cram> --reference <fa>
+
+   Reads the file via :class:`~ttio.importers.bam.BamReader` for SAM/BAM
+   or :class:`~ttio.importers.cram.CramReader` for CRAM (auto-dispatched
+   on the `.cram` extension) and emits a canonical JSON document on
+   stdout matching the schema documented in HANDOFF.md M87 §7. The
+   same shape is produced by the ObjC ``TtioBamDump`` and Java
+   ``BamDump`` CLIs.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.bam_dump.dump
+   ttio.importers.bam_dump.main
+
+
+Module Contents
+---------------
+
+.. py:function:: dump(path: str, name: str = 'genomic_0001', reference: str | None = None) -> dict[str, Any]
+
+   Read ``path`` and return the canonical-JSON-shaped dict.
+
+   If ``path`` ends in ``.cram`` (case-insensitive), a
+   :class:`CramReader` is used; ``reference`` must then be provided.
+   Otherwise a :class:`BamReader` handles the file (samtools
+   auto-detects SAM vs BAM); ``reference`` is accepted but unused.
+
+   Returned keys are unchanged from M87 — see this module's
+   docstring for the full schema.
+
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

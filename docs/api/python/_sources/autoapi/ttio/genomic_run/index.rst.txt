@@ -1,0 +1,124 @@
+ttio.genomic_run
+================
+
+.. py:module:: ttio.genomic_run
+
+.. autoapi-nested-parse::
+
+   GenomicRun — lazy view over /study/genomic_runs/<name>/.
+
+   Materialises :class:`ttio.aligned_read.AlignedRead` instances on demand
+   from the signal channels stored under ``signal_channels/``.  The
+   :class:`ttio.genomic_index.GenomicIndex` is loaded eagerly at open time
+   for cheap filtering and offset lookups.
+
+   Genomic analogue of :class:`ttio.acquisition_run.AcquisitionRun`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.genomic_run.GenomicRun
+
+
+Module Contents
+---------------
+
+.. py:class:: GenomicRun
+
+   Lazy view over one /study/genomic_runs/<name>/ group.
+
+   The :class:`GenomicIndex` and run-level attributes are loaded eagerly
+   at :meth:`open` time so that ``len(gr)`` and region filtering are
+   cheap.  Signal channel datasets are opened lazily and cached on first
+   access.  Compound datasets (``cigars``, ``read_names``, ``mate_info``)
+   are read whole-dataset once and cached.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  ttio.enums.AcquisitionMode
+
+
+   .. py:attribute:: modality
+      :type:  str
+
+
+   .. py:attribute:: reference_uri
+      :type:  str
+
+
+   .. py:attribute:: platform
+      :type:  str
+
+
+   .. py:attribute:: sample_name
+      :type:  str
+
+
+   .. py:attribute:: index
+      :type:  ttio.genomic_index.GenomicIndex
+
+
+   .. py:attribute:: group
+      :type:  ttio.providers.base.StorageGroup
+
+
+   .. py:attribute:: channel_names
+      :type:  list[str]
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[ttio.aligned_read.AlignedRead]
+
+
+   .. py:method:: provenance_chain() -> list
+
+      Return per-run provenance records in insertion order.
+
+      Closes the M91 read-side gap: until Phase 1 the lazy
+      ``GenomicRun`` view didn't expose provenance, so cross-
+      modality queries had to fall back to the ``sample_name``
+      attribute. Now both run types share the same accessor.
+
+      Reads from the ``<run>/provenance/steps`` compound dataset
+      written by :func:`spectral_dataset._write_genomic_run`.
+      Returns ``[]`` for runs that carry no provenance.
+
+
+
+   .. py:method:: __getitem__(i: int) -> ttio.aligned_read.AlignedRead
+
+
+   .. py:method:: reads_in_region(chromosome: str, start: int, end: int) -> list[ttio.aligned_read.AlignedRead]
+
+      Return reads on ``chromosome`` whose mapping position is in ``[start, end)``.
+
+      Note: filters by mapping position only, not by read end coordinate.
+      A read whose start lies outside the window but extends into it
+      will NOT be returned. Use SAM-style overlap semantics in a future
+      enhancement if needed.
+
+
+
+   .. py:method:: open(group, name: str) -> GenomicRun
+      :classmethod:
+
+
+      Open an existing genomic_runs/<name>/ group.
+
+      Mirrors :meth:`ttio.acquisition_run.AcquisitionRun.open`: the
+      caller resolves the child group before calling this classmethod.
+      The genomic index and run-level attributes are loaded eagerly;
+      signal channel datasets remain closed until first access.
+
+
+

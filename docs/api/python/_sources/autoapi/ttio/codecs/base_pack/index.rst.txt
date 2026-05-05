@@ -1,0 +1,126 @@
+ttio.codecs.base_pack
+=====================
+
+.. py:module:: ttio.codecs.base_pack
+
+.. autoapi-nested-parse::
+
+   BASE_PACK genomic-sequence codec — 2-bit ACGT + sidecar mask.
+
+   Clean-room implementation. The 2-bit-per-base packing convention is
+   decades-old prior art, fundamental and ungatewayed by IP. **No
+   htslib, no jbzip, no CRAM tools-Java source consulted.** The
+   sidecar mask layout (sparse position+byte list) is a TTI-O-specific
+   design choice — see HANDOFF.md M84 §3, binding decision §80.
+
+   Cross-language equivalents:
+       Objective-C: TTIOBasePack (objc/Source/Codecs/TTIOBasePack.{h,m})
+       Java:        global.thalion.ttio.codecs.BasePack
+
+   Wire format (big-endian throughout, self-contained):
+
+       Offset      Size  Field
+       ──────      ────  ──────────────────────────────────────────
+       0           1     version            (0x00)
+       1           4     original_length    (uint32 BE)
+       5           4     packed_length      (uint32 BE — = ceil(orig/4))
+       9           4     mask_count         (uint32 BE)
+       13          var   packed_body        (packed_length bytes)
+       13+pl       var   mask               (mask_count × 5 bytes:
+                                              uint32 BE position,
+                                              uint8 original_byte)
+
+   Total length = ``13 + packed_length + 5 * mask_count`` bytes.
+
+   Pack mapping (case-sensitive; binding decision §81):
+
+       'A' (0x41) → 0b00
+       'C' (0x43) → 0b01
+       'G' (0x47) → 0b10
+       'T' (0x54) → 0b11
+       anything else → mask entry (placeholder 0b00 written to body)
+
+   Bit order within byte is **big-endian** (binding decision §82) —
+   the first base in the input occupies the two highest-order bits.
+   The padding bits in the final body byte (when ``len(input) % 4 !=
+   0``) are zero (binding decision §83); the decoder uses
+   ``original_length`` to know how many slots to consume.
+
+   Mask entries are sorted ascending by position (binding decision
+   §84); the encoder emits them in input order, the decoder validates
+   strict ascending order. The first byte is ``version = 0x00``
+   (binding decision §85), distinct from the M79 codec id ``0x06``.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.base_pack.VERSION
+   ttio.codecs.base_pack.HEADER_LEN
+   ttio.codecs.base_pack.MASK_ENTRY_LEN
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.base_pack.encode
+   ttio.codecs.base_pack.decode
+
+
+Module Contents
+---------------
+
+.. py:data:: VERSION
+   :type:  int
+   :value: 0
+
+
+.. py:data:: HEADER_LEN
+   :type:  int
+   :value: 13
+
+
+.. py:data:: MASK_ENTRY_LEN
+   :type:  int
+   :value: 5
+
+
+.. py:function:: encode(data: bytes) -> bytes
+
+   Encode ``data`` using BASE_PACK + sidecar mask.
+
+   Returns a self-contained byte string per the wire format
+   described in this module's docstring (HANDOFF.md M84 §2). Pure
+   ACGT input compresses to ~25% of original size plus a 13-byte
+   header; non-ACGT bytes round-trip losslessly via the mask.
+
+   :param data: Input bytes. Any byte value is accepted; ``A``/``C``/``G``/``T``
+                (uppercase only — see binding decision §81) are packed into
+                2-bit slots, anything else gets a mask entry.
+
+   :returns: *bytes* -- Encoded stream of length
+             ``13 + ceil(len(data) / 4) + 5 * mask_count``.
+
+
+.. py:function:: decode(encoded: bytes) -> bytes
+
+   Decode a stream produced by :func:`encode`.
+
+   Reads the header, unpacks the 2-bit body, applies the sidecar
+   mask. Validates strictly: the version byte, the
+   ``packed_length`` invariant, the total stream length, and that
+   every mask position is in ``[0, original_length)`` and strictly
+   ascending.
+
+   :raises ValueError: If the stream is shorter than the header, has a bad version
+       byte, has a wrong ``packed_length`` for the declared
+       ``original_length``, has a body or mask section of the
+       wrong length, has a mask position out of range, or has
+       unsorted / duplicate mask positions.
+
+

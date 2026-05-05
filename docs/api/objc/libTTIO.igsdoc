@@ -12,10 +12,13 @@
 	TTIOAccessUnit = TTIOAccessUnit;
 	TTIOAcquisitionRun = TTIOAcquisitionRun;
 	TTIOAcquisitionSimulator = TTIOAcquisitionSimulator;
+	TTIOAlignedRead = TTIOAlignedRead;
 	TTIOAnonymizationPolicy = TTIOAnonymizer;
 	TTIOAnonymizationResult = TTIOAnonymizer;
 	TTIOAnonymizer = TTIOAnonymizer;
 	TTIOAxisDescriptor = TTIOAxisDescriptor;
+	TTIOBamReader = TTIOBamReader;
+	TTIOBamWriter = TTIOBamWriter;
 	TTIOBase64 = TTIOBase64;
 	TTIOBrukerTDFMetadata = TTIOBrukerTDFReader;
 	TTIOBrukerTDFReader = TTIOBrukerTDFReader;
@@ -27,12 +30,17 @@
 	TTIOCipherSuite = TTIOCipherSuite;
 	TTIOCompoundField = TTIOCompoundField;
 	TTIOCompoundIO = TTIOCompoundIO;
+	TTIOCramReader = TTIOCramReader;
+	TTIOCramWriter = TTIOCramWriter;
 	TTIOEncodingSpec = TTIOEncodingSpec;
 	TTIOEncryptedTransport = TTIOEncryptedTransport;
 	TTIOEncryptionManager = TTIOEncryptionManager;
 	TTIOFeature = TTIOFeature;
 	TTIOFeatureFlags = TTIOFeatureFlags;
+	TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
 	TTIOFreeInductionDecay = TTIOFreeInductionDecay;
+	TTIOGenomicIndex = TTIOGenomicIndex;
+	TTIOGenomicRun = TTIOGenomicRun;
 	TTIOHDF5CompoundType = TTIOHDF5CompoundType;
 	TTIOHDF5Dataset = TTIOHDF5Dataset;
 	TTIOHDF5File = TTIOHDF5File;
@@ -56,6 +64,7 @@
 	TTIOKeyRotationManager = TTIOKeyRotationManager;
 	TTIOMSImage = TTIOMSImage;
 	TTIOMassSpectrum = TTIOMassSpectrum;
+	TTIOMateInfoV2 = TTIOMateInfoV2;
 	TTIOMemoryProvider = TTIOMemoryProvider;
 	TTIOMzMLReader = TTIOMzMLReader;
 	TTIOMzMLWriter = TTIOMzMLWriter;
@@ -65,6 +74,7 @@
 	TTIOMzTabWriter = TTIOMzTabWriter;
 	TTIONMR2DSpectrum = TTIONMR2DSpectrum;
 	TTIONMRSpectrum = TTIONMRSpectrum;
+	TTIONameTokenizerV2 = TTIONameTokenizerV2;
 	TTIONmrMLReader = TTIONmrMLReader;
 	TTIONmrMLWriter = TTIONmrMLWriter;
 	TTIONumpress = TTIONumpress;
@@ -80,6 +90,9 @@
 	TTIOQuery = TTIOQuery;
 	TTIORamanImage = TTIORamanImage;
 	TTIORamanSpectrum = TTIORamanSpectrum;
+	TTIORefDiffV2 = TTIORefDiffV2;
+	TTIOReferenceResolver = TTIOReferenceResolver;
+	TTIOSamReader = TTIOSamReader;
 	TTIOSignalArray = TTIOSignalArray;
 	TTIOSignatureManager = TTIOSignatureManager;
 	TTIOSpectralDataset = TTIOSpectralDataset;
@@ -104,21 +117,29 @@
 	TTIOValueRange = TTIOValueRange;
 	TTIOVerifier = TTIOVerifier;
 	TTIOWatersMassLynxReader = TTIOWatersMassLynxReader;
+	TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	TTIOWrittenRun = TTIOWrittenRun;
 	TTIOZarrProvider = TTIOZarrProvider;
     };
     constant = {
 	TTIOErrorDomain = TTIOHDF5Errors;
+	TTIOFqzcompNx16ZErrorDomain = TTIOFqzcompNx16Z;
 	TTIOImzMLReaderErrorDomain = TTIOImzMLReader;
+	TTIOMateInfoV2ErrorDomain = TTIOMateInfoV2;
 	TTIOMzMLReaderErrorDomain = TTIOMzMLReader;
 	TTIOMzTabReaderErrorDomain = TTIOMzTabReader;
+	TTIONameTokenizerV2ErrorDomain = TTIONameTokenizerV2;
 	TTIONmrMLReaderErrorDomain = TTIONmrMLReader;
+	TTIORefDiffV2ErrorDomain = TTIORefDiffV2;
+	TTIORefMissingErrorDomain = TTIOReferenceResolver;
 	TTIOTransportErrorDomain = TTIOTransportPacket;
 	TTIOTransportHeaderMagic = TTIOTransportPacket;
 	TTIOTransportHeaderSize = TTIOTransportPacket;
 	TTIOTransportVersion = TTIOTransportPacket;
     };
     function = {
+	TTIOBasePackDecode = TTIOBasePack;
+	TTIOBasePackEncode = TTIOBasePack;
 	TTIOHDF5TypeForPrecision = TTIOHDF5Types;
 	TTIOHDF5TypeIsBuiltin = TTIOHDF5Types;
 	TTIOJcampChooseYFactor = TTIOJcampDxEncode;
@@ -129,7 +150,11 @@
 	TTIOJcampFormatG10 = TTIOJcampDxEncode;
 	TTIOJcampRoundInt = TTIOJcampDxEncode;
 	TTIOMakeError = TTIOHDF5Errors;
+	TTIOOffsetsFromLengths = TTIOGenomicIndex;
 	TTIOPrecisionElementSize = TTIOHDF5Types;
+	TTIOQualityDecode = TTIOQuality;
+	TTIOQualityEncode = TTIOQuality;
+	TTIORansEncode = TTIORans;
 	TTIOTransportCRC32C = TTIOTransportPacket;
     };
     macro = {
@@ -154,6 +179,9 @@
 	"+activationNameForMethod:" = {
 	    TTIOCVTermMapper = TTIOCVTermMapper;
 	};
+	"+adapterForCompoundDatasetWithParent:name:fields:count:" = {
+	    TTIOHDF5Provider = TTIOHDF5Provider;
+	};
 	"+adapterForDataset:name:" = {
 	    TTIOHDF5Provider = TTIOHDF5Provider;
 	};
@@ -165,6 +193,10 @@
 	};
 	"+anonymizeDataset:outputPath:policy:error:" = {
 	    TTIOAnonymizer = TTIOAnonymizer;
+	};
+	"+backendName" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	    TTIONameTokenizerV2 = TTIONameTokenizerV2;
 	};
 	"+bundleForDataset:error:" = {
 	    TTIOISAExporter = TTIOISAExporter;
@@ -196,6 +228,19 @@
 	"+dataForSpectrum:fid:sweepWidthPPM:error:" = {
 	    TTIONmrMLWriter = TTIONmrMLWriter;
 	};
+	"+decodeData:error:" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	    TTIONameTokenizerV2 = TTIONameTokenizerV2;
+	};
+	"+decodeData:ownChromIds:ownPositions:nRecords:outMateChromIds:outMatePositions:outTemplateLengths:error:" = {
+	    TTIOMateInfoV2 = TTIOMateInfoV2;
+	};
+	"+decodeData:positions:cigarStrings:reference:nReads:totalBases:outSequences:outOffsets:error:" = {
+	    TTIORefDiffV2 = TTIORefDiffV2;
+	};
+	"+decodeData:revcompFlags:error:" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	};
 	"+decodeFromBytes:length:error:" = {
 	    TTIOAccessUnit = TTIOAccessUnit;
 	    TTIOTransportPacketHeader = TTIOTransportPacket;
@@ -218,6 +263,12 @@
 	"+decodeString:zlibInflate:" = {
 	    TTIOBase64 = TTIOBase64;
 	};
+	"+decodeV4Data:revcompFlags:error:" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	};
+	"+decryptChannelFromSegments:bytesPerElement:datasetId:channelName:key:error:" = {
+	    TTIOPerAUEncryption = TTIOPerAUEncryption;
+	};
 	"+decryptChannelFromSegments:datasetId:channelName:key:error:" = {
 	    TTIOPerAUEncryption = TTIOPerAUEncryption;
 	};
@@ -225,6 +276,9 @@
 	    TTIOEncryptionManager = TTIOEncryptionManager;
 	};
 	"+decryptFilePath:key:providerName:error:" = {
+	    TTIOPerAUFile = TTIOPerAUFile;
+	};
+	"+decryptFilePathByRegion:keyMap:providerName:error:" = {
 	    TTIOPerAUFile = TTIOPerAUFile;
 	};
 	"+decryptHeaderSegments:datasetId:key:error:" = {
@@ -263,6 +317,27 @@
 	"+encodeFloat64:count:scale:outDeltas:" = {
 	    TTIONumpress = TTIONumpress;
 	};
+	"+encodeMateChromIds:matePositions:templateLengths:ownChromIds:ownPositions:error:" = {
+	    TTIOMateInfoV2 = TTIOMateInfoV2;
+	};
+	"+encodeNames:" = {
+	    TTIONameTokenizerV2 = TTIONameTokenizerV2;
+	};
+	"+encodeSequences:offsets:positions:cigarStrings:reference:referenceMd5:referenceUri:readsPerSlice:error:" = {
+	    TTIORefDiffV2 = TTIORefDiffV2;
+	};
+	"+encodeV4WithQualities:readLengths:revcompFlags:strategyHint:padCount:error:" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	};
+	"+encodeWithQualities:readLengths:revcompFlags:error:" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	};
+	"+encodeWithQualities:readLengths:revcompFlags:options:error:" = {
+	    TTIOFqzcompNx16Z = TTIOFqzcompNx16Z;
+	};
+	"+encryptChannelToSegments:offsets:lengths:nSpectra:bytesPerElement:datasetId:channelName:key:error:" = {
+	    TTIOPerAUEncryption = TTIOPerAUEncryption;
+	};
 	"+encryptChannelToSegments:offsets:lengths:nSpectra:datasetId:channelName:key:error:" = {
 	    TTIOPerAUEncryption = TTIOPerAUEncryption;
 	};
@@ -270,6 +345,9 @@
 	    TTIOEncryptionManager = TTIOEncryptionManager;
 	};
 	"+encryptFilePath:key:encryptHeaders:providerName:error:" = {
+	    TTIOPerAUFile = TTIOPerAUFile;
+	};
+	"+encryptFilePathByRegion:keyMap:providerName:error:" = {
 	    TTIOPerAUFile = TTIOPerAUFile;
 	};
 	"+encryptHeaderSegments:datasetId:key:error:" = {
@@ -321,6 +399,12 @@
 	    TTIOFeatureFlags = TTIOFeatureFlags;
 	};
 	"+featureNativeMSImageCube" = {
+	    TTIOFeatureFlags = TTIOFeatureFlags;
+	};
+	"+featureNoSignalIntDups" = {
+	    TTIOFeatureFlags = TTIOFeatureFlags;
+	};
+	"+featureOptGenomic" = {
 	    TTIOFeatureFlags = TTIOFeatureFlags;
 	};
 	"+featurePQCPreview" = {
@@ -461,11 +545,19 @@
 	"+managerWithFile:" = {
 	    TTIOKeyRotationManager = TTIOKeyRotationManager;
 	};
+	"+nativeAvailable" = {
+	    TTIOMateInfoV2 = TTIOMateInfoV2;
+	    TTIONameTokenizerV2 = TTIONameTokenizerV2;
+	    TTIORefDiffV2 = TTIORefDiffV2;
+	};
 	"+nonceLength:" = {
 	    TTIOCipherSuite = TTIOCipherSuite;
 	};
 	"+openAtPath:error:" = {
 	    TTIOHDF5File = TTIOHDF5File;
+	};
+	"+openFromGroup:name:error:" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
 	};
 	"+openReadOnlyAtPath:error:" = {
 	    TTIOHDF5File = TTIOHDF5File;
@@ -533,6 +625,7 @@
 	    TTIOThermoRawReader = TTIOThermoRawReader;
 	};
 	"+readFromGroup:error:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
 	    TTIOInstrumentConfig = TTIOInstrumentConfig;
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	};
@@ -599,6 +692,9 @@
 	"+signDataset:inFile:withKey:error:" = {
 	    TTIOSignatureManager = TTIOSignatureManager;
 	};
+	"+signGenomicRun:inFile:withKey:error:" = {
+	    TTIOSignatureManager = TTIOSignatureManager;
+	};
 	"+signProvenanceInRun:inFile:withKey:error:" = {
 	    TTIOSignatureManager = TTIOSignatureManager;
 	};
@@ -629,6 +725,9 @@
 	"+verifyDataset:inFile:withKey:error:" = {
 	    TTIOSignatureManager = TTIOSignatureManager;
 	    TTIOVerifier = TTIOVerifier;
+	};
+	"+verifyGenomicRun:inFile:withKey:error:" = {
+	    TTIOSignatureManager = TTIOSignatureManager;
 	};
 	"+verifyProvenanceInRun:inFile:withKey:error:" = {
 	    TTIOSignatureManager = TTIOSignatureManager;
@@ -666,6 +765,12 @@
 	};
 	"+writeIdentifications:intoGroup:datasetNamed:error:" = {
 	    TTIOCompoundIO = TTIOCompoundIO;
+	};
+	"+writeMinimalToPath:title:isaInvestigationId:mixedRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
+	};
+	"+writeMinimalToPath:title:isaInvestigationId:msRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
 	};
 	"+writeMinimalToPath:title:isaInvestigationId:msRuns:identifications:quantifications:provenanceRecords:error:" = {
 	    TTIOSpectralDataset = TTIOSpectralDataset;
@@ -718,9 +823,12 @@
 	    TTIOCVParam = TTIOCVParam;
 	};
 	"-acquisitionMode" = {
+	    "(TTIORun)" = TTIORun;
 	    TTIOAUHeaderPlaintext = TTIOPerAUEncryption;
 	    TTIOAccessUnit = TTIOAccessUnit;
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
+	    TTIOGenomicRun = TTIOGenomicRun;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	    TTIOWrittenRun = TTIOWrittenRun;
 	};
 	"-acquisitionSoftware" = {
@@ -756,6 +864,9 @@
 	};
 	"-allCVParams" = {
 	    "(TTIOCVAnnotatable)" = TTIOCVAnnotatable;
+	};
+	"-allRunsUnified" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
 	};
 	"-analyzerType" = {
 	    TTIOInstrumentConfig = TTIOInstrumentConfig;
@@ -843,8 +954,27 @@
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
 	    TTIOMzMLReader = TTIOMzMLReader;
 	};
+	"-chromosome" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-chromosomeAt:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
+	"-chromosomes" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-chunks" = {
 	    "(TTIOStorageDataset)" = TTIOStorageProtocols;
+	};
+	"-cigar" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-cigarAtIndex:error:" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	};
+	"-cigars" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-cipherSuite" = {
 	    TTIOProtectionMetadata = TTIOProtectionMetadata;
@@ -898,6 +1028,8 @@
 	};
 	"-count" = {
 	    "(TTIOIndexable)" = TTIOIndexable;
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	    TTIOGenomicRun = TTIOGenomicRun;
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	    TTIOTransitionList = TTIOTransitionList;
 	};
@@ -971,6 +1103,9 @@
 	"-elementSize" = {
 	    TTIOEncodingSpec = TTIOEncodingSpec;
 	};
+	"-embedReference" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-enableEnvelopeEncryptionWithKEK:kekId:algorithm:error:" = {
 	    TTIOKeyRotationManager = TTIOKeyRotationManager;
 	};
@@ -1028,7 +1163,15 @@
 	    TTIOSpectralDataset = TTIOSpectralDataset;
 	};
 	"-flags" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	    TTIOAlignedRead = TTIOAlignedRead;
 	    TTIOTransportPacketHeader = TTIOTransportPacket;
+	};
+	"-flagsAt:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
+	"-flagsData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-flushAndCloseWithError:" = {
 	    TTIOStreamWriter = TTIOStreamWriter;
@@ -1038,6 +1181,9 @@
 	};
 	"-frameCount" = {
 	    TTIOBrukerTDFMetadata = TTIOBrukerTDFReader;
+	};
+	"-genomicRuns" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
 	};
 	"-globalMetadata" = {
 	    TTIOBrukerTDFMetadata = TTIOBrukerTDFReader;
@@ -1103,15 +1249,33 @@
 	"-imzmlPath" = {
 	    TTIOImzMLWriteResult = TTIOImzMLWriter;
 	};
+	"-index" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	};
 	"-indexPosition" = {
 	    TTIOSpectrum = TTIOSpectrum;
+	};
+	"-indicesForFlag:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
 	};
 	"-indicesForMsLevel:" = {
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	};
+	"-indicesForRegion:start:end:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
+	"-indicesForUnmapped" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
 	"-indicesInRetentionTimeRange:" = {
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
+	};
+	"-initWithAcquisitionMode:referenceUri:platform:sampleName:positions:mappingQualities:flags:sequences:qualities:offsets:lengths:cigars:readNames:mateChromosomes:matePositions:templateLengths:chromosomes:signalCompression:" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
+	"-initWithAcquisitionMode:referenceUri:platform:sampleName:positions:mappingQualities:flags:sequences:qualities:offsets:lengths:cigars:readNames:mateChromosomes:matePositions:templateLengths:chromosomes:signalCompression:signalCodecOverrides:" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-initWithBuffer:length:encoding:axis:" = {
 	    TTIOSignalArray = TTIOSignalArray;
@@ -1194,6 +1358,9 @@
 	"-initWithOffset:length:iv:tag:ciphertext:" = {
 	    TTIOChannelSegment = TTIOPerAUEncryption;
 	};
+	"-initWithOffsets:lengths:chromosomes:positions:mappingQualities:flags:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
 	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:" = {
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	};
@@ -1209,6 +1376,18 @@
 	"-initWithPacketType:flags:datasetId:auSequence:payloadLength:timestampNs:" = {
 	    TTIOTransportPacketHeader = TTIOTransportPacket;
 	};
+	"-initWithPath:" = {
+	    TTIOBamReader = TTIOBamReader;
+	    TTIOBamWriter = TTIOBamWriter;
+	};
+	"-initWithPath:NS_UNAVAILABLE" = {
+	    TTIOCramReader = TTIOCramReader;
+	    TTIOCramWriter = TTIOCramWriter;
+	};
+	"-initWithPath:referenceFasta:" = {
+	    TTIOCramReader = TTIOCramReader;
+	    TTIOCramWriter = TTIOCramWriter;
+	};
 	"-initWithPolicy:" = {
 	    TTIOAccessPolicy = TTIOAccessPolicy;
 	};
@@ -1220,6 +1399,12 @@
 	};
 	"-initWithPublicKey:privateKey:" = {
 	    TTIOPQCKeyPair = TTIOPostQuantumCrypto;
+	};
+	"-initWithReadName:chromosome:position:mappingQuality:cigar:sequence:qualities:flags:mateChromosome:matePosition:templateLength:" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-initWithRootGroup:externalReferencePath:" = {
+	    TTIOReferenceResolver = TTIOReferenceResolver;
 	};
 	"-initWithRunName:spectrumIndex:chemicalEntity:confidenceScore:evidenceChain:" = {
 	    TTIOIdentification = TTIOIdentification;
@@ -1243,6 +1428,12 @@
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
 	};
 	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	};
+	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:chromosome:position:mappingQuality:flags:" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	};
+	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:chromosome:position:mappingQuality:flags:matePosition:templateLength:" = {
 	    TTIOAccessUnit = TTIOAccessUnit;
 	};
 	"-initWithSpectrumClassName:acquisitionMode:channelData:offsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:" = {
@@ -1342,11 +1533,26 @@
 	"-isEqual:" = {
 	    TTIOSignalArray = TTIOSignalArray;
 	};
+	"-isMapped" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
 	"-isMetabolomics" = {
 	    TTIOMzTabImport = TTIOMzTabReader;
 	};
 	"-isOpen" = {
 	    "(TTIOStorageProvider)" = TTIOStorageProtocols;
+	};
+	"-isPaired" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-isReverse" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-isSecondary" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-isSupplementary" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
 	};
 	"-isThreadSafe" = {
 	    TTIOHDF5File = TTIOHDF5File;
@@ -1387,10 +1593,14 @@
 	    TTIOSignalArray = TTIOSignalArray;
 	};
 	"-lengthAt:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	};
 	"-lengths" = {
 	    TTIOWrittenRun = TTIOWrittenRun;
+	};
+	"-lengthsData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-lockForReading" = {
 	    TTIOHDF5File = TTIOHDF5File;
@@ -1407,10 +1617,23 @@
 	"-manufacturer" = {
 	    TTIOInstrumentConfig = TTIOInstrumentConfig;
 	};
+	"-mappingQualitiesData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
+	"-mappingQuality" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-mappingQualityAt:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
 	"-maskIntensityBelowQuantile" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
 	"-maskRareMetabolites" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
+	"-maskRegions" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
 	"-matches:datasetId:" = {
@@ -1418,6 +1641,19 @@
 	};
 	"-matchingIndices" = {
 	    TTIOQuery = TTIOQuery;
+	};
+	"-mateChromosome" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-mateChromosomes" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
+	"-matePosition" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-matePositionsData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-matrixSize" = {
 	    TTIOTwoDimensionalCorrelationSpectrum = TTIOTwoDimensionalCorrelationSpectrum;
@@ -1436,6 +1672,7 @@
 	};
 	"-modality" = {
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
+	    TTIOGenomicRun = TTIOGenomicRun;
 	};
 	"-mode" = {
 	    TTIOIRImage = TTIOIRImage;
@@ -1516,11 +1753,14 @@
 	    TTIOMzTabWriteResult = TTIOMzTabWriter;
 	};
 	"-name" = {
+	    "(TTIORun)" = TTIORun;
 	    "(TTIOStorageDataset)" = TTIOStorageProtocols;
 	    "(TTIOStorageGroup)" = TTIOStorageProtocols;
+	    TTIOAcquisitionRun = TTIOAcquisitionRun;
 	    TTIOAxisDescriptor = TTIOAxisDescriptor;
 	    TTIOCVParam = TTIOCVParam;
 	    TTIOCompoundField = TTIOCompoundField;
+	    TTIOGenomicRun = TTIOGenomicRun;
 	    TTIOTransportChannelData = TTIOAccessUnit;
 	};
 	"-nativeHandle" = {
@@ -1556,6 +1796,7 @@
 	};
 	"-objectAtIndex:" = {
 	    "(TTIOIndexable)" = TTIOIndexable;
+	    TTIOGenomicRun = TTIOGenomicRun;
 	};
 	"-objectForKey:" = {
 	    "(TTIOIndexable)" = TTIOIndexable;
@@ -1567,10 +1808,14 @@
 	    TTIOChannelSegment = TTIOPerAUEncryption;
 	};
 	"-offsetAt:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	};
 	"-offsets" = {
 	    TTIOWrittenRun = TTIOWrittenRun;
+	};
+	"-offsetsData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-ontologyRef" = {
 	    TTIOCVParam = TTIOCVParam;
@@ -1606,6 +1851,8 @@
 	    TTIOProvenanceRecord = TTIOProvenanceRecord;
 	};
 	"-path" = {
+	    TTIOBamReader = TTIOBamReader;
+	    TTIOBamWriter = TTIOBamWriter;
 	    TTIOHDF5File = TTIOHDF5File;
 	    TTIOMzTabWriteResult = TTIOMzTabWriter;
 	};
@@ -1645,6 +1892,10 @@
 	"-pixelZ" = {
 	    TTIOAccessUnit = TTIOAccessUnit;
 	};
+	"-platform" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-polarities" = {
 	    TTIOWrittenRun = TTIOWrittenRun;
 	};
@@ -1661,6 +1912,16 @@
 	};
 	"-policy" = {
 	    TTIOAccessPolicy = TTIOAccessPolicy;
+	};
+	"-position" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-positionAt:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
+	};
+	"-positionsData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-precision" = {
 	    "(TTIOStorageDataset)" = TTIOStorageProtocols;
@@ -1706,10 +1967,15 @@
 	};
 	"-provenanceChain" = {
 	    "(TTIOProvenanceable)" = TTIOProvenanceable;
+	    "(TTIORun)" = TTIORun;
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
+	    TTIOGenomicRun = TTIOGenomicRun;
 	};
 	"-provenanceRecords" = {
+	    TTIOBamReader = TTIOBamReader;
 	    TTIOSpectralDataset = TTIOSpectralDataset;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	    TTIOWrittenRun = TTIOWrittenRun;
 	};
 	"-provenanceRecordsForInputRef:" = {
 	    TTIOSpectralDataset = TTIOSpectralDataset;
@@ -1724,9 +1990,24 @@
 	    TTIOPQCKeyPair = TTIOPostQuantumCrypto;
 	    TTIOProtectionMetadata = TTIOProtectionMetadata;
 	};
+	"-qualities" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-qualitiesData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
+	"-qualitiesRandomised" = {
+	    TTIOAnonymizationResult = TTIOAnonymizer;
+	};
 	"-quantifications" = {
 	    TTIOMzTabImport = TTIOMzTabReader;
 	    TTIOSpectralDataset = TTIOSpectralDataset;
+	};
+	"-randomiseQualities" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
+	"-randomiseQualitiesConstant" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
 	"-rareMetaboliteTable" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
@@ -1746,8 +2027,15 @@
 	"-readAllPacketsWithError:" = {
 	    TTIOTransportReader = TTIOTransportReader;
 	};
+	"-readAtIndex:error:" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	};
 	"-readCanonicalBytes:" = {
 	    "(TTIOStorageDataset)" = TTIOStorageProtocols;
+	};
+	"-readCount" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-readDataAtOffset:count:error:" = {
 	    TTIOHDF5Dataset = TTIOHDF5Dataset;
@@ -1755,17 +2043,46 @@
 	"-readDataWithError:" = {
 	    TTIOHDF5Dataset = TTIOHDF5Dataset;
 	};
+	"-readLength" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-readName" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-readNameAtIndex:error:" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	};
+	"-readNames" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
+	"-readNamesStripped" = {
+	    TTIOAnonymizationResult = TTIOAnonymizer;
+	};
 	"-readRows:" = {
 	    "(TTIOStorageDataset)" = TTIOStorageProtocols;
 	};
 	"-readSliceAtOffset:count:error:" = {
 	    "(TTIOStorageDataset)" = TTIOStorageProtocols;
 	};
+	"-readsInMaskedRegion" = {
+	    TTIOAnonymizationResult = TTIOAnonymizer;
+	};
+	"-readsInRegion:start:end:" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	};
 	"-receiverGain" = {
 	    TTIOFreeInductionDecay = TTIOFreeInductionDecay;
 	};
 	"-redactSAAVSpectra" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
+	"-referenceFasta" = {
+	    TTIOCramReader = TTIOCramReader;
+	    TTIOCramWriter = TTIOCramWriter;
+	};
+	"-referenceUri" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	};
 	"-registerProviderClass:forName:" = {
 	    TTIOProviderRegistry = TTIOProviderRegistry;
@@ -1783,6 +2100,9 @@
 	"-resolutionCmInv" = {
 	    TTIOIRImage = TTIOIRImage;
 	    TTIOIRSpectrum = TTIOIRSpectrum;
+	};
+	"-resolveURI:expectedMD5:chromosome:error:" = {
+	    TTIOReferenceResolver = TTIOReferenceResolver;
 	};
 	"-retentionTime" = {
 	    TTIOAUHeaderPlaintext = TTIOPerAUEncryption;
@@ -1825,6 +2145,19 @@
 	    TTIOFeature = TTIOFeature;
 	    TTIOIdentification = TTIOIdentification;
 	};
+	"-runs" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
+	};
+	"-runsForSample:" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
+	};
+	"-runsOfModality:" = {
+	    TTIOSpectralDataset = TTIOSpectralDataset;
+	};
+	"-sampleName" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-sampleRef" = {
 	    TTIOQuantification = TTIOQuantification;
 	};
@@ -1862,6 +2195,12 @@
 	"-seekToPosition:" = {
 	    "(TTIOStreamable)" = TTIOStreamable;
 	};
+	"-sequence" = {
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-sequencesData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-serialNumber" = {
 	    TTIOInstrumentConfig = TTIOInstrumentConfig;
 	};
@@ -1889,6 +2228,9 @@
 	"-setCoarsenMzDecimals:" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
+	"-setEmbedReference:" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-setIntegerAttribute:value:error:" = {
 	    TTIOHDF5Group = TTIOHDF5Group;
 	};
@@ -1902,6 +2244,9 @@
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
 	"-setMaskRareMetabolites:" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
+	"-setMaskRegions:" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
 	"-setMetabolitesMasked:" = {
@@ -1934,11 +2279,30 @@
 	"-setPrecursorMz:" = {
 	    TTIOAUHeaderPlaintext = TTIOPerAUEncryption;
 	};
+	"-setProvenanceRecords:" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	    TTIOWrittenRun = TTIOWrittenRun;
+	};
+	"-setQualitiesRandomised:" = {
+	    TTIOAnonymizationResult = TTIOAnonymizer;
+	};
+	"-setRandomiseQualities:" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
+	"-setRandomiseQualitiesConstant:" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
 	"-setRareMetaboliteTable:" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
 	"-setRareMetaboliteThreshold:" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
+	"-setReadNamesStripped:" = {
+	    TTIOAnonymizationResult = TTIOAnonymizer;
+	};
+	"-setReadsInMaskedRegion:" = {
+	    TTIOAnonymizationResult = TTIOAnonymizer;
 	};
 	"-setRedactSAAVSpectra:" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
@@ -1959,6 +2323,9 @@
 	"-setStripMetadataFields:" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
+	"-setStripReadNames:" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
 	"-setUseChecksum:" = {
 	    TTIOTransportWriter = TTIOTransportWriter;
 	};
@@ -1974,8 +2341,12 @@
 	"-signalArrays" = {
 	    TTIOSpectrum = TTIOSpectrum;
 	};
+	"-signalCodecOverrides" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-signalCompression" = {
 	    TTIOAcquisitionRun = TTIOAcquisitionRun;
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
 	    TTIOWrittenRun = TTIOWrittenRun;
 	};
 	"-signatureAlgorithm" = {
@@ -2060,6 +2431,9 @@
 	"-stripMetadataFields" = {
 	    TTIOAnonymizationPolicy = TTIOAnonymizer;
 	};
+	"-stripReadNames" = {
+	    TTIOAnonymizationPolicy = TTIOAnonymizer;
+	};
 	"-supportsChunking" = {
 	    "(TTIOStorageProvider)" = TTIOStorageProtocols;
 	};
@@ -2083,6 +2457,13 @@
 	    TTIOChromatogram = TTIOChromatogram;
 	    TTIOIsolationWindow = TTIOIsolationWindow;
 	};
+	"-templateLength" = {
+	    TTIOAccessUnit = TTIOAccessUnit;
+	    TTIOAlignedRead = TTIOAlignedRead;
+	};
+	"-templateLengthsData" = {
+	    TTIOWrittenGenomicRun = TTIOWrittenGenomicRun;
+	};
 	"-tileSize" = {
 	    TTIOIRImage = TTIOIRImage;
 	    TTIOMSImage = TTIOMSImage;
@@ -2100,6 +2481,9 @@
 	"-title" = {
 	    TTIOMzTabImport = TTIOMzTabReader;
 	    TTIOSpectralDataset = TTIOSpectralDataset;
+	};
+	"-toGenomicRunWithName:region:sampleName:error:" = {
+	    TTIOBamReader = TTIOBamReader;
 	};
 	"-totalCount" = {
 	    TTIOStreamReader = TTIOStreamReader;
@@ -2183,6 +2567,9 @@
 	    TTIONMR2DSpectrum = TTIONMR2DSpectrum;
 	    TTIORamanImage = TTIORamanImage;
 	};
+	"-wireCompressionForChannel:" = {
+	    TTIOGenomicRun = TTIOGenomicRun;
+	};
 	"-withBasePeakIntensityAtLeast:" = {
 	    TTIOQuery = TTIOQuery;
 	};
@@ -2231,6 +2618,12 @@
 	"-writeEndOfStreamWithError:" = {
 	    TTIOTransportWriter = TTIOTransportWriter;
 	};
+	"-writeGenomicRun:datasetId:name:error:" = {
+	    TTIOTransportWriter = TTIOTransportWriter;
+	};
+	"-writeRun:provenanceRecords:sort:error:" = {
+	    TTIOBamWriter = TTIOBamWriter;
+	};
 	"-writeStreamHeaderWithFormatVersion:title:isaInvestigation:features:nDatasets:error:" = {
 	    TTIOTransportWriter = TTIOTransportWriter;
 	};
@@ -2241,6 +2634,7 @@
 	    TTIOSpectralDataset = TTIOSpectralDataset;
 	};
 	"-writeToGroup:error:" = {
+	    TTIOGenomicIndex = TTIOGenomicIndex;
 	    TTIOInstrumentConfig = TTIOInstrumentConfig;
 	    TTIOSpectrumIndex = TTIOSpectrumIndex;
 	};
@@ -2267,6 +2661,30 @@
     output = {
 	"../Source/Analysis/TTIOTwoDCos.h" = (
 	    "TTIOTwoDCos.gsdoc"
+	);
+	"../Source/Codecs/TTIOBasePack.h" = (
+	    "TTIOBasePack.gsdoc"
+	);
+	"../Source/Codecs/TTIOFqzcompNx16Z.h" = (
+	    "TTIOFqzcompNx16Z.gsdoc"
+	);
+	"../Source/Codecs/TTIOMateInfoV2.h" = (
+	    "TTIOMateInfoV2.gsdoc"
+	);
+	"../Source/Codecs/TTIONameTokenizerV2.h" = (
+	    "TTIONameTokenizerV2.gsdoc"
+	);
+	"../Source/Codecs/TTIOQuality.h" = (
+	    "TTIOQuality.gsdoc"
+	);
+	"../Source/Codecs/TTIORans.h" = (
+	    "TTIORans.gsdoc"
+	);
+	"../Source/Codecs/TTIORefDiffV2.h" = (
+	    "TTIORefDiffV2.gsdoc"
+	);
+	"../Source/Codecs/TTIOReferenceResolver.h" = (
+	    "TTIOReferenceResolver.gsdoc"
 	);
 	"../Source/Core/TTIONumpress.h" = (
 	    "TTIONumpress.gsdoc"
@@ -2298,6 +2716,12 @@
 	"../Source/Dataset/TTIOWrittenRun.h" = (
 	    "TTIOWrittenRun.gsdoc"
 	);
+	"../Source/Export/TTIOBamWriter.h" = (
+	    "TTIOBamWriter.gsdoc"
+	);
+	"../Source/Export/TTIOCramWriter.h" = (
+	    "TTIOCramWriter.gsdoc"
+	);
 	"../Source/Export/TTIOISAExporter.h" = (
 	    "TTIOISAExporter.gsdoc"
 	);
@@ -2318,6 +2742,18 @@
 	);
 	"../Source/Export/TTIONmrMLWriter.h" = (
 	    "TTIONmrMLWriter.gsdoc"
+	);
+	"../Source/Genomics/TTIOAlignedRead.h" = (
+	    "TTIOAlignedRead.gsdoc"
+	);
+	"../Source/Genomics/TTIOGenomicIndex.h" = (
+	    "TTIOGenomicIndex.gsdoc"
+	);
+	"../Source/Genomics/TTIOGenomicRun.h" = (
+	    "TTIOGenomicRun.gsdoc"
+	);
+	"../Source/Genomics/TTIOWrittenGenomicRun.h" = (
+	    "TTIOWrittenGenomicRun.gsdoc"
 	);
 	"../Source/HDF5/TTIOFeatureFlags.h" = (
 	    "TTIOFeatureFlags.gsdoc"
@@ -2349,6 +2785,9 @@
 	"../Source/Image/TTIORamanImage.h" = (
 	    "TTIORamanImage.gsdoc"
 	);
+	"../Source/Import/TTIOBamReader.h" = (
+	    "TTIOBamReader.gsdoc"
+	);
 	"../Source/Import/TTIOBase64.h" = (
 	    "TTIOBase64.gsdoc"
 	);
@@ -2357,6 +2796,9 @@
 	);
 	"../Source/Import/TTIOCVTermMapper.h" = (
 	    "TTIOCVTermMapper.gsdoc"
+	);
+	"../Source/Import/TTIOCramReader.h" = (
+	    "TTIOCramReader.gsdoc"
 	);
 	"../Source/Import/TTIOImzMLReader.h" = (
 	    "TTIOImzMLReader.gsdoc"
@@ -2375,6 +2817,9 @@
 	);
 	"../Source/Import/TTIONmrMLReader.h" = (
 	    "TTIONmrMLReader.gsdoc"
+	);
+	"../Source/Import/TTIOSamReader.h" = (
+	    "TTIOSamReader.gsdoc"
 	);
 	"../Source/Import/TTIOThermoRawReader.h" = (
 	    "TTIOThermoRawReader.gsdoc"
@@ -2423,6 +2868,9 @@
 	);
 	"../Source/Protocols/TTIOProvenanceable.h" = (
 	    "TTIOProvenanceable.gsdoc"
+	);
+	"../Source/Protocols/TTIORun.h" = (
+	    "TTIORun.gsdoc"
 	);
 	"../Source/Protocols/TTIOStreamable.h" = (
 	    "TTIOStreamable.gsdoc"
@@ -2550,6 +2998,7 @@
 	"(TTIOEncryptable)" = TTIOEncryptable;
 	"(TTIOIndexable)" = TTIOIndexable;
 	"(TTIOProvenanceable)" = TTIOProvenanceable;
+	"(TTIORun)" = TTIORun;
 	"(TTIOStorageDataset)" = TTIOStorageProtocols;
 	"(TTIOStorageGroup)" = TTIOStorageProtocols;
 	"(TTIOStorageProvider)" = TTIOStorageProtocols;
@@ -2558,6 +3007,33 @@
     source = {
 	"../Source/Analysis/TTIOTwoDCos.h" = (
 	    "../Source/Analysis/TTIOTwoDCos.m"
+	);
+	"../Source/Codecs/TTIOBasePack.h" = (
+	    "../Source/Codecs/TTIOBasePack.m"
+	);
+	"../Source/Codecs/TTIODeltaRans.h" = (
+	    "../Source/Codecs/TTIODeltaRans.m"
+	);
+	"../Source/Codecs/TTIOFqzcompNx16Z.h" = (
+	    "../Source/Codecs/TTIOFqzcompNx16Z.m"
+	);
+	"../Source/Codecs/TTIOMateInfoV2.h" = (
+	    "../Source/Codecs/TTIOMateInfoV2.m"
+	);
+	"../Source/Codecs/TTIONameTokenizerV2.h" = (
+	    "../Source/Codecs/TTIONameTokenizerV2.m"
+	);
+	"../Source/Codecs/TTIOQuality.h" = (
+	    "../Source/Codecs/TTIOQuality.m"
+	);
+	"../Source/Codecs/TTIORans.h" = (
+	    "../Source/Codecs/TTIORans.m"
+	);
+	"../Source/Codecs/TTIORefDiffV2.h" = (
+	    "../Source/Codecs/TTIORefDiffV2.m"
+	);
+	"../Source/Codecs/TTIOReferenceResolver.h" = (
+	    "../Source/Codecs/TTIOReferenceResolver.m"
 	);
 	"../Source/Core/TTIONumpress.h" = (
 	    "../Source/Core/TTIONumpress.m"
@@ -2589,6 +3065,12 @@
 	"../Source/Dataset/TTIOWrittenRun.h" = (
 	    "../Source/Dataset/TTIOWrittenRun.m"
 	);
+	"../Source/Export/TTIOBamWriter.h" = (
+	    "../Source/Export/TTIOBamWriter.m"
+	);
+	"../Source/Export/TTIOCramWriter.h" = (
+	    "../Source/Export/TTIOCramWriter.m"
+	);
 	"../Source/Export/TTIOISAExporter.h" = (
 	    "../Source/Export/TTIOISAExporter.m"
 	);
@@ -2612,6 +3094,18 @@
 	);
 	"../Source/Export/TTIONmrMLWriter.h" = (
 	    "../Source/Export/TTIONmrMLWriter.m"
+	);
+	"../Source/Genomics/TTIOAlignedRead.h" = (
+	    "../Source/Genomics/TTIOAlignedRead.m"
+	);
+	"../Source/Genomics/TTIOGenomicIndex.h" = (
+	    "../Source/Genomics/TTIOGenomicIndex.m"
+	);
+	"../Source/Genomics/TTIOGenomicRun.h" = (
+	    "../Source/Genomics/TTIOGenomicRun.m"
+	);
+	"../Source/Genomics/TTIOWrittenGenomicRun.h" = (
+	    "../Source/Genomics/TTIOWrittenGenomicRun.m"
 	);
 	"../Source/HDF5/TTIOFeatureFlags.h" = (
 	    "../Source/HDF5/TTIOFeatureFlags.m"
@@ -2646,6 +3140,9 @@
 	"../Source/Image/TTIORamanImage.h" = (
 	    "../Source/Image/TTIORamanImage.m"
 	);
+	"../Source/Import/TTIOBamReader.h" = (
+	    "../Source/Import/TTIOBamReader.m"
+	);
 	"../Source/Import/TTIOBase64.h" = (
 	    "../Source/Import/TTIOBase64.m"
 	);
@@ -2654,6 +3151,9 @@
 	);
 	"../Source/Import/TTIOCVTermMapper.h" = (
 	    "../Source/Import/TTIOCVTermMapper.m"
+	);
+	"../Source/Import/TTIOCramReader.h" = (
+	    "../Source/Import/TTIOCramReader.m"
 	);
 	"../Source/Import/TTIOImzMLReader.h" = (
 	    "../Source/Import/TTIOImzMLReader.m"
@@ -2672,6 +3172,9 @@
 	);
 	"../Source/Import/TTIONmrMLReader.h" = (
 	    "../Source/Import/TTIONmrMLReader.m"
+	);
+	"../Source/Import/TTIOSamReader.h" = (
+	    "../Source/Import/TTIOSamReader.m"
 	);
 	"../Source/Import/TTIOThermoRawReader.h" = (
 	    "../Source/Import/TTIOThermoRawReader.m"
@@ -2720,6 +3223,9 @@
 	);
 	"../Source/Protocols/TTIOProvenanceable.h" = (
 	    "../Source/Protocols/TTIOProvenanceable.h"
+	);
+	"../Source/Protocols/TTIORun.h" = (
+	    "../Source/Protocols/TTIORun.h"
 	);
 	"../Source/Protocols/TTIOStreamable.h" = (
 	    "../Source/Protocols/TTIOStreamable.h"
@@ -2852,10 +3358,13 @@
 	TTIOAccessUnit = NSObject;
 	TTIOAcquisitionRun = NSObject;
 	TTIOAcquisitionSimulator = NSObject;
+	TTIOAlignedRead = NSObject;
 	TTIOAnonymizationPolicy = NSObject;
 	TTIOAnonymizationResult = NSObject;
 	TTIOAnonymizer = NSObject;
 	TTIOAxisDescriptor = NSObject;
+	TTIOBamReader = NSObject;
+	TTIOBamWriter = NSObject;
 	TTIOBase64 = NSObject;
 	TTIOBrukerTDFMetadata = NSObject;
 	TTIOBrukerTDFReader = NSObject;
@@ -2867,12 +3376,17 @@
 	TTIOCipherSuite = NSObject;
 	TTIOCompoundField = NSObject;
 	TTIOCompoundIO = NSObject;
+	TTIOCramReader = TTIOBamReader;
+	TTIOCramWriter = TTIOBamWriter;
 	TTIOEncodingSpec = NSObject;
 	TTIOEncryptedTransport = NSObject;
 	TTIOEncryptionManager = NSObject;
 	TTIOFeature = NSObject;
 	TTIOFeatureFlags = NSObject;
+	TTIOFqzcompNx16Z = NSObject;
 	TTIOFreeInductionDecay = TTIOSignalArray;
+	TTIOGenomicIndex = NSObject;
+	TTIOGenomicRun = NSObject;
 	TTIOHDF5CompoundType = NSObject;
 	TTIOHDF5Dataset = NSObject;
 	TTIOHDF5File = NSObject;
@@ -2896,6 +3410,7 @@
 	TTIOKeyRotationManager = NSObject;
 	TTIOMSImage = TTIOSpectralDataset;
 	TTIOMassSpectrum = TTIOSpectrum;
+	TTIOMateInfoV2 = NSObject;
 	TTIOMemoryProvider = NSObject;
 	TTIOMzMLReader = NSObject;
 	TTIOMzMLWriter = NSObject;
@@ -2905,6 +3420,7 @@
 	TTIOMzTabWriter = NSObject;
 	TTIONMR2DSpectrum = TTIOSpectrum;
 	TTIONMRSpectrum = TTIOSpectrum;
+	TTIONameTokenizerV2 = NSObject;
 	TTIONmrMLReader = NSObject;
 	TTIONmrMLWriter = NSObject;
 	TTIONumpress = NSObject;
@@ -2920,6 +3436,9 @@
 	TTIOQuery = NSObject;
 	TTIORamanImage = TTIOSpectralDataset;
 	TTIORamanSpectrum = TTIOSpectrum;
+	TTIORefDiffV2 = NSObject;
+	TTIOReferenceResolver = NSObject;
+	TTIOSamReader = TTIOBamReader;
 	TTIOSignalArray = NSObject;
 	TTIOSignatureManager = NSObject;
 	TTIOSpectralDataset = NSObject;
@@ -2944,6 +3463,7 @@
 	TTIOValueRange = NSObject;
 	TTIOVerifier = NSObject;
 	TTIOWatersMassLynxReader = NSObject;
+	TTIOWrittenGenomicRun = NSObject;
 	TTIOWrittenRun = NSObject;
 	TTIOZarrProvider = NSObject;
     };
@@ -2953,9 +3473,13 @@
 	TTIOAccessUnit = "TTIOAccessUnit documentation";
 	TTIOAcquisitionRun = "TTIOAcquisitionRun class documentation";
 	TTIOAcquisitionSimulator = "TTIOAcquisitionSimulator class documentation";
+	TTIOAlignedRead = "TTIOAlignedRead class documentation";
 	TTIOAnonymizer = "TTIOAnonymizer documentation";
 	TTIOAxisDescriptor = "TTIOAxisDescriptor class documentation";
+	TTIOBamReader = "TTIOBamReader class documentation";
+	TTIOBamWriter = "TTIOBamWriter class documentation";
 	TTIOBase64 = "TTIOBase64 class documentation";
+	TTIOBasePack = "TTIOBasePack documentation";
 	TTIOBrukerTDFReader = "TTIOBrukerTDFReader documentation";
 	TTIOCVAnnotatable = "TTIOCVAnnotatable documentation";
 	TTIOCVParam = "TTIOCVParam class documentation";
@@ -2965,6 +3489,8 @@
 	TTIOCipherSuite = "TTIOCipherSuite class documentation";
 	TTIOCompoundField = "TTIOCompoundField class documentation";
 	TTIOCompoundIO = "TTIOCompoundIO class documentation";
+	TTIOCramReader = "TTIOCramReader class documentation";
+	TTIOCramWriter = "TTIOCramWriter class documentation";
 	TTIOEncodingSpec = "TTIOEncodingSpec class documentation";
 	TTIOEncryptable = "TTIOEncryptable documentation";
 	TTIOEncryptedTransport = "TTIOEncryptedTransport class documentation";
@@ -2972,7 +3498,10 @@
 	TTIOEnums = "TTIOEnums documentation";
 	TTIOFeature = "TTIOFeature class documentation";
 	TTIOFeatureFlags = "TTIOFeatureFlags class documentation";
+	TTIOFqzcompNx16Z = "TTIOFqzcompNx16Z class documentation";
 	TTIOFreeInductionDecay = "TTIOFreeInductionDecay class documentation";
+	TTIOGenomicIndex = "TTIOGenomicIndex class documentation";
+	TTIOGenomicRun = "TTIOGenomicRun class documentation";
 	TTIOHDF5CompoundType = "TTIOHDF5CompoundType class documentation";
 	TTIOHDF5Dataset = "TTIOHDF5Dataset class documentation";
 	TTIOHDF5Errors = "TTIOHDF5Errors documentation";
@@ -2997,6 +3526,7 @@
 	TTIOKeyRotationManager = "TTIOKeyRotationManager class documentation";
 	TTIOMSImage = "TTIOMSImage class documentation";
 	TTIOMassSpectrum = "TTIOMassSpectrum class documentation";
+	TTIOMateInfoV2 = "TTIOMateInfoV2 class documentation";
 	TTIOMemoryProvider = "TTIOMemoryProvider class documentation";
 	TTIOMzMLReader = "TTIOMzMLReader class documentation";
 	TTIOMzMLWriter = "TTIOMzMLWriter class documentation";
@@ -3004,6 +3534,7 @@
 	TTIOMzTabWriter = "TTIOMzTabWriter documentation";
 	TTIONMR2DSpectrum = "TTIONMR2DSpectrum class documentation";
 	TTIONMRSpectrum = "TTIONMRSpectrum class documentation";
+	TTIONameTokenizerV2 = "TTIONameTokenizerV2 class documentation";
 	TTIONmrMLReader = "TTIONmrMLReader class documentation";
 	TTIONmrMLWriter = "TTIONmrMLWriter class documentation";
 	TTIONumpress = "TTIONumpress class documentation";
@@ -3014,10 +3545,16 @@
 	TTIOProvenanceRecord = "TTIOProvenanceRecord class documentation";
 	TTIOProvenanceable = "TTIOProvenanceable documentation";
 	TTIOProviderRegistry = "TTIOProviderRegistry class documentation";
+	TTIOQuality = "TTIOQuality documentation";
 	TTIOQuantification = "TTIOQuantification class documentation";
 	TTIOQuery = "TTIOQuery class documentation";
 	TTIORamanImage = "TTIORamanImage class documentation";
 	TTIORamanSpectrum = "TTIORamanSpectrum class documentation";
+	TTIORans = "TTIORans documentation";
+	TTIORefDiffV2 = "TTIORefDiffV2 class documentation";
+	TTIOReferenceResolver = "TTIOReferenceResolver class documentation";
+	TTIORun = "TTIORun documentation";
+	TTIOSamReader = "TTIOSamReader class documentation";
 	TTIOSignalArray = "TTIOSignalArray class documentation";
 	TTIOSignatureManager = "TTIOSignatureManager class documentation";
 	TTIOSpectralDataset = "TTIOSpectralDataset class documentation";
@@ -3041,6 +3578,7 @@
 	TTIOValueRange = "TTIOValueRange class documentation";
 	TTIOVerifier = "TTIOVerifier class documentation";
 	TTIOWatersMassLynxReader = "TTIOWatersMassLynxReader class documentation";
+	TTIOWrittenGenomicRun = "TTIOWrittenGenomicRun class documentation";
 	TTIOWrittenRun = "TTIOWrittenRun class documentation";
 	TTIOZarrProvider = "TTIOZarrProvider class documentation";
     };
@@ -3096,6 +3634,11 @@
 	    "-inputEntities" = TTIOProvenanceable;
 	    "-outputEntities" = TTIOProvenanceable;
 	    "-provenanceChain" = TTIOProvenanceable;
+	};
+	"(TTIORun)" = {
+	    "-acquisitionMode" = TTIORun;
+	    "-name" = TTIORun;
+	    "-provenanceChain" = TTIORun;
 	};
 	"(TTIOStorageDataset)" = {
 	    "-attributeNames" = TTIOStorageProtocols;
@@ -3189,18 +3732,26 @@
 	    "-acquisitionMode" = TTIOAccessUnit;
 	    "-basePeakIntensity" = TTIOAccessUnit;
 	    "-channels" = TTIOAccessUnit;
+	    "-chromosome" = TTIOAccessUnit;
 	    "-encode" = TTIOAccessUnit;
+	    "-flags" = TTIOAccessUnit;
 	    "-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:" = TTIOAccessUnit;
+	    "-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:chromosome:position:mappingQuality:flags:" = TTIOAccessUnit;
+	    "-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:chromosome:position:mappingQuality:flags:matePosition:templateLength:" = TTIOAccessUnit;
 	    "-ionMobility" = TTIOAccessUnit;
+	    "-mappingQuality" = TTIOAccessUnit;
+	    "-matePosition" = TTIOAccessUnit;
 	    "-msLevel" = TTIOAccessUnit;
 	    "-pixelX" = TTIOAccessUnit;
 	    "-pixelY" = TTIOAccessUnit;
 	    "-pixelZ" = TTIOAccessUnit;
 	    "-polarity" = TTIOAccessUnit;
+	    "-position" = TTIOAccessUnit;
 	    "-precursorCharge" = TTIOAccessUnit;
 	    "-precursorMz" = TTIOAccessUnit;
 	    "-retentionTime" = TTIOAccessUnit;
 	    "-spectrumClass" = TTIOAccessUnit;
+	    "-templateLength" = TTIOAccessUnit;
 	};
 	TTIOAcquisitionRun = {
 	    "+readFromGroup:name:error:" = TTIOAcquisitionRun;
@@ -3217,6 +3768,7 @@
 	    "-inputEntities" = TTIOAcquisitionRun;
 	    "-instrumentConfig" = TTIOAcquisitionRun;
 	    "-modality" = TTIOAcquisitionRun;
+	    "-name" = TTIOAcquisitionRun;
 	    "-nucleusType" = TTIOAcquisitionRun;
 	    "-outputEntities" = TTIOAcquisitionRun;
 	    "-provenanceChain" = TTIOAcquisitionRun;
@@ -3245,11 +3797,34 @@
 	    "-streamPacedToWriter:error:" = TTIOAcquisitionSimulator;
 	    "-streamToWriter:error:" = TTIOAcquisitionSimulator;
 	};
+	TTIOAlignedRead = {
+	    "-chromosome" = TTIOAlignedRead;
+	    "-cigar" = TTIOAlignedRead;
+	    "-flags" = TTIOAlignedRead;
+	    "-initWithReadName:chromosome:position:mappingQuality:cigar:sequence:qualities:flags:mateChromosome:matePosition:templateLength:" = TTIOAlignedRead;
+	    "-isMapped" = TTIOAlignedRead;
+	    "-isPaired" = TTIOAlignedRead;
+	    "-isReverse" = TTIOAlignedRead;
+	    "-isSecondary" = TTIOAlignedRead;
+	    "-isSupplementary" = TTIOAlignedRead;
+	    "-mappingQuality" = TTIOAlignedRead;
+	    "-mateChromosome" = TTIOAlignedRead;
+	    "-matePosition" = TTIOAlignedRead;
+	    "-position" = TTIOAlignedRead;
+	    "-qualities" = TTIOAlignedRead;
+	    "-readLength" = TTIOAlignedRead;
+	    "-readName" = TTIOAlignedRead;
+	    "-sequence" = TTIOAlignedRead;
+	    "-templateLength" = TTIOAlignedRead;
+	};
 	TTIOAnonymizationPolicy = {
 	    "-coarsenChemicalShiftDecimals" = TTIOAnonymizer;
 	    "-coarsenMzDecimals" = TTIOAnonymizer;
 	    "-maskIntensityBelowQuantile" = TTIOAnonymizer;
 	    "-maskRareMetabolites" = TTIOAnonymizer;
+	    "-maskRegions" = TTIOAnonymizer;
+	    "-randomiseQualities" = TTIOAnonymizer;
+	    "-randomiseQualitiesConstant" = TTIOAnonymizer;
 	    "-rareMetaboliteTable" = TTIOAnonymizer;
 	    "-rareMetaboliteThreshold" = TTIOAnonymizer;
 	    "-redactSAAVSpectra" = TTIOAnonymizer;
@@ -3257,11 +3832,16 @@
 	    "-setCoarsenMzDecimals:" = TTIOAnonymizer;
 	    "-setMaskIntensityBelowQuantile:" = TTIOAnonymizer;
 	    "-setMaskRareMetabolites:" = TTIOAnonymizer;
+	    "-setMaskRegions:" = TTIOAnonymizer;
+	    "-setRandomiseQualities:" = TTIOAnonymizer;
+	    "-setRandomiseQualitiesConstant:" = TTIOAnonymizer;
 	    "-setRareMetaboliteTable:" = TTIOAnonymizer;
 	    "-setRareMetaboliteThreshold:" = TTIOAnonymizer;
 	    "-setRedactSAAVSpectra:" = TTIOAnonymizer;
 	    "-setStripMetadataFields:" = TTIOAnonymizer;
+	    "-setStripReadNames:" = TTIOAnonymizer;
 	    "-stripMetadataFields" = TTIOAnonymizer;
+	    "-stripReadNames" = TTIOAnonymizer;
 	};
 	TTIOAnonymizationResult = {
 	    "-chemicalShiftValuesCoarsened" = TTIOAnonymizer;
@@ -3270,12 +3850,18 @@
 	    "-metadataFieldsStripped" = TTIOAnonymizer;
 	    "-mzValuesCoarsened" = TTIOAnonymizer;
 	    "-policiesApplied" = TTIOAnonymizer;
+	    "-qualitiesRandomised" = TTIOAnonymizer;
+	    "-readNamesStripped" = TTIOAnonymizer;
+	    "-readsInMaskedRegion" = TTIOAnonymizer;
 	    "-setChemicalShiftValuesCoarsened:" = TTIOAnonymizer;
 	    "-setIntensitiesZeroed:" = TTIOAnonymizer;
 	    "-setMetabolitesMasked:" = TTIOAnonymizer;
 	    "-setMetadataFieldsStripped:" = TTIOAnonymizer;
 	    "-setMzValuesCoarsened:" = TTIOAnonymizer;
 	    "-setPoliciesApplied:" = TTIOAnonymizer;
+	    "-setQualitiesRandomised:" = TTIOAnonymizer;
+	    "-setReadNamesStripped:" = TTIOAnonymizer;
+	    "-setReadsInMaskedRegion:" = TTIOAnonymizer;
 	    "-setSpectraRedacted:" = TTIOAnonymizer;
 	    "-spectraRedacted" = TTIOAnonymizer;
 	};
@@ -3289,6 +3875,17 @@
 	    "-samplingMode" = TTIOAxisDescriptor;
 	    "-unit" = TTIOAxisDescriptor;
 	    "-valueRange" = TTIOAxisDescriptor;
+	};
+	TTIOBamReader = {
+	    "-initWithPath:" = TTIOBamReader;
+	    "-path" = TTIOBamReader;
+	    "-provenanceRecords" = TTIOBamReader;
+	    "-toGenomicRunWithName:region:sampleName:error:" = TTIOBamReader;
+	};
+	TTIOBamWriter = {
+	    "-initWithPath:" = TTIOBamWriter;
+	    "-path" = TTIOBamWriter;
+	    "-writeRun:provenanceRecords:sort:error:" = TTIOBamWriter;
 	};
 	TTIOBase64 = {
 	    "+decodeString:" = TTIOBase64;
@@ -3405,6 +4002,16 @@
 	    "+writeProvenance:intoGroup:datasetNamed:error:" = TTIOCompoundIO;
 	    "+writeQuantifications:intoGroup:datasetNamed:error:" = TTIOCompoundIO;
 	};
+	TTIOCramReader = {
+	    "-initWithPath:NS_UNAVAILABLE" = TTIOCramReader;
+	    "-initWithPath:referenceFasta:" = TTIOCramReader;
+	    "-referenceFasta" = TTIOCramReader;
+	};
+	TTIOCramWriter = {
+	    "-initWithPath:NS_UNAVAILABLE" = TTIOCramWriter;
+	    "-initWithPath:referenceFasta:" = TTIOCramWriter;
+	    "-referenceFasta" = TTIOCramWriter;
+	};
 	TTIOEncodingSpec = {
 	    "+specWithPrecision:compressionAlgorithm:byteOrder:" = TTIOEncodingSpec;
 	    "-byteOrder" = TTIOEncodingSpec;
@@ -3454,6 +4061,8 @@
 	    "+featureMS2ActivationDetail" = TTIOFeatureFlags;
 	    "+featureNative2DNMR" = TTIOFeatureFlags;
 	    "+featureNativeMSImageCube" = TTIOFeatureFlags;
+	    "+featureNoSignalIntDups" = TTIOFeatureFlags;
+	    "+featureOptGenomic" = TTIOFeatureFlags;
 	    "+featurePQCPreview" = TTIOFeatureFlags;
 	    "+featuresForRoot:" = TTIOFeatureFlags;
 	    "+formatVersionForRoot:" = TTIOFeatureFlags;
@@ -3461,11 +4070,54 @@
 	    "+root:supportsFeature:" = TTIOFeatureFlags;
 	    "+writeFormatVersion:features:toRoot:error:" = TTIOFeatureFlags;
 	};
+	TTIOFqzcompNx16Z = {
+	    "+backendName" = TTIOFqzcompNx16Z;
+	    "+decodeData:error:" = TTIOFqzcompNx16Z;
+	    "+decodeData:revcompFlags:error:" = TTIOFqzcompNx16Z;
+	    "+decodeV4Data:revcompFlags:error:" = TTIOFqzcompNx16Z;
+	    "+encodeV4WithQualities:readLengths:revcompFlags:strategyHint:padCount:error:" = TTIOFqzcompNx16Z;
+	    "+encodeWithQualities:readLengths:revcompFlags:error:" = TTIOFqzcompNx16Z;
+	    "+encodeWithQualities:readLengths:revcompFlags:options:error:" = TTIOFqzcompNx16Z;
+	};
 	TTIOFreeInductionDecay = {
 	    "-dwellTimeSeconds" = TTIOFreeInductionDecay;
 	    "-initWithComplexBuffer:complexLength:dwellTimeSeconds:scanCount:receiverGain:" = TTIOFreeInductionDecay;
 	    "-receiverGain" = TTIOFreeInductionDecay;
 	    "-scanCount" = TTIOFreeInductionDecay;
+	};
+	TTIOGenomicIndex = {
+	    "+readFromGroup:error:" = TTIOGenomicIndex;
+	    "-chromosomeAt:" = TTIOGenomicIndex;
+	    "-count" = TTIOGenomicIndex;
+	    "-flagsAt:" = TTIOGenomicIndex;
+	    "-indicesForFlag:" = TTIOGenomicIndex;
+	    "-indicesForRegion:start:end:" = TTIOGenomicIndex;
+	    "-indicesForUnmapped" = TTIOGenomicIndex;
+	    "-initWithOffsets:lengths:chromosomes:positions:mappingQualities:flags:" = TTIOGenomicIndex;
+	    "-lengthAt:" = TTIOGenomicIndex;
+	    "-mappingQualityAt:" = TTIOGenomicIndex;
+	    "-offsetAt:" = TTIOGenomicIndex;
+	    "-positionAt:" = TTIOGenomicIndex;
+	    "-writeToGroup:error:" = TTIOGenomicIndex;
+	};
+	TTIOGenomicRun = {
+	    "+openFromGroup:name:error:" = TTIOGenomicRun;
+	    "-acquisitionMode" = TTIOGenomicRun;
+	    "-cigarAtIndex:error:" = TTIOGenomicRun;
+	    "-count" = TTIOGenomicRun;
+	    "-index" = TTIOGenomicRun;
+	    "-modality" = TTIOGenomicRun;
+	    "-name" = TTIOGenomicRun;
+	    "-objectAtIndex:" = TTIOGenomicRun;
+	    "-platform" = TTIOGenomicRun;
+	    "-provenanceChain" = TTIOGenomicRun;
+	    "-readAtIndex:error:" = TTIOGenomicRun;
+	    "-readCount" = TTIOGenomicRun;
+	    "-readNameAtIndex:error:" = TTIOGenomicRun;
+	    "-readsInRegion:start:end:" = TTIOGenomicRun;
+	    "-referenceUri" = TTIOGenomicRun;
+	    "-sampleName" = TTIOGenomicRun;
+	    "-wireCompressionForChannel:" = TTIOGenomicRun;
 	};
 	TTIOHDF5CompoundType = {
 	    "-addField:type:offset:" = TTIOHDF5CompoundType;
@@ -3522,6 +4174,7 @@
 	    "-stringAttributeNamed:error:" = TTIOHDF5Group;
 	};
 	TTIOHDF5Provider = {
+	    "+adapterForCompoundDatasetWithParent:name:fields:count:" = TTIOHDF5Provider;
 	    "+adapterForDataset:name:" = TTIOHDF5Provider;
 	    "+adapterForGroup:" = TTIOHDF5Provider;
 	};
@@ -3677,6 +4330,11 @@
 	    "-polarity" = TTIOMassSpectrum;
 	    "-scanWindow" = TTIOMassSpectrum;
 	};
+	TTIOMateInfoV2 = {
+	    "+decodeData:ownChromIds:ownPositions:nRecords:outMateChromIds:outMatePositions:outTemplateLengths:error:" = TTIOMateInfoV2;
+	    "+encodeMateChromIds:matePositions:templateLengths:ownChromIds:ownPositions:error:" = TTIOMateInfoV2;
+	    "+nativeAvailable" = TTIOMateInfoV2;
+	};
 	TTIOMemoryProvider = {
 	    "+discardStore:" = TTIOMemoryProvider;
 	};
@@ -3741,6 +4399,12 @@
 	    "-nucleusType" = TTIONMRSpectrum;
 	    "-spectrometerFrequencyMHz" = TTIONMRSpectrum;
 	};
+	TTIONameTokenizerV2 = {
+	    "+backendName" = TTIONameTokenizerV2;
+	    "+decodeData:error:" = TTIONameTokenizerV2;
+	    "+encodeNames:" = TTIONameTokenizerV2;
+	    "+nativeAvailable" = TTIONameTokenizerV2;
+	};
 	TTIONmrMLReader = {
 	    "+parseData:error:" = TTIONmrMLReader;
 	    "+parseFilePath:error:" = TTIONmrMLReader;
@@ -3778,9 +4442,11 @@
 	    "+aadForChannel:datasetId:auSequence:" = TTIOPerAUEncryption;
 	    "+aadForHeaderWithDatasetId:auSequence:" = TTIOPerAUEncryption;
 	    "+aadForPixelWithDatasetId:auSequence:" = TTIOPerAUEncryption;
+	    "+decryptChannelFromSegments:bytesPerElement:datasetId:channelName:key:error:" = TTIOPerAUEncryption;
 	    "+decryptChannelFromSegments:datasetId:channelName:key:error:" = TTIOPerAUEncryption;
 	    "+decryptHeaderSegments:datasetId:key:error:" = TTIOPerAUEncryption;
 	    "+decryptWithCiphertext:key:iv:tag:aad:error:" = TTIOPerAUEncryption;
+	    "+encryptChannelToSegments:offsets:lengths:nSpectra:bytesPerElement:datasetId:channelName:key:error:" = TTIOPerAUEncryption;
 	    "+encryptChannelToSegments:offsets:lengths:nSpectra:datasetId:channelName:key:error:" = TTIOPerAUEncryption;
 	    "+encryptHeaderSegments:datasetId:key:error:" = TTIOPerAUEncryption;
 	    "+encryptWithPlaintext:key:iv:aad:outTag:error:" = TTIOPerAUEncryption;
@@ -3790,7 +4456,9 @@
 	};
 	TTIOPerAUFile = {
 	    "+decryptFilePath:key:providerName:error:" = TTIOPerAUFile;
+	    "+decryptFilePathByRegion:keyMap:providerName:error:" = TTIOPerAUFile;
 	    "+encryptFilePath:key:encryptHeaders:providerName:error:" = TTIOPerAUFile;
+	    "+encryptFilePathByRegion:keyMap:providerName:error:" = TTIOPerAUFile;
 	};
 	TTIOPostQuantumCrypto = {
 	    "+isAvailable" = TTIOPostQuantumCrypto;
@@ -3869,6 +4537,15 @@
 	    "-laserPowerMw" = TTIORamanSpectrum;
 	    "-wavenumberArray" = TTIORamanSpectrum;
 	};
+	TTIORefDiffV2 = {
+	    "+decodeData:positions:cigarStrings:reference:nReads:totalBases:outSequences:outOffsets:error:" = TTIORefDiffV2;
+	    "+encodeSequences:offsets:positions:cigarStrings:reference:referenceMd5:referenceUri:readsPerSlice:error:" = TTIORefDiffV2;
+	    "+nativeAvailable" = TTIORefDiffV2;
+	};
+	TTIOReferenceResolver = {
+	    "-initWithRootGroup:externalReferencePath:" = TTIOReferenceResolver;
+	    "-resolveURI:expectedMD5:chromosome:error:" = TTIOReferenceResolver;
+	};
 	TTIOSignalArray = {
 	    "+readFromGroup:name:error:" = TTIOSignalArray;
 	    "-axis" = TTIOSignalArray;
@@ -3884,21 +4561,27 @@
 	    "+hmacSHA256OfData:withKey:" = TTIOSignatureManager;
 	    "+signDataset:inFile:withKey:algorithm:error:" = TTIOSignatureManager;
 	    "+signDataset:inFile:withKey:error:" = TTIOSignatureManager;
+	    "+signGenomicRun:inFile:withKey:error:" = TTIOSignatureManager;
 	    "+signProvenanceInRun:inFile:withKey:error:" = TTIOSignatureManager;
 	    "+verifyDataset:inFile:withKey:algorithm:error:" = TTIOSignatureManager;
 	    "+verifyDataset:inFile:withKey:error:" = TTIOSignatureManager;
+	    "+verifyGenomicRun:inFile:withKey:error:" = TTIOSignatureManager;
 	    "+verifyProvenanceInRun:inFile:withKey:error:" = TTIOSignatureManager;
 	};
 	TTIOSpectralDataset = {
 	    "+decryptInPlaceAtPath:withKey:error:" = TTIOSpectralDataset;
 	    "+readFromFilePath:error:" = TTIOSpectralDataset;
+	    "+writeMinimalToPath:title:isaInvestigationId:mixedRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:" = TTIOSpectralDataset;
+	    "+writeMinimalToPath:title:isaInvestigationId:msRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:" = TTIOSpectralDataset;
 	    "+writeMinimalToPath:title:isaInvestigationId:msRuns:identifications:quantifications:provenanceRecords:error:" = TTIOSpectralDataset;
 	    "-accessPolicy" = TTIOSpectralDataset;
+	    "-allRunsUnified" = TTIOSpectralDataset;
 	    "-closeFile" = TTIOSpectralDataset;
 	    "-decryptWithKey:error:" = TTIOSpectralDataset;
 	    "-encryptWithKey:level:error:" = TTIOSpectralDataset;
 	    "-encryptedAlgorithm" = TTIOSpectralDataset;
 	    "-filePath" = TTIOSpectralDataset;
+	    "-genomicRuns" = TTIOSpectralDataset;
 	    "-identifications" = TTIOSpectralDataset;
 	    "-initWithTitle:isaInvestigationId:msRuns:nmrRuns:identifications:quantifications:provenanceRecords:transitions:" = TTIOSpectralDataset;
 	    "-isEncrypted" = TTIOSpectralDataset;
@@ -3910,6 +4593,9 @@
 	    "-provider" = TTIOSpectralDataset;
 	    "-quantifications" = TTIOSpectralDataset;
 	    "-readAdditionalStudyContent:error:" = TTIOSpectralDataset;
+	    "-runs" = TTIOSpectralDataset;
+	    "-runsForSample:" = TTIOSpectralDataset;
+	    "-runsOfModality:" = TTIOSpectralDataset;
 	    "-setAccessPolicy:" = TTIOSpectralDataset;
 	    "-title" = TTIOSpectralDataset;
 	    "-transitions" = TTIOSpectralDataset;
@@ -4040,6 +4726,7 @@
 	    "-writeDatasetHeaderWithDatasetId:name:acquisitionMode:spectrumClass:channelNames:instrumentJSON:expectedAUCount:error:" = TTIOTransportWriter;
 	    "-writeEndOfDatasetWithDatasetId:finalAUSequence:error:" = TTIOTransportWriter;
 	    "-writeEndOfStreamWithError:" = TTIOTransportWriter;
+	    "-writeGenomicRun:datasetId:name:error:" = TTIOTransportWriter;
 	    "-writeStreamHeaderWithFormatVersion:title:isaInvestigation:features:nDatasets:error:" = TTIOTransportWriter;
 	};
 	TTIOTwoDCos = {
@@ -4080,6 +4767,34 @@
 	    "+readFromDirectoryPath:converter:error:" = TTIOWatersMassLynxReader;
 	    "+readFromDirectoryPath:error:" = TTIOWatersMassLynxReader;
 	};
+	TTIOWrittenGenomicRun = {
+	    "-acquisitionMode" = TTIOWrittenGenomicRun;
+	    "-chromosomes" = TTIOWrittenGenomicRun;
+	    "-cigars" = TTIOWrittenGenomicRun;
+	    "-embedReference" = TTIOWrittenGenomicRun;
+	    "-flagsData" = TTIOWrittenGenomicRun;
+	    "-initWithAcquisitionMode:referenceUri:platform:sampleName:positions:mappingQualities:flags:sequences:qualities:offsets:lengths:cigars:readNames:mateChromosomes:matePositions:templateLengths:chromosomes:signalCompression:" = TTIOWrittenGenomicRun;
+	    "-initWithAcquisitionMode:referenceUri:platform:sampleName:positions:mappingQualities:flags:sequences:qualities:offsets:lengths:cigars:readNames:mateChromosomes:matePositions:templateLengths:chromosomes:signalCompression:signalCodecOverrides:" = TTIOWrittenGenomicRun;
+	    "-lengthsData" = TTIOWrittenGenomicRun;
+	    "-mappingQualitiesData" = TTIOWrittenGenomicRun;
+	    "-mateChromosomes" = TTIOWrittenGenomicRun;
+	    "-matePositionsData" = TTIOWrittenGenomicRun;
+	    "-offsetsData" = TTIOWrittenGenomicRun;
+	    "-platform" = TTIOWrittenGenomicRun;
+	    "-positionsData" = TTIOWrittenGenomicRun;
+	    "-provenanceRecords" = TTIOWrittenGenomicRun;
+	    "-qualitiesData" = TTIOWrittenGenomicRun;
+	    "-readCount" = TTIOWrittenGenomicRun;
+	    "-readNames" = TTIOWrittenGenomicRun;
+	    "-referenceUri" = TTIOWrittenGenomicRun;
+	    "-sampleName" = TTIOWrittenGenomicRun;
+	    "-sequencesData" = TTIOWrittenGenomicRun;
+	    "-setEmbedReference:" = TTIOWrittenGenomicRun;
+	    "-setProvenanceRecords:" = TTIOWrittenGenomicRun;
+	    "-signalCodecOverrides" = TTIOWrittenGenomicRun;
+	    "-signalCompression" = TTIOWrittenGenomicRun;
+	    "-templateLengthsData" = TTIOWrittenGenomicRun;
+	};
 	TTIOWrittenRun = {
 	    "-acquisitionMode" = TTIOWrittenRun;
 	    "-basePeakIntensities" = TTIOWrittenRun;
@@ -4092,8 +4807,10 @@
 	    "-polarities" = TTIOWrittenRun;
 	    "-precursorCharges" = TTIOWrittenRun;
 	    "-precursorMzs" = TTIOWrittenRun;
+	    "-provenanceRecords" = TTIOWrittenRun;
 	    "-retentionTimes" = TTIOWrittenRun;
 	    "-setNucleusType:" = TTIOWrittenRun;
+	    "-setProvenanceRecords:" = TTIOWrittenRun;
 	    "-setSignalCompression:" = TTIOWrittenRun;
 	    "-signalCompression" = TTIOWrittenRun;
 	    "-spectrumClassName" = TTIOWrittenRun;

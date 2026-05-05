@@ -1,0 +1,201 @@
+ttio.codecs
+===========
+
+.. py:module:: ttio.codecs
+
+.. autoapi-nested-parse::
+
+   TTI-O compression codecs — clean-room implementations.
+
+   All codecs in this package are implemented from published academic
+   literature. No third-party codec library source code is consulted.
+
+   Codecs:
+       rans              — rANS order-0 and order-1 entropy coding (Duda 2014)
+       base_pack         — 2-bit nucleotide packing + sidecar mask (M84)
+       quality           — Phred score quantisation (M85 Phase A)
+       fqzcomp_nx16_z    — CRAM 3.1 fqzcomp_qual port (v1.5 / V4)
+       mate_info_v2      — CRAM-style inline mate-pair encoding (v1.7, codec id 13)
+       ref_diff_v2       — CRAM-style bit-packed sequence diff (v1.8, codec id 14)
+       name_tokenizer_v2 — CRAM-style adaptive name-tokenizer (v1.8, codec id 15)
+
+   The v1 ``name_tokenizer`` (codec id 8) and ``ref_diff`` (codec id 9)
+   implementations were removed in the v1.0 reset (Phase 2c) — readers
+   reject files written with those codec ids; writers no longer emit them.
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/codecs/base_pack/index
+   /autoapi/ttio/codecs/delta_rans/index
+   /autoapi/ttio/codecs/fqzcomp_nx16_z/index
+   /autoapi/ttio/codecs/mate_info_v2/index
+   /autoapi/ttio/codecs/name_tokenizer_v2/index
+   /autoapi/ttio/codecs/quality/index
+   /autoapi/ttio/codecs/rans/index
+   /autoapi/ttio/codecs/ref_diff_v2/index
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.base_pack_decode
+   ttio.codecs.base_pack_encode
+   ttio.codecs.fqzcomp_nx16_z_decode
+   ttio.codecs.fqzcomp_nx16_z_encode
+   ttio.codecs.quality_decode
+   ttio.codecs.quality_encode
+   ttio.codecs.rans_decode
+   ttio.codecs.rans_encode
+
+
+Package Contents
+----------------
+
+.. py:function:: base_pack_decode(encoded: bytes) -> bytes
+
+   Decode a stream produced by :func:`encode`.
+
+   Reads the header, unpacks the 2-bit body, applies the sidecar
+   mask. Validates strictly: the version byte, the
+   ``packed_length`` invariant, the total stream length, and that
+   every mask position is in ``[0, original_length)`` and strictly
+   ascending.
+
+   :raises ValueError: If the stream is shorter than the header, has a bad version
+       byte, has a wrong ``packed_length`` for the declared
+       ``original_length``, has a body or mask section of the
+       wrong length, has a mask position out of range, or has
+       unsorted / duplicate mask positions.
+
+
+.. py:function:: base_pack_encode(data: bytes) -> bytes
+
+   Encode ``data`` using BASE_PACK + sidecar mask.
+
+   Returns a self-contained byte string per the wire format
+   described in this module's docstring (HANDOFF.md M84 §2). Pure
+   ACGT input compresses to ~25% of original size plus a 13-byte
+   header; non-ACGT bytes round-trip losslessly via the mask.
+
+   :param data: Input bytes. Any byte value is accepted; ``A``/``C``/``G``/``T``
+                (uppercase only — see binding decision §81) are packed into
+                2-bit slots, anything else gets a mask entry.
+
+   :returns: *bytes* -- Encoded stream of length
+             ``13 + ceil(len(data) / 4) + 5 * mask_count``.
+
+
+.. py:function:: fqzcomp_nx16_z_decode(encoded: bytes, revcomp_flags: list[int] | None = None) -> tuple[bytes, list[int], list[int]]
+
+   Decode an M94.Z V4 blob.
+
+   v1.0 reset (Phase 2c): only V4 (CRAM 3.1 fqzcomp_qual port) is
+   decoded. The V1 (pure-Python static rANS), V2 (native-body) and
+   V3 (adaptive Range Coder) reader header dispatches were removed
+   — files written with those version bytes surface a clear
+   migration error pointing at V4.
+
+   ``revcomp_flags`` must match the encoder's trajectory; ``None``
+   is treated as all-zero by V4.
+
+
+.. py:function:: fqzcomp_nx16_z_encode(qualities: bytes, read_lengths: list[int], revcomp_flags: list[int], *, v4_strategy_hint: int = -1, context_params: ContextParams | None = None, prefer_native: bool | None = None, prefer_v3: bool | None = None, prefer_v4: bool | None = None) -> bytes
+
+   Top-level M94.Z encoder — V4 (CRAM 3.1 fqzcomp_qual port) only.
+
+   v1.0 reset (Phase 2c): the V1 (pure-Python static rANS), V2
+   (native-body) and V3 (adaptive Range Coder) encoder paths were
+   removed. V4 is the only encoded version. The native libttio_rans
+   library is required.
+
+   Empty-run case: V4 native rejects n_qualities==0 (the htscodecs
+   fqzcomp_qual core requires at least one symbol); when there are
+   no qualities, the encoder returns a minimal V4-tagged blob with
+   a zero-length body so readers can still dispatch by version byte.
+
+   Args:
+       qualities: concatenated Phred quality byte stream.
+       read_lengths: per-read length list (sum must equal
+           len(qualities)).
+       revcomp_flags: parallel list of 0/1.
+       v4_strategy_hint: -1 = auto-tune (default), 0..4 = preset for
+           the V4 fqzcomp_qual encoder.
+       context_params, prefer_native, prefer_v3, prefer_v4: accepted
+           for backward-compatible call sites only — the encoder
+           always emits V4 in v1.0.
+
+   Returns:
+       On-wire byte stream tagged with version byte 4
+       (``VERSION_V4_FQZCOMP``).
+
+
+.. py:function:: quality_decode(encoded: bytes) -> bytes
+
+   Decode a stream produced by :func:`encode`.
+
+   Reads the header, unpacks the 4-bit bin indices from the body,
+   maps each through the bin-centre table to produce output Phred
+   bytes. Validates strictly: the version byte, the scheme_id, and
+   the total stream length against ``original_length``.
+
+   :param encoded: Encoded stream as produced by :func:`encode`.
+
+   :returns: *bytes* -- Output Phred bytes of length ``original_length``. Each byte
+             is the bin centre for the corresponding input byte's bin
+             (lossy by construction — binding decision §97).
+
+   :raises ValueError: If the stream is shorter than the 6-byte header, has a bad
+       version byte, has a bad scheme_id, or has a body length
+       that doesn't match ``ceil(original_length / 2)``.
+
+
+.. py:function:: quality_encode(data: bytes) -> bytes
+
+   Encode ``data`` (Phred score bytes) using QUALITY_BINNED.
+
+   Maps each input byte through the Illumina-8 bin table, packs
+   bin indices 4-bits-per-index (big-endian within byte: first
+   input quality in the high nibble). Returns a self-contained byte
+   string per the wire format in this module's docstring
+   (HANDOFF.md M85 §3).
+
+   Lossy: round-trip via bin centres.
+   ``decode(encode(x)) == bin_centre[bin_of[x]]`` for each byte x.
+
+   :param data: Input bytes — Phred quality scores. Any byte value 0..255
+                is accepted; values > 40 saturate to bin 7 (centre 40).
+
+   :returns: *bytes* -- Encoded stream of length ``6 + ((len(data) + 1) >> 1)``.
+
+
+.. py:function:: rans_decode(encoded: bytes) -> bytes
+
+   Decode a stream produced by :func:`encode`.
+
+   :raises ValueError: If the input is too short, has an unknown order byte, has a
+       truncated frequency table, or the declared payload length
+       does not match the bytes that follow.
+
+
+.. py:function:: rans_encode(data: bytes, order: int = 0) -> bytes
+
+   Encode ``data`` using rANS with the given context order.
+
+   :param data: Input byte string.  May be empty.
+   :type data: bytes
+   :param order: ``0`` (marginal frequencies) or ``1`` (frequencies conditioned
+                 on the previous byte).
+   :type order: int
+
+   :returns: *bytes* -- Self-contained encoded stream — see module docstring for the
+             wire format.
+
+

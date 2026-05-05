@@ -117,6 +117,36 @@ Module Contents
 
 
 
+   .. py:attribute:: strip_read_names
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: randomise_qualities
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: randomise_qualities_constant
+      :type:  int
+      :value: 30
+
+
+
+   .. py:attribute:: randomise_qualities_seed
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: mask_regions
+      :type:  list[tuple[str, int, int]] | None
+      :value: None
+
+
+
 .. py:class:: AnonymizationResult
 
    Summary of what the anonymizer did.
@@ -157,6 +187,24 @@ Module Contents
 
 
    .. py:attribute:: metadata_fields_stripped
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: read_names_stripped
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: qualities_randomised
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: reads_in_masked_region
       :type:  int
       :value: 0
 

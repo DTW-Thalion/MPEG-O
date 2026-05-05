@@ -11,6 +11,8 @@ ttio.exporters
    - nmrML (M29): 1D spectrum writer
    - ISA-Tab (M27): study bundle writer
    - imzML (v0.9+): MS imaging writer (.imzML + .ibd pair)
+   - BAM (M88): SAM/BAM writer for genomic runs
+   - CRAM (M88): reference-compressed BAM writer for genomic runs
 
    SPDX-License-Identifier: Apache-2.0
 
@@ -22,6 +24,8 @@ Submodules
 .. toctree::
    :maxdepth: 1
 
+   /autoapi/ttio/exporters/bam/index
+   /autoapi/ttio/exporters/cram/index
    /autoapi/ttio/exporters/imzml/index
    /autoapi/ttio/exporters/isa/index
    /autoapi/ttio/exporters/jcamp_dx/index

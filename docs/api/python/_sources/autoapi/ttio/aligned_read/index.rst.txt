@@ -1,0 +1,106 @@
+ttio.aligned_read
+=================
+
+.. py:module:: ttio.aligned_read
+
+.. autoapi-nested-parse::
+
+   AlignedRead — one aligned sequencing read.
+
+   Genomic analogue of :class:`ttio.mass_spectrum.MassSpectrum`. Frozen
+   value object materialised by :meth:`ttio.genomic_run.GenomicRun.__getitem__`
+   from the signal channel arrays under
+   ``/study/genomic_runs/<name>/signal_channels/``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.aligned_read.AlignedRead
+
+
+Module Contents
+---------------
+
+.. py:class:: AlignedRead
+
+   One aligned sequencing read.
+
+
+   .. py:attribute:: read_name
+      :type:  str
+
+
+   .. py:attribute:: chromosome
+      :type:  str
+
+
+   .. py:attribute:: position
+      :type:  int
+
+
+   .. py:attribute:: mapping_quality
+      :type:  int
+
+
+   .. py:attribute:: cigar
+      :type:  str
+
+
+   .. py:attribute:: sequence
+      :type:  str
+
+
+   .. py:attribute:: qualities
+      :type:  bytes
+
+
+   .. py:attribute:: flags
+      :type:  int
+
+
+   .. py:attribute:: mate_chromosome
+      :type:  str
+
+
+   .. py:attribute:: mate_position
+      :type:  int
+
+
+   .. py:attribute:: template_length
+      :type:  int
+
+
+   .. py:property:: is_mapped
+      :type: bool
+
+
+
+   .. py:property:: is_paired
+      :type: bool
+
+
+
+   .. py:property:: is_reverse
+      :type: bool
+
+
+
+   .. py:property:: is_secondary
+      :type: bool
+
+
+
+   .. py:property:: is_supplementary
+      :type: bool
+
+
+
+   .. py:property:: read_length
+      :type: int
+
+
+

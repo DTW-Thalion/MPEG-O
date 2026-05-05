@@ -1,0 +1,321 @@
+ttio.codecs.fqzcomp_nx16_z
+==========================
+
+.. py:module:: ttio.codecs.fqzcomp_nx16_z
+
+.. autoapi-nested-parse::
+
+   TTI-O M94.Z — CRAM-mimic FQZCOMP_NX16 (rANS-Nx16) reference codec.
+
+   This is a NEW codec module, parallel to (and independent from) the M94
+   v1 implementation in :mod:`ttio.codecs.fqzcomp_nx16`. M94.Z follows the
+   CRAM 3.1 ``rANS-Nx16`` discipline:
+
+   * **Static-per-block** frequency tables (built in a forward pre-pass
+     over the input, normalised once to ``T = 4096``, held constant for
+     the entire block).
+   * **L = 2^15**, **B = 16** (16-bit renormalisation chunks),
+     ``b·L = 2^31``.
+   * **N = 4** interleaved rANS states.
+   * **Bit-pack context** (CRAM-style) — no SplitMix64 hash. Layout:
+     12 bits ``prev_q`` | 2 bits position bucket | 1 bit revcomp.
+
+   The wire-format magic is ``M94Z`` (replaces M94 v1's ``FQZN``).
+
+   This is the **pure-Python prototype** for byte-exact algorithm
+   validation. Cython acceleration is a follow-on phase (M94.Z.2).
+
+   Spec: ``docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md``.
+
+   Public API:
+       encode(qualities, read_lengths, revcomp_flags, *, params=None) -> bytes
+       decode_with_metadata(blob, revcomp_flags=None) -> (qualities, read_lengths, revcomp_flags_used)
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.fqzcomp_nx16_z.L
+   ttio.codecs.fqzcomp_nx16_z.B_BITS
+   ttio.codecs.fqzcomp_nx16_z.B
+   ttio.codecs.fqzcomp_nx16_z.T
+   ttio.codecs.fqzcomp_nx16_z.T_BITS
+   ttio.codecs.fqzcomp_nx16_z.NUM_STREAMS
+   ttio.codecs.fqzcomp_nx16_z.X_MAX_PREFACTOR
+   ttio.codecs.fqzcomp_nx16_z.MAGIC
+   ttio.codecs.fqzcomp_nx16_z.VERSION
+   ttio.codecs.fqzcomp_nx16_z.VERSION_V2_NATIVE
+   ttio.codecs.fqzcomp_nx16_z.VERSION_V3_ADAPTIVE
+   ttio.codecs.fqzcomp_nx16_z.VERSION_V4_FQZCOMP
+   ttio.codecs.fqzcomp_nx16_z.ADAPTIVE_STEP
+   ttio.codecs.fqzcomp_nx16_z.ADAPTIVE_T_MAX
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.codecs.fqzcomp_nx16_z.ContextParams
+   ttio.codecs.fqzcomp_nx16_z.CodecHeader
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.fqzcomp_nx16_z.position_bucket_pbits
+   ttio.codecs.fqzcomp_nx16_z.m94z_context
+   ttio.codecs.fqzcomp_nx16_z.normalise_to_total
+   ttio.codecs.fqzcomp_nx16_z.cumulative
+   ttio.codecs.fqzcomp_nx16_z.get_backend_name
+   ttio.codecs.fqzcomp_nx16_z.encode
+   ttio.codecs.fqzcomp_nx16_z.decode_with_metadata
+
+
+Module Contents
+---------------
+
+.. py:data:: L
+   :type:  int
+   :value: 32768
+
+
+.. py:data:: B_BITS
+   :type:  int
+   :value: 16
+
+
+.. py:data:: B
+   :type:  int
+   :value: 65536
+
+
+.. py:data:: T
+   :type:  int
+   :value: 4096
+
+
+.. py:data:: T_BITS
+   :type:  int
+   :value: 12
+
+
+.. py:data:: NUM_STREAMS
+   :type:  int
+   :value: 4
+
+
+.. py:data:: X_MAX_PREFACTOR
+   :type:  int
+   :value: 524288
+
+
+.. py:data:: MAGIC
+   :value: b'M94Z'
+
+
+.. py:data:: VERSION
+   :value: 1
+
+
+.. py:data:: VERSION_V2_NATIVE
+   :value: 2
+
+
+.. py:data:: VERSION_V3_ADAPTIVE
+   :value: 3
+
+
+.. py:data:: VERSION_V4_FQZCOMP
+   :value: 4
+
+
+.. py:data:: ADAPTIVE_STEP
+   :type:  int
+   :value: 16
+
+
+.. py:data:: ADAPTIVE_T_MAX
+   :type:  int
+   :value: 65519
+
+
+.. py:class:: ContextParams
+
+   Bit-pack context parameters.
+
+   Default: qbits=12, pbits=2, dbits=0, sloc=14 → 16384-entry table.
+
+   Wire layout (8 bytes):
+       qbits   : uint8
+       pbits   : uint8
+       dbits   : uint8
+       sloc    : uint8
+       reserved: uint8[4] (must be 0)
+
+
+   .. py:attribute:: qbits
+      :type:  int
+      :value: 12
+
+
+
+   .. py:attribute:: pbits
+      :type:  int
+      :value: 2
+
+
+
+   .. py:attribute:: dbits
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: sloc
+      :type:  int
+      :value: 14
+
+
+
+.. py:function:: position_bucket_pbits(position: int, read_length: int, pbits: int) -> int
+
+   Coarse position-in-read bucket, 0..(2^pbits - 1).
+
+   Spec §4.2: ``min(2^pbits - 1, (pos * 2^pbits) // read_length)``.
+
+
+.. py:function:: m94z_context(prev_q: int, pos_bucket: int, revcomp: int, qbits: int = DEFAULT_QBITS, pbits: int = DEFAULT_PBITS, sloc: int = DEFAULT_SLOC) -> int
+
+   Bit-pack context vector to ``[0, 1<<sloc)``.
+
+   Per spec §4.2:
+       ctx = (prev_q & ((1<<qbits)-1))
+           | ((pos_bucket & ((1<<pbits)-1)) << qbits)
+           | ((revcomp & 1) << (qbits + pbits))
+       return ctx & ((1<<sloc) - 1)
+
+   With qbits=12, pbits=2, sloc=14: 12+2+1 = 15 bits, masked to 14.
+
+
+.. py:function:: normalise_to_total(raw_count: list[int], total: int = T) -> list[int]
+
+   Normalise ``raw_count[256]`` to a freq[256] summing exactly to ``total``.
+
+   Standard "scale-and-fix" algorithm:
+     1. If sum is 0, set freq[0] = total (degenerate convention).
+     2. Otherwise scale each non-zero count proportionally with rounding,
+        floor at 1 (so any present symbol stays encodable).
+     3. Adjust by walking the largest entries up/down until sum == total.
+
+   All deterministic integer math — no floats, no order ambiguity (we
+   pick the largest freq with the smallest symbol index for ties).
+
+
+.. py:function:: cumulative(freq: list[int]) -> list[int]
+
+   Return cum[0..256] where cum[s] = sum(freq[0:s]).
+
+
+.. py:class:: CodecHeader
+
+   M94.Z header (fields packed by ``pack_codec_header``).
+
+
+   .. py:attribute:: flags
+      :type:  int
+
+
+   .. py:attribute:: num_qualities
+      :type:  int
+
+
+   .. py:attribute:: num_reads
+      :type:  int
+
+
+   .. py:attribute:: rlt_compressed_len
+      :type:  int
+
+
+   .. py:attribute:: read_length_table
+      :type:  bytes
+
+
+   .. py:attribute:: context_params
+      :type:  ContextParams
+
+
+   .. py:attribute:: freq_tables_compressed
+      :type:  bytes
+
+
+   .. py:attribute:: state_init
+      :type:  tuple[int, int, int, int]
+
+
+.. py:function:: get_backend_name() -> str
+
+   Return the active inner-loop backend.
+
+   One of:
+       ``"native-<kernel>"``  e.g. ``"native-avx2"``  (libttio_rans available)
+       ``"cython"``           (Cython extension available)
+       ``"pure-python"``      (fallback)
+
+   Selection precedence is determined at module-import time. Note that
+   the V1 M94.Z encode/decode top-level functions currently always
+   dispatch via Cython/pure-Python regardless of native availability —
+   this introspector just reports the *highest tier loaded*. A V2-aware
+   encode/decode dispatch will use the native path in a follow-on task.
+
+
+.. py:function:: encode(qualities: bytes, read_lengths: list[int], revcomp_flags: list[int], *, v4_strategy_hint: int = -1, context_params: ContextParams | None = None, prefer_native: bool | None = None, prefer_v3: bool | None = None, prefer_v4: bool | None = None) -> bytes
+
+   Top-level M94.Z encoder — V4 (CRAM 3.1 fqzcomp_qual port) only.
+
+   v1.0 reset (Phase 2c): the V1 (pure-Python static rANS), V2
+   (native-body) and V3 (adaptive Range Coder) encoder paths were
+   removed. V4 is the only encoded version. The native libttio_rans
+   library is required.
+
+   Empty-run case: V4 native rejects n_qualities==0 (the htscodecs
+   fqzcomp_qual core requires at least one symbol); when there are
+   no qualities, the encoder returns a minimal V4-tagged blob with
+   a zero-length body so readers can still dispatch by version byte.
+
+   Args:
+       qualities: concatenated Phred quality byte stream.
+       read_lengths: per-read length list (sum must equal
+           len(qualities)).
+       revcomp_flags: parallel list of 0/1.
+       v4_strategy_hint: -1 = auto-tune (default), 0..4 = preset for
+           the V4 fqzcomp_qual encoder.
+       context_params, prefer_native, prefer_v3, prefer_v4: accepted
+           for backward-compatible call sites only — the encoder
+           always emits V4 in v1.0.
+
+   Returns:
+       On-wire byte stream tagged with version byte 4
+       (``VERSION_V4_FQZCOMP``).
+
+
+.. py:function:: decode_with_metadata(encoded: bytes, revcomp_flags: list[int] | None = None) -> tuple[bytes, list[int], list[int]]
+
+   Decode an M94.Z V4 blob.
+
+   v1.0 reset (Phase 2c): only V4 (CRAM 3.1 fqzcomp_qual port) is
+   decoded. The V1 (pure-Python static rANS), V2 (native-body) and
+   V3 (adaptive Range Coder) reader header dispatches were removed
+   — files written with those version bytes surface a clear
+   migration error pointing at V4.
+
+   ``revcomp_flags`` must match the encoder's trajectory; ``None``
+   is treated as all-zero by V4.
+
+

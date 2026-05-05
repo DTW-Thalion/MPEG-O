@@ -8,9 +8,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 project = "TTI-O Python"
-author = "DTW-Thalion"
-copyright = "2026, DTW-Thalion"
-release = "0.6.1"
+copyright = "2026, The Thalion Initiative"
+release = "1.0.0"
 
 extensions = [
     "sphinx.ext.napoleon",       # NumPy-style docstring rendering

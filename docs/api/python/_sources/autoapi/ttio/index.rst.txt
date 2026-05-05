@@ -20,11 +20,13 @@ Submodules
 
    /autoapi/ttio/access_policy/index
    /autoapi/ttio/acquisition_run/index
+   /autoapi/ttio/aligned_read/index
    /autoapi/ttio/analysis/index
    /autoapi/ttio/anonymization/index
    /autoapi/ttio/axis_descriptor/index
    /autoapi/ttio/chromatogram/index
    /autoapi/ttio/cipher_suite/index
+   /autoapi/ttio/codecs/index
    /autoapi/ttio/cv_param/index
    /autoapi/ttio/encoding_spec/index
    /autoapi/ttio/encryption/index
@@ -34,6 +36,9 @@ Submodules
    /autoapi/ttio/feature/index
    /autoapi/ttio/feature_flags/index
    /autoapi/ttio/fid/index
+   /autoapi/ttio/genomic/index
+   /autoapi/ttio/genomic_index/index
+   /autoapi/ttio/genomic_run/index
    /autoapi/ttio/identification/index
    /autoapi/ttio/importers/index
    /autoapi/ttio/instrument_config/index
@@ -67,6 +72,7 @@ Submodules
    /autoapi/ttio/uv_vis_spectrum/index
    /autoapi/ttio/value_range/index
    /autoapi/ttio/verifier/index
+   /autoapi/ttio/written_genomic_run/index
 
 
 Attributes
@@ -112,6 +118,10 @@ Classes
    ttio.FeatureFlags
    ttio.AcquisitionRun
    ttio.SpectrumIndex
+   ttio.AlignedRead
+   ttio.GenomicIndex
+   ttio.GenomicRun
+   ttio.WrittenGenomicRun
    ttio.MSImage
    ttio.RamanSpectrum
    ttio.IRSpectrum
@@ -125,11 +135,11 @@ Package Contents
 ----------------
 
 .. py:data:: __version__
-   :value: '1.1.1'
+   :value: '1.0.0'
 
 
 .. py:data:: FORMAT_VERSION
-   :value: '1.3'
+   :value: '1.0'
 
 
 .. py:class:: AcquisitionMode
@@ -296,8 +306,28 @@ Package Contents
 
 
 
-   .. py:attribute:: NAME_TOKENIZED
-      :value: 8
+   .. py:attribute:: DELTA_RANS_ORDER0
+      :value: 11
+
+
+
+   .. py:attribute:: FQZCOMP_NX16_Z
+      :value: 12
+
+
+
+   .. py:attribute:: MATE_INLINE_V2
+      :value: 13
+
+
+
+   .. py:attribute:: REF_DIFF_V2
+      :value: 14
+
+
+
+   .. py:attribute:: NAME_TOKENIZED_V2
+      :value: 15
 
 
 
@@ -404,6 +434,16 @@ Package Contents
 
    .. py:attribute:: UINT8
       :value: 6
+
+
+
+   .. py:attribute:: UINT16
+      :value: 7
+
+
+
+   .. py:attribute:: UINT64
+      :value: 9
 
 
 
@@ -2088,6 +2128,402 @@ Package Contents
       or an :class:`h5py.Group` (legacy). The h5py path is retained
       via ``_native_h5py`` so existing callers that dereferenced
       child groups with ``group["spectrum_index"]`` continue to work.
+
+
+
+.. py:class:: AlignedRead
+
+   One aligned sequencing read.
+
+
+   .. py:attribute:: read_name
+      :type:  str
+
+
+   .. py:attribute:: chromosome
+      :type:  str
+
+
+   .. py:attribute:: position
+      :type:  int
+
+
+   .. py:attribute:: mapping_quality
+      :type:  int
+
+
+   .. py:attribute:: cigar
+      :type:  str
+
+
+   .. py:attribute:: sequence
+      :type:  str
+
+
+   .. py:attribute:: qualities
+      :type:  bytes
+
+
+   .. py:attribute:: flags
+      :type:  int
+
+
+   .. py:attribute:: mate_chromosome
+      :type:  str
+
+
+   .. py:attribute:: mate_position
+      :type:  int
+
+
+   .. py:attribute:: template_length
+      :type:  int
+
+
+   .. py:property:: is_mapped
+      :type: bool
+
+
+
+   .. py:property:: is_paired
+      :type: bool
+
+
+
+   .. py:property:: is_reverse
+      :type: bool
+
+
+
+   .. py:property:: is_secondary
+      :type: bool
+
+
+
+   .. py:property:: is_supplementary
+      :type: bool
+
+
+
+   .. py:property:: read_length
+      :type: int
+
+
+
+.. py:class:: GenomicIndex
+
+   Parallel per-read arrays loaded eagerly at run open time.
+
+   Genomic analogue of :class:`SpectrumIndex`. The arrays map 1:1 to
+   the datasets under ``/study/genomic_runs/<name>/genomic_index/``
+   (M82). They are small (length = read_count) and cheap to hold in
+   memory; the heavy signal channels (sequences, qualities) remain
+   lazy on disk.
+
+   :param offsets: ``uint64`` byte offset of each read into the ``sequences`` and
+                   ``qualities`` signal channels.
+   :type offsets: numpy.ndarray
+   :param lengths: ``uint32`` read length in bases for each read.
+   :type lengths: numpy.ndarray
+   :param chromosomes: Reference sequence name (e.g. ``"chr1"``) for each read.
+                       Variable-length strings stored as a compound VL_BYTES dataset
+                       on disk; held as a Python list in memory.
+   :type chromosomes: list[str]
+   :param positions: ``int64`` 0-based mapping position for each read.
+   :type positions: numpy.ndarray
+   :param mapping_qualities: ``uint8`` mapping quality (Phred-scaled) for each read.
+   :type mapping_qualities: numpy.ndarray
+   :param flags: ``uint32`` SAM-style flags for each read. M82 uses UINT32 (not
+                 UINT16) to leave room for future extended flag bits beyond
+                 SAM's 12-bit range.
+   :type flags: numpy.ndarray
+
+   .. rubric:: Notes
+
+   API status: Provisional (M82.1). Disk read/write methods are
+   implemented in Task 6 of the M82.1 plan; until then they raise
+   :class:`NotImplementedError`.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOGenomicIndex`` (M82.2 — to be implemented) ·
+   Java: ``global.thalion.ttio.genomics.GenomicIndex`` (M82.3 — to
+   be implemented).
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: positions
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: mapping_qualities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: flags
+      :type:  numpy.ndarray
+
+
+   .. py:property:: count
+      :type: int
+
+
+
+   .. py:method:: indices_for_region(chromosome: str, start: int, end: int) -> list[int]
+
+      Return read indices on ``chromosome`` with start <= pos < end.
+
+
+
+   .. py:method:: indices_for_unmapped() -> list[int]
+
+      Return indices of unmapped reads (flag bit 0x4 set).
+
+
+
+   .. py:method:: indices_for_flag(flag_mask: int) -> list[int]
+
+      Return indices where ``(flags & flag_mask) != 0``.
+
+
+
+   .. py:method:: read(idx_group: ttio.providers.base.StorageGroup) -> GenomicIndex
+      :classmethod:
+
+
+      Load all columns from a ``genomic_index/`` StorageGroup.
+
+      Chromosomes are stored as a uint16 id column + compound name
+      lookup table (sibling datasets ``chromosome_ids`` and
+      ``chromosome_names``). ``offsets`` is never on disk in v1.0+
+      files — it's computed from ``cumsum(lengths)`` here.
+
+
+
+   .. py:method:: write(idx_group: ttio.providers.base.StorageGroup) -> None
+
+      Write all columns into ``idx_group``.
+
+      v1.0 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
+      (compound, one row per unique chromosome). Encounter-order id
+      assignment — first occurrence of a name gets the next unused
+      id. Cross-language byte-exact contract.
+
+      ``offsets`` is never written — readers derive from
+      ``cumsum(lengths)``.
+
+
+
+.. py:class:: GenomicRun
+
+   Lazy view over one /study/genomic_runs/<name>/ group.
+
+   The :class:`GenomicIndex` and run-level attributes are loaded eagerly
+   at :meth:`open` time so that ``len(gr)`` and region filtering are
+   cheap.  Signal channel datasets are opened lazily and cached on first
+   access.  Compound datasets (``cigars``, ``read_names``, ``mate_info``)
+   are read whole-dataset once and cached.
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  ttio.enums.AcquisitionMode
+
+
+   .. py:attribute:: modality
+      :type:  str
+
+
+   .. py:attribute:: reference_uri
+      :type:  str
+
+
+   .. py:attribute:: platform
+      :type:  str
+
+
+   .. py:attribute:: sample_name
+      :type:  str
+
+
+   .. py:attribute:: index
+      :type:  ttio.genomic_index.GenomicIndex
+
+
+   .. py:attribute:: group
+      :type:  ttio.providers.base.StorageGroup
+
+
+   .. py:attribute:: channel_names
+      :type:  list[str]
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[ttio.aligned_read.AlignedRead]
+
+
+   .. py:method:: provenance_chain() -> list
+
+      Return per-run provenance records in insertion order.
+
+      Closes the M91 read-side gap: until Phase 1 the lazy
+      ``GenomicRun`` view didn't expose provenance, so cross-
+      modality queries had to fall back to the ``sample_name``
+      attribute. Now both run types share the same accessor.
+
+      Reads from the ``<run>/provenance/steps`` compound dataset
+      written by :func:`spectral_dataset._write_genomic_run`.
+      Returns ``[]`` for runs that carry no provenance.
+
+
+
+   .. py:method:: __getitem__(i: int) -> ttio.aligned_read.AlignedRead
+
+
+   .. py:method:: reads_in_region(chromosome: str, start: int, end: int) -> list[ttio.aligned_read.AlignedRead]
+
+      Return reads on ``chromosome`` whose mapping position is in ``[start, end)``.
+
+      Note: filters by mapping position only, not by read end coordinate.
+      A read whose start lies outside the window but extends into it
+      will NOT be returned. Use SAM-style overlap semantics in a future
+      enhancement if needed.
+
+
+
+   .. py:method:: open(group, name: str) -> GenomicRun
+      :classmethod:
+
+
+      Open an existing genomic_runs/<name>/ group.
+
+      Mirrors :meth:`ttio.acquisition_run.AcquisitionRun.open`: the
+      caller resolves the child group before calling this classmethod.
+      The genomic index and run-level attributes are loaded eagerly;
+      signal channel datasets remain closed until first access.
+
+
+
+.. py:class:: WrittenGenomicRun
+
+   Data container for writing a genomic run via SpectralDataset.
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  int
+
+
+   .. py:attribute:: reference_uri
+      :type:  str
+
+
+   .. py:attribute:: platform
+      :type:  str
+
+
+   .. py:attribute:: sample_name
+      :type:  str
+
+
+   .. py:attribute:: positions
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: mapping_qualities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: flags
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: sequences
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: qualities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: cigars
+      :type:  list[str]
+
+
+   .. py:attribute:: read_names
+      :type:  list[str]
+
+
+   .. py:attribute:: mate_chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: mate_positions
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: template_lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: provenance_records
+      :type:  list[ttio.provenance.ProvenanceRecord]
+      :value: []
+
+
+
+   .. py:attribute:: signal_compression
+      :type:  str
+      :value: 'gzip'
+
+
+
+   .. py:attribute:: signal_codec_overrides
+      :type:  dict[str, ttio.enums.Compression]
+
+
+   .. py:attribute:: embed_reference
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: reference_chrom_seqs
+      :type:  dict[str, bytes] | None
+      :value: None
+
+
+
+   .. py:attribute:: external_reference_path
+      :type:  pathlib.Path | None
+      :value: None
 
 
 

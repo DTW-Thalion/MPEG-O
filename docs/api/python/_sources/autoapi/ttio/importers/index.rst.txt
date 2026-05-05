@@ -29,8 +29,11 @@ Submodules
 .. toctree::
    :maxdepth: 1
 
+   /autoapi/ttio/importers/bam/index
+   /autoapi/ttio/importers/bam_dump/index
    /autoapi/ttio/importers/bruker_tdf/index
    /autoapi/ttio/importers/bruker_tdf_cli/index
+   /autoapi/ttio/importers/cram/index
    /autoapi/ttio/importers/cv_term_mapper/index
    /autoapi/ttio/importers/import_result/index
    /autoapi/ttio/importers/imzml/index
@@ -38,6 +41,7 @@ Submodules
    /autoapi/ttio/importers/mzml/index
    /autoapi/ttio/importers/mztab/index
    /autoapi/ttio/importers/nmrml/index
+   /autoapi/ttio/importers/sam/index
    /autoapi/ttio/importers/thermo_raw/index
    /autoapi/ttio/importers/waters_masslynx/index
 

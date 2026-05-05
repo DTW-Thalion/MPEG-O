@@ -1,0 +1,80 @@
+ttio.codecs.mate_info_v2
+========================
+
+.. py:module:: ttio.codecs.mate_info_v2
+
+.. autoapi-nested-parse::
+
+   Python ctypes wrapper for mate_info v2 (CRAM-style inline mate-pair codec).
+
+   Spec: docs/superpowers/specs/2026-05-03-mate-info-v2-design.md
+
+   Encoded blob written as signal_channels/mate_info/inline_v2 uint8
+   dataset with @compression = 13 (MATE_INLINE_V2). Requires
+   TTIO_RANS_LIB_PATH to point at a built libttio_rans.so;
+   without it, HAVE_NATIVE_LIB is False and the writer falls back to
+   the v1 M82 compound layout.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.mate_info_v2.HAVE_NATIVE_LIB
+   ttio.codecs.mate_info_v2.ERR_PARAM
+   ttio.codecs.mate_info_v2.ERR_ALLOC
+   ttio.codecs.mate_info_v2.ERR_CORRUPT
+   ttio.codecs.mate_info_v2.ERR_RESERVED_MF
+   ttio.codecs.mate_info_v2.ERR_NS_LENGTH_MISMATCH
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.mate_info_v2.encode
+   ttio.codecs.mate_info_v2.decode
+
+
+Module Contents
+---------------
+
+.. py:data:: HAVE_NATIVE_LIB
+   :type:  bool
+
+.. py:data:: ERR_PARAM
+   :value: -1
+
+
+.. py:data:: ERR_ALLOC
+   :value: -2
+
+
+.. py:data:: ERR_CORRUPT
+   :value: -3
+
+
+.. py:data:: ERR_RESERVED_MF
+   :value: -4
+
+
+.. py:data:: ERR_NS_LENGTH_MISMATCH
+   :value: -5
+
+
+.. py:function:: encode(mate_chrom_ids: numpy.ndarray, mate_positions: numpy.ndarray, template_lengths: numpy.ndarray, own_chrom_ids: numpy.ndarray, own_positions: numpy.ndarray) -> bytes
+
+   Encode a mate triple to the inline_v2 blob.
+
+   All arrays must be 1-D and have the same length. Dtypes are
+   enforced via np.ascontiguousarray (will copy if input dtype differs).
+
+
+.. py:function:: decode(encoded: bytes, own_chrom_ids: numpy.ndarray, own_positions: numpy.ndarray, n_records: int) -> tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]
+
+   Decode an inline_v2 blob to (mate_chrom_ids, mate_positions, template_lengths).
+
+

@@ -1,0 +1,89 @@
+ttio.codecs.name_tokenizer_v2
+=============================
+
+.. py:module:: ttio.codecs.name_tokenizer_v2
+
+.. autoapi-nested-parse::
+
+   Python ctypes wrapper for NAME_TOKENIZED v2 (codec id 15).
+
+   Spec: docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.name_tokenizer_v2.HAVE_NATIVE_LIB
+   ttio.codecs.name_tokenizer_v2.ERR_PARAM
+   ttio.codecs.name_tokenizer_v2.ERR_CORRUPT
+   ttio.codecs.name_tokenizer_v2.ERR_NTV2_BAD_FLAG
+   ttio.codecs.name_tokenizer_v2.ERR_NTV2_POOL_OOB
+   ttio.codecs.name_tokenizer_v2.ERR_NTV2_BAD_K
+   ttio.codecs.name_tokenizer_v2.ERR_NTV2_DICT_OVERFLOW
+   ttio.codecs.name_tokenizer_v2.ERR_NTV2_BAD_VERSION
+   ttio.codecs.name_tokenizer_v2.ERR_NTV2_BAD_MAGIC
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.name_tokenizer_v2.encode
+   ttio.codecs.name_tokenizer_v2.decode
+   ttio.codecs.name_tokenizer_v2.get_backend_name
+
+
+Module Contents
+---------------
+
+.. py:data:: HAVE_NATIVE_LIB
+   :type:  bool
+
+.. py:data:: ERR_PARAM
+   :value: -1
+
+
+.. py:data:: ERR_CORRUPT
+   :value: -3
+
+
+.. py:data:: ERR_NTV2_BAD_FLAG
+   :value: -8
+
+
+.. py:data:: ERR_NTV2_POOL_OOB
+   :value: -9
+
+
+.. py:data:: ERR_NTV2_BAD_K
+   :value: -10
+
+
+.. py:data:: ERR_NTV2_DICT_OVERFLOW
+   :value: -11
+
+
+.. py:data:: ERR_NTV2_BAD_VERSION
+   :value: -12
+
+
+.. py:data:: ERR_NTV2_BAD_MAGIC
+   :value: -13
+
+
+.. py:function:: encode(names: list[str]) -> bytes
+
+   Encode names to NAME_TOKENIZED v2 wire format.
+
+
+.. py:function:: decode(blob: bytes) -> list[str]
+
+   Decode a NAME_TOKENIZED v2 wire format blob.
+
+
+.. py:function:: get_backend_name() -> str
+

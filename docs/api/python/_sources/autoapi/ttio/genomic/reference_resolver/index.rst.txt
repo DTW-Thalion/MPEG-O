@@ -1,0 +1,79 @@
+ttio.genomic.reference_resolver
+===============================
+
+.. py:module:: ttio.genomic.reference_resolver
+
+.. autoapi-nested-parse::
+
+   Reference resolver for the M93 REF_DIFF codec.
+
+   Lookup chain (per Q5c = hard error in the M93 design spec):
+
+       embedded /study/references/<uri>/ in the open .tio file
+           → external REF_PATH env var (or explicit external_reference_path=)
+           → RefMissingError (no partial decode).
+
+   The resolver yields a chromosome's full uppercase ACGTN bytes. The
+   encoded MD5 attribute on the embedded reference group is verified
+   against the ``expected_md5`` argument; mismatches raise
+   :class:`RefMissingError` rather than silently returning the wrong
+   sequence.
+
+   Cross-language: ObjC ``TTIOReferenceResolver``; Java
+   ``codecs.ReferenceResolver``.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.genomic.reference_resolver.RefMissingError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.genomic.reference_resolver.ReferenceResolver
+
+
+Module Contents
+---------------
+
+.. py:exception:: RefMissingError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Raised when a reference required for REF_DIFF decode cannot be resolved.
+
+   Per M93 design spec Q5c: hard error rather than partial decode.
+   Genomic data integrity is non-negotiable.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: ReferenceResolver(h5_file: h5py.File, external_reference_path: pathlib.Path | None = None)
+
+   Resolve a reference chromosome sequence for REF_DIFF decode.
+
+   Args:
+       h5_file: open ``h5py.File`` handle in read mode. The resolver
+           looks for ``/study/references/<uri>/`` as the primary source.
+       external_reference_path: optional explicit path to a FASTA file.
+           If unset, the ``REF_PATH`` environment variable is consulted.
+
+
+   .. py:method:: resolve(uri: str, expected_md5: bytes, chromosome: str) -> bytes
+
+      Return the chromosome's reference sequence as uppercase ACGTN bytes.
+
+      Raises:
+          RefMissingError: when the reference can't be found or its
+              MD5 doesn't match.
+
+
+

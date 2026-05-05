@@ -336,6 +336,42 @@ Module Contents
 
 
 
+   .. py:attribute:: chromosome
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: position
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mapping_quality
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: flags
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mate_position
+      :type:  int
+      :value: -1
+
+
+
+   .. py:attribute:: template_length
+      :type:  int
+      :value: 0
+
+
+
    .. py:method:: to_bytes() -> bytes
 
 

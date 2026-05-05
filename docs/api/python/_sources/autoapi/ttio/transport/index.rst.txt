@@ -158,6 +158,42 @@ Package Contents
 
 
 
+   .. py:attribute:: chromosome
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: position
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mapping_quality
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: flags
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mate_position
+      :type:  int
+      :value: -1
+
+
+
+   .. py:attribute:: template_length
+      :type:  int
+      :value: 0
+
+
+
    .. py:method:: to_bytes() -> bytes
 
 
@@ -408,6 +444,20 @@ Package Contents
 
       Walk ``dataset`` and emit the full packet sequence.
 
+      Spectral runs are emitted first (dataset_ids 1..N), then
+      genomic runs (dataset_ids N+1..N+M). M89.2 added the genomic
+      flow.
+
+
+
+   .. py:method:: write_genomic_run(*, dataset_id: int, name: str, run) -> None
+
+      Write a single GenomicRun as a stream segment.
+
+      Used by callers that drive emission manually (multiplexed
+      streams, M89.4). The dataset header + AUs + end-of-dataset
+      are emitted; the caller is responsible for stream framing.
+
 
 
 .. py:function:: file_to_transport(ttio_path: str | pathlib.Path, output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False) -> None
@@ -474,6 +524,24 @@ Package Contents
 
 
    .. py:attribute:: max_au
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: chromosome
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: position_min
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: position_max
       :type:  int | None
       :value: None
 

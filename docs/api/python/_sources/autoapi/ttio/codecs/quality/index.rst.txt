@@ -1,0 +1,136 @@
+ttio.codecs.quality
+===================
+
+.. py:module:: ttio.codecs.quality
+
+.. autoapi-nested-parse::
+
+   QUALITY_BINNED genomic quality-score codec — Illumina-8 bin table.
+
+   Clean-room implementation. The 8-bin Phred quantisation table used
+   here ("Illumina-8 / CRUMBLE-style") is documented in many published
+   sources — Illumina's reduced-representation guidance, James
+   Bonfield's CRUMBLE paper (Bioinformatics 2019), HTSlib's
+   ``qual_quants`` field, NCBI SRA's ``lossy.sra`` quality binning.
+   **No htslib, no CRUMBLE, no SRA toolkit source consulted at any
+   point.** The 4-bit packing geometry is the natural choice for an
+   8-bin index alphabet and is not derived from any reference.
+
+   Cross-language equivalents:
+       Objective-C: TTIOQuality (objc/Source/Codecs/TTIOQuality.{h,m})
+       Java:        global.thalion.ttio.codecs.Quality
+
+   Wire format (big-endian throughout, self-contained):
+
+       Offset      Size  Field
+       ──────      ────  ──────────────────────────────────────────
+       0           1     version            (0x00)
+       1           1     scheme_id          (0x00 = "illumina-8")
+       2           4     original_length    (uint32 BE)
+       6           var   packed_indices     (ceil(original_length / 2) bytes)
+
+   Total length = ``6 + ((original_length + 1) >> 1)`` bytes.
+
+   Bin table (Illumina-8; binding decisions §91, §92):
+
+       Bin  Phred range   Centre
+       ───  ───────────   ──────
+        0       0..1         0
+        1       2..9         5
+        2      10..19       15
+        3      20..24       22
+        4      25..29       27
+        5      30..34       32
+        6      35..39       37
+        7     40..255       40    (saturates; binding decision §93)
+
+   Bit order within byte is **big-endian** (binding decision §95) — the
+   first input quality occupies the high nibble of its body byte. The
+   padding bits in the final body byte (when ``len(input) % 2 != 0``)
+   are zero (binding decision §96); the decoder uses
+   ``original_length`` to know how many indices to consume.
+
+   Lossy round-trip (binding decision §97):
+   ``decode(encode(x)) == bin_centre[bin_of[x]]``, NOT ``x``. For an
+   input byte that's already a bin centre (0/5/15/22/27/32/37/40),
+   round-trip is byte-exact. For other Phred values, round-trip
+   produces the bin centre for that value's bin.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.quality.VERSION
+   ttio.codecs.quality.SCHEME_ILLUMINA_8
+   ttio.codecs.quality.HEADER_LEN
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.quality.encode
+   ttio.codecs.quality.decode
+
+
+Module Contents
+---------------
+
+.. py:data:: VERSION
+   :type:  int
+   :value: 0
+
+
+.. py:data:: SCHEME_ILLUMINA_8
+   :type:  int
+   :value: 0
+
+
+.. py:data:: HEADER_LEN
+   :type:  int
+   :value: 6
+
+
+.. py:function:: encode(data: bytes) -> bytes
+
+   Encode ``data`` (Phred score bytes) using QUALITY_BINNED.
+
+   Maps each input byte through the Illumina-8 bin table, packs
+   bin indices 4-bits-per-index (big-endian within byte: first
+   input quality in the high nibble). Returns a self-contained byte
+   string per the wire format in this module's docstring
+   (HANDOFF.md M85 §3).
+
+   Lossy: round-trip via bin centres.
+   ``decode(encode(x)) == bin_centre[bin_of[x]]`` for each byte x.
+
+   :param data: Input bytes — Phred quality scores. Any byte value 0..255
+                is accepted; values > 40 saturate to bin 7 (centre 40).
+
+   :returns: *bytes* -- Encoded stream of length ``6 + ((len(data) + 1) >> 1)``.
+
+
+.. py:function:: decode(encoded: bytes) -> bytes
+
+   Decode a stream produced by :func:`encode`.
+
+   Reads the header, unpacks the 4-bit bin indices from the body,
+   maps each through the bin-centre table to produce output Phred
+   bytes. Validates strictly: the version byte, the scheme_id, and
+   the total stream length against ``original_length``.
+
+   :param encoded: Encoded stream as produced by :func:`encode`.
+
+   :returns: *bytes* -- Output Phred bytes of length ``original_length``. Each byte
+             is the bin centre for the corresponding input byte's bin
+             (lossy by construction — binding decision §97).
+
+   :raises ValueError: If the stream is shorter than the 6-byte header, has a bad
+       version byte, has a bad scheme_id, or has a body length
+       that doesn't match ``ceil(original_length / 2)``.
+
+

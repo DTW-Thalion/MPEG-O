@@ -1,0 +1,133 @@
+ttio.written_genomic_run
+========================
+
+.. py:module:: ttio.written_genomic_run
+
+.. autoapi-nested-parse::
+
+   WrittenGenomicRun — write-side container for a single genomic run.
+
+   Passed to :meth:`ttio.spectral_dataset.SpectralDataset.write_minimal`
+   via the ``genomic_runs`` parameter. Genomic analogue of
+   :class:`ttio.spectral_dataset.WrittenRun`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.written_genomic_run.WrittenGenomicRun
+
+
+Module Contents
+---------------
+
+.. py:class:: WrittenGenomicRun
+
+   Data container for writing a genomic run via SpectralDataset.
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  int
+
+
+   .. py:attribute:: reference_uri
+      :type:  str
+
+
+   .. py:attribute:: platform
+      :type:  str
+
+
+   .. py:attribute:: sample_name
+      :type:  str
+
+
+   .. py:attribute:: positions
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: mapping_qualities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: flags
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: sequences
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: qualities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: cigars
+      :type:  list[str]
+
+
+   .. py:attribute:: read_names
+      :type:  list[str]
+
+
+   .. py:attribute:: mate_chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: mate_positions
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: template_lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: provenance_records
+      :type:  list[ttio.provenance.ProvenanceRecord]
+      :value: []
+
+
+
+   .. py:attribute:: signal_compression
+      :type:  str
+      :value: 'gzip'
+
+
+
+   .. py:attribute:: signal_codec_overrides
+      :type:  dict[str, ttio.enums.Compression]
+
+
+   .. py:attribute:: embed_reference
+      :type:  bool
+      :value: False
+
+
+
+   .. py:attribute:: reference_chrom_seqs
+      :type:  dict[str, bytes] | None
+      :value: None
+
+
+
+   .. py:attribute:: external_reference_path
+      :type:  pathlib.Path | None
+      :value: None
+
+
+
