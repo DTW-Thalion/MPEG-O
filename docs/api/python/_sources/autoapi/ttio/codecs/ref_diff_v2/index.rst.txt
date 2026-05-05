@@ -1,0 +1,87 @@
+ttio.codecs.ref_diff_v2
+=======================
+
+.. py:module:: ttio.codecs.ref_diff_v2
+
+.. autoapi-nested-parse::
+
+   Python ctypes wrapper for ref_diff v2 (CRAM-style sequence diff codec).
+
+   Spec: docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md
+
+   Encoded blob written as ``signal_channels/sequences/refdiff_v2`` uint8
+   dataset with ``@compression = 14`` (REF_DIFF_V2). Requires
+   ``TTIO_RANS_LIB_PATH`` to point at a built ``libttio_rans.so``;
+   without it, ``HAVE_NATIVE_LIB`` is False and v2 write/read is
+   disabled.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.codecs.ref_diff_v2.HAVE_NATIVE_LIB
+   ttio.codecs.ref_diff_v2.ERR_PARAM
+   ttio.codecs.ref_diff_v2.ERR_ALLOC
+   ttio.codecs.ref_diff_v2.ERR_CORRUPT
+   ttio.codecs.ref_diff_v2.ERR_ESC_LENGTH_MISMATCH
+   ttio.codecs.ref_diff_v2.ERR_RESERVED_ESC_STREAM
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.ref_diff_v2.encode
+   ttio.codecs.ref_diff_v2.decode
+   ttio.codecs.ref_diff_v2.parse_blob_header
+
+
+Module Contents
+---------------
+
+.. py:data:: HAVE_NATIVE_LIB
+   :type:  bool
+
+.. py:data:: ERR_PARAM
+   :value: -1
+
+
+.. py:data:: ERR_ALLOC
+   :value: -2
+
+
+.. py:data:: ERR_CORRUPT
+   :value: -3
+
+
+.. py:data:: ERR_ESC_LENGTH_MISMATCH
+   :value: -6
+
+
+.. py:data:: ERR_RESERVED_ESC_STREAM
+   :value: -7
+
+
+.. py:function:: encode(sequences: numpy.ndarray, offsets: numpy.ndarray, positions: numpy.ndarray, cigar_strings: list[str], reference: bytes, reference_md5: bytes, reference_uri: str, reads_per_slice: int = 10000) -> bytes
+
+   Encode a slice of reads to the refdiff_v2 blob.
+
+
+.. py:function:: decode(encoded: bytes, positions: numpy.ndarray, cigar_strings: list[str], reference: bytes, n_reads: int, total_bases: int) -> tuple[numpy.ndarray, numpy.ndarray]
+
+   Decode a refdiff_v2 blob to (sequences, offsets).
+
+   Returns (out_sequences[total_bases] uint8, out_offsets[n_reads+1] uint64).
+
+
+.. py:function:: parse_blob_header(encoded: bytes) -> _BlobHeader
+
+   Parse the reference_uri and reference_md5 from a refdiff_v2 outer header.
+
+   Raises ValueError on a corrupt or truncated blob.
+
+

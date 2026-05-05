@@ -24,6 +24,7 @@ Submodules
    /autoapi/ttio/protocols/encryptable/index
    /autoapi/ttio/protocols/indexable/index
    /autoapi/ttio/protocols/provenanceable/index
+   /autoapi/ttio/protocols/run/index
    /autoapi/ttio/protocols/streamable/index
 
 
@@ -36,6 +37,7 @@ Classes
    ttio.protocols.Encryptable
    ttio.protocols.Indexable
    ttio.protocols.Provenanceable
+   ttio.protocols.Run
    ttio.protocols.Streamable
 
 
@@ -261,6 +263,69 @@ Package Contents
 
 
    .. py:method:: output_entities() -> list[str]
+
+
+.. py:class:: Run
+
+   Bases: :py:obj:`Protocol`
+
+
+   Common surface shared by every run type (MS, NMR, FID,
+   MSImage, Genomic).
+
+   .. attribute:: name
+
+      Run identifier as stored in the .tio file (e.g.
+      ``"run_0001"`` or ``"genomic_0001"``).
+
+      :type: str
+
+   .. attribute:: acquisition_mode
+
+      Acquisition mode enum value identifying the instrument /
+      protocol context.
+
+      :type: AcquisitionMode
+
+   .. method:: __len__() -> int
+
+      Number of measurements in the run.
+
+   .. method:: __iter__() -> Iterator
+
+      Yield each measurement in storage order. The yielded type
+      is modality-specific (Spectrum / AlignedRead).
+
+   .. method:: __getitem__(i: int)
+
+      Return the i-th measurement. Negative indices count from
+      the end. Raises IndexError on out-of-bounds.
+
+   .. method:: provenance_chain() -> list[ProvenanceRecord]
+
+      Return the per-run provenance records in insertion order.
+      Empty list when the run has no provenance attached.
+      
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  ttio.enums.AcquisitionMode
+
+
+   .. py:method:: __len__() -> int
+
+
+   .. py:method:: __iter__() -> Iterator[Any]
+
+
+   .. py:method:: __getitem__(i: int) -> Any
+
+
+   .. py:method:: provenance_chain() -> list[ttio.provenance.ProvenanceRecord]
 
 
 .. py:class:: Streamable

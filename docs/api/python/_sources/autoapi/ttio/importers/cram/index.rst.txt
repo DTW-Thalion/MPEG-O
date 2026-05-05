@@ -1,0 +1,83 @@
+ttio.importers.cram
+===================
+
+.. py:module:: ttio.importers.cram
+
+.. autoapi-nested-parse::
+
+   CRAM importer — M88.
+
+   Reads CRAM (CRAM Reference-compressed Alignment Map) files via the
+   user-installed ``samtools`` binary as a subprocess. Subclasses
+   :class:`~ttio.importers.bam.BamReader` and reuses its SAM-text
+   parsing path: the only difference is that ``samtools view`` for CRAM
+   input requires a ``--reference <fasta>`` argument so the reference-
+   compressed sequence bytes can be reconstituted.
+
+   CRAM is the modern reference-compressed sequencing format used by
+   the 1000 Genomes Project, GA4GH RefGet workflows, and clinical
+   pipelines that need ~50% smaller files than BAM. Per Binding
+   Decision §139 the reference FASTA is a positional constructor
+   argument; no env-var fallback, no RefGet HTTP support in v0.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOCramReader`` · Java:
+   ``global.thalion.ttio.importers.CramReader``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.cram.CramReader
+
+
+Module Contents
+---------------
+
+.. py:class:: CramReader(path: str | os.PathLike[str], reference_fasta: str | os.PathLike[str])
+
+   Bases: :py:obj:`ttio.importers.bam.BamReader`
+
+
+   Read a CRAM file via the ``samtools view`` subprocess.
+
+   :param path: Filesystem path to a CRAM file.
+   :type path: str or :class:`pathlib.Path`
+   :param reference_fasta: Filesystem path to the reference FASTA against which the CRAM
+                           was aligned. Required (Binding Decision §139); CRAM is a
+                           reference-compressed format and cannot be decoded without it.
+                           samtools auto-builds a ``.fai`` index alongside the FASTA on
+                           first use if one isn't already present.
+   :type reference_fasta: str or :class:`pathlib.Path`
+
+   .. rubric:: Notes
+
+   The ``samtools`` binary is a runtime dependency, not a build
+   dependency. Construction succeeds without samtools on PATH;
+   :meth:`to_genomic_run` raises
+   :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
+   cannot be located at first use (Binding Decision §135 from M87).
+
+
+   .. py:property:: reference_fasta
+      :type: pathlib.Path
+
+
+
+   .. py:method:: to_genomic_run(name: str = 'genomic_0001', region: str | None = None, sample_name: str | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
+
+      Read the CRAM and return a :class:`WrittenGenomicRun`.
+
+      Identical semantics to
+      :meth:`~ttio.importers.bam.BamReader.to_genomic_run` except
+      that the underlying ``samtools view`` invocation includes
+      ``--reference <reference_fasta>``.
+
+
+

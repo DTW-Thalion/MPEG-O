@@ -469,12 +469,13 @@ Module Contents
 
    Write ``chromatograms`` under ``<run>/chromatograms/``.
 
-   Does nothing when the list is empty so v0.3 readers continue to see
-   the absence of the group. v0.9 M64.5: the ``run_group`` argument
+   Does nothing when the list is empty. The ``run_group`` argument
    accepts either an ``h5py.Group`` or a
-   :class:`~ttio.providers.base.StorageGroup`. The HDF5 path keeps
-   the legacy byte layout; non-HDF5 providers route through
-   :meth:`StorageGroup.create_dataset` so the same logical data lands
-   in Memory / SQLite / Zarr backends.
+   :class:`~ttio.providers.base.StorageGroup`; non-HDF5 providers
+   route through :meth:`StorageGroup.create_dataset` so the same
+   logical data lands in Memory / SQLite / Zarr backends.
+
+   ``chromatogram_index/offsets`` is never written — readers derive
+   it from ``cumsum(lengths)``.
 
 

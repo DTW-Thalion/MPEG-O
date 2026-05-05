@@ -85,6 +85,20 @@ Module Contents
 
       Walk ``dataset`` and emit the full packet sequence.
 
+      Spectral runs are emitted first (dataset_ids 1..N), then
+      genomic runs (dataset_ids N+1..N+M). M89.2 added the genomic
+      flow.
+
+
+
+   .. py:method:: write_genomic_run(*, dataset_id: int, name: str, run) -> None
+
+      Write a single GenomicRun as a stream segment.
+
+      Used by callers that drive emission manually (multiplexed
+      streams, M89.4). The dataset header + AUs + end-of-dataset
+      are emitted; the caller is responsible for stream framing.
+
 
 
 .. py:class:: TransportReader(source: BinaryIO | str | pathlib.Path)

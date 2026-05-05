@@ -583,6 +583,10 @@ Package Contents
    Return the full map of registered providers, loading entry
    points lazily on first call. Subsequent calls reuse the cache.
 
+   The optional zarr provider is NOT loaded by this function — it is
+   registered lazily via :func:`_try_register_zarr` only when a caller
+   requests the ``zarr`` scheme/name.
+
 
 .. py:function:: open_provider(path_or_url: str, *, provider: str | None = None, mode: str = 'r', **kwargs: Any) -> ttio.providers.base.StorageProvider
 

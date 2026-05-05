@@ -1,0 +1,95 @@
+ttio.exporters.bam
+==================
+
+.. py:module:: ttio.exporters.bam
+
+.. autoapi-nested-parse::
+
+   BAM exporter — M88.
+
+   Writes a :class:`~ttio.written_genomic_run.WrittenGenomicRun` to BAM
+   by formatting the in-memory parallel-array representation as SAM
+   text and piping that text via stdin to the user-installed
+   ``samtools`` binary (``samtools view -bS -``, optionally piped
+   through ``samtools sort -O bam``). Subprocess-only — no htslib
+   linkage; SAM line layout is from the public SAMv1 spec.
+
+   Quality byte encoding
+   ---------------------
+   M87's :class:`~ttio.importers.bam.BamReader` stores SAM's QUAL field
+   bytes verbatim into ``WrittenGenomicRun.qualities`` — i.e. the
+   buffer holds **ASCII Phred+33** characters (so a Phred-40 score is
+   stored as the byte value 73, the ASCII code for ``'I'``). This
+   writer mirrors that convention: each ``qualities[i]`` byte is
+   written directly as the SAM QUAL character with no arithmetic
+   adjustment. The pair is therefore lossless byte-for-byte across the
+   M87 read → M88 write round trip.
+
+   Cross-language note: ObjC and Java implementations must adopt the
+   same convention (store QUAL bytes verbatim on read; emit them
+   verbatim on write) so that conformance dumps match.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOBamWriter`` · Java:
+   ``global.thalion.ttio.exporters.BamWriter``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.exporters.bam.BamWriter
+
+
+Module Contents
+---------------
+
+.. py:class:: BamWriter(path: str | os.PathLike[str])
+
+   Write a :class:`~ttio.written_genomic_run.WrittenGenomicRun` to BAM.
+
+   :param path: Output BAM file path. The ``.bam`` extension is honoured by
+                samtools' file-format auto-detection (Gotcha §165).
+   :type path: str or :class:`pathlib.Path`
+
+   .. rubric:: Notes
+
+   The ``samtools`` binary is a runtime dependency. Construction
+   succeeds without samtools on PATH; :meth:`write` raises
+   :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
+   is missing at first call (Binding Decision §135 from M87).
+
+
+   .. py:property:: path
+      :type: pathlib.Path
+
+
+
+   .. py:method:: write(run: ttio.written_genomic_run.WrittenGenomicRun, provenance_records: list[ttio.provenance.ProvenanceRecord] | None = None, sort: bool = True) -> None
+
+      Serialise ``run`` to the configured output path.
+
+      :param run: The genomic-run container to write.
+      :type run: WrittenGenomicRun
+      :param provenance_records: Optional provenance records to inject as ``@PG`` header
+                                 lines. If ``None``, falls back to ``run.provenance_records``
+                                 so the most common Python-side call is one-arg. Java and
+                                 ObjC pass this explicitly because their
+                                 ``WrittenGenomicRun`` analogues don't carry provenance.
+      :type provenance_records: list[ProvenanceRecord] or None
+      :param sort: When ``True`` (the default per Binding Decision §137),
+                   pipes the SAM text through ``samtools sort -O bam`` so
+                   the output BAM is coordinate-sorted (the precondition
+                   most BAM consumers expect — IGV, GATK, ``samtools
+                   index``). When ``False``, output is written in the input
+                   ``run``'s read order and the ``@HD SO:`` tag is set to
+                   ``unsorted``.
+      :type sort: bool, default True
+
+
+

@@ -1,0 +1,142 @@
+ttio.genomic_index
+==================
+
+.. py:module:: ttio.genomic_index
+
+.. autoapi-nested-parse::
+
+   GenomicIndex — parallel per-read metadata for selective access.
+
+   Genomic analogue of :class:`ttio.acquisition_run.SpectrumIndex`. Loaded
+   eagerly when a :class:`ttio.genomic_run.GenomicRun` opens. Arrays have
+   length == read_count and are small enough to hold in memory; the heavy
+   signal channels (sequences, qualities) remain lazy on disk.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.genomic_index.GenomicIndex
+
+
+Module Contents
+---------------
+
+.. py:class:: GenomicIndex
+
+   Parallel per-read arrays loaded eagerly at run open time.
+
+   Genomic analogue of :class:`SpectrumIndex`. The arrays map 1:1 to
+   the datasets under ``/study/genomic_runs/<name>/genomic_index/``
+   (M82). They are small (length = read_count) and cheap to hold in
+   memory; the heavy signal channels (sequences, qualities) remain
+   lazy on disk.
+
+   :param offsets: ``uint64`` byte offset of each read into the ``sequences`` and
+                   ``qualities`` signal channels.
+   :type offsets: numpy.ndarray
+   :param lengths: ``uint32`` read length in bases for each read.
+   :type lengths: numpy.ndarray
+   :param chromosomes: Reference sequence name (e.g. ``"chr1"``) for each read.
+                       Variable-length strings stored as a compound VL_BYTES dataset
+                       on disk; held as a Python list in memory.
+   :type chromosomes: list[str]
+   :param positions: ``int64`` 0-based mapping position for each read.
+   :type positions: numpy.ndarray
+   :param mapping_qualities: ``uint8`` mapping quality (Phred-scaled) for each read.
+   :type mapping_qualities: numpy.ndarray
+   :param flags: ``uint32`` SAM-style flags for each read. M82 uses UINT32 (not
+                 UINT16) to leave room for future extended flag bits beyond
+                 SAM's 12-bit range.
+   :type flags: numpy.ndarray
+
+   .. rubric:: Notes
+
+   API status: Provisional (M82.1). Disk read/write methods are
+   implemented in Task 6 of the M82.1 plan; until then they raise
+   :class:`NotImplementedError`.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOGenomicIndex`` (M82.2 — to be implemented) ·
+   Java: ``global.thalion.ttio.genomics.GenomicIndex`` (M82.3 — to
+   be implemented).
+
+
+   .. py:attribute:: offsets
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: lengths
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: positions
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: mapping_qualities
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: flags
+      :type:  numpy.ndarray
+
+
+   .. py:property:: count
+      :type: int
+
+
+
+   .. py:method:: indices_for_region(chromosome: str, start: int, end: int) -> list[int]
+
+      Return read indices on ``chromosome`` with start <= pos < end.
+
+
+
+   .. py:method:: indices_for_unmapped() -> list[int]
+
+      Return indices of unmapped reads (flag bit 0x4 set).
+
+
+
+   .. py:method:: indices_for_flag(flag_mask: int) -> list[int]
+
+      Return indices where ``(flags & flag_mask) != 0``.
+
+
+
+   .. py:method:: read(idx_group: ttio.providers.base.StorageGroup) -> GenomicIndex
+      :classmethod:
+
+
+      Load all columns from a ``genomic_index/`` StorageGroup.
+
+      Chromosomes are stored as a uint16 id column + compound name
+      lookup table (sibling datasets ``chromosome_ids`` and
+      ``chromosome_names``). ``offsets`` is never on disk in v1.0+
+      files — it's computed from ``cumsum(lengths)`` here.
+
+
+
+   .. py:method:: write(idx_group: ttio.providers.base.StorageGroup) -> None
+
+      Write all columns into ``idx_group``.
+
+      v1.0 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
+      (compound, one row per unique chromosome). Encounter-order id
+      assignment — first occurrence of a name gets the next unused
+      id. Cross-language byte-exact contract.
+
+      ``offsets`` is never written — readers derive from
+      ``cumsum(lengths)``.
+
+
+

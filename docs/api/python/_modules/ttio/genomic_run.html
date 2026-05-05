@@ -1,0 +1,1277 @@
+<!doctype html>
+<html class="no-js" lang="en" data-content_root="../../">
+  <head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="light dark"><link rel="index" title="Index" href="../../genindex.html"><link rel="search" title="Search" href="../../search.html">
+
+    <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
+        <title>ttio.genomic_run - TTI-O Python API</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=d111a655" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo.css?v=7bdb33bb" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../_static/styles/furo-extensions.css?v=8dab3a3b" />
+    
+    
+
+
+<style>
+  body {
+    --color-code-background: #f2f2f2;
+  --color-code-foreground: #1e1e1e;
+  
+  }
+  @media not print {
+    body[data-theme="dark"] {
+      --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+    }
+    @media (prefers-color-scheme: dark) {
+      body:not([data-theme="light"]) {
+        --color-code-background: #202020;
+  --color-code-foreground: #d0d0d0;
+  
+      }
+    }
+  }
+</style></head>
+  <body>
+    
+    <script>
+      document.body.dataset.theme = localStorage.getItem("theme") || "auto";
+    </script>
+    
+
+<svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+  <symbol id="svg-toc" viewBox="0 0 24 24">
+    <title>Contents</title>
+    <svg stroke="currentColor" fill="currentColor" stroke-width="0" viewBox="0 0 1024 1024">
+      <path d="M408 442h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8zm-8 204c0 4.4 3.6 8 8 8h480c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8H408c-4.4 0-8 3.6-8 8v56zm504-486H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zm0 632H120c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h784c4.4 0 8-3.6 8-8v-56c0-4.4-3.6-8-8-8zM115.4 518.9L271.7 642c5.8 4.6 14.4.5 14.4-6.9V388.9c0-7.4-8.5-11.5-14.4-6.9L115.4 505.1a8.74 8.74 0 0 0 0 13.8z"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-menu" viewBox="0 0 24 24">
+    <title>Menu</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-menu">
+      <line x1="3" y1="12" x2="21" y2="12"></line>
+      <line x1="3" y1="6" x2="21" y2="6"></line>
+      <line x1="3" y1="18" x2="21" y2="18"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-arrow-right" viewBox="0 0 24 24">
+    <title>Expand</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather-chevron-right">
+      <polyline points="9 18 15 12 9 6"></polyline>
+    </svg>
+  </symbol>
+  <symbol id="svg-sun" viewBox="0 0 24 24">
+    <title>Light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="feather-sun">
+      <circle cx="12" cy="12" r="5"></circle>
+      <line x1="12" y1="1" x2="12" y2="3"></line>
+      <line x1="12" y1="21" x2="12" y2="23"></line>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+      <line x1="1" y1="12" x2="3" y2="12"></line>
+      <line x1="21" y1="12" x2="23" y2="12"></line>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon" viewBox="0 0 24 24">
+    <title>Dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-moon">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z" />
+    </svg>
+  </symbol>
+  <symbol id="svg-sun-with-moon" viewBox="0 0 24 24">
+    <title>Auto light/dark, in light mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path style="opacity: 50%" d="M 5.411 14.504 C 5.471 14.504 5.532 14.504 5.591 14.504 C 3.639 16.319 4.383 19.569 6.931 20.352 C 7.693 20.586 8.512 20.551 9.25 20.252 C 8.023 23.207 4.056 23.725 2.11 21.184 C 0.166 18.642 1.702 14.949 4.874 14.536 C 5.051 14.512 5.231 14.5 5.411 14.5 L 5.411 14.504 Z"/>
+      <line x1="14.5" y1="3.25" x2="14.5" y2="1.25"/>
+      <line x1="14.5" y1="15.85" x2="14.5" y2="17.85"/>
+      <line x1="10.044" y1="5.094" x2="8.63" y2="3.68"/>
+      <line x1="19" y1="14.05" x2="20.414" y2="15.464"/>
+      <line x1="8.2" y1="9.55" x2="6.2" y2="9.55"/>
+      <line x1="20.8" y1="9.55" x2="22.8" y2="9.55"/>
+      <line x1="10.044" y1="14.006" x2="8.63" y2="15.42"/>
+      <line x1="19" y1="5.05" x2="20.414" y2="3.636"/>
+      <circle cx="14.5" cy="9.55" r="3.6"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-moon-with-sun" viewBox="0 0 24 24">
+    <title>Auto light/dark, in dark mode</title>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round"
+      class="icon-custom-derived-from-feather-sun-and-tabler-moon">
+      <path d="M 8.282 7.007 C 8.385 7.007 8.494 7.007 8.595 7.007 C 5.18 10.184 6.481 15.869 10.942 17.24 C 12.275 17.648 13.706 17.589 15 17.066 C 12.851 22.236 5.91 23.143 2.505 18.696 C -0.897 14.249 1.791 7.786 7.342 7.063 C 7.652 7.021 7.965 7 8.282 7 L 8.282 7.007 Z"/>
+      <line style="opacity: 50%" x1="18" y1="3.705" x2="18" y2="2.5"/>
+      <line style="opacity: 50%" x1="18" y1="11.295" x2="18" y2="12.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="4.816" x2="14.464" y2="3.964"/>
+      <line style="opacity: 50%" x1="20.711" y1="10.212" x2="21.563" y2="11.063"/>
+      <line style="opacity: 50%" x1="14.205" y1="7.5" x2="13.001" y2="7.5"/>
+      <line style="opacity: 50%" x1="21.795" y1="7.5" x2="23" y2="7.5"/>
+      <line style="opacity: 50%" x1="15.316" y1="10.184" x2="14.464" y2="11.036"/>
+      <line style="opacity: 50%" x1="20.711" y1="4.789" x2="21.563" y2="3.937"/>
+      <circle style="opacity: 50%" cx="18" cy="7.5" r="2.169"/>
+    </svg>
+  </symbol>
+  <symbol id="svg-pencil" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-pencil-code">
+      <path d="M4 20h4l10.5 -10.5a2.828 2.828 0 1 0 -4 -4l-10.5 10.5v4" />
+      <path d="M13.5 6.5l4 4" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+  <symbol id="svg-eye" viewBox="0 0 24 24">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="1" stroke-linecap="round" stroke-linejoin="round" class="icon-tabler-eye-code">
+      <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+      <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+      <path
+        d="M11.11 17.958c-3.209 -.307 -5.91 -2.293 -8.11 -5.958c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6c-.21 .352 -.427 .688 -.647 1.008" />
+      <path d="M20 21l2 -2l-2 -2" />
+      <path d="M17 17l-2 2l2 2" />
+    </svg>
+  </symbol>
+</svg>
+
+<input type="checkbox" class="sidebar-toggle" name="__navigation" id="__navigation" aria-label="Toggle site navigation sidebar">
+<input type="checkbox" class="sidebar-toggle" name="__toc" id="__toc" aria-label="Toggle table of contents sidebar">
+<label class="overlay sidebar-overlay" for="__navigation"></label>
+<label class="overlay toc-overlay" for="__toc"></label>
+
+<a class="skip-to-content muted-link" href="#furo-main-content">Skip to content</a>
+
+
+
+<div class="page">
+  <header class="mobile-header">
+    <div class="header-left">
+      <label class="nav-overlay-icon" for="__navigation">
+        <span class="icon"><svg><use href="#svg-menu"></use></svg></span>
+      </label>
+    </div>
+    <div class="header-center">
+      <a href="../../index.html"><div class="brand">TTI-O Python API</div></a>
+    </div>
+    <div class="header-right">
+      <div class="theme-toggle-container theme-toggle-header">
+        <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+          <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+          <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+          <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+          <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+        </button>
+      </div>
+      <label class="toc-overlay-icon toc-header-icon no-toc" for="__toc">
+        <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+      </label>
+    </div>
+  </header>
+  <aside class="sidebar-drawer">
+    <div class="sidebar-container">
+      
+      <div class="sidebar-sticky"><a class="sidebar-brand" href="../../index.html">
+  
+  <span class="sidebar-brand-text">TTI-O Python API</span>
+  
+</a><form class="sidebar-search-container" method="get" action="../../search.html" role="search">
+  <input class="sidebar-search" placeholder="Search" name="q" aria-label="Search">
+  <input type="hidden" name="check_keywords" value="yes">
+  <input type="hidden" name="area" value="default">
+</form>
+<div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
+  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+<ul>
+<li class="toctree-l1 has-children"><a class="reference internal" href="../../autoapi/ttio/index.html">ttio</a><input aria-label="Toggle navigation of ttio" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/access_policy/index.html">ttio.access_policy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/acquisition_run/index.html">ttio.acquisition_run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/aligned_read/index.html">ttio.aligned_read</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/analysis/index.html">ttio.analysis</a><input aria-label="Toggle navigation of ttio.analysis" class="toctree-checkbox" id="toctree-checkbox-2" name="toctree-checkbox-2" role="switch" type="checkbox"/><label for="toctree-checkbox-2"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/analysis/two_d_cos/index.html">ttio.analysis.two_d_cos</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/anonymization/index.html">ttio.anonymization</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/axis_descriptor/index.html">ttio.axis_descriptor</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/chromatogram/index.html">ttio.chromatogram</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/cipher_suite/index.html">ttio.cipher_suite</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/codecs/index.html">ttio.codecs</a><input aria-label="Toggle navigation of ttio.codecs" class="toctree-checkbox" id="toctree-checkbox-3" name="toctree-checkbox-3" role="switch" type="checkbox"/><label for="toctree-checkbox-3"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/base_pack/index.html">ttio.codecs.base_pack</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/delta_rans/index.html">ttio.codecs.delta_rans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/fqzcomp_nx16_z/index.html">ttio.codecs.fqzcomp_nx16_z</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/mate_info_v2/index.html">ttio.codecs.mate_info_v2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/name_tokenizer_v2/index.html">ttio.codecs.name_tokenizer_v2</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/quality/index.html">ttio.codecs.quality</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/rans/index.html">ttio.codecs.rans</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/codecs/ref_diff_v2/index.html">ttio.codecs.ref_diff_v2</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/cv_param/index.html">ttio.cv_param</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encoding_spec/index.html">ttio.encoding_spec</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encryption/index.html">ttio.encryption</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/encryption_per_au/index.html">ttio.encryption_per_au</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/enums/index.html">ttio.enums</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/bam/index.html">ttio.exporters.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/cram/index.html">ttio.exporters.cram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/imzml/index.html">ttio.exporters.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/isa/index.html">ttio.exporters.isa</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/mzml/index.html">ttio.exporters.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/mztab/index.html">ttio.exporters.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/feature/index.html">ttio.feature</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/feature_flags/index.html">ttio.feature_flags</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/fid/index.html">ttio.fid</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/genomic/index.html">ttio.genomic</a><input aria-label="Toggle navigation of ttio.genomic" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/genomic/reference_resolver/index.html">ttio.genomic.reference_resolver</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/genomic_index/index.html">ttio.genomic_index</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/genomic_run/index.html">ttio.genomic_run</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bam/index.html">ttio.importers.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bam_dump/index.html">ttio.importers.bam_dump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/cram/index.html">ttio.importers.cram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/imzml/index.html">ttio.importers.imzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/mzml/index.html">ttio.importers.mzml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/mztab/index.html">ttio.importers.mztab</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/sam/index.html">ttio.importers.sam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ir_image/index.html">ttio.ir_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ir_spectrum/index.html">ttio.ir_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/isolation_window/index.html">ttio.isolation_window</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/key_rotation/index.html">ttio.key_rotation</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/mass_spectrum/index.html">ttio.mass_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/ms_image/index.html">ttio.ms_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/nmr_2d/index.html">ttio.nmr_2d</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/pqc/index.html">ttio.pqc</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/indexable/index.html">ttio.protocols.indexable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/provenanceable/index.html">ttio.protocols.provenanceable</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/run/index.html">ttio.protocols.run</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/protocols/streamable/index.html">ttio.protocols.streamable</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/provenance/index.html">ttio.provenance</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/base/index.html">ttio.providers.base</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/hdf5/index.html">ttio.providers.hdf5</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/memory/index.html">ttio.providers.memory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/registry/index.html">ttio.providers.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/sqlite/index.html">ttio.providers.sqlite</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/providers/zarr/index.html">ttio.providers.zarr</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/quantification/index.html">ttio.quantification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/query/index.html">ttio.query</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/raman_image/index.html">ttio.raman_image</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/raman_spectrum/index.html">ttio.raman_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/signal_array/index.html">ttio.signal_array</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/signatures/index.html">ttio.signatures</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/spectral_dataset/index.html">ttio.spectral_dataset</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/spectrum/index.html">ttio.spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/stream_reader/index.html">ttio.stream_reader</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/stream_writer/index.html">ttio.stream_writer</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_encode_cli/index.html">ttio.tools.transport_encode_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/transport_server_cli/index.html">ttio.tools.transport_server_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/transition_list/index.html">ttio.transition_list</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../autoapi/ttio/transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/client/index.html">ttio.transport.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/codec/index.html">ttio.transport.codec</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/encrypted/index.html">ttio.transport.encrypted</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/packets/index.html">ttio.transport.packets</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/server/index.html">ttio.transport.server</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../autoapi/ttio/transport/simulator/index.html">ttio.transport.simulator</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/value_range/index.html">ttio.value_range</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/verifier/index.html">ttio.verifier</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../autoapi/ttio/written_genomic_run/index.html">ttio.written_genomic_run</a></li>
+</ul>
+</li>
+</ul>
+
+</div>
+</div>
+
+      </div>
+      
+    </div>
+  </aside>
+  <div class="main">
+    <div class="content">
+      <div class="article-container">
+        <a href="#" class="back-to-top muted-link">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+            <path d="M13 20h-2V8l-5.5 5.5-1.42-1.42L12 4.16l7.92 7.92-1.42 1.42L13 8v12z"></path>
+          </svg>
+          <span>Back to top</span>
+        </a>
+        <div class="content-icon-container">
+          <div class="theme-toggle-container theme-toggle-content">
+            <button class="theme-toggle" aria-label="Toggle Light / Dark / Auto color theme">
+              <svg class="theme-icon-when-auto-light"><use href="#svg-sun-with-moon"></use></svg>
+              <svg class="theme-icon-when-auto-dark"><use href="#svg-moon-with-sun"></use></svg>
+              <svg class="theme-icon-when-dark"><use href="#svg-moon"></use></svg>
+              <svg class="theme-icon-when-light"><use href="#svg-sun"></use></svg>
+            </button>
+          </div>
+          <label class="toc-overlay-icon toc-content-icon no-toc" for="__toc">
+            <span class="icon"><svg><use href="#svg-toc"></use></svg></span>
+          </label>
+        </div>
+        <article role="main" id="furo-main-content">
+          <h1>Source code for ttio.genomic_run</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;GenomicRun — lazy view over /study/genomic_runs/&lt;name&gt;/.</span>
+
+<span class="sd">Materialises :class:`ttio.aligned_read.AlignedRead` instances on demand</span>
+<span class="sd">from the signal channels stored under ``signal_channels/``.  The</span>
+<span class="sd">:class:`ttio.genomic_index.GenomicIndex` is loaded eagerly at open time</span>
+<span class="sd">for cheap filtering and offset lookups.</span>
+
+<span class="sd">Genomic analogue of :class:`ttio.acquisition_run.AcquisitionRun`.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span><span class="p">,</span> <span class="n">field</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Iterator</span><span class="p">,</span> <span class="n">TYPE_CHECKING</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">numpy</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">np</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.aligned_read</span><span class="w"> </span><span class="kn">import</span> <span class="n">AlignedRead</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.enums</span><span class="w"> </span><span class="kn">import</span> <span class="n">AcquisitionMode</span><span class="p">,</span> <span class="n">Compression</span><span class="p">,</span> <span class="n">Precision</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.genomic_index</span><span class="w"> </span><span class="kn">import</span> <span class="n">GenomicIndex</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.</span><span class="w"> </span><span class="kn">import</span> <span class="n">_hdf5_io</span> <span class="k">as</span> <span class="n">io</span>
+
+<span class="c1"># Hoist codec imports out of per-read accessor hot paths. Without</span>
+<span class="c1"># these, every per-read lazy decode call invokes</span>
+<span class="c1"># ``importlib._handle_fromlist`` — measured at ~6% of decode wall</span>
+<span class="c1"># (~9s on chr22) when these were inside the per-read methods.</span>
+<span class="c1">#</span>
+<span class="c1"># v1.0 reset (Phase 2c): the v1 ``name_tokenizer`` codec was removed.</span>
+<span class="c1"># The ULEB128 varint primitives (used by the cigars rANS schema-lift</span>
+<span class="c1"># reader to walk the length-prefix-concat byte stream) live in the</span>
+<span class="c1"># shared :mod:`ttio.codecs._varint` helper.</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.codecs.rans</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode</span> <span class="k">as</span> <span class="n">_rans_decode</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.codecs._varint</span><span class="w"> </span><span class="kn">import</span> <span class="n">varint_decode</span> <span class="k">as</span> <span class="n">_varint_decode</span>
+
+
+<span class="c1"># v1.6 (L4): _INTEGER_CHANNEL_DTYPES removed. The dict only ever</span>
+<span class="c1"># contained positions/flags/mapping_qualities, all dropped from</span>
+<span class="c1"># signal_channels/ in v1.6 — see docs/format-spec.md §10.7.</span>
+<span class="c1"># The companion _int_channel_array helper has been removed below.</span>
+
+<span class="k">if</span> <span class="n">TYPE_CHECKING</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.providers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">StorageGroup</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_wrap_hdf5_group</span><span class="p">(</span><span class="n">obj</span><span class="p">:</span> <span class="nb">object</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;StorageGroup&quot;</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Adapt an h5py.Group to a StorageGroup; pass-through for StorageGroup.&quot;&quot;&quot;</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.providers.base</span><span class="w"> </span><span class="kn">import</span> <span class="n">StorageGroup</span> <span class="k">as</span> <span class="n">_SG</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">_SG</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">obj</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">.providers.hdf5</span><span class="w"> </span><span class="kn">import</span> <span class="n">_Group</span> <span class="k">as</span> <span class="n">_Hdf5Group</span>
+    <span class="k">return</span> <span class="n">_Hdf5Group</span><span class="p">(</span><span class="n">obj</span><span class="p">)</span>  <span class="c1"># type: ignore[arg-type]</span>
+
+
+<span class="nd">@dataclass</span><span class="p">(</span><span class="n">slots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<div class="viewcode-block" id="GenomicRun">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">GenomicRun</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Lazy view over one /study/genomic_runs/&lt;name&gt;/ group.</span>
+
+<span class="sd">    The :class:`GenomicIndex` and run-level attributes are loaded eagerly</span>
+<span class="sd">    at :meth:`open` time so that ``len(gr)`` and region filtering are</span>
+<span class="sd">    cheap.  Signal channel datasets are opened lazily and cached on first</span>
+<span class="sd">    access.  Compound datasets (``cigars``, ``read_names``, ``mate_info``)</span>
+<span class="sd">    are read whole-dataset once and cached.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+<div class="viewcode-block" id="GenomicRun.name">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.name">[docs]</a>
+    <span class="n">name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GenomicRun.acquisition_mode">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.acquisition_mode">[docs]</a>
+    <span class="n">acquisition_mode</span><span class="p">:</span> <span class="n">AcquisitionMode</span></div>
+
+<div class="viewcode-block" id="GenomicRun.modality">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.modality">[docs]</a>
+    <span class="n">modality</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GenomicRun.reference_uri">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.reference_uri">[docs]</a>
+    <span class="n">reference_uri</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GenomicRun.platform">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.platform">[docs]</a>
+    <span class="n">platform</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GenomicRun.sample_name">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.sample_name">[docs]</a>
+    <span class="n">sample_name</span><span class="p">:</span> <span class="nb">str</span></div>
+
+<div class="viewcode-block" id="GenomicRun.index">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.index">[docs]</a>
+    <span class="n">index</span><span class="p">:</span> <span class="n">GenomicIndex</span></div>
+
+<div class="viewcode-block" id="GenomicRun.group">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.group">[docs]</a>
+    <span class="n">group</span><span class="p">:</span> <span class="s2">&quot;StorageGroup&quot;</span></div>
+
+<div class="viewcode-block" id="GenomicRun.channel_names">
+<a class="viewcode-back" href="../../autoapi/ttio/genomic_run/index.html#ttio.genomic_run.GenomicRun.channel_names">[docs]</a>
+    <span class="n">channel_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span>  <span class="c1"># populated for introspection / future tooling; not read by __getitem__</span></div>
+
+
+    <span class="n">_signal_cache</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="n">_compound_cache</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+    <span class="c1"># M86: lazy whole-channel decode cache for byte channels whose</span>
+    <span class="c1"># @compression attribute names a TTIO codec (rANS / BASE_PACK).</span>
+    <span class="c1"># Codec output is byte-stream non-sliceable, so the whole channel</span>
+    <span class="c1"># is decoded once on first access and the decoded buffer is</span>
+    <span class="c1"># sliced from memory thereafter (Binding Decision §89). Cache</span>
+    <span class="c1"># lifetime is the GenomicRun instance — re-opening the file</span>
+    <span class="c1"># incurs the decode cost again (Gotcha §101).</span>
+    <span class="n">_decoded_byte_channels</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># M86 Phase E: lazy decode cache for the read_names channel when</span>
+    <span class="c1"># it carries a NAME_TOKENIZED codec override. Held as a</span>
+    <span class="c1"># ``list[str]`` because the codec returns the decoded names</span>
+    <span class="c1"># already split into per-read entries (different value type from</span>
+    <span class="c1"># ``_decoded_byte_channels``, which holds raw concatenated</span>
+    <span class="c1"># bytes). Per Binding Decision §114 the two caches are kept</span>
+    <span class="c1"># separate. ``None`` until first access; when populated, the</span>
+    <span class="c1"># whole list is materialised in memory (a few hundred MB for</span>
+    <span class="c1"># 10M reads — acceptable for typical genomic workloads, see</span>
+    <span class="c1"># Gotcha §125).</span>
+    <span class="n">_decoded_read_names</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># M86 Phase C: lazy decode cache for the cigars channel when it</span>
+    <span class="c1"># carries a TTIO codec override (RANS_ORDER0 / RANS_ORDER1 /</span>
+    <span class="c1"># NAME_TOKENIZED). Held as a ``list[str]`` because all three</span>
+    <span class="c1"># codec paths produce per-read string entries — the rANS path</span>
+    <span class="c1"># walks varint-length-prefix entries inside the decoded byte</span>
+    <span class="c1"># buffer, and NAME_TOKENIZED returns ``list[str]`` directly.</span>
+    <span class="c1"># Per Binding Decision §123 (Option A from §2.3) this cache is</span>
+    <span class="c1"># **separate** from ``_decoded_read_names`` — the lower-risk</span>
+    <span class="c1"># choice that does not touch shipped Phase E code. A future</span>
+    <span class="c1"># generalisation (Option B) could fold both into a</span>
+    <span class="c1"># ``dict[str, list[str]]`` if a third list-of-strings channel</span>
+    <span class="c1"># appears. Cache lifetime is the GenomicRun instance (Gotcha</span>
+    <span class="c1"># §138).</span>
+    <span class="n">_decoded_cigars</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># M86 Phase F: combined per-field cache for the mate_info subgroup</span>
+    <span class="c1"># layout (Binding Decision §129, Gotcha §144). Held as a single</span>
+    <span class="c1"># ``dict[str, Any]`` keyed by field name (``&quot;chrom&quot;`` →</span>
+    <span class="c1"># list[str]; ``&quot;pos&quot;`` → np.ndarray int64; ``&quot;tlen&quot;`` →</span>
+    <span class="c1"># np.ndarray int32) because the three fields have three different</span>
+    <span class="c1"># value types — a typed-per-field cache would force a union or</span>
+    <span class="c1"># three separate fields. Used only for the Phase F subgroup</span>
+    <span class="c1"># layout; the M82 compound layout still uses the existing</span>
+    <span class="c1"># ``_compound_cache`` via :meth:`_compound`. ``_mate_&lt;field&gt;_at``</span>
+    <span class="c1"># populates the corresponding key on first access.</span>
+    <span class="n">_decoded_mate_info</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default_factory</span><span class="o">=</span><span class="nb">dict</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># Cached result of `_mate_info_is_subgroup()`. Without this, the</span>
+    <span class="c1"># method does an HDF5 link-type probe on every call, and the</span>
+    <span class="c1"># per-read decode path calls it 3x per read — at chr22 scale</span>
+    <span class="c1"># (1.77M reads) that&#39;s 5.3M redundant probes resolving to the</span>
+    <span class="c1"># same answer, dominating decode wall-time. None = not yet</span>
+    <span class="c1"># computed; True/False = cached result.</span>
+    <span class="n">_mate_info_subgroup_cached</span><span class="p">:</span> <span class="s2">&quot;bool | None&quot;</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># v1.8 #11: cached whole-sequence decode from the refdiff_v2 blob.</span>
+    <span class="c1"># None = not yet probed; b&quot;&quot; = probed and found to be v1/BASE_PACK;</span>
+    <span class="c1"># non-empty bytes = decoded concatenated sequence bytes (total_bases long).</span>
+    <span class="c1"># Populated on first access by _sequences_is_ref_diff_v2() +</span>
+    <span class="c1"># _decode_ref_diff_v2_sequences(). Cache lifetime = GenomicRun instance.</span>
+    <span class="n">_decoded_ref_diff_v2</span><span class="p">:</span> <span class="s2">&quot;bytes | None&quot;</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+    <span class="c1"># None = not yet probed; True/False = cached probe result.</span>
+    <span class="n">_sequences_is_v2_cached</span><span class="p">:</span> <span class="s2">&quot;bool | None&quot;</span> <span class="o">=</span> <span class="n">field</span><span class="p">(</span>
+        <span class="n">default</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="nb">repr</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span> <span class="n">compare</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+    <span class="p">)</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Sequence protocol</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="GenomicRun.__len__">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun.__len__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__len__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">count</span></div>
+
+
+<div class="viewcode-block" id="GenomicRun.__iter__">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun.__iter__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__iter__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Iterator</span><span class="p">[</span><span class="n">AlignedRead</span><span class="p">]:</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)):</span>
+            <span class="k">yield</span> <span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">]</span></div>
+
+
+<div class="viewcode-block" id="GenomicRun.provenance_chain">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun.provenance_chain">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">provenance_chain</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;list&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return per-run provenance records in insertion order.</span>
+
+<span class="sd">        Closes the M91 read-side gap: until Phase 1 the lazy</span>
+<span class="sd">        ``GenomicRun`` view didn&#39;t expose provenance, so cross-</span>
+<span class="sd">        modality queries had to fall back to the ``sample_name``</span>
+<span class="sd">        attribute. Now both run types share the same accessor.</span>
+
+<span class="sd">        Reads from the ``&lt;run&gt;/provenance/steps`` compound dataset</span>
+<span class="sd">        written by :func:`spectral_dataset._write_genomic_run`.</span>
+<span class="sd">        Returns ``[]`` for runs that carry no provenance.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="c1"># Use the h5py-native path through the StorageGroup wrapper.</span>
+        <span class="c1"># The provenance compound layout is identical to the MS path</span>
+        <span class="c1"># (see acquisition_run.AcquisitionRun.provenance) and is</span>
+        <span class="c1"># decoded by the same helper.</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.acquisition_run</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">_decode_provenance_compound</span><span class="p">,</span> <span class="n">_native_h5py</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">h5group</span> <span class="o">=</span> <span class="n">_native_h5py</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">Exception</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="n">h5group</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="p">[]</span>
+        <span class="k">if</span> <span class="s2">&quot;provenance&quot;</span> <span class="ow">in</span> <span class="n">h5group</span> <span class="ow">and</span> <span class="s2">&quot;steps&quot;</span> <span class="ow">in</span> <span class="n">h5group</span><span class="p">[</span><span class="s2">&quot;provenance&quot;</span><span class="p">]:</span>
+            <span class="k">return</span> <span class="n">_decode_provenance_compound</span><span class="p">(</span>
+                <span class="n">h5group</span><span class="p">[</span><span class="s2">&quot;provenance&quot;</span><span class="p">],</span> <span class="s2">&quot;steps&quot;</span><span class="p">,</span>
+            <span class="p">)</span>
+        <span class="k">return</span> <span class="p">[]</span></div>
+
+
+<div class="viewcode-block" id="GenomicRun.__getitem__">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun.__getitem__">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="fm">__getitem__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">AlignedRead</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">i</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">i</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">IndexError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;read index </span><span class="si">{</span><span class="n">i</span><span class="si">}</span><span class="s2"> out of range [0, </span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span><span class="si">}</span><span class="s2">)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">offset</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">offsets</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">lengths</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+        <span class="c1"># Per-read scalar fields come straight from the index.</span>
+        <span class="n">position</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">positions</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">mapq</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">mapping_qualities</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">flag</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">flags</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+        <span class="n">chrom</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">chromosomes</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="c1"># Sequence and qualities — read a slice of the per-base channels.</span>
+        <span class="c1"># M86: routed through _byte_channel_slice so that channels</span>
+        <span class="c1"># written with a TTIO codec override (@compression &gt; 0) are</span>
+        <span class="c1"># decoded transparently before slicing.</span>
+        <span class="n">seq_bytes</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_byte_channel_slice</span><span class="p">(</span><span class="s2">&quot;sequences&quot;</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">length</span><span class="p">)</span>
+        <span class="n">sequence</span> <span class="o">=</span> <span class="n">seq_bytes</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;ascii&quot;</span><span class="p">)</span>
+        <span class="n">qualities</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_byte_channel_slice</span><span class="p">(</span><span class="s2">&quot;qualities&quot;</span><span class="p">,</span> <span class="n">offset</span><span class="p">,</span> <span class="n">length</span><span class="p">)</span>
+
+        <span class="c1"># Compound / codec-lifted channels — dispatch on dataset</span>
+        <span class="c1"># shape (M86 Phases C and E). The compound path delegates</span>
+        <span class="c1"># to ``_compound`` (whole-dataset cached), the codec path</span>
+        <span class="c1"># decodes once and caches ``list[str]``.</span>
+        <span class="n">cigar</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cigar_at</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="n">read_name</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_name_at</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="c1"># M86 Phase F: dispatch on HDF5 link type (compound dataset =</span>
+        <span class="c1"># M82 path; subgroup = Phase F per-field path). The three</span>
+        <span class="c1"># helpers each open the bare ``mate_info`` link, detect the</span>
+        <span class="c1"># layout, and route to either the existing ``_compound``</span>
+        <span class="c1"># cache (M82) or the per-field codec/natural-dtype dispatch</span>
+        <span class="c1"># (Phase F).</span>
+        <span class="n">mate_chromosome</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_chrom_at</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="n">mate_position</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_pos_at</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+        <span class="n">template_length</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_tlen_at</span><span class="p">(</span><span class="n">i</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">AlignedRead</span><span class="p">(</span>
+            <span class="n">read_name</span><span class="o">=</span><span class="n">read_name</span><span class="p">,</span>
+            <span class="n">chromosome</span><span class="o">=</span><span class="n">chrom</span><span class="p">,</span>
+            <span class="n">position</span><span class="o">=</span><span class="n">position</span><span class="p">,</span>
+            <span class="n">mapping_quality</span><span class="o">=</span><span class="n">mapq</span><span class="p">,</span>
+            <span class="n">cigar</span><span class="o">=</span><span class="n">cigar</span><span class="p">,</span>
+            <span class="n">sequence</span><span class="o">=</span><span class="n">sequence</span><span class="p">,</span>
+            <span class="n">qualities</span><span class="o">=</span><span class="n">qualities</span><span class="p">,</span>
+            <span class="n">flags</span><span class="o">=</span><span class="n">flag</span><span class="p">,</span>
+            <span class="n">mate_chromosome</span><span class="o">=</span><span class="n">mate_chromosome</span><span class="p">,</span>
+            <span class="n">mate_position</span><span class="o">=</span><span class="n">mate_position</span><span class="p">,</span>
+            <span class="n">template_length</span><span class="o">=</span><span class="n">template_length</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Region query</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+<div class="viewcode-block" id="GenomicRun.reads_in_region">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun.reads_in_region">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">reads_in_region</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span> <span class="n">chromosome</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">start</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">end</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="n">AlignedRead</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return reads on ``chromosome`` whose mapping position is in ``[start, end)``.</span>
+
+<span class="sd">        Note: filters by mapping position only, not by read end coordinate.</span>
+<span class="sd">        A read whose start lies outside the window but extends into it</span>
+<span class="sd">        will NOT be returned. Use SAM-style overlap semantics in a future</span>
+<span class="sd">        enhancement if needed.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span>
+            <span class="bp">self</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">indices_for_region</span><span class="p">(</span><span class="n">chromosome</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>
+        <span class="p">]</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Factory</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="nd">@classmethod</span>
+<div class="viewcode-block" id="GenomicRun.open">
+<a class="viewcode-back" href="../../autoapi/ttio/index.html#ttio.genomic_run.GenomicRun.open">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">open</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">group</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;GenomicRun&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open an existing genomic_runs/&lt;name&gt;/ group.</span>
+
+<span class="sd">        Mirrors :meth:`ttio.acquisition_run.AcquisitionRun.open`: the</span>
+<span class="sd">        caller resolves the child group before calling this classmethod.</span>
+<span class="sd">        The genomic index and run-level attributes are loaded eagerly;</span>
+<span class="sd">        signal channel datasets remain closed until first access.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="n">sgroup</span> <span class="o">=</span> <span class="n">_wrap_hdf5_group</span><span class="p">(</span><span class="n">group</span><span class="p">)</span>
+
+        <span class="c1"># Eager: load the genomic index.</span>
+        <span class="n">idx_group</span> <span class="o">=</span> <span class="n">sgroup</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;genomic_index&quot;</span><span class="p">)</span>
+        <span class="n">index</span> <span class="o">=</span> <span class="n">GenomicIndex</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">idx_group</span><span class="p">)</span>
+
+        <span class="c1"># Eager: list signal channel names.</span>
+        <span class="n">sig</span> <span class="o">=</span> <span class="n">sgroup</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="n">channel_names</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">sig</span><span class="o">.</span><span class="n">child_names</span><span class="p">())</span>
+
+        <span class="c1"># Eager: run-level attributes written by _write_genomic_run.</span>
+        <span class="n">acq_mode_raw</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_int_attr</span><span class="p">(</span><span class="n">sgroup</span><span class="p">,</span> <span class="s2">&quot;acquisition_mode&quot;</span><span class="p">)</span>
+        <span class="n">modality</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">sgroup</span><span class="p">,</span> <span class="s2">&quot;modality&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">reference_uri</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">sgroup</span><span class="p">,</span> <span class="s2">&quot;reference_uri&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">platform</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">sgroup</span><span class="p">,</span> <span class="s2">&quot;platform&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+        <span class="n">sample_name</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_string_attr</span><span class="p">(</span><span class="n">sgroup</span><span class="p">,</span> <span class="s2">&quot;sample_name&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span>
+
+        <span class="k">return</span> <span class="bp">cls</span><span class="p">(</span>
+            <span class="n">name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+            <span class="n">acquisition_mode</span><span class="o">=</span><span class="n">AcquisitionMode</span><span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">acq_mode_raw</span><span class="p">)),</span>
+            <span class="n">modality</span><span class="o">=</span><span class="n">modality</span><span class="p">,</span>
+            <span class="n">reference_uri</span><span class="o">=</span><span class="n">reference_uri</span><span class="p">,</span>
+            <span class="n">platform</span><span class="o">=</span><span class="n">platform</span><span class="p">,</span>
+            <span class="n">sample_name</span><span class="o">=</span><span class="n">sample_name</span><span class="p">,</span>
+            <span class="n">index</span><span class="o">=</span><span class="n">index</span><span class="p">,</span>
+            <span class="n">group</span><span class="o">=</span><span class="n">sgroup</span><span class="p">,</span>
+            <span class="n">channel_names</span><span class="o">=</span><span class="n">channel_names</span><span class="p">,</span>
+        <span class="p">)</span></div>
+
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># Internal helpers</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_signal_dataset</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Open a primitive signal-channel dataset and cache the handle.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_cache</span><span class="p">:</span>
+            <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_signal_cache</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_cache</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_byte_channel_slice</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">offset</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">count</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return bytes ``[offset, offset+count)`` for a uint8 byte channel.</span>
+
+<span class="sd">        M86 dispatch: for codec-compressed channels (``@compression &gt; 0``)</span>
+<span class="sd">        the whole channel is decoded once on first access, the decoded</span>
+<span class="sd">        buffer is cached on this :class:`GenomicRun` instance, and</span>
+<span class="sd">        subsequent slices are taken from the cached bytes. For</span>
+<span class="sd">        uncompressed channels (no attribute or value 0) the existing</span>
+<span class="sd">        per-slice :meth:`StorageDataset.read` path is used unchanged</span>
+<span class="sd">        — no whole-channel materialisation, no behaviour change vs M82.</span>
+
+<span class="sd">        v1.8 extension: when ``name == &quot;sequences&quot;`` and the link at</span>
+<span class="sd">        signal_channels/sequences is a GROUP (refdiff_v2 layout), the</span>
+<span class="sd">        v2 decode path is used and the result is stored in</span>
+<span class="sd">        ``_decoded_ref_diff_v2`` / ``_decoded_byte_channels[&quot;sequences&quot;]``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_byte_channels</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">count</span><span class="p">]</span>
+
+        <span class="c1"># v1.8 probe: for sequences, check for the group layout first.</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;sequences&quot;</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sequences_is_ref_diff_v2</span><span class="p">():</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_ref_diff_v2_sequences</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_byte_channels</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">decoded</span>
+            <span class="k">return</span> <span class="n">decoded</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">count</span><span class="p">]</span>
+
+        <span class="n">ds</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_signal_dataset</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+        <span class="n">codec_id</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_int_attr</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="s2">&quot;compression&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="k">return</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="n">offset</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="n">count</span><span class="p">))</span>
+
+        <span class="c1"># Compressed: read all bytes, decode, cache for subsequent slices.</span>
+        <span class="n">all_bytes</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">length</span><span class="p">)))</span>
+        <span class="k">if</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">RANS_ORDER0</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs.rans</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode</span> <span class="k">as</span> <span class="n">_dec</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="n">_dec</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">RANS_ORDER1</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs.rans</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode</span> <span class="k">as</span> <span class="n">_dec</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="n">_dec</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">BASE_PACK</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs.base_pack</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode</span> <span class="k">as</span> <span class="n">_dec</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="n">_dec</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">QUALITY_BINNED</span><span class="p">):</span>
+            <span class="c1"># Phase D: Illumina-8 Phred bin decode (lossy on encode;</span>
+            <span class="c1"># decode is deterministic from the wire stream).</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs.quality</span><span class="w"> </span><span class="kn">import</span> <span class="n">decode</span> <span class="k">as</span> <span class="n">_dec</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="n">_dec</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">FQZCOMP_NX16_Z</span><span class="p">):</span>
+            <span class="c1"># M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Same</span>
+            <span class="c1"># plumbing as v1: codec carries read_lengths inside its</span>
+            <span class="c1"># sidecar; revcomp_flags come from run.flags &amp; 16. Different</span>
+            <span class="c1"># on-wire format (magic ``M94Z``).</span>
+            <span class="n">decoded</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_fqzcomp_nx16_z_qualities</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;signal_channel &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39;: @compression=</span><span class="si">{</span><span class="n">codec_id</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="s2">&quot;is not a supported TTIO codec id&quot;</span>
+            <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_byte_channels</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">decoded</span>
+        <span class="k">return</span> <span class="n">decoded</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">count</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_sequences_is_ref_diff_v2</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True iff signal_channels/sequences is a GROUP containing refdiff_v2.</span>
+
+<span class="sd">        v1.8+ layout: sequences is a group with a refdiff_v2 child dataset</span>
+<span class="sd">        (@compression = 14). Result is cached via ``_sequences_is_v2_cached``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sequences_is_v2_cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_sequences_is_v2_cached</span>
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">seq_grp</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;sequences&quot;</span><span class="p">)</span>
+            <span class="c1"># It&#39;s a group — check for the refdiff_v2 child dataset.</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">seq_grp</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">&quot;refdiff_v2&quot;</span><span class="p">)</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="kc">True</span>
+            <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="c1"># sequences is a dataset (v1) — not v2.</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_sequences_is_v2_cached</span> <span class="o">=</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_ref_diff_v2_sequences</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode the refdiff_v2 blob; cache and return the flat sequence bytes.</span>
+
+<span class="sd">        Returns concatenated per-read sequence bytes (total_bases long) —</span>
+<span class="sd">        identical contract to the M82 sequences channel.</span>
+
+<span class="sd">        Raises:</span>
+<span class="sd">            RefMissingError: when the reference cannot be resolved.</span>
+<span class="sd">            RuntimeError: when the native lib is unavailable.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_ref_diff_v2</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_ref_diff_v2</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs</span><span class="w"> </span><span class="kn">import</span> <span class="n">ref_diff_v2</span> <span class="k">as</span> <span class="n">_rdv2</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.genomic.reference_resolver</span><span class="w"> </span><span class="kn">import</span> <span class="n">ReferenceResolver</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.acquisition_run</span><span class="w"> </span><span class="kn">import</span> <span class="n">_native_h5py</span>
+
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">_rdv2</span><span class="o">.</span><span class="n">HAVE_NATIVE_LIB</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;REF_DIFF_V2 decode requires libttio_rans &quot;</span>
+                <span class="s2">&quot;(set TTIO_RANS_LIB_PATH env var)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="n">seq_grp</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;sequences&quot;</span><span class="p">)</span>
+        <span class="n">ds</span> <span class="o">=</span> <span class="n">seq_grp</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">&quot;refdiff_v2&quot;</span><span class="p">)</span>
+
+        <span class="n">codec_id</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_int_attr</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="s2">&quot;compression&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">codec_id</span> <span class="o">!=</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">REF_DIFF_V2</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;signal_channels/sequences/refdiff_v2: @compression=</span><span class="si">{</span><span class="n">codec_id</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;expected REF_DIFF_V2 = </span><span class="si">{</span><span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">REF_DIFF_V2</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">blob</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">length</span><span class="p">)))</span>
+
+        <span class="c1"># Parse the outer header to extract reference_uri and reference_md5.</span>
+        <span class="n">header</span> <span class="o">=</span> <span class="n">_rdv2</span><span class="o">.</span><span class="n">parse_blob_header</span><span class="p">(</span><span class="n">blob</span><span class="p">)</span>
+
+        <span class="c1"># Resolve reference via the same chain as v1 REF_DIFF.</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">h5_grp</span> <span class="o">=</span> <span class="n">_native_h5py</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="p">)</span>
+        <span class="k">except</span> <span class="ne">TypeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;REF_DIFF_V2 decode requires an HDF5-backed dataset; &quot;</span>
+                <span class="s2">&quot;non-HDF5 storage providers are not yet supported.&quot;</span>
+            <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="n">h5_file</span> <span class="o">=</span> <span class="n">h5_grp</span><span class="o">.</span><span class="n">file</span>
+        <span class="n">resolver</span> <span class="o">=</span> <span class="n">ReferenceResolver</span><span class="p">(</span><span class="n">h5_file</span><span class="p">)</span>
+
+        <span class="n">unique_chroms</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">chromosomes</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique_chroms</span><span class="p">)</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+            <span class="n">chrom</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="k">elif</span> <span class="nb">len</span><span class="p">(</span><span class="n">unique_chroms</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;REF_DIFF_V2 v1.8 supports single-chromosome runs only; &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;this run carries </span><span class="si">{</span><span class="nb">sorted</span><span class="p">(</span><span class="n">unique_chroms</span><span class="p">)</span><span class="si">}</span><span class="s2">.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">chrom</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="n">unique_chroms</span><span class="p">))</span>
+
+        <span class="n">chrom_seq</span> <span class="o">=</span> <span class="n">resolver</span><span class="o">.</span><span class="n">resolve</span><span class="p">(</span>
+            <span class="n">uri</span><span class="o">=</span><span class="n">header</span><span class="o">.</span><span class="n">reference_uri</span><span class="p">,</span>
+            <span class="n">expected_md5</span><span class="o">=</span><span class="n">header</span><span class="o">.</span><span class="n">reference_md5</span><span class="p">,</span>
+            <span class="n">chromosome</span><span class="o">=</span><span class="n">chrom</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">count</span>
+        <span class="n">positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+        <span class="n">cigars</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_all_cigars</span><span class="p">()</span>
+        <span class="n">total_bases</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="nb">sum</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">lengths</span><span class="p">))</span>
+
+        <span class="n">out_seq</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_rdv2</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">blob</span><span class="p">,</span> <span class="n">positions</span><span class="p">,</span> <span class="n">cigars</span><span class="p">,</span> <span class="n">chrom_seq</span><span class="p">,</span> <span class="n">n</span><span class="p">,</span> <span class="n">total_bases</span><span class="p">)</span>
+        <span class="n">decoded</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">out_seq</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_ref_diff_v2</span> <span class="o">=</span> <span class="n">decoded</span>
+        <span class="k">return</span> <span class="n">decoded</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_fqzcomp_nx16_z_qualities</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">encoded</span><span class="p">:</span> <span class="nb">bytes</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bytes</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode the ``qualities`` channel encoded with the M94.Z codec.</span>
+
+<span class="sd">        Drop-in parallel to :meth:`_decode_fqzcomp_nx16_qualities` — same</span>
+<span class="sd">        signature, same ``revcomp_flags`` derivation; only the underlying</span>
+<span class="sd">        codec module differs (``fqzcomp_nx16_z`` instead of v1&#39;s</span>
+<span class="sd">        ``fqzcomp_nx16``).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs.fqzcomp_nx16_z</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+            <span class="n">decode_with_metadata</span> <span class="k">as</span> <span class="n">_fqz_z_decode</span><span class="p">,</span>
+        <span class="p">)</span>
+
+        <span class="n">SAM_REVERSE</span> <span class="o">=</span> <span class="mi">16</span>
+        <span class="n">flags</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">flags</span>  <span class="c1"># numpy uint32 array</span>
+        <span class="n">revcomp_flags</span> <span class="o">=</span> <span class="p">[</span>
+            <span class="mi">1</span> <span class="k">if</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">f</span><span class="p">)</span> <span class="o">&amp;</span> <span class="n">SAM_REVERSE</span><span class="p">)</span> <span class="k">else</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">f</span> <span class="ow">in</span> <span class="n">flags</span>
+        <span class="p">]</span>
+        <span class="n">qualities</span><span class="p">,</span> <span class="n">_</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="n">_fqz_z_decode</span><span class="p">(</span><span class="n">encoded</span><span class="p">,</span> <span class="n">revcomp_flags</span><span class="o">=</span><span class="n">revcomp_flags</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">qualities</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_all_cigars</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the full list of CIGAR strings for this run.</span>
+
+<span class="sd">        Honours the M86 Phase C codec dispatch on the ``cigars``</span>
+<span class="sd">        channel (RANS / NAME_TOKENIZED override → uint8 dataset; no</span>
+<span class="sd">        override → M82 compound dataset). Caches the result on</span>
+<span class="sd">        ``self._decoded_cigars`` so subsequent ``_cigar_at`` calls</span>
+<span class="sd">        hit the cache.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span>
+        <span class="c1"># Trigger the existing per-read decode path once; the helper</span>
+        <span class="c1"># populates ``self._decoded_cigars`` for the rANS / tokenised</span>
+        <span class="c1"># paths. The compound (M82) path doesn&#39;t populate the field,</span>
+        <span class="c1"># so fall back to a manual walk in that case.</span>
+        <span class="n">_</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cigar_at</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span> <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="kc">None</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span>
+        <span class="c1"># M82 compound layout — gather from the compound cache.</span>
+        <span class="n">cigars</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">(</span><span class="s2">&quot;cigars&quot;</span><span class="p">)</span>
+        <span class="n">out</span> <span class="o">=</span> <span class="p">[</span><span class="n">c</span><span class="p">[</span><span class="s2">&quot;value&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">cigars</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span> <span class="o">=</span> <span class="n">out</span>
+        <span class="k">return</span> <span class="n">out</span>
+
+    <span class="c1"># v1.6 (L4): _int_channel_array removed. The helper supported</span>
+    <span class="c1"># reading positions/flags/mapping_qualities from signal_channels/</span>
+    <span class="c1"># via codec dispatch — but the per-record reader path (__getitem__)</span>
+    <span class="c1"># always used genomic_index/ via self.index.{positions,...}. With</span>
+    <span class="c1"># v1.6 dropping the signal_channels/ duplicates, no caller has a</span>
+    <span class="c1"># reason to use this helper. See docs/format-spec.md §10.7.</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_compound</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Read a compound dataset whole and cache it.</span>
+
+<span class="sd">        ``read_compound_dataset`` already decodes VL bytes to ``str``, so</span>
+<span class="sd">        callers never need to check ``isinstance(v, bytes)``.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound_cache</span><span class="p">:</span>
+            <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_compound_cache</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_compound_dataset</span><span class="p">(</span><span class="n">sig</span><span class="p">,</span> <span class="n">name</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound_cache</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_read_name_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the read name at index ``i``.</span>
+
+<span class="sd">        v1.0 reset (Phase 2c): read_names is always a flat 1-D uint8</span>
+<span class="sd">        dataset encoded with NAME_TOKENIZED_V2 (codec id 15). The v1</span>
+<span class="sd">        NAME_TOKENIZED (codec id 8) decoder and the M82 compound</span>
+<span class="sd">        fallback were both removed; readers reject the v1 layout</span>
+<span class="sd">        with a clear migration error. Decoded names are cached as a</span>
+<span class="sd">        ``list[str]`` on this :class:`GenomicRun` instance.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_read_names</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="n">ds</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">&quot;read_names&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">ds</span><span class="o">.</span><span class="n">precision</span> <span class="o">!=</span> <span class="n">Precision</span><span class="o">.</span><span class="n">UINT8</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;signal_channel &#39;read_names&#39;: dataset is not a flat &quot;</span>
+                <span class="s2">&quot;uint8 codec stream — the v1.0 reader requires the &quot;</span>
+                <span class="s2">&quot;NAME_TOKENIZED_V2 layout. The legacy M82 compound &quot;</span>
+                <span class="s2">&quot;VL-string layout is no longer supported; this file &quot;</span>
+                <span class="s2">&quot;was written with an older TTI-O version. Re-encode &quot;</span>
+                <span class="s2">&quot;with v1.0+.&quot;</span>
+            <span class="p">)</span>
+
+        <span class="n">codec_id</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_int_attr</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="s2">&quot;compression&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span>
+        <span class="k">if</span> <span class="n">codec_id</span> <span class="o">==</span> <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">NAME_TOKENIZED_V2</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs</span><span class="w"> </span><span class="kn">import</span> <span class="n">name_tokenizer_v2</span> <span class="k">as</span> <span class="n">_nt2</span>
+            <span class="n">all_bytes</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">length</span><span class="p">)))</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_read_names</span> <span class="o">=</span> <span class="n">_nt2</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_read_names</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;signal_channel &#39;read_names&#39;: @compression=</span><span class="si">{</span><span class="n">codec_id</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="s2">&quot;is not a supported TTIO codec id for the read_names &quot;</span>
+            <span class="s2">&quot;channel (only NAME_TOKENIZED_V2 = 15 is recognised)&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_cigar_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the cigar string at index ``i``, dispatching on shape.</span>
+
+<span class="sd">        M86 Phase C: cigars has two on-disk layouts (Binding</span>
+<span class="sd">        Decisions §120-§123):</span>
+
+<span class="sd">        - **M82 compound** (no override): VL_STRING-in-compound</span>
+<span class="sd">          dataset, read whole-and-cache via :meth:`_compound`.</span>
+<span class="sd">        - **rANS codec** (override active): flat 1-D uint8 dataset</span>
+<span class="sd">          carrying a length-prefix-concat byte stream</span>
+<span class="sd">          (``varint(len) + bytes`` per CIGAR — §2.5 of the Phase C</span>
+<span class="sd">          plan / format-spec §10.6 extended). Decoded once on first</span>
+<span class="sd">          access and cached as a ``list[str]`` per Binding Decision</span>
+<span class="sd">          §123. Two codec ids are recognised: ``RANS_ORDER0`` (4)</span>
+<span class="sd">          and ``RANS_ORDER1`` (5).</span>
+
+<span class="sd">        Dispatch is on dataset shape — a 1-D uint8 dataset routes</span>
+<span class="sd">        through the codec path; anything else (compound) falls</span>
+<span class="sd">        through to the M82 path. The :attr:`_decoded_cigars` cache</span>
+<span class="sd">        holds the entire decoded list across calls.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="n">ds</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">&quot;cigars&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">ds</span><span class="o">.</span><span class="n">precision</span> <span class="o">==</span> <span class="n">Precision</span><span class="o">.</span><span class="n">UINT8</span><span class="p">:</span>
+            <span class="n">codec_id</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_int_attr</span><span class="p">(</span><span class="n">ds</span><span class="p">,</span> <span class="s2">&quot;compression&quot;</span><span class="p">,</span> <span class="n">default</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span> <span class="ow">or</span> <span class="mi">0</span>
+            <span class="n">all_bytes</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">length</span><span class="p">)))</span>
+            <span class="k">if</span> <span class="n">codec_id</span> <span class="ow">in</span> <span class="p">(</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">RANS_ORDER0</span><span class="p">),</span>
+                <span class="nb">int</span><span class="p">(</span><span class="n">Compression</span><span class="o">.</span><span class="n">RANS_ORDER1</span><span class="p">),</span>
+            <span class="p">):</span>
+                <span class="n">decoded</span> <span class="o">=</span> <span class="n">_rans_decode</span><span class="p">(</span><span class="n">all_bytes</span><span class="p">)</span>
+                <span class="n">_vd</span> <span class="o">=</span> <span class="n">_varint_decode</span>
+                <span class="c1"># Walk the length-prefix-concat byte stream — the</span>
+                <span class="c1"># mirror of the writer&#39;s serialisation contract</span>
+                <span class="c1"># (§2.5). Each entry is varint(len) + len bytes</span>
+                <span class="c1"># of ASCII payload.</span>
+                <span class="n">out</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+                <span class="n">offset</span> <span class="o">=</span> <span class="mi">0</span>
+                <span class="n">n</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">decoded</span><span class="p">)</span>
+                <span class="k">while</span> <span class="n">offset</span> <span class="o">&lt;</span> <span class="n">n</span><span class="p">:</span>
+                    <span class="n">length</span><span class="p">,</span> <span class="n">offset</span> <span class="o">=</span> <span class="n">_vd</span><span class="p">(</span><span class="n">decoded</span><span class="p">,</span> <span class="n">offset</span><span class="p">)</span>
+                    <span class="k">if</span> <span class="n">offset</span> <span class="o">+</span> <span class="n">length</span> <span class="o">&gt;</span> <span class="n">n</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="s2">&quot;cigars rANS stream: length-prefix-concat &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;entry runs off end of decoded buffer &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;(offset=</span><span class="si">{</span><span class="n">offset</span><span class="si">}</span><span class="s2">, length=</span><span class="si">{</span><span class="n">length</span><span class="si">}</span><span class="s2">, &quot;</span>
+                            <span class="sa">f</span><span class="s2">&quot;buffer_size=</span><span class="si">{</span><span class="n">n</span><span class="si">}</span><span class="s2">)&quot;</span>
+                        <span class="p">)</span>
+                    <span class="n">payload</span> <span class="o">=</span> <span class="n">decoded</span><span class="p">[</span><span class="n">offset</span><span class="p">:</span><span class="n">offset</span> <span class="o">+</span> <span class="n">length</span><span class="p">]</span>
+                    <span class="n">offset</span> <span class="o">+=</span> <span class="n">length</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="n">out</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">payload</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;ascii&quot;</span><span class="p">))</span>
+                    <span class="k">except</span> <span class="ne">UnicodeDecodeError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
+                        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                            <span class="s2">&quot;cigars rANS stream: entry contains &quot;</span>
+                            <span class="s2">&quot;non-ASCII bytes&quot;</span>
+                        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_cigars</span> <span class="o">=</span> <span class="n">out</span>
+                <span class="k">return</span> <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;signal_channel &#39;cigars&#39;: @compression=</span><span class="si">{</span><span class="n">codec_id</span><span class="si">}</span><span class="s2"> &quot;</span>
+                <span class="s2">&quot;is not a supported TTIO codec id for the cigars &quot;</span>
+                <span class="s2">&quot;channel (only RANS_ORDER0 = 4 and RANS_ORDER1 = 5 &quot;</span>
+                <span class="s2">&quot;are recognised)&quot;</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Compound path (M82, no override).</span>
+        <span class="n">cigars</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_compound</span><span class="p">(</span><span class="s2">&quot;cigars&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">cigars</span><span class="p">[</span><span class="n">i</span><span class="p">][</span><span class="s2">&quot;value&quot;</span><span class="p">]</span>
+
+    <span class="c1"># ------------------------------------------------------------------</span>
+    <span class="c1"># M86 Phase F — mate_info per-field dispatch</span>
+    <span class="c1"># ------------------------------------------------------------------</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mate_info_is_subgroup</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True iff ``signal_channels/mate_info`` is a group (Phase F).</span>
+
+<span class="sd">        Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5</span>
+<span class="sd">        link type, NOT on ``@compression`` attribute presence on the</span>
+<span class="sd">        bare link. The StorageGroup protocol&#39;s ``open_group`` raises</span>
+<span class="sd">        ``KeyError`` when the named child is a dataset (verified in</span>
+<span class="sd">        :class:`ttio.providers.hdf5._Group.open_group`); we use that</span>
+<span class="sd">        as the link-type query.</span>
+
+<span class="sd">        Result is cached on the instance — the file structure is</span>
+<span class="sd">        immutable for the lifetime of an open run, so the link-type</span>
+<span class="sd">        probe only runs once.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_subgroup_cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_subgroup_cached</span>
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">sig</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;mate_info&quot;</span><span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_subgroup_cached</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_subgroup_cached</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_subgroup_cached</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mate_info_is_inline_v2</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;True iff signal_channels/mate_info/inline_v2 exists.</span>
+
+<span class="sd">        v1.7+ inline-v2 layout. Implies _mate_info_is_subgroup() == True.</span>
+<span class="sd">        Result is cached via _decoded_mate_info sentinel key.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_is_subgroup</span><span class="p">():</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="n">cached</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;_is_inline_v2&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">cached</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">cached</span>
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="n">mate_group</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;mate_info&quot;</span><span class="p">)</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">mate_group</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">&quot;inline_v2&quot;</span><span class="p">)</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="k">except</span> <span class="ne">KeyError</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="p">[</span><span class="s2">&quot;_is_inline_v2&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_decode_mate_inline_v2</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;dict[str, Any]&quot;</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Decode the inline_v2 blob; cache all three fields together.</span>
+
+<span class="sd">        Returns the _decoded_mate_info dict populated with keys:</span>
+<span class="sd">        &#39;chrom&#39; (list[str]), &#39;pos&#39; (np.int64 array), &#39;tlen&#39; (np.int32</span>
+<span class="sd">        array). Reader-side dependency: own_positions and own_chrom_ids</span>
+<span class="sd">        reconstructed from genomic_index; chrom name resolution uses</span>
+<span class="sd">        the mate_info/chrom_names table written alongside the blob.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="s2">&quot;inline_v2&quot;</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="p">:</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span>
+
+        <span class="kn">from</span><span class="w"> </span><span class="nn">.codecs</span><span class="w"> </span><span class="kn">import</span> <span class="n">mate_info_v2</span> <span class="k">as</span> <span class="n">_miv2</span>
+
+        <span class="n">sig</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">group</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;signal_channels&quot;</span><span class="p">)</span>
+        <span class="n">mate_group</span> <span class="o">=</span> <span class="n">sig</span><span class="o">.</span><span class="n">open_group</span><span class="p">(</span><span class="s2">&quot;mate_info&quot;</span><span class="p">)</span>
+        <span class="n">ds</span> <span class="o">=</span> <span class="n">mate_group</span><span class="o">.</span><span class="n">open_dataset</span><span class="p">(</span><span class="s2">&quot;inline_v2&quot;</span><span class="p">)</span>
+        <span class="n">blob</span> <span class="o">=</span> <span class="nb">bytes</span><span class="p">(</span><span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="n">offset</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="nb">int</span><span class="p">(</span><span class="n">ds</span><span class="o">.</span><span class="n">length</span><span class="p">)))</span><span class="o">.</span><span class="n">tobytes</span><span class="p">())</span>
+
+        <span class="n">n</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">count</span>
+        <span class="n">own_positions</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">asarray</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">positions</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+
+        <span class="c1"># Build own_chrom_ids (uint16) from the index chromosomes list</span>
+        <span class="c1"># using encounter-order assignment — same as the writer.</span>
+        <span class="n">name_to_id</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">int</span><span class="p">]</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="n">own_chrom_ids</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">empty</span><span class="p">(</span><span class="n">n</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint16</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">name</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">index</span><span class="o">.</span><span class="n">chromosomes</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;*&quot;</span> <span class="ow">or</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+                <span class="n">own_chrom_ids</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="mh">0xFFFF</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">name_to_id</span><span class="p">:</span>
+                    <span class="n">name_to_id</span><span class="p">[</span><span class="n">name</span><span class="p">]</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">name_to_id</span><span class="p">)</span>
+                <span class="n">own_chrom_ids</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">name_to_id</span><span class="p">[</span><span class="n">name</span><span class="p">]</span>
+
+        <span class="n">mc</span><span class="p">,</span> <span class="n">mp</span><span class="p">,</span> <span class="n">ts</span> <span class="o">=</span> <span class="n">_miv2</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">blob</span><span class="p">,</span> <span class="n">own_chrom_ids</span><span class="p">,</span> <span class="n">own_positions</span><span class="p">,</span>
+                                   <span class="n">n_records</span><span class="o">=</span><span class="n">n</span><span class="p">)</span>
+
+        <span class="c1"># Read the full chrom_id → name table written by the writer.</span>
+        <span class="c1"># This covers mate-only chromosomes absent from genomic_index.</span>
+        <span class="n">chrom_name_rows</span> <span class="o">=</span> <span class="n">io</span><span class="o">.</span><span class="n">read_compound_dataset</span><span class="p">(</span><span class="n">mate_group</span><span class="p">,</span> <span class="s2">&quot;chrom_names&quot;</span><span class="p">)</span>
+        <span class="n">chrom_names_by_id</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">row</span> <span class="ow">in</span> <span class="n">chrom_name_rows</span><span class="p">:</span>
+            <span class="n">v</span> <span class="o">=</span> <span class="n">row</span><span class="p">[</span><span class="s2">&quot;name&quot;</span><span class="p">]</span>
+            <span class="n">chrom_names_by_id</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                <span class="n">v</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;utf-8&quot;</span><span class="p">)</span> <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">v</span><span class="p">,</span> <span class="nb">bytes</span><span class="p">)</span> <span class="k">else</span> <span class="n">v</span>
+            <span class="p">)</span>
+
+        <span class="c1"># Convert mc (int32 ids, -1 = unmapped) back to mate_chromosomes list[str].</span>
+        <span class="n">mate_chromosomes</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">mc</span><span class="p">:</span>
+            <span class="n">iv</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">v</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">iv</span> <span class="o">==</span> <span class="o">-</span><span class="mi">1</span><span class="p">:</span>
+                <span class="n">mate_chromosomes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;*&quot;</span><span class="p">)</span>
+            <span class="k">elif</span> <span class="mi">0</span> <span class="o">&lt;=</span> <span class="n">iv</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">chrom_names_by_id</span><span class="p">):</span>
+                <span class="n">mate_chromosomes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">chrom_names_by_id</span><span class="p">[</span><span class="n">iv</span><span class="p">])</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="c1"># Should not happen in well-formed files.</span>
+                <span class="n">mate_chromosomes</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;chr_id_</span><span class="si">{</span><span class="n">iv</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="p">[</span><span class="s2">&quot;chrom&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mate_chromosomes</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="p">[</span><span class="s2">&quot;pos&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mp</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="p">[</span><span class="s2">&quot;tlen&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="n">ts</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span><span class="p">[</span><span class="s2">&quot;inline_v2&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>  <span class="c1"># marker for round-trip cache</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decoded_mate_info</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_raise_unsupported_mate_layout</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Raise a clear migration error for any non-inline_v2 mate_info layout.</span>
+
+<span class="sd">        v1.0 reset (Phase 2c): the M86 Phase F per-field subgroup</span>
+<span class="sd">        layout (with chrom / pos / tlen child datasets) and the</span>
+<span class="sd">        legacy M82 compound dataset layout were both removed. Only</span>
+<span class="sd">        the v1.7+ inline_v2 BLOB path under</span>
+<span class="sd">        ``signal_channels/mate_info/inline_v2`` (codec id 13) is</span>
+<span class="sd">        decoded; everything else surfaces a clear error so callers</span>
+<span class="sd">        learn they need to re-encode with v1.0+.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="s2">&quot;signal_channels/mate_info: legacy layout detected — &quot;</span>
+            <span class="s2">&quot;the v1.0 reader requires the inline_v2 blob &quot;</span>
+            <span class="s2">&quot;(signal_channels/mate_info/inline_v2 with @compression=13). &quot;</span>
+            <span class="s2">&quot;The M86 Phase F per-field subgroup (chrom/pos/tlen) and &quot;</span>
+            <span class="s2">&quot;the M82 compound dataset layouts were removed in v1.0. &quot;</span>
+            <span class="s2">&quot;This file was written with an older TTI-O version; &quot;</span>
+            <span class="s2">&quot;re-encode with v1.0+ to use MATE_INLINE_V2.&quot;</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mate_chrom_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the mate chromosome at index ``i``.</span>
+
+<span class="sd">        v1.0 reset (Phase 2c): only the v1.7+ inline_v2 layout is</span>
+<span class="sd">        supported. Any other layout raises ValueError.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_is_inline_v2</span><span class="p">():</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_decode_mate_inline_v2</span><span class="p">()[</span><span class="s2">&quot;chrom&quot;</span><span class="p">][</span><span class="n">i</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_raise_unsupported_mate_layout</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;unreachable&quot;</span><span class="p">)</span>  <span class="c1"># pragma: no cover</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mate_pos_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the mate position at index ``i``.</span>
+
+<span class="sd">        v1.0 reset (Phase 2c): inline_v2 is the only supported layout.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_is_inline_v2</span><span class="p">():</span>
+            <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_decode_mate_inline_v2</span><span class="p">()[</span><span class="s2">&quot;pos&quot;</span><span class="p">][</span><span class="n">i</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_raise_unsupported_mate_layout</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;unreachable&quot;</span><span class="p">)</span>  <span class="c1"># pragma: no cover</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_mate_tlen_at</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">i</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">int</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the template length at index ``i``.</span>
+
+<span class="sd">        v1.0 reset (Phase 2c): inline_v2 is the only supported layout.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_mate_info_is_inline_v2</span><span class="p">():</span>
+            <span class="k">return</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_decode_mate_inline_v2</span><span class="p">()[</span><span class="s2">&quot;tlen&quot;</span><span class="p">][</span><span class="n">i</span><span class="p">])</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_raise_unsupported_mate_layout</span><span class="p">()</span>
+        <span class="k">raise</span> <span class="ne">AssertionError</span><span class="p">(</span><span class="s2">&quot;unreachable&quot;</span><span class="p">)</span>  <span class="c1"># pragma: no cover</span></div>
+
+</pre></div>
+        </article>
+      </div>
+      <footer>
+        
+        <div class="related-pages">
+          
+          
+        </div>
+        <div class="bottom-of-page">
+          <div class="left-details">
+            <div class="copyright">
+                Copyright &#169; 2026, The Thalion Initiative
+            </div>
+            Made with <a href="https://www.sphinx-doc.org/">Sphinx</a> and <a class="muted-link" href="https://pradyunsg.me">@pradyunsg</a>'s
+            
+            <a href="https://github.com/pradyunsg/furo">Furo</a>
+            
+          </div>
+          <div class="right-details">
+            
+          </div>
+        </div>
+        
+      </footer>
+    </div>
+    <aside class="toc-drawer no-toc">
+      
+      
+      
+    </aside>
+  </div>
+</div><script src="../../_static/documentation_options.js?v=8d563738"></script>
+    <script src="../../_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="../../_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script src="../../_static/scripts/furo.js?v=46bd48cc"></script>
+    </body>
+</html>

@@ -1,0 +1,44 @@
+ttio.codecs.delta_rans
+======================
+
+.. py:module:: ttio.codecs.delta_rans
+
+.. autoapi-nested-parse::
+
+   DELTA_RANS_ORDER0 codec (M95, codec id 11).
+
+   Delta + zigzag + unsigned LEB128 varint + rANS order-0. Designed for
+   sorted-ascending integer channels (e.g. genomic positions) where deltas
+   are small and concentrated.
+
+   Cross-language equivalents:
+       Objective-C: TTIODeltaRans (objc/Source/Codecs/TTIODeltaRans.{h,m})
+       Java:        global.thalion.ttio.codecs.DeltaRans
+
+   Wire format:
+
+       Offset  Size   Field
+       0       4      magic: "DRA0"
+       4       1      version: uint8 = 1
+       5       1      element_size: uint8 (1, 4, or 8)
+       6       2      reserved: uint8[2] = 0x00
+       8       var    body: rANS order-0 encoded varint stream
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.codecs.delta_rans.encode
+   ttio.codecs.delta_rans.decode
+
+
+Module Contents
+---------------
+
+.. py:function:: encode(data: bytes, element_size: int) -> bytes
+
+.. py:function:: decode(encoded: bytes) -> bytes
+

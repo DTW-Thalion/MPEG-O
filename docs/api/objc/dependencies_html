@@ -4,9 +4,13 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOAccessUnit.gsdoc \
 	libTTIO/TTIOAcquisitionRun.gsdoc \
 	libTTIO/TTIOAcquisitionSimulator.gsdoc \
+	libTTIO/TTIOAlignedRead.gsdoc \
 	libTTIO/TTIOAnonymizer.gsdoc \
 	libTTIO/TTIOAxisDescriptor.gsdoc \
+	libTTIO/TTIOBamReader.gsdoc \
+	libTTIO/TTIOBamWriter.gsdoc \
 	libTTIO/TTIOBase64.gsdoc \
+	libTTIO/TTIOBasePack.gsdoc \
 	libTTIO/TTIOBrukerTDFReader.gsdoc \
 	libTTIO/TTIOCVAnnotatable.gsdoc \
 	libTTIO/TTIOCVParam.gsdoc \
@@ -16,6 +20,8 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOCipherSuite.gsdoc \
 	libTTIO/TTIOCompoundField.gsdoc \
 	libTTIO/TTIOCompoundIO.gsdoc \
+	libTTIO/TTIOCramReader.gsdoc \
+	libTTIO/TTIOCramWriter.gsdoc \
 	libTTIO/TTIOEncodingSpec.gsdoc \
 	libTTIO/TTIOEncryptable.gsdoc \
 	libTTIO/TTIOEncryptedTransport.gsdoc \
@@ -23,7 +29,10 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOEnums.gsdoc \
 	libTTIO/TTIOFeature.gsdoc \
 	libTTIO/TTIOFeatureFlags.gsdoc \
+	libTTIO/TTIOFqzcompNx16Z.gsdoc \
 	libTTIO/TTIOFreeInductionDecay.gsdoc \
+	libTTIO/TTIOGenomicIndex.gsdoc \
+	libTTIO/TTIOGenomicRun.gsdoc \
 	libTTIO/TTIOHDF5CompoundType.gsdoc \
 	libTTIO/TTIOHDF5Dataset.gsdoc \
 	libTTIO/TTIOHDF5Errors.gsdoc \
@@ -48,6 +57,7 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOKeyRotationManager.gsdoc \
 	libTTIO/TTIOMSImage.gsdoc \
 	libTTIO/TTIOMassSpectrum.gsdoc \
+	libTTIO/TTIOMateInfoV2.gsdoc \
 	libTTIO/TTIOMemoryProvider.gsdoc \
 	libTTIO/TTIOMzMLReader.gsdoc \
 	libTTIO/TTIOMzMLWriter.gsdoc \
@@ -55,6 +65,7 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOMzTabWriter.gsdoc \
 	libTTIO/TTIONMR2DSpectrum.gsdoc \
 	libTTIO/TTIONMRSpectrum.gsdoc \
+	libTTIO/TTIONameTokenizerV2.gsdoc \
 	libTTIO/TTIONmrMLReader.gsdoc \
 	libTTIO/TTIONmrMLWriter.gsdoc \
 	libTTIO/TTIONumpress.gsdoc \
@@ -65,10 +76,16 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOProvenanceRecord.gsdoc \
 	libTTIO/TTIOProvenanceable.gsdoc \
 	libTTIO/TTIOProviderRegistry.gsdoc \
+	libTTIO/TTIOQuality.gsdoc \
 	libTTIO/TTIOQuantification.gsdoc \
 	libTTIO/TTIOQuery.gsdoc \
 	libTTIO/TTIORamanImage.gsdoc \
 	libTTIO/TTIORamanSpectrum.gsdoc \
+	libTTIO/TTIORans.gsdoc \
+	libTTIO/TTIORefDiffV2.gsdoc \
+	libTTIO/TTIOReferenceResolver.gsdoc \
+	libTTIO/TTIORun.gsdoc \
+	libTTIO/TTIOSamReader.gsdoc \
 	libTTIO/TTIOSignalArray.gsdoc \
 	libTTIO/TTIOSignatureManager.gsdoc \
 	libTTIO/TTIOSpectralDataset.gsdoc \
@@ -92,6 +109,7 @@ libTTIO/stamp_html &: \
 	libTTIO/TTIOValueRange.gsdoc \
 	libTTIO/TTIOVerifier.gsdoc \
 	libTTIO/TTIOWatersMassLynxReader.gsdoc \
+	libTTIO/TTIOWrittenGenomicRun.gsdoc \
 	libTTIO/TTIOWrittenRun.gsdoc \
 	libTTIO/TTIOZarrProvider.gsdoc \
 	libTTIO/libTTIO.igsdoc

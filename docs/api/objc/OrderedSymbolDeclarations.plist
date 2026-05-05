@@ -25,6 +25,11 @@
 	"-inputEntities",
 	"-outputEntities"
     );
+    "(TTIORun)" = (
+	"-name",
+	"-acquisitionMode",
+	"-provenanceChain"
+    );
     "(TTIOStorageDataset)" = (
 	"-name",
 	"-precision",
@@ -126,11 +131,20 @@
 	"-pixelX",
 	"-pixelY",
 	"-pixelZ",
+	"-chromosome",
+	"-position",
+	"-mappingQuality",
+	"-flags",
+	"-matePosition",
+	"-templateLength",
 	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:",
+	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:chromosome:position:mappingQuality:flags:",
+	"-initWithSpectrumClass:acquisitionMode:msLevel:polarity:retentionTime:precursorMz:precursorCharge:ionMobility:basePeakIntensity:channels:pixelX:pixelY:pixelZ:chromosome:position:mappingQuality:flags:matePosition:templateLength:",
 	"-encode",
 	"+decodeFromBytes:length:error:"
     );
     TTIOAcquisitionRun = (
+	"-name",
 	"-acquisitionMode",
 	"-instrumentConfig",
 	"-spectrumIndex",
@@ -173,6 +187,26 @@
 	"-streamToWriter:error:",
 	"-streamPacedToWriter:error:"
     );
+    TTIOAlignedRead = (
+	"-readName",
+	"-chromosome",
+	"-position",
+	"-mappingQuality",
+	"-cigar",
+	"-sequence",
+	"-qualities",
+	"-flags",
+	"-mateChromosome",
+	"-matePosition",
+	"-templateLength",
+	"-isMapped",
+	"-isPaired",
+	"-isReverse",
+	"-isSecondary",
+	"-isSupplementary",
+	"-readLength",
+	"-initWithReadName:chromosome:position:mappingQuality:cigar:sequence:qualities:flags:mateChromosome:matePosition:templateLength:"
+    );
     TTIOAnonymizationPolicy = (
 	"-redactSAAVSpectra",
 	"-setRedactSAAVSpectra:",
@@ -189,7 +223,15 @@
 	"-coarsenChemicalShiftDecimals",
 	"-setCoarsenChemicalShiftDecimals:",
 	"-stripMetadataFields",
-	"-setStripMetadataFields:"
+	"-setStripMetadataFields:",
+	"-stripReadNames",
+	"-setStripReadNames:",
+	"-randomiseQualities",
+	"-setRandomiseQualities:",
+	"-randomiseQualitiesConstant",
+	"-setRandomiseQualitiesConstant:",
+	"-maskRegions",
+	"-setMaskRegions:"
     );
     TTIOAnonymizationResult = (
 	"-spectraRedacted",
@@ -204,6 +246,12 @@
 	"-setMetabolitesMasked:",
 	"-metadataFieldsStripped",
 	"-setMetadataFieldsStripped:",
+	"-readNamesStripped",
+	"-setReadNamesStripped:",
+	"-qualitiesRandomised",
+	"-setQualitiesRandomised:",
+	"-readsInMaskedRegion",
+	"-setReadsInMaskedRegion:",
 	"-policiesApplied",
 	"-setPoliciesApplied:"
     );
@@ -217,6 +265,17 @@
 	"-samplingMode",
 	"-initWithName:unit:valueRange:samplingMode:",
 	"+descriptorWithName:unit:valueRange:samplingMode:"
+    );
+    TTIOBamReader = (
+	"-path",
+	"-provenanceRecords",
+	"-initWithPath:",
+	"-toGenomicRunWithName:region:sampleName:error:"
+    );
+    TTIOBamWriter = (
+	"-path",
+	"-initWithPath:",
+	"-writeRun:provenanceRecords:sort:error:"
     );
     TTIOBase64 = (
 	"+decodeString:",
@@ -333,6 +392,16 @@
 	"+writeGeneric:intoGroup:datasetNamed:fields:error:",
 	"+readGenericFromGroup:datasetNamed:fields:error:"
     );
+    TTIOCramReader = (
+	"-referenceFasta",
+	"-initWithPath:referenceFasta:",
+	"-initWithPath:NS_UNAVAILABLE"
+    );
+    TTIOCramWriter = (
+	"-referenceFasta",
+	"-initWithPath:referenceFasta:",
+	"-initWithPath:NS_UNAVAILABLE"
+    );
     TTIOEncodingSpec = (
 	"-precision",
 	"-compressionAlgorithm",
@@ -383,17 +452,62 @@
 	"+featureAnonymized",
 	"+featurePQCPreview",
 	"+featureMS2ActivationDetail",
+	"+featureOptGenomic",
+	"+featureNoSignalIntDups",
 	"+formatVersionForRoot:",
 	"+featuresForRoot:",
 	"+root:supportsFeature:",
 	"+isLegacyV1File:",
 	"+writeFormatVersion:features:toRoot:error:"
     );
+    TTIOFqzcompNx16Z = (
+	"+encodeWithQualities:readLengths:revcompFlags:error:",
+	"+encodeWithQualities:readLengths:revcompFlags:options:error:",
+	"+decodeData:revcompFlags:error:",
+	"+decodeData:error:",
+	"+encodeV4WithQualities:readLengths:revcompFlags:strategyHint:padCount:error:",
+	"+decodeV4Data:revcompFlags:error:",
+	"+backendName"
+    );
     TTIOFreeInductionDecay = (
 	"-dwellTimeSeconds",
 	"-scanCount",
 	"-receiverGain",
 	"-initWithComplexBuffer:complexLength:dwellTimeSeconds:scanCount:receiverGain:"
+    );
+    TTIOGenomicIndex = (
+	"-count",
+	"-offsetAt:",
+	"-lengthAt:",
+	"-positionAt:",
+	"-mappingQualityAt:",
+	"-flagsAt:",
+	"-chromosomeAt:",
+	"-indicesForRegion:start:end:",
+	"-indicesForUnmapped",
+	"-indicesForFlag:",
+	"-initWithOffsets:lengths:chromosomes:positions:mappingQualities:flags:",
+	"-writeToGroup:error:",
+	"+readFromGroup:error:"
+    );
+    TTIOGenomicRun = (
+	"-name",
+	"-acquisitionMode",
+	"-modality",
+	"-referenceUri",
+	"-platform",
+	"-sampleName",
+	"-index",
+	"-readCount",
+	"-count",
+	"-objectAtIndex:",
+	"-provenanceChain",
+	"-readAtIndex:error:",
+	"-readNameAtIndex:error:",
+	"-cigarAtIndex:error:",
+	"-readsInRegion:start:end:",
+	"+openFromGroup:name:error:",
+	"-wireCompressionForChannel:"
     );
     TTIOHDF5CompoundType = (
 	"-initWithSize:",
@@ -451,7 +565,8 @@
     );
     TTIOHDF5Provider = (
 	"+adapterForGroup:",
-	"+adapterForDataset:name:"
+	"+adapterForDataset:name:",
+	"+adapterForCompoundDatasetWithParent:name:fields:count:"
     );
     TTIOHeaderSegment = (
 	"-iv",
@@ -605,6 +720,11 @@
 	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:activationMethod:isolationWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:",
 	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:"
     );
+    TTIOMateInfoV2 = (
+	"+nativeAvailable",
+	"+encodeMateChromIds:matePositions:templateLengths:ownChromIds:ownPositions:error:",
+	"+decodeData:ownChromIds:ownPositions:nRecords:outMateChromIds:outMatePositions:outTemplateLengths:error:"
+    );
     TTIOMemoryProvider = (
 	"+discardStore:"
     );
@@ -669,6 +789,12 @@
 	"-spectrometerFrequencyMHz",
 	"-initWithChemicalShiftArray:intensityArray:nucleusType:spectrometerFrequencyMHz:indexPosition:scanTimeSeconds:error:"
     );
+    TTIONameTokenizerV2 = (
+	"+nativeAvailable",
+	"+encodeNames:",
+	"+decodeData:error:",
+	"+backendName"
+    );
     TTIONmrMLReader = (
 	"+readFromFilePath:error:",
 	"+readFromURL:error:",
@@ -710,7 +836,9 @@
 	"+decryptWithCiphertext:key:iv:tag:aad:error:",
 	"+randomIVWithError:",
 	"+encryptChannelToSegments:offsets:lengths:nSpectra:datasetId:channelName:key:error:",
+	"+encryptChannelToSegments:offsets:lengths:nSpectra:bytesPerElement:datasetId:channelName:key:error:",
 	"+decryptChannelFromSegments:datasetId:channelName:key:error:",
+	"+decryptChannelFromSegments:bytesPerElement:datasetId:channelName:key:error:",
 	"+packAUHeaderPlaintext:",
 	"+unpackAUHeaderPlaintext:",
 	"+encryptHeaderSegments:datasetId:key:error:",
@@ -718,7 +846,9 @@
     );
     TTIOPerAUFile = (
 	"+encryptFilePath:key:encryptHeaders:providerName:error:",
-	"+decryptFilePath:key:providerName:error:"
+	"+decryptFilePath:key:providerName:error:",
+	"+encryptFilePathByRegion:keyMap:providerName:error:",
+	"+decryptFilePathByRegion:keyMap:providerName:error:"
     );
     TTIOPostQuantumCrypto = (
 	"+isAvailable",
@@ -797,6 +927,15 @@
 	"-integrationTimeSec",
 	"-initWithWavenumberArray:intensityArray:excitationWavelengthNm:laserPowerMw:integrationTimeSec:indexPosition:scanTimeSeconds:error:"
     );
+    TTIORefDiffV2 = (
+	"+nativeAvailable",
+	"+encodeSequences:offsets:positions:cigarStrings:reference:referenceMd5:referenceUri:readsPerSlice:error:",
+	"+decodeData:positions:cigarStrings:reference:nReads:totalBases:outSequences:outOffsets:error:"
+    );
+    TTIOReferenceResolver = (
+	"-initWithRootGroup:externalReferencePath:",
+	"-resolveURI:expectedMD5:chromosome:error:"
+    );
     TTIOSignalArray = (
 	"-buffer",
 	"-length",
@@ -814,6 +953,8 @@
 	"+verifyDataset:inFile:withKey:error:",
 	"+signDataset:inFile:withKey:algorithm:error:",
 	"+verifyDataset:inFile:withKey:algorithm:error:",
+	"+signGenomicRun:inFile:withKey:error:",
+	"+verifyGenomicRun:inFile:withKey:error:",
 	"+signProvenanceInRun:inFile:withKey:error:",
 	"+verifyProvenanceInRun:inFile:withKey:error:"
     );
@@ -822,6 +963,7 @@
 	"-isaInvestigationId",
 	"-msRuns",
 	"-nmrRuns",
+	"-genomicRuns",
 	"-identifications",
 	"-quantifications",
 	"-provenanceRecords",
@@ -832,10 +974,16 @@
 	"-writeToFilePath:error:",
 	"+readFromFilePath:error:",
 	"+writeMinimalToPath:title:isaInvestigationId:msRuns:identifications:quantifications:provenanceRecords:error:",
+	"+writeMinimalToPath:title:isaInvestigationId:msRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:",
+	"+writeMinimalToPath:title:isaInvestigationId:mixedRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:",
 	"-closeFile",
 	"-filePath",
 	"-provider",
 	"-provenanceRecordsForInputRef:",
+	"-runs",
+	"-allRunsUnified",
+	"-runsForSample:",
+	"-runsOfModality:",
 	"-encryptWithKey:level:error:",
 	"-decryptWithKey:error:",
 	"-accessPolicy",
@@ -968,6 +1116,7 @@
 	"-writeAccessUnit:datasetId:auSequence:error:",
 	"-writeEndOfDatasetWithDatasetId:finalAUSequence:error:",
 	"-writeEndOfStreamWithError:",
+	"-writeGenomicRun:datasetId:name:error:",
 	"-close"
     );
     TTIOTwoDCos = (
@@ -1008,6 +1157,34 @@
 	"+readFromDirectoryPath:converter:error:",
 	"+readFromDirectoryPath:error:"
     );
+    TTIOWrittenGenomicRun = (
+	"-acquisitionMode",
+	"-referenceUri",
+	"-platform",
+	"-sampleName",
+	"-positionsData",
+	"-mappingQualitiesData",
+	"-flagsData",
+	"-sequencesData",
+	"-qualitiesData",
+	"-offsetsData",
+	"-lengthsData",
+	"-cigars",
+	"-readNames",
+	"-mateChromosomes",
+	"-matePositionsData",
+	"-templateLengthsData",
+	"-chromosomes",
+	"-signalCompression",
+	"-signalCodecOverrides",
+	"-provenanceRecords",
+	"-setProvenanceRecords:",
+	"-embedReference",
+	"-setEmbedReference:",
+	"-readCount",
+	"-initWithAcquisitionMode:referenceUri:platform:sampleName:positions:mappingQualities:flags:sequences:qualities:offsets:lengths:cigars:readNames:mateChromosomes:matePositions:templateLengths:chromosomes:signalCompression:",
+	"-initWithAcquisitionMode:referenceUri:platform:sampleName:positions:mappingQualities:flags:sequences:qualities:offsets:lengths:cigars:readNames:mateChromosomes:matePositions:templateLengths:chromosomes:signalCompression:signalCodecOverrides:"
+    );
     TTIOWrittenRun = (
 	"-spectrumClassName",
 	"-acquisitionMode",
@@ -1024,6 +1201,8 @@
 	"-setNucleusType:",
 	"-signalCompression",
 	"-setSignalCompression:",
+	"-provenanceRecords",
+	"-setProvenanceRecords:",
 	"-initWithSpectrumClassName:acquisitionMode:channelData:offsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:"
     );
 }

@@ -69,6 +69,8 @@ Functions
    ttio.encryption_per_au.decrypt_header_segments
    ttio.encryption_per_au.encrypt_per_au
    ttio.encryption_per_au.decrypt_per_au
+   ttio.encryption_per_au.encrypt_per_au_by_region
+   ttio.encryption_per_au.decrypt_per_au_by_region
 
 
 Module Contents
@@ -155,20 +157,29 @@ Module Contents
       :type:  bytes
 
 
-.. py:function:: encrypt_channel_to_segments(plaintext_flat: numpy.ndarray, offsets: numpy.ndarray, lengths: numpy.ndarray, *, dataset_id: int, channel_name: str, key: bytes) -> list[ChannelSegment]
+.. py:function:: encrypt_channel_to_segments(plaintext_flat: numpy.ndarray, offsets: numpy.ndarray, lengths: numpy.ndarray, *, dataset_id: int, channel_name: str, key: bytes, dtype: numpy.dtype | str = '<f8') -> list[ChannelSegment]
 
-   Slice ``plaintext_flat`` into per-spectrum rows and encrypt
-   each independently.
+   Slice ``plaintext_flat`` into per-AU rows and encrypt each
+   independently.
 
    ``plaintext_flat`` is typically a float64 array of decoded signal
-   values for an entire channel; ``offsets[i]`` / ``lengths[i]`` are
-   the i-th spectrum's position. Each row is a separate AES-GCM
-   operation with a fresh IV.
+   values (MS path) or a uint8 array of bytes (genomic path, M90.1).
+   ``offsets[i]`` / ``lengths[i]`` are the i-th AU's position. Each
+   row is a separate AES-GCM operation with a fresh IV.
+
+   ``dtype`` controls the per-element byte width and the cast applied
+   to ``plaintext_flat`` if it doesn't already match. Default
+   ``"<f8"`` (float64, 8 bytes) preserves pre-M90.1 behaviour.
+   Genomic callers pass ``"<u1"`` (uint8, 1 byte).
 
 
-.. py:function:: decrypt_channel_from_segments(segments: list[ChannelSegment], *, dataset_id: int, channel_name: str, key: bytes) -> numpy.ndarray
+.. py:function:: decrypt_channel_from_segments(segments: list[ChannelSegment], *, dataset_id: int, channel_name: str, key: bytes, dtype: numpy.dtype | str = '<f8') -> numpy.ndarray
 
-   Decrypt every row and concatenate plaintext float64 values.
+   Decrypt every row and concatenate plaintext values.
+
+   ``dtype`` controls the per-element byte width used to validate
+   the decrypted length and the dtype of the returned array.
+   Default ``"<f8"`` (MS path); genomic callers pass ``"<u1"``.
 
 
 .. py:function:: pack_au_header_plaintext(*, acquisition_mode: int, ms_level: int, polarity: int, retention_time: float, precursor_mz: float, precursor_charge: int, ion_mobility: float, base_peak_intensity: float) -> bytes
@@ -232,4 +243,45 @@ Module Contents
 
 
 .. py:data:: decrypt_per_au_file
+
+.. py:function:: encrypt_per_au_by_region(path: str, key_map: dict[str, bytes], *, provider: str | None = None) -> None
+
+   Encrypt genomic signal channels with a per-chromosome key map.
+
+   Reads whose chromosome appears in ``key_map`` are AES-256-GCM
+   encrypted with the corresponding 32-byte key. Reads on
+   chromosomes NOT in ``key_map`` are stored as "clear segments"
+   (length-0 IV + plaintext bytes in the ciphertext slot).
+
+   M90.11: when ``key_map`` contains the reserved key ``"_headers"``,
+   the genomic_index columns (chromosomes, positions, mapping_qualities,
+   flags) are ALSO encrypted with that key — closing the gap where
+   a reader without any signal-channel key could still see read
+   locations + counts. ``offsets`` and ``lengths`` always stay
+   plaintext (structural framing, not semantic PHI).
+
+   MS runs are NOT touched — chromosome is a genomic concept.
+   Use the existing :func:`encrypt_per_au` for MS encryption.
+
+   The on-disk schema for signal channels is identical to M90.1
+   (same ``<channel>_segments`` compound). The reader distinguishes
+   encrypted vs clear segments by ``len(seg.iv)``.
+
+
+.. py:function:: decrypt_per_au_by_region(path: str, key_map: dict[str, bytes], *, provider: str | None = None) -> dict[str, dict[str, numpy.ndarray]]
+
+   Decrypt a region-encrypted file using a per-chromosome key map.
+
+   Caller may supply only a subset of the keys used at encryption
+   time. Clear segments (length-0 IV) decode without any key.
+   Encrypted segments whose chromosome key isn't in ``key_map``
+   raise the underlying AES-GCM authentication error.
+
+   Returns ``{run_name: {channel_name: uint8 ndarray}}`` like
+   :func:`decrypt_per_au`. MS runs are decrypted via the standard
+   path inside this function as a convenience — but only if all
+   MS runs were encrypted (mixed MS-encrypted / region-genomic-
+   encrypted is unusual and supported here only because the
+   counter convention guarantees correct AAD reconstruction).
+
 

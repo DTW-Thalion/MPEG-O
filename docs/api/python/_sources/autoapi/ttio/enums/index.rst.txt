@@ -118,6 +118,16 @@ Module Contents
 
 
 
+   .. py:attribute:: UINT16
+      :value: 7
+
+
+
+   .. py:attribute:: UINT64
+      :value: 9
+
+
+
    .. py:method:: numpy_dtype() -> str
 
       Return the little-endian NumPy dtype string for this precision.
@@ -177,8 +187,28 @@ Module Contents
 
 
 
-   .. py:attribute:: NAME_TOKENIZED
-      :value: 8
+   .. py:attribute:: DELTA_RANS_ORDER0
+      :value: 11
+
+
+
+   .. py:attribute:: FQZCOMP_NX16_Z
+      :value: 12
+
+
+
+   .. py:attribute:: MATE_INLINE_V2
+      :value: 13
+
+
+
+   .. py:attribute:: REF_DIFF_V2
+      :value: 14
+
+
+
+   .. py:attribute:: NAME_TOKENIZED_V2
+      :value: 15
 
 
 

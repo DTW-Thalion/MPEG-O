@@ -1,6 +1,8 @@
 global.thalion.ttio
 global.thalion.ttio.analysis
+global.thalion.ttio.codecs
 global.thalion.ttio.exporters
+global.thalion.ttio.genomics
 global.thalion.ttio.hdf5
 global.thalion.ttio.importers
 global.thalion.ttio.protection

@@ -52,6 +52,8 @@ Functions
    ttio.signatures.sign_dataset
    ttio.signatures.verify_dataset
    ttio.signatures.verify_provenance
+   ttio.signatures.sign_genomic_run
+   ttio.signatures.verify_genomic_run
    ttio.signatures.sign_storage_dataset
    ttio.signatures.verify_storage_dataset
 
@@ -130,6 +132,34 @@ Module Contents
 .. py:function:: verify_provenance(run_group: h5py.Group, key: bytes) -> bool
 
    Verify the ``@provenance_signature`` over ``@provenance_json``.
+
+
+.. py:function:: sign_genomic_run(run_group: h5py.Group, key: bytes, *, algorithm: str = 'hmac-sha256') -> dict[str, str]
+
+   Sign every signal channel + index column under one genomic
+   run with one call.
+
+   Returns a dict mapping ``"<sub>/<dataset>"`` (e.g. ``"signal_channels/sequences"``,
+   ``"genomic_index/positions"``) to the prefixed signature stored on
+   that dataset's ``@ttio_signature`` attribute. Datasets that don't
+   exist are silently skipped (e.g. encrypted files have segments
+   instead of plaintext signal channels).
+
+   Algorithm dispatches identically to :func:`sign_dataset` —
+   ``"hmac-sha256"`` (HMAC + shared key) or ``"ml-dsa-87"`` (PQC
+   private key).
+
+
+.. py:function:: verify_genomic_run(run_group: h5py.Group, key: bytes, *, algorithm: str = 'hmac-sha256') -> bool
+
+   Verify every dataset that :func:`sign_genomic_run` would sign.
+
+   Returns ``True`` iff every present, signed dataset verifies under
+   the key. A dataset that has no ``@ttio_signature`` (i.e. wasn't
+   signed) returns ``False`` from :func:`verify_dataset` and so is
+   treated as a verification failure — that's intentional, since a
+   partial-signature run is not a fully-signed run. Datasets that
+   don't exist on disk are skipped.
 
 
 .. py:function:: sign_storage_dataset(dataset: Any, key: bytes, *, algorithm: str = 'hmac-sha256') -> str

@@ -1,6 +1,24 @@
 libTTIO/stamp &: \
 	../Source/Analysis/TTIOTwoDCos.h \
 	../Source/Analysis/TTIOTwoDCos.m \
+	../Source/Codecs/TTIOBasePack.h \
+	../Source/Codecs/TTIOBasePack.m \
+	../Source/Codecs/TTIODeltaRans.h \
+	../Source/Codecs/TTIODeltaRans.m \
+	../Source/Codecs/TTIOFqzcompNx16Z.h \
+	../Source/Codecs/TTIOFqzcompNx16Z.m \
+	../Source/Codecs/TTIOMateInfoV2.h \
+	../Source/Codecs/TTIOMateInfoV2.m \
+	../Source/Codecs/TTIONameTokenizerV2.h \
+	../Source/Codecs/TTIONameTokenizerV2.m \
+	../Source/Codecs/TTIOQuality.h \
+	../Source/Codecs/TTIOQuality.m \
+	../Source/Codecs/TTIORans.h \
+	../Source/Codecs/TTIORans.m \
+	../Source/Codecs/TTIORefDiffV2.h \
+	../Source/Codecs/TTIORefDiffV2.m \
+	../Source/Codecs/TTIOReferenceResolver.h \
+	../Source/Codecs/TTIOReferenceResolver.m \
 	../Source/Core/TTIONumpress.h \
 	../Source/Core/TTIONumpress.m \
 	../Source/Core/TTIOSignalArray.h \
@@ -21,6 +39,10 @@ libTTIO/stamp &: \
 	../Source/Dataset/TTIOTransitionList.m \
 	../Source/Dataset/TTIOWrittenRun.h \
 	../Source/Dataset/TTIOWrittenRun.m \
+	../Source/Export/TTIOBamWriter.h \
+	../Source/Export/TTIOBamWriter.m \
+	../Source/Export/TTIOCramWriter.h \
+	../Source/Export/TTIOCramWriter.m \
 	../Source/Export/TTIOISAExporter.h \
 	../Source/Export/TTIOISAExporter.m \
 	../Source/Export/TTIOImzMLWriter.h \
@@ -36,6 +58,14 @@ libTTIO/stamp &: \
 	../Source/Export/TTIOMzTabWriter.m \
 	../Source/Export/TTIONmrMLWriter.h \
 	../Source/Export/TTIONmrMLWriter.m \
+	../Source/Genomics/TTIOAlignedRead.h \
+	../Source/Genomics/TTIOAlignedRead.m \
+	../Source/Genomics/TTIOGenomicIndex.h \
+	../Source/Genomics/TTIOGenomicIndex.m \
+	../Source/Genomics/TTIOGenomicRun.h \
+	../Source/Genomics/TTIOGenomicRun.m \
+	../Source/Genomics/TTIOWrittenGenomicRun.h \
+	../Source/Genomics/TTIOWrittenGenomicRun.m \
 	../Source/HDF5/TTIOFeatureFlags.h \
 	../Source/HDF5/TTIOFeatureFlags.m \
 	../Source/HDF5/TTIOHDF5Attribute.h \
@@ -57,12 +87,16 @@ libTTIO/stamp &: \
 	../Source/Image/TTIOMSImage.m \
 	../Source/Image/TTIORamanImage.h \
 	../Source/Image/TTIORamanImage.m \
+	../Source/Import/TTIOBamReader.h \
+	../Source/Import/TTIOBamReader.m \
 	../Source/Import/TTIOBase64.h \
 	../Source/Import/TTIOBase64.m \
 	../Source/Import/TTIOBrukerTDFReader.h \
 	../Source/Import/TTIOBrukerTDFReader.m \
 	../Source/Import/TTIOCVTermMapper.h \
 	../Source/Import/TTIOCVTermMapper.m \
+	../Source/Import/TTIOCramReader.h \
+	../Source/Import/TTIOCramReader.m \
 	../Source/Import/TTIOImzMLReader.h \
 	../Source/Import/TTIOImzMLReader.m \
 	../Source/Import/TTIOJcampDxDecode.h \
@@ -75,6 +109,8 @@ libTTIO/stamp &: \
 	../Source/Import/TTIOMzTabReader.m \
 	../Source/Import/TTIONmrMLReader.h \
 	../Source/Import/TTIONmrMLReader.m \
+	../Source/Import/TTIOSamReader.h \
+	../Source/Import/TTIOSamReader.m \
 	../Source/Import/TTIOThermoRawReader.h \
 	../Source/Import/TTIOThermoRawReader.m \
 	../Source/Import/TTIOWatersMassLynxReader.h \
@@ -103,6 +139,7 @@ libTTIO/stamp &: \
 	../Source/Protocols/TTIOEncryptable.h \
 	../Source/Protocols/TTIOIndexable.h \
 	../Source/Protocols/TTIOProvenanceable.h \
+	../Source/Protocols/TTIORun.h \
 	../Source/Protocols/TTIOStreamable.h \
 	../Source/Providers/TTIOCanonicalBytes.h \
 	../Source/Providers/TTIOCanonicalBytes.m \
