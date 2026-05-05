@@ -1,0 +1,123 @@
+ttio.importers.fasta
+====================
+
+.. py:module:: ttio.importers.fasta
+
+.. autoapi-nested-parse::
+
+   FASTA importer.
+
+   Parses FASTA files into either a :class:`ReferenceImport` (for
+   reference genomes that pair with BAM/CRAM input) or an unaligned
+   :class:`WrittenGenomicRun` (for amplicon panels, target lists, or
+   quality-stripped reads).
+
+   Supports gzip-compressed input transparently (detected via magic
+   bytes ``1f 8b``). FASTA records are header-line ``>name [desc...]``
+   followed by one or more sequence lines until the next header or EOF.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFastaReader`` ·
+   Java: ``global.thalion.ttio.importers.FastaReader``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.fasta.FastaParseError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.fasta.FastaReader
+
+
+Module Contents
+---------------
+
+.. py:exception:: FastaParseError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Raised on malformed FASTA input (missing header, embedded
+   null byte, header without sequence).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: FastaReader(path: str | os.PathLike[str])
+
+   Read a FASTA file into TTI-O containers.
+
+   :param path: Filesystem path to a ``.fa`` / ``.fasta`` / ``.fna`` file.
+                gzip-compressed inputs (``.fa.gz`` etc.) are auto-detected
+                and decompressed.
+   :type path: str or Path
+
+   .. rubric:: Notes
+
+   Construction reads only the file header (or nothing). Calling
+   :meth:`read_reference` or :meth:`read_unaligned` triggers the
+   full parse.
+
+
+   .. py:property:: path
+      :type: pathlib.Path
+
+
+
+   .. py:method:: read_reference(uri: str | None = None) -> ttio.genomic.reference_import.ReferenceImport
+
+      Parse the file as a reference genome.
+
+      Each FASTA record becomes one chromosome.
+
+      :param uri: Reference URI to record on the resulting
+                  :class:`ReferenceImport`. Defaults to the file's stem
+                  (e.g. ``"GRCh38"`` for ``GRCh38.fa``), with ``.fa.gz``
+                  and ``.fasta.gz`` compound suffixes stripped.
+      :type uri: str, optional
+
+      :returns: *ReferenceImport* -- Value class carrying chromosomes, sequences (case-
+                preserving), and content MD5.
+
+
+
+   .. py:method:: read_unaligned(*, sample_name: str = '', platform: str = '', reference_uri: str = '', acquisition_mode: ttio.enums.AcquisitionMode = AcquisitionMode.GENOMIC_WGS) -> ttio.written_genomic_run.WrittenGenomicRun
+
+      Parse the file as a set of unaligned reads.
+
+      Each FASTA record becomes one read with SAM-unmapped sentinel
+      values: ``flags = 4`` (unmapped), ``chromosome = "*"``,
+      ``position = 0``, ``mapq = 255``, ``cigar = "*"``. The
+      ``qualities`` channel is filled with ``0xff`` bytes (one per
+      base, matching :class:`BamReader`'s convention for SAM
+      records whose QUAL field is ``*``).
+
+      :param sample_name: Recorded on the genomic run; default ``""``.
+      :type sample_name: str
+      :param platform: Sequencing platform tag (e.g. ``"ILLUMINA"``); default
+                       ``""``.
+      :type platform: str
+      :param reference_uri: Reference URI to associate with this run; default
+                            ``""`` (no reference).
+      :type reference_uri: str
+      :param acquisition_mode: Run-level acquisition mode; default ``GENOMIC_WGS``.
+      :type acquisition_mode: AcquisitionMode
+
+      :returns: *WrittenGenomicRun* -- Run container ready to pass to
+                :meth:`SpectralDataset.write_minimal` via
+                ``genomic_runs=[...]``.
+
+
+

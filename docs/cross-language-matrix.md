@@ -67,6 +67,9 @@ contract levels per language pair. Footnotes follow the table.
 | **M87** SAM/BAM importer canonical JSON | `=` | `=` | `=` (19) | `=` | `python/tests/integration/test_m87_cross_language.py` |
 | **M88** BAM round-trip + 5-read fixture canonical JSON | `=` | `=` | `=` (19) | `=` | `python/tests/integration/test_m88_cross_language.py` |
 | **M88.1** CRAM via `bam_dump --reference` | `=` | `=` | `=` (19) | `=` | `python/tests/integration/test_m88_cross_language.py` |
+| **FASTA round-trip** (`<in.fa> -> <out.fa>` byte + `.fai` byte) | `=` | `=` | `=` | `=` | `python/tests/integration/test_fasta_fastq_cross_language.py` |
+| **FASTQ round-trip** (`<in.fq> -> <out.fq>` byte) | `=` | `=` | `=` | `=` | `python/tests/integration/test_fasta_fastq_cross_language.py` |
+| **FASTA / FASTQ → `.tio` → FASTA / FASTQ** (full container cycle) | n/a (per-lang) | n/a (per-lang) | n/a (per-lang) | n/a | `test_fasta_fastq_tio_roundtrip.py` (Py), `FastaFastqTioRoundTripTest` (Java), `TestFastaFastqTioRoundTrip` (ObjC) |
 | **v1.0 per-AU encryption** (`.mpad` decrypt parity) | `=` (20) | `=` (20) | `=` (20) | `=` | `python/tests/integration/test_per_au_cross_language.py` |
 | **v1.0 per-AU transport** (`.tis` send/recv) | `=` (20) | `=` (20) | `=` (20) | `=` | `python/tests/integration/test_per_au_cross_language.py` |
 | **M51** Numpress codec (delta + slof) cross-lang structural | `S` (21) | — | — | — | `python/tests/test_compression_codecs.py` |
@@ -194,6 +197,8 @@ The harnesses depend on per-language CLI tools. Build them via:
 | JCAMP-DX dump (M73) | inline (uses `ttio.importers.jcamp_dx.read_spectrum`) | `objc/Tools/obj/TtioJcampDxDump` | inline `M73Driver` (compiled at test time) |
 | Transport encode / decode | `python -m ttio.tools.transport_encode_cli` / `transport_decode_cli` | `objc/Tools/obj/TtioTransportEncode` / `TtioTransportDecode` | `global.thalion.ttio.tools.TransportEncodeCli` / `TransportDecodeCli` |
 | Transport server | `python -m ttio.tools.transport_server_cli` | `objc/Tools/obj/TtioTransportServer` | (no standalone main) |
+| FASTA round-trip | `python -m ttio.tools.{fasta_import,fasta_export}_cli` | `objc/Tools/obj/TtioFastaRoundTrip` | `global.thalion.ttio.tools.FastaRoundTrip` |
+| FASTQ round-trip | `python -m ttio.tools.{fastq_import,fastq_export}_cli` | `objc/Tools/obj/TtioFastqRoundTrip` | `global.thalion.ttio.tools.FastqRoundTrip` |
 
 ---
 

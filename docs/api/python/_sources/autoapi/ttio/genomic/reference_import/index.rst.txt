@@ -1,0 +1,159 @@
+ttio.genomic.reference_import
+=============================
+
+.. py:module:: ttio.genomic.reference_import
+
+.. autoapi-nested-parse::
+
+   Reference-FASTA value class and embedding helpers.
+
+   A ``ReferenceImport`` is the parsed result of a reference-FASTA file
+   (many short or long chromosome records, no quality scores). It carries
+   the chromosome names, per-chromosome sequence bytes, and a content-MD5
+   suitable for the ``@md5`` attribute on
+   ``/study/references/<uri>/`` groups inside a ``.tio`` container.
+
+   The same value class is produced by :class:`ttio.importers.fasta.FastaReader`
+   and consumed by :class:`ttio.exporters.fasta.FastaWriter`, so a
+   FASTA -> .tio -> FASTA round-trip preserves chromosome names, byte
+   contents (case-preserving), and MD5.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOReferenceImport`` ·
+   Java: ``global.thalion.ttio.genomic.ReferenceImport``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.genomic.reference_import.ReferenceImport
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.genomic.reference_import.compute_reference_md5
+
+
+Module Contents
+---------------
+
+.. py:function:: compute_reference_md5(chromosomes: list[str], sequences: list[bytes]) -> bytes
+
+   Compute the canonical MD5 over a reference's chromosome set.
+
+   Algorithm (cross-language byte-exact):
+       for each (name, seq) in sorted(zip(chromosomes, sequences),
+                                      key=name):
+           h.update(name_utf8 + b"\n")
+           h.update(seq)
+           h.update(b"\n")
+       return h.digest()
+
+   Sorting by name makes the MD5 invariant to FASTA record order.
+   Names are encoded UTF-8; sequences are passed through verbatim
+   (case-preserving). The trailing ``\n`` separators are pure
+   framing and never appear inside sequence bytes (FASTA forbids
+   embedded newlines per record).
+
+   :returns: *bytes* -- 16-byte MD5 digest.
+
+
+.. py:class:: ReferenceImport
+
+   Reference-FASTA contents staged for embedding into a ``.tio`` container.
+
+   :param uri: Reference identifier (e.g. ``"GRCh38.p14"``). Becomes the
+               sub-group name under ``/study/references/<uri>/``.
+   :type uri: str
+   :param chromosomes: Chromosome names in FASTA file order. The on-disk MD5 is
+                       order-invariant (see :func:`compute_reference_md5`).
+   :type chromosomes: list[str]
+   :param sequences: Per-chromosome sequence bytes, one entry per chromosome,
+                     case-preserved. Newlines and whitespace stripped.
+   :type sequences: list[bytes]
+   :param md5: 16-byte content MD5 (see :func:`compute_reference_md5`). If
+               omitted, computed from ``chromosomes`` + ``sequences``.
+   :type md5: bytes
+
+   .. rubric:: Notes
+
+   A round-trip FASTA -> :class:`FastaReader` -> ``ReferenceImport``
+   -> :class:`FastaWriter` -> FASTA preserves byte content
+   (including soft-masking via lowercase). The Reference Resolver's
+   upper-casing for REF_DIFF_V2 is a separate normalisation that
+   happens at decode time.
+
+
+   .. py:attribute:: uri
+      :type:  str
+
+
+   .. py:attribute:: chromosomes
+      :type:  list[str]
+
+
+   .. py:attribute:: sequences
+      :type:  list[bytes]
+
+
+   .. py:attribute:: md5
+      :type:  bytes
+      :value: b''
+
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:property:: total_bases
+      :type: int
+
+
+      Sum of sequence lengths across all chromosomes.
+
+
+   .. py:method:: chromosome(name: str) -> bytes
+
+      Return the named chromosome's sequence bytes.
+
+      :raises KeyError: If ``name`` is not in this reference.
+
+
+
+   .. py:method:: write_to_dataset(dataset: ttio.spectral_dataset.SpectralDataset, *, overwrite: bool = False) -> None
+
+      Embed this reference at ``/study/references/<uri>/``
+      inside ``dataset``'s open HDF5 file.
+
+      Layout (cross-language byte-equal):
+
+      ``/study/references/<uri>/``
+        attr ``md5``: 32-character lowercase hex string
+        attr ``total_bases``: int64 sum of sequence lengths
+        ``chromosomes/<name>/data``  uint8 dataset of the
+            chromosome's sequence bytes (case-preserving, no
+            newlines).
+
+      :param dataset: Open dataset (writable HDF5 backing).
+      :type dataset: SpectralDataset
+      :param overwrite: If ``True``, replace any existing reference under the same
+                        URI; if ``False``, raise on collision.
+      :type overwrite: bool
+
+      :raises FileExistsError: If a reference with the same ``uri`` is already embedded
+          and ``overwrite`` is ``False``.
+      :raises RuntimeError: If ``dataset``'s storage backend doesn't expose an open
+          HDF5 group (only HDF5-backed datasets support reference
+          embed).
+
+
+

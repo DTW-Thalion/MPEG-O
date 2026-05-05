@@ -1,0 +1,146 @@
+ttio.importers.fastq
+====================
+
+.. py:module:: ttio.importers.fastq
+
+.. autoapi-nested-parse::
+
+   FASTQ importer.
+
+   Parses FASTQ files into unaligned :class:`WrittenGenomicRun`
+   instances. Each four-line record (``@name``, sequence, ``+``,
+   qualities) becomes one read; the SAM unmapped flags
+   (``flags = 4``, ``chrom = "*"``, ``pos = 0``, ``mapq = 255``,
+   ``cigar = "*"``) are written so the resulting run is internally
+   consistent with FASTA-imported runs and with SAM-unmapped reads.
+
+   Phred encoding is auto-detected by scanning the qualities bytes:
+
+   * If any quality byte is below ASCII ``59`` (Phred+33 score < 26),
+     the file is Phred+33.
+   * Otherwise, if every observed byte is in ``[64, 104]``, the file
+     is treated as Phred+64 and converted to Phred+33 on the fly
+     (each byte ``b`` becomes ``b - 31``).
+   * Tie-break: Phred+33 (modern Illumina default).
+
+   The detected offset is exposed via
+   :attr:`FastqReader.detected_phred_offset`. Pass
+   ``force_phred=33`` or ``force_phred=64`` to override the heuristic.
+
+   Compressed input (``.fq.gz`` / ``.fastq.gz``) is auto-detected via
+   the ``1f 8b`` magic bytes regardless of file extension.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFastqReader`` ·
+   Java: ``global.thalion.ttio.importers.FastqReader``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.fastq.FastqParseError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.fastq.FastqReader
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.fastq.detect_phred_offset
+
+
+Module Contents
+---------------
+
+.. py:exception:: FastqParseError
+
+   Bases: :py:obj:`ttio.importers.fasta.FastaParseError`
+
+
+   Raised on malformed FASTQ input (not a multiple of 4 lines,
+   SEQ/QUAL length mismatch, missing ``+`` separator).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:function:: detect_phred_offset(qualities: bytes) -> int
+
+   Heuristic offset detection over a quality-bytes sample.
+
+   :param qualities: Concatenated quality bytes (one or more records).
+   :type qualities: bytes
+
+   :returns: *int* -- ``33`` (modern Illumina, Sanger) or ``64`` (legacy Illumina /
+             Solexa pre-1.8). Empty input returns ``33``.
+
+   .. rubric:: Notes
+
+   The detection rule is:
+
+   * any byte ``b < 59`` => Phred+33 (Phred+64 starts at ``b == 64``)
+   * else if every byte is in ``[64, 104]`` => Phred+64
+   * else => Phred+33 (default)
+
+
+.. py:class:: FastqReader(path: str | os.PathLike[str], *, force_phred: int | None = None)
+
+   Read a FASTQ file into a :class:`WrittenGenomicRun`.
+
+   :param path: Filesystem path to a ``.fq`` / ``.fastq`` file
+                (``.fq.gz`` / ``.fastq.gz`` auto-detected).
+   :type path: str or Path
+   :param force_phred: ``33`` or ``64`` to bypass auto-detection. Defaults to
+                       ``None`` (auto-detect).
+   :type force_phred: int, optional
+
+
+   .. py:property:: path
+      :type: pathlib.Path
+
+
+
+   .. py:property:: detected_phred_offset
+      :type: int
+
+
+      Phred offset (33 or 64) actually applied to the most
+      recent :meth:`read` call. ``KeyError`` if read hasn't been
+      called yet.
+
+
+   .. py:method:: read(*, sample_name: str = '', platform: str = '', reference_uri: str = '', acquisition_mode: ttio.enums.AcquisitionMode = AcquisitionMode.GENOMIC_WGS) -> ttio.written_genomic_run.WrittenGenomicRun
+
+      Parse the file and return a :class:`WrittenGenomicRun`.
+
+      Quality bytes are normalised to Phred+33 internally
+      (verbatim ASCII storage) so downstream codecs see a single
+      canonical representation. The detected source offset is
+      recorded on :attr:`detected_phred_offset` for round-trip.
+
+      :param sample_name: Recorded on the run; default ``""``.
+      :type sample_name: str
+      :param platform: Sequencing platform tag; default ``""``.
+      :type platform: str
+      :param reference_uri: Reference URI to associate with this run; default ``""``.
+      :type reference_uri: str
+      :param acquisition_mode: Default ``GENOMIC_WGS``.
+      :type acquisition_mode: AcquisitionMode
+
+      :returns: *WrittenGenomicRun* -- Unaligned run ready for ``SpectralDataset.write_minimal``.
+
+
+

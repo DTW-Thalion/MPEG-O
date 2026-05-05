@@ -589,3 +589,163 @@ canonical JSON across Python / ObjC / Java:
 * **CRAM 4.0** — samtools versions <1.20 emit CRAM 3.x. The format
   emitted depends on the installed samtools version; TTI-O does
   not pin or override it.
+
+---
+
+## FASTA (reference + unaligned reads)
+
+The FASTA importer / exporter pair is **native to TTI-O** — no
+`samtools` subprocess, no third-party FASTA library. Pure-text
+parsers in each language read FASTA and FASTQ records directly.
+gzip-compressed input is auto-detected via the `1f 8b` magic bytes
+regardless of file extension.
+
+### Two import modes
+
+The same `FastaReader` services two distinct workflows:
+
+| Mode | Method | Result | Use case |
+|---|---|---|---|
+| **Reference** | `read_reference()` / `+readReferenceFromPath:uri:error:` / `readReference()` | `ReferenceImport` (chromosomes + content MD5) | Pair with BAM/CRAM input. Embed under `/study/references/<uri>/` so the `.tio` is self-contained — REF_DIFF_V2 decode no longer needs an external `.fa` on disk. |
+| **Unaligned** | `read_unaligned()` / `+readUnalignedFromPath:...:error:` / `readUnaligned(...)` | `WrittenGenomicRun` with SAM unmapped sentinels | Amplicon panels, target lists, quality-stripped reads. `flags=4` (unmapped), `chrom="*"`, `pos=0`, `mapq=255`, `cigar="*"`, qualities filled with the `0xFF` "qualities unknown" sentinel matching `BamReader`'s convention. |
+
+### Reference-FASTA embedding layout
+
+```
+/study/references/<uri>/
+  attr "md5"             = <32-char lowercase hex string>
+  attr "total_bases"     = <int64 sum of sequence lengths>
+  chromosomes/
+    <chrom_name>/data    = uint8 dataset, gzip-compressed, case-preserving
+    ...
+```
+
+The MD5 attribute is computed by sorting chromosomes by name (so
+the digest is order-invariant), then digesting
+`utf8(name) + 0x0A + sequence_bytes + 0x0A` for each chromosome.
+Cross-language byte-equal: Python, Java, and ObjC all agree.
+
+The `ReferenceResolver` lookup chain is:
+1. Embedded reference at `/study/references/<uri>/` in the open
+   `.tio`.
+2. External FASTA via the `REF_PATH` env var (or an explicit path
+   passed to the resolver constructor).
+3. `RefMissingError` — hard-fail rather than partial decode.
+
+### Exporter — line wrap, `.fai`, gzip
+
+`FastaWriter` writes either a `ReferenceImport` (chromosomes) or a
+`WrittenGenomicRun` / read-side `GenomicRun` (one record per read).
+Output guarantees:
+
+* **Header**: exactly `>name\n` — no description preserved.
+* **Line wrap**: configurable, default 60 chars (NCBI convention).
+  Last line of each record may be shorter; the index records the
+  canonical wrap width.
+* **Line endings**: LF only.
+* **`.fai` index**: emitted alongside non-gzip output by default.
+  Format: `<name>\t<length>\t<offset>\t<linebases>\t<linewidth>\n`
+  matching samtools' `faidx` convention. Skipped silently for gzip
+  output (samtools requires bgzip for indexed gzip-FASTA, which
+  TTI-O does not yet emit).
+* **gzip**: enabled when the destination ends in `.gz` or
+  `gzipOutput=True`.
+
+### Cross-language byte-equality
+
+For uncompressed output, all three languages produce **byte-
+identical** FASTA bytes for the same input — proven by
+`python/tests/integration/test_fasta_fastq_cross_language.py` (the
+test invokes Python directly, then subprocesses the Java
+`FastaRoundTrip` and ObjC `TtioFastaRoundTrip` CLIs and diffs the
+three outputs). gzip wrappers are deflate-non-deterministic across
+implementations; the inner uncompressed payload is byte-equal.
+
+### Round-trip through `.tio`
+
+The full chain `FASTA → WrittenGenomicRun → SpectralDataset.write_minimal
+→ SpectralDataset.open → FastaWriter.write_run → FASTA` produces
+byte-identical output, verified by
+`test_fasta_fastq_tio_roundtrip.py` (Python),
+`FastaFastqTioRoundTripTest` (Java), and
+`TestFastaFastqTioRoundTrip` (ObjC).
+
+### CLI
+
+| Language | Tool | Notes |
+|---|---|---|
+| Python | `python -m ttio.tools.fasta_import_cli {reference,unaligned}` <br> `python -m ttio.tools.fasta_export_cli {reference,run}` | Production CLIs. |
+| Java | `global.thalion.ttio.tools.FastaRoundTrip <in.fa> <out.fa> [line_width]` | Round-trip CLI used by the conformance harness. |
+| ObjC | `TtioFastaRoundTrip <in.fa> <out.fa> [line_width]` | Same. |
+
+---
+
+## FASTQ (unaligned reads)
+
+The FASTQ importer / exporter pair complements FASTA's unaligned-
+mode read path with quality scores preserved verbatim.
+
+### Phred auto-detect
+
+`FastqReader` inspects the qualities byte range to choose the
+encoding offset:
+
+| Observed range | Decision |
+|---|---|
+| any byte `< 59` | **Phred+33** (Phred+64 starts at byte 64; modern Illumina / Sanger range). |
+| every byte in `[64, 104]` | **Phred+64** (legacy Illumina / Solexa pre-1.8). |
+| otherwise | **Phred+33** (default). |
+
+The detected source offset is exposed on the reader
+(`detected_phred_offset` / `detectedPhredOffset()` /
+`outDetected:` out-parameter). Override the heuristic with
+`force_phred=33|64`. Internal storage normalises to Phred+33 ASCII
+verbatim — the byte you store is the byte the writer emits, no
+arithmetic mid-pipeline.
+
+### SAM-unmapped sentinels
+
+Each FASTQ record becomes one read in a `WrittenGenomicRun` with
+`flags=4`, `chromosome="*"`, `position=0`, `mapping_quality=255`,
+`cigar="*"`. Sequence and qualities are populated from the FASTQ
+record verbatim. Mate fields default to BAM unmapped sentinels
+(`mate_position=-1`, `template_length=0`).
+
+### Exporter — Phred selection, gzip
+
+`FastqWriter.write` defaults to Phred+33 output. Pass
+`phred_offset=64` for legacy Illumina output (each byte rewritten
+as `b + 31` on the way out). The internal `0xFF` "qualities
+unknown" sentinel is mapped to Phred 0 (`!`) on output so the
+result is always a parseable FASTQ.
+
+gzip is enabled when the destination ends in `.gz`.
+
+### Cross-language byte-equality
+
+Same guarantee as FASTA: uncompressed output is byte-equal across
+Python / Java / ObjC for the same input. Verified by the same
+3-way harness.
+
+### CLI
+
+| Language | Tool |
+|---|---|
+| Python | `python -m ttio.tools.fastq_import_cli` <br> `python -m ttio.tools.fastq_export_cli` |
+| Java | `global.thalion.ttio.tools.FastqRoundTrip <in.fq> <out.fq>` |
+| ObjC | `TtioFastqRoundTrip <in.fq> <out.fq>` |
+
+### What is NOT covered
+
+* **Phred+64 round-trip preservation** — internal storage is
+  Phred+33 only. A Phred+64 input is converted on read; on export,
+  the user explicitly opts back into Phred+64 with the
+  `phred_offset` argument if needed.
+* **Multi-line FASTQ** — most FASTQ aligners produce one-line
+  sequence + one-line qualities. Multi-line records (rarely seen
+  in modern data) are not supported.
+* **bgzip-FASTQ** — gzip output is plain gzip, not bgzip; samtools
+  random-access via `.fqi` will not work.
+* **Read pairing in a single FASTQ** — paired-end FASTQ is two
+  separate files (`R1.fq` + `R2.fq`); the importer treats each as
+  an independent unaligned run.

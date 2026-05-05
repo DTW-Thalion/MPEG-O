@@ -106,6 +106,7 @@ delegate to the relevant managers; see "Implementation notes" below.
 | `TTIOGenomicRun` | `NSObject` | `TTIOIndexable`, `TTIOStreamable` | `genomicIndex`, `referenceUri`, `platform`, `sampleName`, `acquisitionMode`; element type is `TTIOAlignedRead`, not `TTIOSpectrum`. Lazy hyperslab reads on `signal_channels/sequences` and `qualities`; compound rows (cigars, read_names, mate_info) cached on first access |
 | `TTIOGenomicIndex` | `NSObject` | — | `offsets`, `lengths`, `chromosomes`, `positions`, `mappingQualities`, `flags` (parallel arrays); `indicesForRegion:`, `indicesForUnmapped`, `indicesForFlag:` query helpers |
 | `TTIOWrittenGenomicRun` | `NSObject` | — | Pure write-side container passed to `+writeMinimalToPath:...:genomicRuns:`. Mirrors the field set of `TTIOWrittenRun` for the genomic side |
+| `TTIOReferenceImport` | `NSObject` | — | Reference-FASTA value class staged for embedding at `/study/references/<uri>/`. Carries `uri`, `chromosomes`, `sequences` (case-preserving), and a content-MD5 computed by sort-by-name digest. Cross-language byte-equal MD5 across Python / Java / ObjC |
 | `TTIOSpectralDataset` | `NSObject` | — | `title`, `isaInvestigationId`, `msRuns`, `nmrRuns`, `genomicRuns`, `identifications`, `quantifications`, `provenanceRecords`, `transitions` |
 | `TTIOIdentification` | `NSObject` | `NSCopying` | `runName`, `spectrumIndex`, `chemicalEntity`, `confidenceScore`, `evidenceChain` |
 | `TTIOQuantification` | `NSObject` | `NSCopying` | `chemicalEntity`, `sampleRef`, `abundance`, `normalizationMethod` |

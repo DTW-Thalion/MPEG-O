@@ -1,0 +1,42 @@
+ttio.tools.fasta_import_cli
+===========================
+
+.. py:module:: ttio.tools.fasta_import_cli
+
+.. autoapi-nested-parse::
+
+   FASTA import CLI — converts a FASTA file into either an embedded
+   reference inside a ``.tio`` container or a stand-alone unaligned
+   genomic run.
+
+   Usage
+   -----
+   ::
+
+       python -m ttio.tools.fasta_import_cli reference \
+           --fasta GRCh38.fa --out study.tio --uri GRCh38
+
+       python -m ttio.tools.fasta_import_cli unaligned \
+           --fasta panel.fa --out study.tio --sample S1
+
+   Exit codes
+   ----------
+   - ``0`` — wrote output successfully.
+   - ``1`` — argument error.
+   - ``2`` — read / write failure.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.fasta_import_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

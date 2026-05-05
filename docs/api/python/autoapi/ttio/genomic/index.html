@@ -3,7 +3,7 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html"><link rel="next" title="ttio.genomic.reference_resolver" href="reference_resolver/index.html"><link rel="prev" title="ttio.fid" href="../fid/index.html">
+<link rel="index" title="Index" href="../../../genindex.html"><link rel="search" title="Search" href="../../../search.html"><link rel="next" title="ttio.genomic.reference_import" href="reference_import/index.html"><link rel="prev" title="ttio.fid" href="../fid/index.html">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>ttio.genomic - TTI-O Python API</title>
@@ -224,6 +224,8 @@
 <li class="toctree-l2 has-children"><a class="reference internal" href="../exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/bam/index.html">ttio.exporters.bam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/cram/index.html">ttio.exporters.cram</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/fasta/index.html">ttio.exporters.fasta</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/fastq/index.html">ttio.exporters.fastq</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/imzml/index.html">ttio.exporters.imzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/isa/index.html">ttio.exporters.isa</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/jcamp_dx/index.html">ttio.exporters.jcamp_dx</a></li>
@@ -236,6 +238,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../feature_flags/index.html">ttio.feature_flags</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../fid/index.html">ttio.fid</a></li>
 <li class="toctree-l2 current has-children current-page"><a class="current reference internal" href="#">ttio.genomic</a><input aria-label="Toggle navigation of ttio.genomic" checked="" class="toctree-checkbox" id="toctree-checkbox-5" name="toctree-checkbox-5" role="switch" type="checkbox"/><label for="toctree-checkbox-5"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="reference_import/index.html">ttio.genomic.reference_import</a></li>
 <li class="toctree-l3"><a class="reference internal" href="reference_resolver/index.html">ttio.genomic.reference_resolver</a></li>
 </ul>
 </li>
@@ -249,6 +252,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/cram/index.html">ttio.importers.cram</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/cv_term_mapper/index.html">ttio.importers.cv_term_mapper</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/fasta/index.html">ttio.importers.fasta</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/fastq/index.html">ttio.importers.fastq</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/import_result/index.html">ttio.importers.import_result</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/imzml/index.html">ttio.importers.imzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
@@ -302,6 +307,10 @@
 <li class="toctree-l2"><a class="reference internal" href="../stream_writer/index.html">ttio.stream_writer</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tools/fasta_export_cli/index.html">ttio.tools.fasta_export_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tools/fasta_import_cli/index.html">ttio.tools.fasta_import_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tools/fastq_export_cli/index.html">ttio.tools.fastq_export_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tools/fastq_import_cli/index.html">ttio.tools.fastq_import_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/per_au_cli/index.html">ttio.tools.per_au_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/simulator_cli/index.html">ttio.tools.simulator_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/transport_decode_cli/index.html">ttio.tools.transport_decode_cli</a></li>
@@ -373,7 +382,9 @@
 <p>Genomic-modality support modules for TTI-O.</p>
 <dl class="simple">
 <dt>Public surface from this subpackage:</dt><dd><dl class="simple">
-<dt>ReferenceResolver, RefMissingError — M93 reference resolution</dt><dd><p>for the REF_DIFF codec.</p>
+<dt>ReferenceResolver, RefMissingError — reference resolution for</dt><dd><p>the REF_DIFF_V2 codec.</p>
+</dd>
+<dt>ReferenceImport, compute_reference_md5 — FASTA reference value</dt><dd><p>class staged for embedding into a <code class="docutils literal notranslate"><span class="pre">.tio</span></code> container.</p>
 </dd>
 </dl>
 </dd>
@@ -382,6 +393,7 @@
 <h2>Submodules<a class="headerlink" href="#submodules" title="Link to this heading">¶</a></h2>
 <div class="toctree-wrapper compound">
 <ul>
+<li class="toctree-l1"><a class="reference internal" href="reference_import/index.html">ttio.genomic.reference_import</a></li>
 <li class="toctree-l1"><a class="reference internal" href="reference_resolver/index.html">ttio.genomic.reference_resolver</a></li>
 </ul>
 </div>
@@ -403,8 +415,23 @@
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.genomic.ReferenceResolver" title="ttio.genomic.ReferenceResolver"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReferenceResolver</span></code></a></p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.genomic.ReferenceImport" title="ttio.genomic.ReferenceImport"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReferenceImport</span></code></a></p></td>
+<td><p>Reference-FASTA contents staged for embedding into a <code class="docutils literal notranslate"><span class="pre">.tio</span></code> container.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.genomic.ReferenceResolver" title="ttio.genomic.ReferenceResolver"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ReferenceResolver</span></code></a></p></td>
 <td><p>Resolve a reference chromosome sequence for REF_DIFF decode.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading">¶</a></h2>
+<div class="table-wrapper autosummary longtable docutils container">
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.genomic.compute_reference_md5" title="ttio.genomic.compute_reference_md5"><code class="xref py py-obj docutils literal notranslate"><span class="pre">compute_reference_md5</span></code></a>(→ bytes)</p></td>
+<td><p>Compute the canonical MD5 over a reference's chromosome set.</p></td>
 </tr>
 </tbody>
 </table>
@@ -412,6 +439,139 @@
 </section>
 <section id="package-contents">
 <h2>Package Contents<a class="headerlink" href="#package-contents" title="Link to this heading">¶</a></h2>
+<dl class="py class">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport">
+<span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">ttio.genomic.</span></span><span class="sig-name descname"><span class="pre">ReferenceImport</span></span><a class="reference internal" href="../../../_modules/ttio/genomic/reference_import.html#ReferenceImport"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.genomic.ReferenceImport" title="Link to this definition">¶</a></dt>
+<dd><p>Reference-FASTA contents staged for embedding into a <code class="docutils literal notranslate"><span class="pre">.tio</span></code> container.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>uri</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Reference identifier (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;GRCh38.p14&quot;</span></code>). Becomes the
+sub-group name under <code class="docutils literal notranslate"><span class="pre">/study/references/&lt;uri&gt;/</span></code>.</p></li>
+<li><p><strong>chromosomes</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>]</em>) – Chromosome names in FASTA file order. The on-disk MD5 is
+order-invariant (see <a class="reference internal" href="#ttio.genomic.compute_reference_md5" title="ttio.genomic.compute_reference_md5"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute_reference_md5()</span></code></a>).</p></li>
+<li><p><strong>sequences</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><em>list</em></a><em>[</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><em>bytes</em></a><em>]</em>) – Per-chromosome sequence bytes, one entry per chromosome,
+case-preserved. Newlines and whitespace stripped.</p></li>
+<li><p><strong>md5</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><em>bytes</em></a>) – 16-byte content MD5 (see <a class="reference internal" href="#ttio.genomic.compute_reference_md5" title="ttio.genomic.compute_reference_md5"><code class="xref py py-func docutils literal notranslate"><span class="pre">compute_reference_md5()</span></code></a>). If
+omitted, computed from <code class="docutils literal notranslate"><span class="pre">chromosomes</span></code> + <code class="docutils literal notranslate"><span class="pre">sequences</span></code>.</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>A round-trip FASTA -&gt; <code class="xref py py-class docutils literal notranslate"><span class="pre">FastaReader</span></code> -&gt; <code class="docutils literal notranslate"><span class="pre">ReferenceImport</span></code>
+-&gt; <code class="xref py py-class docutils literal notranslate"><span class="pre">FastaWriter</span></code> -&gt; FASTA preserves byte content
+(including soft-masking via lowercase). The Reference Resolver’s
+upper-casing for REF_DIFF_V2 is a separate normalisation that
+happens at decode time.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.uri">
+<span class="sig-name descname"><span class="pre">uri</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><a class="headerlink" href="#ttio.genomic.ReferenceImport.uri" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.chromosomes">
+<span class="sig-name descname"><span class="pre">chromosomes</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#ttio.genomic.ReferenceImport.chromosomes" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.sequences">
+<span class="sig-name descname"><span class="pre">sequences</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span><a class="headerlink" href="#ttio.genomic.ReferenceImport.sequences" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.md5">
+<span class="sig-name descname"><span class="pre">md5</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">b''</span></span><a class="headerlink" href="#ttio.genomic.ReferenceImport.md5" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.__post_init__">
+<span class="sig-name descname"><span class="pre">__post_init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/genomic/reference_import.html#ReferenceImport.__post_init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.genomic.ReferenceImport.__post_init__" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.total_bases">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">total_bases</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="headerlink" href="#ttio.genomic.ReferenceImport.total_bases" title="Link to this definition">¶</a></dt>
+<dd><p>Sum of sequence lengths across all chromosomes.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.chromosome">
+<span class="sig-name descname"><span class="pre">chromosome</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/genomic/reference_import.html#ReferenceImport.chromosome"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.genomic.ReferenceImport.chromosome" title="Link to this definition">¶</a></dt>
+<dd><p>Return the named chromosome’s sequence bytes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#KeyError" title="(in Python v3.14)"><strong>KeyError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">name</span></code> is not in this reference.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ttio.genomic.ReferenceImport.write_to_dataset">
+<span class="sig-name descname"><span class="pre">write_to_dataset</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataset</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset" title="ttio.spectral_dataset.SpectralDataset"><span class="pre">ttio.spectral_dataset.SpectralDataset</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">overwrite</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/genomic/reference_import.html#ReferenceImport.write_to_dataset"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.genomic.ReferenceImport.write_to_dataset" title="Link to this definition">¶</a></dt>
+<dd><p>Embed this reference at <code class="docutils literal notranslate"><span class="pre">/study/references/&lt;uri&gt;/</span></code>
+inside <code class="docutils literal notranslate"><span class="pre">dataset</span></code>’s open HDF5 file.</p>
+<p>Layout (cross-language byte-equal):</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">/study/references/&lt;uri&gt;/</span></code></dt><dd><p>attr <code class="docutils literal notranslate"><span class="pre">md5</span></code>: 32-character lowercase hex string
+attr <code class="docutils literal notranslate"><span class="pre">total_bases</span></code>: int64 sum of sequence lengths
+<code class="docutils literal notranslate"><span class="pre">chromosomes/&lt;name&gt;/data</span></code>  uint8 dataset of the</p>
+<blockquote>
+<div><p>chromosome’s sequence bytes (case-preserving, no
+newlines).</p>
+</div></blockquote>
+</dd>
+</dl>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> (<a class="reference internal" href="../spectral_dataset/index.html#ttio.spectral_dataset.SpectralDataset" title="ttio.spectral_dataset.SpectralDataset"><em>SpectralDataset</em></a>) – Open dataset (writable HDF5 backing).</p></li>
+<li><p><strong>overwrite</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><em>bool</em></a>) – If <code class="docutils literal notranslate"><span class="pre">True</span></code>, replace any existing reference under the same
+URI; if <code class="docutils literal notranslate"><span class="pre">False</span></code>, raise on collision.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Raises<span class="colon">:</span></dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#FileExistsError" title="(in Python v3.14)"><strong>FileExistsError</strong></a> – If a reference with the same <code class="docutils literal notranslate"><span class="pre">uri</span></code> is already embedded
+and <code class="docutils literal notranslate"><span class="pre">overwrite</span></code> is <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#RuntimeError" title="(in Python v3.14)"><strong>RuntimeError</strong></a> – If <code class="docutils literal notranslate"><span class="pre">dataset</span></code>’s storage backend doesn’t expose an open
+HDF5 group (only HDF5-backed datasets support reference
+embed).</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.genomic.compute_reference_md5">
+<span class="sig-prename descclassname"><span class="pre">ttio.genomic.</span></span><span class="sig-name descname"><span class="pre">compute_reference_md5</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">chromosomes</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sequences</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/genomic/reference_import.html#compute_reference_md5"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.genomic.compute_reference_md5" title="Link to this definition">¶</a></dt>
+<dd><p>Compute the canonical MD5 over a reference’s chromosome set.</p>
+<dl>
+<dt>Algorithm (cross-language byte-exact):</dt><dd><dl>
+<dt>for each (name, seq) in sorted(zip(chromosomes, sequences),</dt><dd><blockquote>
+<div><p>key=name):</p>
+</div></blockquote>
+<p>h.update(name_utf8 + b”n”)
+h.update(seq)
+h.update(b”n”)</p>
+</dd>
+</dl>
+<p>return h.digest()</p>
+</dd>
+</dl>
+<p>Sorting by name makes the MD5 invariant to FASTA record order.
+Names are encoded UTF-8; sequences are passed through verbatim
+(case-preserving). The trailing <code class="docutils literal notranslate"><span class="pre">\n</span></code> separators are pure
+framing and never appear inside sequence bytes (FASTA forbids
+embedded newlines per record).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>bytes</em> – 16-byte MD5 digest.</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="ttio.genomic.ReferenceResolver">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">ttio.genomic.</span></span><span class="sig-name descname"><span class="pre">ReferenceResolver</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">h5_file</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><span class="pre">h5py.File</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">external_reference_path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="../../../_modules/ttio/genomic/reference_resolver.html#ReferenceResolver"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.genomic.ReferenceResolver" title="Link to this definition">¶</a></dt>
@@ -458,12 +618,12 @@ Genomic data integrity is non-negotiable.</p>
       <footer>
         
         <div class="related-pages">
-          <a class="next-page" href="reference_resolver/index.html">
+          <a class="next-page" href="reference_import/index.html">
               <div class="page-info">
                 <div class="context">
                   <span>Next</span>
                 </div>
-                <div class="title">ttio.genomic.reference_resolver</div>
+                <div class="title">ttio.genomic.reference_import</div>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
@@ -512,7 +672,20 @@ Genomic data integrity is non-negotiable.</p>
 <li><a class="reference internal" href="#submodules">Submodules</a></li>
 <li><a class="reference internal" href="#exceptions">Exceptions</a></li>
 <li><a class="reference internal" href="#classes">Classes</a></li>
+<li><a class="reference internal" href="#functions">Functions</a></li>
 <li><a class="reference internal" href="#package-contents">Package Contents</a><ul>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport"><code class="docutils literal notranslate"><span class="pre">ReferenceImport</span></code></a><ul>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.uri"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.uri</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.chromosomes"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.chromosomes</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.sequences"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.sequences</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.md5"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.md5</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.__post_init__"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.__post_init__()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.total_bases"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.total_bases</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.chromosome"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.chromosome()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.genomic.ReferenceImport.write_to_dataset"><code class="docutils literal notranslate"><span class="pre">ReferenceImport.write_to_dataset()</span></code></a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#ttio.genomic.compute_reference_md5"><code class="docutils literal notranslate"><span class="pre">compute_reference_md5()</span></code></a></li>
 <li><a class="reference internal" href="#ttio.genomic.ReferenceResolver"><code class="docutils literal notranslate"><span class="pre">ReferenceResolver</span></code></a><ul>
 <li><a class="reference internal" href="#ttio.genomic.ReferenceResolver.resolve"><code class="docutils literal notranslate"><span class="pre">ReferenceResolver.resolve()</span></code></a></li>
 </ul>

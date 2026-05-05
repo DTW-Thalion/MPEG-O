@@ -1,0 +1,41 @@
+ttio.tools.fasta_export_cli
+===========================
+
+.. py:module:: ttio.tools.fasta_export_cli
+
+.. autoapi-nested-parse::
+
+   FASTA export CLI — emits an embedded reference or a genomic run
+   to a FASTA file.
+
+   Usage
+   -----
+   ::
+
+       python -m ttio.tools.fasta_export_cli reference \
+           --in study.tio --uri GRCh38 --out GRCh38.fa --line-width 60
+
+       python -m ttio.tools.fasta_export_cli run \
+           --in study.tio --name genomic_0001 --out reads.fa
+
+   Exit codes
+   ----------
+   - ``0`` — wrote output successfully.
+   - ``1`` — argument error.
+   - ``2`` — read / write failure.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.fasta_export_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+
