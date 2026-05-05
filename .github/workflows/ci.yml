@@ -189,6 +189,16 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.11", "3.12"]
+    env:
+      # Phase 2c-T + v2 codecs (mate_info_v2, ref_diff_v2,
+      # name_tokenized_v2, fqzcomp_nx16_z) require the native rANS
+      # shared library at runtime. Built fresh in the cmake step
+      # below. The resolver in `python/tests/validation/test_*` also
+      # falls back to `native/_build/libttio_rans.so` from the repo
+      # root when this env var is unset; we set it explicitly so
+      # subprocess-driven tests (Java / ObjC sibling CLIs) inherit
+      # the same path.
+      TTIO_RANS_LIB_PATH: ${{ github.workspace }}/native/_build/libttio_rans.so
 
     steps:
       - name: Checkout
@@ -199,7 +209,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libhdf5-dev \
-            zlib1g-dev
+            zlib1g-dev \
+            cmake \
+            ninja-build
+
+      - name: Build native rANS library
+        # Required for the v2 genomic codecs (MATE_INLINE_V2,
+        # REF_DIFF_V2, NAME_TOKENIZED_V2, FQZCOMP_NX16_Z) and the
+        # Phase 2c-T transport bulk-mode tests. Without this step,
+        # ~90 tests silently skip or run in degraded paths.
+        run: |
+          cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
+          cmake --build native/_build --parallel
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -239,6 +260,8 @@ jobs:
     name: Python — M64 cross-tool validation (optional deps)
     runs-on: ubuntu-latest
     needs: python-test
+    env:
+      TTIO_RANS_LIB_PATH: ${{ github.workspace }}/native/_build/libttio_rans.so
 
     steps:
       - name: Checkout
@@ -247,7 +270,16 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libhdf5-dev zlib1g-dev
+          sudo apt-get install -y --no-install-recommends \
+            libhdf5-dev zlib1g-dev cmake ninja-build
+
+      - name: Build native rANS library
+        run: |
+          cmake -B native/_build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DTTIO_RANS_BUILD_JNI=ON \
+                native
+          cmake --build native/_build --parallel
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -270,6 +302,8 @@ jobs:
     name: Python — nightly stress suite
     runs-on: ubuntu-latest
     if: github.event_name == 'schedule'
+    env:
+      TTIO_RANS_LIB_PATH: ${{ github.workspace }}/native/_build/libttio_rans.so
 
     steps:
       - name: Checkout
@@ -278,7 +312,16 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libhdf5-dev zlib1g-dev
+          sudo apt-get install -y --no-install-recommends \
+            libhdf5-dev zlib1g-dev cmake ninja-build
+
+      - name: Build native rANS library
+        run: |
+          cmake -B native/_build -G Ninja \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DTTIO_RANS_BUILD_JNI=ON \
+                native
+          cmake --build native/_build --parallel
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
