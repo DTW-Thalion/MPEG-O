@@ -1,4 +1,16 @@
 /*
+ * TTIOBamWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOBamWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOBamWriter.h
+ *
+ * BAM exporter. Formats a TTIOWrittenGenomicRun as SAM text and pipes
+ * it via stdin to samtools view -bS - (optionally piped through
+ * samtools sort -O bam). Subprocess-only; no htslib linkage.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOBamWriter.h"

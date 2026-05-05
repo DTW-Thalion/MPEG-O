@@ -14,40 +14,67 @@
 @class TTIOFreeInductionDecay;
 
 /**
- * Milestone 29 — nmrML writer.
+ * <heading>TTIONmrMLWriter</heading>
  *
- * Serializes one NMR spectrum (and optionally its FID) to an nmrML XML
- * document. Mirrors the elements parsed by TTIONmrMLReader so the
- * output round-trips through the reader unchanged.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Export/TTIONmrMLWriter.h</p>
  *
- * nmrCV accessions emitted:
- *   NMR:1000001 — spectrometer frequency (MHz)
- *   NMR:1000002 — nucleus type
- *   NMR:1000003 — number of scans
- *   NMR:1000004 — dwell time (seconds)
- *   NMR:1400014 — sweep width (ppm)
+ * <p>nmrML writer. Serialises one NMR spectrum (and optionally its
+ * FID) to an nmrML XML document. Mirrors the elements parsed by
+ * <code>TTIONmrMLReader</code> so the output round-trips through the
+ * reader unchanged.</p>
  *
- * API status: Stable.
+ * <p><strong>nmrCV accessions emitted:</strong></p>
+ * <ul>
+ *  <li>NMR:1000001 &mdash; spectrometer frequency (MHz)</li>
+ *  <li>NMR:1000002 &mdash; nucleus type</li>
+ *  <li>NMR:1000003 &mdash; number of scans</li>
+ *  <li>NMR:1000004 &mdash; dwell time (seconds)</li>
+ *  <li>NMR:1400014 &mdash; sweep width (ppm)</li>
+ * </ul>
  *
- * Cross-language equivalents:
- *   Python: ttio.exporters.nmrml
- *   Java:   global.thalion.ttio.exporters.NmrMLWriter
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.exporters.nmrml</code><br/>
+ * Java: <code>global.thalion.ttio.exporters.NmrMLWriter</code></p>
  */
 @interface TTIONmrMLWriter : NSObject
 
-/** Serialize a single NMR spectrum (+ optional FID) to an in-memory
- *  nmrML XML blob. The spectrum's ``chemicalShiftArray`` becomes the
- *  ``&lt;xAxis&gt;`` and ``intensityArray`` the ``&lt;yAxis&gt;``.
+/**
+ * Serialises a single NMR spectrum (plus optional FID) to an
+ * in-memory nmrML XML blob. The spectrum's
+ * <code>chemicalShiftArray</code> becomes the
+ * <code>&lt;xAxis&gt;</code> and <code>intensityArray</code> the
+ * <code>&lt;yAxis&gt;</code>. <code>fid</code> may be
+ * <code>nil</code>; if present it is written as
+ * <code>&lt;fidData&gt;</code> in base64 complex128.
  *
- *  ``fid`` may be nil; if present it is written as ``&lt;fidData&gt;`` in
- *  base64 complex128. ``sweepWidthPPM`` is required for the
- *  ``&lt;sweepWidth&gt;`` cvParam; pass 0 to omit.
+ * @param spectrum      Spectrum to serialise.
+ * @param fid           Optional FID to embed; <code>nil</code> omits.
+ * @param sweepWidthPPM Sweep width for the
+ *                      <code>&lt;sweepWidth&gt;</code> cvParam; pass
+ *                      <code>0</code> to omit.
+ * @param error         Out-parameter populated on failure.
+ * @return UTF-8 nmrML data, or <code>nil</code> on failure.
  */
 + (NSData *)dataForSpectrum:(TTIONMRSpectrum *)spectrum
                         fid:(TTIOFreeInductionDecay *)fid
               sweepWidthPPM:(double)sweepWidthPPM
                       error:(NSError **)error;
 
+/**
+ * Convenience wrapper around <code>+dataForSpectrum:...</code> that
+ * writes the result to disk.
+ *
+ * @param spectrum      Spectrum to serialise.
+ * @param fid           Optional FID to embed.
+ * @param sweepWidthPPM Sweep width.
+ * @param path          Destination path.
+ * @param error         Out-parameter populated on failure.
+ * @return <code>YES</code> on success, <code>NO</code> on failure.
+ */
 + (BOOL)writeSpectrum:(TTIONMRSpectrum *)spectrum
                   fid:(TTIOFreeInductionDecay *)fid
         sweepWidthPPM:(double)sweepWidthPPM

@@ -1,3 +1,18 @@
+/*
+ * TTIOJcampDxEncode.m
+ * TTI-O Objective-C Implementation
+ *
+ * Module:        TTIOJcampDxEncode (free functions)
+ * Declared In:   Export/TTIOJcampDxEncode.h
+ *
+ * JCAMP-DX 5.01 §5.9 compressed-XYDATA encoder (PAC / SQZ / DIF).
+ * Byte-for-byte mirror of the Python and Java encoders; the
+ * conformance fixtures under conformance/jcamp_dx/ gate the three
+ * implementations together.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOJcampDxEncode.h"
 #import <math.h>
 #import <stdlib.h>

@@ -1,3 +1,19 @@
+/*
+ * TTIOJcampDxWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOJcampDxWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOJcampDxWriter.h
+ *
+ * JCAMP-DX 5.01 writer for one-dimensional vibrational spectra
+ * (Raman / IR / UV-Vis). Emits AFFN by default; PAC / SQZ / DIF
+ * compressed encodings are routed through TTIOJcampDxEncode.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOJcampDxWriter.h"
 #import "TTIOJcampDxEncode.h"
 #import "Spectra/TTIORamanSpectrum.h"

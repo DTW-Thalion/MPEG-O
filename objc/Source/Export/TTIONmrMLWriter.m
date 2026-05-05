@@ -1,4 +1,16 @@
 /*
+ * TTIONmrMLWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIONmrMLWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIONmrMLWriter.h
+ *
+ * nmrML writer. Serialises one TTIONMRSpectrum (and optional
+ * TTIOFreeInductionDecay) to nmrML XML with the canonical nmrCV
+ * accessions. Output round-trips through TTIONmrMLReader unchanged.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

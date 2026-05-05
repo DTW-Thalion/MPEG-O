@@ -1,4 +1,16 @@
 /*
+ * TTIOCramWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCramWriter
+ * Inherits From: TTIOBamWriter : NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOCramWriter.h
+ *
+ * CRAM exporter. Subclass of TTIOBamWriter; injects --reference
+ * <fasta> into the samtools view and sort invocations so the output
+ * is reference-compressed CRAM rather than BAM.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOCramWriter.h"

@@ -13,34 +13,54 @@
 @class TTIOSpectralDataset;
 
 /**
- * Milestone 27 — ISA-Tab / ISA-JSON exporter.
+ * <heading>TTIOISAExporter</heading>
  *
- * Produces a bundle of UTF-8 text files that describe an
- * :class:`TTIOSpectralDataset` in the ISA (Investigation/Study/Assay)
- * model. Four filenames are emitted:
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Export/TTIOISAExporter.h</p>
  *
- *   i_investigation.txt   — one row per Investigation metadata field
- *   s_study.txt           — one row per sample (= acquisition run)
- *   a_assay_ms.txt        — one row per assay (= acquisition run)
- *   investigation.json    — ISA-JSON (single file per investigation)
+ * <p>ISA-Tab / ISA-JSON exporter. Produces a bundle of UTF-8 text
+ * files that describe a <code>TTIOSpectralDataset</code> in the ISA
+ * (Investigation / Study / Assay) model. Four filenames are
+ * emitted:</p>
  *
- * Mapping:
- *   dataset.title            -> Investigation Title / Study Title
- *   dataset.isaInvestigationId -> Investigation Identifier
- *   each TTIOAcquisitionRun  -> one Study sample + one Assay row
- *   InstrumentConfig         -> Assay technology platform / model
- *   provenance chain         -> Protocol REF / Parameter Value cells
- *   chromatograms            -> Derived Data File cells (names only)
+ * <ul>
+ *  <li><code>i_investigation.txt</code> &mdash; one row per
+ *      Investigation metadata field.</li>
+ *  <li><code>s_study.txt</code> &mdash; one row per sample (=
+ *      acquisition run).</li>
+ *  <li><code>a_assay_ms.txt</code> &mdash; one row per assay (=
+ *      acquisition run).</li>
+ *  <li><code>investigation.json</code> &mdash; ISA-JSON (single file
+ *      per investigation).</li>
+ * </ul>
  *
- * The Python side lives in ``ttio.exporters.isa`` and produces
- * byte-identical output for the same input. This is verified by the
- * M27 cross-language parity tests.
+ * <p><strong>Mapping:</strong></p>
+ * <ul>
+ *  <li><code>dataset.title</code> &rarr; Investigation Title /
+ *      Study Title.</li>
+ *  <li><code>dataset.isaInvestigationId</code> &rarr; Investigation
+ *      Identifier.</li>
+ *  <li>Each <code>TTIOAcquisitionRun</code> &rarr; one Study sample
+ *      + one Assay row.</li>
+ *  <li><code>InstrumentConfig</code> &rarr; Assay technology
+ *      platform / model.</li>
+ *  <li>Provenance chain &rarr; Protocol REF / Parameter Value
+ *      cells.</li>
+ *  <li>Chromatograms &rarr; Derived Data File cells (names
+ *      only).</li>
+ * </ul>
  *
- * API status: Stable.
+ * <p>The Python side lives in <code>ttio.exporters.isa</code> and
+ * produces byte-identical output for the same input. This is verified
+ * by the cross-language parity tests.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.exporters.isa
- *   Java:   global.thalion.ttio.exporters.ISAExporter
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.exporters.isa</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.exporters.ISAExporter</code></p>
  */
 @interface TTIOISAExporter : NSObject
 

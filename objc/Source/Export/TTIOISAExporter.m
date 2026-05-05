@@ -1,4 +1,17 @@
 /*
+ * TTIOISAExporter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOISAExporter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Export/TTIOISAExporter.h
+ *
+ * ISA-Tab / ISA-JSON exporter. Emits the four canonical ISA bundle
+ * files (i_investigation.txt, s_study.txt, a_assay_ms.txt,
+ * investigation.json) describing a TTIOSpectralDataset. Output is
+ * byte-identical to the Python reference under ttio.exporters.isa.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *
