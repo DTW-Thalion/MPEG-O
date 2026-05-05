@@ -4,33 +4,49 @@
 #import <Foundation/Foundation.h>
 
 /**
- * JCAMP-DX 5.01 compressed-XYDATA decoder (SQZ / DIF / DUP / PAC).
+ * <heading>TTIOJcampDxDecode</heading>
  *
- * Implements §5.9 of JCAMP-DX 5.01. The AFFN dialect is handled
- * directly by TTIOJcampDxReader; this class is consulted only when
- * `hasCompression:` reports a compression sentinel.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOJcampDxDecode.h</p>
  *
- * Cross-language equivalents:
- *   Java:   global.thalion.ttio.importers.JcampDxDecode
- *   Python: ttio.importers._jcamp_decode
+ * <p>JCAMP-DX 5.01 compressed-XYDATA decoder
+ * (SQZ / DIF / DUP / PAC). Implements §5.9 of JCAMP-DX 5.01. The
+ * AFFN dialect is handled directly by
+ * <code>TTIOJcampDxReader</code>; this class is consulted only when
+ * <code>+hasCompression:</code> reports a compression sentinel.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers._jcamp_decode</code><br/>
+ * Java: <code>global.thalion.ttio.importers.JcampDxDecode</code></p>
  */
 @interface TTIOJcampDxDecode : NSObject
 
-/** Returns YES iff `body` carries any SQZ/DIF/DUP sentinel. */
+/**
+ * @param body XYDATA section text body.
+ * @return <code>YES</code> iff <code>body</code> carries any
+ *         SQZ / DIF / DUP sentinel character.
+ */
 + (BOOL)hasCompression:(NSString *)body;
 
 /**
- * Decode a compressed XYDATA body.
+ * Decodes a compressed XYDATA body.
  *
  * @param lines   Raw text lines of the XYDATA block (no LDR headers,
- *                no terminal `##END=`).
- * @param firstx  First X value from `##FIRSTX=`.
- * @param deltax  `(LASTX - FIRSTX) / (NPOINTS - 1)`.
- * @param xfactor `##XFACTOR=` scale factor (default 1).
- * @param yfactor `##YFACTOR=` scale factor (default 1).
- * @param outXs   On success, filled with `NSNumber *` doubles.
- * @param outYs   On success, filled with `NSNumber *` doubles.
- * @return YES on success, NO on malformed input (populates error).
+ *                no terminal <code>##END=</code>).
+ * @param firstx  First X value from <code>##FIRSTX=</code>.
+ * @param deltax  <code>(LASTX - FIRSTX) / (NPOINTS - 1)</code>.
+ * @param xfactor <code>##XFACTOR=</code> scale factor (default 1).
+ * @param yfactor <code>##YFACTOR=</code> scale factor (default 1).
+ * @param outXs   On success, filled with <code>NSNumber *</code>
+ *                doubles.
+ * @param outYs   On success, filled with <code>NSNumber *</code>
+ *                doubles.
+ * @param error   Out-parameter populated on malformed input.
+ * @return <code>YES</code> on success, <code>NO</code> on malformed
+ *         input.
  */
 + (BOOL)decodeLines:(NSArray<NSString *> *)lines
              firstx:(double)firstx

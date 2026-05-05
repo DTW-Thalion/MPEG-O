@@ -1,4 +1,16 @@
 /*
+ * TTIOBrukerTDFReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOBrukerTDFReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOBrukerTDFReader.h
+ *
+ * Bruker timsTOF .d directory importer. Reads SQLite metadata
+ * directly via libsqlite3; delegates binary frame extraction to the
+ * Python ttio.importers.bruker_tdf_cli helper through NSTask.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOBrukerTDFReader.h"

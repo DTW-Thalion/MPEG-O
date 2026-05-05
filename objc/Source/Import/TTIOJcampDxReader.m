@@ -1,3 +1,20 @@
+/*
+ * TTIOJcampDxReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOJcampDxReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOJcampDxReader.h
+ *
+ * JCAMP-DX 5.01 reader for one-dimensional vibrational and UV-Vis
+ * spectra. Dispatches on ##DATA TYPE= and returns a concrete
+ * TTIORamanSpectrum / TTIOIRSpectrum / TTIOUVVisSpectrum subclass;
+ * delegates compressed XYDATA decoding to TTIOJcampDxDecode.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOJcampDxReader.h"
 #import "TTIOJcampDxDecode.h"
 #import "Spectra/TTIOSpectrum.h"

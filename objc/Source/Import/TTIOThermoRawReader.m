@@ -1,4 +1,17 @@
 /*
+ * TTIOThermoRawReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOThermoRawReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOThermoRawReader.h
+ *
+ * Public ObjC entry point for reading Thermo Fisher .raw files. The
+ * interface is fixed; current ObjC build returns nil with an
+ * NSError describing the missing Thermo RawFileReader SDK
+ * dependency.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

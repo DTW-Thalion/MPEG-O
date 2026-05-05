@@ -1,4 +1,17 @@
 /*
+ * TTIOCVTermMapper.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCVTermMapper
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOCVTermMapper.h
+ *
+ * Hardcoded mapping from PSI-MS / nmrCV controlled-vocabulary
+ * accessions to TTIO model values (precision, compression, array
+ * roles, MS metadata, NMR acquisition parameters). Unrecognised
+ * accessions pass through as raw TTIOCVParam objects.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

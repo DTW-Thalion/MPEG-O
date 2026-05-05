@@ -13,15 +13,23 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * Convenience wrapper for SAM input.
+ * <heading>TTIOSamReader</heading>
  *
- * Functionally identical to :class:`TTIOBamReader` (samtools auto-
- * detects SAM vs BAM from magic bytes); kept as a separate class for
- * API clarity in callsites that explicitly handle SAM text input.
+ * <p><em>Inherits From:</em> TTIOBamReader : NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOSamReader.h</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.sam.SamReader
- *   Java:   global.thalion.ttio.importers.SamReader
+ * <p>Convenience wrapper for SAM (Sequence Alignment/Map) text input.
+ * Functionally identical to <code>TTIOBamReader</code> &mdash;
+ * <code>samtools</code> auto-detects SAM vs BAM from magic bytes
+ * &mdash; but kept as a separate class for API clarity at call sites
+ * that explicitly handle SAM text input.</p>
+ *
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.sam.SamReader</code><br/>
+ * Java: <code>global.thalion.ttio.importers.SamReader</code></p>
  */
 @interface TTIOSamReader : TTIOBamReader
 @end

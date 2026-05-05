@@ -6,24 +6,51 @@
 @class TTIOSpectrum;
 
 /**
- * JCAMP-DX 5.01 reader for 1-D vibrational and UV-Vis spectra.
- * Dispatches on `##DATA TYPE=` to return one of TTIORamanSpectrum,
- * TTIOIRSpectrum, or TTIOUVVisSpectrum; unknown data types return nil
- * with an error.
+ * <heading>TTIOJcampDxReader</heading>
  *
- * Accepts both dialects of `##XYDATA=(X++(Y..Y))`:
- *   - AFFN (fast path) — one (X, Y) pair per line, free-format decimals.
- *   - PAC / SQZ / DIF / DUP — JCAMP-DX 5.01 §5.9 character-encoded
- *     Y-stream (delegated to TTIOJcampDxDecode). Requires FIRSTX /
- *     LASTX / NPOINTS.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOJcampDxReader.h</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.jcamp_dx.read_spectrum
- *   Java:   global.thalion.ttio.importers.JcampDxReader
+ * <p>JCAMP-DX 5.01 reader for one-dimensional vibrational and UV-Vis
+ * spectra. Dispatches on <code>##DATA TYPE=</code> to return one of
+ * <code>TTIORamanSpectrum</code>, <code>TTIOIRSpectrum</code>, or
+ * <code>TTIOUVVisSpectrum</code>; unknown data types return
+ * <code>nil</code> with an error.</p>
+ *
+ * <p>Both dialects of <code>##XYDATA=(X++(Y..Y))</code> are
+ * accepted:</p>
+ *
+ * <ul>
+ *  <li><strong>AFFN (fast path)</strong> &mdash; one (X, Y) pair per
+ *      line, free-format decimals.</li>
+ *  <li><strong>PAC / SQZ / DIF / DUP</strong> &mdash; JCAMP-DX 5.01
+ *      §5.9 character-encoded Y-stream (delegated to
+ *      <code>TTIOJcampDxDecode</code>). Requires
+ *      <code>FIRSTX</code> / <code>LASTX</code> /
+ *      <code>NPOINTS</code>.</li>
+ * </ul>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.jcamp_dx.read_spectrum</code><br/>
+ * Java: <code>global.thalion.ttio.importers.JcampDxReader</code></p>
  */
 @interface TTIOJcampDxReader : NSObject
 
-/** Returns TTIORamanSpectrum, TTIOIRSpectrum, TTIOUVVisSpectrum, or nil. */
+/**
+ * Reads a JCAMP-DX file and returns the appropriate concrete spectrum
+ * subclass.
+ *
+ * @param path  Filesystem path to a JCAMP-DX 5.01 document.
+ * @param error Out-parameter populated when the data type is
+ *              unrecognised or the file is malformed.
+ * @return A <code>TTIORamanSpectrum</code>,
+ *         <code>TTIOIRSpectrum</code>, or
+ *         <code>TTIOUVVisSpectrum</code>, or <code>nil</code> on
+ *         failure.
+ */
 + (TTIOSpectrum *)readSpectrumFromPath:(NSString *)path error:(NSError **)error;
 
 @end

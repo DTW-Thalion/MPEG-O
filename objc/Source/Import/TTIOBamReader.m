@@ -1,4 +1,17 @@
 /*
+ * TTIOBamReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOBamReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOBamReader.h
+ *
+ * SAM/BAM importer. Wraps the user-installed samtools binary as an
+ * NSTask subprocess to materialise SAM/BAM files into
+ * TTIOWrittenGenomicRun instances; no htslib source is linked.
+ * Probes samtools availability lazily on the first read call.
+ *
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOBamReader.h"

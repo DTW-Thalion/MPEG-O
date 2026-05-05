@@ -13,34 +13,62 @@
 @class TTIOSpectralDataset;
 
 /**
- * Waters MassLynx ``.raw`` directory importer — v0.9 M63.
+ * <heading>TTIOWatersMassLynxReader</heading>
  *
- * Delegates to the user-installed ``masslynxraw`` converter
- * (proprietary Waters tool) via NSTask. Semantics mirror
- * :class:`TTIOThermoRawReader`: the converter emits an mzML in a
- * temp directory, which we parse via TTIOMzMLReader. No Waters
- * proprietary code is compiled into libTTIO.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOWatersMassLynxReader.h</p>
  *
- * Binary resolution order:
- *   1. Explicit ``converter`` argument (non-nil).
- *   2. ``MASSLYNXRAW`` environment variable.
- *   3. ``masslynxraw`` on PATH (native).
- *   4. ``MassLynxRaw.exe`` on PATH — invoked via ``mono``.
+ * <p>Waters MassLynx <code>.raw</code> directory importer. Delegates
+ * to the user-installed <code>masslynxraw</code> converter
+ * (a proprietary Waters tool) via <code>NSTask</code>. Semantics
+ * mirror <code>TTIOThermoRawReader</code>: the converter emits an
+ * mzML in a temp directory, which is parsed via
+ * <code>TTIOMzMLReader</code>. No Waters proprietary code is compiled
+ * into <code>libTTIO</code>.</p>
  *
- * Waters ``.raw`` inputs are directories, not files.
+ * <p><strong>Binary resolution order:</strong></p>
+ * <ol>
+ *  <li>Explicit <code>converter</code> argument
+ *      (when non-<code>nil</code>).</li>
+ *  <li><code>MASSLYNXRAW</code> environment variable.</li>
+ *  <li><code>masslynxraw</code> on <code>PATH</code> (native).</li>
+ *  <li><code>MassLynxRaw.exe</code> on <code>PATH</code> &mdash;
+ *      invoked via <code>mono</code>.</li>
+ * </ol>
  *
- * API status: Provisional (v0.9 M63).
+ * <p>Waters <code>.raw</code> inputs are directories, not files.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.waters_masslynx
- *   Java:   global.thalion.ttio.importers.WatersMassLynxReader
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.waters_masslynx</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.importers.WatersMassLynxReader</code></p>
  */
 @interface TTIOWatersMassLynxReader : NSObject
 
+/**
+ * Reads a Waters <code>.raw</code> directory using an explicit
+ * converter binary.
+ *
+ * @param path      Path to the Waters <code>.raw</code> directory.
+ * @param converter Path to the <code>masslynxraw</code> converter.
+ * @param error     Out-parameter populated on failure.
+ * @return The parsed dataset, or <code>nil</code> on failure.
+ */
 + (TTIOSpectralDataset *)readFromDirectoryPath:(NSString *)path
                                        converter:(NSString *)converter
                                            error:(NSError **)error;
 
+/**
+ * Convenience variant that resolves the converter via the standard
+ * resolution order described in the class summary.
+ *
+ * @param path  Path to the Waters <code>.raw</code> directory.
+ * @param error Out-parameter populated on failure.
+ * @return The parsed dataset, or <code>nil</code> on failure.
+ */
 + (TTIOSpectralDataset *)readFromDirectoryPath:(NSString *)path
                                            error:(NSError **)error;
 

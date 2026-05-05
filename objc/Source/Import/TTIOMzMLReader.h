@@ -14,32 +14,53 @@
 @class TTIOChromatogram;
 
 /**
- * SAX-based mzML 1.1 parser. Consumes an mzML document and produces a
- * populated TTIOSpectralDataset containing one TTIOAcquisitionRun per
- * &lt;run&gt; element. Chromatograms appear as extra spectra carrying the
- * TTIOChromatogram class tag.
+ * <heading>TTIOMzMLReader</heading>
  *
- * What is parsed:
- *   - &lt;spectrum&gt; elements with cvParam-driven metadata (MS level,
- *     polarity, scan start time, scan window, precursor m/z &amp; charge)
- *   - &lt;binaryDataArray&gt; payloads decoded via TTIOBase64, typed via
- *     TTIOCVTermMapper, packaged as TTIOSignalArray
- *   - &lt;chromatogram&gt; elements with time + intensity arrays
- *   - &lt;dataProcessing&gt; as TTIOProvenanceRecord chain (best-effort)
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Import/TTIOMzMLReader.h</p>
  *
- * What is ignored (v0.2):
- *   - spectrumRef / sourceFileRef cross-references
- *   - softwareList (captured as provenance agent names only)
- *   - fileDescription except for the list of source files
+ * <p>SAX-based mzML 1.1 parser. Consumes an mzML document and
+ * produces a populated <code>TTIOSpectralDataset</code> containing
+ * one <code>TTIOAcquisitionRun</code> per <code>&lt;run&gt;</code>
+ * element. Chromatograms appear as extra spectra carrying the
+ * <code>TTIOChromatogram</code> class tag.</p>
  *
- * On malformed input the reader returns nil and populates `error` with a
- * descriptive NSError in the `TTIOMzMLReaderErrorDomain`. Not thread-safe.
+ * <p><strong>What is parsed:</strong></p>
+ * <ul>
+ *  <li><code>&lt;spectrum&gt;</code> elements with cvParam-driven
+ *      metadata (MS level, polarity, scan start time, scan window,
+ *      precursor m/z &amp; charge).</li>
+ *  <li><code>&lt;binaryDataArray&gt;</code> payloads decoded via
+ *      <code>TTIOBase64</code>, typed via
+ *      <code>TTIOCVTermMapper</code>, packaged as
+ *      <code>TTIOSignalArray</code>.</li>
+ *  <li><code>&lt;chromatogram&gt;</code> elements with time +
+ *      intensity arrays.</li>
+ *  <li><code>&lt;dataProcessing&gt;</code> as
+ *      <code>TTIOProvenanceRecord</code> chain (best effort).</li>
+ * </ul>
  *
- * API status: Stable.
+ * <p><strong>What is ignored:</strong></p>
+ * <ul>
+ *  <li><code>spectrumRef</code> / <code>sourceFileRef</code>
+ *      cross-references.</li>
+ *  <li><code>softwareList</code> (captured as provenance agent names
+ *      only).</li>
+ *  <li><code>fileDescription</code> except for the list of source
+ *      files.</li>
+ * </ul>
  *
- * Cross-language equivalents:
- *   Python: ttio.importers.mzml
- *   Java:   global.thalion.ttio.importers.MzMLReader
+ * <p>On malformed input the reader returns <code>nil</code> and
+ * populates <code>error</code> with a descriptive
+ * <code>NSError</code> in the
+ * <code>TTIOMzMLReaderErrorDomain</code>. Not thread-safe.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.importers.mzml</code><br/>
+ * Java: <code>global.thalion.ttio.importers.MzMLReader</code></p>
  */
 @interface TTIOMzMLReader : NSObject
 

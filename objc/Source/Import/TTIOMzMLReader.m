@@ -1,4 +1,17 @@
 /*
+ * TTIOMzMLReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOMzMLReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOMzMLReader.h
+ *
+ * SAX-based mzML 1.1 parser. Produces a TTIOSpectralDataset with one
+ * TTIOAcquisitionRun per <run> element; chromatograms appear as
+ * extra TTIOChromatogram-tagged spectra. Binary payloads are
+ * decoded via TTIOBase64 and typed via TTIOCVTermMapper.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

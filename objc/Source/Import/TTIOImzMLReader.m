@@ -1,4 +1,18 @@
 /*
+ * TTIOImzMLReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOImzMLPixelSpectrum, TTIOImzMLImport,
+ *                TTIOImzMLReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOImzMLReader.h
+ *
+ * imzML + .ibd importer for mass-spectrometry imaging data. Parses
+ * the .imzML metadata (continuous or processed mode), validates the
+ * 16-byte UUID prefix in .ibd, and reads each pixel's m/z +
+ * intensity arrays at the offsets named in the metadata.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *

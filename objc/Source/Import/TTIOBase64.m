@@ -1,4 +1,16 @@
 /*
+ * TTIOBase64.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOBase64
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Import/TTIOBase64.h
+ *
+ * Base64 encode/decode utility for mzML <binaryDataArray> payloads,
+ * with optional zlib inflate/deflate. Wraps the Foundation base64
+ * machinery and zlib's uncompress / compress2.
+ *
  * Licensed under the Apache License, Version 2.0.
  * See LICENSE-IMPORT-EXPORT in the repository root.
  *
