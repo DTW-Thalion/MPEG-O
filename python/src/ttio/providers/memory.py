@@ -1,4 +1,4 @@
-"""In-memory storage provider — Milestone 39 Part D.
+"""In-memory storage provider — Part D.
 
 Holds the full group tree in Python dicts. Useful for tests and
 transient pipelines where no file I/O is needed, and the existence of
@@ -255,7 +255,7 @@ class MemoryProvider(StorageProvider):
         """Open a MemoryProvider. Supports both factory
         (``MemoryProvider.open(url, mode="w")``) and instance
         (``p = MemoryProvider(); p.open(url, mode="w")``) styles per
-        Appendix B Gap 1."""
+        """
         del kwargs
         if isinstance(self_or_path, str):
             actual_path = self_or_path

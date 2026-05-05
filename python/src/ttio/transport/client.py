@@ -1,4 +1,4 @@
-"""WebSocket transport client (v0.10 M68)."""
+"""WebSocket transport client ()."""
 from __future__ import annotations
 
 import asyncio

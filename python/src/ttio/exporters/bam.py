@@ -67,7 +67,7 @@ class BamWriter:
     The ``samtools`` binary is a runtime dependency. Construction
     succeeds without samtools on PATH; :meth:`write` raises
     :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
-    is missing at first call (Binding Decision §135 from M87).
+    is missing at first call (from M87).
     """
 
     def __init__(self, path: str | os.PathLike[str]):
@@ -100,7 +100,7 @@ class BamWriter:
             ObjC pass this explicitly because their
             ``WrittenGenomicRun`` analogues don't carry provenance.
         sort : bool, default True
-            When ``True`` (the default per Binding Decision §137),
+            When ``True`` (the default ),
             pipes the SAM text through ``samtools sort -O bam`` so
             the output BAM is coordinate-sorted (the precondition
             most BAM consumers expect — IGV, GATK, ``samtools
@@ -197,12 +197,12 @@ class BamWriter:
     def _iter_alignment_lines(run: WrittenGenomicRun) -> Iterable[str]:
         """Yield one SAM alignment text line per read in ``run``.
 
-        Field handling per HANDOFF §2.4:
+        Field handling per :
         - QNAME / RNAME / CIGAR: ``"*"`` sentinel preserved.
         - FLAG / MAPQ / TLEN: decimal ints (signed for TLEN,
           unsigned otherwise).
         - POS / PNEXT: decimal ints; ``mate_position == -1`` is
-          mapped to SAM's ``0`` per Binding Decision §138.
+          mapped to SAM's ``0`` .
         - RNEXT: collapsed to ``=`` when equal to RNAME per Binding
           Decision §136 (writer-side reverse of M87's expansion).
         - SEQ / QUAL: ASCII bytes from the concatenated

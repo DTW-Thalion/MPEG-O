@@ -10,7 +10,7 @@ The subprocess approach mirrors :mod:`ttio.importers.thermo_raw`
 (M38) and :mod:`ttio.importers.bruker_tdf` (M53). ``samtools`` is a
 runtime dependency only — ``import ttio.importers.bam`` succeeds on
 systems without samtools; only :meth:`BamReader.to_genomic_run`
-requires the binary on PATH (Binding Decision §135).
+requires the binary on PATH ().
 
 samtools auto-detects SAM vs BAM format from magic bytes; one parser
 handles both. The companion :class:`~ttio.importers.sam.SamReader`
@@ -71,7 +71,7 @@ def _check_samtools() -> None:
 
     Performs the PATH check via :func:`shutil.which` and additionally
     invokes ``samtools --version`` to verify the binary is callable.
-    Per Binding Decision §135 this happens at first use, NOT at module
+    Per this happens at first use, NOT at module
     import time.
     """
     if not _samtools_on_path():
@@ -111,7 +111,7 @@ class BamReader:
     The ``samtools`` binary is a runtime dependency, not a build
     dependency. Construction succeeds without samtools on PATH;
     :meth:`to_genomic_run` raises :class:`SamtoolsNotFoundError` when
-    samtools cannot be located at first use (Binding Decision §135).
+    samtools cannot be located at first use ().
     """
 
     def __init__(self, path: str | os.PathLike[str]):
@@ -191,7 +191,7 @@ class BamReader:
         qual_chunks: list[bytes] = []
         running_offset = 0
 
-        # Provenance timestamp comes from the file mtime per HANDOFF §2.4.
+        # Provenance timestamp comes from the file mtime per
         try:
             file_mtime = int(self._path.stat().st_mtime)
         except OSError:
@@ -246,7 +246,7 @@ class BamReader:
                         f"{exc} — {line[:120]}"
                     ) from exc
 
-                # RNEXT special handling — Binding Decision §131:
+                # RNEXT special handling — :
                 # "=" expands to RNAME so downstream consumers don't
                 # need to remember the convention.
                 if rnext == "=":
@@ -325,10 +325,10 @@ class BamReader:
                 except subprocess.TimeoutExpired:
                     proc.kill()
 
-        # Apply sample_name override per Binding Decision §133.
+        # Apply sample_name override .
         effective_sample = sample_name if sample_name is not None else rg_sample
 
-        # reference_uri: first @SQ wins for v0 of M87 (HANDOFF §2.4).
+        # reference_uri: first @SQ wins for v0 of M87
         # Empty string when no @SQ present.
         reference_uri = sq_names[0] if sq_names else ""
 
@@ -405,9 +405,9 @@ class BamReader:
 
         Only @SQ and @PG are accumulated into structured state here;
         @RG is handled inline in :meth:`to_genomic_run` so the
-        first-wins rule (Binding Decision §133) is obvious at the
+        first-wins rule () is obvious at the
         callsite. @HD and @CO are read but not mapped to TTI-O
-        fields in v0 (HANDOFF §2.4).
+        fields in v0
         """
         if line.startswith("@SQ"):
             fields = cls._parse_header_fields(line)

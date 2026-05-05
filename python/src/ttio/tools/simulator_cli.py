@@ -1,4 +1,4 @@
-"""Command-line simulator entry point (v0.10 M69).
+"""Command-line simulator entry point ().
 
 Usage:
     python -m ttio.tools.simulator_cli <output.tis>

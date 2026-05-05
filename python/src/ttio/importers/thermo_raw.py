@@ -19,10 +19,10 @@ Cross-language equivalents
 --------------------------
 Objective-C: ``TTIOThermoRawReader`` (v0.4 stub; delegation to
 ThermoRawFileParser is a future milestone in ObjC) · Java:
-``global.thalion.ttio.importers.ThermoRawReader`` (M38 shipped; delegates
+``global.thalion.ttio.importers.ThermoRawReader`` (shipped; delegates
 to ThermoRawFileParser binary)
 
-API status: Stable (M38 shipped; delegates to ThermoRawFileParser binary).
+API status: Stable (shipped; delegates to ThermoRawFileParser binary).
 """
 from __future__ import annotations
 

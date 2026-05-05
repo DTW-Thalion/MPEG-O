@@ -1,4 +1,4 @@
-"""Zarr storage provider — Milestone 46 (Track A, stretch).
+"""Zarr storage provider — (Track A, stretch).
 
 Validates that the v0.7 storage-provider abstraction
 (M43/M44/M45 refinements) generalises beyond HDF5. Zarr is the most
@@ -41,7 +41,7 @@ Non-deliverables
 
 API status
 ----------
-Provisional (v0.7 M46 stretch). The public surface is the
+Provisional (stretch). The public surface is the
 StorageProvider / StorageGroup / StorageDataset contract; internal
 layout conventions may evolve in v0.8 once Java + ObjC catch up.
 
@@ -453,7 +453,7 @@ class ZarrProvider(StorageProvider):
 
     def open(self_or_path, path_or_url=None, *, mode: str = "r",  # type: ignore[override]
              **kwargs) -> "ZarrProvider":
-        """Dual-style open() per Appendix B Gap 1 — mirrors HDF5 /
+        """Dual-style open() per — mirrors HDF5 /
         Memory / SQLite providers."""
         del kwargs
         if isinstance(self_or_path, str):

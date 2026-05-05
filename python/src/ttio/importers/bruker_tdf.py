@@ -1,4 +1,4 @@
-"""Bruker timsTOF TDF importer — v0.8 M53.
+"""Bruker timsTOF TDF importer —.
 
 Bruker's .d directory format holds two files:
 
@@ -21,7 +21,7 @@ entry with three parallel signal channels:
 * ``mz`` — peak m/z values (float64 Da)
 * ``intensity`` — raw peak intensities (float64)
 * ``inv_ion_mobility`` — inverse reduced ion mobility 1/K₀
-  (float64 Vs/cm²) — the third signal channel is new in v0.8 M53.
+  (float64 Vs/cm²) — the third signal channel is new in.
 
 Ion mobility is preserved per-peak, not per-spectrum, because
 timsTOF frames are 2-D acquisitions (multiple ion-mobility slices
@@ -47,7 +47,7 @@ Both Java and ObjC readers parse the SQLite metadata natively (via
 extraction delegates to this Python module via subprocess, matching
 the ThermoRawReader pattern (M38).
 
-API status: Provisional (v0.8 M53). Binary decompression via
+API status: Provisional (). Binary decompression via
 ``opentimspy`` is the only supported path in v0.8; a native-C port
 of the frame decoder is deferred to v0.9.
 

@@ -1,4 +1,4 @@
-"""imzML + .ibd importer (v0.9 M59).
+"""imzML + .ibd importer ().
 
 imzML is the dominant interchange format for mass-spectrometry imaging
 data. The format is a pair of files:
@@ -56,7 +56,7 @@ class ImzMLBinaryError(ValueError):
     """Raised when the .ibd binary disagrees with the .imzML metadata.
 
     Covers UUID mismatches and offset / length values that would read
-    past the end of the .ibd (HANDOFF gotcha 48-49).
+    past the end of the .ibd -49).
     """
 
 
@@ -252,7 +252,7 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
     in_spectrum = False
     in_binary_array = False
     in_position = False
-    in_scan_settings = False  # v0.9 M64: disambiguate IMS:1000042 by context
+    in_scan_settings = False  # disambiguate IMS:1000042 by context
     array_kind = ""  # "mz" or "intensity"
 
     for event, elem in iterparse(str(imzml), events=("start", "end")):

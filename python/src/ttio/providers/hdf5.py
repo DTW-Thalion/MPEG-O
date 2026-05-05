@@ -1,4 +1,4 @@
-"""HDF5 storage provider — Milestone 39 Part C.
+"""HDF5 storage provider — Part C.
 
 Adapter that exposes ``h5py`` through the :mod:`ttio.providers.base`
 contract. No behavioural change — callers that used ``h5py.File``
@@ -281,7 +281,7 @@ class Hdf5Provider(StorageProvider):
     def open(self_or_path, path_or_url=None, *, mode: str = "r",  # type: ignore[override]
              **kwargs) -> "Hdf5Provider":
         """Open an HDF5 file under this provider. Supports both factory
-        and instance call styles per Appendix B Gap 1 — see
+        and instance call styles per — see
         :class:`ttio.providers.base.StorageProvider.open`."""
         # Dispatch: classmethod call passes the class as first arg;
         # instance call passes self. Detect by whether first arg is
