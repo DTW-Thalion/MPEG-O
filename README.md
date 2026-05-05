@@ -129,11 +129,12 @@ A complete genomic codec stack ships across all three languages with cross-langu
 
 ### Streaming transport (`.tis`)
 
-* **Packet codec** — 24-byte headers, nine packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
+* **Packet codec** — 24-byte headers, twelve packet types: StreamHeader, DatasetHeader, AccessUnit, ProtectionMetadata, Annotation, Provenance, Chromatogram, EndOfDataset, BlobV2MateInfo, BlobV2RefDiff, BlobV2NameTok, EndOfStream. Three-language parity; bidirectional conformance matrix (any writer × any reader). Optional CRC-32C per packet. See [`docs/transport-spec.md`](docs/transport-spec.md).
 * **WebSocket client + server** — libwebsockets (ObjC), `websockets` (Python), Java-WebSocket (Java). Stream `.tio` as `.tis` over `ws://` / `wss://`.
 * **Acquisition simulator** — replays a fixture at wall-clock pace to exercise client/server scheduling.
 * **Selective access** — per-packet `AUFilter` for client-driven filtering without decryption; ProtectionMetadata packet carries `cipher_suite`, `kek_algorithm`, `wrapped_dek`, `signature_algorithm`, `public_key`. `AUFilter` includes chromosome + position-range predicates so subscribers can scope a stream to a genomic region without decrypting AUs they won't read.
 * **Genomic AUs + multiplexing** — `.tis` carries genomic AUs with a `chromosome + position + mapq + flags` prefix when `spectrum_class == 5`; MS and genomic runs interleave in a single stream and dispatch per-AU on the `spectrum_class` byte. 3×3 cross-language transport matrix green for both encode and decode directions.
+* **Bulk mode for genomic v2 codec blobs** (Phase 2c-T) — opt-in `--bulk` flag on `transport_encode_cli` ships the `mate_info/inline_v2`, `read_names`, and `sequences/refdiff_v2` codec blobs verbatim on the wire, bypassing the receiver's v2 codec encode pass and preserving blob byte-identity across deterministic codecs. Required `bulk_mode_v2_blobs` stream feature flag; cross-language byte-identity verified by the 9-cell `test_phase_2c_t_bulk_mode.py`.
 
 ### Protection: encryption, integrity, and key management
 

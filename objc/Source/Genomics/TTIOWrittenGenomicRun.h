@@ -131,6 +131,11 @@ NS_ASSUME_NONNULL_BEGIN
 /** Number of reads in the run. */
 @property (readonly) NSUInteger readCount;
 
+/// Phase 2c-T: verbatim v2 codec blobs for direct on-disk write,
+/// bypassing the v2 codec encode step in the writer. Used by the
+/// transport bulk-mode receiver. nil disables.
+@property (nonatomic, strong, nullable) id /* TTIOBulkV2Blobs */ bulkV2Blobs;
+
 /**
  * Convenience initialiser without per-channel codec overrides;
  * delegates to the designated initialiser with an empty overrides

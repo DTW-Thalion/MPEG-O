@@ -157,6 +157,27 @@
  */
 - (uint8_t)wireCompressionForChannel:(NSString *)name;
 
+// ── Phase 2c-T verbatim v2 blob accessors ─────────────────────────
+// Read raw on-disk codec blob bytes for the transport bulk-mode
+// writer. Each returns nil when the channel is absent / not in the
+// expected v2 layout (e.g. read_names with @compression != 15).
+
+/// Phase 2c-T: read the verbatim ``mate_info/inline_v2`` blob.
+/// Returns nil when the run has no inline_v2 layout.
+- (nullable NSData *)readMateInfoInlineV2BlobBytes;
+
+/// Phase 2c-T: read the ``mate_info/chrom_names`` sidecar table.
+/// Returns an empty array when the table is missing.
+- (NSArray<NSString *> *)readMateInfoChromNamesTable;
+
+/// Phase 2c-T: read the verbatim ``read_names`` blob when
+/// ``@compression == NAME_TOKENIZED_V2 (15)``. Returns nil otherwise.
+- (nullable NSData *)readNameTokV2BlobBytes;
+
+/// Phase 2c-T: read the verbatim ``sequences/refdiff_v2`` blob when
+/// sequences is a group containing refdiff_v2. Returns nil otherwise.
+- (nullable NSData *)readRefDiffV2BlobBytes;
+
 @end
 
 #endif

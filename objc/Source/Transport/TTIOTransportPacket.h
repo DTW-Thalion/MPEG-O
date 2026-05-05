@@ -29,8 +29,20 @@ typedef NS_ENUM(uint8_t, TTIOTransportPacketType) {
     TTIOTransportPacketProvenance          = 0x06,
     TTIOTransportPacketChromatogram        = 0x07,
     TTIOTransportPacketEndOfDataset        = 0x08,
+    // Phase 2c-T bulk-mode v2 blob carriage (transport-spec §4.10-§4.12).
+    TTIOTransportPacketBlobV2MateInfo      = 0x09,
+    TTIOTransportPacketBlobV2RefDiff       = 0x0A,
+    TTIOTransportPacketBlobV2NameTok       = 0x0B,
     TTIOTransportPacketEndOfStream         = 0xFF
 };
+
+/// Phase 2c-T feature flag in StreamHeader features list.
+extern NSString *const TTIOTransportBulkModeV2BlobsFeature;
+
+/// Phase 2c-T codec ids (mirror TTIOCompression enum).
+extern const uint8_t TTIOTransportCodecIdMateInlineV2;       // 13
+extern const uint8_t TTIOTransportCodecIdRefDiffV2;          // 14
+extern const uint8_t TTIOTransportCodecIdNameTokenizedV2;    // 15
 
 typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
     TTIOTransportPacketFlagEncrypted       = 1 << 0,

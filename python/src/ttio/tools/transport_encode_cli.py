@@ -23,8 +23,20 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("output", help="path to write the .tis stream")
     parser.add_argument("--checksum", action="store_true",
                         help="emit per-packet CRC-32C checksums")
+    parser.add_argument(
+        "--bulk", action="store_true",
+        help="enable Phase 2c-T bulk mode: ship verbatim v2 codec "
+             "blobs (mate_info, read_names, refdiff_v2) for genomic "
+             "runs so transport round-trips preserve SAM mate "
+             "sentinels (=, '') byte-for-byte. No effect on "
+             "MS-only inputs.",
+    )
     args = parser.parse_args(argv)
-    file_to_transport(args.input, args.output, use_checksum=args.checksum)
+    file_to_transport(
+        args.input, args.output,
+        use_checksum=args.checksum,
+        use_bulk_mode=args.bulk,
+    )
     return 0
 
 

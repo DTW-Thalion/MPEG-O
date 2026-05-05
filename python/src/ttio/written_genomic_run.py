@@ -16,6 +16,40 @@ from .provenance import ProvenanceRecord
 
 
 @dataclass(slots=True)
+class BulkV2Blobs:
+    """Verbatim v2 codec blobs for direct on-disk write.
+
+    Set on a :class:`WrittenGenomicRun` to bypass the v2 codec encode
+    step in ``write_minimal`` and write the blob bytes directly to
+    the matching HDF5 paths. Used by the transport bulk-mode receiver
+    (see ``docs/transport-spec.md`` §6.4).
+
+    Each field is independently optional. When ``mate_info_blob`` is
+    set the writer also requires ``mate_info_chrom_names``.
+    ``ref_diff_blob`` requires ``ref_diff_reference_uri`` to validate
+    against the run's ``reference_uri`` attribute.
+
+    Cross-language: ObjC ``TTIOBulkV2Blobs`` · Java ``BulkV2Blobs``.
+    """
+
+    mate_info_blob: bytes | None = None
+    mate_info_chrom_names: list[str] | None = None
+    name_tok_blob: bytes | None = None
+    ref_diff_blob: bytes | None = None
+    ref_diff_reference_uri: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.mate_info_blob is not None and self.mate_info_chrom_names is None:
+            raise ValueError(
+                "BulkV2Blobs.mate_info_blob requires mate_info_chrom_names"
+            )
+        if self.ref_diff_blob is not None and self.ref_diff_reference_uri is None:
+            raise ValueError(
+                "BulkV2Blobs.ref_diff_blob requires ref_diff_reference_uri"
+            )
+
+
+@dataclass(slots=True)
 class WrittenGenomicRun:
     """Data container for writing a genomic run via SpectralDataset."""
 
@@ -92,3 +126,11 @@ class WrittenGenomicRun:
     # decoder fallback when the embedded reference is absent. The
     # writer never reads this path; it is metadata only.
     external_reference_path: Path | None = None
+
+    # Phase 2c-T (v1.0): verbatim v2 codec blobs from the transport
+    # bulk-mode receiver. When set, ``write_minimal`` writes the
+    # blob bytes directly to the matching HDF5 paths and SKIPS the
+    # corresponding v2 codec encode step. This is the only
+    # mechanism that preserves ``mate_chromosome`` SAM sentinels
+    # (``=``, ``""``) byte-for-byte across transport.
+    bulk_v2_blobs: BulkV2Blobs | None = None

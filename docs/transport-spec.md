@@ -113,6 +113,9 @@ plaintext is not a meaningful mode.
 | 0x06 | `Provenance`          | One processing-step record                               |
 | 0x07 | `Chromatogram`        | A batch of chromatogram data points                      |
 | 0x08 | `EndOfDataset`        | Terminates a specific `dataset_id`                       |
+| 0x09 | `BlobV2MateInfo`      | Verbatim `mate_info/inline_v2` blob (bulk mode, §4.10)   |
+| 0x0A | `BlobV2RefDiff`       | Verbatim `sequences/refdiff_v2` blob (bulk mode, §4.11)  |
+| 0x0B | `BlobV2NameTok`       | Verbatim `read_names/name_tok_v2` blob (bulk mode, §4.12)|
 | 0xFF | `EndOfStream`         | Terminates the entire transport stream                   |
 
 ### 3.3 Checksum
@@ -407,6 +410,62 @@ DatasetHeader.
 
 Empty payload (`payload_length = 0`). MUST be the final packet.
 
+### 4.10 BlobV2MateInfo (`0x09`) — bulk mode
+
+Carries the `<run>/signal_channels/mate_info/inline_v2` codec blob
+verbatim, plus the adjacent `chrom_names` table needed to reconstruct
+mate references. Emitted only in bulk mode (`bulk_mode_v2_blobs`
+feature flag, §6.4); per-AU streams MUST NOT emit this packet type.
+
+```
+dataset_id:           uint16            # matches header.dataset_id
+codec_id:             uint8             # 13 = MATE_INLINE_V2
+n_chrom_names:        uint16
+chrom_names:          repeated { uint16 len, bytes[len] }
+blob_length:          uint32
+blob:                 bytes[blob_length]
+```
+
+When the receiver consumes this packet, it writes the blob bytes
+verbatim to `signal_channels/mate_info/inline_v2` in the target
+file (with `@compression = 13`) and the `chrom_names` table to the
+adjacent compound dataset, BYPASSING the `MATE_INLINE_V2` codec
+encode step. This is the only mechanism that preserves the SAM
+sentinels `=` and `""` byte-for-byte across transport.
+
+### 4.11 BlobV2RefDiff (`0x0A`) — bulk mode
+
+Carries the `<run>/signal_channels/sequences/refdiff_v2` codec blob
+verbatim. Emitted only when the source `.tio` has ref-diff-encoded
+sequences (the codec is engaged when a reference is registered and
+the alignment ratio passes the codec's heuristic).
+
+```
+dataset_id:           uint16            # matches header.dataset_id
+codec_id:             uint8             # 14 = REF_DIFF_V2
+reference_uri_len:    uint16
+reference_uri:        bytes[len]
+blob_length:          uint32
+blob:                 bytes[blob_length]
+```
+
+The `reference_uri` MUST equal the run's `reference_uri` attribute.
+A receiver decoding the blob MUST have the matching reference embedded
+under `/study/references/<reference_uri>/`; otherwise it MUST reject
+the stream.
+
+### 4.12 BlobV2NameTok (`0x0B`) — bulk mode
+
+Carries the `<run>/signal_channels/read_names` blob verbatim
+(`@compression = 15`, NAME_TOKENIZED_V2). Emitted only in bulk mode.
+
+```
+dataset_id:           uint16            # matches header.dataset_id
+codec_id:             uint8             # 15 = NAME_TOKENIZED_V2
+blob_length:          uint32
+blob:                 bytes[blob_length]
+```
+
 ## 5. Ordering Rules
 
 1. **StreamHeader first.** The first packet of every stream MUST be
@@ -431,6 +490,12 @@ Empty payload (`payload_length = 0`). MUST be the final packet.
    the header if the dataset is empty).
 7. **EndOfStream last.** Exactly one `EndOfStream` as the final
    packet.
+8. **Blob packets bracket their dataset.** `BlobV2MateInfo`,
+   `BlobV2RefDiff`, and `BlobV2NameTok` MUST appear after the
+   matching `DatasetHeader` and before the matching `EndOfDataset`
+   for the same `dataset_id`. They MAY be interleaved freely with
+   `AccessUnit` packets. At most one of each blob type per
+   `dataset_id`; receivers MUST reject duplicates.
 
 Receivers that encounter a violation SHOULD reject the stream and
 SHOULD surface the violated rule to the application.
@@ -481,6 +546,43 @@ match within float64 epsilon but byte layouts may differ.
 Annotations, provenance, feature flags, and instrument config are
 preserved verbatim. `ProtectionMetadata` is preserved for encrypted
 datasets.
+
+For **genomic** runs, both per-AU and bulk modes deliver the same
+user-visible round-trip (the v2 mate codec normalizes
+`mate_chromosome` sentinels `=` and `""` to resolved chrom names
+and `*` respectively at write time, so neither mode "preserves"
+the SAM-level sentinels — the source `.tio` no longer has them).
+**Bulk mode** (§6.4) skips the receiver's v2 encode pass and
+ships the v2 codec blobs verbatim, which preserves blob
+byte-identity across deterministic codecs and avoids the encode
+cost on the receiver.
+
+### 6.4 Bulk Mode (genomic v2-blob carriage)
+
+When the source `.tio` has v2-encoded genomic blobs on disk
+(`mate_info/inline_v2`, optionally `sequences/refdiff_v2`,
+`read_names` with `@compression = 15`), a writer MAY enable bulk
+mode by:
+
+1. Adding the `bulk_mode_v2_blobs` feature flag to the
+   `StreamHeader.features` list. Flag has no `opt_` prefix → it is
+   **required** per `feature-flags.md`. Receivers that cannot honor
+   verbatim blob injection MUST refuse the stream.
+2. Emitting one `BlobV2MateInfo`, one `BlobV2RefDiff` (if
+   applicable), and one `BlobV2NameTok` per genomic dataset_id,
+   between the `DatasetHeader` and `EndOfDataset` for that dataset
+   (§5 rule 8).
+
+Per-AU `AccessUnit` packets are still emitted in bulk mode. Their
+chromosomes / positions / mapq / flags / lengths feed the
+reconstructed `genomic_index/`; the per-AU mate_chromosome and
+read_name string channels are **discarded** by the receiver in
+favor of the verbatim blobs.
+
+Bulk mode is post-acquisition only — live-streamed genomic AUs
+have no v2 blobs to carry until block-flush. A writer SHOULD
+degrade to per-AU mode (with a stderr warning) when bulk-mode is
+requested but the source has no v2 blobs.
 
 ## 7. Selective Access
 

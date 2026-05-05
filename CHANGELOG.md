@@ -129,9 +129,27 @@ Mandatory at runtime for genomic-run write/read on all three
 language bindings (`TTIO_RANS_LIB_PATH` env var, or `libttio_rans.so` /
 `.dylib` / `.jni` on the loader search path).
 
+### Transport — genomic bulk mode (Phase 2c-T)
+
+- New packet types `BlobV2MateInfo` (0x09), `BlobV2RefDiff` (0x0A),
+  `BlobV2NameTok` (0x0B) carry the verbatim v2 codec blobs
+  (`mate_info/inline_v2`, `sequences/refdiff_v2`,
+  `read_names/name_tok_v2`) on the wire. See
+  `docs/transport-spec.md` §3.2 / §4.10–4.12 / §5.8 / §6.4.
+- Stream-level feature flag `bulk_mode_v2_blobs` (required, no
+  `opt_` prefix). Receivers that cannot honor verbatim blob
+  injection refuse the stream.
+- CLIs accept `--bulk` on encode: Python
+  `python -m ttio.tools.transport_encode_cli --bulk`, Java
+  `TransportEncodeCli --bulk`, ObjC `TtioTransportEncode --bulk`.
+- Cross-language byte-identity verified by the 9-cell
+  Python/Java/ObjC matrix in
+  `python/tests/validation/test_phase_2c_t_bulk_mode.py`.
+
 ### Known limitations
 
-- Genomic-run cross-language transport (bulk-mode wire format) is
-  deferred. Per-channel v2 dispatch is byte-equal across languages,
-  but the genomic-transport conformance suite reports same-set
-  failures pending the bulk-mode spec.
+- Bulk mode is wired through the HDF5 fast path only;
+  `memory://`, `sqlite://`, and `zarr://` writers still go
+  through the v2 codec encode for `mate_info` / `read_names` /
+  `sequences/refdiff_v2`. Bulk-mode receivers using a non-HDF5
+  output URL fall back transparently to per-AU semantics.

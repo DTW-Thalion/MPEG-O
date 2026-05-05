@@ -137,3 +137,31 @@ is built ad-hoc into `/tmp/` per test run. Runtime resolution of
 `libTTIO.so.0` in the ObjC subprocess path uses an injected
 `LD_LIBRARY_PATH` pointing at `objc/Source/obj`. The harness
 contributes 6 tests to the 44 cross-compat-job total.
+
+## v1.0 — genomic transport cross-language conformance
+
+Two parallel 3×3 (writer × reader) Python/Java/ObjC matrices live
+under `python/tests/validation/`:
+
+- **`test_m89_cross_language.py`** — per-AU mode. Asserts semantic
+  round-trip of chromosomes, positions, mapping_qualities, flags,
+  sequences, and qualities for each of the 9 (writer, reader)
+  cells. The `mate_chromosome` SAM sentinels (`=`, `""`) are
+  deliberately not asserted verbatim — the v2 mate codec
+  normalizes them at write time, so per-AU mode delivers a
+  semantic round-trip rather than a byte-verbatim one. 9 cells.
+- **`test_phase_2c_t_bulk_mode.py`** — bulk mode (Phase 2c-T).
+  Same 3×3 matrix, same fixture skeleton but richer (varied
+  read_names, mate_chromosomes mix of `=`/explicit chrom). Adds a
+  byte-identity assertion: the `mate_info/inline_v2` and
+  `read_names` (NAME_TOKENIZED_V2) blobs in the round-tripped
+  `.tio` MUST equal the source `.tio`'s blob bytes. This proves
+  the bulk-mode wire contract (`bulk_mode_v2_blobs` feature
+  flag) holds across all 9 language combinations. 9 cells.
+
+Both suites require `libttio_rans` at runtime
+(`TTIO_RANS_LIB_PATH` env var, or `native/_build/libttio_rans.so`
+on a default WSL build); the bulk-mode suite skips entirely when
+the library cannot be located. The Java cells additionally require
+the JNI library directory on `java.library.path` — handled
+automatically by the resolver in `test_cross_language_smoke.py`.

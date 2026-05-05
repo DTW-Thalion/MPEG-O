@@ -262,6 +262,64 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
                            error:error];
 }
 
+// ---------------------------------------------------------------- Phase 2c-T
+
+- (BOOL)writeBlobV2MateInfoWithDatasetId:(uint16_t)datasetId
+                              chromNames:(NSArray<NSString *> *)chromNames
+                                    blob:(NSData *)blob
+                                    error:(NSError **)error
+{
+    NSMutableData *p = [NSMutableData dataWithCapacity:16 + blob.length];
+    appendU16LE(p, datasetId);
+    uint8_t codecId = TTIOTransportCodecIdMateInlineV2;
+    [p appendBytes:&codecId length:1];
+    appendU16LE(p, (uint16_t)(chromNames.count & 0xFFFF));
+    for (NSString *n in chromNames) appendLEString(p, n, 2);
+    appendU32LE(p, (uint32_t)blob.length);
+    [p appendData:blob];
+    return [self emitPacketType:TTIOTransportPacketBlobV2MateInfo
+                         payload:p
+                       datasetId:datasetId
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeBlobV2RefDiffWithDatasetId:(uint16_t)datasetId
+                            referenceUri:(NSString *)referenceUri
+                                    blob:(NSData *)blob
+                                    error:(NSError **)error
+{
+    NSMutableData *p = [NSMutableData dataWithCapacity:16 + blob.length];
+    appendU16LE(p, datasetId);
+    uint8_t codecId = TTIOTransportCodecIdRefDiffV2;
+    [p appendBytes:&codecId length:1];
+    appendLEString(p, referenceUri ?: @"", 2);
+    appendU32LE(p, (uint32_t)blob.length);
+    [p appendData:blob];
+    return [self emitPacketType:TTIOTransportPacketBlobV2RefDiff
+                         payload:p
+                       datasetId:datasetId
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeBlobV2NameTokWithDatasetId:(uint16_t)datasetId
+                                    blob:(NSData *)blob
+                                    error:(NSError **)error
+{
+    NSMutableData *p = [NSMutableData dataWithCapacity:8 + blob.length];
+    appendU16LE(p, datasetId);
+    uint8_t codecId = TTIOTransportCodecIdNameTokenizedV2;
+    [p appendBytes:&codecId length:1];
+    appendU32LE(p, (uint32_t)blob.length);
+    [p appendData:blob];
+    return [self emitPacketType:TTIOTransportPacketBlobV2NameTok
+                         payload:p
+                       datasetId:datasetId
+                      auSequence:0
+                           error:error];
+}
+
 // ---------------------------------------------------------------- writeDataset
 
 static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
@@ -539,11 +597,16 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     NSArray<NSString *> *genomicNames =
         [dataset.genomicRuns.allKeys sortedArrayUsingSelector:@selector(compare:)];
 
-    // Features currently unknown via the ObjC API; emit empty list.
+    // Features list — Phase 2c-T: declare bulk_mode_v2_blobs when
+    // bulk mode is enabled AND there is at least one genomic run.
+    NSMutableArray<NSString *> *features = [NSMutableArray array];
+    if (_useBulkMode && genomicNames.count > 0) {
+        [features addObject:TTIOTransportBulkModeV2BlobsFeature];
+    }
     if (![self writeStreamHeaderWithFormatVersion:@"1.2"
                                              title:(dataset.title ?: @"")
                                   isaInvestigation:(dataset.isaInvestigationId ?: @"")
-                                          features:@[]
+                                          features:features
                                          nDatasets:(uint16_t)(runNames.count + genomicNames.count)
                                              error:error]) return NO;
 
@@ -606,6 +669,33 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     for (NSString *name in genomicNames) {
         TTIOGenomicRun *grun = dataset.genomicRuns[name];
         NSUInteger nReads = grun.readCount;
+
+        // Phase 2c-T: emit verbatim v2 blob packets (mate_info,
+        // read_names, sequences/refdiff_v2) when bulk mode is on
+        // and the source has them on disk.
+        if (_useBulkMode) {
+            NSData *mateBlob = [grun readMateInfoInlineV2BlobBytes];
+            if (mateBlob != nil) {
+                NSArray<NSString *> *names = [grun readMateInfoChromNamesTable];
+                if (![self writeBlobV2MateInfoWithDatasetId:did
+                                                  chromNames:names
+                                                        blob:mateBlob
+                                                       error:error]) return NO;
+            }
+            NSData *nameBlob = [grun readNameTokV2BlobBytes];
+            if (nameBlob != nil) {
+                if (![self writeBlobV2NameTokWithDatasetId:did
+                                                        blob:nameBlob
+                                                       error:error]) return NO;
+            }
+            NSData *refDiffBlob = [grun readRefDiffV2BlobBytes];
+            if (refDiffBlob != nil) {
+                if (![self writeBlobV2RefDiffWithDatasetId:did
+                                              referenceUri:(grun.referenceUri ?: @"")
+                                                        blob:refDiffBlob
+                                                       error:error]) return NO;
+            }
+        }
         uint8_t acqMode = (uint8_t)grun.acquisitionMode;
         TTIOGenomicIndex *idx = grun.index;
         // M90.10: probe source's @compression on sequences + qualities.

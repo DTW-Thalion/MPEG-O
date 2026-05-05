@@ -29,8 +29,10 @@ the genomic data-model 9-cell matrix
 `python/tests/fixtures/genomic/`; ObjC and Java each verify
 byte-exact decode against the Python-generated artefacts), the
 genomic-transport extension (3×3 encode + decode for genomic
-AUs), per-region encryption + ML-DSA-87 signatures over the
-chromosomes VL compound, the cross-language byte-parity harness
+AUs in both per-AU mode and Phase 2c-T bulk mode — see
+`test_phase_2c_t_bulk_mode.py`), per-region encryption +
+ML-DSA-87 signatures over the chromosomes VL compound, the
+cross-language byte-parity harness
 (with an `ms_per_run_provenance` section so per-run compound
 provenance dual-write is byte-identical), and the multi-omics
 integration test (one `.tio` carrying WGS + proteomics MS + NMR
@@ -338,16 +340,22 @@ Two orthogonal axes:
 
 2. **Streaming transport** — the `.tis` wire format
    documented in `docs/transport-spec.md`. 24-byte packet headers
-   carry nine packet types (StreamHeader, DatasetHeader, AccessUnit,
-   ProtectionMetadata, Annotation, Provenance, Chromatogram,
-   EndOfDataset, EndOfStream). `TransportWriter` / `TransportReader`
+   carry twelve packet types (StreamHeader, DatasetHeader,
+   AccessUnit, ProtectionMetadata, Annotation, Provenance,
+   Chromatogram, EndOfDataset, BlobV2MateInfo, BlobV2RefDiff,
+   BlobV2NameTok, EndOfStream). `TransportWriter` / `TransportReader`
    in all three languages produce / consume the same byte stream;
    `TransportClient` / `TransportServer` wrap the codec in a
    WebSocket frame. Encrypted AUs travel with the ciphertext
    unmodified — the server never decrypts in transit, so selective-
    access filtering is driven by plaintext AU filter fields (or
    the ProtectionMetadata header) rather than the payload. See
-   `docs/transport-encryption-design.md` §6.
+   `docs/transport-encryption-design.md` §6. Phase 2c-T bulk mode
+   (`bulk_mode_v2_blobs` stream feature flag) ships verbatim
+   genomic v2 codec blobs in the three `BlobV2*` packet types so
+   the receiver writes them byte-identically to the target `.tio`
+   without going through the v2 codec encode pass — see
+   `docs/transport-spec.md` §6.4.
 
 ### Transport ↔ file bidirectionality
 
