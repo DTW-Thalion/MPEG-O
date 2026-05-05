@@ -1,0 +1,122 @@
+ttio.exporters.fasta
+====================
+
+.. py:module:: ttio.exporters.fasta
+
+.. autoapi-nested-parse::
+
+   FASTA exporter.
+
+   Writes a :class:`ReferenceImport` (preferred) or a
+   :class:`WrittenGenomicRun` to a FASTA file with optional gzip
+   compression and a samtools-compatible ``.fai`` index alongside.
+
+   Cross-language byte-equality
+   ----------------------------
+   For uncompressed output, three guarantees hold across Python, ObjC,
+   and Java:
+
+   1. Header line is exactly ``>name\n`` (no description preserved).
+   2. Sequence is wrapped at ``line_width`` bytes (default 60),
+      verbatim case.
+   3. Line endings are LF only.
+
+   gzip-compressed output is *not* byte-equal across languages because
+   the compression libraries pick different choices; the conformance
+   harness diffs the decompressed payload.
+
+   The ``.fai`` index follows the samtools / htslib convention:
+
+   ``<name>\t<length>\t<offset>\t<linebases>\t<linewidth>\n``
+
+   * ``length``: total sequence length in bytes (no newlines).
+   * ``offset``: byte offset of the first sequence character after
+     the header line.
+   * ``linebases``: ``line_width`` (sequence bytes per wrapped line).
+   * ``linewidth``: ``line_width + 1`` (includes terminal LF).
+
+   The trailing chromosome's final line may be short of
+   ``line_width`` — the index records the canonical wrap width, not the
+   short tail, matching samtools' faidx output.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFastaWriter`` ·
+   Java: ``global.thalion.ttio.exporters.FastaWriter``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.fasta.DEFAULT_LINE_WIDTH
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.exporters.fasta.FastaWriter
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_LINE_WIDTH
+   :value: 60
+
+
+.. py:class:: FastaWriter
+
+   FASTA exporter for reference imports and unaligned genomic runs.
+
+   All methods are class-level; instantiation is unnecessary.
+
+
+   .. py:method:: write_reference(reference: ttio.genomic.reference_import.ReferenceImport, path: str | os.PathLike[str], *, line_width: int = DEFAULT_LINE_WIDTH, gzip_output: bool | None = None, write_fai: bool = True) -> None
+      :classmethod:
+
+
+      Write a :class:`ReferenceImport` to a FASTA file.
+
+      :param reference: Source reference. Chromosomes are written in the order
+                        recorded on the value class.
+      :type reference: ReferenceImport
+      :param path: Destination path. ``.gz`` extension auto-enables gzip
+                   unless ``gzip_output`` is set explicitly.
+      :type path: str or Path
+      :param line_width: Sequence wrap width in bytes; default 60. Must be >= 1.
+      :type line_width: int
+      :param gzip_output: Force gzip on (``True``) or off (``False``). When
+                          ``None`` (default), gzip is enabled iff ``path`` ends in
+                          ``.gz``.
+      :type gzip_output: bool, optional
+      :param write_fai: When ``True`` (default), emit a samtools-compatible
+                        ``<path>.fai`` index alongside. Index emission is
+                        skipped silently for gzip output (samtools faidx does
+                        not index plain gzip; bgzip is required and not yet
+                        supported here).
+      :type write_fai: bool
+
+
+
+   .. py:method:: write_run(run: ttio.written_genomic_run.WrittenGenomicRun | ttio.genomic_run.GenomicRun, path: str | os.PathLike[str], *, line_width: int = DEFAULT_LINE_WIDTH, gzip_output: bool | None = None, write_fai: bool = True) -> None
+      :classmethod:
+
+
+      Write a genomic run to a FASTA file.
+
+      Accepts either the write-side :class:`WrittenGenomicRun`
+      (parallel arrays in memory) or the read-side
+      :class:`GenomicRun` (lazy backing dataset). Each read becomes
+      one FASTA record (``>read_name`` followed by the wrapped
+      sequence). Quality bytes are discarded; use
+      :class:`FastqWriter` to preserve them.
+
+
+

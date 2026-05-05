@@ -19,6 +19,10 @@ Submodules
    :maxdepth: 1
 
    /autoapi/ttio/tools/dump_identifications/index
+   /autoapi/ttio/tools/fasta_export_cli/index
+   /autoapi/ttio/tools/fasta_import_cli/index
+   /autoapi/ttio/tools/fastq_export_cli/index
+   /autoapi/ttio/tools/fastq_import_cli/index
    /autoapi/ttio/tools/per_au_cli/index
    /autoapi/ttio/tools/simulator_cli/index
    /autoapi/ttio/tools/transport_decode_cli/index

@@ -797,7 +797,92 @@ bifurcating by modality.
 Code written against v1.1.x or earlier needs a one-time
 sed-style rename. There is no dual-import shim.
 
-## 13. See also
+## 13. FASTA / FASTQ ingest and export
+
+The FASTA + FASTQ paths are native to TTI-O — no `samtools`
+subprocess, no third-party FASTA library — and ship a 3-way
+byte-equality guarantee across Python, Java, and ObjC.
+
+### 13.1 Reference FASTA bundled with BAM/CRAM
+
+Embed the reference into the same `.tio` so REF_DIFF_V2 decode
+no longer needs an external `.fa`:
+
+```python
+from ttio.importers.fasta import FastaReader
+from ttio import SpectralDataset
+
+ref = FastaReader("GRCh38.fa").read_reference(uri="GRCh38.p14")
+SpectralDataset.write_minimal(
+    "sample.tio",
+    title="WGS NA12878",
+    isa_investigation_id="EXAMPLE:WGS:0001",
+    runs={},
+)
+with SpectralDataset.open("sample.tio", writable=True) as ds:
+    ref.write_to_dataset(ds)
+```
+
+The reference lives at `/study/references/<uri>/`; chromosome
+sequences are gzip-compressed and case-preserving (soft-masking
+survives round-trip). The MD5 attribute is computed from
+sort-by-name `(name + 0x0A + bytes + 0x0A)` — order-invariant and
+cross-language byte-equal.
+
+### 13.2 FASTQ as an unaligned run
+
+```python
+from ttio.importers.fastq import FastqReader
+
+reader = FastqReader("reads.fq.gz")  # gzip auto-detected
+run = reader.read(sample_name="NA12878")
+print(reader.detected_phred_offset)  # 33 or 64
+SpectralDataset.write_minimal(
+    "sample.tio",
+    title="", isa_investigation_id="",
+    runs={},
+    genomic_runs={"genomic_0001": run},
+)
+```
+
+Phred encoding is auto-detected (`33` modern Illumina / Sanger vs
+`64` legacy Illumina / Solexa pre-1.8). Internal storage is always
+Phred+33; pass `force_phred=33|64` to override the heuristic.
+
+### 13.3 FASTA / FASTQ export from `.tio`
+
+```python
+from ttio.exporters.fasta import FastaWriter
+from ttio.exporters.fastq import FastqWriter
+
+with SpectralDataset.open("sample.tio") as ds:
+    run = ds.genomic_runs["genomic_0001"]
+    FastqWriter.write(run, "out.fq")            # Phred+33 default
+    FastaWriter.write_run(run, "out.fa",
+                           line_width=60)       # NCBI convention
+```
+
+Default 60-char line wrap; configurable. A samtools-compatible
+`<path>.fai` index is emitted alongside non-gzip FASTA output.
+gzip is auto-enabled when the destination ends in `.gz`. The
+internal `0xFF` "qualities unknown" sentinel maps to Phred 0
+(`!`) on FASTQ output so the result is always parseable.
+
+### 13.4 Cross-language CLIs
+
+| Workflow | Python | Java | ObjC |
+|---|---|---|---|
+| FASTA import | `python -m ttio.tools.fasta_import_cli {reference,unaligned}` | (use round-trip CLI) | (use round-trip CLI) |
+| FASTA export | `python -m ttio.tools.fasta_export_cli {reference,run}` | — | — |
+| FASTA round-trip | — | `FastaRoundTrip <in.fa> <out.fa> [width]` | `TtioFastaRoundTrip <in.fa> <out.fa> [width]` |
+| FASTQ import | `python -m ttio.tools.fastq_import_cli` | (use round-trip CLI) | (use round-trip CLI) |
+| FASTQ export | `python -m ttio.tools.fastq_export_cli` | — | — |
+| FASTQ round-trip | — | `FastqRoundTrip <in.fq> <out.fq>` | `TtioFastqRoundTrip <in.fq> <out.fq>` |
+
+See `docs/vendor-formats.md` §FASTA / §FASTQ for the full byte-
+layout spec, parser semantics, and the `.fai` index format.
+
+## 14. See also
 
 - `docs/api-review-v0.7.md` — three-column parity map (Python / ObjC / Java)
   with stability markers for every public class and method, plus

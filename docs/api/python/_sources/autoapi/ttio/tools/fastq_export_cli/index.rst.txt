@@ -1,0 +1,37 @@
+ttio.tools.fastq_export_cli
+===========================
+
+.. py:module:: ttio.tools.fastq_export_cli
+
+.. autoapi-nested-parse::
+
+   FASTQ export CLI — emits a genomic run as a FASTQ file.
+
+   Usage
+   -----
+   ::
+
+       python -m ttio.tools.fastq_export_cli \
+           --in study.tio --name genomic_0001 --out reads.fq.gz
+
+   Exit codes
+   ----------
+   - ``0`` — wrote output successfully.
+   - ``1`` — argument error.
+   - ``2`` — read / write failure.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.fastq_export_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

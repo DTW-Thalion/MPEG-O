@@ -35,6 +35,8 @@ Submodules
    /autoapi/ttio/importers/bruker_tdf_cli/index
    /autoapi/ttio/importers/cram/index
    /autoapi/ttio/importers/cv_term_mapper/index
+   /autoapi/ttio/importers/fasta/index
+   /autoapi/ttio/importers/fastq/index
    /autoapi/ttio/importers/import_result/index
    /autoapi/ttio/importers/imzml/index
    /autoapi/ttio/importers/jcamp_dx/index

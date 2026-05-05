@@ -7,12 +7,14 @@ ttio.exporters
 
    Exporter subpackage (Apache-2.0).
 
-   - mzML (M19): indexed-mzML writer
-   - nmrML (M29): 1D spectrum writer
-   - ISA-Tab (M27): study bundle writer
-   - imzML (v0.9+): MS imaging writer (.imzML + .ibd pair)
-   - BAM (M88): SAM/BAM writer for genomic runs
-   - CRAM (M88): reference-compressed BAM writer for genomic runs
+   - mzML: indexed-mzML writer
+   - nmrML: 1D spectrum writer
+   - ISA-Tab: study bundle writer
+   - imzML: MS imaging writer (.imzML + .ibd pair)
+   - BAM: SAM/BAM writer for genomic runs
+   - CRAM: reference-compressed BAM writer for genomic runs
+   - FASTA: reference + unaligned-run writer with .fai index
+   - FASTQ: unaligned-run writer with auto-detect Phred offset
 
    SPDX-License-Identifier: Apache-2.0
 
@@ -26,6 +28,8 @@ Submodules
 
    /autoapi/ttio/exporters/bam/index
    /autoapi/ttio/exporters/cram/index
+   /autoapi/ttio/exporters/fasta/index
+   /autoapi/ttio/exporters/fastq/index
    /autoapi/ttio/exporters/imzml/index
    /autoapi/ttio/exporters/isa/index
    /autoapi/ttio/exporters/jcamp_dx/index

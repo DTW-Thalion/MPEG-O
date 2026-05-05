@@ -160,6 +160,15 @@ for safety.
 | JCAMP-DX 5.01 reader (Raman / IR) | **Stable** | v0.11 (M73) | AFFN `##XYDATA=(X++(Y..Y))` only. Dispatch on `##DATA TYPE=` between `RamanSpectrum` / `IRSpectrum`. See `docs/vendor-formats.md`. |
 | JCAMP-DX 5.01 writer (Raman / IR) | **Stable** | v0.11 (M73) | `%.10g` AFFN deterministic output; verified bit-identical across Python / Java / ObjC by the cross-language harness. |
 | `TtioJcampDxDump` CLI (ObjC) | **Stable** | v0.11 (M73) | Driver used by the Python↔ObjC conformance test; `docs/vendor-formats.md` documents the surface. |
+| SAM/BAM reader (samtools delegation) | **Stable** | v1.0 | `BamReader` / `SamReader` / `TTIOBamReader`; `to_genomic_run()` / `toGenomicRun:`. See `docs/vendor-formats.md` §SAM/BAM. |
+| CRAM reader (samtools `--reference` delegation) | **Stable** | v1.0 | `CramReader` extends `BamReader` with mandatory FASTA reference. See `docs/vendor-formats.md` §CRAM. |
+| BAM/CRAM writer (samtools delegation) | **Stable** | v1.0 | `BamWriter` / `CramWriter` / `TTIOBamWriter` etc. |
+| FASTA reader | **Stable** | v1.0 | `FastaReader` (Python / Java / ObjC). Two modes: `read_reference()` for `ReferenceImport` and `read_unaligned()` for `WrittenGenomicRun`. gzip auto-detected. See `docs/vendor-formats.md` §FASTA. |
+| FASTA writer + `.fai` index | **Stable** | v1.0 | `FastaWriter` with configurable line-wrap and samtools-compatible `.fai` index emission. Cross-language byte-equal output. |
+| FASTQ reader | **Stable** | v1.0 | `FastqReader` (Python / Java / ObjC) with auto-detect Phred offset (33 / 64). Internal storage normalises to Phred+33. See `docs/vendor-formats.md` §FASTQ. |
+| FASTQ writer | **Stable** | v1.0 | `FastqWriter` with selectable Phred output offset. Internal `0xFF` "qualities unknown" sentinel maps to Phred 0 on output. |
+| `ReferenceImport` value class + `write_to_dataset()` | **Stable** | v1.0 | Embeds a reference at `/study/references/<uri>/`. See `docs/format-spec.md` §"FASTA-import variant of the reference group". |
+| FASTA / FASTQ CLIs (`fasta_import_cli`, `fasta_export_cli`, `fastq_import_cli`, `fastq_export_cli`, `FastaRoundTrip`, `FastqRoundTrip`, `TtioFastaRoundTrip`, `TtioFastqRoundTrip`) | **Stable** | v1.0 | One CLI surface per language; same byte-output contract as the in-process API. |
 
 ### 4.1 Transport (v0.10)
 

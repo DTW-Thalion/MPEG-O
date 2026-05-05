@@ -1,0 +1,38 @@
+ttio.tools.fastq_import_cli
+===========================
+
+.. py:module:: ttio.tools.fastq_import_cli
+
+.. autoapi-nested-parse::
+
+   FASTQ import CLI — converts a FASTQ file into an unaligned
+   genomic run inside a ``.tio`` container.
+
+   Usage
+   -----
+   ::
+
+       python -m ttio.tools.fastq_import_cli \
+           --fastq reads.fq.gz --out study.tio --sample S1
+
+   Exit codes
+   ----------
+   - ``0`` — wrote output successfully.
+   - ``1`` — argument error.
+   - ``2`` — read / write failure.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.fastq_import_cli.main
+
+
+Module Contents
+---------------
+
+.. py:function:: main(argv: list[str] | None = None) -> int
+

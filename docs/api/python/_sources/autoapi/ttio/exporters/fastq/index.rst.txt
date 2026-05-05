@@ -1,0 +1,84 @@
+ttio.exporters.fastq
+====================
+
+.. py:module:: ttio.exporters.fastq
+
+.. autoapi-nested-parse::
+
+   FASTQ exporter.
+
+   Writes a :class:`WrittenGenomicRun` to a FASTQ file with optional
+   gzip compression. Each read becomes a 4-line record:
+
+       @read_name
+       SEQUENCE
+       +
+       QUALITIES
+
+   The qualities channel is emitted verbatim (Phred+33 ASCII —
+   :class:`BamReader` and :class:`FastqReader` both store qualities in
+   this canonical form). For Phred+64 output, set ``phred_offset=64``;
+   each byte ``b`` is rewritten as ``b + 31`` on the way out.
+
+   Reads with an absent or all-``0xFF`` qualities buffer (the
+   ``BamReader`` / FASTA-import sentinel for "qualities unknown") are
+   emitted with the ``!`` (Phred 0) fill character so the output is a
+   parseable FASTQ.
+
+   Cross-language byte-equality
+   ----------------------------
+   For uncompressed output, three guarantees hold across Python, ObjC,
+   and Java:
+
+   1. Header is exactly ``@name\n`` (description discarded).
+   2. The ``+`` separator line is exactly ``+\n`` (no name repetition).
+   3. LF-only line endings.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOFastqWriter`` ·
+   Java: ``global.thalion.ttio.exporters.FastqWriter``.
+
+   SPDX-License-Identifier: Apache-2.0
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.exporters.fastq.FastqWriter
+
+
+Module Contents
+---------------
+
+.. py:class:: FastqWriter
+
+   FASTQ exporter for unaligned genomic runs.
+
+
+   .. py:method:: write(run: ttio.written_genomic_run.WrittenGenomicRun | ttio.genomic_run.GenomicRun, path: str | os.PathLike[str], *, gzip_output: bool | None = None, phred_offset: int = 33) -> None
+      :classmethod:
+
+
+      Serialise ``run`` to a FASTQ file.
+
+      :param run: Source run. The sequence and qualities channels must
+                  be the same length.
+      :type run: WrittenGenomicRun
+      :param path: Destination. ``.gz`` extension auto-enables gzip unless
+                   ``gzip_output`` is set explicitly.
+      :type path: str or Path
+      :param gzip_output: Force gzip on (``True``) or off (``False``). When
+                          ``None`` (default), gzip is enabled iff ``path`` ends in
+                          ``.gz``.
+      :type gzip_output: bool, optional
+      :param phred_offset: ``33`` (default; modern Illumina / Sanger) or ``64``
+                           (legacy Illumina). Quality bytes are converted from the
+                           internal Phred+33 representation if ``64`` is selected.
+      :type phred_offset: int
+
+
+

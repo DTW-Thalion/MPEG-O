@@ -1172,6 +1172,47 @@ group's URI. A second run with the same URI but a different MD5
 raises `ValueError` at write time — the URI–MD5 binding is
 one-to-one within a file.
 
+### FASTA-import variant of the reference group
+
+The `FastaReader` / `FastaWriter` pair (Python
+`ttio.importers.fasta` / `ttio.exporters.fasta`, Java
+`global.thalion.ttio.importers.FastaReader` /
+`...exporters.FastaWriter`, ObjC `TTIOFastaReader` /
+`TTIOFastaWriter`) embeds a reference under the same group prefix
+with a slightly extended attribute set:
+
+```
+/study/references/<uri>/
+  @md5             : fixed-length string — 32-char hex
+  @total_bases     : int64 — sum of sequence lengths across the
+                     reference (FASTA-import layout extension)
+  chromosomes/
+    <chrom_name>/
+      data         : 1-D uint8 dataset, gzip-compressed,
+                     **case-preserving** (lowercase soft-masking
+                     survives the round-trip).
+```
+
+Two intentional differences from the REF_DIFF_V2 auto-embedded
+layout above:
+
+1. **Case preservation.** FASTA-import keeps original byte values
+   so a round-trip through `.tio` does not lose soft-masking.
+   REF_DIFF_V2 auto-embed uppercase-normalises for codec
+   determinism.
+2. **`@total_bases` attribute.** FASTA-import adds this for
+   constant-time `total_bases` queries. REF_DIFF_V2 auto-embed
+   does not.
+
+The `@md5` attribute is computed by both paths over the same
+content (sorted sequences in name order); FASTA-import additionally
+includes name framing (`name + 0x0A + sequence + 0x0A` per
+chromosome) so the digest is order-invariant against
+chromosome-set permutations. **As a result, the FASTA-import MD5
+will not match the REF_DIFF_V2-encoder MD5 for the same
+reference**; users mixing the two paths in a single `.tio` should
+coordinate which writer owns the reference.
+
 ### Default codec selection
 
 When a run provides `reference_chrom_seqs` (or otherwise resolves a
