@@ -1,3 +1,20 @@
+/*
+ * TTIOProviderRegistry.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOProviderRegistry
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Providers/TTIOProviderRegistry.h
+ *
+ * Storage-provider registry singleton. Maps short provider names
+ * (e.g. "hdf5", "memory", "sqlite", "zarr") to provider classes that
+ * self-registered via +load. Resolves opens by explicit name or by
+ * URL scheme.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOProviderRegistry.h"
 #import "HDF5/TTIOHDF5Errors.h"
 

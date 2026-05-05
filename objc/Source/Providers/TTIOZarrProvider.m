@@ -1,4 +1,18 @@
 /*
+ * TTIOZarrProvider.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOZarrProvider
+ * Inherits From: NSObject
+ * Conforms To:   TTIOStorageProvider, NSObject (NSObject)
+ * Declared In:   Providers/TTIOZarrProvider.h
+ *
+ * Zarr v3 storage provider. Self-contained LocalStore over the on-disk
+ * Zarr v3 layout (zarr.json per node, c/N1/N2/... chunk paths,
+ * canonical dtype names). Cross-reads byte-for-byte with the Python
+ * and Java ZarrProviders; gzip-encoded chunks decoded inline via
+ * libz inflate.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOZarrProvider.h"

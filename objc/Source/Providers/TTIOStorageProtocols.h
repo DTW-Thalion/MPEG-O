@@ -2,13 +2,12 @@
  * Licensed under LGPL-3.0-or-later.
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
- * Storage provider protocols — Milestone 39 Part A.
- *
- * All three shipping providers (HDF5, memory, and — eventually —
- * Zarr/SQLite) implement these protocols. Upper layers
+ * Storage provider protocols. All shipping providers (HDF5, memory,
+ * SQLite, Zarr) implement these protocols. Upper layers
  * (TTIOSpectralDataset, TTIOAcquisitionRun, TTIOCompoundIO,
- * TTIOSignatureManager, TTIOEncryptionManager, TTIOKeyRotationManager,
- * TTIOAnonymizer, TTIOFeatureFlags) talk only to the protocols.
+ * TTIOSignatureManager, TTIOEncryptionManager,
+ * TTIOKeyRotationManager, TTIOAnonymizer, TTIOFeatureFlags) talk
+ * only to the protocols.
  */
 
 #ifndef TTIO_STORAGE_PROTOCOLS_H
@@ -34,15 +33,21 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 // ──────────────────────────────────────────────────────────────
 
 /**
- * A typed array (or compound record array) stored under an
- * TTIOStorageGroup. 1-D is the common case; N-D is supported for
- * image cubes and 2-D NMR data.
+ * <heading>TTIOStorageDataset (protocol)</heading>
  *
- * API status: Stable (Provisional per M39 — may change before v1.0).
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Providers/TTIOStorageProtocols.h</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.providers.base.StorageDataset
- *   Java:   global.thalion.ttio.providers.StorageDataset
+ * <p>A typed array (or compound record array) stored under a
+ * <code>TTIOStorageGroup</code>. 1-D is the common case; N-D is
+ * supported for image cubes and 2-D NMR data.</p>
+ *
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.providers.base.StorageDataset</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.providers.StorageDataset</code></p>
  */
 @protocol TTIOStorageDataset <NSObject>
 
@@ -55,15 +60,17 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 
 /** Full read.
  *
- *  Return type varies by backend (Appendix B Gap 2):
- *    - Primitive datasets: NSData of length * sizeof(element).
- *    - Compound datasets (all backends): NSArray&lt;NSDictionary *&gt;
- *      where each dict maps field name to boxed value. The ObjC
- *      reference implementation returns this shape for both HDF5 and
- *      SQLite providers, so callers do not need to branch on
- *      provider type. The universal helper ``-readRows:`` returns
- *      the same value and is provided for cross-language parity with
- *      Python / Java. */
+ *  Return type varies by backend:
+ *    - Primitive datasets: <code>NSData</code> of
+ *      <code>length * sizeof(element)</code>.
+ *    - Compound datasets (all backends):
+ *      <code>NSArray&lt;NSDictionary *&gt;</code> where each dict
+ *      maps field name to boxed value. The ObjC reference
+ *      implementation returns this shape for both HDF5 and SQLite
+ *      providers, so callers do not need to branch on provider type.
+ *      The universal helper <code>-readRows:</code> returns the same
+ *      value and is provided for cross-language parity with Python
+ *      and Java. */
 - (id)readAll:(NSError **)error;
 
 /** Hyperslab read. */
@@ -76,20 +83,20 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 - (BOOL)writeAll:(id)data error:(NSError **)error;
 
 /** Backend-agnostic compound read. Returns
- *  NSArray&lt;NSDictionary *&gt; for compound datasets, nil + NSError
- *  for primitives.
+ *  <code>NSArray&lt;NSDictionary *&gt;</code> for compound datasets,
+ *  <code>nil</code> + <code>NSError</code> for primitives.
  *
- *  ObjC compound readers already return the NSDictionary shape
- *  universally, so most implementations are a trivial forwarder to
- *  ``-readAll:``. Appendix B Gap 2 introduced the method as
- *  ``@optional`` in v0.6.1; v0.7 M50.2 promotes it to ``@required``
- *  so custom provider implementations that omit it fail at compile
- *  time rather than silently at runtime via
- *  ``doesNotRecognizeSelector:``. */
+ *  ObjC compound readers already return the
+ *  <code>NSDictionary</code> shape universally, so most
+ *  implementations are a trivial forwarder to
+ *  <code>-readAll:</code>. Required on the protocol so that custom
+ *  provider implementations that omit it fail at compile time rather
+ *  than silently at runtime via
+ *  <code>doesNotRecognizeSelector:</code>. */
 - (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error;
 
-/** Return the dataset contents as a byte stream in the TTIO
- *  canonical layout (v0.7 M43).
+/** Returns the dataset contents as a byte stream in the TTIO
+ *  canonical layout.
  *
  *  Semantics:
  *    - Primitive numeric: little-endian packed values.
@@ -124,18 +131,23 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 // ──────────────────────────────────────────────────────────────
 
 /**
- * A named directory of sub-groups and datasets.
+ * <heading>TTIOStorageGroup (protocol)</heading>
  *
- * Groups form a hierarchical namespace. Every provider exposes at
- * least one root group via TTIOStorageProvider. Upper-layer objects
- * (TTIOSpectralDataset, TTIOAcquisitionRun, etc.) navigate the tree
- * exclusively through this protocol.
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Providers/TTIOStorageProtocols.h</p>
  *
- * API status: Stable (Provisional per M39 — may change before v1.0).
+ * <p>A named directory of sub-groups and datasets. Groups form a
+ * hierarchical namespace; every provider exposes at least one root
+ * group via <code>TTIOStorageProvider</code>. Upper-layer objects
+ * (<code>TTIOSpectralDataset</code>, <code>TTIOAcquisitionRun</code>,
+ * ...) navigate the tree exclusively through this protocol.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.providers.base.StorageGroup
- *   Java:   global.thalion.ttio.providers.StorageGroup
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.providers.base.StorageGroup</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.providers.StorageGroup</code></p>
  */
 @protocol TTIOStorageGroup <NSObject>
 
@@ -193,19 +205,25 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 // ──────────────────────────────────────────────────────────────
 
 /**
- * Storage backend entry point.
+ * <heading>TTIOStorageProvider (protocol)</heading>
  *
- * A provider opens a backing store (HDF5 file, in-memory tree, future
- * Zarr store, etc.) and exposes its root TTIOStorageGroup. Providers
- * are selected by scheme-based routing via @c supportsURL: or named
- * explicitly. Upper layers talk only to the protocols and stay
- * backend-agnostic.
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Providers/TTIOStorageProtocols.h</p>
  *
- * API status: Stable (Provisional per M39 — may change before v1.0).
+ * <p>Storage backend entry point. A provider opens a backing store
+ * (HDF5 file, in-memory tree, Zarr store, SQLite database, etc.)
+ * and exposes its root <code>TTIOStorageGroup</code>. Providers are
+ * selected by scheme-based routing via <code>-supportsURL:</code>
+ * or named explicitly through
+ * <code>TTIOProviderRegistry</code>. Upper layers talk only to the
+ * protocols and stay backend-agnostic.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.providers.base.StorageProvider
- *   Java:   global.thalion.ttio.providers.StorageProvider
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.providers.base.StorageProvider</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.providers.StorageProvider</code></p>
  */
 @protocol TTIOStorageProvider <NSObject>
 
@@ -227,16 +245,16 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 /** YES if the backend honors ``chunkSize`` in
  *  ``-createDatasetNamed:precision:length:chunkSize:...``. Defaults
  *  to NO via the adapter pattern — only ``TTIOHDF5Provider`` returns
- *  YES. Memory and SQLite accept the argument for interface
- *  compatibility but silently ignore it. Appendix B Gap 3. */
+ *  <code>YES</code>. Memory and SQLite accept the argument for
+ *  interface compatibility but silently ignore it. */
 - (BOOL)supportsChunking;
 
-/** YES if the backend honors ``compression`` / ``compressionLevel``.
- *  Only ``TTIOHDF5Provider`` returns YES (zlib + LZ4). Appendix B
- *  Gap 3. */
+/** <code>YES</code> if the backend honors <code>compression</code> /
+ *  <code>compressionLevel</code>. Only <code>TTIOHDF5Provider</code>
+ *  returns <code>YES</code> (zlib + LZ4). */
 - (BOOL)supportsCompression;
 
-// ── Transactions (Appendix B Gap 11) ────────────────────────────
+// ── Transactions ────────────────────────────────────────────────
 
 /** Start a write-batching transaction. No-op on HDF5 and Memory;
  *  issues ``BEGIN`` on the underlying connection for SQLite. */

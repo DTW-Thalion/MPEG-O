@@ -1,4 +1,17 @@
 /*
+ * TTIOCanonicalBytes.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCanonicalBytes
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Providers/TTIOCanonicalBytes.h
+ *
+ * Canonical byte-layout helpers shared by every storage provider's
+ * -readCanonicalBytes: implementation. Primitives go little-endian;
+ * compound rows walk in storage order, fields in declaration order
+ * with VL strings as u32_le(length) || utf-8_bytes.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOCanonicalBytes.h"

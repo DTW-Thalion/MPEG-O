@@ -1,3 +1,20 @@
+/*
+ * TTIOMemoryProvider.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOMemoryProvider
+ * Inherits From: NSObject
+ * Conforms To:   TTIOStorageProvider, NSObject (NSObject)
+ * Declared In:   Providers/TTIOMemoryProvider.h
+ *
+ * In-memory storage provider. Persists nothing; opens of the same
+ * memory:// URL share a tree until +discardStore: is called. Useful
+ * for tests, scratch work, and protocol-conformance verification
+ * against TTIOHDF5Provider.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOMemoryProvider.h"
 #import "TTIOProviderRegistry.h"
 #import "TTIOCanonicalBytes.h"
