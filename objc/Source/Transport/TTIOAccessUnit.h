@@ -1,14 +1,4 @@
 /*
- * TTIOAccessUnit — v0.10 M67 transport-layer Access Unit value class.
- *
- * One spectrum as a transport-format packet payload. Carries filter
- * keys (RT, MS level, polarity, precursor m/z, ion mobility, base peak
- * intensity) followed by N signal channels.
- *
- * Cross-language equivalents:
- *   Python: ttio.transport.packets.AccessUnit
- *   Java:   global.thalion.ttio.transport.AccessUnit
- *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #ifndef TTIO_ACCESS_UNIT_H
@@ -18,7 +8,17 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/** One signal channel inside an TTIOAccessUnit. */
+/**
+ * <heading>TTIOTransportChannelData</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOAccessUnit.h</p>
+ *
+ * <p>One signal channel inside a <code>TTIOAccessUnit</code>:
+ * channel name, precision, optional compression, element count, and
+ * the encoded payload bytes.</p>
+ */
 @interface TTIOTransportChannelData : NSObject
 
 @property (nonatomic, readonly, copy) NSString *name;
@@ -46,15 +46,40 @@ NS_ASSUME_NONNULL_BEGIN
 
 
 /**
- * Transport-layer Access Unit: one spectrum as a transport payload.
+ * <heading>TTIOAccessUnit</heading>
  *
- * ``spectrumClass`` wire values:
- *   0 = MassSpectrum, 1 = NMRSpectrum, 2 = NMR2D,
- *   3 = FID, 4 = MSImagePixel, 5 = GenomicRead
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOAccessUnit.h</p>
  *
- * ``polarity`` wire values (differs from TTIOPolarity which uses -1
- * for negative; the wire uses nonneg only):
- *   0 = positive, 1 = negative, 2 = unknown
+ * <p>Transport-layer Access Unit: one spectrum (or one genomic read)
+ * as a transport payload. Carries filter keys (RT, MS level,
+ * polarity, precursor m/z, ion mobility, base-peak intensity)
+ * followed by N signal channels.</p>
+ *
+ * <p><strong>spectrumClass</strong> wire values:</p>
+ * <ul>
+ *  <li>0 = MassSpectrum</li>
+ *  <li>1 = NMRSpectrum</li>
+ *  <li>2 = NMR2D</li>
+ *  <li>3 = FID</li>
+ *  <li>4 = MSImagePixel</li>
+ *  <li>5 = GenomicRead</li>
+ * </ul>
+ *
+ * <p><strong>polarity</strong> wire values (differs from
+ * <code>TTIOPolarity</code> which uses <code>-1</code> for negative;
+ * the wire uses non-negative only):</p>
+ * <ul>
+ *  <li>0 = positive</li>
+ *  <li>1 = negative</li>
+ *  <li>2 = unknown</li>
+ * </ul>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.transport.packets.AccessUnit</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.transport.AccessUnit</code></p>
  */
 @interface TTIOAccessUnit : NSObject
 
@@ -74,7 +99,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) uint32_t pixelY;
 @property (nonatomic, readonly) uint32_t pixelZ;
 
-// GenomicRead extension (written only when spectrumClass == 5). M89.1.
+// GenomicRead extension (written only when spectrumClass == 5).
 // Wire layout (transport-spec §4.3.4): chromosome (uint16-len-prefixed
 // UTF-8) + position (i64 LE) + mappingQuality (u8) + flags (u16 LE).
 // position is signed to match BAM's -1 unmapped sentinel.
@@ -82,11 +107,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) int64_t position;
 @property (nonatomic, readonly) uint8_t mappingQuality;
 @property (nonatomic, readonly) uint16_t flags;
-// M90.9: mate extension fields. Optional on the wire — when absent
-// (M89.1 file or empty AU) they default to BAM unmapped sentinels
-// (-1 matePosition, 0 templateLength). Wire layout: appended after
-// the M89.1 fixed suffix as int64 matePosition + int32 templateLength
-// (12 bytes total).
+// Mate extension fields. Optional on the wire — when absent the
+// values default to BAM unmapped sentinels (-1 matePosition,
+// 0 templateLength). Wire layout: appended after the genomic fixed
+// suffix as int64 matePosition + int32 templateLength (12 bytes).
 @property (nonatomic, readonly) int64_t matePosition;
 @property (nonatomic, readonly) int32_t templateLength;
 
@@ -104,9 +128,10 @@ NS_ASSUME_NONNULL_BEGIN
                                pixelY:(uint32_t)pixelY
                                pixelZ:(uint32_t)pixelZ;
 
-/** M89.1 initialiser including the GenomicRead suffix fields.
- *  Delegates to the M90.9 designated initialiser with
- *  matePosition=-1, templateLength=0. */
+/** Genomic-aware initialiser including the GenomicRead suffix
+ *  fields. Delegates to the designated initialiser with
+ *  <code>matePosition = -1</code>,
+ *  <code>templateLength = 0</code>. */
 - (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
                       acquisitionMode:(uint8_t)acquisitionMode
                               msLevel:(uint8_t)msLevel
@@ -125,9 +150,11 @@ NS_ASSUME_NONNULL_BEGIN
                        mappingQuality:(uint8_t)mappingQuality
                                   flags:(uint16_t)flags;
 
-/** M90.9 designated initialiser including the mate extension fields
- *  (matePosition + templateLength). Older initialisers delegate here
- *  with matePosition=-1, templateLength=0. */
+/** Designated initialiser including the mate extension fields
+ *  (<code>matePosition</code> + <code>templateLength</code>). Older
+ *  initialisers delegate here with
+ *  <code>matePosition = -1</code>,
+ *  <code>templateLength = 0</code>. */
 - (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
                       acquisitionMode:(uint8_t)acquisitionMode
                               msLevel:(uint8_t)msLevel

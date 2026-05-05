@@ -1,15 +1,13 @@
 /*
- * TTIOTransportPacket — v0.10 M67 packet header + CRC-32C helpers.
+ * SPDX-License-Identifier: LGPL-3.0-or-later
  *
- * Implements the 24-byte PacketHeader specified in
- * docs/transport-spec.md §3. All multi-byte fields are little-endian
- * on the wire.
+ * Transport packet header value class plus CRC-32C helper. Implements
+ * the 24-byte PacketHeader specified in docs/transport-spec.md §3.
+ * All multi-byte fields are little-endian on the wire.
  *
  * Cross-language equivalents:
  *   Python: ttio.transport.packets.PacketHeader + PacketType
  *   Java:   global.thalion.ttio.transport.PacketHeader + PacketType
- *
- * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #ifndef TTIO_TRANSPORT_PACKET_H
 #define TTIO_TRANSPORT_PACKET_H
@@ -38,13 +36,21 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
     TTIOTransportPacketFlagEncrypted       = 1 << 0,
     TTIOTransportPacketFlagCompressed      = 1 << 1,
     TTIOTransportPacketFlagHasChecksum     = 1 << 2,
-    // v1.0: set in addition to ENCRYPTED when the AU's semantic
-    // header fields are AES-GCM encrypted (transport-spec §4.3.3).
+    // Set in addition to ENCRYPTED when the AU's semantic header
+    // fields are AES-GCM encrypted (transport-spec §4.3.3).
     // Readers MUST reject EncryptedHeader without Encrypted.
     TTIOTransportPacketFlagEncryptedHeader = 1 << 3
 };
 
-/** 24-byte packet header as a plain value object. */
+/**
+ * <heading>TTIOTransportPacketHeader</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOTransportPacket.h</p>
+ *
+ * <p>24-byte packet header as a plain value object.</p>
+ */
 @interface TTIOTransportPacketHeader : NSObject
 
 @property (nonatomic, readonly) TTIOTransportPacketType packetType;

@@ -1,4 +1,17 @@
 /*
+ * TTIOTransportReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOTransportPacketRecord, TTIOTransportReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOTransportReader.h
+ *
+ * Transport stream reader. Walks a transport byte stream into
+ * (header, payload) packet records and (optionally) materialises a
+ * fresh .tio file from the stream. Validates magic / version /
+ * CRC-32C and rejects out-of-order AU sequences.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOTransportReader.h"

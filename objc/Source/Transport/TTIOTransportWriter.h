@@ -1,14 +1,4 @@
 /*
- * TTIOTransportWriter — v0.10 M67.
- *
- * Serializes an TTIOSpectralDataset as a transport byte stream.
- * Walks ``msRuns``, emits StreamHeader → DatasetHeaders →
- * AccessUnits → EndOfDataset → EndOfStream.
- *
- * Cross-language equivalents:
- *   Python: ttio.transport.codec.TransportWriter
- *   Java:   global.thalion.ttio.transport.TransportWriter
- *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #ifndef TTIO_TRANSPORT_WRITER_H
@@ -24,6 +14,26 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/**
+ * <heading>TTIOTransportWriter</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Transport/TTIOTransportWriter.h</p>
+ *
+ * <p>Serialises a <code>TTIOSpectralDataset</code> as a transport
+ * byte stream. Walks <code>msRuns</code>, emits StreamHeader &rarr;
+ * DatasetHeaders &rarr; AccessUnits &rarr; EndOfDataset &rarr;
+ * EndOfStream. A fine-grained API is also exposed for callers that
+ * synthesise streams packet-by-packet
+ * (<code>TTIOAcquisitionSimulator</code>,
+ * <code>TTIOEncryptedTransport</code>).</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.transport.codec.TransportWriter</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.transport.TransportWriter</code></p>
+ */
 @interface TTIOTransportWriter : NSObject
 
 /** Whether each packet's payload is followed by a CRC-32C checksum
@@ -71,17 +81,20 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 
-/** M89.2: emit a single GenomicRun as a stream segment.
+/** Emits a single GenomicRun as a stream segment.
  *
- *  Writes the dataset header (spectrum_class="TTIOGenomicRead",
- *  channel_names=["sequences", "qualities"], reference/platform
- *  metadata in the instrument_json slot), then one ACCESS_UNIT per
- *  read with the genomic suffix populated, then end-of-dataset.
+ *  Writes the dataset header
+ *  (<code>spectrum_class = "TTIOGenomicRead"</code>,
+ *  <code>channel_names = ["sequences", "qualities"]</code>,
+ *  reference / platform metadata in the
+ *  <code>instrument_json</code> slot), then one ACCESS_UNIT per read
+ *  with the genomic suffix populated, then end-of-dataset.
  *
  *  The caller is responsible for stream framing
- *  (writeStreamHeader…/writeEndOfStream…). For full-dataset emission
- *  use ``writeDataset:`` which calls this internally for each
- *  genomic run after the MS runs. */
+ *  (<code>-writeStreamHeader...</code> /
+ *  <code>-writeEndOfStream...</code>). For full-dataset emission
+ *  use <code>-writeDataset:error:</code>, which calls this
+ *  internally for each genomic run after the MS runs. */
 - (BOOL)writeGenomicRun:(TTIOGenomicRun *)run
               datasetId:(uint16_t)datasetId
                    name:(NSString *)name

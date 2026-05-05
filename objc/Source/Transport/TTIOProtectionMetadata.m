@@ -1,4 +1,17 @@
 /*
+ * TTIOProtectionMetadata.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOProtectionMetadata
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOProtectionMetadata.h
+ *
+ * Wire-format ProtectionMetadata payload. Carries cipher-suite,
+ * KEK algorithm, wrapped DEK, signature algorithm, and verifier
+ * public key as length-prefixed UTF-8 / byte fields per
+ * docs/transport-spec.md §4.4.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOProtectionMetadata.h"

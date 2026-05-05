@@ -1,4 +1,19 @@
 /*
+ * TTIOAccessUnit.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOTransportChannelData, TTIOAccessUnit
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Transport/TTIOAccessUnit.h
+ *
+ * Transport-layer Access Unit and per-channel data value classes.
+ * Encode and decode the wire layout for one spectrum or genomic
+ * read: filter keys (RT, MS level, polarity, precursor m/z, ion
+ * mobility, base-peak intensity), N signal channels, and optional
+ * spectrumClass-specific suffixes (MSImagePixel coords or
+ * GenomicRead chromosome/position/flags + mate fields).
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOAccessUnit.h"
