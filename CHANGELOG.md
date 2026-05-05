@@ -145,11 +145,12 @@ language bindings (`TTIO_RANS_LIB_PATH` env var, or `libttio_rans.so` /
 - Cross-language byte-identity verified by the 9-cell
   Python/Java/ObjC matrix in
   `python/tests/validation/test_phase_2c_t_bulk_mode.py`.
-
-### Known limitations
-
-- Bulk mode is wired through the HDF5 fast path only;
-  `memory://`, `sqlite://`, and `zarr://` writers still go
-  through the v2 codec encode for `mate_info` / `read_names` /
-  `sequences/refdiff_v2`. Bulk-mode receivers using a non-HDF5
-  output URL fall back transparently to per-AU semantics.
+- Storage-provider parity: HDF5, memory://, sqlite://, and zarr://
+  write paths all honor `bulk_v2_blobs` and write the verbatim
+  blob bytes — see
+  `python/tests/validation/test_phase_2c_t_storage_providers.py`.
+- Measured speedup: receiver-side decode runs **1.36×–1.43× faster**
+  in bulk mode (10K and 50K-read fixtures); encode is near-parity
+  (≤3% delta), wire size grows ~4% from the additional blob
+  packets. See
+  `docs/benchmarks/2026-05-05-phase-2c-T-bulk-mode.md`.

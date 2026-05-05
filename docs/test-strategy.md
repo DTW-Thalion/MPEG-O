@@ -165,3 +165,10 @@ on a default WSL build); the bulk-mode suite skips entirely when
 the library cannot be located. The Java cells additionally require
 the JNI library directory on `java.library.path` — handled
 automatically by the resolver in `test_cross_language_smoke.py`.
+
+Storage-provider parity for bulk mode is covered by
+`python/tests/validation/test_phase_2c_t_storage_providers.py`,
+which writes a `WrittenGenomicRun` carrying `bulk_v2_blobs` into
+each of `memory://`, `sqlite://`, and (when the optional `zarr`
+extra is installed) `zarr://`, then asserts the on-disk blob
+bytes match the source HDF5 file's blobs.

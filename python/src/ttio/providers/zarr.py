@@ -374,7 +374,12 @@ class _ZarrGroup(StorageGroup):
                        compression_level: int = 6) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
-        actual_chunks = (chunk_size,) if chunk_size > 0 else (length,)
+        # zarr 3.x rejects chunk dims of 0 — clamp to >= 1 so empty
+        # datasets (length == 0) still create cleanly.
+        if chunk_size > 0:
+            actual_chunks = (chunk_size,)
+        else:
+            actual_chunks = (max(length, 1),)
         arr = self._group.create_array(
             name=name,
             shape=(length,),
@@ -392,7 +397,11 @@ class _ZarrGroup(StorageGroup):
                            compression_level: int = 6) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
-        actual_chunks = tuple(chunks) if chunks else tuple(shape)
+        # Same zero-chunk clamp as create_dataset.
+        if chunks:
+            actual_chunks = tuple(max(c, 1) for c in chunks)
+        else:
+            actual_chunks = tuple(max(s, 1) for s in shape)
         arr = self._group.create_array(
             name=name,
             shape=tuple(shape),
