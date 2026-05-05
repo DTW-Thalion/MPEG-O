@@ -1,6 +1,14 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip
+
+TtioFastaRoundTrip_OBJC_FILES = TtioFastaRoundTrip.m
+TtioFastaRoundTrip_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioFastaRoundTrip_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioFastqRoundTrip_OBJC_FILES = TtioFastqRoundTrip.m
+TtioFastqRoundTrip_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioFastqRoundTrip_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 MakeFixtures_OBJC_FILES = MakeFixtures.m
 MakeFixtures_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
