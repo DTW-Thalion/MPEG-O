@@ -1,3 +1,20 @@
+/*
+ * TTIOStreamWriter.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOStreamWriter
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Query/TTIOStreamWriter.h
+ *
+ * Incremental writer that buffers spectra in memory and rewrites the
+ * .tio file on every -flushWithError: so the run group always
+ * reflects the buffered set. Whole-file regenerative flush keeps the
+ * implementation simple and the file valid after each call.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOStreamWriter.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"

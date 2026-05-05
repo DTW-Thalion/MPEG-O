@@ -1,3 +1,19 @@
+/*
+ * TTIOQuery.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOQuery
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Query/TTIOQuery.h
+ *
+ * Compressed-domain query against a TTIOSpectrumIndex. Predicates are
+ * combined with logical AND; evaluation walks the in-memory index
+ * arrays without opening any signal-channel datasets.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOQuery.h"
 #import "Run/TTIOSpectrumIndex.h"
 #import "ValueClasses/TTIOValueRange.h"
