@@ -6,8 +6,6 @@
 #import "TTIOValueRange.h"
 
 /**
- * <heading>TTIOAxisDescriptor</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCoding, NSCopying</p>
  * <p><em>Declared In:</em> ValueClasses/TTIOAxisDescriptor.h</p>

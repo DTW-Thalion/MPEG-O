@@ -4,8 +4,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOSignatureManager</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Protection/TTIOSignatureManager.h</p>
  *

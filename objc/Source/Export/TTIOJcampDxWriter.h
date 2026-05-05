@@ -9,8 +9,6 @@
 @class TTIOUVVisSpectrum;
 
 /**
- * <heading>TTIOJcampDxWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOJcampDxWriter.h</p>
@@ -32,7 +30,7 @@
  *      <code>conformance/jcamp_dx/</code>.</li>
  * </ul>
  *
- * <p>2-D / imaging cubes are not supported &mdash; use HDF5
+ * <p>2-D / imaging cubes are not supported &#8212; use HDF5
  * round-trip for <code>RamanImage</code> / <code>IRImage</code>, or
  * wait for NTUPLES support.</p>
  *

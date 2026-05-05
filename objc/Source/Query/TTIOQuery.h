@@ -8,8 +8,6 @@
 @class TTIOValueRange;
 
 /**
- * <heading>TTIOQuery</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Query/TTIOQuery.h</p>
@@ -17,7 +15,7 @@
  * <p>Compressed-domain query against a
  * <code>TTIOSpectrumIndex</code>. Predicates are combined with logical
  * AND (intersection). The query operates entirely on the in-memory
- * index arrays &mdash; signal-channel datasets are never opened, so a
+ * index arrays &#8212; signal-channel datasets are never opened, so a
  * 10k-spectrum scan completes in well under a millisecond and never
  * touches the encrypted intensity stream.</p>
  *

@@ -15,15 +15,13 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOTransportWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Transport/TTIOTransportWriter.h</p>
  *
  * <p>Serialises a <code>TTIOSpectralDataset</code> as a transport
- * byte stream. Walks <code>msRuns</code>, emits StreamHeader &rarr;
- * DatasetHeaders &rarr; AccessUnits &rarr; EndOfDataset &rarr;
+ * byte stream. Walks <code>msRuns</code>, emits StreamHeader &#8594;
+ * DatasetHeaders &#8594; AccessUnits &#8594; EndOfDataset &#8594;
  * EndOfStream. A fine-grained API is also exposed for callers that
  * synthesise streams packet-by-packet
  * (<code>TTIOAcquisitionSimulator</code>,

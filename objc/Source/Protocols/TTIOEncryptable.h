@@ -7,8 +7,6 @@
 @class TTIOAccessPolicy;
 
 /**
- * <heading>TTIOEncryptable</heading>
- *
  * <p><em>Conforms To:</em> NSObject (root protocol)</p>
  * <p><em>Declared In:</em> Protocols/TTIOEncryptable.h</p>
  *

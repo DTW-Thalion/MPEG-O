@@ -9,8 +9,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOCompoundFieldKind</heading>
- *
  * <p><em>Type:</em> NS_ENUM (NSInteger)</p>
  * <p><em>Declared In:</em> Providers/TTIOCompoundField.h</p>
  *
@@ -30,8 +28,6 @@ typedef NS_ENUM(NSInteger, TTIOCompoundFieldKind) {
 };
 
 /**
- * <heading>TTIOCompoundField</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCopying, NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOCompoundField.h</p>

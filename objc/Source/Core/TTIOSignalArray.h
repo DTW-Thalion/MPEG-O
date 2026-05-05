@@ -9,8 +9,6 @@
 #import "Providers/TTIOStorageProtocols.h"
 
 /**
- * <heading>TTIOSignalArray</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOCVAnnotatable</p>
  * <p><em>Declared In:</em> Core/TTIOSignalArray.h</p>

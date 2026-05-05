@@ -7,14 +7,12 @@
 @class TTIOHDF5Group;
 
 /**
- * <heading>TTIOMSImage</heading>
- *
  * <p><em>Inherits From:</em> TTIOSpectralDataset : NSObject</p>
  * <p><em>Conforms To:</em> TTIOEncryptable (inherited)</p>
  * <p><em>Declared In:</em> Image/TTIOMSImage.h</p>
  *
  * <p>Mass-spectrometry imaging dataset: a
- * <code>width &times; height</code> grid of pixels, each pixel a
+ * <code>width &#215; height</code> grid of pixels, each pixel a
  * spectral profile of <code>spectralPoints</code> float64 values.
  * Inherits from <code>TTIOSpectralDataset</code> so it carries
  * identifications, quantifications, provenance records, and the
@@ -101,7 +99,7 @@
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
 
 /**
- * Reads a <code>tileWidth &times; tileHeight</code> tile starting
+ * Reads a <code>tileWidth &#215; tileHeight</code> tile starting
  * at <code>(x, y)</code>. Supports both the canonical and legacy
  * cube paths.
  */

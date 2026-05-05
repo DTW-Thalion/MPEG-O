@@ -7,8 +7,6 @@
 @class TTIOTwoDimensionalCorrelationSpectrum;
 
 /**
- * <heading>TTIOTwoDCos</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Analysis/TTIOTwoDCos.h</p>

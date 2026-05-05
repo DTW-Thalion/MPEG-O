@@ -14,8 +14,6 @@
 @class TTIOAcquisitionRun;
 
 /**
- * <heading>TTIOMzMLWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIOMzMLWriter.h</p>

@@ -6,8 +6,6 @@
 @class TTIOHDF5Group;
 
 /**
- * <heading>TTIOIdentification</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCopying</p>
  * <p><em>Declared In:</em> Dataset/TTIOIdentification.h</p>

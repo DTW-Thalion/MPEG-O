@@ -13,8 +13,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOImzMLPixelSpectrum</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOImzMLReader.h</p>
@@ -26,7 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * <p>In continuous mode every pixel's <code>mzArray</code> aliases
  * the same shared <code>NSData</code> (allocated once for the run)
- * &mdash; the Python reference implementation makes the same
+ * &#8212; the Python reference implementation makes the same
  * guarantee.</p>
  */
 @interface TTIOImzMLPixelSpectrum : NSObject
@@ -67,8 +65,6 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * <heading>TTIOImzMLImport</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOImzMLReader.h</p>
@@ -95,8 +91,6 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * <heading>TTIOImzMLReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOImzMLReader.h</p>
@@ -105,11 +99,11 @@ NS_ASSUME_NONNULL_BEGIN
  * for mass-spectrometry imaging. Two files:</p>
  *
  * <ul>
- *  <li><code>&lt;stem&gt;.imzML</code> &mdash; XML metadata
+ *  <li><code>&lt;stem&gt;.imzML</code> &#8212; XML metadata
  *      mirroring mzML, with each <code>&lt;spectrum&gt;</code>
  *      carrying an external offset / external array length /
  *      external encoded length cvParam triple.</li>
- *  <li><code>&lt;stem&gt;.ibd</code> &mdash; concatenated binary
+ *  <li><code>&lt;stem&gt;.ibd</code> &#8212; concatenated binary
  *      mass / intensity arrays prefixed by a 16-byte UUID that must
  *      match the
  *      <code>IMS:1000042 universally unique identifier</code>
@@ -118,10 +112,10 @@ NS_ASSUME_NONNULL_BEGIN
  *
  * <p><strong>Modes:</strong></p>
  * <ul>
- *  <li><code>"continuous"</code> (<code>IMS:1000030</code>) &mdash;
+ *  <li><code>"continuous"</code> (<code>IMS:1000030</code>) &#8212;
  *      single shared m/z array stored once; per-pixel intensity
  *      arrays follow.</li>
- *  <li><code>"processed"</code> (<code>IMS:1000031</code>) &mdash;
+ *  <li><code>"processed"</code> (<code>IMS:1000031</code>) &#8212;
  *      per-pixel m/z + intensity.</li>
  * </ul>
  *

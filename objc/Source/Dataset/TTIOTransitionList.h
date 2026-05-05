@@ -6,13 +6,11 @@
 @class TTIOValueRange;
 
 /**
- * <heading>TTIOTransition</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSCopying</p>
  * <p><em>Declared In:</em> Dataset/TTIOTransitionList.h</p>
  *
- * <p>One SRM/MRM transition: precursor &rarr; product m/z with its
+ * <p>One SRM/MRM transition: precursor &#8594; product m/z with its
  * collision energy and an optional retention-time window.</p>
  */
 @interface TTIOTransition : NSObject <NSCopying>
@@ -41,8 +39,6 @@
 @end
 
 /**
- * <heading>TTIOTransitionList</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Dataset/TTIOTransitionList.h</p>
  *

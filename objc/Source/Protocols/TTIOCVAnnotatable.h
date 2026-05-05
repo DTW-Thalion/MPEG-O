@@ -6,8 +6,6 @@
 @class TTIOCVParam;
 
 /**
- * <heading>TTIOCVAnnotatable</heading>
- *
  * <p><em>Conforms To:</em> NSObject (root protocol)</p>
  * <p><em>Declared In:</em> Protocols/TTIOCVAnnotatable.h</p>
  *

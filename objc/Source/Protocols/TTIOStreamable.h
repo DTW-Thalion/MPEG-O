@@ -4,8 +4,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOStreamable</heading>
- *
  * <p><em>Conforms To:</em> NSObject (root protocol)</p>
  * <p><em>Declared In:</em> Protocols/TTIOStreamable.h</p>
  *

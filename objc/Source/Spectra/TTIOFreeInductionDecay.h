@@ -4,8 +4,6 @@
 #import "Core/TTIOSignalArray.h"
 
 /**
- * <heading>TTIOFreeInductionDecay</heading>
- *
  * <p><em>Inherits From:</em> TTIOSignalArray : NSObject</p>
  * <p><em>Conforms To:</em> TTIOCVAnnotatable (inherited)</p>
  * <p><em>Declared In:</em> Spectra/TTIOFreeInductionDecay.h</p>

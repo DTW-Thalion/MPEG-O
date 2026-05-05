@@ -13,8 +13,6 @@
 @class TTIOSpectralDataset;
 
 /**
- * <heading>TTIOWatersMassLynxReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOWatersMassLynxReader.h</p>
@@ -33,7 +31,7 @@
  *      (when non-<code>nil</code>).</li>
  *  <li><code>MASSLYNXRAW</code> environment variable.</li>
  *  <li><code>masslynxraw</code> on <code>PATH</code> (native).</li>
- *  <li><code>MassLynxRaw.exe</code> on <code>PATH</code> &mdash;
+ *  <li><code>MassLynxRaw.exe</code> on <code>PATH</code> &#8212;
  *      invoked via <code>mono</code>.</li>
  * </ol>
  *

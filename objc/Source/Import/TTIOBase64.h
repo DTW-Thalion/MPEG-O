@@ -11,8 +11,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOBase64</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOBase64.h</p>

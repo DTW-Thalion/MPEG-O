@@ -12,8 +12,6 @@
  * method name' warning on every method it decorates. */
 
 /**
- * <heading>TTIOEncryptionManager</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Protection/TTIOEncryptionManager.h</p>
  *

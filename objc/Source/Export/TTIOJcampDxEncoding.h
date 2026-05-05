@@ -4,8 +4,6 @@
 #import <Foundation/Foundation.h>
 
 /**
- * <heading>TTIOJcampDxEncoding</heading>
- *
  * <p><em>Type:</em> NS_ENUM (NSInteger)</p>
  * <p><em>Declared In:</em> Export/TTIOJcampDxEncoding.h</p>
  *

@@ -14,8 +14,6 @@
 @class TTIOFreeInductionDecay;
 
 /**
- * <heading>TTIONmrMLWriter</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Export/TTIONmrMLWriter.h</p>
@@ -27,11 +25,11 @@
  *
  * <p><strong>nmrCV accessions emitted:</strong></p>
  * <ul>
- *  <li>NMR:1000001 &mdash; spectrometer frequency (MHz)</li>
- *  <li>NMR:1000002 &mdash; nucleus type</li>
- *  <li>NMR:1000003 &mdash; number of scans</li>
- *  <li>NMR:1000004 &mdash; dwell time (seconds)</li>
- *  <li>NMR:1400014 &mdash; sweep width (ppm)</li>
+ *  <li>NMR:1000001 &#8212; spectrometer frequency (MHz)</li>
+ *  <li>NMR:1000002 &#8212; nucleus type</li>
+ *  <li>NMR:1000003 &#8212; number of scans</li>
+ *  <li>NMR:1000004 &#8212; dwell time (seconds)</li>
+ *  <li>NMR:1400014 &#8212; sweep width (ppm)</li>
  * </ul>
  *
  * <p><strong>API status:</strong> Stable.</p>

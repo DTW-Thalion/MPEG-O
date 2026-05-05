@@ -13,14 +13,12 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOBrukerTDFMetadata</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOBrukerTDFReader.h</p>
  *
  * <p>SQLite-level metadata snapshot of a Bruker timsTOF
- * <code>.d</code> directory &mdash; no binary extraction
+ * <code>.d</code> directory &#8212; no binary extraction
  * required.</p>
  */
 @interface TTIOBrukerTDFMetadata : NSObject
@@ -37,8 +35,6 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /**
- * <heading>TTIOBrukerTDFReader</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOBrukerTDFReader.h</p>
@@ -48,12 +44,12 @@ NS_ASSUME_NONNULL_BEGIN
  * <p>The <code>.d</code> directory holds two files:</p>
  *
  * <ul>
- *  <li><code>analysis.tdf</code> &mdash; a plain SQLite database with
+ *  <li><code>analysis.tdf</code> &#8212; a plain SQLite database with
  *      metadata tables (<code>Frames</code>,
  *      <code>GlobalMetadata</code>, <code>Properties</code>,
  *      <code>Precursors</code>, ...).</li>
  *  <li><code>analysis.tdf_bin</code> or
- *      <code>analysis.tdf_raw</code> &mdash; a binary blob with
+ *      <code>analysis.tdf_raw</code> &#8212; a binary blob with
  *      ZSTD-compressed frame data and a scan-to-ion index.</li>
  * </ul>
  *

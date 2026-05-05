@@ -9,8 +9,6 @@
 @class TTIOHDF5Attribute;
 
 /**
- * <heading>TTIOHDF5Group</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> HDF5/TTIOHDF5Group.h</p>
  *

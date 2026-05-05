@@ -33,8 +33,6 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 // ──────────────────────────────────────────────────────────────
 
 /**
- * <heading>TTIOStorageDataset (protocol)</heading>
- *
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOStorageProtocols.h</p>
  *
@@ -131,8 +129,6 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 // ──────────────────────────────────────────────────────────────
 
 /**
- * <heading>TTIOStorageGroup (protocol)</heading>
- *
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOStorageProtocols.h</p>
  *
@@ -205,8 +201,6 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 // ──────────────────────────────────────────────────────────────
 
 /**
- * <heading>TTIOStorageProvider (protocol)</heading>
- *
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOStorageProtocols.h</p>
  *

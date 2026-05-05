@@ -10,8 +10,6 @@
 @class TTIOIsolationWindow;
 
 /**
- * <heading>TTIOSpectrumIndex</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Run/TTIOSpectrumIndex.h</p>
  *

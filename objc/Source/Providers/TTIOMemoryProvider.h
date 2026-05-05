@@ -8,8 +8,6 @@
 #import "TTIOStorageProtocols.h"
 
 /**
- * <heading>TTIOMemoryProvider</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> TTIOStorageProvider, NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOMemoryProvider.h</p>
@@ -18,7 +16,7 @@
  * <code>memory://&lt;name&gt;</code>; opening the same name twice
  * returns the same tree until <code>+discardStore:</code> clears it.
  * Exists alongside <code>TTIOHDF5Provider</code> to prove the
- * abstraction works &mdash; if upper layers read and write
+ * abstraction works &#8212; if upper layers read and write
  * identically through both, the protocol contract is correct.</p>
  *
  * <p><strong>API status:</strong> Provisional.</p>

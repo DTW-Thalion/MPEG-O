@@ -6,13 +6,11 @@
 @class TTIOAxisDescriptor;
 
 /**
- * <heading>TTIONMR2DSpectrum</heading>
- *
  * <p><em>Inherits From:</em> TTIOSpectrum : NSObject</p>
  * <p><em>Declared In:</em> Spectra/TTIONMR2DSpectrum.h</p>
  *
  * <p>2-D NMR spectrum (e.g. HSQC, COSY, NOESY): a row-major float64
- * intensity matrix of <code>width &times; height</code> points
+ * intensity matrix of <code>width &#215; height</code> points
  * plus F1 and F2 axis descriptors and per-axis nucleus identifiers.</p>
  *
  * <p>The matrix is stored as a flattened 1-D dataset with the

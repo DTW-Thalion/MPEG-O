@@ -13,8 +13,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOCramReader</heading>
- *
  * <p><em>Inherits From:</em> TTIOBamReader : NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Import/TTIOCramReader.h</p>
@@ -55,7 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithPath:(NSString *)path
               referenceFasta:(NSString *)referenceFasta;
 
-/** Disabled &mdash; the parent's single-argument initialiser is not
+/** Disabled &#8212; the parent's single-argument initialiser is not
  *  valid for CRAM (CRAM cannot be decoded without a reference). */
 - (instancetype)initWithPath:(NSString *)path NS_UNAVAILABLE;
 

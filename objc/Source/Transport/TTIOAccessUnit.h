@@ -9,8 +9,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOTransportChannelData</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Transport/TTIOAccessUnit.h</p>
@@ -46,8 +44,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 
 /**
- * <heading>TTIOAccessUnit</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Transport/TTIOAccessUnit.h</p>

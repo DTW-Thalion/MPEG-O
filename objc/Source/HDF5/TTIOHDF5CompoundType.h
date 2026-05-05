@@ -5,8 +5,6 @@
 #import <hdf5.h>
 
 /**
- * <heading>TTIOHDF5CompoundType</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> HDF5/TTIOHDF5CompoundType.h</p>
  *

@@ -8,8 +8,6 @@
 #import "TTIOStorageProtocols.h"
 
 /**
- * <heading>TTIOProviderRegistry</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Providers/TTIOProviderRegistry.h</p>
@@ -21,7 +19,7 @@
  * <p><strong>API status:</strong> Provisional.</p>
  *
  * <p><strong>Cross-language equivalents:</strong><br/>
- * Python: <code>ttio.providers</code> &mdash; module-level
+ * Python: <code>ttio.providers</code> &#8212; module-level
  * <code>discover_providers</code>, <code>open_provider</code>,
  * <code>register_provider</code> (idiomatic for Python
  * packaging).<br/>

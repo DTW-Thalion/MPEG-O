@@ -9,8 +9,6 @@
 @class TTIOAxisDescriptor;
 
 /**
- * <heading>TTIOSpectrum</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Spectra/TTIOSpectrum.h</p>
  *

@@ -10,8 +10,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * <heading>TTIOTransportClient</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Transport/TTIOTransportClient.h</p>

@@ -6,8 +6,6 @@
 @class TTIOSpectralDataset;
 
 /**
- * <heading>TTIOAnonymizationPolicy</heading>
- *
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Protection/TTIOAnonymizer.h</p>
  *

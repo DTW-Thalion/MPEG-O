@@ -6,8 +6,6 @@
 @class TTIOProvenanceRecord;
 
 /**
- * <heading>TTIOProvenanceable</heading>
- *
  * <p><em>Conforms To:</em> NSObject (root protocol)</p>
  * <p><em>Declared In:</em> Protocols/TTIOProvenanceable.h</p>
  *
@@ -17,7 +15,7 @@
  * object self-documenting and supports regulatory audit trails.</p>
  *
  * <p>A <code>TTIOProvenanceRecord</code> captures
- * <em>(input entities &rarr; activity &rarr; output entities)</em>
+ * <em>(input entities &#8594; activity &#8594; output entities)</em>
  * with timestamps and CV-annotated activity descriptions. The chain
  * is append-only; existing records cannot be mutated once added.</p>
  *
