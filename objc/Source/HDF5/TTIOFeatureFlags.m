@@ -1,3 +1,19 @@
+/*
+ * TTIOFeatureFlags.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOFeatureFlags
+ * Inherits From: NSObject
+ * Declared In:   HDF5/TTIOFeatureFlags.h
+ *
+ * Versioning + feature-flag utility for the TTI-O file format.
+ * Reads and writes the @ttio_format_version + @ttio_features
+ * preamble on the root group; detects legacy files (those without
+ * the preamble) for backward-compatible decode dispatch.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOFeatureFlags.h"
 #import "TTIOHDF5Group.h"
 

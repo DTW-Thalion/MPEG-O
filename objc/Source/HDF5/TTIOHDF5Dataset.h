@@ -6,36 +6,78 @@
 #import "ValueClasses/TTIOEnums.h"
 
 /**
- * Thin wrapper around a 1-D HDF5 dataset. Owns its dataset id and (for
- * compound types) the type id; both are released in -dealloc.
+ * <heading>TTIOHDF5Dataset</heading>
  *
- * Datasets are created with a definite element count and precision; the
- * shape cannot be resized after creation.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> HDF5/TTIOHDF5Dataset.h</p>
+ *
+ * <p>Thin wrapper around a 1-D HDF5 dataset. Owns its dataset id
+ * and (for compound types) the type id; both are released in
+ * <code>-dealloc</code>.</p>
+ *
+ * <p>Datasets are created with a definite element count and
+ * precision; the shape cannot be resized after creation.
+ * Hyperslab reads (<code>-readDataAtOffset:count:error:</code>)
+ * support partial-spectrum access without materialising the entire
+ * dataset.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
  */
 @interface TTIOHDF5Dataset : NSObject
 
+/**
+ * Internal initialiser used by <code>TTIOHDF5Group</code>. Not
+ * intended for external use.
+ *
+ * @param did       HDF5 dataset id obtained from
+ *                  <code>H5Dcreate2</code> / <code>H5Dopen2</code>.
+ * @param precision Element precision.
+ * @param length    Element count.
+ * @param retainer  Object whose lifetime keeps the parent file
+ *                  alive (normally a <code>TTIOHDF5Group</code>).
+ * @return An initialised dataset.
+ */
 - (instancetype)initWithDatasetId:(hid_t)did
                         precision:(TTIOPrecision)precision
                            length:(NSUInteger)length
                          retainer:(id)retainer;
 
-@property (readonly) hid_t          datasetId;
-@property (readonly) TTIOPrecision  precision;
-@property (readonly) NSUInteger     length;
+/** Raw HDF5 dataset id. */
+@property (readonly) hid_t datasetId;
+
+/** Element precision. */
+@property (readonly) TTIOPrecision precision;
+
+/** Element count. */
+@property (readonly) NSUInteger length;
 
 /**
- * Write all elements. The buffer length must match length * elementSize.
+ * Writes all elements.
+ *
+ * @param data  Buffer; <code>data.length</code> must equal
+ *              <code>length * elementSize(precision)</code>.
+ * @param error Out-parameter populated on failure.
+ * @return <code>YES</code> on success.
  */
 - (BOOL)writeData:(NSData *)data error:(NSError **)error;
 
 /**
- * Read all elements. Returns an NSData of length * elementSize bytes.
+ * Reads all elements.
+ *
+ * @param error Out-parameter populated on failure.
+ * @return Buffer of <code>length * elementSize(precision)</code>
+ *         bytes, or <code>nil</code> on failure.
  */
 - (NSData *)readDataWithError:(NSError **)error;
 
 /**
- * Read a hyperslab — `count` elements starting at element `offset`.
- * Useful for partial-spectrum reads.
+ * Reads a hyperslab.
+ *
+ * @param offset Element offset of the first element to read.
+ * @param count  Number of elements to read.
+ * @param error  Out-parameter populated on failure.
+ * @return Buffer of <code>count * elementSize(precision)</code>
+ *         bytes, or <code>nil</code> on failure.
  */
 - (NSData *)readDataAtOffset:(NSUInteger)offset
                        count:(NSUInteger)count

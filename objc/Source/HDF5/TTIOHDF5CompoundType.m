@@ -1,3 +1,19 @@
+/*
+ * TTIOHDF5CompoundType.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOHDF5CompoundType
+ * Inherits From: NSObject
+ * Declared In:   HDF5/TTIOHDF5CompoundType.h
+ *
+ * Wrapper around an HDF5 compound datatype. Tracks every
+ * auxiliary type id allocated for variable-length string and
+ * variable-length byte fields so that -close releases them all
+ * deterministically.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOHDF5CompoundType.h"
 
 @implementation TTIOHDF5CompoundType

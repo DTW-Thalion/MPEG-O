@@ -1,3 +1,19 @@
+/*
+ * TTIOHDF5Dataset.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOHDF5Dataset
+ * Inherits From: NSObject
+ * Declared In:   HDF5/TTIOHDF5Dataset.h
+ *
+ * Thin wrapper around a 1-D HDF5 dataset. Owns its dataset id and
+ * the type id (for compound types); both are released in -dealloc.
+ * Hyperslab reads support partial-spectrum access without
+ * materialising the entire dataset.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOHDF5Dataset.h"
 #import "TTIOHDF5File.h"
 #import "TTIOHDF5Errors.h"

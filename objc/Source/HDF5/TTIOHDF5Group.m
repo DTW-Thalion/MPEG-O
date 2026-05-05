@@ -1,3 +1,19 @@
+/*
+ * TTIOHDF5Group.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOHDF5Group
+ * Inherits From: NSObject
+ * Declared In:   HDF5/TTIOHDF5Group.h
+ *
+ * Wrapper around an HDF5 group handle. Provides sub-group / dataset
+ * creation + opening, attribute read/write, and link enumeration.
+ * Non-owning with respect to the parent file: the file's lifetime
+ * is retained by every group derived from it.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOHDF5Group.h"
 #import "TTIOHDF5Dataset.h"
 #import "TTIOHDF5File.h"
