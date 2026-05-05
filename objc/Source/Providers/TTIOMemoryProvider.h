@@ -8,20 +8,34 @@
 #import "TTIOStorageProtocols.h"
 
 /**
- * In-memory storage provider. URLs look like ``memory://&lt;name&gt;``;
- * opening the same name twice returns the same tree until
- * +discardStore: clears it. Exists alongside TTIOHDF5Provider to prove
- * the abstraction works — if upper layers read/write identically
- * through both, the protocol contract is correct.
+ * <heading>TTIOMemoryProvider</heading>
  *
- * API status: Stable (Provisional per M39 — may change before v1.0).
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> TTIOStorageProvider, NSObject (NSObject)</p>
+ * <p><em>Declared In:</em> Providers/TTIOMemoryProvider.h</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.providers.memory.MemoryProvider
- *   Java:   global.thalion.ttio.providers.MemoryProvider
+ * <p>In-memory storage provider. URLs look like
+ * <code>memory://&lt;name&gt;</code>; opening the same name twice
+ * returns the same tree until <code>+discardStore:</code> clears it.
+ * Exists alongside <code>TTIOHDF5Provider</code> to prove the
+ * abstraction works &mdash; if upper layers read and write
+ * identically through both, the protocol contract is correct.</p>
+ *
+ * <p><strong>API status:</strong> Provisional.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.providers.memory.MemoryProvider</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.providers.MemoryProvider</code></p>
  */
 @interface TTIOMemoryProvider : NSObject <TTIOStorageProvider>
 
+/**
+ * Drops the named in-memory store. Subsequent opens of the same URL
+ * see a fresh empty tree.
+ *
+ * @param url Memory URL of the store to discard.
+ */
 + (void)discardStore:(NSString *)url;
 
 @end

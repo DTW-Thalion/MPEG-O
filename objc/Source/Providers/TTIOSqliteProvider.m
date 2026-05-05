@@ -1,21 +1,24 @@
 /*
- * TTIOSqliteProvider.m — SQLite storage provider for TTI-O
+ * TTIOSqliteProvider.m
+ * TTI-O Objective-C Implementation
  *
- * Three classes in one file:
- *   TTIOSqliteProvider   — conforms to <TTIOStorageProvider>
- *   TTIOSqliteGroup      — conforms to <TTIOStorageGroup>     (internal)
- *   TTIOSqliteDataset    — conforms to <TTIOStorageDataset>   (internal)
+ * Classes:       TTIOSqliteProvider           (public)
+ *                TTIOSqliteGroup, TTIOSqliteDataset (internal)
+ * Inherits From: NSObject
+ * Conforms To:   TTIOStorageProvider / TTIOStorageGroup /
+ *                TTIOStorageDataset, NSObject (NSObject)
+ * Declared In:   Providers/TTIOSqliteProvider.h
  *
- * Schema is byte-identical to the Python and Java SqliteProviders.
- * Primitive datasets: little-endian packed BLOBs via memcpy (x86-64 is
- * already little-endian; document assumption below).
- * Compound datasets: JSON arrays of dicts via NSJSONSerialization.
+ * SQLite storage provider. Schema is byte-identical to the Python
+ * and Java SqliteProviders so .tio.sqlite files cross-read between
+ * implementations. Primitive datasets: little-endian packed BLOBs
+ * via memcpy. Compound datasets: JSON arrays of dicts via
+ * NSJSONSerialization.
  *
- * BYTE-ORDER NOTE: The build target for TTI-O tests is Linux x86-64,
- * which is little-endian. We use memcpy directly into the BLOB rather
- * than OSSwapHostToLittle* to avoid pulling in <libkern/OSByteOrder.h>
- * which may not be available on all GNUstep Linux builds. If TTI-O is
- * ever ported to a big-endian host this file needs explicit byteswapping.
+ * Byte-order note: target build is Linux x86-64 (little-endian);
+ * memcpy is used directly to avoid pulling
+ * <libkern/OSByteOrder.h>. A big-endian port would need explicit
+ * byte-swapping here.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */

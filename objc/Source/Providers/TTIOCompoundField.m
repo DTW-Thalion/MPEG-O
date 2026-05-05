@@ -1,3 +1,19 @@
+/*
+ * TTIOCompoundField.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCompoundField
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying, NSObject (NSObject)
+ * Declared In:   Providers/TTIOCompoundField.h
+ *
+ * Compound-dataset field schema entry: a name and a kind selector.
+ * Used to declare row schemas for
+ * -createCompoundDatasetNamed:fields:count:error:.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOCompoundField.h"
 
 @implementation TTIOCompoundField

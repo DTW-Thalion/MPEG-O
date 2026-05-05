@@ -1,3 +1,20 @@
+/*
+ * TTIOHDF5Provider.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOHDF5Provider
+ * Inherits From: NSObject
+ * Conforms To:   TTIOStorageProvider, NSObject (NSObject)
+ * Declared In:   Providers/TTIOHDF5Provider.h
+ *
+ * HDF5 storage provider. Adapter over the existing
+ * TTIOHDF5File / Group / Dataset layer; registers for both file://
+ * and bare-path URLs. Surfaces the underlying TTIOHDF5File via
+ * -nativeHandle for byte-level callers (signatures, encryption).
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOHDF5Provider.h"
 #import "TTIOProviderRegistry.h"
 #import "TTIOCanonicalBytes.h"
