@@ -1,19 +1,9 @@
 /*
- * TTIOWrittenRun — flat-buffer value object for
- * +[TTIOSpectralDataset writeMinimalToPath:...].
+ * TTIOWrittenRun.h
+ * TTI-O Objective-C Implementation
  *
- * Mirrors the Python `ttio.spectral_dataset.WrittenRun` dataclass.
- * The high-level TTIOAcquisitionRun / TTIOMassSpectrum API requires
- * one NSData per spectrum per channel; at write time the writer
- * iterates every spectrum and memcpy-concatenates the per-spectrum
- * buffers into a flat channel. Callers with already-flat arrays can
- * skip both costs by building an TTIOWrittenRun and calling
- * +writeMinimalToPath: on TTIOSpectralDataset.
- *
- * All buffer fields must be little-endian and typed as documented
- * below. No validation beyond length; the writer trusts the caller.
- *
- * SPDX-License-Identifier: Apache-2.0
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #ifndef TTIO_WRITTEN_RUN_H
 #define TTIO_WRITTEN_RUN_H
@@ -25,45 +15,97 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/**
+ * <heading>TTIOWrittenRun</heading>
+ *
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Dataset/TTIOWrittenRun.h</p>
+ *
+ * <p>Flat-buffer value object for
+ * <code>+[TTIOSpectralDataset writeMinimalToPath:...]</code>.
+ * Mirrors Python's
+ * <code>ttio.spectral_dataset.WrittenRun</code> dataclass.</p>
+ *
+ * <p>The high-level <code>TTIOAcquisitionRun</code> /
+ * <code>TTIOMassSpectrum</code> API requires one
+ * <code>NSData</code> per spectrum per channel; at write time the
+ * writer iterates every spectrum and memcpy-concatenates the
+ * per-spectrum buffers into a flat channel. Callers with
+ * already-flat arrays can skip both costs by building an
+ * <code>TTIOWrittenRun</code> and calling
+ * <code>+writeMinimalToPath:</code> on
+ * <code>TTIOSpectralDataset</code>.</p>
+ *
+ * <p>All buffer fields must be little-endian and typed as
+ * documented. No validation beyond length; the writer trusts the
+ * caller.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.spectral_dataset.WrittenRun</code><br/>
+ * Java: <code>global.thalion.ttio.WrittenRun</code></p>
+ */
 @interface TTIOWrittenRun : NSObject
 
-/** "TTIOMassSpectrum" or "TTIONMRSpectrum". */
+/** Spectrum class name (e.g. <code>@"TTIOMassSpectrum"</code> or
+ *  <code>@"TTIONMRSpectrum"</code>). */
 @property (nonatomic, copy, readonly) NSString *spectrumClassName;
 
-/** AcquisitionMode raw int; see TTIOAcquisitionMode. */
+/** Acquisition mode raw int value; see
+ *  <code>TTIOAcquisitionMode</code>. */
 @property (nonatomic, readonly) int64_t acquisitionMode;
 
-/** Flat per-channel signal buffers, keyed by channel name. Each value
- *  is an NSData of float64 little-endian, already concatenated across
- *  spectra in index order. */
+/** Flat per-channel signal buffers, keyed by channel name. Each
+ *  value is an <code>NSData</code> of float64 little-endian, already
+ *  concatenated across spectra in index order. */
 @property (nonatomic, copy, readonly) NSDictionary<NSString *, NSData *> *channelData;
 
-// All index arrays are parallel with length = spectrumCount.
-@property (nonatomic, copy, readonly) NSData *offsets;               // int64 LE
-@property (nonatomic, copy, readonly) NSData *lengths;               // uint32 LE
-@property (nonatomic, copy, readonly) NSData *retentionTimes;        // float64 LE
-@property (nonatomic, copy, readonly) NSData *msLevels;              // int32 LE
-@property (nonatomic, copy, readonly) NSData *polarities;            // int32 LE
-@property (nonatomic, copy, readonly) NSData *precursorMzs;          // float64 LE
-@property (nonatomic, copy, readonly) NSData *precursorCharges;      // int32 LE
-@property (nonatomic, copy, readonly) NSData *basePeakIntensities;   // float64 LE
+/** int64 LE per-spectrum offsets into the channel buffers. */
+@property (nonatomic, copy, readonly) NSData *offsets;
 
-/** Optional — NMR runs set this; MS runs leave empty. */
+/** uint32 LE per-spectrum lengths. */
+@property (nonatomic, copy, readonly) NSData *lengths;
+
+/** float64 LE per-spectrum retention times in seconds. */
+@property (nonatomic, copy, readonly) NSData *retentionTimes;
+
+/** int32 LE per-spectrum MS levels. */
+@property (nonatomic, copy, readonly) NSData *msLevels;
+
+/** int32 LE per-spectrum polarities (cast from
+ *  <code>TTIOPolarity</code>). */
+@property (nonatomic, copy, readonly) NSData *polarities;
+
+/** float64 LE per-spectrum precursor m/z values. */
+@property (nonatomic, copy, readonly) NSData *precursorMzs;
+
+/** int32 LE per-spectrum precursor charges. */
+@property (nonatomic, copy, readonly) NSData *precursorCharges;
+
+/** float64 LE per-spectrum base-peak intensities. */
+@property (nonatomic, copy, readonly) NSData *basePeakIntensities;
+
+/** Optional NMR run-level nucleus identifier; empty for MS runs. */
 @property (nonatomic, copy) NSString *nucleusType;
 
-/** v0.3 M21. "gzip", "none", "lz4", or "numpress_delta". Defaults to "gzip". */
+/** Compression codec identifier for non-genomic-codec channels.
+ *  One of <code>@"gzip"</code>, <code>@"none"</code>,
+ *  <code>@"lz4"</code>, or <code>@"numpress_delta"</code>. Defaults
+ *  to <code>@"gzip"</code>. */
 @property (nonatomic, copy) NSString *signalCompression;
 
 /** Per-run provenance records. Persisted under the run's group as
- *  ``provenance/steps`` (compound dataset) plus a legacy
- *  ``@provenance_json`` attribute mirror — matches the layout that
- *  ``-[TTIOAcquisitionRun writeToGroup:name:error:]`` emits, and
- *  the cross-language wire format Python's ``WrittenRun.provenance_records``
- *  / Java's ``WrittenRun.provenanceRecords`` write to. Defaults to
- *  ``@[]`` so callers that don't ship per-run provenance get
- *  byte-parity with pre-v0.6 files. */
+ *  <code>provenance/steps</code> (compound dataset) plus a legacy
+ *  <code>@provenance_json</code> attribute mirror for backward
+ *  compatibility. Defaults to an empty array. */
 @property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
 
+/**
+ * Designated initialiser.
+ *
+ * @return An initialised written-run buffer.
+ */
 - (instancetype)initWithSpectrumClassName:(NSString *)spectrumClassName
                           acquisitionMode:(int64_t)acquisitionMode
                               channelData:(NSDictionary<NSString *, NSData *> *)channelData

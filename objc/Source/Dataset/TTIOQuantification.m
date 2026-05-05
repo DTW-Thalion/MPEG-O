@@ -1,3 +1,17 @@
+/*
+ * TTIOQuantification.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOQuantification
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying
+ * Declared In:   Dataset/TTIOQuantification.h
+ *
+ * Per-sample abundance value with optional normalisation method.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOQuantification.h"
 
 @implementation TTIOQuantification

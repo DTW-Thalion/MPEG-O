@@ -1,5 +1,16 @@
 /*
- * SPDX-License-Identifier: Apache-2.0
+ * TTIOWrittenRun.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOWrittenRun
+ * Inherits From: NSObject
+ * Declared In:   Dataset/TTIOWrittenRun.h
+ *
+ * Flat-buffer write-side value object for the
+ * +[TTIOSpectralDataset writeMinimalToPath:...] fast paths.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOWrittenRun.h"
 

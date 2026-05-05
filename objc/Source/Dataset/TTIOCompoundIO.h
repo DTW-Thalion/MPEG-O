@@ -11,97 +11,134 @@
 @class TTIOCompoundField;
 
 /**
- * Compound-type persistence helpers for TTI-O v0.2+ on-disk format.
+ * <heading>TTIOCompoundIO</heading>
  *
- * These helpers write and read native HDF5 compound datasets that replace
- * the v0.1 JSON-encoded string attributes. v0.1 files (detected by the
- * absence of @ttio_features on the root) are read via the old JSON path;
- * v0.2+ writers always emit compound datasets and tag the root with the
- * appropriate feature flag.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Dataset/TTIOCompoundIO.h</p>
  *
- * All functions use variable-length C strings inside the compound records
- * so h5dump can visualize them directly and external tools that understand
- * compound types can introspect without a bespoke reader.
+ * <p>Compound-type persistence helpers for the on-disk format.
+ * Writes and reads native HDF5 compound datasets that hold
+ * identifications, quantifications, provenance records, and the
+ * optional <code>spectrum_index/headers</code> compound. Variable-
+ * length C strings are used inside the records so
+ * <code>h5dump</code> can visualise the rows directly.</p>
  *
- * API status: Stable (internal helper).
+ * <p>The class also provides a generic schema-driven writer / reader
+ * (<code>+writeGeneric:intoGroup:datasetNamed:fields:error:</code>)
+ * used by the storage-provider adapter layer.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio._hdf5_io (private helper module)
- *   Java:   global.thalion.ttio.hdf5.Hdf5CompoundIO
+ * <p><strong>API status:</strong> Stable (internal helper).</p>
  *
- * Each language exposes these differently due to HDF5 binding
- * shapes; see docs/api-review-v0.6.md for the documented stylistic
- * difference.
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio._hdf5_io</code> (private helper module)<br/>
+ * Java: <code>global.thalion.ttio.hdf5.Hdf5CompoundIO</code></p>
  */
 @interface TTIOCompoundIO : NSObject
 
 #pragma mark - Identifications
 
+/**
+ * Writes identifications as a compound dataset under
+ * <code>parent/name</code>.
+ */
 + (BOOL)writeIdentifications:(NSArray<TTIOIdentification *> *)idents
-                    intoGroup:(TTIOHDF5Group *)parent
-                 datasetNamed:(NSString *)name
-                        error:(NSError **)error;
+                   intoGroup:(TTIOHDF5Group *)parent
+                datasetNamed:(NSString *)name
+                       error:(NSError **)error;
 
+/**
+ * Reads identifications previously written by
+ * <code>+writeIdentifications:intoGroup:datasetNamed:error:</code>.
+ */
 + (NSArray<TTIOIdentification *> *)readIdentificationsFromGroup:(TTIOHDF5Group *)parent
-                                                    datasetNamed:(NSString *)name
-                                                           error:(NSError **)error;
+                                                   datasetNamed:(NSString *)name
+                                                          error:(NSError **)error;
 
 #pragma mark - Quantifications
 
+/** Writes quantifications as a compound dataset. */
 + (BOOL)writeQuantifications:(NSArray<TTIOQuantification *> *)quants
-                    intoGroup:(TTIOHDF5Group *)parent
-                 datasetNamed:(NSString *)name
-                        error:(NSError **)error;
+                   intoGroup:(TTIOHDF5Group *)parent
+                datasetNamed:(NSString *)name
+                       error:(NSError **)error;
 
+/** Reads quantifications. */
 + (NSArray<TTIOQuantification *> *)readQuantificationsFromGroup:(TTIOHDF5Group *)parent
-                                                    datasetNamed:(NSString *)name
-                                                           error:(NSError **)error;
+                                                   datasetNamed:(NSString *)name
+                                                          error:(NSError **)error;
 
-#pragma mark - Provenance (dataset-level chain)
+#pragma mark - Provenance
 
+/** Writes provenance records as a compound dataset. */
 + (BOOL)writeProvenance:(NSArray<TTIOProvenanceRecord *> *)records
-               intoGroup:(TTIOHDF5Group *)parent
-            datasetNamed:(NSString *)name
-                   error:(NSError **)error;
+              intoGroup:(TTIOHDF5Group *)parent
+           datasetNamed:(NSString *)name
+                  error:(NSError **)error;
 
+/** Reads provenance records. */
 + (NSArray<TTIOProvenanceRecord *> *)readProvenanceFromGroup:(TTIOHDF5Group *)parent
-                                                 datasetNamed:(NSString *)name
-                                                        error:(NSError **)error;
+                                                datasetNamed:(NSString *)name
+                                                       error:(NSError **)error;
 
-#pragma mark - Spectrum index compound headers (write only, opt_compound_headers)
+#pragma mark - Spectrum-index compound headers
 
-/** Writes a single compound `headers` dataset alongside the existing
- *  parallel 1-D datasets under `spectrum_index/`. Purely additive; read
- *  path still uses the parallel arrays. This dataset exists primarily
- *  for external tooling / h5dump readability. */
+/**
+ * Writes a <code>headers</code> compound dataset alongside the
+ * existing parallel 1-D datasets under
+ * <code>spectrum_index/</code>. Purely additive; the read path
+ * still uses the parallel arrays. Exists primarily for
+ * external-tool readability (<code>h5dump</code>, schema-aware
+ * viewers).
+ */
 + (BOOL)writeCompoundHeadersForIndex:(TTIOSpectrumIndex *)index
-                            intoGroup:(TTIOHDF5Group *)parent
-                                error:(NSError **)error;
+                           intoGroup:(TTIOHDF5Group *)parent
+                               error:(NSError **)error;
 
-/** Verify the compound headers dataset exists and returns row i as an
- *  NSDictionary {offset, length, retention_time, ms_level, polarity,
- *  precursor_mz, precursor_charge, base_peak_intensity}. Used only by
- *  tests; main query paths still use the parallel datasets. */
+/**
+ * Reads a single header row from the compound dataset.
+ *
+ * @param row    Zero-based row index.
+ * @param parent Parent group containing
+ *               <code>spectrum_index/</code>.
+ * @param error  Out-parameter populated on failure.
+ * @return Dictionary keyed by field name (<code>offset</code>,
+ *         <code>length</code>, <code>retention_time</code>,
+ *         <code>ms_level</code>, <code>polarity</code>,
+ *         <code>precursor_mz</code>, <code>precursor_charge</code>,
+ *         <code>base_peak_intensity</code>).
+ */
 + (NSDictionary *)readCompoundHeaderRow:(NSUInteger)row
-                               fromGroup:(TTIOHDF5Group *)parent
-                                   error:(NSError **)error;
+                              fromGroup:(TTIOHDF5Group *)parent
+                                  error:(NSError **)error;
 
-#pragma mark - Generic schema-driven write/read (M39 provider adapter)
+#pragma mark - Generic schema-driven write/read
 
-/** Write an array of rows (each NSDictionary keyed by field name)
- *  into a compound dataset with the given schema. */
+/**
+ * Writes an array of dictionary rows into a compound dataset with
+ * the given schema.
+ *
+ * @param rows         Rows; each <code>NSDictionary</code> keyed by
+ *                     field name.
+ * @param parent       Destination parent group.
+ * @param name         Dataset name.
+ * @param fields       Schema definition.
+ * @param error        Out-parameter populated on failure.
+ * @return <code>YES</code> on success.
+ */
 + (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
-            intoGroup:(TTIOHDF5Group *)parent
-         datasetNamed:(NSString *)name
-               fields:(NSArray<TTIOCompoundField *> *)fields
-                error:(NSError **)error;
+           intoGroup:(TTIOHDF5Group *)parent
+        datasetNamed:(NSString *)name
+              fields:(NSArray<TTIOCompoundField *> *)fields
+               error:(NSError **)error;
 
-/** Read an existing compound dataset, returning rows as NSDictionary
- *  keyed by field name. */
+/**
+ * Reads a compound dataset, returning rows as dictionaries keyed by
+ * field name.
+ */
 + (NSArray<NSDictionary *> *)readGenericFromGroup:(TTIOHDF5Group *)parent
-                                       datasetNamed:(NSString *)name
-                                             fields:(NSArray<TTIOCompoundField *> *)fields
-                                              error:(NSError **)error;
+                                     datasetNamed:(NSString *)name
+                                           fields:(NSArray<TTIOCompoundField *> *)fields
+                                            error:(NSError **)error;
 
 @end
 

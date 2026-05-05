@@ -1,3 +1,20 @@
+/*
+ * TTIOSpectralDataset.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOSpectralDataset
+ * Inherits From: NSObject
+ * Conforms To:   TTIOEncryptable
+ * Declared In:   Dataset/TTIOSpectralDataset.h
+ *
+ * Root container for a .tio file. Owns the top-level study/ group
+ * plus per-modality run dictionaries (MS / NMR / genomic). Provides
+ * the +writeMinimalToPath: flat-buffer write paths and the
+ * +decryptInPlaceAtPath: in-place decryption helper.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOSpectralDataset.h"
 #import "TTIOWrittenRun.h"
 #import "TTIOIdentification.h"

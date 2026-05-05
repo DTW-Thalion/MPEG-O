@@ -1,7 +1,9 @@
 /*
+ * TTIOFeature.h
  * TTI-O Objective-C Implementation
- * Copyright (c) 2026 The Thalion Initiative
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #ifndef TTIO_FEATURE_H
 #define TTIO_FEATURE_H
@@ -11,34 +13,71 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
- * A feature-level observation: a peak detected in one run, with
- * retention time + m/z + charge + per-sample abundances.
+ * <heading>TTIOFeature</heading>
  *
- * Sits between {@link TTIOIdentification} (spectrum-level) and
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSCopying</p>
+ * <p><em>Declared In:</em> Dataset/TTIOFeature.h</p>
+ *
+ * <p>A feature-level observation: a peak detected in one run, with
+ * retention time, m/z, charge, and per-sample abundances. Sits
+ * between {@link TTIOIdentification} (spectrum-level) and
  * {@link TTIOQuantification} (entity-level): the row-level record
  * required by mzTab's PEP section (peptide-level quantification in
- * the 1.0 proteomics dialect) and by mzTab-M's SMF/SME sections
+ * the 1.0 proteomics dialect) and by mzTab-M's SMF / SME sections
  * (small-molecule feature + evidence in the 2.0.0-M metabolomics
- * dialect).
+ * dialect).</p>
  *
- * API status: Provisional (v0.12.0 M78).
+ * <p><strong>API status:</strong> Stable.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.feature.Feature
- *   Java:   global.thalion.ttio.Feature
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.feature.Feature</code><br/>
+ * Java: <code>global.thalion.ttio.Feature</code></p>
  */
 @interface TTIOFeature : NSObject <NSCopying>
 
-@property (nonatomic, readonly, copy) NSString *featureId;              // unique within file
-@property (nonatomic, readonly, copy) NSString *runName;                // acquisition run
-@property (nonatomic, readonly, copy) NSString *chemicalEntity;         // peptide seq, CHEBI id, formula
-@property (nonatomic, readonly)       double    retentionTimeSeconds;   // apex retention time
-@property (nonatomic, readonly)       double    expMassToCharge;        // experimental precursor m/z
-@property (nonatomic, readonly)       NSInteger charge;                 // precursor charge
-@property (nonatomic, readonly, copy) NSString *adductIon;              // e.g. "[M+H]1+"; empty for peptides
-@property (nonatomic, readonly, copy) NSDictionary<NSString *, NSNumber *> *abundances;  // sample label → abundance
+/** Identifier unique within the file. */
+@property (nonatomic, readonly, copy) NSString *featureId;
+
+/** Acquisition-run name. */
+@property (nonatomic, readonly, copy) NSString *runName;
+
+/** Identified entity — peptide sequence, CHEBI id, or formula. */
+@property (nonatomic, readonly, copy) NSString *chemicalEntity;
+
+/** Apex retention time in seconds. */
+@property (nonatomic, readonly) double retentionTimeSeconds;
+
+/** Experimental precursor m/z. */
+@property (nonatomic, readonly) double expMassToCharge;
+
+/** Precursor charge state. */
+@property (nonatomic, readonly) NSInteger charge;
+
+/** Adduct ion identifier (e.g. <code>@"[M+H]1+"</code>); empty for
+ *  peptides. */
+@property (nonatomic, readonly, copy) NSString *adductIon;
+
+/** Sample-label to abundance mapping. */
+@property (nonatomic, readonly, copy) NSDictionary<NSString *, NSNumber *> *abundances;
+
+/** References to supporting evidence rows. */
 @property (nonatomic, readonly, copy) NSArray<NSString *> *evidenceRefs;
 
+/**
+ * Designated initialiser.
+ *
+ * @param featureId      Unique identifier.
+ * @param runName        Acquisition-run name.
+ * @param chemicalEntity Identified entity.
+ * @param rtSeconds      Apex retention time.
+ * @param mz             Experimental precursor m/z.
+ * @param charge         Precursor charge.
+ * @param adductIon      Optional adduct ion identifier.
+ * @param abundances     Optional per-sample abundances.
+ * @param evidenceRefs   Optional evidence references.
+ * @return An initialised feature.
+ */
 - (instancetype)initWithFeatureId:(NSString *)featureId
                           runName:(NSString *)runName
                    chemicalEntity:(NSString *)chemicalEntity
@@ -49,7 +88,10 @@ NS_ASSUME_NONNULL_BEGIN
                        abundances:(nullable NSDictionary<NSString *, NSNumber *> *)abundances
                      evidenceRefs:(nullable NSArray<NSString *> *)evidenceRefs;
 
-/** Minimal constructor; numeric + container fields default to empty/zero. */
+/**
+ * Minimal convenience factory; numeric and container fields default
+ * to zero / empty.
+ */
 + (instancetype)featureWithId:(NSString *)featureId
                       runName:(NSString *)runName
                chemicalEntity:(NSString *)chemicalEntity;

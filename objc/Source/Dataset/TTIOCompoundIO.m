@@ -1,3 +1,20 @@
+/*
+ * TTIOCompoundIO.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCompoundIO
+ * Inherits From: NSObject
+ * Declared In:   Dataset/TTIOCompoundIO.h
+ *
+ * Compound-type persistence helpers for identifications,
+ * quantifications, provenance records, and the optional
+ * spectrum_index/headers compound. Provides the generic
+ * schema-driven writer/reader used by the storage-provider
+ * adapter layer.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOCompoundIO.h"
 #import "TTIOIdentification.h"
 #import "TTIOQuantification.h"

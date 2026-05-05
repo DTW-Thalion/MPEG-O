@@ -1,3 +1,17 @@
+/*
+ * TTIOIdentification.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOIdentification
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying
+ * Declared In:   Dataset/TTIOIdentification.h
+ *
+ * Spectrum-to-entity identification record.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOIdentification.h"
 
 @implementation TTIOIdentification
