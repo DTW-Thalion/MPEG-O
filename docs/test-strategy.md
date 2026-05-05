@@ -172,3 +172,105 @@ which writes a `WrittenGenomicRun` carrying `bulk_v2_blobs` into
 each of `memory://`, `sqlite://`, and (when the optional `zarr`
 extra is installed) `zarr://`, then asserts the on-disk blob
 bytes match the source HDF5 file's blobs.
+
+## Optional vendor-format test fixtures
+
+Most Python tests run end-to-end without external setup. A handful
+of vendor-format integration tests are gated on user-supplied
+fixtures (proprietary instrument data) plus optional binary tools.
+Each gate degrades to a clean `pytest.skip(...)` when its
+prerequisites are missing, so a default `pytest` invocation never
+errors on these.
+
+### Thermo `.raw` delegation
+
+`python/tests/integration/test_thermo_delegation.py` shells out to
+the user-installed `ThermoRawFileParser` CLI. The end-to-end
+`test_thermo_raw_to_ttio_delegation` cell needs both:
+
+1. **The CLI on `PATH`** — gated by `shutil.which("ThermoRawFileParser")`
+   (or the lowercase alias) in `python/tests/conftest.py`. The
+   conftest auto-skips when the binary is missing; cells that
+   exercise the missing-binary error path still run.
+2. **A real `.raw` fixture** at `TTIO_THERMO_RAW_FIXTURE`.
+
+Reproducible setup that unblocks the Thermo delegation test:
+
+```bash
+# Linux (WSL Ubuntu 24.04). The v1.4.5 release runs on Mono.
+sudo apt install -y mono-complete
+
+mkdir -p ~/opt/ThermoRawFileParser
+curl -sL -o /tmp/trfp.zip \
+  https://github.com/CompOmics/ThermoRawFileParser/releases/download/v1.4.5/ThermoRawFileParser1.4.5.zip
+unzip -q -o /tmp/trfp.zip -d ~/opt/ThermoRawFileParser
+
+cat > ~/.local/bin/ThermoRawFileParser <<'EOF'
+#!/usr/bin/env bash
+exec mono "$HOME/opt/ThermoRawFileParser/ThermoRawFileParser.exe" "$@"
+EOF
+chmod +x ~/.local/bin/ThermoRawFileParser
+
+# Public test fixture from the upstream repo (~1.5 MB, MIT-licensed).
+mkdir -p ~/fixtures/thermo
+curl -sL -o ~/fixtures/thermo/small.RAW \
+  https://raw.githubusercontent.com/compomics/ThermoRawFileParser/master/ThermoRawFileParserTest/Data/small.RAW
+
+export PATH="$HOME/.local/bin:$PATH"
+export TTIO_THERMO_RAW_FIXTURE="$HOME/fixtures/thermo/small.RAW"
+pytest python/tests/integration/test_thermo_delegation.py
+```
+
+### Bruker `.d` (TDF)
+
+`python/tests/test_bruker_tdf.py` and
+`python/tests/integration/test_bruker_tdf_integration.py` need:
+
+1. **`opentimspy` + `opentims-bruker-bridge`** — `pip install ttio[bruker]`
+   (or `pip install opentimspy opentims-bruker-bridge`). The
+   bridge package ships the `libtimsdata.so` Bruker reader.
+2. **A real `.d` directory** at `TTIO_BRUKER_TDF_FIXTURE`.
+
+A small public fixture (~1 MB total) ships in the ProteoWizard
+test corpus under Apache-2.0 licensing:
+
+```bash
+mkdir -p ~/fixtures/bruker/diaPASEF.d
+base="https://raw.githubusercontent.com/ProteoWizard/pwiz/master/pwiz/data/vendor_readers/Bruker/Reader_Bruker_Test.data/diaPASEF.d"
+curl -sL -o ~/fixtures/bruker/diaPASEF.d/analysis.tdf     "$base/analysis.tdf"
+curl -sL -o ~/fixtures/bruker/diaPASEF.d/analysis.tdf_bin "$base/analysis.tdf_bin"
+
+export TTIO_BRUKER_TDF_FIXTURE=~/fixtures/bruker/diaPASEF.d
+pytest python/tests/test_bruker_tdf.py \
+       python/tests/integration/test_bruker_tdf_integration.py
+```
+
+### Waters `.raw` (MassLynx)
+
+`python/tests/integration/test_waters_masslynx.py` is more
+constrained because the converter (`masslynxraw` /
+`MassLynxRaw.exe`) is built on the proprietary Waters MassLynxRaw
+SDK and ships only on Windows. The error-contract and
+mock-converter cells (`test_missing_binary_raises_clear_error`,
+`test_missing_input_raises_filenotfound`,
+`test_file_not_directory_raises`, `test_mock_converter_roundtrip`,
+`test_env_var_override`) always run and exercise the delegation
+pipeline end-to-end via a tiny shell stub.
+
+The real-fixture cell `test_real_masslynx_roundtrip` is gated on
+both:
+
+1. **A `masslynxraw` / `MassLynxRaw.exe` binary on PATH** —
+   Windows-only, license-gated. Linux developers can use a
+   `wine`-wrapped MassLynxRaw.exe in principle, but verifying the
+   licensing and bundled DLLs is out of scope here.
+2. **A Waters `.raw` directory** at `TTIO_MASSLYNX_FIXTURE`. A
+   tiny public fixture (~2 KB total, Apache-2.0 licensed) is
+   available from ProteoWizard's test corpus under
+   `pwiz/data/vendor_readers/Waters/Reader_Waters_Test.data/Minimal_DDA.raw/`
+   (12 small files: `_FUNC{001..003}.{DAT,IDX,STS}`, `_FUNCTNS.INF`,
+   `_HEADER.TXT`, `_extern.inf`).
+
+The fixture alone is not sufficient — without the converter
+binary, the test will skip cleanly with
+`"masslynxraw / MassLynxRaw.exe not on PATH"`.

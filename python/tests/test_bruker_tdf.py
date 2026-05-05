@@ -161,10 +161,12 @@ def test_real_tdf_round_trip(tmp_path: Path) -> None:
     # Re-open the written file and verify the ion-mobility channel
     # is present with matching shape.
     with SpectralDataset.open(written, mode="r") as sd:
-        root = sd._file  # h5py.File
+        root = sd.file  # h5py.File
         run_group = root["/study/ms_runs/tims_ms1"]
         channels = run_group["signal_channels"]
-        assert "mz" in channels
-        assert "intensity" in channels
-        assert "inv_ion_mobility" in channels
-        assert channels["mz"].shape == channels["inv_ion_mobility"].shape
+        # Channels are stored with the ``_values`` suffix on disk (the
+        # canonical signal-channel layout).
+        assert "mz_values" in channels
+        assert "intensity_values" in channels
+        assert "inv_ion_mobility_values" in channels
+        assert channels["mz_values"].shape == channels["inv_ion_mobility_values"].shape
