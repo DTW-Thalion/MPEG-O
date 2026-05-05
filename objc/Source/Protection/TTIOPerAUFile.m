@@ -1,5 +1,16 @@
 /*
+ * TTIOPerAUFile.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOPerAUFile
+ * Declared In:   Protection/TTIOPerAUFile.h
+ *
+ * File-level per-AU encryption orchestrator. Reads plaintext
+ * channels + writes the segments compound layout via the storage
+ * provider abstraction.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOPerAUFile.h"
 #import "TTIOPerAUEncryption.h"

@@ -1,3 +1,15 @@
+/*
+ * TTIOSignatureManager.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOSignatureManager
+ * Declared In:   Protection/TTIOSignatureManager.h
+ *
+ * HMAC-SHA256 + post-quantum signing/verification helpers.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOSignatureManager.h"
 #import "TTIOCipherSuite.h"
 #import "TTIOPostQuantumCrypto.h"

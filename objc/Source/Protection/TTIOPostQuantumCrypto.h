@@ -1,12 +1,13 @@
 /*
- * TTIOPostQuantumCrypto.h — ML-KEM-1024 + ML-DSA-87 primitives
- * (v0.8 M49).
+ * TTIOPostQuantumCrypto.h
+ * TTI-O Objective-C Implementation
  *
- * Thin wrapper over liboqs (Open Quantum Safe) giving the rest of
- * libTTIO a stable surface for FIPS 203 (ML-KEM-1024) key
- * encapsulation and FIPS 204 (ML-DSA-87) digital signatures. Python
- * uses the liboqs-python bindings over the same shared library;
- * Java uses Bouncy Castle 1.79+ instead (see docs/pqc.md).
+ * ML-KEM-1024 + ML-DSA-87 primitives. Thin wrapper over liboqs
+ * (Open Quantum Safe) giving the rest of libTTIO a stable surface
+ * for FIPS 203 (ML-KEM-1024) key encapsulation and FIPS 204
+ * (ML-DSA-87) digital signatures. Python uses the liboqs-python
+ * bindings over the same shared library; Java uses Bouncy Castle
+ * 1.79+ instead (see docs/pqc.md).
  *
  * Availability
  * ------------

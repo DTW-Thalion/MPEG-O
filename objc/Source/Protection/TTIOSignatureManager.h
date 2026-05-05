@@ -4,29 +4,37 @@
 #import <Foundation/Foundation.h>
 
 /**
- * HMAC-SHA256 signing and verification for TTI-O datasets. Signatures
- * are stored on the target HDF5 dataset as a base64-encoded string
- * attribute named @ttio_signature. A file that contains any signed
- * datasets also carries opt_digital_signatures in @ttio_features.
+ * <heading>TTIOSignatureManager</heading>
  *
- * The signature covers the raw byte contents of the dataset returned
- * by H5Dread; for primitive numeric datasets this is the platform
- * little-endian layout, which is stable across writer runs on a
- * single platform and across the file round-trip. For compound
- * datasets this is the packed struct representation (warning: not
- * portable across platforms with different struct padding —
- * signature verification is intended to detect in-place tampering on
- * the same host, not cross-platform authenticity attestation).
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Protection/TTIOSignatureManager.h</p>
  *
- * Provenance-chain signing operates on the run's @provenance_json
- * attribute introduced in Milestone 10; the UTF-8 encoded JSON string
- * is HMAC'd and the signature stored as @provenance_signature on the
- * same run group.
+ * <p>HMAC-SHA256 signing and verification for TTI-O datasets.
+ * Signatures are stored on the target dataset as a base64-encoded
+ * string attribute named <code>@ttio_signature</code>. A file that
+ * contains any signed datasets also carries
+ * <code>opt_digital_signatures</code> in
+ * <code>@ttio_features</code>.</p>
  *
- * All methods require a 32-byte HMAC key. Shorter keys are padded
- * internally by OpenSSL; callers should use a strong 256-bit secret.
+ * <p>The signature covers the raw byte contents of the dataset
+ * returned by <code>H5Dread</code>; for primitive numeric datasets
+ * this is the platform little-endian layout, which is stable
+ * across writer runs on a single platform and across the file
+ * round-trip. For compound datasets this is the packed struct
+ * representation; signature verification is intended to detect
+ * in-place tampering on the same host, not cross-platform
+ * authenticity attestation.</p>
  *
- * API status: Stable.
+ * <p>Provenance-chain signing operates on the run's
+ * <code>@provenance_json</code> attribute; the UTF-8 encoded JSON
+ * string is HMAC'd and the signature stored as
+ * <code>@provenance_signature</code> on the same run group.</p>
+ *
+ * <p>All methods require a 32-byte HMAC key. Shorter keys are
+ * padded internally by OpenSSL; callers should use a strong
+ * 256-bit secret.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
  *
  * Cross-language equivalents:
  *   Python: ttio.signatures
@@ -65,8 +73,7 @@
                 error:(NSError **)error;
 
 /**
- * Sign a dataset with an explicit cipher-suite algorithm selector
- * (v0.8 M49.1).
+ * Sign a dataset with an explicit cipher-suite algorithm selector.
  *
  * For ``algorithm=@"hmac-sha256"``, ``key`` is the 32-byte HMAC
  * secret and the stored attribute is ``"v2:" + base64(mac)``. For
@@ -74,8 +81,6 @@
  * signing <b>private</b> key and the stored attribute is
  * ``"v3:" + base64(signature)``; the enclosing file gains the
  * ``opt_pqc_preview`` feature flag.
- *
- * @since 0.8
  */
 + (BOOL)signDataset:(NSString *)datasetPath
              inFile:(NSString *)filePath
@@ -90,8 +95,6 @@
  *
  * For ``algorithm=@"ml-dsa-87"``, ``key`` is the 2592-byte
  * verification public key.
- *
- * @since 0.8
  */
 + (BOOL)verifyDataset:(NSString *)datasetPath
                inFile:(NSString *)filePath
@@ -99,19 +102,19 @@
             algorithm:(NSString *)algorithm
                 error:(NSError **)error;
 
-#pragma mark - M90.2 Genomic run-level convenience
+#pragma mark - Genomic run-level convenience
 
-/** M90.2: sign every signal channel + every genomic_index column
- *  under one genomic run with one call.
+/** Sign every signal channel + every genomic_index column under one
+ *  genomic run with a single call.
  *
  *  Walks ``/study/genomic_runs/<runName>/signal_channels/{sequences,
  *  qualities}`` and ``/study/genomic_runs/<runName>/genomic_index/
  *  {offsets, lengths, positions, mapping_qualities, flags,
  *  chromosomes}`` and signs each existing dataset individually with
- *  HMAC-SHA256. M90.15: the ``chromosomes`` compound is now included
- *  alongside the atomic columns — the canonical-bytes reader
- *  serialises VL_STRING compound fields as u32_le(length) ||
- *  utf-8_bytes so the chromosome signature matches Python.
+ *  HMAC-SHA256. The ``chromosomes`` compound is included alongside
+ *  the atomic columns — the canonical-bytes reader serialises
+ *  VL_STRING compound fields as ``u32_le(length) || utf-8_bytes``
+ *  so the chromosome signature matches Python.
  *
  *  Returns a dictionary mapping each signed sub-path
  *  (e.g. ``"signal_channels/sequences"``,
@@ -127,7 +130,7 @@
            withKey:(NSData *)hmacKey
              error:(NSError **)error;
 
-/** M90.2: verify every dataset that ``signGenomicRun:`` would sign.
+/** Verify every dataset that ``signGenomicRun:`` would sign.
  *
  *  Returns YES iff every present, signed dataset verifies under the
  *  key. Datasets that don't exist on disk are skipped. A present

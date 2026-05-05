@@ -6,10 +6,25 @@
 @class TTIOSpectralDataset;
 
 /**
- * Milestone 28 — spectral anonymization.
+ * <heading>TTIOAnonymizationPolicy</heading>
  *
- * Applies caller-selected policies to a dataset and writes a new
- * ``.tio`` file. The original is never modified.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Protection/TTIOAnonymizer.h</p>
+ *
+ * <p>Caller-supplied policy describing which anonymisation
+ * transforms to apply. Passed to
+ * <code>+[TTIOAnonymizer anonymizeDataset:...]</code> alongside the
+ * source dataset; the anonymiser writes a new <code>.tio</code>
+ * file. The original is never modified.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.anonymization</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.protection.Anonymizer</code></p>
+ *
+ * <p>Spectral anonymisation transforms.</p>
  *
  * Supported policies:
  *   redactSAAVSpectra           — remove spectra with SAAV identifications
@@ -39,7 +54,7 @@
 @property (nonatomic) NSInteger coarsenChemicalShiftDecimals; // -1 = disabled
 @property (nonatomic) BOOL stripMetadataFields;
 
-// M90.3 — genomic anonymisation policies. When source has no
+// Genomic anonymisation policies. When source has no
 // genomic_runs, these are silent no-ops.
 
 /** Replace every read_name on every genomic run with the empty
@@ -47,8 +62,7 @@
 @property (nonatomic) BOOL stripReadNames;
 
 /** Replace every per-base Phred quality score with a single
- *  caller-specified constant (default 30). The "randomise" name
- *  matches the M90 spec language; the actual replacement is
+ *  caller-specified constant (default 30). The replacement is
  *  deterministic per-read so anonymised .tio files stay
  *  reproducible. */
 @property (nonatomic) BOOL randomiseQualities;
@@ -57,11 +71,11 @@
  *  randomiseQualities. Defaults to 30. */
 @property (nonatomic) uint8_t randomiseQualitiesConstant;
 
-/** M90.14: when set (non-nil NSNumber), randomiseQualities draws
- *  per-byte Phred scores from a deterministic RNG seeded with this
- *  64-bit value. Range is [0, 93] (SAM spec). Reproducible within
- *  the ObjC implementation: same seed → same byte sequence. When
- *  nil (default), the M90.3 constant-replacement path is used.
+/** When set (non-nil NSNumber), randomiseQualities draws per-byte
+ *  Phred scores from a deterministic RNG seeded with this 64-bit
+ *  value. Range is [0, 93] (SAM spec). Reproducible within the
+ *  ObjC implementation: same seed → same byte sequence. When nil
+ *  (default), the constant-replacement path is used.
  *
  *  Cross-language byte equality with numpy's PCG64 is NOT a goal —
  *  ObjC's RNG is a self-contained xoshiro256** so seeded outputs
@@ -86,8 +100,8 @@
 @property (nonatomic) NSUInteger chemicalShiftValuesCoarsened;
 @property (nonatomic) NSUInteger metabolitesMasked;
 @property (nonatomic) NSUInteger metadataFieldsStripped;
-// M90.3 — genomic counters. Populated when the corresponding
-// policy is enabled and the source has genomic runs.
+// Genomic counters. Populated when the corresponding policy is
+// enabled and the source has genomic runs.
 @property (nonatomic) NSUInteger readNamesStripped;
 @property (nonatomic) NSUInteger qualitiesRandomised;
 @property (nonatomic) NSUInteger readsInMaskedRegion;

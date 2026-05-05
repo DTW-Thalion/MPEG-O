@@ -1,3 +1,14 @@
+/*
+ * TTIOAnonymizer.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOAnonymizationPolicy, TTIOAnonymizationResult,
+ *                TTIOAnonymizer
+ * Declared In:   Protection/TTIOAnonymizer.h
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOAnonymizer.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOIdentification.h"

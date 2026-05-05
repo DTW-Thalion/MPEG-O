@@ -1,5 +1,14 @@
 /*
+ * TTIOCipherSuite.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOCipherSuite
+ * Declared In:   Protection/TTIOCipherSuite.h
+ *
+ * Cipher-suite catalogue + algorithm-dispatched parameter helpers.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOCipherSuite.h"
 #import "HDF5/TTIOHDF5Errors.h"   // TTIOMakeError

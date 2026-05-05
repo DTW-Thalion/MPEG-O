@@ -1,3 +1,16 @@
+/*
+ * TTIOKeyRotationManager.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOKeyRotationManager
+ * Declared In:   Protection/TTIOKeyRotationManager.h
+ *
+ * Envelope encryption + key rotation. DEK + KEK key-wrapping with
+ * O(1) rotation and a key_history audit trail.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOKeyRotationManager.h"
 #import "TTIOEncryptionManager.h"
 #import "TTIOPostQuantumCrypto.h"

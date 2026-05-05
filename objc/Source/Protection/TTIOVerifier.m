@@ -1,3 +1,16 @@
+/*
+ * TTIOVerifier.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOVerifier
+ * Declared In:   Protection/TTIOVerifier.h
+ *
+ * Higher-level verification API that collapses sign-and-verify
+ * outcomes into TTIOVerificationStatus enum values.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOVerifier.h"
 #import "TTIOSignatureManager.h"
 #import "HDF5/TTIOHDF5File.h"

@@ -12,20 +12,28 @@
  * method name' warning on every method it decorates. */
 
 /**
- * AES-256-GCM encryption helpers for selectively protecting sensitive
- * datasets inside an `.tio` file. Uses OpenSSL EVP under the hood.
+ * <heading>TTIOEncryptionManager</heading>
  *
- * Keys are 32 bytes (256-bit). IVs are 12 bytes (96-bit) and are
- * generated with RAND_bytes per encryption. Auth tags are 16 bytes
- * (128-bit). Wrong-key decrypts fail cleanly via GCM tag mismatch with
- * a populated NSError; no plaintext is returned on failure.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em> Protection/TTIOEncryptionManager.h</p>
  *
- * The intensity-channel methods operate on a closed `.tio` file path
- * so callers don't need to thread an open TTIOHDF5File handle through.
- * They open the file in read-write mode, mutate the dataset structure,
- * and close it.
+ * <p>AES-256-GCM encryption helpers for selectively protecting
+ * sensitive datasets inside a <code>.tio</code> file. Uses OpenSSL
+ * EVP under the hood.</p>
  *
- * API status: Stable.
+ * <p>Keys are 32 bytes (256-bit). IVs are 12 bytes (96-bit) and
+ * are generated with <code>RAND_bytes</code> per encryption. Auth
+ * tags are 16 bytes (128-bit). Wrong-key decrypts fail cleanly via
+ * GCM tag mismatch with a populated <code>NSError</code>; no
+ * plaintext is returned on failure.</p>
+ *
+ * <p>The intensity-channel methods operate on a closed
+ * <code>.tio</code> file path so callers do not need to thread an
+ * open <code>TTIOHDF5File</code> handle through. They open the
+ * file in read-write mode, mutate the dataset structure, and close
+ * it.</p>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
  *
  * Cross-language equivalents:
  *   Python: ttio.encryption

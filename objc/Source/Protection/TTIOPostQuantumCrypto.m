@@ -1,5 +1,16 @@
 /*
+ * TTIOPostQuantumCrypto.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOPostQuantumCrypto
+ * Declared In:   Protection/TTIOPostQuantumCrypto.h
+ *
+ * ML-KEM-1024 (FIPS 203) + ML-DSA-87 (FIPS 204) primitives via
+ * liboqs. Returns TTIOErrorPQCUnavailable when liboqs is not
+ * linked.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOPostQuantumCrypto.h"
 #import "HDF5/TTIOHDF5Errors.h"   // TTIOMakeError, TTIOErrorInvalidArgument
