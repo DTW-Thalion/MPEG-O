@@ -1,3 +1,20 @@
+/*
+ * TTIONumpress.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIONumpress
+ * Inherits From: NSObject
+ * Declared In:   Core/TTIONumpress.h
+ *
+ * Lossy numeric compression for monotonically-varying float64
+ * signals (m/z, retention times). Clean-room from Teleman et al.
+ * 2014 — fixed-point scale + first-difference quantisation.
+ * Byte-identical with the Python and Java implementations by
+ * construction.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIONumpress.h"
 #import <math.h>
 
