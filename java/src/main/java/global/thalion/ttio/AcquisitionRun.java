@@ -24,7 +24,7 @@ import java.util.*;
  * {@link global.thalion.ttio.protocols.Provenanceable}.
  * {@code Encryptable} conformance is deferred to M41.5.</p>
  *
- * <p>v0.7 M44: I/O routed through {@link StorageGroup} /
+ * <p>I/O routed through {@link StorageGroup} /
  * {@link StorageDataset}; this class no longer references the low-level
  * {@code Hdf5Group} / {@code Hdf5Dataset} types.</p>
  *
@@ -58,10 +58,10 @@ public class AcquisitionRun implements
     private final String nucleusType;
     private final double spectrometerFrequencyMHz;
 
-    // v0.11 M79: omics modality this run carries. Storage attribute
+    // omics modality this run carries. Storage attribute
     // {@code @modality} (UTF-8 string). Defaults to
     // {@code "mass_spectrometry"}; pre-v0.11 files lack the attribute
-    // and are interpreted as mass-spec runs. v0.11 M74 will introduce
+    // and are interpreted as mass-spec runs. will introduce
     // {@code "genomics"} for genomic-read runs.
     private final String modality;
 
@@ -95,7 +95,7 @@ public class AcquisitionRun implements
                 spectrometerFrequencyMHz, "mass_spectrometry");
     }
 
-    /** v0.11 M79: full constructor including {@code modality}. */
+    /** full constructor including {@code modality}. */
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
                           InstrumentConfig instrumentConfig,
@@ -126,7 +126,7 @@ public class AcquisitionRun implements
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
     public String nucleusType() { return nucleusType; }
     public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
-    /** v0.11 M79: omics modality (e.g. {@code "mass_spectrometry"}). */
+    /** omics modality (e.g. {@code "mass_spectrometry"}). */
     public String modality() { return modality; }
 
     public int spectrumCount() { return spectrumIndex.count(); }
@@ -322,7 +322,7 @@ public class AcquisitionRun implements
 
     // ── Storage I/O ─────────────────────────────────────────────────
     //
-    // v0.7 M44: everything below is routed through the StorageGroup /
+    // everything below is routed through the StorageGroup /
     // StorageDataset protocols. HDF5, SQLite, and Memory providers all
     // satisfy the same contract.
 
@@ -376,7 +376,7 @@ public class AcquisitionRun implements
             String nucleusType = runGroup.hasAttribute("nucleus_type")
                     ? (String) runGroup.getAttribute("nucleus_type") : null;
 
-            // v0.11 M79: optional @modality attribute. Pre-v0.11 runs
+            // optional @modality attribute. Pre-v0.11 runs
             // lack it and read back as mass-spec.
             String modality = "mass_spectrometry";
             if (runGroup.hasAttribute("modality")) {
@@ -406,7 +406,7 @@ public class AcquisitionRun implements
         try (StorageGroup sc = runGroup.createGroup("signal_channels")) {
             StringBuilder channelNames = new StringBuilder();
             boolean first = true;
-            // v0.9 M64.5: some providers (ZarrProvider Java v0.8) don't
+            // some providers (ZarrProvider Java v0.8) don't
             // implement compression. Probe on the first channel and
             // reuse the decision for the rest so the loop is
             // consistent rather than half-compressed/half-not.
@@ -449,7 +449,7 @@ public class AcquisitionRun implements
                 String dsName = ch.strip() + "_values";
                 if (sc.hasChild(dsName)) {
                     try (StorageDataset ds = sc.openDataset(dsName)) {
-                        // v0.7 M44: route through the storage protocol, not
+                        // route through the storage protocol, not
                         // Hdf5Dataset directly. Providers decide how to
                         // materialise the underlying array.
                         channels.put(ch.strip(), (double[]) ds.readAll());

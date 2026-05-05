@@ -342,7 +342,7 @@ public final class Hdf5CompoundIO {
         }
     }
 
-    /** v0.11 M82.4: Read a C-style null-terminated UTF-8 string from
+    /** Read a C-style null-terminated UTF-8 string from
      *  a native address. Uses {@link NativeBytesPool#readBytes} to
      *  walk bytes one at a time via {@code Unsafe.getByte}; stops at
      *  the first 0x00 byte. JHI5 1.10 doesn't expose VL_STRING

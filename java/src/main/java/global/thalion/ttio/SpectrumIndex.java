@@ -166,7 +166,7 @@ public class SpectrumIndex {
 
     /** Write this index to a storage group (creates spectrum_index/ subgroup).
      *
-     *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup} so the
+     *  <p>parameter type relaxed to {@link StorageGroup} so the
      *  index can be written through any provider (HDF5, SQLite, Memory).</p>
      *
      *  <p>The mathematically redundant {@code offsets} column is omitted;
@@ -196,7 +196,7 @@ public class SpectrumIndex {
 
     /** Read spectrum index from an existing run group.
      *
-     *  <p>v0.7 M44: parameter type relaxed to {@link StorageGroup}.</p> */
+     *  <p>parameter type relaxed to {@link StorageGroup}.</p> */
     public static SpectrumIndex readFrom(StorageGroup runGroup) {
         try (StorageGroup idx = runGroup.openGroup("spectrum_index")) {
             int count = ((Number) idx.getAttribute("count")).intValue();

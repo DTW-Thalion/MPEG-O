@@ -268,7 +268,7 @@ public class Hdf5Dataset implements AutoCloseable {
 
     /** Write a uint8 (one-byte) integer attribute on this dataset.
      *  M86's {@code @compression} attribute uses this datatype
-     *  (Binding Decision §86: H5T_NATIVE_UINT8). */
+     *  (: H5T_NATIVE_UINT8). */
     public void setUint8Attribute(String name, int value) {
         file.lockForWriting();
         long space = -1, aid = -1;

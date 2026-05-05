@@ -26,7 +26,7 @@ public final class StreamReader implements AutoCloseable {
         this.file = Hdf5File.openReadOnly(filePath);
         try (Hdf5Group study = file.rootGroup().openGroup("study");
              Hdf5Group runs = study.openGroup("ms_runs")) {
-            // v0.7 M44: AcquisitionRun.readFrom takes StorageGroup; wrap the
+            // AcquisitionRun.readFrom takes StorageGroup; wrap the
             // raw Hdf5Group via the Hdf5Provider adapter.
             this.run = AcquisitionRun.readFrom(
                     Hdf5Provider.adapterForGroup(runs), runName);

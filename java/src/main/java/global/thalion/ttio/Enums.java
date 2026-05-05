@@ -26,7 +26,7 @@ public final class Enums {
 
     /** Numeric precision of a signal buffer.
      *
-     * <p><b>Appendix B Gap 7:</b> this enum used to hold a
+     * <p><b>:</b> this enum used to hold a
      * {@code HDF5Constants.H5T_NATIVE_*} id per constant, which made
      * the HDF5 JNI wrapper a load-time dependency of every consumer,
      * including non-HDF5 providers such as SQLite. The HDF5 type ids
@@ -46,7 +46,7 @@ public final class Enums {
         UINT32(4),
         /** 128-bit complex: two {@code double} values per element (16 bytes). */
         COMPLEX128(16),
-        /** Unsigned 8-bit integer (1 byte). v0.11 M79. */
+        /** Unsigned 8-bit integer (1 byte).. */
         UINT8(1),
         /**
          * Unsigned 16-bit integer (2 bytes). v1.2.0 L1 (Task #82
@@ -64,7 +64,7 @@ public final class Enums {
          */
         @Deprecated _RESERVED_INT8(1),
         /**
-         * Unsigned 64-bit integer (8 bytes). v0.11 M82: genomic index
+         * Unsigned 64-bit integer (8 bytes).: genomic index
          * offsets. Cross-language ordinal {@code = 9} matches Python's
          * {@code Precision.UINT64} and ObjC's {@code TTIOPrecisionUInt64}.
          * Wire format uses HDF5 native types.
@@ -91,13 +91,13 @@ public final class Enums {
         LZ4,
         /** NumPRESS delta-integer compression for ordered m/z or retention-time arrays. */
         NUMPRESS_DELTA,
-        /** rANS order-0 entropy coder (genomic CRAM-style). v0.11 M79 reservation; codec lands in M75. */
+        /** rANS order-0 entropy coder (genomic CRAM-style). reservation; codec lands in M75. */
         RANS_ORDER0,
-        /** rANS order-1 entropy coder (context-aware). v0.11 M79 reservation; codec lands in M75. */
+        /** rANS order-1 entropy coder (context-aware). reservation; codec lands in M75. */
         RANS_ORDER1,
-        /** 2-bit packed nucleotide bases (A/C/G/T). v0.11 M79 reservation; codec lands in M75. */
+        /** 2-bit packed nucleotide bases (A/C/G/T). reservation; codec lands in M75. */
         BASE_PACK,
-        /** Quality-score binning (Illumina-style). v0.11 M79 reservation; codec lands in M75. */
+        /** Quality-score binning (Illumina-style). reservation; codec lands in M75. */
         QUALITY_BINNED,
         /** @deprecated Codec id 8 (NAME_TOKENIZED v1) removed in the
          *  v1.0 reset. Slot retained as a placeholder so subsequent
@@ -113,7 +113,7 @@ public final class Enums {
         @Deprecated
         _RESERVED_10,
         /** Delta + zigzag + varint + rANS order-0 for sorted integer channels
-         *  (M95 v1.2, codec id 11). */
+         *  (v1.2, codec id 11). */
         DELTA_RANS_ORDER0,
         /** CRAM-mimic rANS-Nx16 quality codec (M94.Z v1.2, codec id 12). */
         FQZCOMP_NX16_Z,
@@ -203,9 +203,9 @@ public final class Enums {
         NMR_2D,
         /** Mass spectrometry imaging. */
         IMAGING,
-        /** Whole-genome sequencing. v0.11 M79. */
+        /** Whole-genome sequencing.. */
         GENOMIC_WGS,
-        /** Whole-exome sequencing. v0.11 M79. */
+        /** Whole-exome sequencing.. */
         GENOMIC_WES
     }
 

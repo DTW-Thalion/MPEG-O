@@ -22,7 +22,7 @@ package global.thalion.ttio.genomics;
  * scores. The record's {@code qualities} field is {@code byte[]} for
  * compatibility with HDF5 UINT8 reads.</p>
  *
- * <p><b>API status:</b> Stable (v0.11 M82.3).</p>
+ * <p><b>API status:</b> Stable ().</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOAlignedRead}, Python {@code ttio.aligned_read.AlignedRead}.</p>

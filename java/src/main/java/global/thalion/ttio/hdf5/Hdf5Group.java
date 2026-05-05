@@ -412,7 +412,7 @@ public class Hdf5Group implements AutoCloseable {
      * Build the HDF5 type id for a given Precision. For COMPLEX128, creates
      * a compound type {double re; double im;} — caller must close if not builtin.
      *
-     * <p>Appendix B Gap 7: HDF5Constants references live here rather
+     * <p>HDF5Constants references live here rather
      * than on Precision itself so non-HDF5 providers (SQLite) can load
      * Precision without pulling the HDF5 JNI classes onto the
      * classpath.</p>
@@ -452,7 +452,7 @@ public class Hdf5Group implements AutoCloseable {
             return Precision.INT64;
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT32))
             return Precision.UINT32;
-        // v0.11 M82: round-trip H5T_NATIVE_UINT64 as Precision.UINT64
+        // round-trip H5T_NATIVE_UINT64 as Precision.UINT64
         // (was Precision.INT64 as a pre-M82 workaround when the enum
         // value didn't exist). Pre-M82 spectrum_index/offsets files
         // written as INT64 by the legacy ObjC writer continue to read
@@ -464,7 +464,7 @@ public class Hdf5Group implements AutoCloseable {
         // type for genomic_index/chromosome_ids.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT16))
             return Precision.UINT16;
-        // v0.11 M79: H5T_NATIVE_UINT8 is the on-disk type for genomic
+        // H5T_NATIVE_UINT8 is the on-disk type for genomic
         // base/quality byte arrays.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT8))
             return Precision.UINT8;
