@@ -1,28 +1,18 @@
 /*
- * TTIOCipherSuite.h — cipher-suite catalog and algorithm-dispatched
- * parameter helpers (v0.7 M48).
+ * TTIOCipherSuite.h
  *
- * Pre-v0.7, encryption / signing / key-wrap APIs accepted an implicit
- * fixed algorithm (AES-256-GCM for bulk, HMAC-SHA256 for signatures).
- * Key sizes and nonce lengths were hardcoded module-level constants.
- *
- * v0.7 M48 generalises the public API with an ``algorithm:`` parameter
- * backed by this catalog. The intent is to shape the parameter hole
- * so M49's post-quantum binding is a pure plug-in — no API change —
- * once ML-KEM-1024 / ML-DSA-87 are ready.
- *
- * Reserved algorithms (``ml-kem-1024``, ``ml-dsa-87``, ``shake256``)
- * are registered in the catalog but fail ``validateKey:error:`` with
- * a clear "reserved for M49" error until the primitives ship.
- *
- * Binding decision 39: this is a static allow-list, not a plugin
- * registry. Adding a new algorithm is a source-code change.
+ * Cipher-suite catalogue and algorithm-dispatched parameter
+ * helpers. The encryption / signing / key-wrap APIs accept an
+ * `algorithm:` parameter backed by this catalogue. Adding a new
+ * algorithm is a source-code change to the static allow-list, not
+ * a plugin-registration call.
  *
  * Cross-language equivalents:
  *   Python: ttio.cipher_suite
  *   Java:   global.thalion.ttio.protection.CipherSuite
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #ifndef TTIO_CIPHER_SUITE_H
 #define TTIO_CIPHER_SUITE_H

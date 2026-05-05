@@ -1,5 +1,14 @@
 /*
+ * TTIOPerAUEncryption.m
+ * TTI-O Objective-C Implementation
+ *
+ * Classes:       TTIOChannelSegment, TTIOPerAUEncryption
+ * Declared In:   Protection/TTIOPerAUEncryption.h
+ *
+ * Per-Access-Unit encryption primitives + AAD binding.
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOPerAUEncryption.h"
 

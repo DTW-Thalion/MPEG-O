@@ -1,3 +1,15 @@
+/*
+ * TTIOEncryptionManager.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOEncryptionManager
+ * Declared In:   Protection/TTIOEncryptionManager.h
+ *
+ * AES-256-GCM encryption helpers backed by OpenSSL EVP.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOEncryptionManager.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"

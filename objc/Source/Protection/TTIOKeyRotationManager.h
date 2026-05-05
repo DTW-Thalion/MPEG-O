@@ -6,23 +6,39 @@
 @class TTIOHDF5File;
 
 /**
- * Milestone 25 — envelope encryption + key rotation.
+ * <heading>TTIOKeyRotationManager</heading>
  *
- * Envelope model: a Data Encryption Key (DEK, 32 bytes) encrypts the
- * signal data. A Key Encryption Key (KEK, 32 bytes) wraps the DEK with
- * AES-256-GCM. Rotation re-wraps the DEK under a new KEK without
- * touching any signal dataset, so it's O(1) in file size.
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Declared In:</em>
+ * Protection/TTIOKeyRotationManager.h</p>
  *
- * On-disk layout (additive to /protection/, present iff ``opt_key_rotation``):
+ * <p>Envelope encryption + key rotation. A Data Encryption Key
+ * (DEK, 32 bytes) encrypts the signal data. A Key Encryption Key
+ * (KEK, 32 bytes) wraps the DEK with AES-256-GCM. Rotation
+ * re-wraps the DEK under a new KEK without touching any signal
+ * dataset, so it is O(1) in file size.</p>
+ *
+ * <p>On-disk layout (additive to <code>/protection/</code>, present
+ * iff <code>opt_key_rotation</code>):</p>
+ *
+ * <pre>
  *   /protection/key_info/
  *     @kek_id         (string) — caller-supplied KEK identifier
- *     @kek_algorithm  (string) — always "aes-256-gcm" in v0.4
+ *     @kek_algorithm  (string) — algorithm identifier (e.g. "aes-256-gcm")
  *     @wrapped_at     (string) — ISO-8601 timestamp of the most recent wrap
  *     dek_wrapped     (uint8[60]) — 32 cipher + 12 IV + 16 tag
  *     key_history/    (subgroup)
- *       @count        (int64)  — number of prior (timestamp,kek_id) entries
+ *       @count        (int64)  — number of prior (timestamp, kek_id) entries
  *       entries       (compound dataset: timestamp string, kek_id string,
  *                      kek_algorithm string)
+ * </pre>
+ *
+ * <p><strong>API status:</strong> Stable.</p>
+ *
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.key_rotation_manager.KeyRotationManager</code><br/>
+ * Java:
+ * <code>global.thalion.ttio.protection.KeyRotationManager</code></p>
  *
  * Usage:
  *   TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&amp;err];
@@ -83,11 +99,9 @@
  *
  * Default callers should prefer
  * ``-enableEnvelopeEncryptionWithKEK:kekId:error:`` which always writes
- * the v1.2 versioned blob (M47). This method is exposed for regression
+ * the canonical versioned blob. This method is exposed for regression
  * fixtures and cross-version backward-compat tests: pass ``legacyV1=YES``
- * to emit the 60-byte v1.1 layout readable by pre-v0.7 code.
- *
- * @since 0.7
+ * to emit the 60-byte legacy layout readable by older readers.
  */
 - (NSData *)wrapDEK:(NSData *)dek
             withKEK:(NSData *)kek
@@ -95,14 +109,12 @@
               error:(NSError **)error;
 
 /**
- * Envelope encryption with an algorithm selector (v0.8 M49.1).
+ * Envelope encryption with an algorithm selector.
  *
  * For ``algorithm="aes-256-gcm"`` (default), ``kek`` is a 32-byte
  * symmetric key. For ``algorithm="ml-kem-1024"``, ``kek`` is the
  * 1568-byte ML-KEM encapsulation <b>public</b> key, and the resulting
  * file gets the ``opt_pqc_preview`` feature flag on its root group.
- *
- * @since 0.8
  */
 - (NSData *)enableEnvelopeEncryptionWithKEK:(NSData *)kek
                                       kekId:(NSString *)kekId

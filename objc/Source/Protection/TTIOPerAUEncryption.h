@@ -1,13 +1,18 @@
 /*
- * TTIOPerAUEncryption — v1.0 per-Access-Unit encryption primitives.
+ * TTIOPerAUEncryption.h
+ * TTI-O Objective-C Implementation
  *
- * Parallel to Python ttio.encryption_per_au and Java
- * global.thalion.ttio.protection.PerAUEncryption. Implements the AAD
- * binding rules from docs/transport-spec.md §4.3.4 and the
+ * Per-Access-Unit encryption primitives. Implements the AAD binding
+ * rules from docs/transport-spec.md §4.3.4 and the
  * <channel>_segments / au_header_segments compound layout from
  * docs/format-spec.md §9.1.
  *
+ * Cross-language equivalents:
+ *   Python: ttio.encryption_per_au
+ *   Java:   global.thalion.ttio.protection.PerAUEncryption
+ *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #ifndef TTIO_PER_AU_ENCRYPTION_H
 #define TTIO_PER_AU_ENCRYPTION_H
@@ -120,7 +125,7 @@ NS_ASSUME_NONNULL_BEGIN
  *
  *  Convenience overload that calls the generalised method below with
  *  ``bytesPerElement = 8`` (float64). MS callers stay on this entry
- *  point; M90.1 genomic callers reach for the bytesPerElement form. */
+ *  point; genomic callers reach for the bytesPerElement form. */
 + (nullable NSArray<TTIOChannelSegment *> *)
     encryptChannelToSegments:(NSData *)plaintextFloat64
                       offsets:(const uint64_t *)offsets

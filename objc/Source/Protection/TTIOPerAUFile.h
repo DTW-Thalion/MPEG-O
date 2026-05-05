@@ -1,20 +1,21 @@
 /*
- * TTIOPerAUFile — v1.0 file-level per-AU encryption orchestrator.
+ * TTIOPerAUFile.h
+ * TTI-O Objective-C Implementation
  *
- * Reads plaintext <channel>_values datasets from an TTI-O file,
- * encrypts each spectrum independently with TTIOPerAUEncryption,
- * and rewrites the file's signal_channels groups with the
- * <channel>_segments compound layout from docs/format-spec.md §9.1.
- * Routes through the TTIOStorageProvider / TTIOStorageGroup
- * abstraction so any backend that supports VL_BYTES compound
- * fields (HDF5 today; Memory today; SQLite / Zarr after their
- * compound paths grow base64 transport) works.
+ * File-level per-AU encryption orchestrator. Reads plaintext
+ * <channel>_values datasets, encrypts each spectrum independently
+ * with TTIOPerAUEncryption, and rewrites the file's signal_channels
+ * groups with the <channel>_segments compound layout from
+ * docs/format-spec.md §9.1. Routes through the TTIOStorageProvider
+ * / TTIOStorageGroup abstraction so any backend that supports
+ * VL_BYTES compound fields (HDF5, Memory, ...) works.
  *
  * Cross-language equivalents:
- *   Python: ttio.encryption_per_au.encrypt_per_au/decrypt_per_au
+ *   Python: ttio.encryption_per_au.encrypt_per_au / decrypt_per_au
  *   Java:   global.thalion.ttio.protection.PerAUFile
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
  */
 #ifndef TTIO_PER_AU_FILE_H
 #define TTIO_PER_AU_FILE_H
@@ -63,7 +64,7 @@ NS_ASSUME_NONNULL_BEGIN
        providerName:(nullable NSString *)providerName
               error:(NSError * _Nullable *)error;
 
-#pragma mark - M90.4 — region-based per-AU encryption
+#pragma mark - Region-based per-AU encryption
 
 /** Encrypt genomic signal channels with a per-chromosome key map.
  *
@@ -73,10 +74,10 @@ NS_ASSUME_NONNULL_BEGIN
  *  ``<channel>_segments`` compound is reused, but with a length-0 IV
  *  / length-0 tag and the raw plaintext bytes stored in the
  *  ``ciphertext`` slot. The decoder branches on ``len(seg.iv)``, so
- *  old M90.1 files (every IV is exactly 12 bytes) decode unchanged
- *  under the new code path.
+ *  uniform-IV files (every IV is exactly 12 bytes) decode unchanged
+ *  under the same code path.
  *
- *  M90.11: when ``keyMap`` contains the reserved key ``"_headers"``,
+ *  When ``keyMap`` contains the reserved key ``"_headers"``,
  *  the four genomic_index columns (chromosomes, positions,
  *  mapping_qualities, flags) are ALSO encrypted with that key —
  *  closing the gap where a reader without any signal-channel key

@@ -1,3 +1,15 @@
+/*
+ * TTIOAccessPolicy.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOAccessPolicy
+ * Inherits From: NSObject
+ * Conforms To:   NSCopying
+ * Declared In:   Protection/TTIOAccessPolicy.h
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOAccessPolicy.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
