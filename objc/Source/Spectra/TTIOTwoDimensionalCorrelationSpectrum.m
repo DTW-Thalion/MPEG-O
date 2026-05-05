@@ -1,3 +1,17 @@
+/*
+ * TTIOTwoDimensionalCorrelationSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOTwoDimensionalCorrelationSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIOTwoDimensionalCorrelationSpectrum.h
+ *
+ * Noda 2-D correlation spectrum (2D-COS): synchronous + asynchronous
+ * correlation matrices keyed on a shared spectral-variable axis.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOTwoDimensionalCorrelationSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEncodingSpec.h"

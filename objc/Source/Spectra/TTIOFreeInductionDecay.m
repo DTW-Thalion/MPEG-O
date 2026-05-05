@@ -1,3 +1,18 @@
+/*
+ * TTIOFreeInductionDecay.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOFreeInductionDecay
+ * Inherits From: TTIOSignalArray : NSObject
+ * Conforms To:   TTIOCVAnnotatable (inherited)
+ * Declared In:   Spectra/TTIOFreeInductionDecay.h
+ *
+ * NMR free-induction decay — Complex128 buffer + dwell time +
+ * scan count + receiver gain.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOFreeInductionDecay.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
 #import "ValueClasses/TTIOEnums.h"

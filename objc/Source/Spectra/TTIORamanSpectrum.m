@@ -1,3 +1,17 @@
+/*
+ * TTIORamanSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIORamanSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIORamanSpectrum.h
+ *
+ * 1-D Raman spectrum: wavenumber + intensity + excitation laser
+ * wavelength + laser power + integration time.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIORamanSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"

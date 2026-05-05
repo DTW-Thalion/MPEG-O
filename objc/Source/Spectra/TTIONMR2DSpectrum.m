@@ -1,3 +1,17 @@
+/*
+ * TTIONMR2DSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIONMR2DSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIONMR2DSpectrum.h
+ *
+ * 2-D NMR spectrum (HSQC, COSY, NOESY): row-major float64 intensity
+ * matrix + F1/F2 axis descriptors + per-axis nucleus identifiers.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIONMR2DSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEncodingSpec.h"

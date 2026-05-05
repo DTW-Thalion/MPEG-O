@@ -1,3 +1,17 @@
+/*
+ * TTIONMRSpectrum.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIONMRSpectrum
+ * Inherits From: TTIOSpectrum : NSObject
+ * Declared In:   Spectra/TTIONMRSpectrum.h
+ *
+ * 1-D NMR spectrum with chemical-shift + intensity arrays + nucleus
+ * + spectrometer frequency.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIONMRSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "HDF5/TTIOHDF5Errors.h"
