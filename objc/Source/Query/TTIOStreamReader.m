@@ -1,3 +1,20 @@
+/*
+ * TTIOStreamReader.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOStreamReader
+ * Inherits From: NSObject
+ * Conforms To:   NSObject (NSObject)
+ * Declared In:   Query/TTIOStreamReader.h
+ *
+ * Sequential read-back wrapper over TTIOAcquisitionRun. Holds a
+ * read-only HDF5 file handle, advances a position counter, and emits
+ * spectra one at a time so callers can stream through runs larger
+ * than memory.
+ *
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ * Copyright (c) 2026 The Thalion Initiative
+ */
 #import "TTIOStreamReader.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Spectra/TTIOMassSpectrum.h"
