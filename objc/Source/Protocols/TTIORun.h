@@ -8,40 +8,51 @@
 @class TTIOProvenanceRecord;
 
 /**
- * Modality-agnostic Protocol for an acquisition or sequencing run
- * inside a TTI-O SpectralDataset.
+ * <heading>TTIORun</heading>
  *
- * A "run" is a sequence of measurements (spectra in the MS / NMR /
- * FID case, aligned reads in the genomic case) that share an
- * acquisition mode, instrument context, and provenance chain. Both
- * TTIOAcquisitionRun and TTIOGenomicRun conform to this protocol so
- * callers can iterate uniformly without knowing the underlying
- * modality.
+ * <p><em>Conforms To:</em> TTIOIndexable, NSObject</p>
+ * <p><em>Declared In:</em> Protocols/TTIORun.h</p>
  *
+ * <p>Modality-agnostic interface for an acquisition or sequencing
+ * run inside a <code>TTIOSpectralDataset</code>. A run is a sequence
+ * of measurements (mass / NMR spectra in the spectroscopy case,
+ * aligned reads in the genomic case) that share an acquisition mode,
+ * an instrument context, and a provenance chain.</p>
+ *
+ * <p>Both <code>TTIOAcquisitionRun</code> and
+ * <code>TTIOGenomicRun</code> conform to this protocol so callers
+ * can iterate uniformly without knowing the underlying modality.
  * Modality-specific work (e.g. extracting a CIGAR string from an
  * aligned read, or a precursor m/z from a mass spectrum) requires
- * narrowing via -isKindOfClass: to the concrete class.
+ * narrowing via <code>-isKindOfClass:</code> to the concrete class.</p>
  *
- * API status: Provisional (Phase 1 abstraction polish, post-M91).
+ * <p><strong>API status:</strong> Stable.</p>
  *
- * Cross-language equivalents:
- *   Python: ttio.protocols.run.Run
- *   Java:   global.thalion.ttio.protocols.Run
+ * <p><strong>Cross-language equivalents:</strong><br/>
+ * Python: <code>ttio.protocols.run.Run</code><br/>
+ * Java: <code>global.thalion.ttio.protocols.Run</code></p>
  */
 @protocol TTIORun <TTIOIndexable>
 
 @required
 
-/** Run identifier as stored in the .tio file (e.g. ``@"run_0001"``
- *  or ``@"genomic_0001"``). */
+/**
+ * Run identifier as stored in the .tio file (e.g.
+ * <code>@"run_0001"</code> or <code>@"genomic_0001"</code>).
+ */
 @property (readonly, copy) NSString *name;
 
-/** Acquisition mode enum value identifying the instrument /
- *  protocol context. */
+/**
+ * Acquisition-mode enum value identifying the instrument or protocol
+ * context. See <code>TTIOAcquisitionMode</code> for the enumerated
+ * values.
+ */
 @property (readonly) TTIOAcquisitionMode acquisitionMode;
 
-/** Per-run provenance records in insertion order. Empty array
- *  when the run has no provenance attached. */
+/**
+ * @return Per-run provenance records in insertion order. Empty array
+ *         if the run has no provenance attached.
+ */
 - (NSArray<TTIOProvenanceRecord *> *)provenanceChain;
 
 @end
