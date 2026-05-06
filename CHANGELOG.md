@@ -154,3 +154,97 @@ language bindings (`TTIO_RANS_LIB_PATH` env var, or `libttio_rans.so` /
   (≤3% delta), wire size grows ~4% from the additional blob
   packets. See
   `docs/benchmarks/2026-05-05-phase-2c-T-bulk-mode.md`.
+
+### Cross-language nmrML reader parity
+
+The Python `ImportResult` gained four nmrML acquisition-parameter
+fields on 2026-05-05 (`spectrometer_frequency_mhz`,
+`number_of_scans`, `fid_real`, `fid_imag`); Java and ObjC sibling
+readers now surface the same fields:
+
+- **Java** `NmrMLReader.NmrMLResult` exposes
+  `spectrometerFrequencyMHz()`, `numberOfScans()`, `fidReal()`,
+  `fidImag()`. The parser also accepts
+  `<irradiationFrequency value="...">` directly inside
+  `<acquisitionParameterSet>` (matches Python; previously
+  required `<directDimensionParameterSet>`).
+- **ObjC** `TTIONmrMLReader` now also exposes deinterleaved
+  `fidReal` / `fidImag` `NSData` properties alongside the
+  pre-existing `spectrometerFrequencyMHz` / `numberOfScans`.
+
+### Native codec fixes
+
+- **NAME_TOKENIZED_V2** (codec id 15): decoder MATCH path no
+  longer rejects valid encoded blobs whose pool entry has a
+  different total token count than the block's column shape.
+  Surfaced by the production-corpus decode benchmark on real
+  Illumina BAMs with mixed flowcell prefixes (e.g. `H2YHMBCXX`
+  tokenises to 3 tokens vs `H2YT5BCXX`'s 5 tokens because of
+  the internal digit). Permanent regression guard at
+  `python/tests/test_name_tokenizer_v2_native.py::test_mixed_flowcell_token_count_regression`;
+  minimal failing fixture preserved at
+  `python/tests/fixtures/codecs/name_tok_v2_corrupt_94.txt`.
+- **Bruker TDF importer**: `frame2retention_time` returned a 1-D
+  ndarray under opentimspy ≥ 1.2 even for scalar input; the
+  per-frame list comprehension produced a `(n, 1)` 2-D
+  `retention_times` buffer that the writer rejected. Now passes
+  the whole `frame_ids` array at once.
+- **Zarr 3.x empty-chunk**: `ZarrProvider.create_dataset` now
+  clamps chunk dims to ≥ 1 so empty datasets (length == 0) build
+  cleanly under zarr-python 3.x.
+
+### Format support — Bruker .tsf
+
+`ttio.importers.bruker_tdf.read_metadata()` now recognises both
+`analysis.tdf` (TIMS) and `analysis.tsf` (non-TIMS Bruker QTOF /
+MALDI) `.d` directories. The SQLite metadata schema is shared,
+so frame counts / retention times / instrument-vendor strings
+parse identically. Full per-frame `read()` is TDF-only in v1.0
+(opentimspy is TDF-only); calling it on a `.tsf` directory raises
+`BrukerTDFUnavailableError` with a pointer at the
+`msconvert` → mzML workaround.
+
+### Performance — benchmark suites + microbench tooling
+
+Three new perf harnesses for release-to-release tracking:
+
+- **`python/tests/stress/test_fasta_fastq_benchmark.py`** —
+  five scenarios per fixture size (FASTQ export / import,
+  FASTA export / import, FASTQ → `.tio` → FASTQ round-trip)
+  at 1K, 10K, plus opt-in 100K and 1M reads via
+  `TTIO_INCLUDE_LONG_TAIL=1`.
+- **`python/tests/stress/test_production_corpus_benchmark.py`** —
+  BAM → `.tio` → decode-all-reads cycle against the real corpora
+  under `data/genomic/` (synthetic, na12878 chr22, na12878 WES,
+  hg002 Illumina subset, hg002 PacBio). The full 1.6 GB
+  hg002 chr22 BAM is opt-in via `TTIO_INCLUDE_FULL_CORPUS=1`.
+- **`global.thalion.ttio.tools.Benchmark` (Java) +
+  `TtioBenchmark` (ObjC)** — pair with the Python harnesses to
+  give cross-language perf-tracking parity. Both emit the same
+  JSON schema so a single `jq` over the three result files
+  diffs cleanly.
+
+Headline numbers consolidated in
+`docs/benchmarks/2026-05-05-v1.0-comprehensive-perf-report.md`.
+
+### Build + dev workflow
+
+- **`scripts/dev-setup.sh`** — one-shot Python developer setup:
+  builds `libttio_rans.so` + JNI wrapper, installs the package
+  with the broadest test extras, prints required env-var
+  exports. PEP 668 (Ubuntu 24.04+ externally-managed) friendly.
+- **`scripts/fetch-vendor-fixtures.sh`** — downloads + sha256-
+  verifies the public Thermo `small.RAW` (MIT, ~1.5 MB) and
+  Bruker `diaPASEF.d` (Apache-2.0, ~1 MB) fixtures from upstream
+  repos. Manifests pinned at `data/vendor/{thermo,bruker}/*.sha256`.
+- **CI** (`.github/workflows/ci.yml`):
+  - All Python jobs (`python-test`, `python-validation`,
+    `python-stress`) now build the native rANS library + JNI
+    wrapper before running pytest. Previously skipped ~90 v2-codec
+    tests silently because the runtime library was never present.
+  - New `python-vendor-fixtures` job exercises the Bruker TDF +
+    Thermo `.raw` integration paths on every push/PR (mono +
+    ThermoRawFileParser v1.4.5 + sha256-pinned fixtures).
+- **`CONTRIBUTING.md`** added — top-level entry point with
+  quick-start, repo layout, per-language test commands, optional
+  fixture flow, code style notes.

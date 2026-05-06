@@ -274,3 +274,53 @@ both:
 The fixture alone is not sufficient — without the converter
 binary, the test will skip cleanly with
 `"masslynxraw / MassLynxRaw.exe not on PATH"`.
+
+## Production-corpus decode benchmark
+
+`python/tests/stress/test_production_corpus_benchmark.py` runs
+the BAM → `.tio` → decode-all-reads cycle against the genomic
+corpora committed under `data/genomic/` (synthetic, na12878
+chr22, na12878 WES, hg002 Illumina subset, hg002 PacBio). Times
+each leg, computes BAM↔`.tio` compression ratios, and records
+results to `tests/stress/benchmark_results.json` under a
+`production_corpus` section.
+
+Default cells are bound to corpora ≤ 200 MB so the suite stays
+inside the nightly stress window. The full 1.6 GB
+`hg002_illumina/hg002_illumina.chr22.bam` is opt-in via
+`TTIO_INCLUDE_FULL_CORPUS=1`.
+
+Real-data exposure value: this benchmark surfaced a
+`NAME_TOKENIZED_V2` codec corruption bug on Illumina BAMs with
+mixed flowcell prefixes (e.g. `H2YHMBCXX` + `H2YT5BCXX`) that
+none of the synthetic fixtures triggered. Fixed in commit
+`2dffecb`; permanent regression guard at
+`python/tests/test_name_tokenizer_v2_native.py::test_mixed_flowcell_token_count_regression`
+with the minimal failing 94-name fixture preserved at
+`python/tests/fixtures/codecs/name_tok_v2_corrupt_94.txt`.
+
+## Long-tail FASTQ scaling
+
+`python/tests/stress/test_fasta_fastq_benchmark.py` defaults to
+1K and 10K-read fixtures. `TTIO_INCLUDE_LONG_TAIL=1` enables an
+additional 100K and 1M-read pair of cells that exercise the same
+v2 codec stack at production-Illumina scale (one HiSeq lane ≈
+200-400M reads). Used to spot non-linear blow-up regressions
+between releases. Single-machine 1M-read numbers in the v1.0
+comprehensive perf report.
+
+## Cross-language microbench harnesses
+
+Three parallel timing-loggers, one per language:
+
+| Language | Harness                                          | Output |
+|----------|--------------------------------------------------|--------|
+| Python   | `python/tests/stress/test_*_benchmark.py`        | `python/tests/stress/benchmark_results.json` |
+| Java     | `global.thalion.ttio.tools.Benchmark`            | `java/target/benchmark_results.json` (configurable) |
+| ObjC     | `objc/Tools/obj/TtioBenchmark`                   | `objc/Tests/benchmark_results.json` (configurable) |
+
+The Java + ObjC tools take a source `.tio` path and time
+transport encode (per-AU + Phase 2c-T bulk) and decode. All three
+emit the same JSON schema so a single `jq` over the three result
+files diffs cleanly across release tags. Sample numbers in §3 of
+the v1.0 perf report.

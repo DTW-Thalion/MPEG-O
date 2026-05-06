@@ -129,6 +129,35 @@ cd java   && mvn verify                          # Java unit + integration
 cd objc/Tests && make check                      # ObjC test runner
 ```
 
+## Benchmarks
+
+Three parallel timing-loggers, one per language. All emit the
+same JSON schema so a single `jq` over the three result files
+diffs cleanly across release tags:
+
+```bash
+# Python — runs the full stress matrix (provider + FASTA/FASTQ
+# + production-corpus + Phase 2c-T bulk-mode). Results land in
+# python/tests/stress/benchmark_results.json.
+cd python && pytest tests/stress -v
+
+# Long-tail FASTQ scaling cells (100K + 1M reads, ~2 minutes):
+TTIO_INCLUDE_LONG_TAIL=1 pytest tests/stress/test_fasta_fastq_benchmark.py
+
+# Java — transport encode + decode timing on a source .tio.
+java -Djava.library.path=$REPO/native/_build:/usr/lib/x86_64-linux-gnu/jni \
+     -cp "java/target/classes:$(deps):/usr/share/java/jarhdf5.jar" \
+     global.thalion.ttio.tools.Benchmark <source.tio> [output.json]
+
+# ObjC — same shape via mono-free Objective-C binary.
+LD_LIBRARY_PATH=$REPO/objc/Source/obj \
+TTIO_RANS_LIB_PATH=$REPO/native/_build/libttio_rans.so \
+$REPO/objc/Tools/obj/TtioBenchmark <source.tio> [output.json]
+```
+
+Headline numbers + interpretation are in
+`docs/benchmarks/2026-05-05-v1.0-comprehensive-perf-report.md`.
+
 ## License
 
 TTI-O is LGPL-3.0-or-later. Contributions are accepted under the

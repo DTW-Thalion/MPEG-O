@@ -74,6 +74,7 @@ contract levels per language pair. Footnotes follow the table.
 | **v1.0 per-AU transport** (`.tis` send/recv) | `=` (20) | `=` (20) | `=` (20) | `=` | `python/tests/integration/test_per_au_cross_language.py` |
 | **M89.6 genomic transport per-AU** (3×3 writer × reader) | `=` | `=` | `=` | `=` | `python/tests/validation/test_m89_cross_language.py` |
 | **Phase 2c-T transport bulk-mode** (3×3 writer × reader, byte-identity on `mate_info` + `read_names` blobs) | `=` | `=` | `=` | `=` | `python/tests/validation/test_phase_2c_t_bulk_mode.py` |
+| **nmrML reader parity** (acquisition-parameter scalars + complex128 FID) | `=` | `=` | `=` | n/a | `python/tests/integration/test_nmrml_roundtrip.py` (Py) + `java/.../ImportExportTest::nmrmlParityFieldsSurfaced` |
 | **M51** Numpress codec (delta + slof) cross-lang structural | `S` (21) | — | — | — | `python/tests/test_compression_codecs.py` |
 | **MS-fixture archive backward-compat** (5 ObjC-built `.tio` fixtures) | `~` (22) | — | — | — | `python/tests/test_cross_compat.py`, `python/tests/validation/test_m64_cross_tool_validation.py` |
 
@@ -201,6 +202,7 @@ The harnesses depend on per-language CLI tools. Build them via:
 | Transport server | `python -m ttio.tools.transport_server_cli` | `objc/Tools/obj/TtioTransportServer` | (no standalone main) |
 | FASTA round-trip | `python -m ttio.tools.{fasta_import,fasta_export}_cli` | `objc/Tools/obj/TtioFastaRoundTrip` | `global.thalion.ttio.tools.FastaRoundTrip` |
 | FASTQ round-trip | `python -m ttio.tools.{fastq_import,fastq_export}_cli` | `objc/Tools/obj/TtioFastqRoundTrip` | `global.thalion.ttio.tools.FastqRoundTrip` |
+| Transport perf microbench | `pytest python/tests/stress/` | `objc/Tools/obj/TtioBenchmark` | `global.thalion.ttio.tools.Benchmark` |
 
 ---
 
