@@ -117,6 +117,15 @@ def _iter_records(
 
     Quality bytes are converted to the requested Phred offset and
     sentinel ``0xff`` qualities are mapped to Phred 0.
+
+    For :class:`GenomicRun` (read-side, lazy) the loop pulls the
+    whole sequences + qualities byte buffers once and slices them
+    in-memory, bypassing the per-read :meth:`__getitem__` /
+    :class:`AlignedRead` materialisation. The full
+    :class:`AlignedRead` path also calls ``_cigar_at`` /
+    ``_mate_*_at`` per read which FASTQ does not need; skipping it
+    cuts ~80% of the wall time at 100K-1M-read scale (profile from
+    2026-05-05: 11K → 80K+ reads/s).
     """
     seen: set[str] = set()
     if isinstance(run, WrittenGenomicRun):
@@ -131,10 +140,38 @@ def _iter_records(
             for i in range(len(run.read_names))
         )
     else:
-        records = (
-            (read.read_name, read.sequence.encode("ascii"), read.qualities)
-            for read in run
-        )
+        # Pre-fetch whole channels once (slicing-friendly memoryview).
+        n = len(run)
+        offsets = run.index.offsets
+        lengths = run.index.lengths
+        if n > 0:
+            total = int(offsets[-1]) + int(lengths[-1])
+            seq_full = run._byte_channel_slice("sequences", 0, total)
+            qual_full = run._byte_channel_slice("qualities", 0, total)
+        else:
+            seq_full = b""
+            qual_full = b""
+        # Force one-shot read_names decode (NAME_TOKENIZED_V2 caches
+        # the full list under .._read_name_at; touching index 0 if
+        # any reads exist).
+        if n > 0:
+            run._read_name_at(0)
+        names_cache = run._decoded_read_names
+        if names_cache is None:
+            # Channel was uncompressed compound or empty — fall back
+            # to per-read accessor (rare path).
+            names_cache = [run._read_name_at(i) for i in range(n)]
+
+        def _records_iter():
+            for i in range(n):
+                start = int(offsets[i])
+                end = start + int(lengths[i])
+                yield (
+                    names_cache[i],
+                    seq_full[start:end],
+                    qual_full[start:end],
+                )
+        records = _records_iter()
     for i, (name, seq, qual) in enumerate(records):
         # Map the unknown-quality sentinel to Phred 0 in the output.
         if qual and any(b == _QUAL_UNKNOWN_BYTE for b in qual):
