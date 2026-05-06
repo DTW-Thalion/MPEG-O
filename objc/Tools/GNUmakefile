@@ -1,6 +1,10 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark
+
+TtioBenchmark_OBJC_FILES = TtioBenchmark.m
+TtioBenchmark_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioBenchmark_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioFastaRoundTrip_OBJC_FILES = TtioFastaRoundTrip.m
 TtioFastaRoundTrip_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
