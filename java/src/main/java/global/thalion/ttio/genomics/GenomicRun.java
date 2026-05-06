@@ -53,6 +53,28 @@ public class GenomicRun
     // would buy nothing and would complicate the Run protocol surface.
     private final List<ProvenanceRecord> provenanceRecords;
 
+    // ── Per-record HDF5-probe cache invariants (audit 2026-05-06) ─────
+    //
+    // Every cache below memoises a per-record-path operation that
+    // would otherwise hit HDF5 (open group / open dataset / read
+    // attribute) on every call. objectAtIndex(i) drives one call to
+    // each of: byteChannelSlice("sequences"), byteChannelSlice(
+    // "qualities"), cigarAt(i), readNameAt(i), mateChromAt(i),
+    // matePosAt(i), mateTlenAt(i). At 100K reads any uncached probe
+    // multiplies the per-record cost by HDF5 round-trip overhead —
+    // the isMateInfoInlineV2 case was 300K group opens / ~2.2s of
+    // wall-time framework cost (commit 758b340). Audit confirmed:
+    //   * sequencesIsV2Cached    — covers isSequencesRefDiffV2
+    //   * mateInfoInlineV2Cached — covers isMateInfoInlineV2
+    //   * decodedByteChannels    — covers byteChannelSlice (compressed +
+    //                              uncompressed via byteChannelFull)
+    //   * decodedReadNames       — covers readNameAt
+    //   * decodedCigars          — covers cigarAt
+    //   * decodedMateV2          — covers mate{Chrom,Pos,Tlen}At
+    //   * compoundCache          — covers compoundRows
+    // signalChannelCompressionCode opens a dataset per call but is
+    // only invoked twice per run (sequences + qualities at the top
+    // of TransportWriter.emitGenomicRunAccessUnits), not per record.
     private StorageGroup signalChannels;                       // lazy
     private StorageDataset sequencesDs;                        // lazy
     private StorageDataset qualitiesDs;                        // lazy
@@ -575,7 +597,7 @@ public class GenomicRun
      *
      *  <p>If {@code readCount == 0} the writer emits an empty group
      *  (no child datasets); this method short-circuits there. */
-    private String readNameAt(int i) {
+    public String readNameAt(int i) {
         if (index.count() == 0) {
             // Defensive: read at index 0 on an empty run is an
             // out-of-range error caught upstream; return-empty-string
@@ -636,7 +658,7 @@ public class GenomicRun
      *        per CIGAR); walk the buffer to reconstruct the list.</li>
      *  </ul>
      */
-    private String cigarAt(int i) {
+    public String cigarAt(int i) {
         List<String> cached = decodedCigars;
         if (cached != null) {
             return cached.get(i);
@@ -666,9 +688,19 @@ public class GenomicRun
                     + "and RANS_ORDER1 = 5 are recognised in v1.0+)");
             }
         }
-        // Compound path (M82, no override).
+        // Compound path (M82, no override). Materialise the whole
+        // list on first call and cache in decodedCigars — without
+        // this, per-record cigarAt(i) allocates a fresh String via
+        // stringFromCompound per call (UTF-8 decode + char[] alloc),
+        // which dominates the genomic transport encode hot path
+        // when the source carries no codec override (audit
+        // 2026-05-06).
         List<Object[]> rows = compoundRows("cigars");
-        return stringFromCompound(rows.get(i)[0]);
+        int rn = rows.size();
+        java.util.List<String> out = new java.util.ArrayList<>(rn);
+        for (Object[] row : rows) out.add(stringFromCompound(row[0]));
+        decodedCigars = out;
+        return out.get(i);
     }
 
     /** Walk a length-prefix-concat byte buffer back into a list of
@@ -827,7 +859,7 @@ public class GenomicRun
      *  {@code i}. Only the inline_v2 blob layout is supported now;
      *  the M86 Phase F per-field subgroup and the M82 compound layout
      *  raise {@code IllegalStateException}. */
-    private String mateChromAt(int i) {
+    public String mateChromAt(int i) {
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             int mateChromId = decodedMateV2.mateChromIds[i];
@@ -842,7 +874,7 @@ public class GenomicRun
 
     /** return the mate position at index
      *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
-    private long matePosAt(int i) {
+    public long matePosAt(int i) {
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             return decodedMateV2.matePositions[i];
@@ -852,7 +884,7 @@ public class GenomicRun
 
     /** return the template length at index
      *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
-    private int mateTlenAt(int i) {
+    public int mateTlenAt(int i) {
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             return decodedMateV2.templateLengths[i];
