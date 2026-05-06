@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.protocols;

@@ -27,8 +27,8 @@
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOAlignedRead.h"
-#import "Codecs/TTIORans.h"        // M90.10: rANS wire codec dispatch
-#import "Codecs/TTIOBasePack.h"    // M90.10: BASE_PACK wire codec dispatch
+#import "Codecs/TTIORans.h"        // rANS wire codec dispatch
+#import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import <time.h>
 #import <string.h>
 #import <zlib.h>
@@ -77,7 +77,7 @@ static NSString *spectrumClassToWireName(uint8_t wire)
         case 2: return @"TTIONMR2DSpectrum";
         case 3: return @"TTIOFreeInductionDecay";
         case 4: return @"TTIOMSImagePixel";
-        case 5: return @"TTIOGenomicRead";  // M89.2
+        case 5: return @"TTIOGenomicRead";
         default: return @"TTIOMassSpectrum";
     }
 }
@@ -89,7 +89,7 @@ static uint8_t wireFromSpectrumClassName(NSString *name)
     if ([name isEqualToString:@"TTIONMR2DSpectrum"]) return 2;
     if ([name isEqualToString:@"TTIOFreeInductionDecay"]) return 3;
     if ([name isEqualToString:@"TTIOMSImagePixel"]) return 4;
-    if ([name isEqualToString:@"TTIOGenomicRead"]) return 5;  // M89.2
+    if ([name isEqualToString:@"TTIOGenomicRead"]) return 5;
     return 0;
 }
 
@@ -430,7 +430,7 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
     return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }
 
-// M90.10: encode a UINT8 channel slice with the requested wire codec.
+// encode a UINT8 channel slice with the requested wire codec.
 // codec==0 (NONE) is identity. RANS_ORDER0/1 + BASE_PACK dispatch to
 // the matching M86 codec. Other codec ids return the raw bytes (the
 // genomic-string channels never set this — this helper is only called
@@ -469,7 +469,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     }
     NSUInteger nReads = run.readCount;
     NSString *instrJSON = genomicRunMetadataJSON(run);
-    // M90.9: emit all 5 channels (sequences, qualities, cigar,
+    // emit all 5 channels (sequences, qualities, cigar,
     // read_name, mate_chromosome). The 3 string channels carry one
     // per-AU UTF-8 string each.
     NSArray<NSString *> *channelNames = @[@"sequences", @"qualities",
@@ -486,7 +486,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
 
     TTIOGenomicIndex *idx = run.index;
     uint8_t acqMode = (uint8_t)run.acquisitionMode;
-    // M90.10: probe @compression on the source's sequences / qualities
+    // probe @compression on the source's sequences / qualities
     // datasets. The 3 string channels always ride uncompressed —
     // per-AU codec framing dominates short strings.
     uint8_t seqCodec = [run wireCompressionForChannel:@"sequences"];
@@ -506,7 +506,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         NSData *qualData = r.qualities ?: [NSData data];
         uint32_t seqLen = (uint32_t)seqData.length;
         uint32_t qualLen = (uint32_t)qualData.length;
-        // M90.10: re-encode per-AU slice with the M86 codec when the
+        // re-encode per-AU slice with the M86 codec when the
         // source channel had an @compression attribute set.
         NSData *seqPayload = applyWireCodecGenomic(seqData, seqCodec);
         NSData *qualPayload = applyWireCodecGenomic(qualData, qualCodec);
@@ -522,7 +522,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
                                                 compression:qualCodec
                                                   nElements:qualLen
                                                        data:qualPayload];
-        // M90.9: the 3 compound-string channels. Each carries the
+        // the 3 compound-string channels. Each carries the
         // per-read string's UTF-8 bytes for THIS AU only.
         NSData *cigarData = [(r.cigar ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
         NSData *nameData  = [(r.readName ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
@@ -593,7 +593,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     // round-trip guarantee for dict iteration across platforms.
     runNames = [runNames sortedArrayUsingSelector:@selector(compare:)];
 
-    // M89.4: genomic runs after MS runs in the dataset_id space.
+    // genomic runs after MS runs in the dataset_id space.
     NSArray<NSString *> *genomicNames =
         [dataset.genomicRuns.allKeys sortedArrayUsingSelector:@selector(compare:)];
 
@@ -626,7 +626,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
                                               error:error]) return NO;
         did++;
     }
-    // M89.4: contiguous IDs after MS — genomic dataset_ids start at
+    // contiguous IDs after MS — genomic dataset_ids start at
     // runNames.count + 1. M90.9: 5 channels (sequences, qualities,
     // cigar, read_name, mate_chromosome).
     NSArray<NSString *> *gChannelNames = @[@"sequences", @"qualities",
@@ -698,7 +698,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         }
         uint8_t acqMode = (uint8_t)grun.acquisitionMode;
         TTIOGenomicIndex *idx = grun.index;
-        // M90.10: probe source's @compression on sequences + qualities.
+        // probe source's @compression on sequences + qualities.
         uint8_t seqCodec = [grun wireCompressionForChannel:@"sequences"];
         uint8_t qualCodec = [grun wireCompressionForChannel:@"qualities"];
         // Bulk-fetch the byte channels + read-names list once. Mirrors

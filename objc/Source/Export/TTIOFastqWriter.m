@@ -162,7 +162,7 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
     // per-read TTIOAlignedRead materialisation, which would also
     // decode the cigar / mate triple — fields FASTQ does not need.
     // Mirrors the 24× speedup the Python FastqWriter saw from this
-    // same pattern (commit ae9441d).
+    // same pattern.
     NSUInteger n = [run count];
     NSData *seqAll  = [run wholeSequencesData];
     NSData *qualAll = [run wholeQualitiesData];

@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.genomics;
@@ -71,21 +71,21 @@ import java.util.Objects;
  *                           the genomic run group, mirroring
  *                           {@link global.thalion.ttio.AcquisitionRun}'s
  *                           layout.
- * @param embedReference     M93 (v1.5): when true (default), the writer
+ * @param embedReference     M93 : when true (default), the writer
  *                           embeds {@link #referenceChromSeqs} at
  *                           {@code /study/references/<reference_uri>/}.
  *                           Set to false when the reference is supplied
  *                           externally and the file should not duplicate
  *                           the bytes. Has no effect when
  *                           {@link #referenceChromSeqs} is {@code null}.
- * @param referenceChromSeqs M93 (v1.5): per-chromosome reference
+ * @param referenceChromSeqs M93 : per-chromosome reference
  *                           sequence bytes (uppercase ACGTN), keyed by
  *                           chromosome name. Required input for the
  *                           REF_DIFF context-aware codec on the
  *                           {@code sequences} channel; absent values
  *                           cause REF_DIFF to fall back to BASE_PACK
  *                           silently (Q5b=C). May be {@code null}.
- * @param externalReferencePath M93 (v1.5): optional explicit external
+ * @param externalReferencePath M93 : optional explicit external
  *                           FASTA path that REF_DIFF readers can fall
  *                           back to when the reference is not embedded
  *                           and {@code REF_PATH} is unset. May be
@@ -288,7 +288,7 @@ public record WrittenGenomicRun(
     }
 
     /**
-     * M93 (v1.5) full-fat builder. Returns a new instance with the same
+     * M93 full-fat builder. Returns a new instance with the same
      * payload but with the M93 reference fields replaced. Builder-style
      * convenience for callers that already have a base run and want to
      * attach a reference for REF_DIFF dispatch.

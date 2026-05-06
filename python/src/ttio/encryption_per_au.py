@@ -453,7 +453,7 @@ def encrypt_per_au(
 
             dataset_id_counter += 1
 
-        # M90.1: extend encryption to genomic runs. Genomic signal
+        # extend encryption to genomic runs. Genomic signal
         # channels (sequences, qualities) are stored as plain uint8
         # datasets named without a "_values" suffix (different from
         # the MS layout). dataset_id_counter continues from where the
@@ -588,7 +588,7 @@ def decrypt_per_au(
             out[run_name] = run_out
             dataset_id_counter += 1
 
-        # M90.1: also materialise genomic_runs. dataset_id continues
+        # also materialise genomic_runs. dataset_id continues
         # from where the MS loop left off so AAD reconstruction
         # matches the encrypt path exactly.
         if study.has_child("genomic_runs"):
@@ -759,7 +759,7 @@ def encrypt_per_au_by_region(
                         f"{cname}_algorithm", "aes-256-gcm-by-region",
                     )
 
-            # M90.11: encrypt genomic_index columns under the
+            # encrypt genomic_index columns under the
             # reserved _headers key.
             if headers_key is not None:
                 _encrypt_genomic_index(
@@ -937,7 +937,7 @@ def decrypt_per_au_by_region(
             ms_run_names = []
         dataset_id_counter = len(ms_run_names) + 1
 
-        # M90.11: when the file carries opt_encrypted_au_headers,
+        # when the file carries opt_encrypted_au_headers,
         # decrypt requires the reserved "_headers" key. Without it,
         # we can't even reconstruct the chromosomes column needed
         # for per-AU dispatch on signal channels.
@@ -967,7 +967,7 @@ def decrypt_per_au_by_region(
             g_idx = g_group.open_group("genomic_index")
             g_run_out: dict[str, Any] = {}
 
-            # M90.11: decrypt the genomic_index columns first so the
+            # decrypt the genomic_index columns first so the
             # per-AU signal-channel dispatch (which needs chromosomes)
             # can proceed even when the source columns were encrypted.
             if headers_encrypted:

@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: Apache-2.0
  */
 package global.thalion.ttio;
@@ -50,7 +50,7 @@ class ImportExportTest {
 
     @Test
     void mzmlMs2ActivationAndIsolationRoundTrip() throws Exception {
-        // M74: parse a fixture that carries MS2 precursor activation + an
+        // parse a fixture that carries MS2 precursor activation + an
         // isolation window, and confirm the data propagates through
         // MzMLReader, AcquisitionRun, and SpectrumIndex accessors. Gates
         // that the SRM <product><isolationWindow> inside <chromatogram>
@@ -84,7 +84,7 @@ class ImportExportTest {
 
     @Test
     void mzmlMalformedThrowsMzMLParseException() throws Exception {
-        // M50.3: MzMLReader throws MzMLParseException (specific) —
+        // MzMLReader throws MzMLParseException (specific) —
         // not bare Exception — so callers can catch parse failures
         // narrowly. Write a non-mzML file and verify the exception
         // shape + that it extends IOException (for catch (IOException)
@@ -133,22 +133,22 @@ class ImportExportTest {
             MzMLWriter.write(readRun, outMzml);
         }
 
-        // v0.9 M64: Java writer now emits every XSD-required wrapper
+        // Java writer now emits every XSD-required wrapper
         // section and the instrument model cvParam inside
         // <instrumentConfiguration>. Assert the output shape so
         // regressions surface at the unit-test layer (not only when
         // external XSD validators run).
         String written = Files.readString(Path.of(outMzml));
         assertTrue(written.contains("<softwareList"),
-                "v0.9 M64: mzML export must emit <softwareList>");
+                "mzML export must emit <softwareList>");
         assertTrue(written.contains("<instrumentConfigurationList"),
-                "v0.9 M64: mzML export must emit <instrumentConfigurationList>");
+                "mzML export must emit <instrumentConfigurationList>");
         assertTrue(written.contains("<dataProcessingList"),
-                "v0.9 M64: mzML export must emit <dataProcessingList>");
+                "mzML export must emit <dataProcessingList>");
         assertTrue(written.contains("MS:1000031"),
-                "v0.9 M64: instrument model cvParam (MS:1000031) required");
+                "instrument model cvParam (MS:1000031) required");
         assertTrue(written.contains("defaultInstrumentConfigurationRef=\"IC1\""),
-                "v0.9 M64: <run> must reference IC1 via defaultInstrumentConfigurationRef");
+                "<run> must reference IC1 via defaultInstrumentConfigurationRef");
 
         // Re-read the written mzML
         AcquisitionRun reImported = MzMLReader.read(outMzml);
@@ -377,31 +377,31 @@ class ImportExportTest {
         String outPath = tempDir.resolve("roundtrip.nmrML").toString();
         NmrMLWriter.write(run, outPath);
 
-        // v0.9 M64: nmrML writer now emits every XSD-required wrapper
+        // nmrML writer now emits every XSD-required wrapper
         // section + canonical spectrum1D with single interleaved (x,y)
         // <spectrumDataArray>. Assert the output shape so any regression
         // against the XSD content model surfaces here.
         String written = Files.readString(Path.of(outPath));
         assertTrue(written.contains("version=\"1.1.0\""),
-                "v0.9 M64: <nmrML> must carry version='1.1.0' attribute");
+                "<nmrML> must carry version='1.1.0' attribute");
         assertTrue(written.contains("<fileDescription>"),
-                "v0.9 M64: <fileDescription> required by nmrML XSD");
+                "<fileDescription> required by nmrML XSD");
         assertTrue(written.contains("<softwareList>"),
-                "v0.9 M64: <softwareList> required before <acquisition>");
+                "<softwareList> required before <acquisition>");
         assertTrue(written.contains("<instrumentConfigurationList>"),
-                "v0.9 M64: <instrumentConfigurationList> required before <acquisition>");
+                "<instrumentConfigurationList> required before <acquisition>");
         assertTrue(written.contains("<DirectDimensionParameterSet"),
-                "v0.9 M64: <DirectDimensionParameterSet> required inside acquisition1D");
+                "<DirectDimensionParameterSet> required inside acquisition1D");
         assertTrue(written.contains("<sampleContainer"),
-                "v0.9 M64: <sampleContainer> required in acquisitionParameterSet");
+                "<sampleContainer> required in acquisitionParameterSet");
         assertTrue(written.contains("<sweepWidth"),
-                "v0.9 M64: <sweepWidth> replaces the legacy cvParam form");
+                "<sweepWidth> replaces the legacy cvParam form");
         assertTrue(written.contains("<irradiationFrequency"),
-                "v0.9 M64: <irradiationFrequency> replaces the legacy cvParam form");
+                "<irradiationFrequency> replaces the legacy cvParam form");
         assertTrue(written.contains("numberOfDataPoints=\"" + points + "\""),
-                "v0.9 M64: <spectrum1D> must carry numberOfDataPoints attribute");
+                "<spectrum1D> must carry numberOfDataPoints attribute");
         assertTrue(written.contains("byteFormat="),
-                "v0.9 M64: BinaryDataArrayType byteFormat attribute required");
+                "BinaryDataArrayType byteFormat attribute required");
 
         // Read back
         NmrMLReader.NmrMLResult result = NmrMLReader.read(outPath);
@@ -452,7 +452,7 @@ class ImportExportTest {
         assertTrue(invest.contains("Investigation Identifier\tISA-001"));
         assertTrue(invest.contains("Investigation Title\tISA Test"));
 
-        // v0.9 M64: every ISA-Tab investigation file must include all 11
+        // every ISA-Tab investigation file must include all 11
         // required section headers. isatools halts at the first missing
         // required section — previously only 4 of 11 were emitted.
         for (String section : new String[] {

@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: Apache-2.0
  */
 package global.thalion.ttio.importers;
@@ -128,8 +128,8 @@ public class MzMLReader {
         private int selectedIonDepth;
         private int scanDepth;
         private int scanWindowDepth;
-        private int activationDepth;      // M74
-        private int isolationWindowDepth; // M74
+        private int activationDepth;
+        private int isolationWindowDepth;
         private int specDefaultLen;
         private int chromDefaultLen;
 
@@ -142,7 +142,7 @@ public class MzMLReader {
         private double curScanWinLow = 0;
         private double curScanWinHigh = 0;
         private boolean hasScanWin = false;
-        // M74: activation + isolation for the spectrum currently being parsed
+        // activation + isolation for the spectrum currently being parsed
         private ActivationMethod curActivation = ActivationMethod.NONE;
         private double curIsolationTargetMz = 0;
         private double curIsolationLowerOffset = 0;

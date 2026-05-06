@@ -208,7 +208,7 @@ def verify_provenance(run_group: h5py.Group, key: bytes) -> bool:
     return hmac.compare_digest(stored, expected)
 
 
-# M90.2: run-level convenience helpers for genomic_runs. These walk
+# run-level convenience helpers for genomic_runs. These walk
 # every signal channel (sequences, qualities) and every genomic_index
 # column (offsets, lengths, positions, mapping_qualities, flags) and
 # sign each dataset individually with sign_dataset(). The chromosomes

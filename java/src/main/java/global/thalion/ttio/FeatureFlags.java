@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -36,9 +36,9 @@ public final class FeatureFlags {
      *  ML-DSA-87). Opt-flag — a reader without PQC can still open the
      *  file and read unencrypted datasets. */
     public static final String OPT_PQC_PREVIEW = "opt_pqc_preview";
-    /** v1.0: channels encrypted per Access Unit. */
+    /** channels encrypted per Access Unit. */
     public static final String OPT_PER_AU_ENCRYPTION = "opt_per_au_encryption";
-    /** v1.0: AU semantic header encrypted. */
+    /** AU semantic header encrypted. */
     public static final String OPT_ENCRYPTED_AU_HEADERS = "opt_encrypted_au_headers";
     /** per-AU encryption keyed by chromosome (region-based).
      *  Set in addition to {@link #OPT_PER_AU_ENCRYPTION} when a file
@@ -60,7 +60,7 @@ public final class FeatureFlags {
      *  that ignore the flag still parse the MS pipeline normally
      *  (genomic runs are a separate group hierarchy). M82 */
     public static final String OPT_GENOMIC = "opt_genomic";
-    /** v1.2 L4 (v1.6): genomic runs in this file do NOT carry the
+    /** v1.2 L4 : genomic runs in this file do NOT carry the
      *  {@code signal_channels/{positions,flags,mapping_qualities}}
      *  duplicates that v1.5 and earlier wrote alongside the canonical
      *  {@code genomic_index/} copies. Tooling that wants to detect
@@ -130,7 +130,7 @@ public final class FeatureFlags {
         return new FeatureFlags(version, flags);
     }
 
-    /** Read feature flags from any provider's root group (v0.9). */
+    /** Read feature flags from any provider's root group . */
     public static FeatureFlags readFrom(global.thalion.ttio.providers.StorageGroup root) {
         String version = "1.0.0";
         Set<String> flags = new LinkedHashSet<>();
@@ -151,7 +151,7 @@ public final class FeatureFlags {
         root.setStringAttribute("ttio_features", toJsonArray());
     }
 
-    /** Write feature flags to any provider's root group (v0.9). */
+    /** Write feature flags to any provider's root group . */
     public void writeTo(global.thalion.ttio.providers.StorageGroup root) {
         root.setAttribute("ttio_format_version", formatVersion);
         root.setAttribute("ttio_features", toJsonArray());

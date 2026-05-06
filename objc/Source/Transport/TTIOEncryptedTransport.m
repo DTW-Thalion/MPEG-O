@@ -211,7 +211,7 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSMutableArray *> *channelSegments;
 @property (nonatomic, strong) NSMutableArray<TTIOHeaderSegment *> *headerSegments;
 @property (nonatomic) BOOL usedEncryptedHeaders;
-// M90.8: genomic-only fields. isGenomic is set when DATASET_HEADER
+// genomic-only fields. isGenomic is set when DATASET_HEADER
 // declares spectrum_class==TTIOGenomicRead. Per-AU genomic suffix
 // values accumulate into the four arrays so the materialiser can
 // rebuild the plaintext genomic_index columns. genomicMetadataJSON
@@ -303,7 +303,7 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             if (![n hasPrefix:@"_"]) [runNames addObject:n];
         }
 
-        // M90.8: also walk study/genomic_runs/. dataset_id continues
+        // also walk study/genomic_runs/. dataset_id continues
         // from MS so AAD reconstruction matches the per-AU encrypt
         // path (M90.1).
         NSMutableArray *genomicRunNames = [NSMutableArray array];
@@ -394,7 +394,7 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             did++;
         }
 
-        // M90.8: per-genomic-run ProtectionMetadata + DatasetHeader.
+        // per-genomic-run ProtectionMetadata + DatasetHeader.
         // dataset_id continues from MS so AAD reconstruction matches.
         for (NSString *gRunName in genomicRunNames) {
             id<TTIOStorageGroup> gRun = [genomicRunsGroup openGroupNamed:gRunName error:error];
@@ -627,7 +627,7 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             did++;
         }
 
-        // M90.8: genomic AU emission. Same dataset_id space as MS so
+        // genomic AU emission. Same dataset_id space as MS so
         // AAD reconstruction (dataset_id + au_sequence) matches.
         for (NSString *gRunName in genomicRunNames) {
             id<TTIOStorageGroup> gRun = [genomicRunsGroup openGroupNamed:gRunName error:error];
@@ -791,7 +791,7 @@ static DatasetAccumulator *makeAcc(NSString *name, uint8_t acqMode,
     for (NSString *c in channelNames) d.channelSegments[c] = [NSMutableArray array];
     d.headerSegments = [NSMutableArray array];
     d.usedEncryptedHeaders = NO;
-    // M90.8: pre-init genomic accumulators. isGenomic flips on when
+    // pre-init genomic accumulators. isGenomic flips on when
     // the DATASET_HEADER spectrum_class is TTIOGenomicRead.
     d.isGenomic = [spectrumClass isEqualToString:@"TTIOGenomicRead"];
     d.genomicChromosomes = [NSMutableArray array];
@@ -944,7 +944,7 @@ static BOOL ingestAU(TTIOTransportPacketRecord *record,
         double bpi; memcpy(&bpi, &buf[off], 8); off += 8;
         uint8_t nChannels = buf[off++];
 
-        // M90.8: capture genomic suffix when this is a genomic AU
+        // capture genomic suffix when this is a genomic AU
         // so the materialiser can rebuild the plaintext
         // genomic_index columns. Decode through TTIOAccessUnit
         // since it knows the chrom-len-prefixed layout.
@@ -1040,7 +1040,7 @@ static BOOL writeEncryptedFile(NSString *path,
         id<TTIOStorageGroup> msRuns =
             [study createGroupNamed:@"ms_runs" error:error];
         if (!msRuns) return NO;
-        // M90.8: split into MS vs genomic datasets. Each gets its own
+        // split into MS vs genomic datasets. Each gets its own
         // /study/{ms_runs,genomic_runs}/ subtree.
         NSArray *sortedDids = [datasets.allKeys sortedArrayUsingSelector:
                                 @selector(compare:)];
@@ -1225,7 +1225,7 @@ static BOOL writeEncryptedFile(NSString *path,
                 }
             }
         }
-        // M90.8: write study/genomic_runs/<name>/ for each genomic
+        // write study/genomic_runs/<name>/ for each genomic
         // dataset captured on the wire. Encrypted segments round-trip
         // verbatim; plaintext genomic_index columns are reconstructed
         // from the per-AU genomic suffix arrays captured during ingest.
@@ -1516,7 +1516,7 @@ static BOOL writeEncryptedFile(NSString *path,
                                                             encoding:NSUTF8StringEncoding]];
                 off += cl;
             }
-            // M90.8: read instrument_json — for genomic datasets it
+            // read instrument_json — for genomic datasets it
             // carries the per-run metadata (modality / platform /
             // reference_uri / sample_name) which we re-emit on the
             // materialised genomic_run group.

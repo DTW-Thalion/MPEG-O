@@ -95,7 +95,7 @@ def encrypt_bytes(
         raise ValueError(
             f"{algorithm}: IV must be {nonce_len} bytes, got {len(iv)}"
         )
-    # v0.7: only AES-256-GCM is a live AEAD; other AEADs land in M49.
+    # only AES-256-GCM is a live AEAD; other AEADs land in M49.
     if algorithm != "aes-256-gcm":  # pragma: no cover - caught by validate_key
         raise cipher_suite.UnsupportedAlgorithmError(
             f"{algorithm}: AEAD path not yet implemented"

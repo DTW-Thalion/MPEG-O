@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
 import global.thalion.ttio.Enums;
@@ -174,7 +174,7 @@ public final class EncryptedTransport {
         }
     }
 
-    /** M90.8: emit ProtectionMetadata + DatasetHeader for one genomic
+    /** emit ProtectionMetadata + DatasetHeader for one genomic
      *  run. Genomic only encrypts {@code sequences} + {@code qualities}
      *  (per M90.1); other channels (cigars, read_names, mate_info)
      *  stay plaintext on the source file and are not part of the
@@ -214,7 +214,7 @@ public final class EncryptedTransport {
         }
     }
 
-    /** M90.8: emit one ENCRYPTED ACCESS_UNIT packet per read.
+    /** emit one ENCRYPTED ACCESS_UNIT packet per read.
      *  Each AU carries {@code spectrum_class=5}, the M89.1 chromosome
      *  + position + mapq + flags suffix (sourced from the plaintext
      *  {@code genomic_index/}), and UINT8 ChannelData with
@@ -573,7 +573,7 @@ public final class EncryptedTransport {
         int nch = bb.get() & 0xFF;
         out.channelNames = new ArrayList<>(nch);
         for (int i = 0; i < nch; i++) out.channelNames.add(readLEString(bb, 2));
-        // M90.8: instrument_json carries the genomic-run metadata for the
+        // instrument_json carries the genomic-run metadata for the
         // reader to rebuild modality/platform/reference_uri/sample_name.
         if (bb.remaining() >= 4) {
             out.instrumentJson = readLEString(bb, 4);
@@ -686,7 +686,7 @@ public final class EncryptedTransport {
             StorageProvider.Mode.CREATE, providerName);
         try {
             StorageGroup root = sp.rootGroup();
-            // M90.8: bump format_version to 1.4 + add opt_genomic when any
+            // bump format_version to 1.4 + add opt_genomic when any
             // genomic dataset came through the stream (matches the
             // SpectralDataset.create heuristic).
             boolean anyGenomic = false;
@@ -706,7 +706,7 @@ public final class EncryptedTransport {
                 study.setAttribute("isa_investigation_id",
                                      isa == null ? "" : isa);
 
-                // M90.8: split datasets into MS vs genomic.
+                // split datasets into MS vs genomic.
                 Map<Integer, DatasetAccumulator> msDs = new TreeMap<>();
                 Map<Integer, DatasetAccumulator> gDs = new TreeMap<>();
                 for (Map.Entry<Integer, DatasetAccumulator> e : datasets.entrySet()) {
@@ -817,7 +817,7 @@ public final class EncryptedTransport {
         }  // sig try-with-resources
     }
 
-    /** M90.8: materialise one genomic dataset into the destination .tio.
+    /** materialise one genomic dataset into the destination .tio.
      *  Mirrors materialiseRun for genomic_runs/ subtree: writes the run
      *  group with modality/platform/reference_uri/sample_name attrs
      *  (parsed from instrument_json), the encrypted signal_channels
@@ -886,7 +886,7 @@ public final class EncryptedTransport {
         }
     }
 
-    /** M90.8: minimal JSON value extractor for the metadata JSON we
+    /** minimal JSON value extractor for the metadata JSON we
      *  emit on the wire. Looks for the literal pattern "key": "value"
      *  and returns the captured value; returns the empty string when
      *  the key is not present or the JSON cannot be parsed. */
@@ -915,7 +915,7 @@ public final class EncryptedTransport {
         return out.toString();
     }
 
-    /** M90.8: write a chromosomes compound dataset (single VL_STRING
+    /** write a chromosomes compound dataset (single VL_STRING
      *  field {@code value}) mirroring the GenomicIndex layout.
      *  L1 (Task #82 Phase B.1, 2026-05-01): write chromosomes as
      *  {@code chromosome_ids} (uint16) + {@code chromosome_names}
@@ -1067,7 +1067,7 @@ public final class EncryptedTransport {
         List<Double> plaintextPmzs = new ArrayList<>();
         List<Integer> plaintextPcs = new ArrayList<>();
         List<Double> plaintextBpis = new ArrayList<>();
-        // M90.8: genomic accumulator fields
+        // genomic accumulator fields
         boolean isGenomic;
         String instrumentJson = "";
         List<String> genomicChromosomes = new ArrayList<>();

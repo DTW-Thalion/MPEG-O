@@ -47,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *       (M89.3 chromosome / position predicates, MS/genomic separation
  *       in multiplexed streams).</li>
  *   <li>Python {@code tests/test_transport_codec.py::TestGenomicRoundTrip}
- *       and {@code TestMultiplexedRoundTrip} (M89.2 / M89.4).</li>
+ *       and {@code TestMultiplexedRoundTrip} (M89.2).</li>
  *   <li>Python {@code tests/test_m89_5_genomic_encryption.py}
  *       (M89.5: per-AU AES-GCM round-trip preserves the genomic
  *       suffix).</li>
@@ -124,7 +124,7 @@ class M89GenomicTransportTest {
             0L, 0L, 0L,
             "chr1", 100L, 60, 0);
         byte[] full = au.encode();
-        // M90.9: the AU body now ends with int64 mate_position +
+        // the AU body now ends with int64 mate_position +
         // int32 template_length (12 bytes). The mate extension
         // decoder is OPTIONAL — if it is short the decoder simply
         // defaults to -1 / 0. To reach the M89.1 short-fixed-suffix

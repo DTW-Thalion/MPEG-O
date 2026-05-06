@@ -329,7 +329,7 @@ static BOOL ensureSignatureFeatureFlags(TTIOHDF5Group *root, NSError **error)
         return NO;
     }
 
-    // v0.3: canonical little-endian serialization before hashing so
+    // canonical little-endian serialization before hashing so
     // the MAC is portable across host endianness. The stored string
     // carries a ``v2:`` prefix to distinguish it from v0.2 native
     // signatures. Verifiers still accept unprefixed v1 signatures.

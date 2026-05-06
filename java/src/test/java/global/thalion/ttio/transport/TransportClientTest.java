@@ -28,7 +28,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * v0.10 M68: Java client against the Python reference server.
+ * Java client against the Python reference server.
  *
  * <p>The Python server is spawned as a subprocess via
  * {@code python -m ttio.tools.transport_server_cli}. These tests

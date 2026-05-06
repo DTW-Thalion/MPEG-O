@@ -109,7 +109,7 @@ static char *dupCString(NSString *s, NSMutableArray *retained)
     return (char *)[src UTF8String];
 }
 
-// M37: write a JSON-string attribute carrying the same array of
+// write a JSON-string attribute carrying the same array of
 // plist dicts as the compound dataset. Lets Java (JHI5 1.10 cannot
 // marshal compound-with-VL reads) recover the full record set.
 // Top-level dataset names only — per-run "steps" dataset does not

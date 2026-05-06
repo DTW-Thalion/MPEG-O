@@ -34,8 +34,8 @@
 #import "Codecs/TTIOFqzcompNx16Z.h"        // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"           // M95 v1.2
 #import "Codecs/TTIOReferenceResolver.h"  // M93 v1.2
-#import "Codecs/TTIOMateInfoV2.h"          // v1.7 #11: inline mate-pair codec
-#import "Codecs/TTIORefDiffV2.h"          // v1.8 #11: bit-packed ref-diff v2
+#import "Codecs/TTIOMateInfoV2.h"          // inline mate-pair codec
+#import "Codecs/TTIORefDiffV2.h"          // bit-packed ref-diff v2
 #import "Codecs/TTIONameTokenizerV2.h"     // v1.8 #11 ch3: adaptive name-tokenizer v2
 #import <hdf5.h>
 
@@ -44,7 +44,7 @@
     id<TTIOStorageGroup> _signalChannelsGroup;       // lazily opened, cached
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_signalCache;
     NSMutableDictionary<NSString *, NSArray *> *_compoundCache;
-    // M86: lazy whole-channel decode cache for byte channels whose
+    // lazy whole-channel decode cache for byte channels whose
     // @compression attribute names a TTIO codec (rANS / BASE_PACK).
     // Codec output is byte-stream non-sliceable, so the whole channel
     // is decoded once on first access and the decoded buffer is
@@ -52,7 +52,7 @@
     // lifetime is the TTIOGenomicRun instance — re-opening the file
     // incurs the decode cost again (Gotcha §101).
     NSMutableDictionary<NSString *, NSData *> *_decodedByteChannels;
-    // M86 Phase E: lazy whole-list decode cache for read_names when
+    // lazy whole-list decode cache for read_names when
     // it's stored as a flat 1-D uint8 dataset with @compression == 8
     // (NAME_TOKENIZED). Held as NSArray<NSString *> rather than NSData
     // because the codec returns a list of names indexed by read
@@ -62,7 +62,7 @@
     // again; for very large runs the decoded list is materialised in
     // RAM in one shot since the codec is per-batch, Gotcha §124).
     NSArray<NSString *> *_decodedReadNames;
-    // M86 Phase C: lazy whole-list decode cache for cigars when it's
+    // lazy whole-list decode cache for cigars when it's
     // stored as a flat 1-D uint8 dataset with @compression in
     // {RANS_ORDER0 (4), RANS_ORDER1 (5), NAME_TOKENIZED (8)}. Held as
     // NSArray<NSString *> because all three codec paths return a
@@ -74,7 +74,7 @@
     // (Gotcha §138 — re-opening the file incurs the decode cost
     // again).
     NSArray<NSString *> *_decodedCigars;
-    // M86 Phase B: lazy whole-channel decode cache for integer
+    // lazy whole-channel decode cache for integer
     // channels (positions / flags / mapping_qualities) whose
     // @compression attribute names a TTIO rANS id. Held as NSData
     // (LE byte representation of the original integer array) keyed
@@ -85,7 +85,7 @@
     // instance.
     // v1.6 (L4): _decodedIntChannels removed (cache for the dropped
     // intChannelArrayNamed: helper).
-    // M86 Phase F: combined per-field cache for the mate_info subgroup
+    // combined per-field cache for the mate_info subgroup
     // (Binding Decision §129). Single NSMutableDictionary keyed by the
     // on-disk child name (@"chrom", @"pos", @"tlen") since the three
     // fields have three different value types — chrom is
@@ -96,17 +96,17 @@
     // TTIOGenomicRun instance (re-opening the file incurs the decode
     // cost again).
     NSMutableDictionary<NSString *, id> *_decodedMateInfo;
-    // M86 Phase F: cached link-type query result for
+    // cached link-type query result for
     // signal_channels/mate_info. -1 = not yet probed; 0 = M82 compound
     // dataset; 1 = Phase F subgroup. Probed once via H5Oget_info_by_name
     // on first mate-field access (Binding Decision §128, Gotcha §141).
     int8_t _mateInfoLinkType;
-    // v1.8 #11: cached link-type query result for
+    // cached link-type query result for
     // signal_channels/sequences. -1 = not yet probed; 0 = flat dataset
     // (v1 REF_DIFF / BASE_PACK / rANS / uncompressed); 1 = GROUP (v1.8
     // refdiff_v2 layout). Probed once on first sequences access.
     int8_t _sequencesLinkType;
-    // v1.8 #11: decoded flat sequence bytes from the refdiff_v2 blob.
+    // decoded flat sequence bytes from the refdiff_v2 blob.
     // Populated on first access when _sequencesLinkType == 1.
     NSData *_decodedRefDiffV2Sequences;
 }
@@ -229,7 +229,7 @@
     return rows;
 }
 
-// M86: read the @compression attribute (uint8) on an HDF5 dataset.
+// read the @compression attribute (uint8) on an HDF5 dataset.
 // Returns 0 (NONE) when the attribute is absent — equivalent to
 // "uncompressed at the TTIO-codec layer". The dataset hid_t is taken
 // from the underlying TTIOHDF5Dataset; non-HDF5 backends fall back to
@@ -245,7 +245,7 @@ static uint8_t _ttio_m86_read_compression_attr(hid_t did)
     return value;
 }
 
-// M86: read the @compression attribute via the storage protocol (used
+// read the @compression attribute via the storage protocol (used
 // for non-HDF5 backends). Returns 0 when absent or non-numeric.
 static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> ds)
 {
@@ -258,7 +258,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return 0;
 }
 
-// M90.10: probe @compression on a signal channel without decoding
+// probe @compression on a signal channel without decoding
 // anything. Used by the transport writer to decide whether to re-
 // encode each per-AU UINT8 slice with the same M86 codec on the
 // wire. Returns 0 (NONE) when the attribute is absent or unreadable.
@@ -276,7 +276,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return _ttio_m86_read_compression_attr_protocol(ds);
 }
 
-// M86: byte-channel slice helper.
+// byte-channel slice helper.
 //
 // For byte channels (sequences, qualities) the read path may need to
 // decode through a TTIO codec when @compression > 0. We implement the
@@ -285,14 +285,14 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 // instance. For uncompressed channels the existing per-slice
 // HDF5 hyperslab read path is preserved unchanged.
 //
-// v1.8 #11: for the sequences channel, probe whether signal_channels/sequences
+// for the sequences channel, probe whether signal_channels/sequences
 // is a GROUP (refdiff_v2 layout) and decode via TTIORefDiffV2 when true.
 - (NSData *)byteChannelSliceNamed:(NSString *)name
                             offset:(NSUInteger)offset
                              count:(NSUInteger)count
                              error:(NSError **)error
 {
-    // v1.8 #11: refdiff_v2 group layout probe for sequences channel.
+    // refdiff_v2 group layout probe for sequences channel.
     if ([name isEqualToString:@"sequences"] && [self _sequencesIsRefDiffV2]) {
         NSData *decoded = _decodedRefDiffV2Sequences;
         if (!decoded) {
@@ -423,7 +423,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return out[@"qualities"];
 }
 
-// M86 Phase E: read_names dispatch helper.
+// read_names dispatch helper.
 //
 // The read_names channel has two on-disk layouts (Binding Decisions
 // §111, §112):
@@ -562,7 +562,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return nil;
 }
 
-// M86 Phase C: unsigned LEB128 varint reader for the cigars rANS
+// unsigned LEB128 varint reader for the cigars rANS
 // length-prefix-concat path. Mirrors NAME_TOKENIZED's varint_read
 // (in TTIONameTokenizer.m) — reproduced here to avoid coupling the
 // run reader to the codec module's private symbols. Returns 1 on
@@ -589,7 +589,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     }
 }
 
-// M86 Phase C: cigars dispatch helper.
+// cigars dispatch helper.
 //
 // The cigars channel has two on-disk layouts (Binding Decisions
 // §120-§123, HANDOFF M86 Phase C §2.7):
@@ -762,7 +762,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     // without this, per-record cigarAtIndex: allocates a fresh
     // NSString from NSData on every call, dominating the per-
     // record time on the genomic transport encode path (mirrors
-    // Java fix in commit 701f310 / Python parity).
+    // Java fix / Python parity).
     TTIOCompoundField *vlValue =
         [TTIOCompoundField fieldWithName:@"value"
                                     kind:TTIOCompoundFieldKindVLString];
@@ -798,7 +798,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return _decodedCigars[i];
 }
 
-// M86 Phase B: integer-channel array reader.
+// integer-channel array reader.
 //
 // Returns the full integer signal-channel array (positions, flags,
 // or mapping_qualities) as an NSData carrying the LE byte
@@ -824,7 +824,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 // dispatch — but those datasets no longer exist in v1.6 files. See
 // docs/format-spec.md §10.7.
 
-// M86 Phase F: HDF5 link-type query for signal_channels/mate_info.
+// HDF5 link-type query for signal_channels/mate_info.
 // Per Binding Decision §128 / Gotcha §141, dispatch is on HDF5 link
 // type (dataset = M82 compound; group = Phase F subgroup), NOT on
 // @compression attribute presence on the bare link (the attribute
@@ -898,7 +898,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return NO;
 }
 
-/** v1.7 #11: YES when signal_channels/mate_info/inline_v2 exists. */
+/** YES when signal_channels/mate_info/inline_v2 exists. */
 - (BOOL)_mateInfoIsInlineV2
 {
     // Force probe if not yet done.
@@ -906,9 +906,9 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return _mateInfoLinkType == 2;
 }
 
-// ── v1.8 #11: sequences GROUP probe + refdiff_v2 decoder ─────────────────────
+// ── sequences GROUP probe + refdiff_v2 decoder ─────────────────────
 
-/** v1.8 #11: probe whether signal_channels/sequences is a GROUP (refdiff_v2
+/** probe whether signal_channels/sequences is a GROUP (refdiff_v2
  *  layout) or a flat dataset (all v1 layouts). Cached on first call. */
 - (BOOL)_sequencesIsRefDiffV2
 {
@@ -943,7 +943,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return NO;
 }
 
-/** v1.8 #11: decode the refdiff_v2 blob into flat sequence bytes; cache
+/** decode the refdiff_v2 blob into flat sequence bytes; cache
  *  the result in _decodedRefDiffV2Sequences. Returns nil + error on
  *  failure. Resolves the reference via TTIOReferenceResolver.
  *
@@ -1107,7 +1107,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return _decodedRefDiffV2Sequences;
 }
 
-/** v1.7 #11: decode the inline_v2 blob; populate _decodedMateInfo with
+/** decode the inline_v2 blob; populate _decodedMateInfo with
  *  "chrom" (NSArray<NSString *>), "pos" (NSData int64), "tlen" (NSData int32).
  *  Returns NO + error on failure. Caches on success. */
 - (BOOL)_decodeMateInfoInlineV2:(NSError **)error
@@ -1321,7 +1321,7 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
     uint32_t flag     = [_index flagsAt:i];
     NSString *chrom   = [_index chromosomeAt:i];
 
-    // M86: routed through byteChannelSliceNamed: so codec-compressed
+    // routed through byteChannelSliceNamed: so codec-compressed
     // channels (@compression > 0) are decoded transparently before
     // slicing. Uncompressed channels go through the existing
     // hyperslab path.
@@ -1337,7 +1337,7 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
                                                error:error];
     if (!qualities) return nil;
 
-    // M86 Phase C: route cigars through the shape-dispatching helper
+    // route cigars through the shape-dispatching helper
     // so the schema-lifted (flat uint8 + RANS or NAME_TOKENIZED)
     // layout is decoded transparently. The compound (M82) layout
     // continues to use the existing -compoundRowsNamed: cache via
@@ -1345,14 +1345,14 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
     NSString *cigar = [self cigarAtIndex:i error:error];
     if (!cigar && error && *error) return nil;
 
-    // M86 Phase E: route read_names through the shape-dispatching
+    // route read_names through the shape-dispatching
     // helper so the schema-lifted (flat uint8 + NAME_TOKENIZED)
     // layout is decoded transparently. The compound (M82) layout
     // continues to use the existing -compoundRowsNamed: cache.
     NSString *readName = [self readNameAtIndex:i error:error];
     if (!readName && error && *error) return nil;
 
-    // M86 Phase F: route mate-field reads through the per-field
+    // route mate-field reads through the per-field
     // dispatch helpers. The link-type query (group vs dataset) for
     // signal_channels/mate_info is cached on the run, so the three
     // accessors are essentially free after the first call. The

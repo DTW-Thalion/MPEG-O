@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.hdf5;
@@ -223,7 +223,7 @@ public class Hdf5Group implements AutoCloseable {
     // ── Attributes ──────────────────────────────────────────────────
 
     public void setStringAttribute(String name, String value) {
-        // M90.7: write as VL_STRING with UTF-8 encoding (matches what
+        // write as VL_STRING with UTF-8 encoding (matches what
         // h5py writes by default), so Python readers can verify
         // signatures and other string attributes written by Java.
         // The pre-M90.7 fixed-length path was ASCII-only and reported
@@ -262,7 +262,7 @@ public class Hdf5Group implements AutoCloseable {
     }
 
     public String readStringAttribute(String name) {
-        // M90.7: read both VL_STRING (forward) and fixed-length
+        // read both VL_STRING (forward) and fixed-length
         // (pre-M90.7 + cross-platform back-compat) string attributes.
         file.lockForReading();
         long aid = -1, htype = -1;

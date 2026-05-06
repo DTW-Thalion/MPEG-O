@@ -258,7 +258,7 @@ class SpectrumIndex:
             if present("isolation_upper_offsets") else None
         )
 
-        # v1.0: offsets is never on disk — synthesize from cumsum(lengths).
+        # offsets is never on disk — synthesize from cumsum(lengths).
         from .genomic_index import _offsets_from_lengths
         lengths = col("lengths", "<u4")
         offsets = _offsets_from_lengths(lengths)
@@ -317,11 +317,11 @@ class AcquisitionRun:
     # backward-compat with files written by v0.10 and earlier (which
     # didn't carry the attribute at all).
     modality: str = "mass_spectrometry"
-    # M24: chromatogram traces. Empty list on v0.3 files (group absent).
+    # chromatogram traces. Empty list on v0.3 files (group absent).
     chromatograms: list[Chromatogram] = field(default_factory=list)
     # signal cache holds protocol datasets, not h5py.Dataset.
     _signal_cache: dict[str, StorageDataset] = field(default_factory=dict, repr=False)
-    # M21: eagerly decoded Numpress-delta channels, keyed by channel
+    # eagerly decoded Numpress-delta channels, keyed by channel
     # name. When present, :meth:`_materialize_spectrum` slices from
     # this float64 buffer instead of hitting the HDF5 dataset, because
     # Numpress decoding needs the running-sum prefix of the run.
@@ -332,12 +332,12 @@ class AcquisitionRun:
     # are readable through the normal API after decrypt while the
     # on-disk file stays encrypted. Mirrors ObjC rehydration.
     _decrypted_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
-    # M41.3: Streamable cursor and Provenanceable cache.
+    # Streamable cursor and Provenanceable cache.
     _cursor: int = field(default=0, repr=False)
     _provenance_cache: list[ProvenanceRecord] | None = field(default=None, repr=False)
-    # M41.5: Encryptable conformance.
+    # Encryptable conformance.
     _access_policy: AccessPolicy | None = field(default=None, repr=False)
-    # M41.5: persistence context — set by SpectralDataset.open so that
+    # persistence context — set by SpectralDataset.open so that
     # encrypt_with_key / decrypt_with_key can delegate to the encryption module.
     _persistence_file_path: str | None = field(default=None, repr=False)
     _persistence_run_name: str | None = field(default=None, repr=False)
@@ -385,7 +385,7 @@ class AcquisitionRun:
         else:
             config = InstrumentConfig()
 
-        # M21: detect Numpress-delta channels via the
+        # detect Numpress-delta channels via the
         # ``<chName>_numpress_fixed_point`` attribute on the
         # signal_channels group, and eagerly decode them here so
         # :meth:`_materialize_spectrum` can just slice a float64 buffer.
@@ -740,7 +740,7 @@ def _read_chromatograms(run_group) -> list[Chromatogram]:
     int_all  = np.asarray(g.open_dataset("intensity_values").read())
     idx = g.open_group("chromatogram_index")
     lengths       = np.asarray(idx.open_dataset("lengths").read())
-    # v1.0: offsets always synthesized from cumsum(lengths).
+    # offsets always synthesized from cumsum(lengths).
     from .genomic_index import _offsets_from_lengths
     offsets = _offsets_from_lengths(lengths.astype(np.uint64, copy=False))
     types         = np.asarray(idx.open_dataset("types").read())

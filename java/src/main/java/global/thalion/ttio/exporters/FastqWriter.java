@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: Apache-2.0
  */
 package global.thalion.ttio.exporters;
@@ -156,7 +156,7 @@ public final class FastqWriter {
         // Skips the per-read AlignedRead materialisation (which would
         // also decode cigar / mate triple — fields FASTQ does not
         // need). Mirrors the 24× speedup the Python FastqWriter saw
-        // from this same pattern (commit ae9441d).
+        // from this same pattern.
         int n = run.readCount();
         byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
         byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];

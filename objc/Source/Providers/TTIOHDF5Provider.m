@@ -45,7 +45,7 @@
 
 @interface TTIOHDF5DatasetAdapter : NSObject <TTIOStorageDataset>
 - (instancetype)initWithDataset:(TTIOHDF5Dataset *)ds name:(NSString *)name;
-/** v0.7 M45: reconstructed rank for flattened N-D datasets. nil for
+/** reconstructed rank for flattened N-D datasets. nil for
  *  genuine 1-D datasets. Set by the group adapter on create / open. */
 @property (nonatomic, strong, nullable) NSArray<NSNumber *> *ndShape;
 @end
@@ -186,7 +186,7 @@
     TTIOHDF5DatasetAdapter *adapter =
         [[TTIOHDF5DatasetAdapter alloc] initWithDataset:d name:name];
 
-    // v0.7 M45: if the parent group carries @__shape_<name>__, this
+    // if the parent group carries @__shape_<name>__, this
     // is a flattened N-D dataset. Parse the JSON-ish shape string and
     // attach to the adapter so shape() reports the full rank.
     NSString *shapeAttr = [NSString stringWithFormat:@"__shape_%@__", name];
@@ -251,7 +251,7 @@
                                    error:error];
     }
 
-    // v0.7 M45: rank ≥ 2. Stored as a flat 1-D HDF5 dataset plus a
+    // rank ≥ 2. Stored as a flat 1-D HDF5 dataset plus a
     // @__shape_<name>__ attribute on the parent group recording the
     // original rank and dims. Matches SqliteProvider's layout so
     // canonical bytes stay bit-identical across backends; native
@@ -508,7 +508,7 @@
 - (BOOL)supportsChunking    { return YES; }
 - (BOOL)supportsCompression { return YES; }
 
-// ── v0.7 M44: factory wrappers (expose internal adapters) ───────────
+// ── factory wrappers (expose internal adapters) ───────────
 
 + (id<TTIOStorageGroup>)adapterForGroup:(TTIOHDF5Group *)group
 {

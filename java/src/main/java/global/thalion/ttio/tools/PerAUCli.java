@@ -56,7 +56,7 @@ public final class PerAUCli {
 
     private static final byte[] MAGIC = {'M', 'P', 'A', '1'};
 
-    // M90.12: per-entry dtype codes (mirror the Precision enum).
+    // per-entry dtype codes (mirror the Precision enum).
     private static final int MPAD_DTYPE_FLOAT64 = 1;
     private static final int MPAD_DTYPE_UINT8 = 6;
     private static final int MPAD_DTYPE_BYTES = 0xFF;

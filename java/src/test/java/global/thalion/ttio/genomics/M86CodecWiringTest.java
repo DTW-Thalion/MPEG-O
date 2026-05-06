@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.genomics;
@@ -769,7 +769,7 @@ class M86CodecWiringTest {
     // is covered by the per-codec round-trip tests above. ────────────
 
 
-    // ── v1.6: Phase B integer-channel codec wiring REMOVED ──────────
+    // ── Phase B integer-channel codec wiring REMOVED ──────────
     //
     // v1.5 wrote positions/flags/mapping_qualities under BOTH
     // genomic_index/ AND signal_channels/. v1.6 drops the

@@ -318,7 +318,7 @@ def _compound_dtype(fields: tuple[CompoundField, ...]) -> np.dtype:
         elif f.kind == CompoundFieldKind.VL_STRING:
             items.append((f.name, object))
         elif f.kind == CompoundFieldKind.VL_BYTES:
-            # v1.0: bytes blobs stored as Python bytes in an
+            # bytes blobs stored as Python bytes in an
             # object-kind column (same mechanics as VL_STRING).
             items.append((f.name, object))
         else:

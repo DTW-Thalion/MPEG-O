@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.genomics;
@@ -53,17 +53,17 @@ public class GenomicRun
     // would buy nothing and would complicate the Run protocol surface.
     private final List<ProvenanceRecord> provenanceRecords;
 
-    // ── Per-record HDF5-probe cache invariants (audit 2026-05-06) ─────
+    // ── Per-record HDF5-probe cache invariants ────────────────────────
     //
     // Every cache below memoises a per-record-path operation that
     // would otherwise hit HDF5 (open group / open dataset / read
     // attribute) on every call. objectAtIndex(i) drives one call to
     // each of: byteChannelSlice("sequences"), byteChannelSlice(
     // "qualities"), cigarAt(i), readNameAt(i), mateChromAt(i),
-    // matePosAt(i), mateTlenAt(i). At 100K reads any uncached probe
-    // multiplies the per-record cost by HDF5 round-trip overhead —
-    // the isMateInfoInlineV2 case was 300K group opens / ~2.2s of
-    // wall-time framework cost (commit 758b340). Audit confirmed:
+    // matePosAt(i), mateTlenAt(i). Any uncached probe in that chain
+    // multiplies per-record cost by HDF5 round-trip overhead, which
+    // dominates the genomic transport encode hot path at scale.
+    //
     //   * sequencesIsV2Cached    — covers isSequencesRefDiffV2
     //   * mateInfoInlineV2Cached — covers isMateInfoInlineV2
     //   * decodedByteChannels    — covers byteChannelSlice (compressed +
@@ -72,6 +72,7 @@ public class GenomicRun
     //   * decodedCigars          — covers cigarAt
     //   * decodedMateV2          — covers mate{Chrom,Pos,Tlen}At
     //   * compoundCache          — covers compoundRows
+    //
     // signalChannelCompressionCode opens a dataset per call but is
     // only invoked twice per run (sequences + qualities at the top
     // of TransportWriter.emitGenomicRunAccessUnits), not per record.
@@ -79,7 +80,7 @@ public class GenomicRun
     private StorageDataset sequencesDs;                        // lazy
     private StorageDataset qualitiesDs;                        // lazy
     private final Map<String, List<Object[]>> compoundCache = new HashMap<>();
-    // M86: lazy whole-channel decode cache for byte channels whose
+    // lazy whole-channel decode cache for byte channels whose
     // @compression attribute names a TTI-O codec (rANS / BASE_PACK).
     // Codec output is byte-stream non-sliceable, so the whole channel
     // is decoded once on first access and the decoded buffer is sliced
@@ -88,20 +89,20 @@ public class GenomicRun
     // cost again (Gotcha §101). Mutable HashMap, not Map.of(), so the
     // dispatch helper can populate it.
     private final Map<String, byte[]> decodedByteChannels = new HashMap<>();
-    // M86 Phase E: lazy decode cache for the read_names channel when it
+    // lazy decode cache for the read_names channel when it
     // carries a NAME_TOKENIZED codec override. Held as a List<String>
     // (not byte[]) — different value type and
     // semantics from decodedByteChannels (which holds raw byte buffers
     // sliced by per-read offset/length). The whole list is materialised
     // on first access regardless of the access pattern.
     private List<String> decodedReadNames = null;
-    // M86 Phase C: lazy decode cache for the cigars channel when it
+    // lazy decode cache for the cigars channel when it
     // carries an RANS_ORDER0 / RANS_ORDER1 / NAME_TOKENIZED codec
     // override. Held as a List<String> mirroring decodedReadNames per
     // — separate cache from decodedReadNames
     // (Option A from §2.3, lower-risk than a generalised dict).
     private List<String> decodedCigars = null;
-    // M86 Phase B: lazy decode cache for integer channels. Per Binding
+    // lazy decode cache for integer channels. Per Binding
     // Decision §116 this is a separate cache from decodedByteChannels
     // (byte[]) and decodedReadNames (List<String>) because the value
     // v1.6 (L4): decodedIntChannels removed. The cache supported the
@@ -220,7 +221,7 @@ public class GenomicRun
         return global.thalion.ttio.ProvenanceJsonParse.parseArray(json);
     }
 
-    /** M90.10: probe the {@code @compression} attribute on a
+    /** probe the {@code @compression} attribute on a
      *  signal_channels child dataset. Returns the codec id (an
      *  {@link global.thalion.ttio.Enums.Compression} ordinal), or 0
      *  ({@code NONE}) when the attribute is absent or the channel
@@ -252,17 +253,17 @@ public class GenomicRun
         int  length = index.lengthAt(i);
 
         ensureSignalChannels();
-        // M86: routed through byteChannelSlice so that channels written
+        // routed through byteChannelSlice so that channels written
         // with a TTIO codec override (@compression > 0) are decoded
         // transparently before slicing.
         byte[] seqBytes = byteChannelSlice("sequences", offset, length);
         String sequence = new String(seqBytes, StandardCharsets.US_ASCII);
         byte[] qualities = byteChannelSlice("qualities", offset, length);
 
-        // M86 Phase E: read_names dispatched separately via
+        // read_names dispatched separately via
         // readNameAt() (the dataset shape varies — compound vs flat
         // uint8 codec). M86 Phase C: cigars likewise via cigarAt().
-        // M86 Phase F: mate fields dispatched via three per-field
+        // mate fields dispatched via three per-field
         // accessors (mateChromAt / matePosAt / mateTlenAt) since the
         // mate_info link can be either an M82 compound dataset OR a
         // Phase F subgroup containing three child datasets (Binding
@@ -397,7 +398,7 @@ public class GenomicRun
         return sequencesIsV2Cached;
     }
 
-    /** M86: slice {@code count} bytes starting at {@code offset} from a
+    /** slice {@code count} bytes starting at {@code offset} from a
      *  uint8 byte channel. For codec-compressed channels
      *  ({@code @compression > 0}) the whole channel is decoded once on
      *  first access, the decoded buffer is cached on this
@@ -439,7 +440,7 @@ public class GenomicRun
         } else if (codecId == global.thalion.ttio.Enums.Compression.BASE_PACK.ordinal()) {
             decoded = global.thalion.ttio.codecs.BasePack.decode(all);
         } else if (codecId == global.thalion.ttio.Enums.Compression.QUALITY_BINNED.ordinal()) {
-            // M86 Phase D: lossy Phred bin quantisation (§97).
+            // lossy Phred bin quantisation (§97).
             // Caller of byteChannelSlice gets the bin-centre values,
             // not the original Phred bytes.
             decoded = global.thalion.ttio.codecs.Quality.decode(all);
@@ -643,7 +644,7 @@ public class GenomicRun
             + "id 15) on a flat uint8 dataset.");
     }
 
-    /** M86 Phase C: return the cigar string at index {@code i},
+    /** return the cigar string at index {@code i},
      *  dispatching on dataset shape (Binding Decisions §120-§123).
      *
      *  <p>Two on-disk layouts:
@@ -772,7 +773,7 @@ public class GenomicRun
         }
     }
 
-    // ── M86 Phase F: mate_info per-field dispatch ──────────────────
+    // ── mate_info per-field dispatch ──────────────────
 
     /** Task 13 (mate_info v2): true iff
      *  {@code signal_channels/mate_info/inline_v2} exists (v1.7 layout).

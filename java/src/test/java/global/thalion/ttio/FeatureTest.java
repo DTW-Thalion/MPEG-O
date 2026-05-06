@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -14,7 +14,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * M78: unit tests for the {@link Feature} value class. Mirrors the
+ * unit tests for the {@link Feature} value class. Mirrors the
  * Python {@code test_m78_feature.py} value-class block: defaults,
  * equality, defensive copy, and null-to-empty coercion.
  */

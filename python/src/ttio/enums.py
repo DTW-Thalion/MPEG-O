@@ -91,12 +91,12 @@ class Compression(IntEnum):
     # frequency tables, L=2^15, B=16, N=4, bit-pack 15-bit context.
     # Sole quality codec for the qualities channel; wire magic ``M94Z``.
     FQZCOMP_NX16_Z = 12
-    # v1.7 #11: CRAM-style inline mate-pair encoding.
+    # CRAM-style inline mate-pair encoding.
     # Single blob at signal_channels/mate_info/inline_v2 with
     # @compression = 13. Default mate_info codec from v1.7 onward
     # (no opt-out — v1.0 reset removed the user-facing flag).
     MATE_INLINE_V2 = 13
-    # v1.8 #11: CRAM-style bit-packed sequence diff codec.
+    # CRAM-style bit-packed sequence diff codec.
     # Single blob at signal_channels/sequences/refdiff_v2 with
     # @compression = 14. Default sequences codec from v1.8 onward
     # (no opt-out — v1.0 reset removed the user-facing flag).

@@ -180,7 +180,7 @@ static BOOL write_records(NSArray<NSString *> *names,
                 writeFai:(BOOL)writeFai
                    error:(NSError **)error
 {
-    // Same bulk-fetch pattern as TTIOFastqWriter (commit ae9441d):
+    // Same bulk-fetch pattern as TTIOFastqWriter:
     // pre-fetch the whole sequences buffer + read-names list once,
     // slice in-memory per record. Skips per-read AlignedRead
     // materialisation.

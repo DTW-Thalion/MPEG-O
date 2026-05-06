@@ -35,7 +35,7 @@ class ImportedSpectrum:
     polarity: int = 0  # Polarity enum value
     precursor_mz: float = 0.0
     precursor_charge: int = 0
-    # M74: MS/MS activation + isolation. `activation_method` is an
+    # MS/MS activation + isolation. `activation_method` is an
     # ActivationMethod IntEnum value (NONE=0 for MS1 or unreported).
     # `isolation_*` are raw mzML fields; zero sentinel means MS1.
     activation_method: int = 0

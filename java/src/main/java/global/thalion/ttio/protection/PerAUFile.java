@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
 import global.thalion.ttio.Enums;
@@ -77,14 +77,14 @@ public final class PerAUFile {
         }
     }
 
-    /** M90.11: plaintext genomic_index columns recovered from a file
+    /** plaintext genomic_index columns recovered from a file
      *  encrypted with the reserved {@code "_headers"} key. */
     public record GenomicIndexPlain(List<String> chromosomes,
                                       long[] positions,
                                       byte[] mappingQualities,
                                       int[] flags) {}
 
-    /** M90.11: reserved key name in the {@code keyMap} that signals
+    /** reserved key name in the {@code keyMap} that signals
      *  the caller wants the genomic_index columns encrypted. */
     public static final String HEADERS_KEY_NAME = "_headers";
 
@@ -113,7 +113,7 @@ public final class PerAUFile {
                         }
                     }
                 }
-                // M90.1: continue dataset_id_counter into genomic_runs.
+                // continue dataset_id_counter into genomic_runs.
                 if (study.hasChild("genomic_runs")) {
                     try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
                         for (String runName : runNames(gRuns)) {
@@ -170,7 +170,7 @@ public final class PerAUFile {
                         }
                     }
                 }
-                // M90.1: dataset_id_counter continues into genomic_runs so
+                // dataset_id_counter continues into genomic_runs so
                 // AAD reconstruction matches the encrypt path exactly.
                 if (study.hasChild("genomic_runs")) {
                     try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
@@ -190,7 +190,7 @@ public final class PerAUFile {
 
     // ─────────────────────────────────────────── M90.4 region encryption
 
-    /** M90.4: encrypt genomic signal channels with a per-chromosome
+    /** encrypt genomic signal channels with a per-chromosome
      *  key map. Reads whose chromosome appears in {@code keyMap} get
      *  AES-256-GCM encrypted with that key; reads on chromosomes not
      *  in the map are stored as clear segments (empty IV/tag,
@@ -212,7 +212,7 @@ public final class PerAUFile {
                     + "' must be 32 bytes, got " + e.getValue().length);
             }
         }
-        // M90.11: split off the reserved "_headers" entry. The
+        // split off the reserved "_headers" entry. The
         // remaining map drives per-AU signal-channel dispatch.
         Map<String, byte[]> chromosomeKeys = new LinkedHashMap<>();
         byte[] headersKey = null;
@@ -297,7 +297,7 @@ public final class PerAUFile {
         }
     }
 
-    /** M90.4: decrypt a region-encrypted file using a per-chromosome
+    /** decrypt a region-encrypted file using a per-chromosome
      *  key map. Caller may supply a subset of the keys used at
      *  encryption time — clear segments decode without any key, but
      *  encrypted segments whose chromosome key isn't in {@code keyMap}
@@ -321,7 +321,7 @@ public final class PerAUFile {
                 throw new IllegalStateException(
                     "file at " + path + " does not carry opt_per_au_encryption");
             }
-            // M90.11: when the file carries opt_encrypted_au_headers,
+            // when the file carries opt_encrypted_au_headers,
             // decrypt requires the reserved "_headers" key. Without
             // it we can't even reconstruct the chromosomes column
             // needed for per-AU dispatch on signal channels.
@@ -377,7 +377,7 @@ public final class PerAUFile {
              StorageGroup idx = run.openGroup("spectrum_index")) {
 
             int[] lengths = readInts(idx, "lengths");
-            // v1.10 #10: offsets is no longer stored on disk by default;
+            // offsets is no longer stored on disk by default;
             // synthesize from cumsum(lengths). Pre-v1.10 files have it.
             long[] offsets = idx.hasChild("offsets")
                 ? readLongs(idx, "offsets")
@@ -462,7 +462,7 @@ public final class PerAUFile {
 
     // ─────────────────────────────────────── genomic encrypt / decrypt
 
-    /** M90.1: encrypt one {@code /study/genomic_runs/<name>/} subtree.
+    /** encrypt one {@code /study/genomic_runs/<name>/} subtree.
      *  Sequences and qualities are uint8 (one byte per logical
      *  element), AAD reuses the standard
      *  {@code dataset_id || au_sequence || channel_name} layout. */
@@ -473,7 +473,7 @@ public final class PerAUFile {
              StorageGroup idx = run.openGroup("genomic_index")) {
 
             int[] lengths = readInts(idx, "lengths");
-            // v1.10 #10: offsets is no longer stored on disk by default;
+            // offsets is no longer stored on disk by default;
             // synthesize from cumsum(lengths). Pre-v1.10 files have it.
             long[] offsets = idx.hasChild("offsets")
                 ? readLongs(idx, "offsets")
@@ -495,7 +495,7 @@ public final class PerAUFile {
         }
     }
 
-    /** M90.1: decrypt one genomic run subtree. Returns a
+    /** decrypt one genomic run subtree. Returns a
      *  {@link DecryptedRun} whose {@code channels} map carries
      *  {@code "sequences"} and {@code "qualities"} as flat uint8
      *  byte arrays (no element-width unpacking). */
@@ -534,7 +534,7 @@ public final class PerAUFile {
              StorageGroup idx = run.openGroup("genomic_index")) {
 
             int[] lengths = readInts(idx, "lengths");
-            // v1.10 #10: offsets is no longer stored on disk by default;
+            // offsets is no longer stored on disk by default;
             // synthesize from cumsum(lengths). Pre-v1.10 files have it.
             long[] offsets = idx.hasChild("offsets")
                 ? readLongs(idx, "offsets")
@@ -559,7 +559,7 @@ public final class PerAUFile {
                 }
             }
 
-            // M90.11: encrypt genomic_index columns under the
+            // encrypt genomic_index columns under the
             // reserved _headers key.
             if (headersKey != null) {
                 encryptGenomicIndex(idx, datasetId, headersKey, chromosomes);
@@ -575,7 +575,7 @@ public final class PerAUFile {
         try (StorageGroup run = gRuns.openGroup(runName);
              StorageGroup sig = run.openGroup("signal_channels");
              StorageGroup idx = run.openGroup("genomic_index")) {
-            // M90.11: decrypt the genomic_index columns first so the
+            // decrypt the genomic_index columns first so the
             // per-AU signal-channel dispatch (which needs chromosomes)
             // can proceed even when the source columns were encrypted.
             List<String> chromosomes;
@@ -600,7 +600,7 @@ public final class PerAUFile {
         }
     }
 
-    /** M90.11: encrypt the four genomic_index columns
+    /** encrypt the four genomic_index columns
      *  (chromosomes, positions, mapping_qualities, flags) and replace
      *  the plaintext datasets with {@code <column>_encrypted} blobs
      *  containing {@code iv || tag || ciphertext}. {@code offsets} /
@@ -668,7 +668,7 @@ public final class PerAUFile {
         }
     }
 
-    /** M90.11: inverse of {@link #encryptGenomicIndex}. Returns the
+    /** inverse of {@link #encryptGenomicIndex}. Returns the
      *  four plaintext columns. */
     private static GenomicIndexPlain decryptGenomicIndex(
             StorageGroup idx, int datasetId, byte[] key) {

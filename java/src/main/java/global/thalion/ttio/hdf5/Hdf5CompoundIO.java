@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.hdf5;
@@ -305,7 +305,7 @@ public final class Hdf5CompoundIO {
                         case INT64 -> bb.getLong(off);
                         case FLOAT64 -> bb.getDouble(off);
                         case VL_STRING -> {
-                            // M82.4: HDF5 stores VL_STRING as a char*
+                            // HDF5 stores VL_STRING as a char*
                             // pointer (8 bytes) at the field offset.
                             // Walk bytes from the native address until
                             // the null terminator; decode UTF-8.

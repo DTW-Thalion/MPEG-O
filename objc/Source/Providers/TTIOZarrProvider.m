@@ -340,7 +340,7 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
 @property (nonatomic, assign) TTIOPrecision precision;
 @property (nonatomic, copy) NSArray<NSNumber *> *shape;
 @property (nonatomic, copy) NSArray<NSNumber *> *chunks;
-@property (nonatomic, strong) id compressor;  // v0.9: nil = uncompressed; NSDictionary{id=zlib,level=…}
+@property (nonatomic, strong) id compressor;  // nil = uncompressed; NSDictionary{id=zlib,level=…}
 @end
 
 @implementation _ZPrimitiveDataset
@@ -376,7 +376,7 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
     if (!raw) {
         return [NSMutableData dataWithLength:chunkBytes];  // fill_value=0
     }
-    // v0.9: decompress if a compressor is set.
+    // decompress if a compressor is set.
     if (self.compressor && ![self.compressor isKindOfClass:[NSNull class]]) {
         NSData *plain = zInflate(raw, chunkBytes);
         if (!plain) return [NSMutableData dataWithLength:chunkBytes];

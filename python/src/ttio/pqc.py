@@ -46,7 +46,7 @@ Cross-language equivalents
   — see :file:`docs/pqc.md` § "Why Python/ObjC use liboqs but Java
   uses Bouncy Castle").
 
-API status: Provisional (v0.8). Subject to breaking changes through
+API status: Provisional . Subject to breaking changes through
 the v0.8 series; will be marked Stable at v1.0.
 """
 from __future__ import annotations

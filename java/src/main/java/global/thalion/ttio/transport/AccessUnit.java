@@ -127,9 +127,9 @@ public final class AccessUnit {
         if (spectrumClass == 4) {
             size += 12;
         } else if (spectrumClass == 5) {
-            // M89.1: uint16 chromosome length + chromosome bytes +
+            // uint16 chromosome length + chromosome bytes +
             // int64 position + uint8 mapq + uint16 flags = 13 + |chrom|.
-            // M90.9: + int64 mate_position + int32 template_length = +12.
+            // + int64 mate_position + int32 template_length = +12.
             size += 2 + chromosome.getBytes(StandardCharsets.UTF_8).length + 8 + 1 + 2;
             size += 8 + 4;
         }
@@ -199,7 +199,7 @@ public final class AccessUnit {
             pixelY = buf.getInt() & 0xFFFFFFFFL;
             pixelZ = buf.getInt() & 0xFFFFFFFFL;
         } else if (spectrumClass == 5) {
-            // M89.1: uint16 chromosome length + chromosome bytes +
+            // uint16 chromosome length + chromosome bytes +
             // int64 position + uint8 mapq + uint16 flags.
             if (bytes.length - buf.position() < 2) {
                 throw new IllegalArgumentException(

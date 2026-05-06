@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
 import java.nio.ByteBuffer;
@@ -218,7 +218,7 @@ public final class PerAUEncryption {
                                           datasetId, channelName, key, 8);
     }
 
-    /** M90.1: slice flat little-endian plaintext into per-AU rows of
+    /** slice flat little-endian plaintext into per-AU rows of
      *  {@code bytesPerElement} bytes per logical element and encrypt
      *  each with a fresh IV.
      *
@@ -267,7 +267,7 @@ public final class PerAUEncryption {
                                             key, 8);
     }
 
-    /** M90.1: decrypt every row and concatenate the plaintext bytes,
+    /** decrypt every row and concatenate the plaintext bytes,
      *  validating the per-row plaintext length against
      *  {@code length * bytesPerElement}.
      *
@@ -305,7 +305,7 @@ public final class PerAUEncryption {
 
     // ─────────────────────────────────────────── M90.4: region dispatch
 
-    /** M90.4: per-AU dispatch on chromosome name. Reads on chromosomes
+    /** per-AU dispatch on chromosome name. Reads on chromosomes
      *  in {@code keyMap} get encrypted with the corresponding
      *  AES-256-GCM key; reads on chromosomes NOT in {@code keyMap}
      *  emit a "clear segment" — same {@link ChannelSegment} compound
@@ -353,7 +353,7 @@ public final class PerAUEncryption {
         return out;
     }
 
-    /** M90.4: inverse of
+    /** inverse of
      *  {@link #encryptChannelByRegion(byte[], long[], int[], List, int, String, Map)}.
      *  Branches on {@code seg.iv().length}: 0 = clear segment (the
      *  ciphertext IS the plaintext), 12 = AES-256-GCM (must have a

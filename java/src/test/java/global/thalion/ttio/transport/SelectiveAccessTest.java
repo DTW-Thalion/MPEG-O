@@ -21,7 +21,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * v0.10 M71: selective-access proportionality + ProtectionMetadata
+ * selective-access proportionality + ProtectionMetadata
  * wire round-trip.
  */
 class SelectiveAccessTest {

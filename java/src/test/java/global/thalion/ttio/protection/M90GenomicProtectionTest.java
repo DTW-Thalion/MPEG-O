@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.protection;
@@ -280,7 +280,7 @@ class M90GenomicProtectionTest {
         assertTrue(sigs.containsKey("genomic_index/positions"));
         assertTrue(sigs.containsKey("genomic_index/mapping_qualities"));
         assertTrue(sigs.containsKey("genomic_index/flags"));
-        // v1.10 #10: offsets no longer written on disk → not signed.
+        // offsets no longer written on disk → not signed.
         assertFalse(sigs.containsKey("genomic_index/offsets"));
         assertTrue(sigs.containsKey("genomic_index/lengths"));
     }

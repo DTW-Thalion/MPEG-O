@@ -20,7 +20,7 @@ typedef struct {
     NSInteger              nonceSize;
     NSInteger              tagSize;
     TTIOCipherStatus       status;
-    NSInteger              privateKeySize;  // v0.8 M49: KEM/Sig only, 0 for symmetric
+    NSInteger              privateKeySize;  // KEM/Sig only, 0 for symmetric
 } CatalogEntry;
 
 static const CatalogEntry kCatalog[] = {

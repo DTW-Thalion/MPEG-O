@@ -69,9 +69,9 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
     BOOL _inChromatogram;
     NSUInteger _chromDefaultLen;
     TTIOChromatogramType _chromType;
-    double _chromTargetMz;        // M24: parsed from userParam
-    double _chromPrecursorMz;     // M24
-    double _chromProductMz;       // M24
+    double _chromTargetMz;        // parsed from userParam
+    double _chromPrecursorMz;
+    double _chromProductMz;
     NSMutableDictionary<NSString *, TTIOSignalArray *> *_chromArrays;
 
     // Current binaryDataArray
@@ -89,10 +89,10 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
     NSInteger _scanWindowDepth;
     NSInteger _scanDepth;
     NSInteger _precursorDepth;
-    NSInteger _activationDepth;       // M74
-    NSInteger _isolationWindowDepth;  // M74
+    NSInteger _activationDepth;
+    NSInteger _isolationWindowDepth;
 
-    // M74: per-spectrum activation + isolation window being accumulated
+    // per-spectrum activation + isolation window being accumulated
     TTIOActivationMethod _activationMethod;
     double _isolationTargetMz;
     double _isolationLowerOffset;
@@ -244,7 +244,7 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
     _scanWinLow = 0.0;
     _scanWinHigh = 0.0;
     _hasScanWin = NO;
-    // M74
+
     _activationMethod = TTIOActivationMethodNone;
     _isolationTargetMz = 0.0;
     _isolationLowerOffset = 0.0;
@@ -389,7 +389,7 @@ didStartElement:(NSString *)elementName
         return;
     }
 
-    // M24: parse userParam target/precursor/product m/z inside a chromatogram.
+    // parse userParam target/precursor/product m/z inside a chromatogram.
     if ([elementName isEqualToString:@"userParam"] && _inChromatogram) {
         NSString *name = attrs[@"name"];
         double v = [attrs[@"value"] doubleValue];
@@ -522,7 +522,7 @@ didStartElement:(NSString *)elementName
             _chromType = TTIOChromatogramTypeTIC;
             return;
         }
-        if ([acc isEqualToString:@"MS:1000627"]) {    // M24: XIC
+        if ([acc isEqualToString:@"MS:1000627"]) {    // XIC
             _chromType = TTIOChromatogramTypeXIC;
             return;
         }
@@ -642,7 +642,7 @@ didStartElement:(NSString *)elementName
         win = [TTIOValueRange rangeWithMinimum:_scanWinLow maximum:_scanWinHigh];
     }
 
-    // M74: build an IsolationWindow only when any of the three offsets was
+    // build an IsolationWindow only when any of the three offsets was
     // reported. All-zero means "no window" and we pass nil to match Python/Java.
     TTIOIsolationWindow *iso = nil;
     if (_isolationTargetMz != 0.0 ||

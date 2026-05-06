@@ -91,7 +91,7 @@ def write_encrypted_dataset(
         run_items = [(n, ms_runs.open_group(n))
                       for n in ms_runs.child_names()
                       if not n.startswith("_") and ms_runs.has_child(n)]
-        # M90.8: also walk genomic_runs after MS. dataset_id_counter
+        # also walk genomic_runs after MS. dataset_id_counter
         # continues from MS so AAD reconstruction matches the
         # per-AU encrypt path (M90.1).
         if study.has_child("genomic_runs"):
@@ -252,7 +252,7 @@ def write_encrypted_dataset(
                 final_au_sequence=n,
             )
 
-        # M90.8: emit genomic_runs after MS. Same dataset_id space
+        # emit genomic_runs after MS. Same dataset_id space
         # (continues from MS) so AAD reconstruction stays symmetric.
         for genomic_offset, (g_run_name, g_run_group) in enumerate(
             genomic_run_items, start=1,
@@ -495,7 +495,7 @@ def read_encrypted_to_file(
                 "channel_segments": {c: [] for c in meta["channel_names"]},
                 "header_segments": [],
                 "used_encrypted_headers": False,
-                # M90.8: genomic-only accumulator, populated by
+                # genomic-only accumulator, populated by
                 # _ingest_encrypted_au when spectrum_class == 5.
                 "is_genomic": meta["spectrum_class"] == "TTIOGenomicRead",
                 "genomic_chromosomes": [],
@@ -536,7 +536,7 @@ def read_encrypted_to_file(
         io.write_fixed_string_attr(study, "title", stream_meta.get("title", ""))
         io.write_fixed_string_attr(study, "isa_investigation_id",
                                      stream_meta.get("isa_investigation", ""))
-        # M90.8: split datasets into MS vs genomic for output.
+        # split datasets into MS vs genomic for output.
         ms_datasets = {did: d for did, d in datasets.items()
                         if not d.get("is_genomic")}
         genomic_datasets = {did: d for did, d in datasets.items()
@@ -592,7 +592,7 @@ def read_encrypted_to_file(
                 io.write_au_header_segments(idx, "au_header_segments",
                                               d["header_segments"])
 
-        # M90.8: write genomic_runs/ if any genomic datasets came
+        # write genomic_runs/ if any genomic datasets came
         # through the stream.
         if genomic_datasets:
             g_runs_group = study.create_group("genomic_runs")
@@ -750,7 +750,7 @@ def _ingest_encrypted_au(d: dict, *, header, payload: bytes,
         # variant. We don't decode the filter header; we do need to
         # skip it to reach the channels. Delegate to AccessUnit.
         au = AccessUnit.from_bytes(payload)
-        # M90.8: capture genomic suffix when this is a genomic AU.
+        # capture genomic suffix when this is a genomic AU.
         if d.get("is_genomic"):
             d["genomic_chromosomes"].append(au.chromosome)
             d["genomic_positions"].append(int(au.position))

@@ -232,7 +232,7 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
     NSError *cerr = nil;
     NSData *lengths   = readTypedChannel(group, @"lengths",           &cerr);
     if (!lengths)   { if (error) *error = cerr; return nil; }
-    // v1.10 #10: offsets is omitted from disk by default — synthesize
+    // offsets is omitted from disk by default — synthesize
     // from cumsum(lengths). Pre-v1.10 files have it on disk.
     NSData *offsets;
     if ([group hasChildNamed:@"offsets"]) {

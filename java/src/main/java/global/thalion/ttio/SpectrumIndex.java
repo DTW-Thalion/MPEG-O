@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -41,7 +41,7 @@ public class SpectrumIndex {
     private final double[] precursorMzs;
     private final int[] precursorCharges;
     private final double[] basePeakIntensities;
-    // M74 (v0.11): optional parallel columns. Non-null iff the file was
+    // M74 : optional parallel columns. Non-null iff the file was
     // written with the opt_ms2_activation_detail feature flag set.
     // All four are null-or-all-populated (enforced by constructors).
     private final int[] activationMethods;
@@ -201,7 +201,7 @@ public class SpectrumIndex {
         try (StorageGroup idx = runGroup.openGroup("spectrum_index")) {
             int count = ((Number) idx.getAttribute("count")).intValue();
 
-            // v1.10 #10: offsets is omitted from disk by default and
+            // offsets is omitted from disk by default and
             // computed from cumsum(lengths) at read time. Pre-v1.10
             // files have it on disk (read directly).
             int[] lengths = readInts(idx, "lengths");

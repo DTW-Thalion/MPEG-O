@@ -32,7 +32,7 @@
  *   ML-KEM-1024  pk 1568 · sk 3168 · ct 1568 · ss 32
  *   ML-DSA-87    pk 2592 · sk 4896 · sig 4627
  *
- * API status: Provisional (v0.8). Subject to breaking changes
+ * API status: Provisional . Subject to breaking changes
  * through v0.8; Stable at v1.0.
  *
  * Cross-language equivalents:
