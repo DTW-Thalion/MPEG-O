@@ -309,7 +309,7 @@ static inline int32_t readI32(const uint8_t *b)
         writeU32(&pix[8], _pixelZ);
         [buf appendBytes:pix length:12];
     } else if (_spectrumClass == 5) {
-        // M89.1: GenomicRead suffix — chromosome (uint16-len-prefixed
+        // GenomicRead suffix — chromosome (uint16-len-prefixed
         // UTF-8) then position (i64 LE) + mapq (u8) + flags (u16 LE).
         NSData *chrom = [(_chromosome ?: @"") dataUsingEncoding:NSUTF8StringEncoding];
         uint8_t lenBytes[2];
@@ -393,7 +393,7 @@ static inline int32_t readI32(const uint8_t *b)
         pixelY = readU32(&bytes[offset + 4]);
         pixelZ = readU32(&bytes[offset + 8]);
     } else if (spectrumClass == 5) {
-        // M89.1: GenomicRead suffix.
+        // GenomicRead suffix.
         if (length - offset < 2) {
             if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                      code:TTIOTransportErrorTruncated

@@ -75,7 +75,7 @@ class GenomicRun:
 
     _signal_cache: dict = field(default_factory=dict, repr=False, compare=False)
     _compound_cache: dict[str, list[dict]] = field(default_factory=dict, repr=False, compare=False)
-    # M86: lazy whole-channel decode cache for byte channels whose
+    # lazy whole-channel decode cache for byte channels whose
     # @compression attribute names a TTIO codec (rANS / BASE_PACK).
     # Codec output is byte-stream non-sliceable, so the whole channel
     # is decoded once on first access and the decoded buffer is
@@ -85,7 +85,7 @@ class GenomicRun:
     _decoded_byte_channels: dict[str, bytes] = field(
         default_factory=dict, repr=False, compare=False,
     )
-    # M86 Phase E: lazy decode cache for the read_names channel when
+    # lazy decode cache for the read_names channel when
     # it carries a NAME_TOKENIZED codec override. Held as a
     # ``list[str]`` because the codec returns the decoded names
     # already split into per-read entries (different value type from
@@ -98,7 +98,7 @@ class GenomicRun:
     _decoded_read_names: list[str] | None = field(
         default=None, repr=False, compare=False,
     )
-    # M86 Phase C: lazy decode cache for the cigars channel when it
+    # lazy decode cache for the cigars channel when it
     # carries a TTIO codec override (RANS_ORDER0 / RANS_ORDER1 /
     # NAME_TOKENIZED). Held as a ``list[str]`` because all three
     # codec paths produce per-read string entries — the rANS path
@@ -114,7 +114,7 @@ class GenomicRun:
     _decoded_cigars: list[str] | None = field(
         default=None, repr=False, compare=False,
     )
-    # M86 Phase F: combined per-field cache for the mate_info subgroup
+    # combined per-field cache for the mate_info subgroup
     # layout (Gotcha §144). Held as a single
     # ``dict[str, Any]`` keyed by field name (``"chrom"`` →
     # list[str]; ``"pos"`` → np.ndarray int64; ``"tlen"`` →
@@ -138,7 +138,7 @@ class GenomicRun:
         default=None, repr=False, compare=False,
     )
 
-    # v1.8 #11: cached whole-sequence decode from the refdiff_v2 blob.
+    # cached whole-sequence decode from the refdiff_v2 blob.
     # None = not yet probed; b"" = probed and found to be v1/BASE_PACK;
     # non-empty bytes = decoded concatenated sequence bytes (total_bases long).
     # Populated on first access by _sequences_is_ref_diff_v2() +
@@ -211,7 +211,7 @@ class GenomicRun:
         chrom = self.index.chromosomes[i]
 
         # Sequence and qualities — read a slice of the per-base channels.
-        # M86: routed through _byte_channel_slice so that channels
+        # routed through _byte_channel_slice so that channels
         # written with a TTIO codec override (@compression > 0) are
         # decoded transparently before slicing.
         seq_bytes = self._byte_channel_slice("sequences", offset, length)
@@ -226,7 +226,7 @@ class GenomicRun:
 
         read_name = self._read_name_at(i)
 
-        # M86 Phase F: dispatch on HDF5 link type (compound dataset =
+        # dispatch on HDF5 link type (compound dataset =
         # M82 path; subgroup = Phase F per-field path). The three
         # helpers each open the bare ``mate_info`` link, detect the
         # layout, and route to either the existing ``_compound``
@@ -661,7 +661,7 @@ class GenomicRun:
         # without this, per-record _cigar_at(i) goes back through
         # the structured-record decode each call, dominating the
         # per-record time on the genomic transport encode path
-        # (mirrors Java fix in commit 701f310 / ObjC parity).
+        # (mirrors Java fix / ObjC parity).
         cigars = self._compound("cigars")
         out: list[str] = []
         for row in cigars:

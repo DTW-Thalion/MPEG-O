@@ -87,7 +87,7 @@ class WrittenGenomicRun:
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     signal_compression: str = "gzip"  # "gzip" → ZLIB; "none" → NONE
 
-    # M86: per-channel codec opt-in. Maps channel name to a TTI-O
+    # per-channel codec opt-in. Maps channel name to a TTI-O
     # internal codec id. Only "sequences" and "qualities" are
     # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are
     # accepted as codec values. Channels not in this dict use the
@@ -127,7 +127,7 @@ class WrittenGenomicRun:
     # writer never reads this path; it is metadata only.
     external_reference_path: Path | None = None
 
-    # Phase 2c-T (v1.0): verbatim v2 codec blobs from the transport
+    # Phase 2c-T : verbatim v2 codec blobs from the transport
     # bulk-mode receiver. When set, ``write_minimal`` writes the
     # blob bytes directly to the matching HDF5 paths and SKIPS the
     # corresponding v2 codec encode step. This is the only

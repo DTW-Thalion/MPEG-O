@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: Apache-2.0 */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: Apache-2.0 */
 package global.thalion.ttio.exporters;
 
 import global.thalion.ttio.*;
@@ -165,7 +165,7 @@ public final class MzMLWriter {
 
             // precursorList (MS2+)
             if (msLevel >= 2 && precMz > 0) {
-                // M74: consult the index for activation method + isolation
+                // consult the index for activation method + isolation
                 // window so the writer emits real metadata when the source
                 // file carried it (opt_ms2_activation_detail flag), rather
                 // than a CID placeholder.

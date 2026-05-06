@@ -48,7 +48,7 @@ static const uint16_t   TTIO_WK_ALG_ML_KEM_1024 = 0x0001;  // reserved (M49)
 static NSString *const kKEKAlgorithmAES  = @"aes-256-gcm";
 static NSString *const kKEKAlgorithmMLKEM = @"ml-kem-1024";
 
-// v0.8 M49.1: ML-KEM-1024 envelope blob. Metadata = kem_ct(1568) ||
+// ML-KEM-1024 envelope blob. Metadata = kem_ct(1568) ||
 // aes_iv(12) || aes_tag(16) = 1596 bytes. Ciphertext = AES-GCM wrapped
 // DEK = 32 bytes. Total blob length = 11 + 1596 + 32 = 1639 bytes.
 static const NSUInteger TTIO_MLKEM_CT_LEN       = 1568;
@@ -199,7 +199,7 @@ static NSString *iso8601Now(void)
 }
 
 // Wrap a 32-byte plaintext (the DEK) under the given KEK using AES-256-GCM.
-// v0.7 M47: default output is the v1.2 versioned blob (71 bytes for
+// default output is the v1.2 versioned blob (71 bytes for
 // AES-GCM). Pass legacyV1=YES to emit the v1.1 60-byte layout for
 // backward-compat fixture generation.
 - (NSData *)wrapDEK:(NSData *)dek
@@ -245,7 +245,7 @@ static NSString *iso8601Now(void)
     return [self wrapDEK:dek withKEK:kek legacyV1:NO error:error];
 }
 
-// v0.8 M49.1: wrap the DEK under ML-KEM-1024. `publicKey` must be the
+// wrap the DEK under ML-KEM-1024. `publicKey` must be the
 // 1568-byte ML-KEM encapsulation public key. Returns a v1.2 blob with
 // algorithm_id=0x0001. Always emits the AEAD-inner-wrap chain
 // (encapsulate → AES-256-GCM wrap under shared secret).
@@ -294,7 +294,7 @@ static NSString *iso8601Now(void)
                                          error:error];
 }
 
-// v0.8 M49.1: inverse of -wrapDEKWithMLKEMPublicKey:. `privateKey` is
+// inverse of -wrapDEKWithMLKEMPublicKey:. `privateKey` is
 // the 3168-byte ML-KEM decapsulation key.
 - (NSData *)unwrapMLKEMBlob:(NSData *)wrapped
           withPrivateKey:(NSData *)privateKey
@@ -431,7 +431,7 @@ static NSString *iso8601Now(void)
 }
 
 // Write (or overwrite) the wrapped blob at /protection/key_info/dek_wrapped.
-// v0.7 M47: blob length now varies (v1.1 = 60 bytes, v1.2 AES-GCM =
+// blob length now varies (v1.1 = 60 bytes, v1.2 AES-GCM =
 // 71 bytes, v1.2 ML-KEM = 1579 bytes). Pad to int32 boundary and
 // store the real byte length in @dek_wrapped_bytes so readers can
 // recover it precisely; pre-v0.7 readers default to 60 bytes and

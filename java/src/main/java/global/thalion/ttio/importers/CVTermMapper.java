@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: Apache-2.0
  */
 package global.thalion.ttio.importers;
@@ -62,7 +62,7 @@ public final class CVTermMapper {
     // Unit accessions
     public static final String UO_MINUTE = "UO:0000031";
 
-    // M74: MS/MS activation-method accessions
+    // MS/MS activation-method accessions
     public static final String MS_CID   = "MS:1000133";
     public static final String MS_HCD   = "MS:1000422";
     public static final String MS_ETD   = "MS:1000598";
@@ -70,7 +70,7 @@ public final class CVTermMapper {
     public static final String MS_UVPD  = "MS:1003246";
     public static final String MS_ETHCD = "MS:1003181";
 
-    // M74: isolation-window cvParam accessions
+    // isolation-window cvParam accessions
     public static final String MS_ISOLATION_WINDOW_TARGET_MZ  = "MS:1000827";
     public static final String MS_ISOLATION_WINDOW_LOWER_OFFSET = "MS:1000828";
     public static final String MS_ISOLATION_WINDOW_UPPER_OFFSET = "MS:1000829";

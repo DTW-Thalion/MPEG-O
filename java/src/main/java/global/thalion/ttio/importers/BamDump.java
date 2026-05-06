@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.importers;
@@ -71,7 +71,7 @@ public final class BamDump {
                 "Usage: BamDump <path> [--reference FASTA] [--name NAME]");
         }
 
-        // M88.1: dispatch on .cram extension to CramReader. For
+        // dispatch on .cram extension to CramReader. For
         // BAM/SAM paths --reference is accepted but unused.
         BamReader reader;
         if (pathStr.toLowerCase().endsWith(".cram")) {

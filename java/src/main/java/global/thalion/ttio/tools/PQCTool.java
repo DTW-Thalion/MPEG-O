@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.tools;
@@ -197,7 +197,7 @@ public final class PQCTool {
      * pick the backend by URL scheme, then drives the StorageDataset
      * contract for canonical bytes + attribute I/O. Works for any
      * provider that implements get/setAttribute on its datasets —
-     * currently Zarr, Memory, SQLite, and HDF5 (v0.8).
+     * currently Zarr, Memory, SQLite, and HDF5 .
      */
     private static boolean signOrVerifyProvider(String url, String dsPath,
                                                   byte[] key, boolean sign)

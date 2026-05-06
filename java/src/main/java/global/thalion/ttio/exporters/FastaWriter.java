@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: Apache-2.0
  */
 package global.thalion.ttio.exporters;
@@ -118,7 +118,7 @@ public final class FastaWriter {
         GenomicRun run, Path path,
         int lineWidth, Boolean gzipOutput, boolean writeFai
     ) throws IOException {
-        // Same bulk-fetch pattern as FastqWriter (commit ae9441d):
+        // Same bulk-fetch pattern as FastqWriter:
         // pre-fetch the whole sequences buffer + read-names list once,
         // slice in-memory per record. Skips per-read AlignedRead
         // materialisation, which would also decode cigar / mate triple —

@@ -36,10 +36,10 @@ from ttio.transport.encrypted import (
     write_encrypted_dataset,
 )
 
-_MPAD_MAGIC = b"MPA1"  # M90.12: bumped from MPAD to MPA1 (uint8-aware)
+_MPAD_MAGIC = b"MPA1"  # bumped from MPAD to MPA1 (uint8-aware)
 
 
-# M90.12: per-entry dtype codes mirror the existing Precision enum.
+# per-entry dtype codes mirror the existing Precision enum.
 # Reader infers element-byte width from the dtype code instead of
 # the pre-M90.12 behaviour of casting everything to float64.
 _MPAD_DTYPE_FLOAT32 = 0
@@ -123,7 +123,7 @@ def _headers_json(rows) -> str:
 
 def _do_decrypt(args: argparse.Namespace) -> int:
     plain = decrypt_per_au(args.input, _read_key(args.key))
-    # M90.12: each entry now carries its own dtype code so genomic
+    # each entry now carries its own dtype code so genomic
     # uint8 channels stay 1 byte/element (pre-M90.12 cast everything
     # to float64, mangling sequences/qualities).
     entries: dict[str, tuple[int, bytes]] = {}

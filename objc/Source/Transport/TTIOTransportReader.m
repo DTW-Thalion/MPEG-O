@@ -19,8 +19,8 @@
 #import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOBulkV2Blobs.h"
-#import "Codecs/TTIORans.h"        // M90.10: rANS wire codec dispatch
-#import "Codecs/TTIOBasePack.h"    // M90.10: BASE_PACK wire codec dispatch
+#import "Codecs/TTIORans.h"        // rANS wire codec dispatch
+#import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import "ValueClasses/TTIOEnums.h"
 #import <string.h>
 #import <zlib.h>
@@ -299,7 +299,7 @@ typedef struct {
                 @"instrumentJSON": instrumentJSON,
             };
 
-            // M89.2: route genomic datasets to a parallel accumulator.
+            // route genomic datasets to a parallel accumulator.
             if ([spectrumClass isEqualToString:@"TTIOGenomicRead"]) {
                 NSMutableDictionary *gd = [NSMutableDictionary dictionary];
                 gd[@"runningOffset"] = @(0);
@@ -368,7 +368,7 @@ typedef struct {
                 return NO;
             }
 
-            // M89.2: route to genomic accumulator if this dataset is
+            // route to genomic accumulator if this dataset is
             // a TTIOGenomicRead stream.
             NSMutableDictionary *gd = genomicData[didKey];
             if (gd) {
@@ -384,7 +384,7 @@ typedef struct {
                 [(NSMutableArray *)gd[@"positions"] addObject:@(au.position)];
                 [(NSMutableArray *)gd[@"mappingQualities"] addObject:@(au.mappingQuality)];
                 [(NSMutableArray *)gd[@"flags"] addObject:@((uint32_t)au.flags)];
-                // M90.9: AU mate extension — pulled directly off the
+                // AU mate extension — pulled directly off the
                 // decoded AU, defaults to -1 / 0 for M89.1 fixtures.
                 [(NSMutableArray *)gd[@"matePositions"] addObject:@(au.matePosition)];
                 [(NSMutableArray *)gd[@"templateLengths"] addObject:@(au.templateLength)];
@@ -405,7 +405,7 @@ typedef struct {
                                                  (unsigned)ch.precision]}];
                         return NO;
                     }
-                    // M90.10: dispatch on the wire compression byte.
+                    // dispatch on the wire compression byte.
                     // NONE → identity; RANS_ORDER0/1 → TTIORansDecode;
                     // BASE_PACK → TTIOBasePackDecode. Other codecs
                     // unsupported on the genomic transport path.
@@ -676,7 +676,7 @@ typedef struct {
         runs[(NSString *)meta[@"name"]] = wr;
     }
 
-    // M89.2: build TTIOWrittenGenomicRun objects for each genomic
+    // build TTIOWrittenGenomicRun objects for each genomic
     // dataset_id. These travel through the extended writeMinimalToPath
     // overload alongside any MS runs.
     NSMutableDictionary<NSString *, TTIOWrittenGenomicRun *> *genomicRuns =
@@ -733,7 +733,7 @@ typedef struct {
             [lengthsData appendBytes:&v length:4];
         }
 
-        // M90.9: compound fields ride on the wire as 3 string channels
+        // compound fields ride on the wire as 3 string channels
         // + a 12-byte mate extension on the AU genomic suffix. The
         // accumulator captured them per-AU; materialise into the
         // run-level shapes the WrittenGenomicRun expects. M89.1-only

@@ -135,7 +135,7 @@
     if (_did >= 0) H5Dclose(_did);
 }
 
-#pragma mark - <TTIOStorageDataset> bridge methods (Option B / M44 catch-up)
+#pragma mark - <TTIOStorageDataset> bridge methods (Option B)
 
 // Protocol method names that delegate to the HDF5-typed methods above.
 // Upper-layer writers (SignalArray, AcquisitionRun, ...) call only these

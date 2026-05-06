@@ -89,7 +89,7 @@ _SPECTRUM_CLASS_TO_WIRE = {
 _WIRE_TO_SPECTRUM_CLASS = {v: k for k, v in _SPECTRUM_CLASS_TO_WIRE.items()}
 
 
-# M90.10: M86 codec dispatch for genomic UINT8 channels on the wire.
+# M86 codec dispatch for genomic UINT8 channels on the wire.
 
 _RANS_ORDER0_WIRE = int(Compression.RANS_ORDER0)
 _RANS_ORDER1_WIRE = int(Compression.RANS_ORDER1)
@@ -506,7 +506,7 @@ class TransportWriter:
         precision_uint8 = int(Precision.UINT8) & 0xFF
         compression_none = int(Compression.NONE) & 0xFF
         acq_mode = int(run.acquisition_mode) & 0xFF
-        # M90.10: probe source @compression on sequences + qualities
+        # probe source @compression on sequences + qualities
         # so the wire codec mirrors the file's codec choice. The
         # string channels (cigar/read_name/mate_chromosome) always
         # ride uncompressed — they're per-AU short strings where
@@ -531,11 +531,11 @@ class TransportWriter:
             stop = start + length
             seq_bytes = seq_full[start:stop]
             qual_bytes = qual_full[start:stop]
-            # M90.10: re-encode per-AU slice with the M86 codec when
+            # re-encode per-AU slice with the M86 codec when
             # the source channel had an @compression attribute set.
             seq_payload = _apply_wire_codec(bytes(seq_bytes), seq_codec)
             qual_payload = _apply_wire_codec(bytes(qual_bytes), qual_codec)
-            # M90.9: pull the per-read compound fields off the lazy
+            # pull the per-read compound fields off the lazy
             # AlignedRead. read_name / cigar / mate_* go on the wire
             # so a transport round-trip preserves SAM-level fidelity.
             r = run[i]
@@ -891,7 +891,7 @@ class TransportReader:
                 meta = _decode_dataset_header(payload)
                 did = meta["dataset_id"]
                 dataset_metas[did] = meta
-                # M89.2: genomic datasets get a parallel accumulator.
+                # genomic datasets get a parallel accumulator.
                 if meta["spectrum_class"] == "TTIOGenomicRead":
                     genomic_data[did] = _new_genomic_accumulator()
                 else:
@@ -1014,7 +1014,7 @@ class TransportReader:
                 signal_compression="gzip",
             )
 
-        # M89.2: build WrittenGenomicRun for each genomic dataset.
+        # build WrittenGenomicRun for each genomic dataset.
         from ..written_genomic_run import BulkV2Blobs, WrittenGenomicRun
         genomic_runs: dict[str, WrittenGenomicRun] = {}
         for did, gd in genomic_data.items():
@@ -1053,7 +1053,7 @@ class TransportReader:
                            else np.array([], dtype=np.uint8)),
                 offsets=np.array(gd["offsets"], dtype=np.uint64),
                 lengths=np.array(gd["lengths"], dtype=np.uint32),
-                # M90.9: compound fields now round-trip on the wire.
+                # compound fields now round-trip on the wire.
                 # When the source is an M89.2-era stream the per-AU
                 # decoders default the missing strings to "" and the
                 # mate scalars to -1 / 0 (preserved by the AU
@@ -1099,7 +1099,7 @@ def _new_genomic_accumulator() -> dict:
         "offsets": [],
         "lengths": [],
         "running_offset": 0,
-        # M90.9: compound-field accumulators.
+        # compound-field accumulators.
         "cigars": [],
         "read_names": [],
         "mate_chromosomes": [],
@@ -1124,11 +1124,11 @@ def _ingest_genomic_access_unit_bytes(gd: dict, payload: bytes) -> None:
     gd["positions"].append(int(au.position))
     gd["mapping_qualities"].append(int(au.mapping_quality))
     gd["flags"].append(int(au.flags) & 0xFFFFFFFF)
-    # M90.9: mate extension fields ride on the AU genomic suffix.
+    # mate extension fields ride on the AU genomic suffix.
     gd["mate_positions"].append(int(au.mate_position))
     gd["template_lengths"].append(int(au.template_length))
     length = 0
-    # M90.9: compound-string channels default to "" if absent (an
+    # compound-string channels default to "" if absent (an
     # M89.2-era AU). Channel-name dispatch covers both layouts.
     cigar_str = ""
     name_str = ""
@@ -1139,7 +1139,7 @@ def _ingest_genomic_access_unit_bytes(gd: dict, payload: bytes) -> None:
                 f"genomic channel precision {ch.precision} not yet supported "
                 "(UINT8 only in M89.2)"
             )
-        # M90.10: dispatch on wire compression byte (NONE / RANS_*
+        # dispatch on wire compression byte (NONE / RANS_*
         # / BASE_PACK). See _decode_wire_codec.
         decoded = _decode_wire_codec(bytes(ch.data), int(ch.compression))
         if ch.name == "sequences":

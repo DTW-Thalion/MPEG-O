@@ -27,7 +27,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-/** v0.10 M67: Java transport codec round-trip tests. */
+/** Java transport codec round-trip tests. */
 class TransportCodecTest {
 
     // ── helpers ───────────────────────────────────────────────────

@@ -114,7 +114,7 @@ class _State:
         self.in_selected_ion = 0
         self.in_scan = 0
         self.in_scan_window = 0
-        # M74: activation + isolation-window containers
+        # activation + isolation-window containers
         self.in_activation = 0
         self.in_isolation_window = 0
         self.activation_method = ActivationMethod.NONE

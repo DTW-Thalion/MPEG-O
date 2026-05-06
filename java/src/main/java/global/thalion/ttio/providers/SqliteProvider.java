@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.providers;
@@ -334,7 +334,7 @@ public final class SqliteProvider implements StorageProvider {
                 int[] arr = toIntArray(data);
                 for (int v : arr) buf.putInt(v);
             }
-            case INT64, UINT64 -> {  // M82: UINT64 packs identically to INT64
+            case INT64, UINT64 -> {  // UINT64 packs identically to INT64
                 long[] arr = toLongArray(data);
                 for (long v : arr) buf.putLong(v);
             }
@@ -386,7 +386,7 @@ public final class SqliteProvider implements StorageProvider {
                 for (int i = 0; i < n; i++) arr[i] = buf.getInt();
                 yield arr;
             }
-            case INT64, UINT64 -> {  // M82: UINT64 unpacks identically to INT64
+            case INT64, UINT64 -> {  // UINT64 unpacks identically to INT64
                 long[] arr = new long[n];
                 for (int i = 0; i < n; i++) arr[i] = buf.getLong();
                 yield arr;
@@ -1258,7 +1258,7 @@ public final class SqliteProvider implements StorageProvider {
                 case FLOAT32 -> new float[0];
                 case FLOAT64 -> new double[0];
                 case INT32, UINT32 -> new int[0];
-                case INT64, UINT64 -> new long[0];  // M82
+                case INT64, UINT64 -> new long[0];
                 case COMPLEX128 -> new double[0];
                 case UINT8 -> new byte[0];
                 case UINT16 -> new short[0];  // L1: chromosome_ids

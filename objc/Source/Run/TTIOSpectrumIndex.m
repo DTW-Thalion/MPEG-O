@@ -32,7 +32,7 @@
     NSData *_precursorMzs;     // double[count]
     NSData *_precursorCharges; // int32_t[count]
     NSData *_basePeakIntensities; // double[count]
-    // M74: nil (legacy) or all-four populated.
+    // nil (legacy) or all-four populated.
     NSData *_activationMethods;     // int32_t[count]
     NSData *_isolationTargetMzs;    // double[count]
     NSData *_isolationLowerOffsets; // double[count]
@@ -182,7 +182,7 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
     id<TTIOStorageGroup> g = [parent createGroupNamed:@"spectrum_index" error:error];
     if (!g) return NO;
     if (![g setAttributeValue:@((int64_t)_count) forName:@"count" error:error]) return NO;
-    // v1.10 #10: offsets is omitted on disk; readers compute it from
+    // offsets is omitted on disk; readers compute it from
     // cumsum(lengths).
     if (!writeArray(g, @"lengths",          TTIOPrecisionUInt32,  _lengths,          error)) return NO;
     if (!writeArray(g, @"retention_times",  TTIOPrecisionFloat64, _retentionTimes,   error)) return NO;
@@ -209,7 +209,7 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
     if (!g) return nil;
     NSData *lengths = readArray(g, @"lengths", error);
     if (!lengths) return nil;
-    // v1.10 #10: offsets is omitted from disk by default; synthesize
+    // offsets is omitted from disk by default; synthesize
     // from cumsum(lengths). Pre-v1.10 files have it on disk.
     NSData *offsets;
     if ([g hasChildNamed:@"offsets"]) {

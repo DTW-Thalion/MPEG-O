@@ -114,7 +114,7 @@ public final class TransportReader implements AutoCloseable {
         String isa = "";
         Map<Integer, DatasetMeta> datasetMetas = new LinkedHashMap<>();
         Map<Integer, RunAccumulator> runAccs = new LinkedHashMap<>();
-        // M89.2: parallel accumulator for genomic datasets.
+        // parallel accumulator for genomic datasets.
         Map<Integer, GenomicAccumulator> genomicAccs = new LinkedHashMap<>();
         // Phase 2c-T: per-genomic-dataset_id buffers for verbatim
         // v2 blobs. Populated when BlobV2* packets arrive.
@@ -160,7 +160,7 @@ public final class TransportReader implements AutoCloseable {
                 datasetMetas.put(datasetId, new DatasetMeta(
                         datasetId, name, acqMode, spectrumClass, channelNames,
                         instrumentJson, expected));
-                // M89.2: genomic datasets get a parallel accumulator.
+                // genomic datasets get a parallel accumulator.
                 if ("TTIOGenomicRead".equals(spectrumClass)) {
                     genomicAccs.put(datasetId, new GenomicAccumulator());
                 } else {
@@ -283,7 +283,7 @@ public final class TransportReader implements AutoCloseable {
                     channelMap, List.of(), List.of(), "", 0.0));
         }
 
-        // M89.2: build WrittenGenomicRun for each genomic dataset.
+        // build WrittenGenomicRun for each genomic dataset.
         // Phase 2c-T: attach any verbatim v2 blobs collected for this
         // dataset_id so write_minimal skips the v2 codec encode for
         // those channels.
@@ -399,11 +399,11 @@ public final class TransportReader implements AutoCloseable {
             positions.add(au.position);
             mappingQualities.add(au.mappingQuality);
             flags.add(au.flags);
-            // M90.9: mate extension fields ride on the AU genomic suffix.
+            // mate extension fields ride on the AU genomic suffix.
             matePositions.add(au.matePosition);
             templateLengths.add(au.templateLength);
             int length = 0;
-            // M90.9: compound-string channels default to "" if absent
+            // compound-string channels default to "" if absent
             // (an M89.2-era AU). Channel-name dispatch covers both
             // layouts.
             String cigarStr = "";
@@ -415,7 +415,7 @@ public final class TransportReader implements AutoCloseable {
                         "genomic channel precision " + ch.precision
                         + " not yet supported (UINT8 only)");
                 }
-                // M90.10: dispatch on wire compression byte (NONE /
+                // dispatch on wire compression byte (NONE /
                 // RANS_* / BASE_PACK). See decodeWireCodec.
                 byte[] decoded = decodeWireCodec(ch.data, ch.compression);
                 if ("sequences".equals(ch.name)) {
@@ -442,7 +442,7 @@ public final class TransportReader implements AutoCloseable {
             runningOffset += length;
         }
 
-        /** M90.10: decode a wire payload encoded by
+        /** decode a wire payload encoded by
          *  {@code TransportWriter.applyWireCodec}. NONE → identity. */
         private static byte[] decodeWireCodec(byte[] payload, int codecId) {
             if (codecId == 0) return payload;  // NONE
@@ -472,7 +472,7 @@ public final class TransportReader implements AutoCloseable {
                 mqArr[i] = (byte) (mappingQualities.get(i) & 0xFF);
                 flagsArr[i] = flags.get(i);
             }
-            // M90.9: compound fields now round-trip on the wire. When
+            // compound fields now round-trip on the wire. When
             // the source is an M89.2-era stream the per-AU decoders
             // default the missing strings to "" and the mate scalars
             // to -1 / 0 (preserved by AccessUnit.decode + the

@@ -93,15 +93,15 @@ class SpectralDataset:
     encrypted_algorithm: str = ""
     _closed: bool = False
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
-    _lock: RWLock | None = None  # M23: set when opened with thread_safe=True
-    provider: StorageProvider | None = None  # M39: owning storage provider
+    _lock: RWLock | None = None  # set when opened with thread_safe=True
+    provider: StorageProvider | None = None  # owning storage provider
     # ``provider`` is the backend abstraction introduced in M39. ``file``
     # remains the canonical h5py handle for byte-level code (signatures,
     # encryption, signal-channel codecs) that isn't expressed through the
     # protocol; it is the provider's native handle when ``provider`` is
     # set. New call sites should reach for ``provider.root_group()`` or
     # ``provider.native_handle()`` instead of ``file`` directly.
-    # M41.5: Encryptable conformance.
+    # Encryptable conformance.
     _access_policy: AccessPolicy | None = field(default=None, repr=False)
 
     # ------------------------------------------------------------- lifecycle
@@ -175,7 +175,7 @@ class SpectralDataset:
                 raise
 
         p = Path(path)
-        # M82: if an explicit provider name is given for a bare path, route
+        # if an explicit provider name is given for a bare path, route
         # through open_provider so Memory / SQLite / Zarr backends work.
         if provider is not None and provider not in ("hdf5", "h5", "h5py"):
             sp = open_provider(str(path), provider=provider, mode=mode)
@@ -890,7 +890,7 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 
     idx = g.create_group("spectrum_index")
     io.write_int_attr(idx, "count", int(run.offsets.shape[0]))
-    # v1.0: offsets is never written — readers derive from cumsum(lengths).
+    # offsets is never written — readers derive from cumsum(lengths).
     columns: list[tuple[str, np.ndarray, str]] = [
         ("lengths", run.lengths, "<u4"),
         ("retention_times", run.retention_times, "<f8"),
@@ -943,7 +943,7 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
                 compression=codec,
             )
 
-    # M24: chromatograms
+    # chromatograms
     if run.chromatograms:
         from .acquisition_run import write_chromatograms_to_run_group
         write_chromatograms_to_run_group(g, run.chromatograms)
@@ -1286,7 +1286,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
     if isinstance(parent, h5py.Group):
         parent = _H5Group(parent)
 
-    # M86: validate any per-channel codec overrides before we touch
+    # validate any per-channel codec overrides before we touch
     # the file. The override surface covers the four byte/string
     # channels (sequences, qualities, read_names, cigars). Anything
     # outside the per-channel whitelist is a caller error and must
@@ -1310,7 +1310,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         # v1.0 reset: read_names is auto-encoded with NAME_TOKENIZED_V2
         # (codec id 15); no explicit override is supported.
         "read_names": frozenset(),
-        # M86 Phase C: cigars accepts the rANS pair on a length-prefix-
+        # cigars accepts the rANS pair on a length-prefix-
         # concat byte stream of the CIGAR strings (varint(len) + bytes
         # per CIGAR). BASE_PACK and QUALITY_BINNED are wrong-content
         # (CIGARs are not ACGT bytes nor Phred values) and are
@@ -1320,7 +1320,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             _Compression.RANS_ORDER1,
         }),
     }
-    # v1.6: per-record integer metadata channels removed from the
+    # per-record integer metadata channels removed from the
     # signal_channels/ override surface. They live exclusively in
     # genomic_index/ now (see comment above). Hard-error so callers
     # with stale code learn immediately.
@@ -1336,7 +1336,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 f"signal_channels/. The override no longer applies. "
                 f"See docs/format-spec.md §4 and §10.7."
             )
-        # v1.7 #11: per-field mate_info_* overrides are disallowed —
+        # per-field mate_info_* overrides are disallowed —
         # the inline_v2 codec encodes all three fields together.
         if ch_name in ("mate_info_chrom", "mate_info_pos", "mate_info_tlen"):
             raise ValueError(
@@ -1518,7 +1518,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
             if _default is not None:
                 _qual_codec = _default
 
-    # v1.6: positions / flags / mapping_qualities are NOT written
+    # positions / flags / mapping_qualities are NOT written
     # under signal_channels/. They live exclusively in genomic_index/,
     # mirroring MS's spectrum_index/ pattern (per-record metadata =
     # index; signal_channels = bulk data). See docs/format-spec.md
@@ -1565,7 +1565,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         )
     # Variable-length per-read string fields — cigars and read_names are
     # 7-bit ASCII; vl_str() (ASCII encoding) matches the ObjC reader.
-    # M86 Phase C: schema lift for cigars. When an override is
+    # schema lift for cigars. When an override is
     # present the writer replaces the M82 compound dataset with a
     # flat 1-D uint8 dataset of the same name carrying the codec
     # output, plus an @compression attribute (Binding Decisions
@@ -1927,7 +1927,7 @@ def _write_identifications(study: h5py.Group, records: list[Identification]) -> 
             "evidence_chain_json": json.dumps(r.evidence_chain),
         } for r in records
     ], fields)
-    # M37: emit @identifications_json mirror so Java (JHI5 1.10 cannot
+    # emit @identifications_json mirror so Java (JHI5 1.10 cannot
     # marshal compound-with-VL reads) can recover the full record set.
     io.write_fixed_string_attr(study, "identifications_json", json.dumps([
         {
@@ -1955,7 +1955,7 @@ def _write_quantifications(study: h5py.Group, records: list[Quantification]) -> 
             "normalization_method": r.normalization_method,
         } for r in records
     ], fields)
-    # M37: JSON mirror (see _write_identifications)
+    # JSON mirror (see _write_identifications)
     io.write_fixed_string_attr(study, "quantifications_json", json.dumps([
         {
             "chemical_entity": r.chemical_entity,
@@ -1989,7 +1989,7 @@ def _write_provenance(
             "output_refs_json": json.dumps(r.output_refs),
         } for r in records
     ], fields)
-    # M37: JSON mirror. Only emitted for the top-level /study/provenance
+    # JSON mirror. Only emitted for the top-level /study/provenance
     # dataset; per-run provenance (§6.4) stays compound-only because the
     # Java reader never descends into run-level compound datasets.
     if dataset_name == "provenance":

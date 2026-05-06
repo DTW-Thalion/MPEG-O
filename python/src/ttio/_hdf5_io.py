@@ -687,7 +687,7 @@ def _write_int64_channel(
     ds.write(data)
 
 
-# M86 Phase B: per-channel integer dtypes for the int↔byte
+# per-channel integer dtypes for the int↔byte
 # serialisation contract. Determined by **channel name lookup**
 # (), not by an on-disk attribute. The reader
 # uses the same map to interpret the decoded byte buffer back to

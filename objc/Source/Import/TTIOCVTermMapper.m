@@ -89,7 +89,7 @@
 + (BOOL)isSelectedReactionMonitoringAccession:(NSString *)acc
 { return [acc isEqualToString:@"MS:1001473"]; }
 
-#pragma mark - M74: MS/MS activation-method accessions
+#pragma mark - MS/MS activation-method accessions
 
 + (TTIOActivationMethod)activationMethodForAccession:(NSString *)acc
 {
@@ -140,7 +140,7 @@
     return nil;
 }
 
-#pragma mark - M74: isolation-window cvParam accessions
+#pragma mark - isolation-window cvParam accessions
 
 + (BOOL)isIsolationWindowTargetMzAccession:(NSString *)acc
 { return [acc isEqualToString:@"MS:1000827"]; }

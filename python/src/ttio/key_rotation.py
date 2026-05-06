@@ -59,7 +59,7 @@ from .encryption import (
     encrypt_bytes,
 )
 
-WRAPPED_BLOB_LEN = AES_KEY_LEN + AES_IV_LEN + AES_TAG_LEN  # 60 (v1.1)
+WRAPPED_BLOB_LEN = AES_KEY_LEN + AES_IV_LEN + AES_TAG_LEN  # 60 
 KEK_ALGORITHM = "aes-256-gcm"
 
 # v1.2 wrapped-key blob format (M47, see format-spec §8).

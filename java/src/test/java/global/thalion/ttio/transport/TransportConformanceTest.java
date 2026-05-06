@@ -23,7 +23,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * v0.10 M70: bidirectional conversion conformance (in-language).
+ * bidirectional conversion conformance (in-language).
  * .tio → .tis → .tio preserves every signal sample bit-for-bit.
  */
 class TransportConformanceTest {

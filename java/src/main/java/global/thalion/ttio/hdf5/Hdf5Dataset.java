@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.hdf5;
@@ -186,7 +186,7 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
-    /** M90.2: write a UTF-8 string attribute on this dataset.
+    /** write a UTF-8 string attribute on this dataset.
      *  Mirrors {@link Hdf5Group#setStringAttribute}. M90.7 made this
      *  emit VL_STRING with UTF-8 cset so Python and ObjC readers can
      *  consume Java-written {@code @ttio_signature} attributes. */
@@ -224,7 +224,7 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
-    /** M90.2: read a UTF-8 string attribute from this dataset.
+    /** read a UTF-8 string attribute from this dataset.
      *  Returns {@code null} when the attribute is absent OR the
      *  attribute's HDF5 type class is not {@code H5T_STRING}. The
      *  caller is expected to dispatch on the return type ({@code null}
@@ -372,7 +372,7 @@ public class Hdf5Dataset implements AutoCloseable {
             case FLOAT32 -> new float[n];
             case FLOAT64 -> new double[n];
             case INT32, UINT32 -> new int[n];
-            case INT64, UINT64 -> new long[n];  // M82: UINT64 packs as long[]
+            case INT64, UINT64 -> new long[n];  // UINT64 packs as long[]
             case COMPLEX128 -> new byte[n * 16];
             case UINT16 -> new short[n];  // L1: chromosome_ids
             case UINT8 -> new byte[n];

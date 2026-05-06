@@ -16,7 +16,7 @@ NS_ASSUME_NONNULL_BEGIN
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Genomics/TTIOBulkV2Blobs.h</p>
  *
- * <p>Phase 2c-T (v1.0): verbatim v2 codec blobs for direct on-disk
+ * <p>Phase 2c-T : verbatim v2 codec blobs for direct on-disk
  * write. Set on a <code>TTIOWrittenGenomicRun</code> to bypass the
  * v2 codec encode step in the writer and write the blob bytes
  * directly to the matching HDF5 paths. Used by the transport

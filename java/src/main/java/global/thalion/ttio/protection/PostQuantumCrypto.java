@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
 import java.security.SecureRandom;
@@ -37,7 +37,7 @@ import org.bouncycastle.pqc.crypto.mlkem.MLKEMExtractor;
  * verified ML-KEM via PQCP's mlkem-native. See {@code docs/pqc.md} for
  * the detailed cross-language discrepancy table.</p>
  *
- * <p><b>API status:</b> Provisional (v0.8). Subject to breaking
+ * <p><b>API status:</b> Provisional . Subject to breaking
  * changes through the v0.8 series; will be marked Stable at v1.0.</p>
  *
  * <p><b>Cross-language equivalents:</b> Python

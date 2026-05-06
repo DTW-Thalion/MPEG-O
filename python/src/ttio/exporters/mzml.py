@@ -211,7 +211,7 @@ def dataset_to_bytes(
         emit('          </scanList>\n')
 
         if spec.precursor_mz > 0.0 or int(spec.ms_level) > 1:
-            # M74: consult the index directly so we see activation method
+            # consult the index directly so we see activation method
             # and isolation window even when the cached Spectrum returned
             # from `chosen_run[i]` carries the legacy defaults.
             activation = chosen_run.index.activation_method_at(i)
@@ -283,7 +283,7 @@ def dataset_to_bytes(
 
     emit('      </spectrumList>\n')
 
-    # M24: chromatogramList
+    # chromatogramList
     chroms = list(getattr(chosen_run, "chromatograms", []) or [])
     chrom_offsets: list[tuple[str, int]] = []
     if chroms:

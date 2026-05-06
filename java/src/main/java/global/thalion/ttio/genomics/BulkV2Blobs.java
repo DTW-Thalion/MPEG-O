@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.genomics;
@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Phase 2c-T (v1.0): verbatim v2 codec blobs for direct on-disk
+ * Phase 2c-T : verbatim v2 codec blobs for direct on-disk
  * write. Set on a {@link WrittenGenomicRun} via the bulk-mode
  * constructor or {@link WrittenGenomicRun#withBulkV2Blobs} to
  * bypass the v2 codec encode step in the writer and write the

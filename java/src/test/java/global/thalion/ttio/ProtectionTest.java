@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -152,7 +152,7 @@ class ProtectionTest {
         byte[] dek = new byte[32];
         new java.security.SecureRandom().nextBytes(dek);
 
-        // v0.7 M47: default wrapKey emits the v1.2 versioned blob
+        // default wrapKey emits the v1.2 versioned blob
         // (71 bytes for AES-256-GCM: 11-byte header + 28-byte
         // metadata + 32-byte ciphertext). The legacy v1.1 60-byte
         // layout is tested separately below.

@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
 import global.thalion.ttio.*;
@@ -32,7 +32,7 @@ import java.util.*;
  */
 public class Anonymizer {
 
-    /** M90.3: a single masked region (chromosome + half-open
+    /** a single masked region (chromosome + half-open
      *  interval). Reads whose mapping position falls inside any
      *  registered region have their sequence + qualities zeroed, but
      *  their index entries are preserved so downstream readers see
@@ -52,7 +52,7 @@ public class Anonymizer {
         boolean randomiseQualities,
         int randomiseQualitiesConstant,    // default 30
         java.util.List<MaskRegion> maskRegions,  // null = no masking
-        /** M90.14: when non-null, qualities are replaced with
+        /** when non-null, qualities are replaced with
          *  deterministic random Phred bytes in [0, 93] from a seeded
          *  RNG. When null, the M90.3 constant path is used. */
         Long randomiseQualitiesSeed
@@ -262,7 +262,7 @@ public class Anonymizer {
             metadataFieldsStripped = 1;
         }
 
-        // M90.3: walk genomic_runs and apply genomic policies. Returns
+        // walk genomic_runs and apply genomic policies. Returns
         // an empty list when the source carries no genomic runs (and
         // create()'s genomic-runs branch is then a no-op). The three
         // genomic counters in the result mirror the three policies.
@@ -375,7 +375,7 @@ public class Anonymizer {
             // ── randomise_qualities ─────────────────────────────────
             if (policy.randomiseQualities()) {
                 if (policy.randomiseQualitiesSeed() != null) {
-                    // M90.14: seeded random Phred per byte. Range
+                    // seeded random Phred per byte. Range
                     // [0, 93] matches the SAM spec valid Phred range
                     // (0 = lowest, 93 = highest representable in
                     // Illumina-style ASCII offset 33 + 60). Cross-
@@ -410,7 +410,7 @@ public class Anonymizer {
                     chroms.add(gr.index().chromosomeAt(i));
                     positions[i] = gr.index().positionAt(i);
                 }
-                // M90.13: SAM-overlap semantics. Walk the CIGAR to
+                // SAM-overlap semantics. Walk the CIGAR to
                 // compute each read's reference end coordinate; a
                 // read overlaps a region iff [pos, pos+span-1]
                 // intersects [region_start, region_end] on inclusive
@@ -507,7 +507,7 @@ public class Anonymizer {
         return out;
     }
 
-    // M90.13: CIGAR reference span (number of bases consumed on the
+    // CIGAR reference span (number of bases consumed on the
     // reference). Ops that consume reference: M, D, N, =, X. Ops that
     // do NOT: I, S, H, P. Returns 0 for empty / "*" / non-parseable
     // CIGAR — caller falls back to position-only masking (M90.3

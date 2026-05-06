@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: LGPL-3.0-or-later */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: LGPL-3.0-or-later */
 package global.thalion.ttio.protection;
 
 import global.thalion.ttio.providers.StorageDataset;
@@ -257,7 +257,7 @@ public final class SignatureManager {
         "chromosome_ids", "chromosome_names"
     };
 
-    /** M90.2: sign every signal channel and every genomic_index
+    /** sign every signal channel and every genomic_index
      *  column under one {@code /study/genomic_runs/<name>/} group in
      *  one call, storing each signature on the dataset's
      *  {@code @ttio_signature} attribute.
@@ -318,7 +318,7 @@ public final class SignatureManager {
         return signGenomicRun(runGroup, key, "hmac-sha256");
     }
 
-    /** M90.2: verify every signal channel and every genomic_index
+    /** verify every signal channel and every genomic_index
      *  column under one genomic run. Returns {@code true} iff every
      *  present, signed dataset verifies under {@code key}.
      *

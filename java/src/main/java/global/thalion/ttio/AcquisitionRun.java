@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -68,14 +68,14 @@ public class AcquisitionRun implements
     // Channel data (concatenated across all spectra)
     private final Map<String, double[]> channels;
 
-    // M41.3: Streamable cursor and Provenanceable cache.
+    // Streamable cursor and Provenanceable cache.
     private int cursor = 0;
     private java.util.List<ProvenanceRecord> provenanceCache;
-    // M41.5: Encryptable conformance.
+    // Encryptable conformance.
     private global.thalion.ttio.protection.AccessPolicy accessPolicy;
     private String persistenceFilePath;
     private String persistenceRunName;
-    // v1.1 Issue B: plaintext channels recovered via decryptWithKey. The
+    // plaintext channels recovered via decryptWithKey. The
     // on-disk file is untouched (decrypt is read-only), so after
     // open-on-encrypted + decrypt the in-memory {@link #channels} map is
     // still missing the encrypted channel — spectra need to fall back
@@ -300,7 +300,7 @@ public class AcquisitionRun implements
         }
         byte[] plaintext = global.thalion.ttio.protection.EncryptionManager
             .decryptIntensityChannelInRun(persistenceFilePath, persistenceRunName, key);
-        // v1.1 Issue B: stash the recovered plaintext as a double[] so
+        // stash the recovered plaintext as a double[] so
         // objectAtIndex / channelSlice can materialise spectra without
         // re-decrypting per access. Little-endian matches the encode
         // path in EncryptionManager.encryptChannel.
@@ -544,7 +544,7 @@ public class AcquisitionRun implements
 
             try (StorageGroup idx = cg.openGroup("chromatogram_index")) {
                 int[] lengths = readIntDs(idx, "lengths");
-                // v1.10 #10: offsets omitted from disk by default;
+                // offsets omitted from disk by default;
                 // synthesize from cumsum(lengths). Pre-v1.10 files have
                 // the column on disk (read directly).
                 long[] offsets = idx.hasChild("offsets")

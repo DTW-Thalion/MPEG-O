@@ -40,7 +40,7 @@
     out->_polarity      = [f[@"polarity"] isKindOfClass:[NSNumber class]] ? f[@"polarity"] : nil;
     out->_datasetId     = [f[@"dataset_id"] isKindOfClass:[NSNumber class]] ? f[@"dataset_id"] : nil;
     out->_maxAU         = [f[@"max_au"] isKindOfClass:[NSNumber class]] ? f[@"max_au"] : nil;
-    // M89.3: genomic predicates. chromosome is a string; position_min /
+    // genomic predicates. chromosome is a string; position_min /
     // position_max are integers (NSJSONSerialization yields NSNumber
     // for both ints and floats, so we accept either).
     out->_chromosome    = [f[@"chromosome"] isKindOfClass:[NSString class]] ? f[@"chromosome"] : nil;
@@ -60,7 +60,7 @@
     if (_precursorMzMin && au.precursorMz < _precursorMzMin.doubleValue) return NO;
     if (_precursorMzMax && au.precursorMz > _precursorMzMax.doubleValue) return NO;
     if (_polarity && au.polarity != _polarity.intValue) return NO;
-    // M89.3: genomic predicates. A chromosome predicate excludes any
+    // genomic predicates. A chromosome predicate excludes any
     // AU whose chromosome differs (MS AUs default to "" and are
     // therefore excluded). Position predicates first require
     // spectrumClass==5 — MS AUs have no notion of position.

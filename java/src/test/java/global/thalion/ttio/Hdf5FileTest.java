@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -146,7 +146,7 @@ class Hdf5FileTest {
         }
     }
 
-    /** M90.7: setStringAttribute MUST emit a variable-length HDF5
+    /** setStringAttribute MUST emit a variable-length HDF5
      *  string with UTF-8 cset (matches Python's h5py default), so
      *  cross-language readers handle Java-written attrs uniformly. */
     @Test
@@ -179,7 +179,7 @@ class Hdf5FileTest {
         }
     }
 
-    /** M90.7: a fixed-length string attribute (e.g. legacy file written
+    /** a fixed-length string attribute (e.g. legacy file written
      *  by pre-M90.7 Java) MUST still read back correctly through the
      *  back-compat branch. */
     @Test

@@ -223,7 +223,7 @@ cleanup:
     else if (H5Tequal(htype, H5T_NATIVE_DOUBLE) > 0) precision = TTIOPrecisionFloat64;
     else if (H5Tequal(htype, H5T_NATIVE_INT32)  > 0) precision = TTIOPrecisionInt32;
     else if (H5Tequal(htype, H5T_NATIVE_INT64)  > 0) precision = TTIOPrecisionInt64;
-    // M82: UINT64 datasets (genomic_index/offsets) round-trip as UINT64.
+    // UINT64 datasets (genomic_index/offsets) round-trip as UINT64.
     // Pre-M82 spectrum_index/offsets were written by Python as native
     // uint64 but lacked an ObjC TTIOPrecisionUInt64 enum value, so they
     // were read back as INT64 (bit-identical for non-negative offsets).
@@ -466,7 +466,7 @@ static herr_t collect_link(hid_t loc, const char *name,
     if (_gid >= 0) H5Gclose(_gid);
 }
 
-#pragma mark - <TTIOStorageGroup> bridge methods (Option B / M44 catch-up)
+#pragma mark - <TTIOStorageGroup> bridge methods (Option B)
 
 // Protocol method names that delegate to the HDF5-typed methods above.
 // Upper-layer writers (AcquisitionRun, SpectrumIndex, SignalArray, ...)

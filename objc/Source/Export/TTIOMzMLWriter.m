@@ -261,7 +261,7 @@ static NSString *precisionName(BOOL useFloat32)
         appendUTF8(body, @"          </scanList>\n");
 
         if (ms.precursorMz > 0.0 || ms.msLevel > 1) {
-            // M74: consult the spectrum index for activation method +
+            // consult the spectrum index for activation method +
             // isolation window so the writer emits real metadata when
             // the source file carried it (opt_ms2_activation_detail
             // flag) rather than a CID placeholder. `spectrumAtIndex:`
@@ -381,7 +381,7 @@ static NSString *precisionName(BOOL useFloat32)
     appendUTF8(body, @"      </spectrumList>\n");
 
     // ------------------------------------------------------------------
-    // M24: chromatogramList
+    // chromatogramList
     // ------------------------------------------------------------------
     NSArray<TTIOChromatogram *> *chroms = chosenRun.chromatograms;
     NSMutableArray<NSNumber *> *chromOffsets = [NSMutableArray arrayWithCapacity:chroms.count];

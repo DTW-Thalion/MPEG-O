@@ -1,14 +1,14 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
 
 import global.thalion.ttio.genomics.BulkV2Blobs;          // Phase 2c-T
-import global.thalion.ttio.genomics.GenomicIndex;        // M82.3
-import global.thalion.ttio.genomics.GenomicRun;          // M82.3
-import global.thalion.ttio.genomics.WrittenGenomicRun;   // M82.3
+import global.thalion.ttio.genomics.GenomicIndex;
+import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.hdf5.Hdf5CompoundIO;
 import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
@@ -47,20 +47,20 @@ public class SpectralDataset implements
         global.thalion.ttio.protocols.Encryptable,
         AutoCloseable {
 
-    private final StorageProvider provider;  // M39: owning provider
+    private final StorageProvider provider;  // owning provider
     private final Hdf5File file;             // native handle (kept for
                                               // signature/encryption paths)
     private final FeatureFlags featureFlags;
     private final String title;
     private final String isaInvestigationId;
     private final Map<String, AcquisitionRun> msRuns;
-    private final Map<String, GenomicRun> genomicRuns;  // M82.3
+    private final Map<String, GenomicRun> genomicRuns;
     private final List<Identification> identifications;
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
-    // M41.5: Encryptable conformance.
+    // Encryptable conformance.
     private global.thalion.ttio.protection.AccessPolicy accessPolicy;
-    // v1.1 Issue A: root-level encryption state that survives close/reopen.
+    // root-level encryption state that survives close/reopen.
     // Empty string when the dataset carries no @encrypted root attribute;
     // "aes-256-gcm" when it does. Updated by encryptWithKey and by both
     // readers.
@@ -118,7 +118,7 @@ public class SpectralDataset implements
         return file != null ? file.getPath() : null;
     }
 
-    /** M39: the owning storage provider. New call sites should reach
+    /** the owning storage provider. New call sites should reach
      *  for this instead of the native {@link Hdf5File}. */
     public StorageProvider provider() { return provider; }
 
@@ -262,7 +262,7 @@ public class SpectralDataset implements
             String title = null;
             String isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
-            Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();  // M82.3
+            Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
@@ -294,7 +294,7 @@ public class SpectralDataset implements
                         }
                     }
 
-                    // M82.3: read genomic_runs/ when present.
+                    // read genomic_runs/ when present.
                     if (study.hasChild("genomic_runs")) {
                         try (Hdf5Group gG = study.openGroup("genomic_runs")) {
                             if (gG.hasAttribute("_run_names")) {
@@ -347,7 +347,7 @@ public class SpectralDataset implements
             }
             String title = null, isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
-            Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();  // M82.3
+            Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
@@ -381,7 +381,7 @@ public class SpectralDataset implements
                             }
                         }
                     }
-                    // M82.3: read genomic_runs/ from any provider.
+                    // read genomic_runs/ from any provider.
                     if (study.hasChild("genomic_runs")) {
                         try (var gG = study.openGroup("genomic_runs")) {
                             if (gG.hasAttribute("_run_names")) {
@@ -461,7 +461,7 @@ public class SpectralDataset implements
                             buildProvenanceJson(provenanceRecords));
                 }
 
-                // M82.3: genomic_runs subtree (provider-agnostic).
+                // genomic_runs subtree (provider-agnostic).
                 Map<String, GenomicRun> genomicMap = new LinkedHashMap<>();
                 if (genomicRuns != null && !genomicRuns.isEmpty()) {
                     // M93 v1.2: embed references at /study/references/
@@ -732,7 +732,7 @@ public class SpectralDataset implements
                     }
                 }
 
-                // M82.3: genomic_runs subtree (only when non-empty).
+                // genomic_runs subtree (only when non-empty).
                 Map<String, GenomicRun> genomicMap = new LinkedHashMap<>();
                 if (hasGenomic) {
                     // M93 v1.2: embed referenced chromosome sequences at
@@ -831,7 +831,7 @@ public class SpectralDataset implements
                 "cigars", java.util.Set.of(
                     Enums.Compression.RANS_ORDER0,
                     Enums.Compression.RANS_ORDER1));
-                // v1.6: positions / flags / mapping_qualities REMOVED
+                // positions / flags / mapping_qualities REMOVED
                 // from the override surface. These per-record integer
                 // fields live only in genomic_index/ now (mirroring
                 // MS's spectrum_index/ pattern). The droppedIntChannels
@@ -841,7 +841,7 @@ public class SpectralDataset implements
                 // removed entirely from the override surface (rejected
                 // below by the unconditional reject branches and the
                 // generic "channel not supported" branch).
-        // v1.6: per-record integer metadata channels removed from the
+        // per-record integer metadata channels removed from the
         // signal_channels/ override surface. They live exclusively
         // under genomic_index/ now. Hard-error so callers with stale
         // code learn immediately.
@@ -981,12 +981,12 @@ public class SpectralDataset implements
 
             // signal_channels: 5 typed channels + 3 compound datasets.
             try (var sc = rg.createGroup("signal_channels")) {
-                // v1.6: positions / flags / mapping_qualities are NOT
+                // positions / flags / mapping_qualities are NOT
                 // written under signal_channels/. They live exclusively
                 // in genomic_index/, mirroring MS's spectrum_index/
                 // pattern. See docs/format-spec.md §4 and §10.7.
                 // Override-validation rejects these channel names.
-                // M86: sequences/qualities go through the codec
+                // sequences/qualities go through the codec
                 // dispatch helper; absent from the override map →
                 // existing HDF5-filter path with @compression unset.
                 // ref-diff path: writeSequencesRefDiff handles both
@@ -1064,7 +1064,7 @@ public class SpectralDataset implements
                 List<global.thalion.ttio.providers.CompoundField> vlField = List.of(
                     new global.thalion.ttio.providers.CompoundField("value",
                         global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
-                // M86 Phase C: schema lift for cigars. When an override
+                // schema lift for cigars. When an override
                 // is present, replace the M82 compound dataset with a
                 // flat 1-D uint8 dataset of the same name carrying the
                 // codec output, plus an @compression attribute (Binding
@@ -1366,7 +1366,7 @@ public class SpectralDataset implements
     // in v1.0+; non-empty runs without the native lib raise
     // IllegalStateException at the call site (see writeGenomicRunSubtree).
 
-    /** Phase 2c-T (v1.0): write a verbatim {@code mate_info/inline_v2}
+    /** Phase 2c-T : write a verbatim {@code mate_info/inline_v2}
      *  blob plus the {@code chrom_names} sidecar table, BYPASSING the
      *  v2 codec encode. Used by the transport bulk-mode receiver. */
     private static void writeBulkMateInfo(
@@ -1748,7 +1748,7 @@ public class SpectralDataset implements
         }
     }
 
-    /** M86: write a uint8 byte channel, optionally through a TTI-O
+    /** write a uint8 byte channel, optionally through a TTI-O
      *  codec (rANS order-0/1, BASE_PACK, QUALITY_BINNED). When
      *  {@code codecOverride} is {@code null} the channel is written
      *  via the default HDF5-filter path (identical to M82 behaviour,
@@ -1815,7 +1815,7 @@ public class SpectralDataset implements
         return codec.ordinal();
     }
 
-    /** M86 Phase C: encode a {@code List<String>} of CIGARs through
+    /** encode a {@code List<String>} of CIGARs through
      *  the rANS codec path.
      *
      *  <p>For {@link Enums.Compression#RANS_ORDER0} and
@@ -1945,13 +1945,13 @@ public class SpectralDataset implements
                         idents.get(row).confidenceScore(),
                         pool.addString(idents.get(row).evidenceChainJson())
                 });
-        // M82.4: identifications_json mirror retired. Java reads
+        // identifications_json mirror retired. Java reads
         // VL_STRING from the compound directly via Unsafe deref now,
         // so the JSON shadow is dead weight on the HDF5 fast path.
     }
 
     private static List<Identification> readIdentifications(Hdf5Group study) {
-        // M82.4: prefer the compound (canonical) — VL_STRING reads
+        // prefer the compound (canonical) — VL_STRING reads
         // work via Unsafe deref now. Fall back to legacy JSON mirror
         // only when the compound is absent (older Java-written files
         // that were JSON-only or unusual layouts).
@@ -1986,11 +1986,11 @@ public class SpectralDataset implements
                         pool.addString(quants.get(row).normalizationMethod() != null
                                 ? quants.get(row).normalizationMethod() : "")
                 });
-        // M82.4: quantifications_json mirror retired (see writeIdentifications).
+        // quantifications_json mirror retired (see writeIdentifications).
     }
 
     private static List<Quantification> readQuantifications(Hdf5Group study) {
-        // M82.4: compound first (canonical); JSON fallback for legacy.
+        // compound first (canonical); JSON fallback for legacy.
         if (study.hasChild("quantifications")) {
             List<Object[]> rows = Hdf5CompoundIO.readCompoundFull(
                     study, "quantifications", Hdf5CompoundIO.quantificationSchema());
@@ -2023,14 +2023,14 @@ public class SpectralDataset implements
                         pool.addString(records.get(row).inputRefsJson()),
                         pool.addString(records.get(row).outputRefsJson())
                 });
-        // M82.4: study-level provenance_json mirror retired
+        // study-level provenance_json mirror retired
         // (see writeIdentifications). The per-run provenance_json
         // attribute on /study/ms_runs/<name>/ is a different layer
         // and is signed by signatures.py — that one stays.
     }
 
     private static List<ProvenanceRecord> readProvenance(Hdf5Group study) {
-        // M82.4: compound first (canonical); JSON fallback for legacy.
+        // compound first (canonical); JSON fallback for legacy.
         if (study.hasChild("provenance")) {
             List<Object[]> rows = Hdf5CompoundIO.readCompoundFull(
                     study, "provenance", Hdf5CompoundIO.provenanceSchema());
@@ -2203,7 +2203,7 @@ public class SpectralDataset implements
         markRootEncrypted();
     }
 
-    /** v1.1 Issue A: write the root {@code @encrypted} attribute so
+    /** write the root {@code @encrypted} attribute so
      *  {@link #isEncrypted} / {@link #encryptedAlgorithm} survive
      *  close/reopen. For HDF5-backed datasets (the only backend with
      *  per-run on-disk encryption today) this opens the file R/W after

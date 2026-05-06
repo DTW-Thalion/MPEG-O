@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.providers;
@@ -299,7 +299,7 @@ public final class ZarrProvider implements StorageProvider {
             case UINT32  -> "uint32";
             case UINT16  -> "uint16";   // L1 (Task #82): chromosome_ids
             case UINT8   -> "uint8";
-            case UINT64  -> "uint64";   // M82
+            case UINT64  -> "uint64";
             case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(
                     "Precision " + p + " is reserved (cross-lang parity)");
@@ -384,7 +384,7 @@ public final class ZarrProvider implements StorageProvider {
 
     static int bytesPerElement(Precision p) {
         return switch (p) {
-            case FLOAT64, INT64, UINT64 -> 8;   // M82: UINT64 is 8 bytes
+            case FLOAT64, INT64, UINT64 -> 8;   // UINT64 is 8 bytes
             case FLOAT32, INT32, UINT32 -> 4;
             case COMPLEX128 -> 16;
             case UINT16 -> 2;  // L1: chromosome_ids
@@ -1152,7 +1152,7 @@ public final class ZarrProvider implements StorageProvider {
                 for (int i = 0; i < n; i++) out[i] = bb.getFloat();
                 yield out;
             }
-            case INT64, UINT64 -> {   // M82: UINT64 unpacks as long[]
+            case INT64, UINT64 -> {   // UINT64 unpacks as long[]
                 int n = raw.length / 8;
                 long[] out = new long[n];
                 for (int i = 0; i < n; i++) out[i] = bb.getLong();
@@ -1196,7 +1196,7 @@ public final class ZarrProvider implements StorageProvider {
                 float[] a = (float[]) data;
                 for (int i = 0; i < totalElems; i++) bb.putFloat(a[i]);
             }
-            case INT64, UINT64 -> {   // M82
+            case INT64, UINT64 -> {
                 long[] a = (long[]) data;
                 for (int i = 0; i < totalElems; i++) bb.putLong(a[i]);
             }

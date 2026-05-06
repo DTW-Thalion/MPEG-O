@@ -37,22 +37,22 @@
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOCompoundField.h"
 #import "Providers/TTIOHDF5Provider.h"
-#import "Genomics/TTIOGenomicRun.h"            // M82
-#import "Genomics/TTIOGenomicIndex.h"          // M82
-#import "Genomics/TTIOWrittenGenomicRun.h"     // M82
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOGenomicIndex.h"
+#import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOBulkV2Blobs.h"           // Phase 2c-T
-#import "Codecs/TTIORans.h"                    // M86
-#import "Codecs/TTIOBasePack.h"                // M86
+#import "Codecs/TTIORans.h"
+#import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"                 // M86 Phase D
 #import "Codecs/TTIOFqzcompNx16Z.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
-#import "Codecs/TTIOMateInfoV2.h"               // v1.7 #11: inline mate-pair codec
-#import "Codecs/TTIORefDiffV2.h"               // v1.8 #11: bit-packed ref-diff v2
+#import "Codecs/TTIOMateInfoV2.h"               // inline mate-pair codec
+#import "Codecs/TTIORefDiffV2.h"               // bit-packed ref-diff v2
 #import "Codecs/TTIONameTokenizerV2.h"          // v1.8 #11 ch3: adaptive name-tokenizer v2
 #import <hdf5.h>
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
-// M86 Phase B: little-endian serialisation helpers. Use macOS's
+// little-endian serialisation helpers. Use macOS's
 // libkern/OSByteOrder.h when available; fall back to endian.h on
 // Linux (GNUstep on x86/ARM). The serialisation is non-negotiable
 // LE per Binding Decision §118; on big-endian platforms a per-element
@@ -97,7 +97,7 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
     return NO;
 }
 
-// ── M86: signal-channel codec wiring ────────────────────────────────
+// ── signal-channel codec wiring ────────────────────────────────
 //
 // Validation, codec dispatch (rANS / BASE_PACK), and the uint8
 // @compression attribute write that the read path keys on. See
@@ -108,22 +108,22 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
     static NSSet *s = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        // M86 Phase E: read_names joins sequences/qualities as an
+        // read_names joins sequences/qualities as an
         // override-eligible channel, but its only valid codec is
         // NAME_TOKENIZED (Binding Decision §113).
-        // M86 Phase B: positions/flags/mapping_qualities (integer
+        // positions/flags/mapping_qualities (integer
         // channels) join the override-eligible set; their only valid
         // codecs are RANS_ORDER0/1 (Binding Decision §117).
-        // M86 Phase C: cigars joins the override-eligible set;
+        // cigars joins the override-eligible set;
         // accepts {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED} per
         // Binding Decision §120.
-        // M86 Phase F: mate_info_chrom / mate_info_pos /
+        // mate_info_chrom / mate_info_pos /
         // mate_info_tlen join the override-eligible set as the
         // three per-field "virtual channel" names that trigger the
         // mate_info schema lift (Binding Decisions §125, §126). The
         // bare "mate_info" key remains rejected with a discoverable
         // error pointing at the per-field names (Gotcha §143).
-        // v1.6: positions / flags / mapping_qualities REMOVED from the
+        // positions / flags / mapping_qualities REMOVED from the
         // override-eligible set. These per-record integer fields are
         // stored only under genomic_index/ now (mirroring MS's
         // spectrum_index/ pattern). _TTIO_M86_DroppedIntChannels
@@ -189,7 +189,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
         NSSet *intAllowed = [NSSet setWithArray:@[
             @(TTIOCompressionRansOrder0),
             @(TTIOCompressionRansOrder1),
-            @(TTIOCompressionDeltaRansOrder0),  // M95: delta + rANS
+            @(TTIOCompressionDeltaRansOrder0),  // delta + rANS
         ]];
         // mate_info_chrom shares cigars' allowed
         // set (rANS pair via length-prefix-concat). NAME_TOKENIZED v1
@@ -200,7 +200,7 @@ static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideC
             @(TTIOCompressionRansOrder0),
             @(TTIOCompressionRansOrder1),
         ]];
-        // v1.6: positions / flags / mapping_qualities REMOVED — see
+        // positions / flags / mapping_qualities REMOVED — see
         // _TTIO_M86_DroppedIntChannels for the dedicated reject.
         d = @{
             @"sequences":         seqAllowed,
@@ -436,7 +436,7 @@ static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
     }
 }
 
-// M86 Phase C: unsigned LEB128 varint writer for the cigars rANS path.
+// unsigned LEB128 varint writer for the cigars rANS path.
 // The serialisation contract is `varint(asciiLen) + asciiBytes` per
 // CIGAR (§2.5 of the Phase C plan; mirrors NAME_TOKENIZED's verbatim
 // format minus the 7-byte header). Same wire format as the codec's
@@ -455,7 +455,7 @@ static void _TTIO_M86_VarintWrite(NSMutableData *out, uint64_t value)
     [out appendBytes:buf length:n];
 }
 
-/** M86 Phase C: encode a list of CIGAR strings via the selected codec.
+/** encode a list of CIGAR strings via the selected codec.
  *
  *  only the rANS pair is accepted —
  *  NAME_TOKENIZED v1 (codec id 8) was removed.
@@ -659,7 +659,7 @@ static BOOL _TTIO_M86_WriteByteChannelStorage(id<TTIOStorageGroup> group,
                             error:error];
 }
 
-// ── M86 Phase B: integer-channel codec wiring ───────────────────────
+// ── integer-channel codec wiring ───────────────────────
 //
 // Per-channel integer dtypes for the int↔byte serialisation contract
 // (Binding Decision §115). Determined by **channel name lookup**; the
@@ -708,7 +708,7 @@ static NSData *_TTIO_M86_IntChannelToLEBytes(NSString *name, NSData *data)
     return [data copy];
 }
 
-/** M95: element size in bytes for a named integer channel.  Used by
+/** element size in bytes for a named integer channel.  Used by
  *  the delta-rANS encoder which needs the element width to compute
  *  deltas across typed values rather than raw bytes. */
 static uint8_t _TTIO_M95_IntChannelElementSize(NSString *name) {
@@ -873,7 +873,7 @@ static BOOL _TTIO_M86_WriteIntChannelStorage(id<TTIOStorageGroup> group,
 }
 
 
-/** v1.7 #11: returns YES when the inline_v2 path should be used.
+/** returns YES when the inline_v2 path should be used.
  *  Requires native libttio_rans AND a non-empty run. (v1.0 reset:
  *  opt-out flag removed; empty runs still take the M82 compound
  *  fallback because the inline_v2 encoder requires n > 0.) */
@@ -911,7 +911,7 @@ static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
     }
 }
 
-// ── v1.7 #11: inline_v2 writer helpers ──────────────────────────────
+// ── inline_v2 writer helpers ──────────────────────────────
 //
 // Build the chrom_id table (encounter-order on own chromosomes, extended
 // with mate-only chroms), encode via TTIOMateInfoV2, and write:
@@ -1270,13 +1270,13 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
     NSString         *_filePath;
     TTIOAccessPolicy *_accessPolicy;
     NSString         *_encryptedAlgorithm;  // empty string when not encrypted
-    id<TTIOStorageProvider> _provider;  // M39: owns _file
+    id<TTIOStorageProvider> _provider;  // owns _file
 }
 
 @synthesize filePath = _filePath;
 @synthesize provider = _provider;
 @synthesize encryptedAlgorithm = _encryptedAlgorithm;
-@synthesize genomicRuns = _genomicRuns;  // M82
+@synthesize genomicRuns = _genomicRuns;
 
 - (BOOL)isEncrypted
 {
@@ -1298,7 +1298,7 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
         _isaInvestigationId = [isaId copy];
         _msRuns             = [msRuns copy] ?: @{};
         _nmrRuns            = [nmrRuns copy] ?: @{};
-        _genomicRuns        = @{};   // M82: populated by +readFromFilePath: when present
+        _genomicRuns        = @{};   // populated by +readFromFilePath: when present
         _identifications    = [identifications copy] ?: @[];
         _quantifications    = [quantifications copy] ?: @[];
         _provenanceRecords  = [provenance copy] ?: @[];
@@ -1754,7 +1754,7 @@ static NSData *_TTIO_M93_ResolveSingleChromForRun(TTIOWrittenGenomicRun *run,
 // generic byte-channel path with the run's signalCompression default
 // or the explicit override (RANS / BASE_PACK).
 
-// ── v1.8 #11: ref_diff v2 writer helpers ────────────────────────────────────
+// ── ref_diff v2 writer helpers ────────────────────────────────────
 //
 // When eligible (native lib + reference + all reads mapped + opt-not-disabled),
 // the writer creates signal_channels/sequences as a GROUP containing a
@@ -2039,7 +2039,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     return TTIOCompressionNone;
 }
 
-// M82: provider-agnostic write of one /study/genomic_runs/<name>/
+// provider-agnostic write of one /study/genomic_runs/<name>/
 // subtree via the StorageGroup protocol. Used by the memory:// /
 // sqlite:// / zarr:// write path. The HDF5 fast path uses
 // +writeGenomicRun:toGroup:name:error: instead which goes
@@ -2049,10 +2049,10 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                             name:(NSString *)name
                            error:(NSError **)error
 {
-    // M86: validate signal-channel codec overrides before any
+    // validate signal-channel codec overrides before any
     // mutation. Same fail-fast contract as the HDF5 fast path.
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
-    // v1.7 #11: reject per-field mate_info_* overrides when inline_v2 active.
+    // reject per-field mate_info_* overrides when inline_v2 active.
     _TTIO_V17_ValidateMateInfoV2Overrides(run);
 
     id<TTIOStorageGroup> rg = [parent createGroupNamed:name error:error];
@@ -2091,7 +2091,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (!sc) return NO;
     TTIOCompression codec = run.signalCompression;
 
-    // v1.6: positions / flags / mapping_qualities are NOT written
+    // positions / flags / mapping_qualities are NOT written
     // under signal_channels/. They live exclusively under
     // genomic_index/, mirroring MS's spectrum_index/ pattern. See
     // docs/format-spec.md §4 and §10.7. Override-validation rejects
@@ -2135,7 +2135,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         [TTIOCompoundField fieldWithName:@"value" kind:TTIOCompoundFieldKindVLString]
     ];
 
-    // M86 Phase C: schema lift for cigars on the provider/storage
+    // schema lift for cigars on the provider/storage
     // path. Same dispatch as the HDF5 fast path.
     NSNumber *cigarsOverrideS = run.signalCodecOverrides[@"cigars"];
     if (cigarsOverrideS != nil) {
@@ -2329,7 +2329,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (!idxG) return NO;
     if (![idxG setAttributeValue:@((int64_t)spectrumCount)
                           forName:@"count" error:error]) return NO;
-    // v1.10 #10: offsets is omitted on disk; readers derive it from
+    // offsets is omitted on disk; readers derive it from
     // cumsum(lengths).
     if (!writeIndexArrayStorage(idxG, @"lengths",
                                  TTIOPrecisionUInt32, run.lengths,
@@ -2384,8 +2384,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     return YES;
 }
 
-// M82: provider-agnostic minimal write — supports memory:// /
-// sqlite:// / zarr:// URLs. Task 30 (v1.2): MS runs are now supported
+// provider-agnostic minimal write — supports memory:// /
+// sqlite:// / zarr:// URLs. Task 30 : MS runs are now supported
 // via the StorageGroup protocol path; the HDF5 fast path in
 // -writeMinimalToPath: still handles plain filesystem paths for
 // byte-exact parity.
@@ -2485,7 +2485,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     return YES;
 }
 
-// M82: write one /study/genomic_runs/<name>/ subtree. Mirrors the
+// write one /study/genomic_runs/<name>/ subtree. Mirrors the
 // per-MS-run writer but for the genomic data model. Uses TTIOGenomicIndex
 // for the index subgroup + TTIOCompoundIO for the 3 VL compound
 // datasets (cigars, read_names, mate_info) under signal_channels/.
@@ -2494,11 +2494,11 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                     name:(NSString *)name
                    error:(NSError **)error
 {
-    // M86: validate signal-channel codec overrides before any HDF5
+    // validate signal-channel codec overrides before any HDF5
     // mutation. Raises NSInvalidArgumentException on programmer
     // error; the file is left untouched.
     _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
-    // v1.7 #11: reject per-field mate_info_* overrides when inline_v2 active.
+    // reject per-field mate_info_* overrides when inline_v2 active.
     _TTIO_V17_ValidateMateInfoV2Overrides(run);
 
     TTIOHDF5Group *rg = [parent createGroupNamed:name error:error];
@@ -2558,9 +2558,9 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // positions=int64, sequences=uint8, qualities=uint8, flags=uint32,
     // mapping_qualities=uint8.
     //
-    // M86: sequences and qualities go through the byte-channel codec
+    // sequences and qualities go through the byte-channel codec
     // dispatcher so an override (rANS / BASE_PACK) is honoured.
-    // v1.6: positions / flags / mapping_qualities are NOT written
+    // positions / flags / mapping_qualities are NOT written
     // under signal_channels/. They live exclusively under
     // genomic_index/, mirroring MS's spectrum_index/ pattern. See
     // docs/format-spec.md §4 and §10.7.
@@ -2617,7 +2617,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         [TTIOCompoundField fieldWithName:@"value" kind:TTIOCompoundFieldKindVLString]
     ];
 
-    // M86 Phase C: schema lift for cigars. When an override is set,
+    // schema lift for cigars. When an override is set,
     // replace the M82 compound dataset with a flat 1-D uint8 dataset
     // of the same name carrying the codec output, plus an
     // @compression attribute naming the codec id (Binding Decisions
@@ -2890,7 +2890,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         [TTIOFeatureFlags featureNativeMSImageCube],
     ] mutableCopy];
 
-    // M82: opt_genomic is the canonical advertisement of genomic
+    // opt_genomic is the canonical advertisement of genomic
     // content. Add it whenever genomicRuns is non-empty, idempotent
     // if a future caller pre-populates it. Bump format_version to 1.4
     // (which implies 1.3 + 1.1 — readers gate features by flag, not
@@ -2994,7 +2994,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         if (!idxG) return NO;
         if (![idxG setIntegerAttribute:@"count"
                                  value:(int64_t)spectrumCount error:error]) return NO;
-        // v1.10 #10: offsets is omitted on disk; readers derive it
+        // offsets is omitted on disk; readers derive it
         // from cumsum(lengths).
         if (!writeIndexArrayDS(idxG, @"lengths",
                                 TTIOPrecisionUInt32, run.lengths, error)) return NO;
@@ -3054,7 +3054,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (!nmrRunsGroup) return NO;
     if (![nmrRunsGroup setStringAttribute:@"_run_names" value:@"" error:error]) return NO;
 
-    // M82: genomic_runs subtree (only when non-empty — pre-M82 byte
+    // genomic_runs subtree (only when non-empty — pre-M82 byte
     // parity for ms-only files).
     if (hasGenomic) {
         // M93 v1.2: embed each unique reference (by URI) once at
@@ -3117,7 +3117,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 
     NSString *title = @"", *isaId = @"";
     NSMutableDictionary *msRuns = [NSMutableDictionary dictionary];
-    NSMutableDictionary *genomicRunsMap = [NSMutableDictionary dictionary];  // M82.2
+    NSMutableDictionary *genomicRunsMap = [NSMutableDictionary dictionary];
     NSArray *idents = @[], *quants = @[], *provRecs = @[];
 
     if ([root hasChildNamed:@"study"]) {
@@ -3143,7 +3143,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             }
         }
 
-        // M82.2: provider-agnostic genomic_runs read.
+        // provider-agnostic genomic_runs read.
         if ([study hasChildNamed:@"genomic_runs"]) {
             id<TTIOStorageGroup> gG = [study openGroupNamed:@"genomic_runs" error:NULL];
             id namesObj = [gG attributeValueForName:@"_run_names" error:NULL];
@@ -3208,7 +3208,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                          provenanceRecords:provRecs
                                                transitions:nil];
     ds->_filePath    = [url copy];
-    ds->_genomicRuns = [genomicRunsMap copy];  // M82.2
+    ds->_genomicRuns = [genomicRunsMap copy];
     // Surface the root `encrypted` attr for provider-backed reads too.
     id encObj = [root attributeValueForName:@"encrypted" error:NULL];
     if ([encObj isKindOfClass:[NSString class]]) {
@@ -3226,7 +3226,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     if (isNonHdf5ProviderURL(path)) {
         return [self readViaProviderURL:path error:error];
     }
-    // M39: route through TTIOHDF5Provider; the native handle is the
+    // route through TTIOHDF5Provider; the native handle is the
     // TTIOHDF5File previously obtained directly.
     TTIOHDF5Provider *p = [[TTIOHDF5Provider alloc] init];
     if (![p openURL:path mode:TTIOStorageOpenModeRead error:error]) return nil;
@@ -3256,7 +3256,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         }
     }
 
-    // M82: genomic_runs subtree (absent on pre-M82 files → empty dict).
+    // genomic_runs subtree (absent on pre-M82 files → empty dict).
     NSMutableDictionary *genomicRuns = [NSMutableDictionary dictionary];
     if ([study hasChildNamed:@"genomic_runs"]) {
         TTIOHDF5Group *gg = [study openGroupNamed:@"genomic_runs" error:error];
@@ -3300,7 +3300,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     }
 
     // Identifications, quantifications, provenance: compound if present
-    // (v0.2 feature flags), JSON fallback otherwise (v0.1).
+    // (v0.2 feature flags), JSON fallback otherwise .
     NSArray *idents = @[];
     NSArray *quants = @[];
     NSArray *prov   = @[];
@@ -3357,7 +3357,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     ds->_file        = f;
     ds->_provider    = p;
     ds->_filePath    = [path copy];
-    ds->_genomicRuns = [genomicRuns copy];  // M82
+    ds->_genomicRuns = [genomicRuns copy];
 
     // Subclass hook: read additional /study/ content while file is open.
     (void)[ds readAdditionalStudyContent:study error:NULL];
@@ -3603,7 +3603,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         NSData *json = [NSJSONSerialization dataWithJSONObject:plists options:0 error:error];
         if (!json) { [f close]; return NO; }
         H5Ldelete(study.groupId, "identifications", H5P_DEFAULT);
-        // M37: also strip the JSON attribute mirror so sealed files are
+        // also strip the JSON attribute mirror so sealed files are
         // not readable without decryption.
         if ([study hasAttributeNamed:@"identifications_json"])
             H5Adelete(study.groupId, "identifications_json");

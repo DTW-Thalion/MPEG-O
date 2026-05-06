@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -27,7 +27,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
  * {@code -DTTIO_FASTQ_BENCH=1}. Confirms the read-side
  * {@link FastqWriter#write(GenomicRun, Path)} benefits from the same
  * bulk-fetch pattern that produced a 24× speedup in the Python
- * FastqWriter at 1M reads (commit ae9441d).
+ * FastqWriter at 1M reads.
  */
 final class FastqBulkBenchTest {
 

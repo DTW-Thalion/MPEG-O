@@ -64,11 +64,11 @@ class AnonymizationPolicy:
     coarsen_chemical_shift_decimals: int | None = None
     coarsen_mz_decimals: int | None = None
     strip_metadata_fields: bool = False
-    # M90.3: genomic policies. None / False / empty = no-op.
+    # genomic policies. None / False / empty = no-op.
     strip_read_names: bool = False
     randomise_qualities: bool = False
     randomise_qualities_constant: int = 30
-    # M90.14: when set, qualities are replaced with deterministic
+    # when set, qualities are replaced with deterministic
     # random Phred scores in [0, 93] (SAM spec range) from a numpy
     # RNG seeded with this value. None → constant path (M90.3).
     randomise_qualities_seed: int | None = None
@@ -86,7 +86,7 @@ class AnonymizationResult:
     chemical_shift_values_coarsened: int = 0
     metabolites_masked: int = 0
     metadata_fields_stripped: int = 0
-    # M90.3: genomic counters.
+    # genomic counters.
     read_names_stripped: int = 0
     qualities_randomised: int = 0
     reads_in_masked_region: int = 0
@@ -342,7 +342,7 @@ def _apply_genomic_policies(
         # ── randomise_qualities ─────────────────────────────────────
         if policy.randomise_qualities:
             if policy.randomise_qualities_seed is not None:
-                # M90.14: seeded random Phred per byte. Range [0, 93]
+                # seeded random Phred per byte. Range [0, 93]
                 # matches the SAM spec valid Phred range (0 = lowest
                 # quality, 93 = highest representable in standard
                 # Illumina-style ASCII offset 33 + 60).
@@ -366,7 +366,7 @@ def _apply_genomic_policies(
         if policy.mask_regions:
             chroms = list(gr.index.chromosomes)
             positions_arr = np.asarray(gr.index.positions)
-            # M90.13: walk the CIGAR to compute each read's reference
+            # walk the CIGAR to compute each read's reference
             # end coordinate. SAM-overlap semantics: a read overlaps a
             # region iff [read_start, read_end] intersects
             # [region_start, region_end]. Falls back to position-only

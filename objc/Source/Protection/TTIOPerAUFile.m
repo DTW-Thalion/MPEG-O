@@ -334,12 +334,12 @@ static NSArray<TTIOChannelSegment *> *encryptChannelWithDispatch(
     return out;
 }
 
-// M90.11: reserved key name for encrypting genomic_index columns
+// reserved key name for encrypting genomic_index columns
 // under encryptFilePathByRegion's keyMap. The presence of this entry
 // is the opt-in signal for opt_encrypted_au_headers on genomic data.
 static NSString *const kTTIOPerAUHeadersKeyName = @"_headers";
 
-// M90.11: serialise the chromosomes list as compact JSON
+// serialise the chromosomes list as compact JSON
 // ``["chr1","chr1","chr2"]`` — must match Python's
 // json.dumps(chromosomes) which uses double-quoted strings and a
 // single comma+space separator. Foundation's NSJSONSerialization
@@ -627,7 +627,7 @@ static NSData *decryptChannelWithDispatch(
             if (!lensDs) return NO;
             NSData *lengthsData = [lensDs readAll:error];
             if (!lengthsData) return NO;
-            // v1.10 #10: offsets is omitted from disk by default;
+            // offsets is omitted from disk by default;
             // synthesize from cumsum(lengths). Pre-v1.10 files have it.
             NSData *offsetsData;
             if ([idx hasChildNamed:@"offsets"]) {
@@ -728,7 +728,7 @@ static NSData *decryptChannelWithDispatch(
             datasetId++;
         }
 
-        // M90.1: extend encryption to genomic runs. Genomic signal
+        // extend encryption to genomic runs. Genomic signal
         // channels (sequences, qualities) are stored as plain uint8
         // datasets named without a "_values" suffix (different from
         // the MS layout). datasetId continues from where the MS loop
@@ -754,7 +754,7 @@ static NSData *decryptChannelWithDispatch(
                 if (!gLensDs) return NO;
                 NSData *gLengthsData = [gLensDs readAll:error];
                 if (!gLengthsData) return NO;
-                // v1.10 #10: synthesize offsets from cumsum(lengths)
+                // synthesize offsets from cumsum(lengths)
                 // when the column is absent (default for v1.10+ files).
                 NSData *gOffsetsData;
                 if ([gIdx hasChildNamed:@"offsets"]) {
@@ -914,7 +914,7 @@ static NSData *decryptChannelWithDispatch(
             datasetId++;
         }
 
-        // M90.1: also materialise genomic_runs. datasetId continues
+        // also materialise genomic_runs. datasetId continues
         // from where the MS loop left off so AAD reconstruction
         // matches the encrypt path exactly.
         if ([study hasChildNamed:@"genomic_runs"]) {
@@ -985,7 +985,7 @@ static NSData *decryptChannelWithDispatch(
         }
     }
 
-    // M90.11: split out the reserved "_headers" entry from the
+    // split out the reserved "_headers" entry from the
     // chromosome-keyed entries. Headers-key encrypts the four
     // genomic_index columns (chromosomes, positions,
     // mapping_qualities, flags). Chromosome keys encrypt signal
@@ -1067,7 +1067,7 @@ static NSData *decryptChannelWithDispatch(
             if (!gLensDs) return NO;
             NSData *gLengthsData = [gLensDs readAll:error];
             if (!gLengthsData) return NO;
-            // v1.10 #10: synthesize offsets when absent.
+            // synthesize offsets when absent.
             NSData *gOffsetsData;
             if ([gIdx hasChildNamed:@"offsets"]) {
                 id<TTIOStorageDataset> gOffsDs =
@@ -1086,7 +1086,7 @@ static NSData *decryptChannelWithDispatch(
                 readChromosomes(hdf5GIdx, error);
             if (!chromosomes) return NO;
 
-            // M90.11: signal-channel encryption runs in two cases:
+            // signal-channel encryption runs in two cases:
             //   (a) caller supplied chromosome keys (M90.4 path)
             //   (b) caller supplied an empty key_map (M90.4 no-op:
             //       file gets opt_per_au_encryption with all-clear
@@ -1121,7 +1121,7 @@ static NSData *decryptChannelWithDispatch(
                 }
             }
 
-            // M90.11: when "_headers" key is present, encrypt the
+            // when "_headers" key is present, encrypt the
             // four genomic_index columns under it.
             if (headersKey != nil) {
                 if (!encryptGenomicIndex(gIdx, datasetId, headersKey,
@@ -1179,7 +1179,7 @@ static NSData *decryptChannelWithDispatch(
         }
     }
 
-    // M90.11: split out the reserved "_headers" entry from the
+    // split out the reserved "_headers" entry from the
     // chromosome keys.
     NSData *headersKey = keyMap[kTTIOPerAUHeadersKeyName];
     NSMutableDictionary<NSString *, NSData *> *chromosomeKeys =
@@ -1203,7 +1203,7 @@ static NSData *decryptChannelWithDispatch(
             return nil;
         }
 
-        // M90.11: opt_encrypted_au_headers files require the
+        // opt_encrypted_au_headers files require the
         // "_headers" key — without it we can't even reconstruct the
         // chromosomes column needed to dispatch signal-channel
         // decryption.
@@ -1270,7 +1270,7 @@ static NSData *decryptChannelWithDispatch(
             NSMutableDictionary *gRunOut = [NSMutableDictionary dictionary];
             NSArray<NSString *> *chromosomes = nil;
 
-            // M90.11: when headers are encrypted, decrypt the four
+            // when headers are encrypted, decrypt the four
             // genomic_index columns FIRST so the per-AU signal-channel
             // dispatch (which needs chromosomes) can proceed.
             if (headersEncrypted) {

@@ -555,7 +555,7 @@ static uint32_t ttioRngNextBoundedU32(TTIORngState *r, uint32_t bound)
         // ── randomise_qualities ──────────────────────────────────
         if (policy.randomiseQualities) {
             if (policy.randomiseQualitiesSeed != nil) {
-                // M90.14: seeded RNG path. Range [0, 93] matches the
+                // seeded RNG path. Range [0, 93] matches the
                 // SAM spec valid Phred range. Reproducible within
                 // ObjC; cross-language byte equality is NOT a goal.
                 TTIORngState rng;

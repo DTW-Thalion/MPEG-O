@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.providers;
@@ -385,14 +385,14 @@ public final class Hdf5Provider implements StorageProvider {
         @Override public void writeAll(Object data) { delegate.writeData(data); }
 
         @Override public boolean hasAttribute(String n) {
-            // M86: route through Hdf5Dataset's attribute API so the
+            // route through Hdf5Dataset's attribute API so the
             // codec-dispatch read path can probe @compression on the
             // dataset itself ().
             return delegate.hasAttribute(n);
         }
         @Override public Object getAttribute(String n) {
-            // M86: integer reader for @compression (uint8 scalar).
-            // M90.2: String reader for @ttio_signature (UTF-8). The
+            // integer reader for @compression (uint8 scalar).
+            // String reader for @ttio_signature (UTF-8). The
             // string reader is type-safe — it returns null when the
             // on-disk type class is not H5T_STRING, so callers can
             // dispatch on (string-typed -> String) vs
@@ -403,10 +403,10 @@ public final class Hdf5Provider implements StorageProvider {
             return delegate.readIntegerAttribute(n, 0L);
         }
         @Override public void setAttribute(String n, Object v) {
-            // M86: dataset-level @compression attribute is a uint8 by
+            // dataset-level @compression attribute is a uint8 by
             // spec (). Numbers go through the
             // uint8 writer; nulls delete.
-            // M90.2: Strings (e.g. @ttio_signature) go through the
+            // Strings (e.g. @ttio_signature) go through the
             // UTF-8 string writer added in Hdf5Dataset.
             if (v == null) { delegate.deleteAttribute(n); return; }
             if (v instanceof Number num) {
@@ -488,10 +488,10 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override
         public Object readAll() {
-            // M82.4: route VL_BYTES *and* VL_STRING compounds to the
+            // route VL_BYTES *and* VL_STRING compounds to the
             // full reader. The full reader now dereferences VL_STRING
             // char* pointers via Unsafe (was hardcoded to "" prior to
-            // M82.4); VL_BYTES uses the same NativeBytesPool path.
+            // an earlier release); VL_BYTES uses the same NativeBytesPool path.
             // Pure-primitive compounds still take the lighter
             // primitives path for consistency with prior behavior.
             boolean hasVl = schema.fields.stream().anyMatch(f ->
@@ -511,7 +511,7 @@ public final class Hdf5Provider implements StorageProvider {
             return new ArrayList<>(all.subList(from, to));
         }
 
-        // M90.15: route attribute API through a freshly-opened
+        // route attribute API through a freshly-opened
         // dataset handle so signGenomicRun() can write
         // @ttio_signature on the chromosomes compound. We can't use
         // the Hdf5Group#openDataset path because precisionFromType

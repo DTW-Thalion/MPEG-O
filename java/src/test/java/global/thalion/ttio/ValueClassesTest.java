@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -584,7 +584,7 @@ class ValueClassesTest {
 
     @Test
     void activationMethodIntegerValuesMatchObjC() {
-        // M74: values persist as int32 in spectrum_index; must match ObjC.
+        // values persist as int32 in spectrum_index; must match ObjC.
         assertEquals(0, Enums.ActivationMethod.NONE.intValue());
         assertEquals(1, Enums.ActivationMethod.CID.intValue());
         assertEquals(2, Enums.ActivationMethod.HCD.intValue());

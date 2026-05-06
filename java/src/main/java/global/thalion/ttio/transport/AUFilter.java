@@ -14,7 +14,7 @@ import java.util.Map;
  * {@code ttio.transport.filters.AUFilter} and ObjC
  * {@code TTIOAUFilter}.
  *
- * <p>M89.3 (v0.11) added the three genomic predicates:
+ * <p>M89.3 added the three genomic predicates:
  * {@link #chromosome} (exact-match string), {@link #positionMin} and
  * {@link #positionMax} (inclusive int64 range). The position
  * predicates explicitly reject non-genomic AUs ({@code spectrumClass

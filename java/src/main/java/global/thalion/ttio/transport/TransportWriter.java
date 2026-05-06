@@ -250,7 +250,7 @@ public final class TransportWriter implements AutoCloseable {
         }
 
         // M89.2/M89.4: Genomic dataset headers: ids N+1..N+M (contiguous).
-        // M90.9: now lists 5 channels (sequences, qualities + the 3
+        // now lists 5 channels (sequences, qualities + the 3
         // per-AU compound strings cigar/read_name/mate_chromosome).
         for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
             GenomicRun grun = e.getValue();
@@ -278,7 +278,7 @@ public final class TransportWriter implements AutoCloseable {
             id++;
         }
 
-        // M89.2: Then genomic AUs. Phase 2c-T: in bulk mode, emit
+        // Then genomic AUs. Phase 2c-T: in bulk mode, emit
         // verbatim v2 codec blobs first, then per-AU AccessUnits.
         for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
             if (useBulkMode) {
@@ -312,7 +312,7 @@ public final class TransportWriter implements AutoCloseable {
         }
     }
 
-    /** M89.2: Write a single {@link GenomicRun} as a stream segment.
+    /** Write a single {@link GenomicRun} as a stream segment.
      *
      *  <p>Used by callers that drive emission manually (multiplexed
      *  streams, M89.4). The dataset header + AUs + end-of-dataset are
@@ -362,18 +362,18 @@ public final class TransportWriter implements AutoCloseable {
         int precisionUint8 = Enums.Precision.UINT8.ordinal();
         int compressionNone = Enums.Compression.NONE.ordinal();
         int acqMode = run.acquisitionMode().ordinal() & 0xFF;
-        // M90.10: probe source @compression on sequences + qualities
+        // probe source @compression on sequences + qualities
         // so the wire codec mirrors the file's codec choice. The
         // string channels (cigar/read_name/mate_chromosome) always
         // ride uncompressed.
         int seqCodec = run.signalChannelCompressionCode("sequences");
         int qualCodec = run.signalChannelCompressionCode("qualities");
         // Bulk-fetch the byte channels + read-names list once. Mirrors
-        // the Python encoder's pattern (transport/codec.py:494-505) and
-        // the FastqWriter bulk fix (commit ae9441d / 0f99852). Profile
-        // showed 90% of per-record time was the objectAtIndex String
-        // roundtrip + per-record AlignedRead allocation; pre-fetching
-        // skips both for the seq + name paths.
+        // the Python encoder's pattern in transport/codec.py and the
+        // FastqWriter bulk path. Without this pre-fetch, per-record
+        // time is dominated by the objectAtIndex String roundtrip +
+        // AlignedRead allocation; pre-fetching skips both for the seq
+        // and name paths.
         byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
         byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];
         java.util.List<String> namesAll = run.readNamesAll();
@@ -404,7 +404,7 @@ public final class TransportWriter implements AutoCloseable {
             long position = idx.positionAt(i);
             int mappingQuality = idx.mappingQualityAt(i);
             int flagsValue = idx.flagsAt(i);
-            // M90.10: re-encode per-AU slice with the M86 codec when
+            // re-encode per-AU slice with the M86 codec when
             // the source channel had an @compression attribute set.
             byte[] seqPayload = applyWireCodec(seqBytes, seqCodec);
             byte[] qualPayload = applyWireCodec(qualBytes, qualCodec);
@@ -443,7 +443,7 @@ public final class TransportWriter implements AutoCloseable {
         }
     }
 
-    /** M90.10: encode {@code plaintext} with the given wire codec id.
+    /** encode {@code plaintext} with the given wire codec id.
      *  NONE → identity. Other ids dispatch to the matching M86 codec.
      *  Mirrors Python {@code _apply_wire_codec}. */
     private static byte[] applyWireCodec(byte[] plaintext, int codecId) {
@@ -462,7 +462,7 @@ public final class TransportWriter implements AutoCloseable {
             + " not supported for genomic UINT8");
     }
 
-    /** M89.2: Per-genomic-run metadata serialised into the
+    /** Per-genomic-run metadata serialised into the
      *  {@code instrument_json} slot of the dataset header. Mirrors
      *  Python {@code _genomic_run_metadata_json}: JSON object with
      *  reference_uri, platform, sample_name, modality, sort_keys=true.

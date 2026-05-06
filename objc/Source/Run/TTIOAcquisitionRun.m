@@ -49,7 +49,7 @@
     // not yet persisted.
     NSString                    *_name;
     NSArray                     *_inMemorySpectra;       // nil when read-from-disk
-    // v0.7 M44: storage-protocol iVars. Populated by
+    // storage-protocol iVars. Populated by
     // +readFromGroup:name:error: via TTIOHDF5Provider's adapter
     // factory; the hot spectrum-read path goes through the protocol
     // (readSliceAtOffset:count:error:) so a future non-HDF5 provider
@@ -62,7 +62,7 @@
     NSMutableArray<TTIOProvenanceRecord *> *_provenance;
     TTIOAccessPolicy            *_accessPolicy;
 
-    // M21: eagerly decoded Numpress-delta channels, keyed by channel
+    // eagerly decoded Numpress-delta channels, keyed by channel
     // name. When a channel is present here, spectrumAtIndex: slices
     // into this float64 buffer instead of reading the HDF5 dataset,
     // because Numpress decoding needs the running sum prefix.
@@ -80,7 +80,7 @@
     NSString *_persistenceFilePath;
     NSString *_persistenceRunName;
 
-    // M24: chromatogram traces carried with this run.
+    // chromatogram traces carried with this run.
     NSArray<TTIOChromatogram *> *_chromatograms;
 }
 
@@ -161,7 +161,7 @@
     int32_t  *pcp = pc.mutableBytes;
     double   *bpp = bp.mutableBytes;
 
-    // M74: scan once to see if any MS spectrum carries activation/isolation
+    // scan once to see if any MS spectrum carries activation/isolation
     // detail. If so, build four parallel optional columns; otherwise pass nil
     // so the index reflects the legacy (no opt_ms2_activation_detail) layout.
     BOOL anyM74 = NO;
@@ -420,7 +420,7 @@
         }
     }
 
-    // M24: chromatograms under <run>/chromatograms/
+    // chromatograms under <run>/chromatograms/
     if (_chromatograms.count > 0) {
         if (![self writeChromatogramsToRunGroup:runGroup error:error]) return NO;
     }
@@ -430,7 +430,7 @@
 
 // M24 helper — lays out /chromatograms/ with concatenated time/intensity
 // datasets and a chromatogram_index/ subgroup of parallel metadata.
-// v1.10 #10: chromatogram_index/offsets is omitted on disk; readers
+// chromatogram_index/offsets is omitted on disk; readers
 // compute it from cumsum(lengths).
 - (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
                                 error:(NSError **)error
@@ -531,7 +531,7 @@
         ? (NSString *)classObj : @"TTIOMassSpectrum";
     id nucObj = [runGroup attributeValueForName:@"nucleus_type" error:NULL];
     NSString *nucleus = [nucObj isKindOfClass:[NSString class]] ? nucObj : nil;
-    // v0.11 M79: @modality fallback to "mass_spectrometry" so pre-v0.11
+    // @modality fallback to "mass_spectrometry" so pre-v0.11
     // runs read back as mass-spec.
     id modObj = [runGroup attributeValueForName:@"modality" error:NULL];
     NSString *modality = ([modObj isKindOfClass:[NSString class]]
@@ -614,7 +614,7 @@
         if (cn.length > 0) className = cn;
     }
 
-    // v0.11 M79: @modality with pre-v0.11 mass-spec fallback.
+    // @modality with pre-v0.11 mass-spec fallback.
     NSString *modality = @"mass_spectrometry";
     if ([runGroup hasAttributeNamed:@"modality"]) {
         NSString *m = [runGroup attributeValueForName:@"modality" error:NULL];
@@ -690,7 +690,7 @@
             continue;
         }
 
-        // M21: detect Numpress-delta encoding via the per-channel
+        // detect Numpress-delta encoding via the per-channel
         // ``@<chName>_numpress_fixed_point`` attribute.
         NSString *scaleAttr = [NSString stringWithFormat:@"%@_numpress_fixed_point", chName];
         if ([channels hasAttributeNamed:scaleAttr]) {
@@ -741,7 +741,7 @@
     run->_numpressChannels     = numpressChannels.count > 0 ? numpressChannels : nil;
     run->_signalCompression    = runCompression;
 
-    // M24: read chromatograms if present. Absence means v0.3 file → empty list.
+    // read chromatograms if present. Absence means v0.3 file → empty list.
     run->_chromatograms = [self readChromatogramsFromRunGroup:runGroup];
     return run;
 }
@@ -769,7 +769,7 @@
 
     NSData *lengthsData   = [[idxGroup openDatasetNamed:@"lengths" error:NULL] readAll:NULL];
     if (!lengthsData) return @[];
-    // v1.10 #10: offsets is omitted from disk by default; synthesize.
+    // offsets is omitted from disk by default; synthesize.
     NSData *offsetsData;
     if ([idxGroup hasChildNamed:@"offsets"]) {
         offsetsData = [[idxGroup openDatasetNamed:@"offsets" error:NULL] readAll:NULL];
@@ -868,7 +868,7 @@
             d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
                                length:(NSUInteger)len * sizeof(double)];
         } else {
-            // v0.7 M44: route the hot spectrum read through the
+            // route the hot spectrum read through the
             // storage protocol instead of TTIOHDF5Dataset directly.
             // Works uniformly across HDF5/Memory/SQLite backends;
             // M43's cross-backend byte-identity tests guarantee

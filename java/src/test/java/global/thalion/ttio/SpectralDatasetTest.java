@@ -1,6 +1,6 @@
 /*
  * TTI-O Java Implementation
- * Copyright (C) 2026 DTW-Thalion
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio;
@@ -329,7 +329,7 @@ class SpectralDatasetTest {
                     .with(FeatureFlags.OPT_NATIVE_MSIMAGE_CUBE)
                     .writeTo(root);
             try (Hdf5Group study = root.createGroup("study")) {
-                // v0.7 M44: MSImage.writeTo takes StorageGroup; wrap the
+                // MSImage.writeTo takes StorageGroup; wrap the
                 // raw Hdf5Group via the Hdf5Provider adapter.
                 image.writeTo(global.thalion.ttio.providers.Hdf5Provider
                         .adapterForGroup(study));
@@ -340,7 +340,7 @@ class SpectralDatasetTest {
         try (Hdf5File f = Hdf5File.openReadOnly(path);
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study")) {
-            // v0.7 M44: MSImage.readFrom takes StorageGroup; wrap the
+            // MSImage.readFrom takes StorageGroup; wrap the
             // raw Hdf5Group via the Hdf5Provider adapter.
             MSImage read = MSImage.readFrom(global.thalion.ttio.providers
                     .Hdf5Provider.adapterForGroup(study));
@@ -391,7 +391,7 @@ class SpectralDatasetTest {
             AcquisitionRun run = ds.msRuns().values().iterator().next();
             assertTrue(run.spectrumCount() > 0);
 
-            // M37: fixture carries @identifications_json / @quantifications_json /
+            // fixture carries @identifications_json / @quantifications_json /
             // @provenance_json mirror attributes, so Java recovers the VL-string
             // fields with full fidelity via the JSON attribute path.
             List<Identification> idents = ds.identifications();
@@ -433,7 +433,7 @@ class SpectralDatasetTest {
         }
     }
 
-    // ── M37: Compound metadata round-trips ──────────────────────────
+    // ── Compound metadata round-trips ──────────────────────────
 
     @Test
     void identificationsRoundTrip() {
@@ -535,7 +535,7 @@ class SpectralDatasetTest {
 
     @Test
     void compoundOnlyRecoversFullRecord() {
-        // M82.4: simulate a compound-only file (Python/ObjC files have
+        // simulate a compound-only file (Python/ObjC files have
         // no JSON mirror; M82.4-and-later Java files don't either).
         // VL_STRING fields are now recovered from the compound via
         // Hdf5CompoundIO.readCompoundFull's Unsafe-based char* deref —
@@ -573,7 +573,7 @@ class SpectralDatasetTest {
             assertEquals(1, read.size());
             assertEquals(42, read.get(0).spectrumIndex());
             assertEquals(0.61, read.get(0).confidenceScore(), 1e-12);
-            // M82.4: VL fields now recover from the compound directly.
+            // VL fields now recover from the compound directly.
             assertEquals("run_X", read.get(0).runName());
             assertEquals("CHEBI:99999", read.get(0).chemicalEntity());
         }

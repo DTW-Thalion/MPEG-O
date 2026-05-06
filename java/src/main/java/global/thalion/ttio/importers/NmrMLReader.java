@@ -1,4 +1,4 @@
-/* TTI-O Java Implementation / Copyright (C) 2026 DTW-Thalion / SPDX-License-Identifier: Apache-2.0 */
+/* TTI-O Java Implementation / Copyright (c) 2026 The Thalion Initiative / SPDX-License-Identifier: Apache-2.0 */
 package global.thalion.ttio.importers;
 
 import global.thalion.ttio.*;
@@ -251,7 +251,7 @@ public final class NmrMLReader {
                     if (bf != null) spectrumByteFormat = bf;
                     String comp = atts.getValue("compressed");
                     boolean isCompressed = "true".equalsIgnoreCase(comp) || "zlib".equalsIgnoreCase(comp);
-                    // Canonical (v0.9) form: inside spectrum1D but not in
+                    // Canonical form: inside spectrum1D but not in
                     // legacy xAxis/yAxis wrappers. Legacy form: inside
                     // xAxis or yAxis wrapper.
                     if (inXAxis || inYAxis || inSpectrum1D) {
