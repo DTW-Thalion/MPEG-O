@@ -1531,26 +1531,34 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (NSData *)wholeSequencesData
 {
-    NSUInteger total = [self _totalBaseCount];
-    if (total == 0) return [NSData data];
-    NSError *err = nil;
-    NSData *d = [self byteChannelSliceNamed:@"sequences"
-                                      offset:0
-                                       count:total
-                                       error:&err];
-    return d ?: [NSData data];
+    return [self _byteChannelFullNamed:@"sequences"];
 }
 
 - (NSData *)wholeQualitiesData
 {
+    return [self _byteChannelFullNamed:@"qualities"];
+}
+
+// Cache-priming whole-channel fetch. byteChannelSliceNamed: caches
+// codec-compressed channels but returns the raw HDF5 buffer for
+// uncompressed (codec_id == 0) without caching — fix that here so
+// subsequent per-record slices hit the cache regardless of layout.
+- (NSData *)_byteChannelFullNamed:(NSString *)name
+{
     NSUInteger total = [self _totalBaseCount];
     if (total == 0) return [NSData data];
+    NSData *cached = _decodedByteChannels[name];
+    if (cached) return cached;
     NSError *err = nil;
-    NSData *d = [self byteChannelSliceNamed:@"qualities"
-                                      offset:0
-                                       count:total
-                                       error:&err];
-    return d ?: [NSData data];
+    NSData *full = [self byteChannelSliceNamed:name
+                                         offset:0
+                                          count:total
+                                          error:&err];
+    if (!full) return [NSData data];
+    if (!_decodedByteChannels[name]) {
+        _decodedByteChannels[name] = full;
+    }
+    return full;
 }
 
 - (NSArray<NSString *> *)allReadNames
