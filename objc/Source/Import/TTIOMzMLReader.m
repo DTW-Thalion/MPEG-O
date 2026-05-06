@@ -98,6 +98,16 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
     double _isolationLowerOffset;
     double _isolationUpperOffset;
     BOOL _anyActivationDetail;
+
+    // referenceableParamGroup support: collect cvParam attributes
+    // under each group id, then replay them whenever a spectrum or
+    // chromatogram references the group via
+    // <referenceableParamGroupRef ref="…">. Without this, ref'd
+    // polarity / MS-level CVs silently disappear from the import.
+    NSMutableDictionary<NSString *,
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *> *_paramGroups;
+    NSString *_currentGroupId;
+    BOOL _inRefGroup;
 }
 
 @synthesize dataset = _dataset;
@@ -172,6 +182,9 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
         _runSpectra = [NSMutableArray array];
         _specArrays = [NSMutableDictionary dictionary];
         _chromArrays = [NSMutableDictionary dictionary];
+        _paramGroups = [NSMutableDictionary dictionary];
+        _currentGroupId = nil;
+        _inRefGroup = NO;
         _binText = [NSMutableString string];
     }
     return self;
@@ -309,6 +322,23 @@ didStartElement:(NSString *)elementName
  qualifiedName:(NSString *)qName
     attributes:(NSDictionary<NSString *, NSString *> *)attrs
 {
+    if ([elementName isEqualToString:@"referenceableParamGroup"]) {
+        NSString *gid = attrs[@"id"] ?: @"";
+        _currentGroupId = [gid copy];
+        _inRefGroup = YES;
+        if (!_paramGroups[gid]) {
+            _paramGroups[gid] = [NSMutableArray array];
+        }
+        return;
+    }
+    if ([elementName isEqualToString:@"referenceableParamGroupRef"]) {
+        NSString *ref = attrs[@"ref"] ?: @"";
+        NSArray<NSDictionary *> *cvs = _paramGroups[ref];
+        for (NSDictionary *cv in cvs) {
+            [self handleCVParamWithAttributes:cv];
+        }
+        return;
+    }
     if ([elementName isEqualToString:@"run"]) {
         _runId = [attrs[@"id"] copy] ?: @"run";
         return;
@@ -349,6 +379,12 @@ didStartElement:(NSString *)elementName
     if ([elementName isEqualToString:@"isolationWindow"]) { _isolationWindowDepth++; return; }
 
     if ([elementName isEqualToString:@"cvParam"]) {
+        if (_inRefGroup && _currentGroupId) {
+            // Buffer cvParams for replay through any
+            // <referenceableParamGroupRef ref="..."> citing this id.
+            [_paramGroups[_currentGroupId] addObject:[attrs copy]];
+            return;
+        }
         [self handleCVParamWithAttributes:attrs];
         return;
     }
@@ -510,6 +546,12 @@ didStartElement:(NSString *)elementName
   namespaceURI:(NSString *)namespaceURI
  qualifiedName:(NSString *)qName
 {
+    if ([elementName isEqualToString:@"referenceableParamGroup"]) {
+        _inRefGroup = NO;
+        _currentGroupId = nil;
+        return;
+    }
+
     if ([elementName isEqualToString:@"binary"]) {
         _inBinary = NO;
         return;

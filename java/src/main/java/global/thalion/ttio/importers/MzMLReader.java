@@ -332,8 +332,17 @@ public class MzMLReader {
                 case "referenceableParamGroup" -> inRefGroup = false;
                 case "binary" -> {
                     capturing = false;
-                    if (charBuf.length() > 0 && curArrayRole != null) {
-                        byte[] decoded = decodeBase64Zlib(charBuf.toString(), curZlib);
+                    if (curArrayRole != null) {
+                        // Empty <binary></binary> is valid mzML: it
+                        // represents a zero-length array. The PSI-MS
+                        // tiny.pwiz fixture explicitly tests this with
+                        // its "spectrum with no data" userParam.
+                        // Python + ObjC readers both accept it; we
+                        // must too, otherwise empty spectra silently
+                        // disappear from the run.
+                        byte[] decoded = charBuf.length() > 0
+                            ? decodeBase64Zlib(charBuf.toString(), curZlib)
+                            : new byte[0];
                         double[] values = bytesToDoubles(decoded, curPrecision);
                         if (inSpectrum) specArrays.put(curArrayRole, values);
                         if (inChromatogram) chromArrays.put(curArrayRole, values);
