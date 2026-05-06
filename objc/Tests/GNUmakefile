@@ -103,7 +103,8 @@ TTIOTests_OBJC_FILES = \
 	TestTask30MSProviderURL.m \
 	TestTask31InstanceWriterParity.m \
 	TestFastaFastqIo.m \
-	TestFastaFastqTioRoundTrip.m
+	TestFastaFastqTioRoundTrip.m \
+	TTIOReferencesAccessorTests.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

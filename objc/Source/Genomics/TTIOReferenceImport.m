@@ -94,6 +94,86 @@
     return [NSData dataWithBytes:digest length:16];
 }
 
+/** Decode a 32-character lowercase-hex string into a 16-byte
+ *  digest. Returns nil for any input that is not exactly 32 hex
+ *  digits — the constructor then recomputes the MD5, matching the
+ *  Java/Python fallback semantics. */
+static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
+{
+    if (hex == nil || hex.length != 32) return nil;
+    NSData *ascii = [hex dataUsingEncoding:NSASCIIStringEncoding];
+    if (ascii == nil || ascii.length != 32) return nil;
+    const uint8_t *src = (const uint8_t *)ascii.bytes;
+    uint8_t out[16];
+    for (NSUInteger i = 0; i < 16; i++) {
+        int hi = -1, lo = -1;
+        uint8_t a = src[i * 2];
+        uint8_t b = src[i * 2 + 1];
+        if (a >= '0' && a <= '9') hi = a - '0';
+        else if (a >= 'a' && a <= 'f') hi = 10 + (a - 'a');
+        else if (a >= 'A' && a <= 'F') hi = 10 + (a - 'A');
+        if (b >= '0' && b <= '9') lo = b - '0';
+        else if (b >= 'a' && b <= 'f') lo = 10 + (b - 'a');
+        else if (b >= 'A' && b <= 'F') lo = 10 + (b - 'A');
+        if (hi < 0 || lo < 0) return nil;
+        out[i] = (uint8_t)((hi << 4) | lo);
+    }
+    return [NSData dataWithBytes:out length:16];
+}
+
++ (instancetype)readFromGroup:(id<TTIOStorageGroup>)refGroup
+{
+    if (refGroup == nil) return nil;
+
+    // URI: prefer @reference_uri, fall back to the group's leaf name.
+    NSString *uri = nil;
+    if ([refGroup hasAttributeNamed:@"reference_uri"]) {
+        id v = [refGroup attributeValueForName:@"reference_uri" error:NULL];
+        if ([v isKindOfClass:[NSString class]]) {
+            uri = (NSString *)v;
+        }
+    }
+    if (uri == nil) {
+        uri = [refGroup name] ?: @"";
+    }
+
+    // MD5: preserve verbatim from @md5 (lowercase hex) when present,
+    // so the read-back instance carries the same digest bytes as the
+    // writer used. Missing / malformed → constructor recomputes.
+    NSData *md5 = nil;
+    if ([refGroup hasAttributeNamed:@"md5"]) {
+        id v = [refGroup attributeValueForName:@"md5" error:NULL];
+        if ([v isKindOfClass:[NSString class]]) {
+            md5 = _TTIO_ParseMd5HexLocal((NSString *)v);
+        }
+    }
+
+    NSMutableArray<NSString *> *chromNames = [NSMutableArray array];
+    NSMutableArray<NSData *> *seqs = [NSMutableArray array];
+    if ([refGroup hasChildNamed:@"chromosomes"]) {
+        id<TTIOStorageGroup> chromsGrp =
+            [refGroup openGroupNamed:@"chromosomes" error:NULL];
+        if (chromsGrp == nil) return nil;
+        for (NSString *cname in [chromsGrp childNames]) {
+            id<TTIOStorageGroup> chromGrp =
+                [chromsGrp openGroupNamed:cname error:NULL];
+            if (chromGrp == nil) continue;
+            id<TTIOStorageDataset> ds =
+                [chromGrp openDatasetNamed:@"data" error:NULL];
+            if (ds == nil) continue;
+            id raw = [ds readAll:NULL];
+            if (![raw isKindOfClass:[NSData class]]) continue;
+            [chromNames addObject:cname];
+            [seqs addObject:(NSData *)raw];
+        }
+    }
+
+    return [[self alloc] initWithUri:uri
+                         chromosomes:chromNames
+                           sequences:seqs
+                                 md5:md5];
+}
+
 - (NSUInteger)totalBases
 {
     NSUInteger n = 0;
