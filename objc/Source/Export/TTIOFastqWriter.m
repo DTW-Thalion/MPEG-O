@@ -17,6 +17,7 @@
 #import "TTIOFastqWriter.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOAlignedRead.h"
 
 #import <zlib.h>
@@ -156,21 +157,32 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
         gz = (gzipOutput == 1);
     }
 
+    // Pre-fetch the whole sequences + qualities byte buffers + the
+    // read-names list once, then slice in-memory per record. Skips
+    // per-read TTIOAlignedRead materialisation, which would also
+    // decode the cigar / mate triple — fields FASTQ does not need.
+    // Mirrors the 24× speedup the Python FastqWriter saw from this
+    // same pattern (commit ae9441d).
     NSUInteger n = [run count];
+    NSData *seqAll  = [run wholeSequencesData];
+    NSData *qualAll = [run wholeQualitiesData];
+    NSArray<NSString *> *namesAll = [run allReadNames];
+    const uint8_t *seqBytes  = seqAll.bytes;
+    const uint8_t *qualBytes = qualAll.bytes;
+    NSUInteger qualLen = qualAll.length;
+    TTIOGenomicIndex *idx = run.index;
+
     NSMutableData *body = [NSMutableData dataWithCapacity:64 * 1024];
     NSMutableSet<NSString *> *seen = [NSMutableSet set];
     for (NSUInteger i = 0; i < n; i++) {
-        TTIOAlignedRead *r = (TTIOAlignedRead *)[run objectAtIndex:i];
-        NSData *seqData = [r.sequence dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data];
-        NSData *qualSrc = r.qualities ?: [NSData data];
-        NSUInteger len = seqData.length;
+        uint64_t off = [idx offsetAt:i];
+        uint32_t len = [idx lengthAt:i];
         // Build qual slice with sentinel mapping + phred shift.
         NSMutableData *qualSlice = [NSMutableData dataWithCapacity:len];
-        if (qualSrc.length >= len && len > 0) {
-            const uint8_t *src = qualSrc.bytes;
+        if (qualLen >= off + len && len > 0) {
             uint8_t *out = malloc(len);
-            for (NSUInteger j = 0; j < len; j++) {
-                uint8_t b = src[j];
+            for (uint32_t j = 0; j < len; j++) {
+                uint8_t b = qualBytes[off + j];
                 if (b == kQualUnknownByte) b = kPhred33Fill;
                 if (phredOffset == 64) b = (uint8_t)((b + 31) & 0xFF);
                 out[j] = b;
@@ -184,7 +196,7 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
             [qualSlice appendBytes:out length:len];
             free(out);
         }
-        NSString *name = r.readName;
+        NSString *name = (i < namesAll.count) ? namesAll[i] : @"";
         if ([seen containsObject:name]) {
             name = [NSString stringWithFormat:@"%@#%lu", name, (unsigned long)i];
         }
@@ -195,7 +207,7 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
         uint8_t lf = '\n';
         [body appendBytes:&lf length:1];
         if (len > 0) {
-            [body appendData:seqData];
+            [body appendBytes:seqBytes + off length:len];
         }
         [body appendBytes:&lf length:1];
         uint8_t plus = '+';

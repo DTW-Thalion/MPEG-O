@@ -976,4 +976,51 @@ public class GenomicRun
             return null;
         }
     }
+
+    // ── Bulk accessors for hot serialization paths ────────────────
+    //
+    // The per-read accessors (objectAtIndex / readAt /
+    // sequence-on-AlignedRead / etc.) are convenient but materialise
+    // a fresh AlignedRead and slice every channel on every call.
+    // For serialization workloads that touch every byte sequentially
+    // (FastqWriter, FastaWriter, TransportWriter at full-corpus
+    // scale), pre-fetching the whole channel once and slicing
+    // in-memory is dramatically faster — Python's FastqWriter saw a
+    // 24× speedup at 1M reads from this exact pattern.
+
+    /** Return the full ``signal_channels/sequences`` byte array.
+     *  Decoded once and cached for codec-compressed channels;
+     *  read once and discarded for uncompressed channels. */
+    public byte[] sequencesFull() {
+        ensureSignalChannels();
+        return byteChannelSlice("sequences", 0L, (int) totalBaseCount());
+    }
+
+    /** Return the full ``signal_channels/qualities`` byte array.
+     *  Same caching semantics as {@link #sequencesFull}. */
+    public byte[] qualitiesFull() {
+        ensureSignalChannels();
+        return byteChannelSlice("qualities", 0L, (int) totalBaseCount());
+    }
+
+    /** Return the full read-names list, forcing the one-shot
+     *  NAME_TOKENIZED_V2 decode + cache. Mirrors the Python
+     *  ``GenomicRun._read_name_at`` cache priming idiom. */
+    public List<String> readNamesAll() {
+        int n = index.count();
+        if (n == 0) return java.util.Collections.emptyList();
+        // Touch index 0 to trigger the one-shot decode for v2 layouts.
+        readNameAt(0);
+        if (decodedReadNames != null) return decodedReadNames;
+        // Compound / uncompressed fallback path.
+        List<String> out = new ArrayList<>(n);
+        for (int i = 0; i < n; i++) out.add(readNameAt(i));
+        return out;
+    }
+
+    private long totalBaseCount() {
+        int n = index.count();
+        if (n == 0) return 0L;
+        return index.offsetAt(n - 1) + index.lengthAt(n - 1);
+    }
 }
