@@ -232,7 +232,64 @@ def test_mzml_three_way_parity(tmp_path: Path) -> None:
             f"spectrum {i} intensity array divergence"
         )
 
-    # Polarity is parsed inconsistently across languages on real
-    # fixtures: Java's mzML reader honours the positive-scan CV param,
-    # Python + ObjC currently do not. Track that separately rather
-    # than gate the rest of the parity surface on it.
+    # Polarity now agrees across all three (synthetic input emits it
+    # directly per-spectrum; the real-fixture test below additionally
+    # exercises referenceableParamGroupRef polarity resolution).
+    for i in range(py["spectrumCount"]):
+        ps, js, os_ = py["spectra"][i], java["spectra"][i], objc["spectra"][i]
+        assert ps["polarity"] == js["polarity"] == os_["polarity"]
+
+
+@pytest.mark.skipif(
+    not (_have_java() and _have_objc()),
+    reason="needs both Java MzMLProbe.class and built TtioMzMLProbe"
+)
+def test_mzml_three_way_parity_tiny_pwiz() -> None:
+    """Drive the PSI-MS tiny.pwiz.1.1.mzML reference fixture through
+    all three readers. Catches divergences the synthetic test cannot:
+      * Empty <binary></binary> arrays (Java used to drop the spectrum)
+      * <referenceableParamGroupRef> resolution (Python + ObjC used
+        to silently miss the positive-scan polarity CV that lives on
+        the referenced group rather than directly on the spectrum)
+    Both bugs were fixed in 2026-05-06; this test gates against
+    regression."""
+    fixture = (
+        REPO_ROOT
+        / "objc"
+        / "Tests"
+        / "Fixtures"
+        / "tiny.pwiz.1.1.mzML"
+    )
+    if not fixture.is_file():
+        pytest.skip(f"tiny.pwiz.1.1.mzML not available at {fixture}")
+
+    py = _python_probe(fixture)
+    java = _run_java_probe(fixture)
+    objc = _run_objc_probe(fixture)
+
+    assert py["spectrumCount"] == 4, (
+        f"expected 4 spectra in tiny.pwiz, got py={py['spectrumCount']}"
+    )
+    assert (
+        py["spectrumCount"]
+        == java["spectrumCount"]
+        == objc["spectrumCount"]
+    )
+
+    for i in range(py["spectrumCount"]):
+        ps, js, os_ = py["spectra"][i], java["spectra"][i], objc["spectra"][i]
+        assert ps["retentionTime"] == js["retentionTime"] == os_["retentionTime"]
+        assert ps["msLevel"] == js["msLevel"] == os_["msLevel"]
+        assert ps["polarity"] == js["polarity"] == os_["polarity"], (
+            f"spectrum {i} polarity divergence "
+            f"py={ps['polarity']} java={js['polarity']} "
+            f"objc={os_['polarity']}"
+        )
+        assert ps["precursorMz"] == js["precursorMz"] == os_["precursorMz"]
+        assert (
+            ps["precursorCharge"]
+            == js["precursorCharge"]
+            == os_["precursorCharge"]
+        )
+        assert ps["mz"] == js["mz"] == os_["mz"]
+        assert ps["intensity"] == js["intensity"] == os_["intensity"]

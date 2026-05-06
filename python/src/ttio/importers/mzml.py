@@ -88,6 +88,7 @@ class _State:
         "any_activation_detail",
         "in_chromatogram", "chrom_type", "chrom_target_mz",
         "chrom_precursor_mz", "chrom_product_mz",
+        "param_groups", "current_group_id", "in_ref_group",
     )
 
     def __init__(self, source_file: str) -> None:
@@ -130,6 +131,12 @@ class _State:
         self.chrom_target_mz = 0.0
         self.chrom_precursor_mz = 0.0
         self.chrom_product_mz = 0.0
+        # referenceableParamGroup support: collect cvParams under each
+        # group id, then replay them whenever a spectrum / chromatogram
+        # references the group via <referenceableParamGroupRef>.
+        self.param_groups: dict[str, list[dict[str, str]]] = {}
+        self.current_group_id: str | None = None
+        self.in_ref_group: bool = False
 
     def reset_spectrum(self) -> None:
         self.in_spectrum = False
@@ -173,6 +180,17 @@ def _local(tag: str) -> str:
 
 def _handle_start(state: _State, tag: str, elem: Any) -> None:
     attrs = elem.attrib
+    if tag == "referenceableParamGroup":
+        gid = attrs.get("id", "")
+        state.current_group_id = gid
+        state.in_ref_group = True
+        state.param_groups.setdefault(gid, [])
+        return
+    if tag == "referenceableParamGroupRef":
+        ref = attrs.get("ref", "")
+        for cv_attrs in state.param_groups.get(ref, ()):
+            _handle_cv_param(state, cv_attrs)
+        return
     if tag == "run":
         state.run_id = attrs.get("id", "run")
         return
@@ -232,6 +250,12 @@ def _handle_start(state: _State, tag: str, elem: Any) -> None:
         state.in_isolation_window += 1
         return
     if tag == "cvParam":
+        if state.in_ref_group and state.current_group_id is not None:
+            # Buffer cvParams for later replay through any
+            # <referenceableParamGroupRef ref="..."> element that
+            # cites this group id.
+            state.param_groups[state.current_group_id].append(dict(attrs))
+            return
         _handle_cv_param(state, attrs)
 
 
@@ -336,6 +360,10 @@ def _handle_cv_param(state: _State, attrs: dict[str, str]) -> None:
 
 
 def _handle_end(state: _State, tag: str, elem: Any) -> None:
+    if tag == "referenceableParamGroup":
+        state.in_ref_group = False
+        state.current_group_id = None
+        return
     if tag == "binary":
         if state.in_bin_array:
             state.bin_text.append(elem.text or "")
