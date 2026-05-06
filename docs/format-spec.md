@@ -1213,6 +1213,60 @@ will not match the REF_DIFF_V2-encoder MD5 for the same
 reference**; users mixing the two paths in a single `.tio` should
 coordinate which writer owns the reference.
 
+### Reading embedded references
+
+A `.tio` may embed one or more references at
+`/study/references/<reference_uri>/`. Each child group is one
+reference; under it sits a `chromosomes/` sub-group whose children
+are per-chromosome sub-groups. Each per-chromosome sub-group
+contains a `data` UINT8 dataset holding the raw sequence bytes
+(uppercase ACGTN for the REF_DIFF_V2 auto-embed path; case-
+preserving for the FASTA-import path).
+
+URI-group attributes:
+
+| Attribute        | Type   | Description                                                |
+|------------------|--------|------------------------------------------------------------|
+| `reference_uri`  | string | The reference URI (matches the group's leaf-name segment). |
+| `md5`            | string | 32-character lowercase hex digest of the sequences.        |
+
+Per-chromosome group attribute `length` carries the sequence length
+in bases (informational; equals the `data` dataset's length and may
+be ignored by readers).
+
+**MD5 computation.** The `@md5` attribute stamped by the
+REF_DIFF_V2 auto-embed writer is the MD5 of the **concatenated
+sequence bytes** in **alphabetic order of chromosome name** —
+i.e. the writer's bytes-only digest. This is intentionally
+different from the canonical
+`compute_reference_md5` /
+`ReferenceImport.computeMd5` /
+`+[TTIOReferenceImport computeMd5WithChromosomes:sequences:]`
+helpers, which prepend each chromosome name + a `0x0A` byte before
+the sequence bytes (ending each chrom block with another `0x0A`).
+The two forms produce different digests for the same content. The
+mismatch is being tracked for unification in v1.2; in v1.1.0 the
+writer's seq-only form is the authoritative on-disk digest.
+
+(See also the "FASTA-import variant" subsection above: that path
+stamps a third digest variant — the canonical name-framed form —
+because FASTA-import owns its own writer code path.)
+
+**Read-side accessor (v1.1.0+).** A freshly-opened dataset exposes
+embedded references through the `references()` accessor
+(`references` property in Python,
+`-[TTIOSpectralDataset references]` in ObjC), keyed by reference
+URI. Datasets written without embedded references (writer flag
+`embedReference = false`) return an empty map regardless of whether
+individual genomic runs carry a `referenceUri`.
+
+The `@md5` attribute is preserved verbatim through `references()` —
+i.e. the returned `ReferenceImport.md5` matches the on-disk
+attribute byte-for-byte when present and well-formed. Missing or
+malformed values fall back to recomputation via the canonical helper
+(`compute_reference_md5` etc.), which means a read-back digest may
+differ from the writer-stamped one in that specific edge case.
+
 ### Default codec selection
 
 When a run provides `reference_chrom_seqs` (or otherwise resolves a

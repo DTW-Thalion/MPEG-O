@@ -9,7 +9,47 @@ public API is stable from onward.
 
 ---
 
-## [Unreleased] — post-v1.0.0 perf + parity tweaks
+## [Unreleased]
+
+_No changes yet._
+
+---
+
+## [1.1.0] — 2026-05-06
+
+Pure additive release. No wire-format change: `.tio` files written
+by 1.0.0 are read identically by 1.1.0 and vice versa.
+
+### Added
+
+- `SpectralDataset.references()` (Java),
+  `SpectralDataset.references` property (Python), and
+  `[TTIOSpectralDataset references]` (ObjC) — enumerates embedded
+  references at `/study/references/<reference_uri>/` for opened
+  datasets, keyed by reference URI. Datasets written without
+  embedded references (writer flag `embedReference = false`) return
+  an empty map regardless of whether individual genomic runs carry a
+  `referenceUri`. Cross-language parity verified by
+  `python/tests/conformance/test_references_xlang.py` (9 directed
+  pairs).
+- `ReferenceImport.readFromGroup` (Java) /
+  `ReferenceImport.read_from_group` (Python) /
+  `+[TTIOReferenceImport readFromGroup:]` (ObjC) — factory that
+  materialises a `ReferenceImport` from its on-disk group.
+
+### Notes
+
+- ObjC has no canonical library-version constant; the version bump
+  applies only to the Java pom and Python `__version__` /
+  `pyproject.toml` metadata.
+- The on-disk reference layout itself is unchanged from 1.0.0 —
+  v1.1.0 only fills in the previously-missing read path. See
+  `docs/format-spec.md` §10.10 (subsection "Reading embedded
+  references") for the exact byte layout and the `@md5` form note.
+
+---
+
+## [post-v1.0.0 perf + parity tweaks — included in 1.1.0]
 
 All correctness-neutral (same wire bytes, same on-disk container).
 Headline numbers + reproducer instructions consolidated in
