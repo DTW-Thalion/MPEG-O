@@ -368,19 +368,42 @@ public final class TransportWriter implements AutoCloseable {
         // ride uncompressed.
         int seqCodec = run.signalChannelCompressionCode("sequences");
         int qualCodec = run.signalChannelCompressionCode("qualities");
+        // Bulk-fetch the byte channels + read-names list once. Mirrors
+        // the Python encoder's pattern (transport/codec.py:494-505) and
+        // the FastqWriter bulk fix (commit ae9441d / 0f99852). Profile
+        // showed 90% of per-record time was the objectAtIndex String
+        // roundtrip + per-record AlignedRead allocation; pre-fetching
+        // skips both for the seq + name paths.
+        byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
+        byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];
+        java.util.List<String> namesAll = run.readNamesAll();
+        global.thalion.ttio.genomics.GenomicIndex idx = run.index();
         for (int i = 0; i < n; i++) {
-            AlignedRead read = run.objectAtIndex(i);
-            byte[] seqBytes = read.sequence().getBytes(StandardCharsets.UTF_8);
-            byte[] qualBytes = read.qualities();
-            int length = seqBytes.length;
+            long offset = idx.offsetAt(i);
+            int length = idx.lengthAt(i);
+            byte[] seqBytes = new byte[length];
+            if (length > 0) System.arraycopy(seqAll, (int) offset, seqBytes, 0, length);
+            byte[] qualBytes;
+            if (qualAll.length >= offset + length) {
+                qualBytes = new byte[length];
+                if (length > 0) System.arraycopy(qualAll, (int) offset, qualBytes, 0, length);
+            } else {
+                qualBytes = new byte[0];
+            }
+            // cigar / mateChromosome / matePosition / templateLength
+            // are still routed through objectAtIndex — the underlying
+            // per-record decoders cache after first call so per-record
+            // cost is amortised. Skipping the seq/qual byteChannelSlice
+            // work + String roundtrip is the main win.
+            AlignedRead read = run.readAt(i);
             // M90.10: re-encode per-AU slice with the M86 codec when
             // the source channel had an @compression attribute set.
             byte[] seqPayload = applyWireCodec(seqBytes, seqCodec);
             byte[] qualPayload = applyWireCodec(qualBytes, qualCodec);
             byte[] cigarBytes = (read.cigar() == null ? "" : read.cigar())
                 .getBytes(StandardCharsets.UTF_8);
-            byte[] nameBytes = (read.readName() == null ? "" : read.readName())
-                .getBytes(StandardCharsets.UTF_8);
+            String name = i < namesAll.size() ? namesAll.get(i) : "";
+            byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
             byte[] mateChrBytes = (read.mateChromosome() == null ? ""
                     : read.mateChromosome()).getBytes(StandardCharsets.UTF_8);
             List<ChannelData> channels = new ArrayList<>(5);

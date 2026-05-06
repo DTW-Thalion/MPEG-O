@@ -90,6 +90,12 @@ public class GenomicRun
     // Task 13 (mate_info v2): lazy decoded triple from inline_v2 blob.
     // Null until first access to a mate field on a v2-layout file.
     private global.thalion.ttio.codecs.MateInfoV2.Triple decodedMateV2 = null;
+    /** Memoised result of {@link #isMateInfoInlineV2}. The probe opens
+     *  the {@code mate_info} HDF5 group; without caching, calling it
+     *  three times per record from {@link #objectAtIndex} blew up the
+     *  TransportWriter genomic encode path (300K HDF5 group opens
+     *  per 100K reads, ~2.2s of pure framework overhead). */
+    private Boolean mateInfoInlineV2Cached = null;
     // Resolved chrom name table for the v2 path: index → chrom name.
     // Task 13 (ref_diff v2): lazy decoded flat byte stream from the
     // signal_channels/sequences/refdiff_v2 blob. Null until first access
@@ -742,11 +748,17 @@ public class GenomicRun
      *  {@link #_decodeMateV2()} is used instead of the Phase F subgroup
      *  or M82 compound paths. */
     private boolean isMateInfoInlineV2() {
+        if (mateInfoInlineV2Cached != null) return mateInfoInlineV2Cached;
         ensureSignalChannels();
-        if (!signalChannels.hasChild("mate_info")) return false;
+        if (!signalChannels.hasChild("mate_info")) {
+            mateInfoInlineV2Cached = Boolean.FALSE;
+            return false;
+        }
         try (StorageGroup mateGrp = signalChannels.openGroup("mate_info")) {
-            return mateGrp.hasChild("inline_v2");
+            mateInfoInlineV2Cached = mateGrp.hasChild("inline_v2");
+            return mateInfoInlineV2Cached;
         } catch (Exception e) {
+            mateInfoInlineV2Cached = Boolean.FALSE;
             return false;
         }
     }
