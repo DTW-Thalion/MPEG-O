@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import TracebackType
+from types import MappingProxyType, TracebackType
 from typing import Any, Iterator, Mapping
 
 import h5py
@@ -426,7 +426,10 @@ class SpectralDataset:
 
         :since: 1.1.0
         """
-        from types import MappingProxyType
+        # Deliberate tightening over `all_runs` etc.: /study/references/
+        # is a write-once-on-open snapshot, so we expose it as a true
+        # read-only view (mutation raises TypeError) rather than a
+        # cheap dict copy. Added in 1.1.0.
         return MappingProxyType(self._references)
 
     @property
