@@ -33,6 +33,7 @@ TTIOTests_OBJC_FILES = \
 	TestMilestone27.m \
 	TestMilestone28.m \
 	TestMilestone29.m \
+	TestNmrMLReaderParity.m \
 	TestMilestone39.m \
 	TestMilestone49.m \
 	TestMilestone52.m \

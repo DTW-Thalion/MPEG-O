@@ -36,6 +36,7 @@ extern void testMilestone25(void);
 extern void testMilestone27(void);
 extern void testMilestone28(void);
 extern void testMilestone29(void);
+extern void testNmrMLReaderParity(void);
 extern void testMilestone39(void);
 extern void testMilestone49(void);
 extern void testMilestone52(void);
@@ -248,6 +249,7 @@ int main(int argc, const char *argv[])
 
         START_SET("Milestone 29: nmrML writer + Thermo RAW stub")
             testMilestone29();
+            testNmrMLReaderParity();
         END_SET("Milestone 29: nmrML writer + Thermo RAW stub")
 
         START_SET("Milestone 39: provider abstraction")
