@@ -8,12 +8,17 @@ When ``Cython`` is unavailable, the build silently emits no extension
 modules — the pure-Python references provide byte-identical output, just
 slower. ObjC + Java implementations are unaffected.
 
-Extensions whose ``.pyx`` source files are missing on disk are also
-silently skipped — `_ref_diff` and `_name_tokenizer` are placeholders
-for future Cython acceleration; the pure-Python implementations under
-``ttio.codecs.ref_diff_v2`` and ``ttio.codecs.name_tokenizer_v2``
-already cover the codec. Skipping a missing source keeps
-``pip install -e .`` working on a fresh clone.
+Two of the v2 codecs — REF_DIFF_V2 and NAME_TOKENIZED_V2 — do not have
+Cython accelerators here because their Python wrappers
+(``ttio.codecs.ref_diff_v2``, ``ttio.codecs.name_tokenizer_v2``) are
+thin ctypes shims around the native ``libttio_rans`` C library. All
+hot work runs in C; the Python glue is only argument marshalling.
+Adding Cython on top would be a no-op layer. Empty placeholder
+package directories were removed 2026-05-05.
+
+Extensions whose ``.pyx`` source files are missing on disk are still
+silently skipped so a partial-source checkout (e.g. minimum-clone for
+build metadata only) keeps ``pip install -e .`` working.
 """
 from __future__ import annotations
 
@@ -30,17 +35,12 @@ _CYTHON_TARGETS = [
         "src/ttio/codecs/_fqzcomp_nx16_z/_fqzcomp_nx16_z.pyx",
     ),
     (
-        "ttio.codecs._ref_diff._ref_diff",
-        "src/ttio/codecs/_ref_diff/_ref_diff.pyx",
-    ),
-    (
-        "ttio.codecs._name_tokenizer._name_tokenizer",
-        "src/ttio/codecs/_name_tokenizer/_name_tokenizer.pyx",
-    ),
-    (
         "ttio.codecs._rans._rans",
         "src/ttio/codecs/_rans/_rans.pyx",
     ),
+    # Note: REF_DIFF_V2 and NAME_TOKENIZED_V2 use the native C library
+    # via ctypes; no Python-side Cython accelerator is meaningful. See
+    # the module docstring above.
 ]
 
 ext_modules: list = []
