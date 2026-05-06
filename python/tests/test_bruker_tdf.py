@@ -91,6 +91,58 @@ def test_metadata_raises_on_non_tdf_directory(tmp_path: Path) -> None:
         read_metadata(tmp_path / "does_not_exist.d")
 
 
+def _write_synthetic_tsf(d_dir: Path) -> None:
+    """Construct a minimal ``analysis.tsf`` (non-TIMS Bruker) SQLite
+    metadata file. Same schema as ``.tdf`` — only the file name and
+    binary frame layout differ. Used for the .tsf-detection tests."""
+    d_dir.mkdir(parents=True, exist_ok=True)
+    tsf = d_dir / "analysis.tsf"
+    if tsf.exists():
+        tsf.unlink()
+    conn = sqlite3.connect(str(tsf))
+    c = conn.cursor()
+    c.execute("CREATE TABLE Frames (Id INTEGER PRIMARY KEY, Time REAL, MsMsType INTEGER)")
+    c.execute("CREATE TABLE GlobalMetadata (Key TEXT PRIMARY KEY, Value TEXT)")
+    c.execute("CREATE TABLE Properties (Key TEXT PRIMARY KEY, Value TEXT)")
+    c.execute("INSERT INTO Frames VALUES (1, 0.5, 0)")
+    c.execute("INSERT INTO Frames VALUES (2, 1.0, 0)")
+    c.execute("INSERT INTO GlobalMetadata VALUES ('InstrumentVendor', 'Bruker')")
+    c.execute("INSERT INTO GlobalMetadata VALUES ('InstrumentName', 'rapifleX')")
+    c.execute("INSERT INTO GlobalMetadata VALUES ('AcquisitionSoftware', 'flexControl')")
+    conn.commit()
+    conn.close()
+
+
+def test_metadata_reads_tsf_directory(tmp_path: Path) -> None:
+    """``read_metadata`` works on .tsf inputs (non-TIMS Bruker). The
+    SQLite schema is identical to .tdf for the metadata tables we
+    consume; the only difference is binary frame layout, which
+    metadata-only access doesn't touch."""
+    from ttio.importers.bruker_tdf import read_metadata
+    d = tmp_path / "non_tims.d"
+    _write_synthetic_tsf(d)
+    md = read_metadata(d)
+    assert md.frame_count == 2
+    assert md.ms1_frame_count == 2
+    assert md.instrument_vendor == "Bruker"
+    assert md.instrument_model == "rapifleX"
+
+
+def test_read_rejects_tsf_with_clear_error(tmp_path: Path) -> None:
+    """Full per-frame ``read()`` raises BrukerTDFUnavailableError on
+    a .tsf directory rather than crashing inside opentimspy (which
+    is TDF-only). Users get a pointer at the msconvert workaround."""
+    from ttio.importers.bruker_tdf import read, BrukerTDFUnavailableError
+    d = tmp_path / "non_tims.d"
+    _write_synthetic_tsf(d)
+    out = tmp_path / "out.tio"
+    with pytest.raises(
+        BrukerTDFUnavailableError,
+        match=r"\.tsf .*non-TIMS|msconvert"
+    ):
+        read(d, out)
+
+
 def test_read_without_opentimspy_raises_cleanly(tmp_path: Path) -> None:
     """If opentimspy is not importable, ``read()`` must raise
     :class:`BrukerTDFUnavailableError` with install guidance — the

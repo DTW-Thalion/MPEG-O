@@ -216,6 +216,19 @@ def read(d_dir: str | Path, output_path: str | Path, *,
     if not d.is_dir():
         raise FileNotFoundError(f"Bruker .d directory not found: {d}")
 
+    # ``.tsf`` (non-TIMS Bruker) shares the SQLite metadata schema
+    # with ``.tdf`` so :func:`read_metadata` works on either, but the
+    # binary frame layout differs. opentimspy is TDF-only; raise a
+    # clear error rather than crash inside the C library.
+    schema_path = _locate_tdf(d)
+    if schema_path.suffix == ".tsf":
+        raise BrukerTDFUnavailableError(
+            f"{d} is a Bruker .tsf (non-TIMS) directory; full per-frame "
+            "decode is not supported via opentimspy in v1.0. Use "
+            "read_metadata() for metadata-only access, or convert to "
+            "mzML via ProteoWizard's msconvert + ingest the mzML."
+        )
+
     metadata = read_metadata(d)
 
     ot = OpenTIMS(d)
@@ -262,19 +275,42 @@ def read(d_dir: str | Path, output_path: str | Path, *,
 
 
 def _locate_tdf(d: Path) -> Path:
-    """Return the path to ``analysis.tdf`` inside the ``.d`` directory."""
+    """Return the path to ``analysis.tdf`` (or ``analysis.tsf``)
+    inside the ``.d`` directory.
+
+    Bruker uses two SQLite-backed schemas:
+
+    * ``analysis.tdf`` + ``analysis.tdf_bin`` for **timsTOF** runs
+      (per-peak ion-mobility, the v0.8 default this importer was
+      written for).
+    * ``analysis.tsf`` + ``analysis.tsf_bin`` for **non-TIMS**
+      Bruker QTOF / MALDI-style runs (single ion-mobility per scan).
+
+    The metadata schemas are very similar — the SQLite tables
+    ``GlobalMetadata`` / ``Properties`` / ``Frames`` exist in both,
+    so :func:`read_metadata` can run on either. The full per-frame
+    decode path through ``opentimspy`` is **TDF-only** today; calling
+    :func:`read` on a ``.tsf`` directory raises a clear error
+    pointing at this gap.
+    """
     if not d.is_dir():
         raise FileNotFoundError(
-            f"No analysis.tdf found under {d} — is this a Bruker .d directory?")
-    candidate = d / "analysis.tdf"
-    if candidate.is_file():
-        return candidate
+            f"No analysis.tdf / analysis.tsf found under {d} — "
+            "is this a Bruker .d directory?")
+    for name in ("analysis.tdf", "analysis.tsf"):
+        candidate = d / name
+        if candidate.is_file():
+            return candidate
     # Some tools nest the .d under a parent — try one level in.
     for child in d.iterdir():
-        if child.is_dir() and (child / "analysis.tdf").is_file():
-            return child / "analysis.tdf"
+        if child.is_dir():
+            for name in ("analysis.tdf", "analysis.tsf"):
+                candidate = child / name
+                if candidate.is_file():
+                    return candidate
     raise FileNotFoundError(
-        f"No analysis.tdf found under {d} — is this a Bruker .d directory?")
+        f"No analysis.tdf / analysis.tsf found under {d} — "
+        "is this a Bruker .d directory?")
 
 
 def _pick(d: dict[str, str], *keys: str) -> str:
