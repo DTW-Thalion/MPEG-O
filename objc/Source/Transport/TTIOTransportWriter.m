@@ -701,15 +701,43 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         // M90.10: probe source's @compression on sequences + qualities.
         uint8_t seqCodec = [grun wireCompressionForChannel:@"sequences"];
         uint8_t qualCodec = [grun wireCompressionForChannel:@"qualities"];
+        // Bulk-fetch the byte channels + read-names list once. Mirrors
+        // the Java + Python encoders (commits 758b340 / Python
+        // transport/codec.py:494-505) so per-record cost is dominated
+        // by NSData slicing (~free) instead of TTIOAlignedRead
+        // materialisation + String roundtrip.
+        NSData *seqAll = (nReads > 0)
+            ? [grun wholeSequencesData] : [NSData data];
+        NSData *qualAll = (nReads > 0)
+            ? [grun wholeQualitiesData] : [NSData data];
+        NSArray<NSString *> *namesAll = [grun allReadNames];
+        const uint8_t *seqBytes  = seqAll.bytes;
+        const uint8_t *qualBytes = qualAll.bytes;
+        NSUInteger qualLenTotal = qualAll.length;
         for (NSUInteger i = 0; i < nReads; i++) {
+            uint64_t offset = idx ? [idx offsetAt:i] : 0;
+            uint32_t length = idx ? [idx lengthAt:i] : 0;
+            NSData *seqData = (length > 0)
+                ? [NSData dataWithBytes:seqBytes + offset length:length]
+                : [NSData data];
+            NSData *qualData;
+            if (qualLenTotal >= offset + length && length > 0) {
+                qualData = [NSData dataWithBytes:qualBytes + offset
+                                          length:length];
+            } else {
+                qualData = [NSData data];
+            }
+            // cigar / mateChromosome / matePosition / templateLength
+            // still flow through readAtIndex — those decoders cache
+            // after first call so per-record cost is amortised. The
+            // savings here are skipping the byteChannelSliceNamed
+            // work + NSString alloc for the seq channel.
             NSError *readErr = nil;
             TTIOAlignedRead *r = [grun readAtIndex:i error:&readErr];
             if (!r) {
                 if (error) *error = readErr;
                 return NO;
             }
-            NSData *seqData = [r.sequence dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
-            NSData *qualData = r.qualities ?: [NSData data];
             uint32_t seqLen = (uint32_t)seqData.length;
             uint32_t qualLen = (uint32_t)qualData.length;
             NSData *seqPayload = applyWireCodecGenomic(seqData, seqCodec);
@@ -727,7 +755,8 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
                                                       nElements:qualLen
                                                            data:qualPayload];
             NSData *cigarData = [(r.cigar ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
-            NSData *nameData  = [(r.readName ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+            NSString *nameStr = (i < namesAll.count) ? namesAll[i] : (r.readName ?: @"");
+            NSData *nameData  = [nameStr dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
             NSData *mateChrData = [(r.mateChromosome ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
             TTIOTransportChannelData *cigarCh =
                 [[TTIOTransportChannelData alloc] initWithName:@"cigar"

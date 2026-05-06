@@ -1,6 +1,10 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench
+
+TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
+TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioTransportEncodeBench_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioMzMLProbe_OBJC_FILES = TtioMzMLProbe.m
 TtioMzMLProbe_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
