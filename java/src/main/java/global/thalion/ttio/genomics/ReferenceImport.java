@@ -201,6 +201,7 @@ public final class ReferenceImport {
      *
      * @param refGroup the {@code /study/references/<uri>/} group
      * @return a fully-populated {@code ReferenceImport}
+     * @since 1.1.0
      */
     public static ReferenceImport readFromGroup(StorageGroup refGroup) {
         Objects.requireNonNull(refGroup, "refGroup");
