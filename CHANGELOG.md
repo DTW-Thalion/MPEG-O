@@ -9,6 +9,83 @@ public API is stable from onward.
 
 ---
 
+## [Unreleased] — post-v1.0.0 perf + parity tweaks
+
+All correctness-neutral (same wire bytes, same on-disk container).
+Headline numbers + reproducer instructions consolidated in
+`docs/benchmarks/2026-05-05-v1.0-comprehensive-perf-report.md`
+§11.
+
+### Performance
+
+- **24× FASTQ re-export speedup** (Python). The hot loop in
+  `FastqWriter.write(GenomicRun, ...)` materialised one
+  `AlignedRead` per record, which decoded cigar + mate triple
+  for every read — fields FASTQ does not need. Now pre-fetches
+  the whole `sequences` + `qualities` byte buffers + read-names
+  list once, slices in-memory. 11K reads/s → 265K reads/s on
+  1M reads × 100bp (commit `ae9441d`).
+- **Java + ObjC FASTQ writer bulk-fetch parity** mirrors the
+  same fix. Java now sustains ~750K reads/s on the same 1M
+  workload; ObjC ~635K reads/s (commit `0f99852`). New
+  microbenches: `FastqBulkBenchTest` (Java, opt-in via
+  `-DTTIO_FASTQ_BENCH=1`) + `objc/Tools/obj/TtioFastqBench`.
+- **Java transport genomic encode +64%** at 100K reads × 100bp
+  (33 → 54K reads/s). Profile pinpointed
+  `GenomicRun.isMateInfoInlineV2()` reopening the `mate_info`
+  HDF5 group 3× per record (300K group opens at 100K reads,
+  ~2.2s of pure framework overhead). Memoised the probe in
+  `mateInfoInlineV2Cached`; ObjC already cached via
+  `_mateInfoLinkType`. `TransportWriter.emitGenomicRunAccessUnits`
+  also now bulk-fetches the byte channels once and slices in-
+  memory. New microbench: `TransportEncodeBenchTest` (commit
+  `758b340`).
+- **Byte-channel cache audit** (`GenomicRun.byteChannelSlice` /
+  `-byteChannelSliceNamed:`). The codec-compressed path cached;
+  the uncompressed path returned the raw HDF5 buffer per call,
+  so `sequencesFull` / `-wholeSequencesData` warmups were
+  silently a no-op for files written with `signal_compression =
+  NONE`. Fixed in both Java + ObjC (commit `221611c`).
+
+### Cross-language parity gates
+
+- **nmrML 3-way probe parity** — `NmrMLProbe.java`,
+  `TtioNmrMLProbe.m`, and a Python harness drive all three
+  readers against synthetic + `bmse000325` inputs and assert
+  bit-exact JSON for `numberOfScans` /
+  `spectrometerFrequencyMHz` / `fidReal` / `fidImag` (commit
+  `8c6b8b0`).
+- **mzML 3-way probe parity** — `MzMLProbe.java`,
+  `TtioMzMLProbe.m`, and `test_mzml_cross_lang_parity.py` cover
+  synthetic + `tiny.pwiz.1.1.mzML` fixtures with full mz +
+  intensity arrays plus precursor / polarity / RT scalars.
+
+### mzML reader bug-fixes
+
+- **Java**: `endElement("binary")` no longer skips spectra with
+  empty `<binary></binary>` arrays (PSI-MS reference fixture
+  intentionally tests this via its "spectrum with no data"
+  userParam). 4-spectrum `tiny.pwiz` now reports 4 spectra (was
+  3) (commit `01ca2b4`).
+- **Python + ObjC**: `<referenceableParamGroupRef>` is now
+  resolved. Both readers buffer cvParams under each
+  `<referenceableParamGroup id="...">` and replay them when a
+  spectrum / chromatogram cites the group via
+  `<referenceableParamGroupRef ref="...">`. Polarity (and any
+  other CV param) on referenced groups now reaches the
+  per-spectrum surface (same commit).
+
+### Documentation
+
+- `docs/cross-language-matrix.md` gains entries for the two new
+  probe-style parity tests + CLI inventory rows for the four
+  new probe binaries.
+- `docs/benchmarks/2026-05-05-v1.0-comprehensive-perf-report.md`
+  §11 documents the post-v1.0.0 perf tweaks with reproducer
+  invocations.
+
+---
+
 ## [v1.0.0] — 2026-05-04 — first stable release
 
 This is the first stable release of TTI-O. The format string is

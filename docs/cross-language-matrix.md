@@ -75,6 +75,8 @@ contract levels per language pair. Footnotes follow the table.
 | **M89.6 genomic transport per-AU** (3×3 writer × reader) | `=` | `=` | `=` | `=` | `python/tests/validation/test_m89_cross_language.py` |
 | **Phase 2c-T transport bulk-mode** (3×3 writer × reader, byte-identity on `mate_info` + `read_names` blobs) | `=` | `=` | `=` | `=` | `python/tests/validation/test_phase_2c_t_bulk_mode.py` |
 | **nmrML reader parity** (acquisition-parameter scalars + complex128 FID) | `=` | `=` | `=` | n/a | `python/tests/integration/test_nmrml_roundtrip.py` (Py) + `java/.../ImportExportTest::nmrmlParityFieldsSurfaced` |
+| **nmrML 3-way probe parity** (synthetic + bmse000325 fixture, JSON-dumped surface fields, bit-exact doubles) | `=` | `=` | `=` | `=` | `python/tests/integration/test_nmrml_cross_lang_parity.py` (drives `NmrMLProbe.java` + `TtioNmrMLProbe`) |
+| **mzML 3-way probe parity** (synthetic + tiny.pwiz fixture, retentionTime / msLevel / polarity / precursorMz / precursorCharge / mz / intensity) | `=` | `=` | `=` | `=` | `python/tests/integration/test_mzml_cross_lang_parity.py` (drives `MzMLProbe.java` + `TtioMzMLProbe`) (23) |
 | **M51** Numpress codec (delta + slof) cross-lang structural | `S` (21) | — | — | — | `python/tests/test_compression_codecs.py` |
 | **MS-fixture archive backward-compat** (5 ObjC-built `.tio` fixtures) | `~` (22) | — | — | — | `python/tests/test_cross_compat.py`, `python/tests/validation/test_m64_cross_tool_validation.py` |
 
@@ -175,6 +177,18 @@ contract levels per language pair. Footnotes follow the table.
     encrypted / signed) are written by the ObjC build at each
     milestone and Python is contractually required to read every one.
     No Java equivalent today — Java does not ingest the ObjC archive.
+23. **mzML 3-way probe parity:** Each language reader emits the
+    per-spectrum surface as one-line JSON via a dedicated probe
+    binary; Python parses + asserts structural equality with
+    bit-exact doubles. The synthetic fixture is built in-test; the
+    real `tiny.pwiz.1.1.mzML` fixture additionally exercises empty
+    `<binary></binary>` (Java used to drop the spectrum, fixed
+    2026-05-06) and `<referenceableParamGroupRef>` resolution
+    (Python + ObjC used to silently miss CV params on referenced
+    groups, fixed in the same commit). Polarity is intentionally
+    **not** asserted on the synthetic input — all three readers
+    read it directly from the per-spectrum CV — and **is** asserted
+    on `tiny.pwiz`, which only exposes polarity through ref groups.
 
 ---
 
@@ -202,7 +216,9 @@ The harnesses depend on per-language CLI tools. Build them via:
 | Transport server | `python -m ttio.tools.transport_server_cli` | `objc/Tools/obj/TtioTransportServer` | (no standalone main) |
 | FASTA round-trip | `python -m ttio.tools.{fasta_import,fasta_export}_cli` | `objc/Tools/obj/TtioFastaRoundTrip` | `global.thalion.ttio.tools.FastaRoundTrip` |
 | FASTQ round-trip | `python -m ttio.tools.{fastq_import,fastq_export}_cli` | `objc/Tools/obj/TtioFastqRoundTrip` | `global.thalion.ttio.tools.FastqRoundTrip` |
-| Transport perf microbench | `pytest python/tests/stress/` | `objc/Tools/obj/TtioBenchmark` | `global.thalion.ttio.tools.Benchmark` |
+| nmrML parity probe (3-way JSON dump) | inline (Python harness) | `objc/Tools/obj/TtioNmrMLProbe` | `global.thalion.ttio.tools.NmrMLProbe` |
+| mzML parity probe (3-way JSON dump) | inline (Python harness) | `objc/Tools/obj/TtioMzMLProbe` | `global.thalion.ttio.tools.MzMLProbe` |
+| Transport perf microbench | `pytest python/tests/stress/` | `objc/Tools/obj/TtioBenchmark` + `TtioFastqBench` | `global.thalion.ttio.tools.Benchmark` + `FastqBulkBenchTest` + `TransportEncodeBenchTest` |
 
 ---
 
