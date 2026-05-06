@@ -5,6 +5,9 @@
  */
 package global.thalion.ttio.genomics;
 
+import global.thalion.ttio.providers.StorageDataset;
+import global.thalion.ttio.providers.StorageGroup;
+
 import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -171,5 +174,86 @@ public final class ReferenceImport {
             sb.append(String.format("%02x", b));
         }
         return sb.toString();
+    }
+
+    /**
+     * Read an embedded reference from {@code /study/references/<uri>/}.
+     *
+     * <p>Layout (matches the writer in
+     * {@code SpectralDataset.embedReferencesForRuns}):</p>
+     * <ul>
+     *   <li>{@code refGroup} attribute {@code reference_uri} = the
+     *       reference URI; falls back to {@code refGroup.name()}.</li>
+     *   <li>{@code refGroup} attribute {@code md5} = lowercase-hex
+     *       content MD5; preserved verbatim into the returned
+     *       {@code ReferenceImport} so byte-for-byte round-trip is
+     *       maintained.</li>
+     *   <li>{@code refGroup/chromosomes/} = sub-group containing one
+     *       child per chromosome.</li>
+     *   <li>{@code refGroup/chromosomes/<name>/data} = UINT8 dataset of
+     *       sequence bytes (case-preserving).</li>
+     * </ul>
+     *
+     * <p>Chromosomes are returned in the order
+     * {@link StorageGroup#childNames()} reports them — the writer
+     * sorts alphabetically before persisting, so for any file written
+     * by this library the order is alphabetic.</p>
+     *
+     * @param refGroup the {@code /study/references/<uri>/} group
+     * @return a fully-populated {@code ReferenceImport}
+     */
+    public static ReferenceImport readFromGroup(StorageGroup refGroup) {
+        Objects.requireNonNull(refGroup, "refGroup");
+
+        // URI: prefer @reference_uri, fall back to the group name.
+        String uri;
+        if (refGroup.hasAttribute("reference_uri")) {
+            Object v = refGroup.getAttribute("reference_uri");
+            uri = v != null ? v.toString() : refGroup.name();
+        } else {
+            uri = refGroup.name();
+        }
+
+        // MD5: preserve verbatim from @md5 (lowercase hex) when
+        // present, so the read-back ReferenceImport carries the same
+        // digest bytes as the writer used.
+        byte[] md5 = null;
+        if (refGroup.hasAttribute("md5")) {
+            Object v = refGroup.getAttribute("md5");
+            if (v != null) {
+                md5 = parseHexLocal(v.toString());
+            }
+        }
+
+        List<String> chromNames = new ArrayList<>();
+        List<byte[]> seqs = new ArrayList<>();
+        try (StorageGroup chromsGrp = refGroup.openGroup("chromosomes")) {
+            for (String name : chromsGrp.childNames()) {
+                try (StorageGroup chromGrp = chromsGrp.openGroup(name)) {
+                    try (StorageDataset ds = chromGrp.openDataset("data")) {
+                        byte[] bytes = (byte[]) ds.readAll();
+                        chromNames.add(name);
+                        seqs.add(bytes);
+                    }
+                }
+            }
+        }
+
+        return new ReferenceImport(uri, chromNames, seqs, md5);
+    }
+
+    /** Local hex-decoder for the {@code @md5} attribute. Returns
+     *  {@code null} if the input is not a 32-char hex string (so the
+     *  4-arg constructor falls back to recomputing). */
+    private static byte[] parseHexLocal(String hex) {
+        if (hex == null || hex.length() != 32) return null;
+        byte[] out = new byte[16];
+        for (int i = 0; i < 16; i++) {
+            int hi = Character.digit(hex.charAt(i * 2), 16);
+            int lo = Character.digit(hex.charAt(i * 2 + 1), 16);
+            if (hi < 0 || lo < 0) return null;
+            out[i] = (byte) ((hi << 4) | lo);
+        }
+        return out;
     }
 }
