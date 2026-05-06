@@ -299,6 +299,58 @@ class ImportExportTest {
                 "Should have spectra or FID data");
     }
 
+    /** Cross-language parity for the acquisition-parameter scalars +
+     *  deinterleaved FID arrays added to Python's
+     *  {@code ImportResult} on 2026-05-05. The Java {@code NmrMLResult}
+     *  mirrors those four fields so cross-language consumers see the
+     *  same surface. */
+    @Test
+    void nmrmlParityFieldsSurfaced() throws Exception {
+        // Synthesize a minimal nmrML with both an acquisition param
+        // block and a complex128 FID stream.
+        int n = 32;
+        double[] real = new double[n];
+        double[] imag = new double[n];
+        for (int i = 0; i < n; i++) {
+            real[i] = i * 0.5;
+            imag[i] = -i * 0.25;
+        }
+        java.nio.ByteBuffer buf = java.nio.ByteBuffer
+            .allocate(2 * n * Double.BYTES)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < n; i++) {
+            buf.putDouble(real[i]);
+            buf.putDouble(imag[i]);
+        }
+        String fidB64 = java.util.Base64.getEncoder().encodeToString(buf.array());
+        String xml = "<?xml version=\"1.0\"?>"
+            + "<nmrML xmlns=\"http://nmrml.org/schema\">"
+            + "<cvList><cv id=\"nmrCV\" fullName=\"x\" version=\"1.1.0\"/></cvList>"
+            + "<acquisition><acquisition1D>"
+            + "<acquisitionParameterSet numberOfScans=\"16\">"
+            + "<acquisitionNucleus name=\"1H\"/>"
+            + "<irradiationFrequency value=\"600000000\"/>"
+            + "</acquisitionParameterSet>"
+            + "<fidData compressed=\"false\" byteFormat=\"complex128\""
+            + " encodedLength=\"" + fidB64.length() + "\">"
+            + fidB64 + "</fidData>"
+            + "</acquisition1D></acquisition></nmrML>";
+        Path tmp = Files.createTempFile("parity_", ".nmrML");
+        Files.writeString(tmp, xml);
+        NmrMLReader.NmrMLResult result = NmrMLReader.read(tmp.toString());
+        assertEquals(16, result.numberOfScans(),
+            "numberOfScans must round-trip from acquisitionParameterSet attribute");
+        assertEquals(600.0, result.spectrometerFrequencyMHz(), 1e-9,
+            "irradiationFrequency 600 MHz must surface as MHz");
+        assertEquals(n, result.fidReal().length,
+            "fidReal must be deinterleaved length-n");
+        assertEquals(n, result.fidImag().length);
+        for (int i = 0; i < n; i++) {
+            assertEquals(real[i], result.fidReal()[i], 1e-12);
+            assertEquals(imag[i], result.fidImag()[i], 1e-12);
+        }
+    }
+
     @Test
     void nmrmlRoundTrip() throws Exception {
         // Create NMR data, write nmrML, read back, verify

@@ -116,6 +116,15 @@ _FIXTURE_SIZES = [
     ("small", 1_000, 100),
     ("medium", 10_000, 100),
 ]
+# Long-tail scaling cells. Opt-in via TTIO_INCLUDE_LONG_TAIL=1 since
+# they take ~minutes each and aren't appropriate for the per-PR
+# nightly window. The 1M cell exercises the same v2 codec stack at
+# production-Illumina scale (one HiSeq lane ≈ 200-400M reads).
+if os.environ.get("TTIO_INCLUDE_LONG_TAIL") == "1":
+    _FIXTURE_SIZES.extend([
+        ("large", 100_000, 100),
+        ("xlarge", 1_000_000, 100),
+    ])
 
 
 @pytest.mark.parametrize("size_name,n_reads,read_length", _FIXTURE_SIZES)

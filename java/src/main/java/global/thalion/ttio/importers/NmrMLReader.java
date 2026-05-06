@@ -41,18 +41,52 @@ public final class NmrMLReader {
 
     private NmrMLReader() {}
 
-    /** Parse result bundling the AcquisitionRun and optional FID. */
+    /** Parse result bundling the AcquisitionRun and optional FID,
+     *  plus the acquisition-parameter scalars surfaced for parity
+     *  with the Python {@code ImportResult} fields added 2026-05-05. */
     public static final class NmrMLResult {
         private final AcquisitionRun run;
         private final FreeInductionDecay fid;
+        private final double spectrometerFrequencyMHz;
+        private final int numberOfScans;
+        private final double[] fidReal;
+        private final double[] fidImag;
 
-        NmrMLResult(AcquisitionRun run, FreeInductionDecay fid) {
+        NmrMLResult(AcquisitionRun run, FreeInductionDecay fid,
+                    double spectrometerFrequencyMHz, int numberOfScans,
+                    double[] fidReal, double[] fidImag) {
             this.run = run;
             this.fid = fid;
+            this.spectrometerFrequencyMHz = spectrometerFrequencyMHz;
+            this.numberOfScans = numberOfScans;
+            this.fidReal = fidReal != null ? fidReal : new double[0];
+            this.fidImag = fidImag != null ? fidImag : new double[0];
+        }
+
+        /** Backwards-compatible constructor (pre-2026-05-05 callers).
+         *  Acquisition-parameter scalars default to zero / empty. */
+        NmrMLResult(AcquisitionRun run, FreeInductionDecay fid) {
+            this(run, fid, 0.0, 0, null, null);
         }
 
         public AcquisitionRun run() { return run; }
         public FreeInductionDecay fid() { return fid; }
+
+        /** Spectrometer frequency in MHz (irradiationFrequency Hz / 1e6).
+         *  Returns {@code 0.0} when the source nmrML did not declare it. */
+        public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
+
+        /** Number of scans declared in the acquisition parameter set,
+         *  or {@code 0} when absent. */
+        public int numberOfScans() { return numberOfScans; }
+
+        /** FID real-valued samples (deinterleaved from a complex128
+         *  fidData stream). Empty when no FID was declared or when
+         *  byteFormat was not complex128. */
+        public double[] fidReal() { return fidReal; }
+
+        /** FID imaginary-valued samples (paired with {@link #fidReal}). */
+        public double[] fidImag() { return fidImag; }
     }
 
     /**
@@ -198,7 +232,11 @@ public final class NmrMLReader {
                     }
                 }
                 case "irradiationFrequency" -> {
-                    if (inDirectDimensionParameterSet) {
+                    // The 1.0 schema wraps this under
+                    // directDimensionParameterSet; older / external
+                    // tools (and the Python reader) put it directly
+                    // inside acquisitionParameterSet. Honor either.
+                    if (inDirectDimensionParameterSet || inAcquisitionParameterSet) {
                         String v = atts.getValue("value");
                         if (v != null) {
                             try { spectrometerFrequencyHz = Double.parseDouble(v); } catch (NumberFormatException ignored) {}
@@ -332,15 +370,32 @@ public final class NmrMLReader {
                     freqMHz
             );
 
-            // Decode FID if present
+            // Decode FID if present. ``complex128`` is the canonical
+            // byteFormat for two-channel real+imag interleaved float64
+            // streams; deinterleave into separate arrays for the
+            // result's surface API (mirrors Python's
+            // ``ImportResult.fid_real`` / ``ImportResult.fid_imag``).
             FreeInductionDecay fid = null;
+            double[] fidReal = null;
+            double[] fidImag = null;
             if (fidBase64 != null && !fidBase64.isEmpty()) {
                 double[] complexData = decodeFloat64Array(fidBase64, fidCompressed);
                 int scanCount = complexData.length / 2;
                 fid = new FreeInductionDecay(complexData, scanCount, dwellTimeSeconds, 0.0);
+                if ("complex128".equalsIgnoreCase(fidByteFormat)
+                    && complexData.length >= 2
+                    && complexData.length % 2 == 0) {
+                    fidReal = new double[scanCount];
+                    fidImag = new double[scanCount];
+                    for (int i = 0; i < scanCount; i++) {
+                        fidReal[i] = complexData[2 * i];
+                        fidImag[i] = complexData[2 * i + 1];
+                    }
+                }
             }
 
-            return new NmrMLResult(run, fid);
+            return new NmrMLResult(
+                run, fid, freqMHz, numberOfScans, fidReal, fidImag);
         }
     }
 
