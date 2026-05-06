@@ -757,7 +757,12 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         return _decodedCigars[i];
     }
 
-    // Compound path (M82, no override).
+    // Compound path (M82, no override). Materialise the whole
+    // cigar list on first call and cache in _decodedCigars —
+    // without this, per-record cigarAtIndex: allocates a fresh
+    // NSString from NSData on every call, dominating the per-
+    // record time on the genomic transport encode path (mirrors
+    // Java fix in commit 701f310 / Python parity).
     TTIOCompoundField *vlValue =
         [TTIOCompoundField fieldWithName:@"value"
                                     kind:TTIOCompoundFieldKindVLString];
@@ -775,12 +780,22 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
                             (unsigned long)cigars.count]}];
         return nil;
     }
-    id cigarV = cigars[i][@"value"];
-    if ([cigarV isKindOfClass:[NSData class]]) {
-        return [[NSString alloc] initWithData:cigarV
-                                      encoding:NSUTF8StringEncoding];
+    NSMutableArray<NSString *> *out =
+        [NSMutableArray arrayWithCapacity:cigars.count];
+    for (NSDictionary *row in cigars) {
+        id v = row[@"value"];
+        if ([v isKindOfClass:[NSData class]]) {
+            [out addObject:[[NSString alloc] initWithData:v
+                                                  encoding:NSUTF8StringEncoding]
+                          ?: @""];
+        } else if ([v isKindOfClass:[NSString class]]) {
+            [out addObject:(NSString *)v];
+        } else {
+            [out addObject:@""];
+        }
     }
-    return (NSString *)cigarV;
+    _decodedCigars = [out copy];
+    return _decodedCigars[i];
 }
 
 // M86 Phase B: integer-channel array reader.
