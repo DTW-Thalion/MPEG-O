@@ -656,9 +656,22 @@ class GenomicRun:
                 "are recognised)"
             )
 
-        # Compound path (M82, no override).
+        # Compound path (M82, no override). Materialise the whole
+        # list on first call and cache in self._decoded_cigars —
+        # without this, per-record _cigar_at(i) goes back through
+        # the structured-record decode each call, dominating the
+        # per-record time on the genomic transport encode path
+        # (mirrors Java fix in commit 701f310 / ObjC parity).
         cigars = self._compound("cigars")
-        return cigars[i]["value"]
+        out: list[str] = []
+        for row in cigars:
+            v = row["value"]
+            if isinstance(v, bytes):
+                out.append(v.decode("utf-8"))
+            else:
+                out.append(v)
+        self._decoded_cigars = out
+        return out[i]
 
     # ------------------------------------------------------------------
     # M86 Phase F — mate_info per-field dispatch
