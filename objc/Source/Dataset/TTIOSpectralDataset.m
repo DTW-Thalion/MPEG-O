@@ -40,6 +40,7 @@
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOBulkV2Blobs.h"           // Phase 2c-T
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
@@ -1277,6 +1278,7 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
 @synthesize provider = _provider;
 @synthesize encryptedAlgorithm = _encryptedAlgorithm;
 @synthesize genomicRuns = _genomicRuns;
+@synthesize references = _references;
 
 - (BOOL)isEncrypted
 {
@@ -1299,6 +1301,7 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
         _msRuns             = [msRuns copy] ?: @{};
         _nmrRuns            = [nmrRuns copy] ?: @{};
         _genomicRuns        = @{};   // populated by +readFromFilePath: when present
+        _references         = @{};   // populated by +readFromFilePath: when present
         _identifications    = [identifications copy] ?: @[];
         _quantifications    = [quantifications copy] ?: @[];
         _provenanceRecords  = [provenance copy] ?: @[];
@@ -3118,6 +3121,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     NSString *title = @"", *isaId = @"";
     NSMutableDictionary *msRuns = [NSMutableDictionary dictionary];
     NSMutableDictionary *genomicRunsMap = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, TTIOReferenceImport *> *refsMap =
+        [NSMutableDictionary dictionary];
     NSArray *idents = @[], *quants = @[], *provRecs = @[];
 
     if ([root hasChildNamed:@"study"]) {
@@ -3157,6 +3162,23 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                                                     name:trimmed
                                                                    error:NULL];
                     if (gr) genomicRunsMap[trimmed] = gr;
+                }
+            }
+        }
+
+        // /study/references/<uri>/ — embedded references read-back
+        // (1.1.0 — Phase 0 tio-browser). Empty dict when absent.
+        if ([study hasChildNamed:@"references"]) {
+            id<TTIOStorageGroup> refsG =
+                [study openGroupNamed:@"references" error:NULL];
+            if (refsG != nil) {
+                for (NSString *uri in [refsG childNames]) {
+                    id<TTIOStorageGroup> oneRefG =
+                        [refsG openGroupNamed:uri error:NULL];
+                    if (oneRefG == nil) continue;
+                    TTIOReferenceImport *r =
+                        [TTIOReferenceImport readFromGroup:oneRefG];
+                    if (r != nil) refsMap[uri] = r;
                 }
             }
         }
@@ -3209,6 +3231,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                                transitions:nil];
     ds->_filePath    = [url copy];
     ds->_genomicRuns = [genomicRunsMap copy];
+    ds->_references  = [refsMap copy];
     // Surface the root `encrypted` attr for provider-backed reads too.
     id encObj = [root attributeValueForName:@"encrypted" error:NULL];
     if ([encObj isKindOfClass:[NSString class]]) {
@@ -3358,6 +3381,29 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     ds->_provider    = p;
     ds->_filePath    = [path copy];
     ds->_genomicRuns = [genomicRuns copy];
+
+    // /study/references/<uri>/ — embedded references read-back
+    // (1.1.0 — Phase 0 tio-browser). Empty dict when absent.
+    NSMutableDictionary<NSString *, TTIOReferenceImport *> *refs =
+        [NSMutableDictionary dictionary];
+    if ([study hasChildNamed:@"references"]) {
+        TTIOHDF5Group *refsG = [study openGroupNamed:@"references" error:NULL];
+        if (refsG != nil) {
+            for (NSString *uri in [refsG childNames]) {
+                TTIOHDF5Group *oneRefG =
+                    [refsG openGroupNamed:uri error:NULL];
+                if (oneRefG == nil) continue;
+                id<TTIOStorageGroup> oneRefAdapter =
+                    (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
+                        performSelector:@selector(initWithGroup:)
+                                 withObject:oneRefG];
+                TTIOReferenceImport *r =
+                    [TTIOReferenceImport readFromGroup:oneRefAdapter];
+                if (r != nil) refs[uri] = r;
+            }
+        }
+    }
+    ds->_references = [refs copy];
 
     // Subclass hook: read additional /study/ content while file is open.
     (void)[ds readAdditionalStudyContent:study error:NULL];

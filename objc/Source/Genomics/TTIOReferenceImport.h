@@ -9,6 +9,7 @@
 #define TTIO_REFERENCE_IMPORT_H
 
 #import <Foundation/Foundation.h>
+#import "Providers/TTIOStorageProtocols.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -70,6 +71,41 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (NSData *)computeMd5WithChromosomes:(NSArray<NSString *> *)chromosomes
                             sequences:(NSArray<NSData *> *)sequences;
+
+/**
+ * Read an embedded reference from
+ * <code>/study/references/&lt;uri&gt;/</code>.
+ *
+ * <p>Layout (matches the writer in
+ * <code>_TTIO_M93_EmbedReferences</code>):</p>
+ * <ul>
+ *   <li><code>refGroup</code> attribute <code>reference_uri</code> =
+ *       the reference URI; falls back to
+ *       <code>-[refGroup name]</code>.</li>
+ *   <li><code>refGroup</code> attribute <code>md5</code> =
+ *       lowercase-hex content MD5; preserved verbatim into the
+ *       returned <code>TTIOReferenceImport</code> so byte-for-byte
+ *       round-trip is maintained. Missing or malformed values fall
+ *       back to recomputation in the constructor.</li>
+ *   <li><code>refGroup/chromosomes/</code> = sub-group containing
+ *       one child per chromosome.</li>
+ *   <li><code>refGroup/chromosomes/&lt;name&gt;/data</code> = UINT8
+ *       dataset of sequence bytes (case-preserving).</li>
+ * </ul>
+ *
+ * <p>Chromosomes are returned in the order
+ * <code>-[refGroup childNames]</code> reports them — the writer
+ * sorts alphabetically before persisting, so for any file written
+ * by this library the order is alphabetic.</p>
+ *
+ * @param refGroup the <code>/study/references/&lt;uri&gt;/</code>
+ *                 group.
+ * @return A fully-populated <code>TTIOReferenceImport</code>, or
+ *         <code>nil</code> on storage failure.
+ *
+ * @since 1.1.0
+ */
++ (nullable instancetype)readFromGroup:(id<TTIOStorageGroup>)refGroup;
 
 /** Total bases across all chromosomes. */
 - (NSUInteger)totalBases;
