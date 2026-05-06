@@ -178,6 +178,31 @@
 /// sequences is a group containing refdiff_v2. Returns nil otherwise.
 - (nullable NSData *)readRefDiffV2BlobBytes;
 
+// ── Bulk accessors for hot serialization paths ────────────────────
+//
+// The per-read accessors (-objectAtIndex:, -readAtIndex:error:,
+// -readNameAtIndex:error:, etc.) materialise a fresh
+// TTIOAlignedRead and slice every channel on every call. For
+// serialization workloads that touch every byte sequentially
+// (TTIOFastqWriter, TTIOFastaWriter, TTIOTransportWriter at full-
+// corpus scale) pre-fetching the whole channel once and slicing
+// in-memory is dramatically faster — Python's FastqWriter saw a
+// 24× speedup at 1M reads from this exact pattern.
+
+/// Return the full ``signal_channels/sequences`` byte buffer.
+/// Decoded once and cached for codec-compressed channels;
+/// read once for uncompressed channels. Empty NSData for
+/// zero-read runs.
+- (NSData *)wholeSequencesData;
+
+/// Return the full ``signal_channels/qualities`` byte buffer.
+/// Same caching semantics as ``wholeSequencesData``.
+- (NSData *)wholeQualitiesData;
+
+/// Return the full read-names list, forcing the one-shot
+/// NAME_TOKENIZED_V2 decode + cache.
+- (NSArray<NSString *> *)allReadNames;
+
 @end
 
 #endif

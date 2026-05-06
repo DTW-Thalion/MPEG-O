@@ -1520,4 +1520,54 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
     return [raw isKindOfClass:[NSData class]] ? (NSData *)raw : nil;
 }
 
+#pragma mark - Bulk accessors for hot serialization paths
+
+- (NSUInteger)_totalBaseCount
+{
+    NSUInteger n = _index.count;
+    if (n == 0) return 0;
+    return (NSUInteger)([_index offsetAt:n - 1] + [_index lengthAt:n - 1]);
+}
+
+- (NSData *)wholeSequencesData
+{
+    NSUInteger total = [self _totalBaseCount];
+    if (total == 0) return [NSData data];
+    NSError *err = nil;
+    NSData *d = [self byteChannelSliceNamed:@"sequences"
+                                      offset:0
+                                       count:total
+                                       error:&err];
+    return d ?: [NSData data];
+}
+
+- (NSData *)wholeQualitiesData
+{
+    NSUInteger total = [self _totalBaseCount];
+    if (total == 0) return [NSData data];
+    NSError *err = nil;
+    NSData *d = [self byteChannelSliceNamed:@"qualities"
+                                      offset:0
+                                       count:total
+                                       error:&err];
+    return d ?: [NSData data];
+}
+
+- (NSArray<NSString *> *)allReadNames
+{
+    NSUInteger n = _index.count;
+    if (n == 0) return @[];
+    // Touch index 0 to trigger the one-shot v2 decode + cache.
+    NSError *err = nil;
+    [self readNameAtIndex:0 error:&err];
+    if (_decodedReadNames) return [_decodedReadNames copy];
+    // Compound / uncompressed fallback path — rare under v1.0.
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *s = [self readNameAtIndex:i error:NULL] ?: @"";
+        [out addObject:s];
+    }
+    return [out copy];
+}
+
 @end

@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.zip.GZIPOutputStream;
 
@@ -150,12 +151,31 @@ public final class FastqWriter {
             ? gzipOutput
             : path.getFileName().toString().toLowerCase().endsWith(".gz");
 
+        // Pre-fetch the whole sequences + qualities byte arrays + the
+        // read_names list once, then slice in-memory per record.
+        // Skips the per-read AlignedRead materialisation (which would
+        // also decode cigar / mate triple — fields FASTQ does not
+        // need). Mirrors the 24× speedup the Python FastqWriter saw
+        // from this same pattern (commit ae9441d).
+        int n = run.readCount();
+        byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
+        byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];
+        List<String> namesAll = run.readNamesAll();
+
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         Set<String> seen = new HashSet<>();
-        for (int i = 0; i < run.readCount(); i++) {
-            AlignedRead r = run.readAt(i);
-            byte[] seq = r.sequence().getBytes(StandardCharsets.US_ASCII);
-            byte[] qual = r.qualities() != null ? r.qualities().clone() : new byte[0];
+        for (int i = 0; i < n; i++) {
+            int off = (int) run.index().offsetAt(i);
+            int len = run.index().lengthAt(i);
+            byte[] seq = new byte[len];
+            System.arraycopy(seqAll, off, seq, 0, len);
+            byte[] qual;
+            if (qualAll.length >= off + len) {
+                qual = new byte[len];
+                System.arraycopy(qualAll, off, qual, 0, len);
+            } else {
+                qual = new byte[0];
+            }
             for (int j = 0; j < qual.length; j++) {
                 if ((qual[j] & 0xFF) == QUAL_UNKNOWN_BYTE) {
                     qual[j] = PHRED33_FILL;
@@ -170,7 +190,7 @@ public final class FastqWriter {
                     qual[j] = (byte) ((qual[j] & 0xFF) + 31);
                 }
             }
-            String name = r.readName();
+            String name = namesAll.get(i);
             if (seen.contains(name)) name = name + "#" + i;
             seen.add(name);
             buf.write('@');

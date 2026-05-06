@@ -118,14 +118,25 @@ public final class FastaWriter {
         GenomicRun run, Path path,
         int lineWidth, Boolean gzipOutput, boolean writeFai
     ) throws IOException {
-        List<Record> records = new ArrayList<>();
+        // Same bulk-fetch pattern as FastqWriter (commit ae9441d):
+        // pre-fetch the whole sequences buffer + read-names list once,
+        // slice in-memory per record. Skips per-read AlignedRead
+        // materialisation, which would also decode cigar / mate triple —
+        // fields FASTA does not need.
+        int n = run.readCount();
+        byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
+        java.util.List<String> namesAll = run.readNamesAll();
+        List<Record> records = new ArrayList<>(n);
         Set<String> seen = new HashSet<>();
-        for (int i = 0; i < run.readCount(); i++) {
-            AlignedRead r = run.readAt(i);
-            String name = r.readName();
+        for (int i = 0; i < n; i++) {
+            int off = (int) run.index().offsetAt(i);
+            int len = run.index().lengthAt(i);
+            String name = namesAll.get(i);
             if (seen.contains(name)) name = name + "#" + i;
             seen.add(name);
-            records.add(new Record(name, r.sequence().getBytes(StandardCharsets.US_ASCII)));
+            byte[] seq = new byte[len];
+            if (len > 0) System.arraycopy(seqAll, off, seq, 0, len);
+            records.add(new Record(name, seq));
         }
         writeRecords(records, path, lineWidth, gzipOutput, writeFai);
     }
