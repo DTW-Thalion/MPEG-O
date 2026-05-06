@@ -30,16 +30,27 @@ Headline numbers + reproducer instructions consolidated in
   workload; ObjC ~635K reads/s (commit `0f99852`). New
   microbenches: `FastqBulkBenchTest` (Java, opt-in via
   `-DTTIO_FASTQ_BENCH=1`) + `objc/Tools/obj/TtioFastqBench`.
-- **Java transport genomic encode +64%** at 100K reads × 100bp
-  (33 → 54K reads/s). Profile pinpointed
-  `GenomicRun.isMateInfoInlineV2()` reopening the `mate_info`
-  HDF5 group 3× per record (300K group opens at 100K reads,
-  ~2.2s of pure framework overhead). Memoised the probe in
-  `mateInfoInlineV2Cached`; ObjC already cached via
-  `_mateInfoLinkType`. `TransportWriter.emitGenomicRunAccessUnits`
-  also now bulk-fetches the byte channels once and slices in-
-  memory. New microbench: `TransportEncodeBenchTest` (commit
-  `758b340`).
+- **Java transport genomic encode 33 → 235K reads/s (+612%)** at
+  100K reads × 100bp (commits `758b340` + `701f310`). Two
+  fixes: (1) memoised `GenomicRun.isMateInfoInlineV2()` after
+  noticing the probe reopened the `mate_info` HDF5 group 3× per
+  record (300K group opens at 100K reads, ~2.2s of pure
+  framework overhead — ObjC already cached this via
+  `_mateInfoLinkType`), and (2) eager-cached the M82 compound
+  fall-through of `cigarAt` + bypassed per-record `AlignedRead`
+  materialisation in `TransportWriter`. At 1M reads: 328K rps.
+  Java is now ~40% faster than ObjC on this workload. New
+  microbench: `TransportEncodeBenchTest`.
+- **ObjC transport genomic encode 70 → 164K reads/s (+134%)**
+  (commit `d5e2e25`). Same per-record `[grun readAtIndex:i]` →
+  `dataUsingEncoding:` re-encode roundtrip Java had. Now bulk-
+  fetches `wholeSequencesData` / `wholeQualitiesData` /
+  `allReadNames` once. New microbench: `TtioTransportEncodeBench`.
+- **Python + ObjC `cigar_at` eager-cache (parity with Java)**
+  (commit `7ac32e4`). M82 compound fall-through no longer
+  re-decodes per call. Python: 10 → 36K rps at 100K reads
+  transport encode (+260%). ObjC: net-neutral on the test
+  fixture but protective for any NSData-typed compound returns.
 - **Byte-channel cache audit** (`GenomicRun.byteChannelSlice` /
   `-byteChannelSliceNamed:`). The codec-compressed path cached;
   the uncompressed path returned the raw HDF5 buffer per call,
