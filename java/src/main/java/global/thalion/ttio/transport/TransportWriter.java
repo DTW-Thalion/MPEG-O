@@ -390,22 +390,29 @@ public final class TransportWriter implements AutoCloseable {
             } else {
                 qualBytes = new byte[0];
             }
-            // cigar / mateChromosome / matePosition / templateLength
-            // are still routed through objectAtIndex — the underlying
-            // per-record decoders cache after first call so per-record
-            // cost is amortised. Skipping the seq/qual byteChannelSlice
-            // work + String roundtrip is the main win.
-            AlignedRead read = run.readAt(i);
+            // Bypass run.readAt(i) entirely: pull cigar / mateChrom /
+            // matePos / tlen via the per-field cached accessors and
+            // chrom/pos/mapq/flags from the index. All cached after
+            // first call, so per-record cost is dominated by the
+            // .getBytes() calls on the three string channels.
+            String cigar = run.cigarAt(i);
+            String name = i < namesAll.size() ? namesAll.get(i) : "";
+            String mateChrom = run.mateChromAt(i);
+            long matePos = run.matePosAt(i);
+            int tlen = run.mateTlenAt(i);
+            String chromosome = idx.chromosomeAt(i);
+            long position = idx.positionAt(i);
+            int mappingQuality = idx.mappingQualityAt(i);
+            int flagsValue = idx.flagsAt(i);
             // M90.10: re-encode per-AU slice with the M86 codec when
             // the source channel had an @compression attribute set.
             byte[] seqPayload = applyWireCodec(seqBytes, seqCodec);
             byte[] qualPayload = applyWireCodec(qualBytes, qualCodec);
-            byte[] cigarBytes = (read.cigar() == null ? "" : read.cigar())
+            byte[] cigarBytes = (cigar == null ? "" : cigar)
                 .getBytes(StandardCharsets.UTF_8);
-            String name = i < namesAll.size() ? namesAll.get(i) : "";
             byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
-            byte[] mateChrBytes = (read.mateChromosome() == null ? ""
-                    : read.mateChromosome()).getBytes(StandardCharsets.UTF_8);
+            byte[] mateChrBytes = (mateChrom == null ? "" : mateChrom)
+                .getBytes(StandardCharsets.UTF_8);
             List<ChannelData> channels = new ArrayList<>(5);
             channels.add(new ChannelData("sequences", precisionUint8,
                     seqCodec, length, seqPayload));
@@ -426,12 +433,12 @@ public final class TransportWriter implements AutoCloseable {
                     0.0, 0.0,           // ion_mobility, base_peak_intensity
                     channels,
                     0L, 0L, 0L,         // pixel_x/y/z (unused for class==5)
-                    read.chromosome(),
-                    read.position(),
-                    read.mappingQuality(),
-                    read.flags() & 0xFFFF,
-                    read.matePosition(),
-                    read.templateLength());
+                    chromosome,
+                    position,
+                    mappingQuality,
+                    flagsValue & 0xFFFF,
+                    matePos,
+                    tlen);
             writeAccessUnit(datasetId, i, au);
         }
     }
