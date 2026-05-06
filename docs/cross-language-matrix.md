@@ -218,7 +218,7 @@ The harnesses depend on per-language CLI tools. Build them via:
 | FASTQ round-trip | `python -m ttio.tools.{fastq_import,fastq_export}_cli` | `objc/Tools/obj/TtioFastqRoundTrip` | `global.thalion.ttio.tools.FastqRoundTrip` |
 | nmrML parity probe (3-way JSON dump) | inline (Python harness) | `objc/Tools/obj/TtioNmrMLProbe` | `global.thalion.ttio.tools.NmrMLProbe` |
 | mzML parity probe (3-way JSON dump) | inline (Python harness) | `objc/Tools/obj/TtioMzMLProbe` | `global.thalion.ttio.tools.MzMLProbe` |
-| Transport perf microbench | `pytest python/tests/stress/` | `objc/Tools/obj/TtioBenchmark` + `TtioFastqBench` | `global.thalion.ttio.tools.Benchmark` + `FastqBulkBenchTest` + `TransportEncodeBenchTest` |
+| Transport perf microbench | `pytest python/tests/stress/` | `objc/Tools/obj/TtioBenchmark` + `TtioFastqBench` + `TtioTransportEncodeBench` | `global.thalion.ttio.tools.Benchmark` + `FastqBulkBenchTest` + `TransportEncodeBenchTest` |
 
 ---
 

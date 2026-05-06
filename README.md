@@ -39,9 +39,9 @@ This repository hosts three implementation streams. The **Objective-C** stream u
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3026 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3072 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
-| **Java (`global.thalion.ttio`)** | **783/0/0/4 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
+| **Java (`global.thalion.ttio`)** | **804/0/0/4 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages

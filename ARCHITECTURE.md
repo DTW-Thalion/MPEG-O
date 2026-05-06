@@ -6,14 +6,14 @@ v1.0.0 ships three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md`
-  is rooted here. **3026 assertions / 0 failures.**
+  is rooted here. **3072 assertions / 0 failures.**
 - **Python (`ttio` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top
   of `h5py` + `numpy` that mirrors the Objective-C class
   hierarchy 1-to-1.
 - **Java (`global.thalion.ttio`)** (`java/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. **783 / 0 / 0 / 4.**
+  mirroring the ObjC/Python class hierarchy. **804 / 0 / 0 / 4.**
   Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
   crypto dependency). HDF5 via system `libhdf5-java` bindings.
 
