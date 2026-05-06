@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover
     from pathlib import Path
 
+    from ..providers.base import StorageGroup
     from ..spectral_dataset import SpectralDataset
 
 
@@ -135,6 +136,81 @@ class ReferenceImport:
         raise KeyError(
             f"chromosome {name!r} not present in reference {self.uri!r} "
             f"(known: {sorted(self.chromosomes)})"
+        )
+
+    @classmethod
+    def read_from_group(cls, ref_group: "StorageGroup") -> "ReferenceImport":
+        """Read an embedded reference from ``/study/references/<uri>/``.
+
+        Inverse of :func:`ttio.spectral_dataset._embed_references_for_runs`.
+        Per-chromosome sequences live at
+        ``<uri>/chromosomes/<name>/data`` (UINT8); the URI group
+        carries ``@reference_uri`` (the canonical URI string) and
+        ``@md5`` (32-character lowercase hex). The MD5 is preserved
+        verbatim from the on-disk attribute when present, so the
+        read-back value carries the same digest bytes the writer used —
+        load-bearing for cross-language byte-exact round-trip. When the
+        attribute is absent or malformed, the constructor falls back to
+        recomputing via :func:`compute_reference_md5`.
+
+        Chromosome names are returned in the order
+        :meth:`StorageGroup.child_names` yields them, which for the
+        canonical writer is alphabetic (the embed helper sorts before
+        persisting).
+
+        Cross-language equivalents
+        --------------------------
+        Java: ``ReferenceImport.readFromGroup(StorageGroup)``.
+
+        :since: 1.1.0
+        """
+        from .. import _hdf5_io as io
+
+        # URI: prefer @reference_uri, fall back to the leaf group name.
+        uri = io.read_string_attr(ref_group, "reference_uri", default=None)
+        if not uri:
+            # StorageGroup.name gives the full path for HDF5; take the
+            # leaf to mirror Java's refGroup.name() semantics.
+            full = ref_group.name
+            uri = full.rsplit("/", 1)[-1] if "/" in full else full
+
+        # MD5: read @md5 (lowercase hex string) verbatim. Parse to 16
+        # bytes; on absence or malformed input, leave as empty so the
+        # ReferenceImport constructor recomputes from sequences.
+        md5_bytes = b""
+        md5_hex = io.read_string_attr(ref_group, "md5", default=None)
+        if md5_hex and len(md5_hex) == 32:
+            try:
+                md5_bytes = bytes.fromhex(md5_hex)
+            except ValueError:
+                md5_bytes = b""
+
+        chrom_names: list[str] = []
+        sequences: list[bytes] = []
+        chroms_grp = ref_group.open_group("chromosomes")
+        try:
+            for name in chroms_grp.child_names():
+                chrom_grp = chroms_grp.open_group(name)
+                try:
+                    ds = chrom_grp.open_dataset("data")
+                    try:
+                        arr = ds.read()
+                        # Primitive UINT8 datasets always come back as
+                        # ndarray per the StorageDataset contract.
+                        chrom_names.append(name)
+                        sequences.append(bytes(arr))
+                    finally:
+                        ds.close()
+                finally:
+                    chrom_grp.close()
+        finally:
+            chroms_grp.close()
+
+        return cls(
+            uri=uri,
+            chromosomes=chrom_names,
+            sequences=sequences,
+            md5=md5_bytes,
         )
 
     def write_to_dataset(
