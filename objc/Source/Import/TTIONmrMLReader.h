@@ -80,6 +80,16 @@
 @property (readonly) double   dwellTimeSeconds;
 @property (readonly) double   sweepWidthPpm;
 
+/** Deinterleaved real / imag sample arrays from the source's
+ *  <code>&lt;fidData byteFormat="complex128"&gt;</code> stream.
+ *  Empty NSData on FID-less files or when the source declared a
+ *  non-complex128 byte format. Mirrors Python
+ *  <code>ImportResult.fid_real</code> / <code>fid_imag</code>
+ *  (added 2026-05-05) so cross-language consumers see the same
+ *  surface. Each entry is a packed <code>float64</code> array. */
+@property (readonly, copy) NSData *fidReal;
+@property (readonly, copy) NSData *fidImag;
+
 @end
 
 extern NSString *const TTIONmrMLReaderErrorDomain;

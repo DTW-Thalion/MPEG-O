@@ -248,6 +248,46 @@ public record WrittenGenomicRun(
     }
 
     /**
+     * Backwards-compatible constructor (M93 v1.5 era, 23 components)
+     * that defaults the Phase 2c-T {@link #bulkV2Blobs} to {@code null}.
+     * Callers that pre-date the 2026-05-05 verbatim-v2-blob carriage
+     * additive continue to work unchanged.
+     */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression,
+        Map<String, Compression> signalCodecOverrides,
+        List<ProvenanceRecord> provenanceRecords,
+        boolean embedReference,
+        Map<String, byte[]> referenceChromSeqs,
+        Path externalReferencePath
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, signalCodecOverrides, provenanceRecords,
+             embedReference, referenceChromSeqs, externalReferencePath,
+             null);
+    }
+
+    /**
      * M93 (v1.5) full-fat builder. Returns a new instance with the same
      * payload but with the M93 reference fields replaced. Builder-style
      * convenience for callers that already have a base run and want to

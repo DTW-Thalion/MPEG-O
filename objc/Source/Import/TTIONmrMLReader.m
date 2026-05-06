@@ -73,6 +73,11 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
     NSData *_currentInterleavedXY;  // v0.9 canonical single-array form
     NSUInteger _current1DNumberOfDataPoints;
     NSUInteger _currentSpecIndex;
+
+    // Phase 2026-05-05 cross-language parity: deinterleaved real /
+    // imag float64 arrays from the most-recent complex128 fidData.
+    NSData *_fidReal;
+    NSData *_fidImag;
 }
 
 @synthesize dataset                  = _dataset;
@@ -82,6 +87,8 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
 @synthesize numberOfScans            = _numberOfScans;
 @synthesize dwellTimeSeconds         = _dwellTimeSeconds;
 @synthesize sweepWidthPpm            = _sweepWidthPpm;
+@synthesize fidReal                  = _fidReal;
+@synthesize fidImag                  = _fidImag;
 
 #pragma mark - Class entry points
 
@@ -151,6 +158,8 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
         _dwellTimeSeconds         = 0.0;
         _sweepWidthPpm            = 0.0;
         _currentSpecIndex         = 0;
+        _fidReal                  = [NSData data];
+        _fidImag                  = [NSData data];
     }
     return self;
 }
@@ -463,6 +472,27 @@ didStartElement:(NSString *)elementName
                                                      scanCount:_numberOfScans
                                                   receiverGain:1.0];
     [_fids addObject:fid];
+
+    // Phase 2026-05-05 cross-language parity: surface deinterleaved
+    // real / imag float64 arrays on the reader instance to match
+    // Python ``ImportResult.fid_real`` / ``fid_imag``. Only populated
+    // for ``byteFormat="complex128"`` (interleaved double pairs).
+    BOOL isComplex128 = [[_fidByteFormat lowercaseString]
+                         isEqualToString:@"complex128"];
+    if (isComplex128 && complexBuf.length >= 2 * sizeof(double)
+        && (complexBuf.length % (2 * sizeof(double)) == 0)) {
+        const double *src = (const double *)complexBuf.bytes;
+        NSMutableData *re = [NSMutableData dataWithLength:complexLen * sizeof(double)];
+        NSMutableData *im = [NSMutableData dataWithLength:complexLen * sizeof(double)];
+        double *reb = (double *)re.mutableBytes;
+        double *imb = (double *)im.mutableBytes;
+        for (NSUInteger i = 0; i < complexLen; i++) {
+            reb[i] = src[2 * i];
+            imb[i] = src[2 * i + 1];
+        }
+        _fidReal = [re copy];
+        _fidImag = [im copy];
+    }
 }
 
 - (void)finishSpectrum1D
