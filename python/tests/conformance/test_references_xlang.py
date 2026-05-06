@@ -183,14 +183,14 @@ def _write_java(out: Path) -> None:
         pytest.skip("Java conformance helpers not built (run `mvn test-compile` in java/)")
     cmd = ["java", "-cp", _java_classpath(),
            "global.thalion.ttio.conformance.RefXLangWriter", str(out)]
-    subprocess.run(cmd, check=True, capture_output=True)
+    subprocess.run(cmd, check=True, capture_output=True, timeout=60)
 
 
 def _write_objc(out: Path) -> None:
     if not _objc_runtime_available():
         pytest.skip("ObjC conformance helpers not built (run `./build.sh` in objc/)")
     cmd = [str(_OBJC_BIN / "TtioRefXLangWriter"), str(out)]
-    subprocess.run(cmd, check=True, capture_output=True, env=_objc_env())
+    subprocess.run(cmd, check=True, capture_output=True, env=_objc_env(), timeout=60)
 
 
 # ─── Readers ────────────────────────────────────────────────────────
@@ -213,7 +213,7 @@ def _read_java(tio: Path) -> dict:
         pytest.skip("Java conformance helpers not built (run `mvn test-compile` in java/)")
     cmd = ["java", "-cp", _java_classpath(),
            "global.thalion.ttio.conformance.RefXLangReader", str(tio)]
-    out = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    out = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
     # Reader prints exactly one JSON line on stdout. Filter for the
     # opening brace to avoid SLF4J / HDF5 INFO chatter.
     for line in out.stdout.splitlines():
@@ -228,7 +228,7 @@ def _read_objc(tio: Path) -> dict:
         pytest.skip("ObjC conformance helpers not built (run `./build.sh` in objc/)")
     cmd = [str(_OBJC_BIN / "TtioRefXLangReader"), str(tio)]
     out = subprocess.run(cmd, check=True, capture_output=True, text=True,
-                         env=_objc_env())
+                         env=_objc_env(), timeout=60)
     for line in out.stdout.splitlines():
         line = line.strip()
         if line.startswith("{"):
