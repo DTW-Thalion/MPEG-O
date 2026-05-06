@@ -989,18 +989,43 @@ public class GenomicRun
     // 24× speedup at 1M reads from this exact pattern.
 
     /** Return the full ``signal_channels/sequences`` byte array.
-     *  Decoded once and cached for codec-compressed channels;
-     *  read once and discarded for uncompressed channels. */
+     *  Side-effect: populates the per-channel cache so that
+     *  subsequent per-record {@link #byteChannelSlice} calls slice
+     *  the warm buffer instead of issuing fresh HDF5 reads. This
+     *  matters for uncompressed channels, which the codec path
+     *  does not cache automatically. */
     public byte[] sequencesFull() {
         ensureSignalChannels();
-        return byteChannelSlice("sequences", 0L, (int) totalBaseCount());
+        return byteChannelFull("sequences");
     }
 
     /** Return the full ``signal_channels/qualities`` byte array.
-     *  Same caching semantics as {@link #sequencesFull}. */
+     *  Same warm-cache semantics as {@link #sequencesFull}. */
     public byte[] qualitiesFull() {
         ensureSignalChannels();
-        return byteChannelSlice("qualities", 0L, (int) totalBaseCount());
+        return byteChannelFull("qualities");
+    }
+
+    /** Cache-priming whole-channel fetch. For codec-compressed
+     *  channels {@link #byteChannelSlice} already caches; for
+     *  uncompressed channels we explicitly read the full extent and
+     *  put it in {@link #decodedByteChannels} so subsequent slices
+     *  are O(arraycopy). */
+    private byte[] byteChannelFull(String name) {
+        byte[] cached = decodedByteChannels.get(name);
+        if (cached != null) {
+            return cached.clone();
+        }
+        long total = totalBaseCount();
+        byte[] full = byteChannelSlice(name, 0L, (int) total);
+        // byteChannelSlice's compressed-codec path already populated
+        // the cache. The uncompressed path (codecId == 0) returns the
+        // raw HDF5 buffer without caching — fix that here so the
+        // warmup is actually effective for those channels too.
+        if (!decodedByteChannels.containsKey(name)) {
+            decodedByteChannels.put(name, full);
+        }
+        return full;
     }
 
     /** Return the full read-names list, forcing the one-shot
