@@ -43,18 +43,23 @@ public class MainWindow {
             }
         });
         scene.setOnDragDropped(e -> {
+            boolean success = false;
             if (e.getDragboard().hasFiles()) {
                 java.io.File f = e.getDragboard().getFiles().get(0);
                 if (f.getName().endsWith(".tio")) {
                     loadDataset(f.toString(), true);
+                    success = true;
                 } else {
                     // Phase 8 hooks the sniffer here to pre-select an importer.
                     Alert info = new Alert(Alert.AlertType.INFORMATION,
                         "Importer wizard pre-selection wired in Phase 8.\n"
                         + "Dropped: " + f.toString(), ButtonType.OK);
                     info.showAndWait();
+                    success = true;
                 }
             }
+            e.setDropCompleted(success);
+            e.consume();
         });
         primaryStage.setTitle("tio-browser");
         primaryStage.show();
