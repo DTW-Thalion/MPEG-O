@@ -96,6 +96,19 @@ public class ReadInspectorView {
     }
 
     /**
+     * Display a free-form placeholder message in the metadata pane and
+     * blank out the sequence / CIGAR / quality regions. Used by
+     * {@link ReadInspectorTab} when the row's native codec path is
+     * unavailable and {@code AlignedRead} can't be materialised.
+     */
+    public void renderPlaceholder(String message) {
+        metadataLabel.setText(message == null ? "" : message);
+        sequenceFlow.getChildren().clear();
+        cigarPane.getChildren().clear();
+        qualChart.getData().clear();
+    }
+
+    /**
      * Pure-Java metadata formatter. Returns a multi-line, monospace
      * footer describing the read. Unmapped reads (flag &amp; 0x4 set,
      * or chromosome empty/&quot;*&quot;) get a "(unmapped)" tag and
