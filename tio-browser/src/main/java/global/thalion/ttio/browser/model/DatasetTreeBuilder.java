@@ -34,8 +34,20 @@ public final class DatasetTreeBuilder {
             TreeNodeKind groupKind = groupKindFor(run.acquisitionMode());
             DatasetTreeNode group = acqGroups.computeIfAbsent(groupKind,
                 k -> new DatasetTreeNode(k, groupLabelFor(k), null));
-            group.add(new DatasetTreeNode(
-                runKindFor(groupKind), entry.getKey(), entry.getKey()));
+            DatasetTreeNode runNode = new DatasetTreeNode(
+                runKindFor(groupKind), entry.getKey(), entry.getKey());
+            // Add chromatograms as child nodes when the run carries them.
+            // Key encoded as "<runKey>#<index>" so ChromatogramPlotTab can
+            // resolve back to the underlying Chromatogram via:
+            //   run.chromatograms().get(index)
+            for (int i = 0; i < run.chromatograms().size(); i++) {
+                var chrom = run.chromatograms().get(i);
+                String chromLabel = chrom.type() + " #" + i;
+                runNode.add(new DatasetTreeNode(
+                    TreeNodeKind.CHROMATOGRAM, chromLabel,
+                    entry.getKey() + "#" + i));
+            }
+            group.add(runNode);
         }
         for (DatasetTreeNode g : acqGroups.values()) study.add(g);
 

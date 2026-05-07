@@ -13,6 +13,8 @@ import global.thalion.ttio.browser.view.headers.MsHeadersTable;
 import global.thalion.ttio.browser.view.headers.NmrHeadersTable;
 import global.thalion.ttio.browser.view.headers.RamanHeadersTable;
 import global.thalion.ttio.browser.view.overview.OverviewTab;
+import global.thalion.ttio.browser.view.plot.ChromatogramPlotTab;
+import global.thalion.ttio.browser.view.plot.SpectrumPlotTab;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -143,9 +145,21 @@ public class MainWindow {
         treeView = new DatasetTreeView();
         detailPane = new DetailPane();
         detailPane.register(new OverviewTab());
-        detailPane.register(new MsHeadersTable());
-        detailPane.register(new NmrHeadersTable());
-        detailPane.register(new RamanHeadersTable());
+        MsHeadersTable msHeaders = new MsHeadersTable();
+        NmrHeadersTable nmrHeaders = new NmrHeadersTable();
+        RamanHeadersTable ramanHeaders = new RamanHeadersTable();
+        SpectrumPlotTab plotTab = new SpectrumPlotTab();
+        // Bridge headers row-selection → SpectrumPlotTab.render. The Plot
+        // tab itself only resets on run-level selection; the headers
+        // tables drive the actual content.
+        msHeaders.onRowSelected(plotTab::render);
+        nmrHeaders.onRowSelected(plotTab::render);
+        ramanHeaders.onRowSelected(plotTab::render);
+        detailPane.register(msHeaders);
+        detailPane.register(nmrHeaders);
+        detailPane.register(ramanHeaders);
+        detailPane.register(plotTab);
+        detailPane.register(new ChromatogramPlotTab());
         detailPane.register(new ProvenanceTab());
         detailPane.register(new FeatureFlagsTab());
         detailPane.register(new EncryptionTab());
