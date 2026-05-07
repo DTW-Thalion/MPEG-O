@@ -21,13 +21,14 @@ class NativeLibraryLoaderTest {
     }
 
     @Test
-    void platformIdCollapsesMacToSingleId() {
-        // macOS uses a universal2 binary; both arches resolve to "mac".
-        assertEquals("mac",
+    void platformIdRecognizesMacArches() {
+        // Bundle ships arm64-only; mac-x64 has no resource (Intel-Mac
+        // users hit graceful degradation).
+        assertEquals("mac-x64",
             NativeLibraryLoader.platformId("Mac OS X", "x86_64"));
-        assertEquals("mac",
+        assertEquals("mac-aarch64",
             NativeLibraryLoader.platformId("Mac OS X", "aarch64"));
-        assertEquals("mac",
+        assertEquals("mac-aarch64",
             NativeLibraryLoader.platformId("Darwin", "arm64"));
     }
 
@@ -49,10 +50,12 @@ class NativeLibraryLoaderTest {
     void resourcePathMatchesShadeLayout() {
         assertEquals("/native/linux-x64/libttio_rans_jni.so",
             NativeLibraryLoader.resourcePath("linux-x64"));
-        assertEquals("/native/mac/libttio_rans_jni.dylib",
-            NativeLibraryLoader.resourcePath("mac"));
+        assertEquals("/native/mac-aarch64/libttio_rans_jni.dylib",
+            NativeLibraryLoader.resourcePath("mac-aarch64"));
         assertEquals("/native/win-x64/ttio_rans_jni.dll",
             NativeLibraryLoader.resourcePath("win-x64"));
+        // Intel Mac has no bundled native (graceful degradation).
+        assertNull(NativeLibraryLoader.resourcePath("mac-x64"));
         assertNull(NativeLibraryLoader.resourcePath("unknown"));
     }
 }
