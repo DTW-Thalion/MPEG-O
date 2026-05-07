@@ -13,6 +13,46 @@ public API is stable from onward.
 
 ### Added
 
+- **`tio-browser` desktop GUI (Phases 0–7 + native bundling)** —
+  JavaFX desktop application for inspecting `.tio` datasets, peer to
+  the Java / Python / ObjC reference implementations. Cross-platform
+  shaded jar bundles `libttio_rans_jni` for **Linux x86_64**, **macOS
+  Apple Silicon (arm64)**, and **Windows x86_64**; end users can run
+  `java -jar tio-browser-<ver>-shaded.jar` without any toolchain
+  setup beyond a JDK 17+ runtime. `NativeLibraryLoader` resolves the
+  library via `System.loadLibrary` → bundled-resource extract →
+  graceful degradation (Intel Mac and other unbundled platforms get
+  a placeholder in the genomic Read Inspector; all non-genomic
+  features keep working). Built and validated via the
+  `release-shaded-jar.yml` GitHub Actions matrix workflow
+  (`ubuntu-22.04` + `macos-14` arm64 + `windows-2022` MinGW UCRT64).
+  See [`tio-browser/README.md`](tio-browser/README.md) for the
+  install matrix, build-from-source instructions, release path, and
+  rationale for arm64-only macOS / MinGW-w64 Windows.
+
+- `Quantification.unit` field (Java / Python / ObjC) — optional
+  per-quantification unit string (e.g. `"fmol"`, `"ng/mL"`). Stored
+  as a JSON-array sidecar attribute `@quantification_units` on
+  `/study/quantifications` for backward-compat (legacy datasets read
+  back with empty units). Surfaced as a column in `tio-browser`'s
+  Quantifications tab.
+
+- `MassSpectrum.isCentroided()` / `is_centroided` / `isCentroided`
+  (Java / Python / ObjC) — per-spectrum centroid-vs-profile
+  classification, stored as a parallel-array column
+  `spectrum_index/centroideds` (int32, 0=profile, 1=centroided).
+  Wire-format additive optional column; legacy files read as
+  `false` for all rows. Used by `tio-browser`'s spectrum plot to
+  auto-select stem rendering for centroided MS.
+
+- `AcquisitionRun.spectra() : List<Spectrum>` (Java) /
+  `acquisition_run.spectra` property (Python) /
+  `-[TTIOAcquisitionRun spectra]` (ObjC) — modality-uniform spectrum
+  enumeration, replacing the `for(i)+objectAtIndex+instanceof`
+  pattern. Includes new `AcquisitionMode` constants
+  `RAMAN` / `IR` / `UV_VIS` (ordinals 9 / 10 / 11) and an
+  `AcquisitionRun.solvent` attribute (default `""`) for NMR runs.
+
 - `ReferenceImport.writeToDataset` (Java),
   `-[TTIOReferenceImport writeToDataset:overwrite:error:]` (ObjC) —
   public counterpart to Python's `ReferenceImport.write_to_dataset`,

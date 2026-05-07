@@ -35,13 +35,14 @@ The standard is built around **six shared data primitives** and an **HDF5-based 
 
 ## Implementation Streams
 
-This repository hosts three implementation streams. The **Objective-C** stream under `objc/` is the normative reference implementation.
+This repository hosts three reference-implementation streams plus a desktop GUI built on the Java stream. The **Objective-C** stream under `objc/` is the normative reference implementation.
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3072 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
-| **Java (`global.thalion.ttio`)** | **804/0/0/4 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
+| **Java (`global.thalion.ttio`)** | **809/0/0/4 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
+| **`tio-browser` (JavaFX desktop GUI)** | **Phases 0–7 + cross-platform native bundling shipped.** Cross-platform shaded jar bundles `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-shaded.jar` with no toolchain setup beyond JDK 17+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
