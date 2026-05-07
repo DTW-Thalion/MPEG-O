@@ -18,12 +18,10 @@ class AppSmokeTest extends ApplicationTest {
 
     @Test
     void appWindowOpensWithExpectedTitle() {
-        assertEquals("tio-browser", listTargetWindows().get(0).getScene()
-            .getWindow().getOnCloseRequest() == null
-            ? "tio-browser" : "tio-browser",
-            "window should be open with title set");
-        // Test value: the start() call must complete without throwing,
-        // and a stage must be visible.
-        assertTrue(listTargetWindows().size() >= 1);
+        assertTrue(listTargetWindows().size() >= 1,
+            "primary stage should be visible after start()");
+        Stage primary = (Stage) listTargetWindows().get(0);
+        assertEquals("tio-browser", primary.getTitle(),
+            "primary stage title should be 'tio-browser'");
     }
 }
