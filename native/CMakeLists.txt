@@ -123,13 +123,19 @@ if(TTIO_RANS_BUILD_JNI)
         target_compile_options(ttio_rans_jni PRIVATE -Wall -Wextra -Wpedantic)
     endif()
     # Library naming follows each platform's native convention:
-    #   Linux:   libttio_rans_jni.so    (CMake default, lib prefix)
-    #   macOS:   libttio_rans_jni.dylib (CMake default, lib prefix)
-    #   Windows: ttio_rans_jni.dll      (CMake default, no lib prefix)
-    # tio-browser's NativeLibraryLoader uses System.load on an absolute
-    # extracted path so either form works there; this preserves the
-    # convention the existing comment block describes.
-    if(NOT WIN32)
+    #   Linux:   libttio_rans_jni.so    (lib prefix kept; CMake default)
+    #   macOS:   libttio_rans_jni.dylib (lib prefix kept; CMake default)
+    #   Windows: ttio_rans_jni.dll      (no lib prefix — Windows convention)
+    #
+    # MinGW-w64 (used on Windows) defaults to "lib" prefix even though
+    # Windows convention is no prefix; explicitly set PREFIX="" on
+    # WIN32 to override. tio-browser's NativeLibraryLoader uses
+    # System.load on an absolute extracted path so either form would
+    # work there; this preserves the convention the existing comment
+    # block describes.
+    if(WIN32)
+        set_target_properties(ttio_rans_jni PROPERTIES PREFIX "")
+    else()
         set_target_properties(ttio_rans_jni PROPERTIES PREFIX "lib")
     endif()
     install(TARGETS ttio_rans_jni LIBRARY DESTINATION lib)
