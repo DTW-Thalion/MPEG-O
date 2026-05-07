@@ -9,7 +9,87 @@ public API is stable from onward.
 
 ---
 
-## [Unreleased] — post-v1.0.0 perf + parity tweaks
+## [Unreleased]
+
+### Added
+
+- `ReferenceImport.writeToDataset` (Java),
+  `-[TTIOReferenceImport writeToDataset:overwrite:error:]` (ObjC) —
+  public counterpart to Python's `ReferenceImport.write_to_dataset`,
+  closing the cross-language API parity gap on the reference-write
+  path. Each language now has matching `readFromGroup` /
+  `writeToDataset` symmetry. All three writers produce a
+  byte-identical `/study/references/<uri>/` subtree (same `@md5`,
+  `@reference_uri`, per-chromosome `@length`, and ZLIB-compressed
+  UINT8 `data`); verified by structural comparison across Python,
+  Java, and ObjC fixtures.
+
+---
+
+## [1.1.0] — 2026-05-06
+
+Pure additive release. No wire-format change: `.tio` files written
+by 1.0.0 are read identically by 1.1.0 and vice versa.
+
+### Added
+
+- `SpectralDataset.references()` (Java),
+  `SpectralDataset.references` property (Python), and
+  `[TTIOSpectralDataset references]` (ObjC) — enumerates embedded
+  references at `/study/references/<reference_uri>/` for opened
+  datasets, keyed by reference URI. Datasets written without
+  embedded references (writer flag `embedReference = false`) return
+  an empty map regardless of whether individual genomic runs carry a
+  `referenceUri`. Cross-language parity verified by
+  `python/tests/conformance/test_references_xlang.py` (9 directed
+  pairs).
+- `ReferenceImport.readFromGroup` (Java) /
+  `ReferenceImport.read_from_group` (Python) /
+  `+[TTIOReferenceImport readFromGroup:]` (ObjC) — factory that
+  materialises a `ReferenceImport` from its on-disk group.
+
+### Fixed
+
+- ObjC writer's reference-embed path no longer requires `libttio_rans`
+  to be available. Embedding `/study/references/<uri>/...` is pure HDF5
+  I/O and now fires whenever `embedReference=YES` on a
+  `TTIOWrittenGenomicRun`, matching Python's behavior. Signal-channel
+  encoding via REF_DIFF_V2 still gates on the native lib (unchanged).
+  Resolves the writer-gate asymmetry finding from Phase 0 Task 0.6.
+
+### Changed
+
+- Unified `@md5` attribute computation on
+  `/study/references/<uri>/` to a single seq-only form across all
+  writers and helpers. Previously, REF_DIFF_V2 auto-embed used
+  `MD5(seq_a || seq_b || ...)` (sorted by name) while FASTA-import
+  writers and the public canonical helpers
+  (`compute_reference_md5` / `ReferenceImport.computeMd5` /
+  `+[TTIOReferenceImport computeMd5WithChromosomes:sequences:]`)
+  used `MD5(name_a || 0x0A || seq_a || 0x0A || ...)`. All three
+  paths now agree on the seq-only form, which was already the
+  authoritative on-disk digest. Existing v1.0.0 files written via
+  REF_DIFF_V2 auto-embed are unchanged (their on-disk `@md5` was
+  already seq-only). Existing v1.0.0 files written via FASTA-import
+  retain their on-disk `@md5` verbatim through the v1.1.0
+  `read_from_group` / `readFromGroup` path; only the auto-recompute
+  fallback (when `md5=None` / `md5=null` / `md5:nil` is passed to
+  the constructor) now produces a seq-only digest. Resolves the
+  three-form `@md5` finding from Phase 0 Task 0.6.
+
+### Notes
+
+- ObjC has no canonical library-version constant; the version bump
+  applies only to the Java pom and Python `__version__` /
+  `pyproject.toml` metadata.
+- The on-disk reference layout itself is unchanged from 1.0.0 —
+  v1.1.0 only fills in the previously-missing read path. See
+  `docs/format-spec.md` §10.10 (subsection "Reading embedded
+  references") for the exact byte layout and the `@md5` form note.
+
+---
+
+## [post-v1.0.0 perf + parity tweaks — included in 1.1.0]
 
 All correctness-neutral (same wire bytes, same on-disk container).
 Headline numbers + reproducer instructions consolidated in

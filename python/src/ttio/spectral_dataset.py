@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from types import TracebackType
+from types import MappingProxyType, TracebackType
 from typing import Any, Iterator, Mapping
 
 import h5py
@@ -24,6 +24,7 @@ from . import _hdf5_io as io
 from ._rwlock import RWLock
 from .access_policy import AccessPolicy
 from .acquisition_run import AcquisitionRun
+from .genomic.reference_import import ReferenceImport  # tio-browser Phase 0
 from .genomic_run import GenomicRun  # M82
 from .enums import EncryptionLevel
 from .feature_flags import FeatureFlags
@@ -90,6 +91,13 @@ class SpectralDataset:
     ms_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
     nmr_runs: dict[str, AcquisitionRun] = field(default_factory=dict)
     genomic_runs: dict[str, GenomicRun] = field(default_factory=dict)  # M82
+    # Embedded references at /study/references/<uri>/, populated on
+    # open() from the canonical embed layout (see
+    # :func:`_embed_references_for_runs` for the writer side). Empty
+    # for files without an embedded reference, including those whose
+    # genomic runs use ``embed_reference=False``. Mirrors Java's
+    # ``SpectralDataset.references()`` (added Phase 0 of tio-browser).
+    _references: dict[str, "ReferenceImport"] = field(default_factory=dict)
     encrypted_algorithm: str = ""
     _closed: bool = False
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
@@ -250,6 +258,8 @@ class SpectralDataset:
                 if g_group.has_child(name):
                     genomic_runs_map[name] = GenomicRun.open(g_group.open_group(name), name)
 
+        references_map = _load_references_provider(study)
+
         return cls(
             path=path,
             file=None,  # non-HDF5 providers don't expose h5py.File
@@ -259,6 +269,7 @@ class SpectralDataset:
             ms_runs=ms_runs,
             nmr_runs=nmr_runs,
             genomic_runs=genomic_runs_map,  # M82
+            _references=references_map,
             encrypted_algorithm=encrypted,
             _remote_fileobj=None,
             _lock=(RWLock() if thread_safe else None),
@@ -317,6 +328,8 @@ class SpectralDataset:
                 if name in g_group:
                     genomic_runs_map[name] = GenomicRun.open(g_group[name], name)
 
+        references_map = _load_references_h5py(study)
+
         return cls(
             path=path,
             file=f,
@@ -326,6 +339,7 @@ class SpectralDataset:
             ms_runs=ms_runs,
             nmr_runs=nmr_runs,
             genomic_runs=genomic_runs_map,  # M82
+            _references=references_map,
             encrypted_algorithm=encrypted,
             _remote_fileobj=remote_fileobj,
             _lock=(RWLock() if thread_safe else None),
@@ -392,6 +406,31 @@ class SpectralDataset:
     @property
     def is_encrypted(self) -> bool:
         return bool(self.encrypted_algorithm)
+
+    @property
+    def references(self) -> Mapping[str, ReferenceImport]:
+        """Embedded references at ``/study/references/<uri>/``, keyed
+        by URI string.
+
+        Populated on :meth:`open` from the canonical embed layout (see
+        :func:`_embed_references_for_runs`). Empty for files without
+        embedded references — including those whose genomic runs use
+        ``embed_reference=False`` (the v1.2+ default), which keep the
+        ``reference_uri`` attribute but rely on the
+        :class:`ReferenceResolver` for byte resolution.
+
+        The return is a read-only view: mutations on the returned
+        mapping do not affect the dataset. Mirrors Java's
+        ``SpectralDataset.references()`` (added Phase 0 of
+        tio-browser).
+
+        :since: 1.1.0
+        """
+        # Deliberate tightening over `all_runs` etc.: /study/references/
+        # is a write-once-on-open snapshot, so we expose it as a true
+        # read-only view (mutation raises TypeError) rather than a
+        # cheap dict copy. Added in 1.1.0.
+        return MappingProxyType(self._references)
 
     @property
     def all_runs(self) -> Mapping[str, AcquisitionRun]:
@@ -1002,6 +1041,40 @@ def _reference_md5_for_run(run: WrittenGenomicRun) -> bytes:
     for chrom_name in sorted(run.reference_chrom_seqs):
         md5.update(run.reference_chrom_seqs[chrom_name])
     return md5.digest()
+
+
+def _load_references_provider(study) -> dict[str, ReferenceImport]:
+    """Read ``/study/references/<uri>/`` via the StorageGroup protocol.
+
+    Inverse-side helper for :func:`_embed_references_for_runs`. Returns
+    an empty dict when the ``references`` sub-group is absent, mirroring
+    Java's ``Map.of()`` empty-map contract.
+    """
+    if not study.has_child("references"):
+        return {}
+    refs_grp = study.open_group("references")
+    out: dict[str, ReferenceImport] = {}
+    try:
+        for uri in refs_grp.child_names():
+            sub = refs_grp.open_group(uri)
+            try:
+                out[uri] = ReferenceImport.read_from_group(sub)
+            finally:
+                sub.close()
+    finally:
+        refs_grp.close()
+    return out
+
+
+def _load_references_h5py(study: "h5py.Group") -> dict[str, ReferenceImport]:
+    """Read ``/study/references/<uri>/`` directly from an ``h5py`` study
+    group. Wraps the group in the HDF5 :class:`StorageGroup` adapter so
+    :meth:`ReferenceImport.read_from_group` sees the same protocol
+    surface used by the provider path."""
+    if "references" not in study:
+        return {}
+    from .providers.hdf5 import _Group as _H5Group
+    return _load_references_provider(_H5Group(study))
 
 
 def _embed_references_for_runs(

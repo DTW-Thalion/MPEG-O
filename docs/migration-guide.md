@@ -825,9 +825,13 @@ with SpectralDataset.open("sample.tio", writable=True) as ds:
 
 The reference lives at `/study/references/<uri>/`; chromosome
 sequences are gzip-compressed and case-preserving (soft-masking
-survives round-trip). The MD5 attribute is computed from
-sort-by-name `(name + 0x0A + bytes + 0x0A)` — order-invariant and
-cross-language byte-equal.
+survives round-trip). The MD5 attribute is computed by sorting
+chromosomes by name and digesting the concatenated sequence bytes
+— `MD5(seq_for_chr_a || seq_for_chr_b || ...)` where `||` is byte
+concatenation. Order-invariant and cross-language byte-equal.
+Unified to seq-only form in v1.1.0; readers may still encounter
+the older `(name + 0x0A + seq + 0x0A)` form on pre-1.1 files (see
+CHANGELOG for migration notes).
 
 ### 13.2 FASTQ as an unaligned run
 
