@@ -208,6 +208,96 @@ class ExportTaskTest {
     }
 
     @Test
+    void nmrMLRoundTripPreservesChemicalShifts(@TempDir Path tmp) throws Exception {
+        Path src = Paths.get("../java/src/test/resources/ttio/nmr_1d.tio")
+            .toAbsolutePath();
+        Path nmrml = tmp.resolve("out.nmrML");
+        Path reTio = tmp.resolve("re.tio");
+
+        try (SpectralDataset ds = SpectralDataset.open(src.toString())) {
+            ExportTask exp = new ExportTask(exportSpec("nmrML"),
+                ExportConfig.basic(nmrml), ds);
+            runAndWait(exp);
+            try { exp.get(); } catch (ExecutionException ee) {
+                fail("nmrML export failed: " + ee.getCause(), ee.getCause());
+            }
+        }
+        assertTrue(Files.exists(nmrml));
+
+        // Re-import nmrML -> re.tio
+        ImportTask imp = new ImportTask(importSpec("nmrML"),
+            ImportConfig.basic(nmrml, reTio, "hdf5", "run_0001", "round"));
+        runAndWait(imp);
+        try { imp.get(); } catch (ExecutionException ee) {
+            fail("nmrML re-import failed: " + ee.getCause(), ee.getCause());
+        }
+
+        try (SpectralDataset orig = SpectralDataset.open(src.toString());
+             SpectralDataset round = SpectralDataset.open(reTio.toString())) {
+            AcquisitionRun ro = orig.msRuns().values().iterator().next();
+            AcquisitionRun rr = round.msRuns().values().iterator().next();
+            double[] csO = ro.channels().getOrDefault("chemical_shift", new double[0]);
+            double[] csR = rr.channels().getOrDefault("chemical_shift", new double[0]);
+            assertEquals(csO.length, csR.length,
+                "nmrML round-trip changed chemical_shift array length");
+            assertArrayEquals(csO, csR, 1e-9,
+                "chemical_shift array mismatch after nmrML round-trip");
+        }
+    }
+
+    @Test
+    void bamRoundTripPreservesFirstReadSequence(@TempDir Path tmp) throws Exception {
+        assumeTrue(samtoolsAvailable(), "samtools not on PATH");
+        assumeTrue(nativeLibraryAvailable(),
+            "libttio_rans_jni not loadable; skip BAM round-trip");
+        Path bam = Paths.get("../java/src/test/resources/ttio/fixtures/genomic/m87_test.bam")
+            .toAbsolutePath();
+        Path origTio = tmp.resolve("orig.tio");
+
+        ImportTask imp = new ImportTask(importSpec("BAM"),
+            ImportConfig.basic(bam, origTio, "hdf5", "run_0001", "m87"));
+        runAndWait(imp);
+        try { imp.get(); } catch (ExecutionException ee) {
+            fail("BAM import failed: " + ee.getCause(), ee.getCause());
+        }
+
+        Path bamOut = tmp.resolve("out.bam");
+        byte[] origFirstSeq;
+        try (SpectralDataset ds = SpectralDataset.open(origTio.toString())) {
+            var run = ds.genomicRuns().values().iterator().next();
+            int len = run.index().lengthAt(0);
+            origFirstSeq = new byte[len];
+            byte[] seqs = run.sequencesFull();
+            int off = (int) run.index().offsetAt(0);
+            System.arraycopy(seqs, off, origFirstSeq, 0, len);
+            ExportTask exp = new ExportTask(exportSpec("BAM"),
+                ExportConfig.basic(bamOut), ds);
+            runAndWait(exp);
+            try { exp.get(); } catch (ExecutionException ee) {
+                fail("BAM export failed: " + ee.getCause(), ee.getCause());
+            }
+        }
+
+        Path reTio = tmp.resolve("re.tio");
+        ImportTask imp2 = new ImportTask(importSpec("BAM"),
+            ImportConfig.basic(bamOut, reTio, "hdf5", "run_0001", "round"));
+        runAndWait(imp2);
+        try { imp2.get(); } catch (ExecutionException ee) {
+            fail("BAM re-import failed: " + ee.getCause(), ee.getCause());
+        }
+        try (SpectralDataset round = SpectralDataset.open(reTio.toString())) {
+            var run = round.genomicRuns().values().iterator().next();
+            int len = run.index().lengthAt(0);
+            byte[] roundFirstSeq = new byte[len];
+            byte[] seqs = run.sequencesFull();
+            int off = (int) run.index().offsetAt(0);
+            System.arraycopy(seqs, off, roundFirstSeq, 0, len);
+            assertArrayEquals(origFirstSeq, roundFirstSeq,
+                "first-read sequence mismatch after BAM round-trip");
+        }
+    }
+
+    @Test
     void unsupportedImzMLRaisesClearError(@TempDir Path tmp) throws Exception {
         // Empty dataset is enough — eligibility wouldn't pass in the
         // dialog, but the task itself must surface a clear error if
