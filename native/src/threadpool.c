@@ -31,7 +31,26 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#ifdef _WIN32
+#  include <windows.h>
+#else
+#  include <unistd.h>
+#endif
+
+/* Detect online CPU count for the auto-sized pool. POSIX uses
+ * sysconf(_SC_NPROCESSORS_ONLN); Windows exposes the same value via
+ * GetSystemInfo(). Both return -1 / 0 on error so the fall-back to
+ * single-thread happens uniformly. */
+static long ttio_rans_online_cpus(void)
+{
+#ifdef _WIN32
+    SYSTEM_INFO si;
+    GetSystemInfo(&si);
+    return (long)si.dwNumberOfProcessors;
+#else
+    return sysconf(_SC_NPROCESSORS_ONLN);
+#endif
+}
 
 /* ── internal types ────────────────────────────────────────────────── */
 
@@ -101,7 +120,7 @@ static void *worker_main(void *arg)
 ttio_rans_pool *ttio_rans_pool_create(int n_threads)
 {
     if (n_threads <= 0) {
-        long n = sysconf(_SC_NPROCESSORS_ONLN);
+        long n = ttio_rans_online_cpus();
         n_threads = (n > 0) ? (int)n : 1;
     }
     /* Defensive cap: avoid pathological values. */
