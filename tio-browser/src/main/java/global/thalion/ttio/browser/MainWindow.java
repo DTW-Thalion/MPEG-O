@@ -37,6 +37,25 @@ public class MainWindow {
         scene.getStylesheets().add(
             getClass().getResource("/css/tio-browser.css").toExternalForm());
         primaryStage.setScene(scene);
+        scene.setOnDragOver(e -> {
+            if (e.getDragboard().hasFiles()) {
+                e.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
+            }
+        });
+        scene.setOnDragDropped(e -> {
+            if (e.getDragboard().hasFiles()) {
+                java.io.File f = e.getDragboard().getFiles().get(0);
+                if (f.getName().endsWith(".tio")) {
+                    loadDataset(f.toString(), true);
+                } else {
+                    // Phase 8 hooks the sniffer here to pre-select an importer.
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                        "Importer wizard pre-selection wired in Phase 8.\n"
+                        + "Dropped: " + f.toString(), ButtonType.OK);
+                    info.showAndWait();
+                }
+            }
+        });
         primaryStage.setTitle("tio-browser");
         primaryStage.show();
         wireFileActions();
@@ -138,6 +157,31 @@ public class MainWindow {
             closeCurrentDataset();
             javafx.application.Platform.exit();
         });
+        saveAsItem.setOnAction(e -> saveAsViaChooser());
+    }
+
+    private void saveAsViaChooser() {
+        if (currentDataset == null) return;
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save As");
+        chooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("TTI-O dataset", "*.tio"));
+        File target = chooser.showSaveDialog(stage);
+        if (target == null) return;
+        try {
+            java.nio.file.Files.copy(
+                java.nio.file.Paths.get(currentDataset.path()),
+                target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // Switch open to the new path, read-write
+            String oldPath = currentDataset.path();
+            closeCurrentDataset();
+            loadDataset(target.toString(), /* readOnly = */ false);
+        } catch (java.io.IOException ex) {
+            Alert err = new Alert(Alert.AlertType.ERROR,
+                "Save As failed: " + ex.getMessage(), ButtonType.OK);
+            err.showAndWait();
+        }
     }
 
     private void openFileViaChooser() {
