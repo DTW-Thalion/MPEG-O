@@ -49,8 +49,8 @@ class NmrHeadersTableTest {
             t.update(open, new DatasetTreeNode(
                 TreeNodeKind.NMR_RUN, runKey, runKey));
             assertEquals(expected, t.table().getItems().size());
-            assertEquals(4, t.table().getColumns().size(),
-                "NMR Headers expects 4 columns: idx, nucleus, freq, scan time");
+            assertEquals(5, t.table().getColumns().size(),
+                "NMR Headers expects 5 columns: idx, nucleus, freq, scan time, solvent");
         }
     }
 }

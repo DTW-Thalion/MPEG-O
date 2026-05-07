@@ -52,9 +52,9 @@ class MsHeadersTableTest {
                 TreeNodeKind.MS_RUN, runKey, runKey));
             assertEquals(expected, t.table().getItems().size(),
                 "row count must match run.count()");
-            assertTrue(t.table().getColumns().size() >= 6,
-                "MS Headers should have at least 6 columns; got "
-                + t.table().getColumns().size());
+            assertEquals(8, t.table().getColumns().size(),
+                "MS Headers expects 8 columns: idx, scan time, MS level, "
+                + "polarity, precursor m/z, precursor charge, base peak int., activation");
         }
     }
 }
