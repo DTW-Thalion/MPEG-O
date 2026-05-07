@@ -16,7 +16,7 @@ import java.util.List;
  * Imaging mass spectrometry dataset with spatial grid and tile access.
  *
  * <p>Stored as a 3-D intensity cube
- * ({@code height × width × spectralPoints}) under
+ * ({@code height x width x spectralPoints}) under
  * {@code /study/image_cube/}.</p>
  *
  * <p>I/O routed through {@link StorageGroup} /
@@ -49,6 +49,7 @@ public class MSImage {
     private final double pixelSizeY;
     private final String scanPattern;
     private final double[] intensityCube;
+    private final double[] mzAxis;     // NEW -- length 0 (legacy) or == spectralPoints
 
     // Dataset-level composition fields
     private final String title;
@@ -57,9 +58,10 @@ public class MSImage {
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
 
+    /** Designated constructor (1.2.0): includes mzAxis. */
     public MSImage(int width, int height, int spectralPoints, int tileSize,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
-                   double[] intensityCube,
+                   double[] intensityCube, double[] mzAxis,
                    String title, String isaInvestigationId,
                    List<Identification> identifications,
                    List<Quantification> quantifications,
@@ -72,6 +74,13 @@ public class MSImage {
         this.pixelSizeY = pixelSizeY;
         this.scanPattern = scanPattern;
         this.intensityCube = intensityCube;
+        if (mzAxis == null) mzAxis = new double[0];
+        if (mzAxis.length > 0 && mzAxis.length != spectralPoints) {
+            throw new IllegalArgumentException(
+                "mzAxis length " + mzAxis.length
+                + " does not match spectralPoints=" + spectralPoints);
+        }
+        this.mzAxis = mzAxis;
         this.title = title != null ? title : "";
         this.isaInvestigationId = isaInvestigationId != null ? isaInvestigationId : "";
         this.identifications = identifications != null ? List.copyOf(identifications) : List.of();
@@ -79,12 +88,26 @@ public class MSImage {
         this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
     }
 
-    /** Convenience — image-only construction (empty dataset-level metadata). */
+    /** Backwards-compat 13-arg ctor (1.1.x callers): defaults mzAxis to empty. */
+    public MSImage(int width, int height, int spectralPoints, int tileSize,
+                   double pixelSizeX, double pixelSizeY, String scanPattern,
+                   double[] intensityCube,
+                   String title, String isaInvestigationId,
+                   List<Identification> identifications,
+                   List<Quantification> quantifications,
+                   List<ProvenanceRecord> provenanceRecords) {
+        this(width, height, spectralPoints, tileSize,
+             pixelSizeX, pixelSizeY, scanPattern, intensityCube, new double[0],
+             title, isaInvestigationId,
+             identifications, quantifications, provenanceRecords);
+    }
+
+    /** Convenience -- image-only construction (empty dataset-level metadata). */
     public MSImage(int width, int height, int spectralPoints,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
                    double[] intensityCube) {
         this(width, height, spectralPoints, 0,
-             pixelSizeX, pixelSizeY, scanPattern, intensityCube,
+             pixelSizeX, pixelSizeY, scanPattern, intensityCube, new double[0],
              "", "", List.of(), List.of(), List.of());
     }
 
@@ -96,6 +119,8 @@ public class MSImage {
     public double pixelSizeY() { return pixelSizeY; }
     public String scanPattern() { return scanPattern; }
     public double[] intensityCube() { return intensityCube; }
+    /** The shared m/z axis when present; empty array for legacy files. */
+    public double[] mzAxis() { return mzAxis; }
 
     public String title() { return title; }
     public String isaInvestigationId() { return isaInvestigationId; }
