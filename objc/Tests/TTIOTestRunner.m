@@ -108,6 +108,7 @@ extern void testTask31InstanceWriterParity(void);
 extern void testFastaFastqIo(void);
 extern void testFastaFastqTioRoundTrip(void);
 extern void testReferencesAccessor(void);
+extern void testReferenceImportWriteToDataset(void);
 
 int main(int argc, const char *argv[])
 {
@@ -540,6 +541,10 @@ int main(int argc, const char *argv[])
         START_SET("1.1.0: SpectralDataset.references read-back (Phase 0 tio-browser)")
             testReferencesAccessor();
         END_SET("1.1.0: SpectralDataset.references read-back (Phase 0 tio-browser)")
+
+        START_SET("1.1.0: ReferenceImport.writeToDataset round-trip (Phase 0 tio-browser)")
+            testReferenceImportWriteToDataset();
+        END_SET("1.1.0: ReferenceImport.writeToDataset round-trip (Phase 0 tio-browser)")
     }
     return 0;
 }

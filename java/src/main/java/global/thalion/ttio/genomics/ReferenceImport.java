@@ -5,8 +5,11 @@
  */
 package global.thalion.ttio.genomics;
 
+import global.thalion.ttio.Enums;
+import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
+import global.thalion.ttio.providers.StorageProvider;
 
 import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
@@ -241,6 +244,127 @@ public final class ReferenceImport {
         }
 
         return new ReferenceImport(uri, chromNames, seqs, md5);
+    }
+
+    /**
+     * Embed this reference at {@code /study/references/<uri>/} inside
+     * {@code dataset}'s open storage backing.
+     *
+     * <p>Layout (cross-language byte-equal — matches Python's
+     * {@code ReferenceImport.write_to_dataset} and the canonical
+     * embed-helper writer used by {@code embedReference=true}
+     * runs):</p>
+     *
+     * <ul>
+     *   <li>{@code /study/references/<uri>/} group with
+     *       {@code @md5} (32-char lowercase hex) and
+     *       {@code @reference_uri} attributes.</li>
+     *   <li>{@code chromosomes/<name>/} sub-group per chromosome,
+     *       in alphabetic order, with an {@code @length} (int64)
+     *       attribute.</li>
+     *   <li>{@code chromosomes/<name>/data} UINT8 ZLIB-compressed
+     *       dataset of sequence bytes.</li>
+     * </ul>
+     *
+     * <p>If a reference with the same {@code uri} is already
+     * embedded and {@code overwrite} is {@code false}, throws
+     * {@link IllegalStateException} (mirrors Python's
+     * {@code FileExistsError}). When {@code overwrite} is
+     * {@code true}, the existing group is deleted first.</p>
+     *
+     * @param dataset   open dataset; must expose a writable
+     *                  {@link StorageProvider} via
+     *                  {@link SpectralDataset#provider()}.
+     * @param overwrite if {@code true}, replace any existing
+     *                  reference under the same URI.
+     * @throws IllegalStateException if {@code overwrite=false} and a
+     *         reference with the same URI is already embedded, or if
+     *         the dataset has no open writable provider.
+     * @since 1.1.0
+     */
+    public void writeToDataset(SpectralDataset dataset, boolean overwrite) {
+        Objects.requireNonNull(dataset, "dataset");
+        StorageProvider provider = dataset.provider();
+        if (provider == null || !provider.isOpen()) {
+            throw new IllegalStateException(
+                "ReferenceImport.writeToDataset requires an open dataset "
+                + "with a writable provider; got "
+                + (provider == null ? "null provider" : "closed provider")
+                + ".");
+        }
+        try (StorageGroup root = provider.rootGroup()) {
+            StorageGroup study;
+            if (root.hasChild("study")) {
+                study = root.openGroup("study");
+            } else {
+                study = root.createGroup("study");
+            }
+            try (StorageGroup ignoredStudy = study) {
+                StorageGroup refsGrp;
+                if (study.hasChild("references")) {
+                    refsGrp = study.openGroup("references");
+                } else {
+                    refsGrp = study.createGroup("references");
+                }
+                try (StorageGroup ignoredRefs = refsGrp) {
+                    if (refsGrp.hasChild(uri)) {
+                        if (!overwrite) {
+                            throw new IllegalStateException(
+                                "reference '" + uri + "' already embedded "
+                                + "at /study/references/" + uri + "; "
+                                + "pass overwrite=true to replace.");
+                        }
+                        refsGrp.deleteChild(uri);
+                    }
+                    try (StorageGroup refGrp = refsGrp.createGroup(uri)) {
+                        refGrp.setAttribute("md5", md5Hex());
+                        refGrp.setAttribute("reference_uri", uri);
+                        try (StorageGroup chromsGrp = refGrp.createGroup("chromosomes")) {
+                            // Build a (name -> seq) map and sort by
+                            // name so the on-disk child order matches
+                            // the canonical embed-helper writer
+                            // byte-for-byte.
+                            Map<String, byte[]> byName = new LinkedHashMap<>();
+                            for (int i = 0; i < chromosomes.size(); i++) {
+                                byName.put(chromosomes.get(i), sequences.get(i));
+                            }
+                            List<String> sortedNames = new ArrayList<>(byName.keySet());
+                            Collections.sort(sortedNames);
+                            for (String chromName : sortedNames) {
+                                byte[] seq = byName.get(chromName);
+                                try (StorageGroup c = chromsGrp.createGroup(chromName)) {
+                                    c.setAttribute("length", (long) seq.length);
+                                    StorageDataset ds;
+                                    try {
+                                        ds = c.createDataset("data",
+                                            Enums.Precision.UINT8, seq.length,
+                                            65536, Enums.Compression.ZLIB, 6);
+                                    } catch (UnsupportedOperationException e) {
+                                        ds = c.createDataset("data",
+                                            Enums.Precision.UINT8, seq.length,
+                                            0, Enums.Compression.NONE, 0);
+                                    }
+                                    try (StorageDataset closeMe = ds) {
+                                        closeMe.writeAll(seq);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Convenience overload for {@link #writeToDataset(SpectralDataset, boolean)}
+     * that defaults {@code overwrite} to {@code false}, mirroring
+     * Python's keyword-only default.
+     *
+     * @since 1.1.0
+     */
+    public void writeToDataset(SpectralDataset dataset) {
+        writeToDataset(dataset, false);
     }
 
     /** Local hex-decoder for the {@code @md5} attribute. Returns

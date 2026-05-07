@@ -11,6 +11,8 @@
 #import <Foundation/Foundation.h>
 #import "Providers/TTIOStorageProtocols.h"
 
+@class TTIOSpectralDataset;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /**
@@ -107,6 +109,60 @@ NS_ASSUME_NONNULL_BEGIN
  * @since 1.1.0
  */
 + (nullable instancetype)readFromGroup:(id<TTIOStorageGroup>)refGroup;
+
+/**
+ * Embed this reference at
+ * <code>/study/references/&lt;uri&gt;/</code> inside
+ * <code>dataset</code>'s open storage backing.
+ *
+ * <p>Layout (cross-language byte-equal — matches Python's
+ * <code>ReferenceImport.write_to_dataset</code> and the canonical
+ * embed-helper writer used by <code>embedReference=YES</code>
+ * runs):</p>
+ * <ul>
+ *   <li><code>/study/references/&lt;uri&gt;/</code> group with
+ *       <code>@md5</code> (32-char lowercase hex) and
+ *       <code>@reference_uri</code> attributes.</li>
+ *   <li><code>chromosomes/&lt;name&gt;/</code> sub-group per
+ *       chromosome, in alphabetic order, with an
+ *       <code>@length</code> (int64) attribute.</li>
+ *   <li><code>chromosomes/&lt;name&gt;/data</code> UINT8
+ *       ZLIB-compressed dataset of sequence bytes.</li>
+ * </ul>
+ *
+ * <p>If a reference with the same <code>uri</code> is already
+ * embedded and <code>overwrite</code> is <code>NO</code>, returns
+ * <code>NO</code> with a populated error in
+ * <code>TTIOSpectralDatasetErrorDomain</code> code 2201 (mirrors
+ * Python's <code>FileExistsError</code> and Java's
+ * <code>IllegalStateException</code>). When <code>overwrite</code>
+ * is <code>YES</code>, the existing group is deleted first.</p>
+ *
+ * @param dataset   Open dataset; must expose a writable
+ *                  <code>TTIOStorageProvider</code> via
+ *                  <code>-[TTIOSpectralDataset provider]</code>.
+ * @param overwrite If <code>YES</code>, replace any existing
+ *                  reference under the same URI.
+ * @param error     Out-parameter populated on failure.
+ * @return <code>YES</code> on success, <code>NO</code> on failure
+ *         (with <code>error</code> populated).
+ *
+ * @since 1.1.0
+ */
+- (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
+             overwrite:(BOOL)overwrite
+                 error:(NSError **)error;
+
+/**
+ * Convenience wrapper for
+ * <code>-writeToDataset:overwrite:error:</code> that defaults
+ * <code>overwrite</code> to <code>NO</code>, mirroring Python's
+ * keyword-only default.
+ *
+ * @since 1.1.0
+ */
+- (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
+                 error:(NSError **)error;
 
 /** Total bases across all chromosomes. */
 - (NSUInteger)totalBases;

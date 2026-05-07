@@ -11,7 +11,18 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-_No changes yet._
+### Added
+
+- `ReferenceImport.writeToDataset` (Java),
+  `-[TTIOReferenceImport writeToDataset:overwrite:error:]` (ObjC) —
+  public counterpart to Python's `ReferenceImport.write_to_dataset`,
+  closing the cross-language API parity gap on the reference-write
+  path. Each language now has matching `readFromGroup` /
+  `writeToDataset` symmetry. All three writers produce a
+  byte-identical `/study/references/<uri>/` subtree (same `@md5`,
+  `@reference_uri`, per-chromosome `@length`, and ZLIB-compressed
+  UINT8 `data`); verified by structural comparison across Python,
+  Java, and ObjC fixtures.
 
 ---
 
