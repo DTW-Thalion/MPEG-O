@@ -28,9 +28,11 @@ public class QuantificationsTab implements AbstractDetailTab {
         sample.setMinWidth(140);
         TableColumn<Row, Double> abundance = new TableColumn<>("abundance");
         abundance.setCellValueFactory(new PropertyValueFactory<>("abundance"));
+        TableColumn<Row, String> unit = new TableColumn<>("unit");
+        unit.setCellValueFactory(new PropertyValueFactory<>("unit"));
         TableColumn<Row, String> norm = new TableColumn<>("normalization");
         norm.setCellValueFactory(new PropertyValueFactory<>("normalizationMethod"));
-        table.getColumns().setAll(List.of(entity, sample, abundance, norm));
+        table.getColumns().setAll(List.of(entity, sample, abundance, unit, norm));
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY_FLEX_LAST_COLUMN);
     }
 
@@ -47,7 +49,8 @@ public class QuantificationsTab implements AbstractDetailTab {
         rows.clear();
         for (Quantification q : d.dataset().quantifications()) {
             rows.add(new Row(q.chemicalEntity(), q.sampleRef(),
-                q.abundance(), nullSafe(q.normalizationMethod())));
+                q.abundance(), nullSafe(q.unit()),
+                nullSafe(q.normalizationMethod())));
         }
     }
 
@@ -59,19 +62,22 @@ public class QuantificationsTab implements AbstractDetailTab {
         private final String chemicalEntity;
         private final String sampleRef;
         private final double abundance;
+        private final String unit;
         private final String normalizationMethod;
 
         public Row(String chemicalEntity, String sampleRef,
-                   double abundance, String normalizationMethod) {
+                   double abundance, String unit, String normalizationMethod) {
             this.chemicalEntity = chemicalEntity;
             this.sampleRef = sampleRef;
             this.abundance = abundance;
+            this.unit = unit;
             this.normalizationMethod = normalizationMethod;
         }
 
         public String getChemicalEntity()       { return chemicalEntity; }
         public String getSampleRef()            { return sampleRef; }
         public double getAbundance()            { return abundance; }
+        public String getUnit()                 { return unit; }
         public String getNormalizationMethod()  { return normalizationMethod; }
     }
 }
