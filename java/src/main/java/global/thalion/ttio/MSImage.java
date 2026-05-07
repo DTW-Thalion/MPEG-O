@@ -199,8 +199,17 @@ public class MSImage {
                 // route through the storage protocol.
                 cube = (double[]) ds.readAll();
             }
-            return new MSImage(width, height, spectralPoints,
-                    pixelSizeX, pixelSizeY, scanPattern, cube);
+
+            double[] mzAxis = new double[0];
+            if (ic.hasChild("mz_axis")) {
+                try (StorageDataset axisDs = ic.openDataset("mz_axis")) {
+                    mzAxis = (double[]) axisDs.readAll();
+                }
+            }
+
+            return new MSImage(width, height, spectralPoints, 0,
+                    pixelSizeX, pixelSizeY, scanPattern, cube, mzAxis,
+                    "", "", List.of(), List.of(), List.of());
         }
     }
 }
