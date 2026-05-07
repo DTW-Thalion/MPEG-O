@@ -133,7 +133,7 @@
         <dependency>
             <groupId>org.testfx</groupId>
             <artifactId>openjfx-monocle</artifactId>
-            <version>jdk-12.0.1+2</version>
+            <version>17.0.10</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -145,7 +145,6 @@
                 <version>3.2.5</version>
                 <configuration>
                     <argLine>
-                        --add-modules=javafx.controls,javafx.graphics,javafx.fxml
                         -Dtestfx.robot=glass
                         -Dtestfx.headless=true
                         -Dprism.order=sw
