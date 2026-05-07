@@ -90,11 +90,11 @@ public final class NativeLibraryLoader {
 
     /** Visible for testing.
      *
-     *  <p>macOS collapses both x86_64 and arm64 to {@code "mac"} —
-     *  the bundled {@code libttio_rans_jni.dylib} is a universal2
-     *  fat binary built on macos-14 via {@code -DCMAKE_OSX_ARCHITECTURES=
-     *  "x86_64;arm64"}. A single dylib loads natively on Intel and
-     *  Apple Silicon Macs.</p>
+     *  <p>macOS bundle is currently arm64-only (Apple Silicon). Intel
+     *  Macs map to {@code "mac-x64"} which has no resource path —
+     *  loader records {@link #lastError()} and the genomic Read
+     *  Inspector falls back to a placeholder. Universal2 is a future
+     *  follow-up gated on the SIMD .c files self-guarding for arm64.</p>
      */
     static String platformId(String osName, String osArch) {
         String os = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
@@ -104,7 +104,8 @@ public final class NativeLibraryLoader {
                 ? "linux-aarch64" : "linux-x64";
         }
         if (os.contains("mac") || os.contains("darwin")) {
-            return "mac";
+            return arch.contains("aarch64") || arch.contains("arm64")
+                ? "mac-aarch64" : "mac-x64";
         }
         if (os.contains("win")) {
             return arch.contains("aarch64") || arch.contains("arm64")
@@ -118,7 +119,7 @@ public final class NativeLibraryLoader {
         return switch (pid) {
             case "linux-x64"     -> "/native/linux-x64/libttio_rans_jni.so";
             case "linux-aarch64" -> "/native/linux-aarch64/libttio_rans_jni.so";
-            case "mac"           -> "/native/mac/libttio_rans_jni.dylib";
+            case "mac-aarch64"   -> "/native/mac-aarch64/libttio_rans_jni.dylib";
             case "win-x64"       -> "/native/win-x64/ttio_rans_jni.dll";
             case "win-aarch64"   -> "/native/win-aarch64/ttio_rans_jni.dll";
             default              -> null;
