@@ -18,17 +18,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS uses a single universal2 binary (x86_64 + arm64 lipo'd
-        # into one .dylib) built on macos-14. macos-13 (Intel) was
-        # producing 60+ minute queue waits during peak; the universal
-        # build runs in ~20 seconds on macos-14 and works natively on
-        # both Intel and Apple Silicon Macs.
+        # macOS native is arm64-only for now. Universal2 (x86_64+arm64)
+        # would require source-level changes: native/src SIMD .c files
+        # use x86 intrinsics (<immintrin.h>) and don't self-guard for
+        # arm64; arm64-slice compilation in a universal binary fails.
+        # macos-13 (Intel) GHA runners are queue-blocked (60+ min waits)
+        # so we can't build the x86_64 slice on its own runner either.
+        # Apple Silicon is the bulk of post-2020 Macs; Intel-Mac users
+        # running the jar see graceful degradation in NativeLibraryLoader
+        # (placeholder in Read Inspector). Tracked as follow-up.
         include:
           - os: ubuntu-22.04
             classifier: linux-x64
             artifact_name: libttio_rans_jni.so
           - os: macos-14
-            classifier: mac
+            classifier: mac-aarch64
             artifact_name: libttio_rans_jni.dylib
           - os: windows-2022
             classifier: win-x64
@@ -76,14 +80,14 @@ jobs:
           cmake -B _build -DCMAKE_BUILD_TYPE=Release \
             -DTTIO_RANS_BUILD_JNI=ON
 
-      - name: Configure CMake (macOS — universal2 fat binary)
+      - name: Configure CMake (macOS — arm64-only)
         if: runner.os == 'macOS'
         shell: bash
         run: |
           cd native
           cmake -B _build -DCMAKE_BUILD_TYPE=Release \
             -DTTIO_RANS_BUILD_JNI=ON \
-            -DCMAKE_OSX_ARCHITECTURES="x86_64;arm64"
+            -DCMAKE_OSX_ARCHITECTURES="arm64"
 
       - name: Configure + build CMake (Windows / MSYS2 UCRT64)
         if: runner.os == 'Windows'
@@ -108,7 +112,7 @@ jobs:
           cd native
           cmake --build _build --config Release --target ttio_rans_jni
           if [ "${{ runner.os }}" = "macOS" ]; then
-            echo "Verifying universal2 lipo output:"
+            echo "macOS dylib architecture (arm64-only):"
             lipo -info _build/libttio_rans_jni.dylib
           fi
 
@@ -164,10 +168,10 @@ jobs:
       - name: Stage natives into tio-browser resources
         run: |
           BASE=tio-browser/src/main/resources/native
-          mkdir -p $BASE/linux-x64 $BASE/mac $BASE/win-x64
-          cp native-artifacts/native-linux-x64/libttio_rans_jni.so  $BASE/linux-x64/
-          cp native-artifacts/native-mac/libttio_rans_jni.dylib     $BASE/mac/
-          cp native-artifacts/native-win-x64/ttio_rans_jni.dll      $BASE/win-x64/
+          mkdir -p $BASE/linux-x64 $BASE/mac-aarch64 $BASE/win-x64
+          cp native-artifacts/native-linux-x64/libttio_rans_jni.so       $BASE/linux-x64/
+          cp native-artifacts/native-mac-aarch64/libttio_rans_jni.dylib  $BASE/mac-aarch64/
+          cp native-artifacts/native-win-x64/ttio_rans_jni.dll           $BASE/win-x64/
           ls -laR $BASE
 
       - name: Install ttio jar to local M2
@@ -188,7 +192,7 @@ jobs:
           echo "Inspecting $JAR"
           for path in \
               native/linux-x64/libttio_rans_jni.so \
-              native/mac/libttio_rans_jni.dylib \
+              native/mac-aarch64/libttio_rans_jni.dylib \
               native/win-x64/ttio_rans_jni.dll; do
             if unzip -l "$JAR" | grep -q "$path"; then
               echo "  ✓ $path"
