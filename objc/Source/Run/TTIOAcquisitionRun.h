@@ -85,6 +85,17 @@
 /** Spectrometer frequency in MHz for NMR runs. */
 @property (readonly) double spectrometerFrequencyMHz;
 
+/** Optional NMR solvent label (e.g. <code>@"CDCl3"</code>,
+ *  <code>@"DMSO-d6"</code>). Empty string when not specified or when
+ *  the run is not NMR. Stored as the <code>@solvent</code> string
+ *  attribute on the run group.
+ *
+ *  <p>Cross-language equivalents: Java
+ *  <code>AcquisitionRun.solvent()</code>, Python
+ *  <code>AcquisitionRun.solvent</code>.</p>
+ */
+@property (readonly, copy) NSString *solvent;
+
 /** Compression codec applied to signal-channel datasets when
  *  persisting this run. Defaults to <code>TTIOCompressionZlib</code>;
  *  writers may set <code>LZ4</code> or <code>NumpressDelta</code>
@@ -163,6 +174,20 @@
  *         <code>nil</code> on failure.
  */
 - (id)spectrumAtIndex:(NSUInteger)index error:(NSError **)error;
+
+/**
+ * Materialise all spectra in this run as an array. Convenience over
+ * <code>-spectrumAtIndex:error:</code> + count for callers that want
+ * to iterate or stream; rows that fail to materialise are skipped.
+ *
+ * <p>Cross-language equivalents: Java
+ * <code>AcquisitionRun.spectra() : List&lt;Spectrum&gt;</code>, Python
+ * <code>AcquisitionRun.spectra() -&gt; list[Spectrum]</code> (also
+ * iterable via <code>__iter__</code>).</p>
+ *
+ * @return Immutable array of materialised spectra in index order.
+ */
+- (NSArray *)spectra;
 
 /**
  * @param range Closed retention-time range in seconds.

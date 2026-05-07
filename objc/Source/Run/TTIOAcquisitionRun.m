@@ -122,6 +122,7 @@
         _spectrumIndex = [self buildIndexFromSpectra:spectra];
         _chromatograms = @[];
         _modality = @"mass_spectrometry";
+        _solvent = @"";
     }
     return self;
 }
@@ -294,6 +295,11 @@
         if (!fd) return NO;
         double f[1] = { _spectrometerFrequencyMHz };
         if (![fd writeAll:[NSData dataWithBytes:f length:sizeof(f)] error:error]) return NO;
+    }
+
+    if (_solvent && _solvent.length > 0) {
+        if (![runGroup setAttributeValue:_solvent
+                                 forName:@"solvent" error:error]) return NO;
     }
 
     // Per-run provenance.
@@ -590,6 +596,7 @@
     run->_signalCompression    = TTIOCompressionNone;
     run->_chromatograms        = @[];
     run->_modality             = [modality copy];
+    run->_solvent              = @"";
     return run;
 }
 
@@ -632,6 +639,12 @@
                 freqMHz = ((const double *)fdata.bytes)[0];
             }
         }
+    }
+
+    NSString *solvent = @"";
+    if ([runGroup hasAttributeNamed:@"solvent"]) {
+        NSString *s = [runGroup attributeValueForName:@"solvent" error:NULL];
+        if (s.length > 0) solvent = s;
     }
 
     // Per-run provenance: prefer the v0.3 compound layout at
@@ -735,6 +748,7 @@
     run->_nucleusType          = [nucleus copy];
     run->_spectrometerFrequencyMHz = freqMHz;
     run->_modality             = [modality copy];
+    run->_solvent              = [solvent copy];
     run->_inMemorySpectra      = nil;
     run->_streamPosition       = 0;
     run->_provenance           = provenance;
@@ -948,6 +962,17 @@
         if (obj) [out addObject:obj];
     }
     return out;
+}
+
+- (NSArray *)spectra
+{
+    NSUInteger n = [self count];
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        id obj = [self spectrumAtIndex:i error:NULL];
+        if (obj) [out addObject:obj];
+    }
+    return [out copy];
 }
 
 #pragma mark - TTIOStreamable
