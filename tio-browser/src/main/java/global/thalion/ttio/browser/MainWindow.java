@@ -234,6 +234,22 @@ public class MainWindow {
         });
         saveAsItem.setOnAction(e -> saveAsViaChooser());
         importItem.setOnAction(e -> openImportDialog(null, null));
+        exportItem.setOnAction(e -> openExportDialog());
+    }
+
+    /** Open the export wizard. No-op if no dataset is currently open. */
+    private void openExportDialog() {
+        if (currentDataset == null) {
+            new javafx.scene.control.Alert(
+                javafx.scene.control.Alert.AlertType.INFORMATION,
+                "Open a dataset first.").showAndWait();
+            return;
+        }
+        var dlg = new global.thalion.ttio.browser.exporters
+            .ExportDialog(stage, currentDataset);
+        dlg.showAndExport(out -> {
+            statusBarLabel.setText("Exported to " + out);
+        });
     }
 
     /** Open the import wizard. {@code preFormat} and {@code preSource}
