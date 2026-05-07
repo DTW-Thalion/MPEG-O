@@ -31,6 +31,7 @@ python/tests/stress/benchmark_results.json
 
 # Maven build output
 java/target/
+tio-browser/target/
 
 # Transient build/ scratch dir for cross-language fixtures + logs
 build/
