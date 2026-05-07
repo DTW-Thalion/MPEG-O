@@ -36,10 +36,34 @@ target_include_directories(ttio_rans
     PUBLIC  include
     PRIVATE src
 )
-target_compile_options(ttio_rans PRIVATE -Wall -Wextra -Wpedantic)
-target_link_libraries(ttio_rans PRIVATE Threads::Threads m ZLIB::ZLIB)
+# Compiler warnings: GCC/Clang spellings on Unix; MSVC's /W3 on Windows.
+# MSVC chokes on -Wextra (parses 'e' as a numeric option) and rejects
+# -Wpedantic outright; both flags are GCC/Clang-only.
+if(MSVC)
+    target_compile_options(ttio_rans PRIVATE /W3)
+else()
+    target_compile_options(ttio_rans PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+# libm is implicit on MSVC (math.h symbols live in the C runtime).
+if(MSVC)
+    target_link_libraries(ttio_rans PRIVATE Threads::Threads ZLIB::ZLIB)
+else()
+    target_link_libraries(ttio_rans PRIVATE Threads::Threads m ZLIB::ZLIB)
+endif()
 
-# x86_64: build SSE4.1 / AVX2 kernels with appropriate per-file flags.
+# x86_64: build SSE4.1 / AVX2 kernels.
+#
+# GCC/Clang need explicit per-file -msse4.1 / -mavx2 flags to enable
+# the wider intrinsics in those compilation units (without them, the
+# intrinsics-bearing headers refuse to expose SSE4.1+ symbols).
+#
+# MSVC has no per-file SSE4.1 flag (intrinsics in <smmintrin.h> are
+# always available for x64 targets) and uses /arch:AVX2 at the
+# whole-compilation-unit level for AVX2. For per-file AVX2 enablement
+# under MSVC we'd need to split the AVX2 sources into a separate
+# library target — accepting the simpler "no per-file flag, intrinsics
+# work via <immintrin.h>" path here gets MSVC compiling; an MSVC-side
+# AVX2 dispatch optimisation is a separate enhancement.
 if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
     target_sources(ttio_rans PRIVATE
         src/rans_encode_sse41.c
@@ -47,14 +71,16 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
         src/rans_encode_avx2.c
         src/rans_decode_avx2.c
     )
-    set_source_files_properties(
-        src/rans_encode_sse41.c src/rans_decode_sse41.c
-        PROPERTIES COMPILE_FLAGS "-msse4.1"
-    )
-    set_source_files_properties(
-        src/rans_encode_avx2.c src/rans_decode_avx2.c
-        PROPERTIES COMPILE_FLAGS "-mavx2"
-    )
+    if(NOT MSVC)
+        set_source_files_properties(
+            src/rans_encode_sse41.c src/rans_decode_sse41.c
+            PROPERTIES COMPILE_FLAGS "-msse4.1"
+        )
+        set_source_files_properties(
+            src/rans_encode_avx2.c src/rans_decode_avx2.c
+            PROPERTIES COMPILE_FLAGS "-mavx2"
+        )
+    endif()
 endif()
 
 # Install
@@ -91,7 +117,11 @@ if(TTIO_RANS_BUILD_JNI)
     add_library(ttio_rans_jni SHARED src/ttio_rans_jni.c)
     target_link_libraries(ttio_rans_jni PRIVATE ttio_rans)
     target_include_directories(ttio_rans_jni PRIVATE ${JNI_INCLUDE_DIRS})
-    target_compile_options(ttio_rans_jni PRIVATE -Wall -Wextra -Wpedantic)
+    if(MSVC)
+        target_compile_options(ttio_rans_jni PRIVATE /W3)
+    else()
+        target_compile_options(ttio_rans_jni PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
     set_target_properties(ttio_rans_jni PROPERTIES PREFIX "lib")
     install(TARGETS ttio_rans_jni LIBRARY DESTINATION lib)
 endif()
