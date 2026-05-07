@@ -145,7 +145,11 @@ jobs:
   build-shaded-jar:
     name: Build shaded fat-jar with all natives bundled
     needs: build-native
-    runs-on: ubuntu-22.04
+    # Bundling does not produce native code (just maven shade staging),
+    # so runner glibc doesn't matter. Use 24.04 which packages the
+    # HDF5 Java bindings under libhdf5-java (jammy renamed/dropped
+    # libjarhdf5-java).
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -158,7 +162,7 @@ jobs:
       - name: Install HDF5 (system jar dep)
         run: |
           sudo apt-get update
-          sudo apt-get install -y libhdf5-dev libhdf5-jni libjarhdf5-java
+          sudo apt-get install -y libhdf5-dev libhdf5-jni libhdf5-java
 
       - name: Download all native artifacts
         uses: actions/download-artifact@v4
