@@ -613,12 +613,22 @@ The same `FastaReader` services two distinct workflows:
 
 ```
 /study/references/<uri>/
+  attr "reference_uri"   = <URI string>
   attr "md5"             = <32-char lowercase hex string>
-  attr "total_bases"     = <int64 sum of sequence lengths>
   chromosomes/
-    <chrom_name>/data    = uint8 dataset, gzip-compressed, case-preserving
+    <chrom_name>/
+      attr "length"      = <int64 sequence length in bases>
+      data               = uint8 dataset, zlib-compressed, uppercase ACGTN
     ...
 ```
+
+`ReferenceImport.write_to_dataset()` and the REF_DIFF_V2 auto-embed
+path emit the **same** layout — `format-spec.md` §10.10 documents
+the canonical shape and is the single source of truth. (Pre-v1.1.1
+`write_to_dataset()` emitted a flat `<group>/<chromName>` variant
+with `@total_bases` and case-preserving lowercase data; that variant
+was unified in v1.1.1 — see CHANGELOG and `format-spec.md` for the
+historical note.)
 
 The MD5 attribute is computed by sorting chromosomes by name (so
 the digest is order-invariant), then digesting the concatenated
