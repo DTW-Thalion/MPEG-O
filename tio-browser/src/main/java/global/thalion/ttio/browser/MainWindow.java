@@ -5,6 +5,7 @@ import global.thalion.ttio.browser.model.DatasetTreeBuilder;
 import global.thalion.ttio.browser.model.DatasetTreeNode;
 import global.thalion.ttio.browser.model.OpenDataset;
 import global.thalion.ttio.browser.view.DatasetTreeView;
+import global.thalion.ttio.browser.view.DetailPane;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
@@ -27,6 +28,7 @@ public class MainWindow {
     private MenuItem importItem, exportItem, downloadItem, uploadItem, diagnosticsItem;
 
     private DatasetTreeView treeView;
+    private DetailPane detailPane;
     private OpenDataset currentDataset;
 
     public void show(Stage primaryStage) {
@@ -132,13 +134,11 @@ public class MainWindow {
         mainSplit = new SplitPane();
         mainSplit.setOrientation(Orientation.HORIZONTAL);
         treeView = new DatasetTreeView();
-        treeView.onSelected(node -> {
-            // Phase 3 wires this into DetailPane; for now log.
-            System.out.println("[tree] selected: " + node);
-        });
+        detailPane = new DetailPane();
+        treeView.onSelected(node -> detailPane.onSelection(node));
         treeContainer = new StackPane(treeView.control());
         treeContainer.setMinWidth(240);
-        detailContainer = new StackPane(new Label("(open a .tio file to begin)"));
+        detailContainer = new StackPane(detailPane.control());
         mainSplit.getItems().addAll(treeContainer, detailContainer);
         mainSplit.setDividerPositions(0.30);
         return mainSplit;
@@ -225,7 +225,7 @@ public class MainWindow {
             updateStatusBarFromDataset();
             DatasetTreeNode treeRoot = DatasetTreeBuilder.build(currentDataset);
             treeView.setRoot(treeRoot);
-            // Detail pane wired in Phase 3.
+            detailPane.setCurrentDataset(currentDataset);
         });
         task.setOnFailed(ev -> {
             Throwable t = task.getException();
@@ -257,12 +257,15 @@ public class MainWindow {
             currentDataset = null;
         }
         if (treeView != null) treeView.clear();
+        if (detailPane != null) detailPane.setCurrentDataset(null);
         updateStatusBarFromDataset();
     }
 
     public OpenDataset currentDataset() { return currentDataset; }
 
     public DatasetTreeView tree() { return treeView; }
+
+    public DetailPane detail() { return detailPane; }
 
     public void dispose() {
         if (stage != null) stage.close();
