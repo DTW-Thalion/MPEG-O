@@ -621,9 +621,12 @@ The same `FastaReader` services two distinct workflows:
 ```
 
 The MD5 attribute is computed by sorting chromosomes by name (so
-the digest is order-invariant), then digesting
-`utf8(name) + 0x0A + sequence_bytes + 0x0A` for each chromosome.
-Cross-language byte-equal: Python, Java, and ObjC all agree.
+the digest is order-invariant), then digesting the concatenated
+sequence bytes: `MD5(seq_for_chr_a || seq_for_chr_b || ...)` where
+`||` denotes byte concatenation. Unified in v1.1.0 (previously
+some writers used the `(name + 0x0A + seq + 0x0A)` form; see the
+migration guide and CHANGELOG for details). Cross-language
+byte-equal: Python, Java, and ObjC all agree.
 
 The `ReferenceResolver` lookup chain is:
 1. Embedded reference at `/study/references/<uri>/` in the open
