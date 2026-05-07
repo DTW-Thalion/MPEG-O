@@ -902,6 +902,9 @@ class WrittenRun:
     isolation_target_mzs: np.ndarray | None = None
     isolation_lower_offsets: np.ndarray | None = None
     isolation_upper_offsets: np.ndarray | None = None
+    # Optional per-spectrum centroided flag (0 = profile, 1 = centroided).
+    # Independent of M74 gating; written to ``spectrum_index/centroideds``.
+    centroideds: np.ndarray | None = None
     nucleus_type: str = ""
     # Optional NMR solvent label (e.g. "CDCl3", "DMSO-d6"). Empty when
     # not specified or when the run is not NMR. Written as the
@@ -982,6 +985,9 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
             "WrittenRun M74 columns must be either all-None or all-set; "
             "partial population is not a valid schema state."
         )
+    # Optional centroided column — independent of M74 gating.
+    if run.centroideds is not None:
+        columns.append(("centroideds", run.centroideds, "<i4"))
     for dname, data, dtype in columns:
         io.write_signal_channel(idx, dname, data.astype(dtype, copy=False),
                                 chunk_size=io.DEFAULT_INDEX_CHUNK)

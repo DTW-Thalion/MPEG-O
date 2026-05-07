@@ -28,21 +28,11 @@ public class MassSpectrum extends Spectrum {
     private final ValueRange scanWindow; // nullable
     private final ActivationMethod activationMethod;
     private final IsolationWindow isolationWindow; // nullable
+    private final boolean centroided;
 
     /**
-     * Full constructor including M74 activation and isolation fields.
-     *
-     * @param mzValues          raw m/z values (wrapped into a {@link SignalArray})
-     * @param intensityValues   raw intensity values (wrapped into a {@link SignalArray})
-     * @param indexPosition     position in the parent AcquisitionRun (0-based)
-     * @param scanTimeSeconds   scan time in seconds from run start
-     * @param precursorMz       precursor m/z for tandem MS; 0 if not tandem
-     * @param precursorCharge   precursor charge state; 0 if unknown
-     * @param msLevel           MS level (1, 2, 3, ...)
-     * @param polarity          ion polarity
-     * @param scanWindow        m/z range covered by the scan; {@code null} if not reported
-     * @param activationMethod  MS2+ activation method; {@link ActivationMethod#NONE} for MS1
-     * @param isolationWindow   MS2+ isolation window; {@code null} for MS1 or when not reported
+     * Full constructor including M74 activation and isolation fields and
+     * the centroided flag.
      */
     public MassSpectrum(double[] mzValues, double[] intensityValues,
                         int indexPosition, double scanTimeSeconds,
@@ -50,7 +40,8 @@ public class MassSpectrum extends Spectrum {
                         int msLevel, Polarity polarity,
                         ValueRange scanWindow,
                         ActivationMethod activationMethod,
-                        IsolationWindow isolationWindow) {
+                        IsolationWindow isolationWindow,
+                        boolean centroided) {
         super(Map.of(
             "mz", SignalArray.ofDoubles(mzValues),
             "intensity", SignalArray.ofDoubles(intensityValues)
@@ -62,12 +53,27 @@ public class MassSpectrum extends Spectrum {
         this.activationMethod = activationMethod == null
             ? ActivationMethod.NONE : activationMethod;
         this.isolationWindow = isolationWindow;
+        this.centroided = centroided;
+    }
+
+    /** Pre-centroided constructor; defaults {@code centroided} to {@code false}. */
+    public MassSpectrum(double[] mzValues, double[] intensityValues,
+                        int indexPosition, double scanTimeSeconds,
+                        double precursorMz, int precursorCharge,
+                        int msLevel, Polarity polarity,
+                        ValueRange scanWindow,
+                        ActivationMethod activationMethod,
+                        IsolationWindow isolationWindow) {
+        this(mzValues, intensityValues, indexPosition, scanTimeSeconds,
+             precursorMz, precursorCharge, msLevel, polarity, scanWindow,
+             activationMethod, isolationWindow, false);
     }
 
     /**
      * Backward-compatible constructor (pre-M74): defaults
-     * {@code activationMethod} to {@link ActivationMethod#NONE} and
-     * {@code isolationWindow} to {@code null}.
+     * {@code activationMethod} to {@link ActivationMethod#NONE},
+     * {@code isolationWindow} to {@code null}, and {@code centroided}
+     * to {@code false}.
      */
     public MassSpectrum(double[] mzValues, double[] intensityValues,
                         int indexPosition, double scanTimeSeconds,
@@ -76,7 +82,7 @@ public class MassSpectrum extends Spectrum {
                         ValueRange scanWindow) {
         this(mzValues, intensityValues, indexPosition, scanTimeSeconds,
              precursorMz, precursorCharge, msLevel, polarity, scanWindow,
-             ActivationMethod.NONE, null);
+             ActivationMethod.NONE, null, false);
     }
 
     /** Returns the {@code "mz"} {@link SignalArray}. */
@@ -113,4 +119,15 @@ public class MassSpectrum extends Spectrum {
      * no isolation window was reported.
      */
     public IsolationWindow isolationWindow() { return isolationWindow; }
+
+    /**
+     * Returns {@code true} if this spectrum is centroided (mzML
+     * MS:1000127), {@code false} for profile mode (MS:1000128) or when
+     * the centroided column is absent in the source file.
+     *
+     * <p><b>Cross-language equivalents:</b> Python
+     * {@code MassSpectrum.is_centroided}, Objective-C
+     * {@code -[TTIOMassSpectrum isCentroided]}.</p>
+     */
+    public boolean isCentroided() { return centroided; }
 }

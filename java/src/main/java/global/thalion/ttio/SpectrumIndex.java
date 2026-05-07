@@ -48,6 +48,11 @@ public class SpectrumIndex {
     private final double[] isolationTargetMzs;
     private final double[] isolationLowerOffsets;
     private final double[] isolationUpperOffsets;
+    // Optional per-spectrum centroided flag. {@code null} for files
+    // written before the centroided column was added; otherwise
+    // {@code 0 = profile, 1 = centroided} per spectrum. Mirrors mzML
+    // CV terms MS:1000127 (centroid) and MS:1000128 (profile).
+    private final int[] centroideds;
 
     /** Pre-M74 legacy constructor; defaults the four M74 columns to null. */
     public SpectrumIndex(int count, long[] offsets, int[] lengths,
@@ -59,9 +64,7 @@ public class SpectrumIndex {
              null, null, null, null);
     }
 
-    /** Full (M74) constructor. The four activation / isolation arrays
-     *  must be either all-null (no M74 columns on disk) or all non-null
-     *  with length equal to {@code count}. */
+    /** M74 constructor (pre-centroided overload retained for source-compat). */
     public SpectrumIndex(int count, long[] offsets, int[] lengths,
                          double[] retentionTimes, int[] msLevels, int[] polarities,
                          double[] precursorMzs, int[] precursorCharges,
@@ -70,6 +73,28 @@ public class SpectrumIndex {
                          double[] isolationTargetMzs,
                          double[] isolationLowerOffsets,
                          double[] isolationUpperOffsets) {
+        this(count, offsets, lengths, retentionTimes, msLevels, polarities,
+             precursorMzs, precursorCharges, basePeakIntensities,
+             activationMethods, isolationTargetMzs,
+             isolationLowerOffsets, isolationUpperOffsets, null);
+    }
+
+    /** Full constructor including the optional {@code centroideds} column.
+     *
+     *  <p>The four M74 activation / isolation arrays must be either all-null
+     *  or all non-null with length equal to {@code count}. The
+     *  {@code centroideds} array is independently optional: {@code null}
+     *  for legacy files; otherwise length must equal {@code count}.</p>
+     */
+    public SpectrumIndex(int count, long[] offsets, int[] lengths,
+                         double[] retentionTimes, int[] msLevels, int[] polarities,
+                         double[] precursorMzs, int[] precursorCharges,
+                         double[] basePeakIntensities,
+                         int[] activationMethods,
+                         double[] isolationTargetMzs,
+                         double[] isolationLowerOffsets,
+                         double[] isolationUpperOffsets,
+                         int[] centroideds) {
         boolean anyNull = activationMethods == null
                 || isolationTargetMzs == null
                 || isolationLowerOffsets == null
@@ -81,6 +106,11 @@ public class SpectrumIndex {
         if (anyNull && !allNull) {
             throw new IllegalArgumentException(
                 "M74 columns must be all-null or all-populated");
+        }
+        if (centroideds != null && centroideds.length != count) {
+            throw new IllegalArgumentException(
+                "centroideds length " + centroideds.length
+                + " does not match spectrum count " + count);
         }
         this.count = count;
         this.offsets = offsets;
@@ -95,6 +125,7 @@ public class SpectrumIndex {
         this.isolationTargetMzs = isolationTargetMzs;
         this.isolationLowerOffsets = isolationLowerOffsets;
         this.isolationUpperOffsets = isolationUpperOffsets;
+        this.centroideds = centroideds;
     }
 
     public int count() { return count; }
@@ -122,6 +153,23 @@ public class SpectrumIndex {
     public double[] isolationTargetMzs() { return isolationTargetMzs; }
     public double[] isolationLowerOffsets() { return isolationLowerOffsets; }
     public double[] isolationUpperOffsets() { return isolationUpperOffsets; }
+
+    /** Optional per-spectrum centroided column; {@code null} when the
+     *  file was written before centroided tracking. */
+    public int[] centroideds() { return centroideds; }
+
+    /** Returns whether spectrum {@code i} is centroided (mzML
+     *  MS:1000127). Returns {@code false} when the column is absent —
+     *  callers that need to distinguish "unknown" from "profile"
+     *  should check {@link #centroideds()} for {@code null}.
+     *
+     *  <p><b>Cross-language equivalents:</b> Python
+     *  {@code SpectrumIndex.centroided_at(i)}, Objective-C
+     *  {@code -[TTIOSpectrumIndex centroidedAt:]}.</p>
+     */
+    public boolean centroidedAt(int i) {
+        return centroideds != null && centroideds[i] != 0;
+    }
 
     /** (M74) Returns the activation method at spectrum {@code i};
      *  {@link ActivationMethod#NONE} when the M74 column is absent or
@@ -191,6 +239,10 @@ public class SpectrumIndex {
                 writeDataset(idx, "isolation_lower_offsets", Precision.FLOAT64, isolationLowerOffsets);
                 writeDataset(idx, "isolation_upper_offsets", Precision.FLOAT64, isolationUpperOffsets);
             }
+            // Optional centroided column (independent of M74 gating).
+            if (centroideds != null) {
+                writeDataset(idx, "centroideds", Precision.INT32, centroideds);
+            }
         }
     }
 
@@ -231,11 +283,16 @@ public class SpectrumIndex {
             double[] isolationLowerOffsets = hasAct ? readDoubles(idx, "isolation_lower_offsets") : null;
             double[] isolationUpperOffsets = hasAct ? readDoubles(idx, "isolation_upper_offsets") : null;
 
+            // Optional centroided column — independent of M74 gating.
+            int[] centroideds = idx.hasChild("centroideds")
+                    ? readInts(idx, "centroideds") : null;
+
             return new SpectrumIndex(count, offsets, lengths, retentionTimes,
                     msLevels, polarities, precursorMzs, precursorCharges,
                     basePeakIntensities,
                     activationMethods, isolationTargetMzs,
-                    isolationLowerOffsets, isolationUpperOffsets);
+                    isolationLowerOffsets, isolationUpperOffsets,
+                    centroideds);
         }
     }
 

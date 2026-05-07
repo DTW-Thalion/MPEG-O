@@ -132,6 +132,11 @@ class SpectrumIndex:
     isolation_target_mzs: np.ndarray | None = None
     isolation_lower_offsets: np.ndarray | None = None
     isolation_upper_offsets: np.ndarray | None = None
+    # Optional per-spectrum centroided flag. ``None`` for files written
+    # before the centroided column was added; otherwise ``0 = profile,
+    # 1 = centroided`` per spectrum. Mirrors mzML CV terms MS:1000127
+    # (centroid) and MS:1000128 (profile).
+    centroideds: np.ndarray | None = None
 
     @property
     def count(self) -> int:
@@ -198,6 +203,21 @@ class SpectrumIndex:
                                 lower_offset=lower,
                                 upper_offset=upper)
 
+    def centroided_at(self, index: int) -> bool:
+        """Return whether spectrum ``index`` is centroided (mzML
+        MS:1000127). Returns ``False`` when the column is absent —
+        callers needing to distinguish "unknown" from "profile" should
+        check ``self.centroideds is None``.
+
+        Cross-language equivalents
+        --------------------------
+        Java: ``SpectrumIndex.centroidedAt(i)`` · Objective-C:
+        ``-[TTIOSpectrumIndex centroidedAt:]``.
+        """
+        if self.centroideds is None:
+            return False
+        return bool(self.centroideds[index])
+
     # ------------------------------------------------------------------ #
     # Range queries                                                        #
     # ------------------------------------------------------------------ #
@@ -258,6 +278,9 @@ class SpectrumIndex:
             if present("isolation_upper_offsets") else None
         )
 
+        # Optional centroided column — independent of M74 gating.
+        centroideds = col("centroideds", "<i4") if present("centroideds") else None
+
         # offsets is never on disk — synthesize from cumsum(lengths).
         from .genomic_index import _offsets_from_lengths
         lengths = col("lengths", "<u4")
@@ -275,6 +298,7 @@ class SpectrumIndex:
             isolation_target_mzs=isolation_target_mzs,
             isolation_lower_offsets=isolation_lower_offsets,
             isolation_upper_offsets=isolation_upper_offsets,
+            centroideds=centroideds,
         )
 
 
@@ -671,6 +695,7 @@ class AcquisitionRun:
         return MassSpectrum(
             ms_level=int(self.index.ms_levels[i]),
             polarity=polarity,
+            is_centroided=self.index.centroided_at(i),
             **base_kwargs,
         )
 
