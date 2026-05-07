@@ -21,12 +21,26 @@
                              abundance:(double)abundance
                    normalizationMethod:(NSString *)method
 {
+    return [self initWithChemicalEntity:entity
+                              sampleRef:sampleRef
+                              abundance:abundance
+                    normalizationMethod:method
+                                   unit:@""];
+}
+
+- (instancetype)initWithChemicalEntity:(NSString *)entity
+                             sampleRef:(NSString *)sampleRef
+                             abundance:(double)abundance
+                   normalizationMethod:(NSString *)method
+                                  unit:(NSString *)unit
+{
     self = [super init];
     if (self) {
         _chemicalEntity      = [entity copy];
         _sampleRef           = [sampleRef copy];
         _abundance           = abundance;
         _normalizationMethod = [method copy];
+        _unit                = unit ? [unit copy] : @"";
     }
     return self;
 }
@@ -40,15 +54,18 @@
     d[@"sample_ref"]      = _sampleRef ?: @"";
     d[@"abundance"]       = @(_abundance);
     if (_normalizationMethod) d[@"normalization_method"] = _normalizationMethod;
+    if (_unit && _unit.length > 0) d[@"unit"] = _unit;
     return d;
 }
 
 + (instancetype)fromPlist:(NSDictionary *)plist
 {
+    NSString *unit = plist[@"unit"];
     return [[self alloc] initWithChemicalEntity:plist[@"chemical_entity"]
                                        sampleRef:plist[@"sample_ref"]
                                        abundance:[plist[@"abundance"] doubleValue]
-                             normalizationMethod:plist[@"normalization_method"]];
+                             normalizationMethod:plist[@"normalization_method"]
+                                            unit:(unit ?: @"")];
 }
 
 - (BOOL)isEqual:(id)other
@@ -61,6 +78,9 @@
     if (_abundance != o.abundance) return NO;
     if ((_normalizationMethod || o.normalizationMethod) &&
         ![_normalizationMethod isEqualToString:o.normalizationMethod]) return NO;
+    NSString *u1 = _unit ?: @"";
+    NSString *u2 = o.unit ?: @"";
+    if (![u1 isEqualToString:u2]) return NO;
     return YES;
 }
 
