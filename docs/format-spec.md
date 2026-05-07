@@ -1204,14 +1204,12 @@ layout above:
    constant-time `total_bases` queries. REF_DIFF_V2 auto-embed
    does not.
 
-The `@md5` attribute is computed by both paths over the same
-content (sorted sequences in name order); FASTA-import additionally
-includes name framing (`name + 0x0A + sequence + 0x0A` per
-chromosome) so the digest is order-invariant against
-chromosome-set permutations. **As a result, the FASTA-import MD5
-will not match the REF_DIFF_V2-encoder MD5 for the same
-reference**; users mixing the two paths in a single `.tio` should
-coordinate which writer owns the reference.
+The `@md5` attribute is computed by both paths using the same
+single canonical seq-only formula (see "MD5 computation" below).
+Both writers — REF_DIFF_V2 auto-embed and FASTA-import — produce
+byte-identical digests for the same reference content. (Unified in
+v1.1.0; previously these two paths used different forms — see
+CHANGELOG.)
 
 ### Reading embedded references
 
@@ -1234,23 +1232,18 @@ Per-chromosome group attribute `length` carries the sequence length
 in bases (informational; equals the `data` dataset's length and may
 be ignored by readers).
 
-**MD5 computation.** The `@md5` attribute stamped by the
-REF_DIFF_V2 auto-embed writer is the MD5 of the **concatenated
+**MD5 computation.** The `@md5` attribute on each
+`/study/references/<uri>/` group is the MD5 of the **concatenated
 sequence bytes** in **alphabetic order of chromosome name** —
-i.e. the writer's bytes-only digest. This is intentionally
-different from the canonical
-`compute_reference_md5` /
-`ReferenceImport.computeMd5` /
+i.e. `MD5(seq_for_chr_a || seq_for_chr_b || ...)` where `||`
+denotes byte concatenation, with no inter-chromosome framing.
+The same formula is used by all writers (REF_DIFF_V2 auto-embed
+and FASTA-import) and by the `compute_reference_md5` (Python) /
+`ReferenceImport.computeMd5` (Java) /
 `+[TTIOReferenceImport computeMd5WithChromosomes:sequences:]`
-helpers, which prepend each chromosome name + a `0x0A` byte before
-the sequence bytes (ending each chrom block with another `0x0A`).
-The two forms produce different digests for the same content. The
-mismatch is being tracked for unification in v1.2; in v1.1.0 the
-writer's seq-only form is the authoritative on-disk digest.
-
-(See also the "FASTA-import variant" subsection above: that path
-stamps a third digest variant — the canonical name-framed form —
-because FASTA-import owns its own writer code path.)
+(ObjC) helpers. Unified in v1.1.0 (previously: REF_DIFF_V2 used
+this form; FASTA-import and the helpers used a name-framed
+`name + 0x0A + seq + 0x0A` form; see CHANGELOG for details).
 
 **Read-side accessor (v1.1.0+).** A freshly-opened dataset exposes
 embedded references through the `references()` accessor

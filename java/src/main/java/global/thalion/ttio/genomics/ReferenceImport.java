@@ -35,9 +35,11 @@ import java.util.Objects;
  * {@code TTIOReferenceImport}.</p>
  *
  * <p>The MD5 algorithm sorts chromosomes by name (so the digest is
- * order-invariant), then concatenates each
- * {@code name_utf8 + 0x0A + sequence_bytes + 0x0A} and digests the
- * result. Cross-language byte-equal.</p>
+ * order-invariant), then concatenates the per-chromosome
+ * {@code sequence_bytes} verbatim (case-preserving, no framing) and
+ * digests the result. Cross-language byte-equal. Unified in v1.1.0
+ * with the REF_DIFF_V2 auto-embed writer's stamp; the previous
+ * name-framed form is gone.</p>
  */
 public final class ReferenceImport {
 
@@ -93,9 +95,10 @@ public final class ReferenceImport {
 
     /**
      * Compute the canonical content-MD5 over a chromosome set. The
-     * algorithm sorts by name (order-invariant), then writes
-     * {@code utf8(name) + 0x0A + sequence + 0x0A} for each entry into
-     * an MD5 digest.
+     * algorithm sorts by name (order-invariant), then concatenates
+     * the per-chromosome sequence bytes verbatim (case-preserving,
+     * no framing) into an MD5 digest. Matches the REF_DIFF_V2
+     * auto-embed writer's stamp byte-for-byte (unified in v1.1.0).
      */
     public static byte[] computeMd5(List<String> chromosomes, List<byte[]> sequences) {
         if (chromosomes.size() != sequences.size()) {
@@ -114,10 +117,7 @@ public final class ReferenceImport {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
             for (String name : sortedNames) {
-                md.update(name.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                md.update((byte) 0x0A);
                 md.update(indexByName.get(name));
-                md.update((byte) 0x0A);
             }
             return md.digest();
         } catch (NoSuchAlgorithmException e) {

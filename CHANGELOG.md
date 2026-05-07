@@ -37,6 +37,26 @@ by 1.0.0 are read identically by 1.1.0 and vice versa.
   `+[TTIOReferenceImport readFromGroup:]` (ObjC) — factory that
   materialises a `ReferenceImport` from its on-disk group.
 
+### Changed
+
+- Unified `@md5` attribute computation on
+  `/study/references/<uri>/` to a single seq-only form across all
+  writers and helpers. Previously, REF_DIFF_V2 auto-embed used
+  `MD5(seq_a || seq_b || ...)` (sorted by name) while FASTA-import
+  writers and the public canonical helpers
+  (`compute_reference_md5` / `ReferenceImport.computeMd5` /
+  `+[TTIOReferenceImport computeMd5WithChromosomes:sequences:]`)
+  used `MD5(name_a || 0x0A || seq_a || 0x0A || ...)`. All three
+  paths now agree on the seq-only form, which was already the
+  authoritative on-disk digest. Existing v1.0.0 files written via
+  REF_DIFF_V2 auto-embed are unchanged (their on-disk `@md5` was
+  already seq-only). Existing v1.0.0 files written via FASTA-import
+  retain their on-disk `@md5` verbatim through the v1.1.0
+  `read_from_group` / `readFromGroup` path; only the auto-recompute
+  fallback (when `md5=None` / `md5=null` / `md5:nil` is passed to
+  the constructor) now produces a seq-only digest. Resolves the
+  three-form `@md5` finding from Phase 0 Task 0.6.
+
 ### Notes
 
 - ObjC has no canonical library-version constant; the version bump

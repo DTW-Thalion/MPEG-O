@@ -65,16 +65,16 @@ KNOWN_REFS = {
 
 
 def _expected_md5_hex() -> str:
-    """The on-disk @md5 attribute the production writer stamps.
+    """The single canonical on-disk @md5 form (unified in v1.1.0).
 
     All three production writers (Python ``_reference_md5_for_run``,
     Java ``referenceMd5ForRun``, ObjC ``_TTIO_M93_ReferenceMD5ForRun``)
-    use the sequence-concat-only form sorted by chromosome name. This
-    is NOT the same as the public-API canonical-MD5 helper
-    (``compute_reference_md5`` /
+    AND the public-API helpers (``compute_reference_md5`` /
     ``ReferenceImport.computeMd5`` /
     ``+[TTIOReferenceImport computeMd5WithChromosomes:sequences:]``)
-    which uses the ``name + 0x0A + seq + 0x0A`` form.
+    now agree on the seq-only form: sort chromosome names
+    alphabetically, concatenate sequence bytes verbatim, MD5 the
+    result.
     """
     import hashlib
     md = hashlib.md5()
