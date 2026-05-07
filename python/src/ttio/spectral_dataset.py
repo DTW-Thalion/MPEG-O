@@ -559,15 +559,24 @@ class SpectralDataset:
         with self.read_lock():
             study = self._study_target()
             if self._study_has_child("quantifications"):
-                return [
-                    Quantification(
+                # Optional sidecar `@quantification_units` JSON-array
+                # attribute carries one unit per row. Absent on legacy
+                # files; readers default missing rows to empty string.
+                units_blob = io.read_string_attr(
+                    study, "quantification_units", default="")
+                units = json.loads(units_blob) if units_blob else []
+                rows = list(io.read_compound_dataset(study, "quantifications"))
+                out: list[Quantification] = []
+                for i, r in enumerate(rows):
+                    unit = units[i] if i < len(units) else ""
+                    out.append(Quantification(
                         chemical_entity=r["chemical_entity"],
                         sample_ref=r["sample_ref"],
                         abundance=float(r["abundance"]),
                         normalization_method=r.get("normalization_method", ""),
-                    )
-                    for r in io.read_compound_dataset(study, "quantifications")
-                ]
+                        unit=unit if isinstance(unit, str) else "",
+                    ))
+                return out
             blob = io.read_string_attr(study, "quantifications_json", default="")
             return _decode_quantifications_json(blob) if blob else []
 
@@ -2059,6 +2068,13 @@ def _write_quantifications(study: h5py.Group, records: list[Quantification]) -> 
             "normalization_method": r.normalization_method,
         } for r in records
     ], fields)
+    # Optional sidecar `@quantification_units` JSON-array attribute:
+    # one string per row, parallel to the compound dataset above.
+    # Emitted only when at least one record carries a non-empty unit;
+    # absent on legacy files (units default to "").
+    if any(getattr(r, "unit", "") for r in records):
+        io.write_fixed_string_attr(study, "quantification_units",
+            json.dumps([getattr(r, "unit", "") or "" for r in records]))
     # JSON mirror (see _write_identifications)
     io.write_fixed_string_attr(study, "quantifications_json", json.dumps([
         {
@@ -2067,6 +2083,7 @@ def _write_quantifications(study: h5py.Group, records: list[Quantification]) -> 
             "abundance": float(r.abundance),
             **({"normalization_method": r.normalization_method}
                if r.normalization_method else {}),
+            **({"unit": r.unit} if getattr(r, "unit", "") else {}),
         } for r in records
     ]))
 
@@ -2158,6 +2175,7 @@ def _decode_quantifications_json(blob: str) -> list[Quantification]:
             sample_ref=str(r.get("sample_ref", "")),
             abundance=float(r.get("abundance", 0.0)),
             normalization_method=str(r.get("normalization_method", "")),
+            unit=str(r.get("unit", "")),
         ))
     return out
 

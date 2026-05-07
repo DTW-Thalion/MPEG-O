@@ -316,6 +316,32 @@ static NSArray<TTIOCompoundField *> *quantificationFields(void)
                       fields:quantificationFields()
                        error:error]) return NO;
 
+    // Optional sidecar `@quantification_units` JSON-array attribute on
+    // the parent group: one string per row, parallel to the compound
+    // dataset above. Emitted only when at least one record carries a
+    // non-empty unit; absent on legacy files (units default to "").
+    BOOL anyUnit = NO;
+    for (TTIOQuantification *q in quants) {
+        if (q.unit.length > 0) { anyUnit = YES; break; }
+    }
+    if (anyUnit) {
+        NSMutableArray<NSString *> *units = [NSMutableArray arrayWithCapacity:quants.count];
+        for (TTIOQuantification *q in quants) {
+            [units addObject:q.unit ?: @""];
+        }
+        NSError *jsonErr = nil;
+        NSData *json = [NSJSONSerialization dataWithJSONObject:units
+                                                       options:0
+                                                         error:&jsonErr];
+        if (json) {
+            NSString *s = [[NSString alloc] initWithData:json
+                                                encoding:NSUTF8StringEncoding];
+            [parent setAttributeValue:s
+                              forName:@"quantification_units"
+                                error:NULL];
+        }
+    }
+
     NSMutableArray *plists = [NSMutableArray arrayWithCapacity:quants.count];
     for (TTIOQuantification *q in quants) [plists addObject:[q asPlist]];
     writeJsonMirrorForDatasetNamed(parent, name, plists);
@@ -333,15 +359,31 @@ static NSArray<TTIOCompoundField *> *quantificationFields(void)
                               error:error];
     if (!rows) return nil;
 
+    // Optional sidecar `@quantification_units` JSON array.
+    NSArray<NSString *> *units = nil;
+    if ([parent hasAttributeNamed:@"quantification_units"]) {
+        NSString *s = [parent attributeValueForName:@"quantification_units" error:NULL];
+        if (s.length > 0) {
+            NSData *d = [s dataUsingEncoding:NSUTF8StringEncoding];
+            id parsed = [NSJSONSerialization JSONObjectWithData:d options:0 error:NULL];
+            if ([parsed isKindOfClass:[NSArray class]]) units = parsed;
+        }
+    }
+
     NSMutableArray *out = [NSMutableArray arrayWithCapacity:rows.count];
-    for (NSDictionary *r in rows) {
+    for (NSUInteger i = 0; i < rows.count; i++) {
+        NSDictionary *r = rows[i];
         NSString *norm = r[@"normalization_method"];
         if ([norm isKindOfClass:[NSString class]] && norm.length == 0) norm = nil;
+        NSString *unit = (units && i < units.count
+                          && [units[i] isKindOfClass:[NSString class]])
+                         ? units[i] : @"";
         [out addObject:[[TTIOQuantification alloc]
                          initWithChemicalEntity:r[@"chemical_entity"] ?: @""
                                       sampleRef:r[@"sample_ref"] ?: @""
                                       abundance:[r[@"abundance"] doubleValue]
-                            normalizationMethod:norm]];
+                            normalizationMethod:norm
+                                           unit:unit]];
     }
     return out;
 }
