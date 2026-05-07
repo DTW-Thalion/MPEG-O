@@ -9,7 +9,6 @@ import global.thalion.ttio.browser.model.DatasetTreeNode;
 import global.thalion.ttio.browser.model.OpenDataset;
 import global.thalion.ttio.browser.model.TreeNodeKind;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -18,10 +17,10 @@ import java.util.List;
  * the three modalities share an x/y axis shape but differ in units and
  * auxiliary fields (laser power vs IR mode vs path length).
  *
- * <p>Currently forward-compat only: the live {@code AcquisitionMode}
- * enum has no constants that map to {@link TreeNodeKind#RAMAN_RUN},
- * {@link TreeNodeKind#IR_RUN}, or {@link TreeNodeKind#UV_VIS_RUN}, so
- * {@link DatasetTreeBuilder} never produces these run kinds today.
+ * <p>As of the API-completeness PR (TTI-O #8) the {@code AcquisitionMode}
+ * enum exposes {@code RAMAN}, {@code IR}, and {@code UV_VIS} constants,
+ * and {@code DatasetTreeBuilder} maps them to the three run kinds this
+ * table applies to. The table is no longer dead code.
  */
 public class RamanHeadersTable extends HeadersTableBase<Spectrum> {
 
@@ -49,15 +48,11 @@ public class RamanHeadersTable extends HeadersTableBase<Spectrum> {
             table.getItems().clear();
             return;
         }
-        List<Spectrum> rows = new ArrayList<>(run.count());
-        for (int i = 0; i < run.count(); i++) {
-            Spectrum s = run.objectAtIndex(i);
-            if (s instanceof RamanSpectrum
-                || s instanceof IRSpectrum
-                || s instanceof UVVisSpectrum) {
-                rows.add(s);
-            }
-        }
+        List<Spectrum> rows = run.spectra().stream()
+            .filter(s -> s instanceof RamanSpectrum
+                      || s instanceof IRSpectrum
+                      || s instanceof UVVisSpectrum)
+            .toList();
         table.getItems().setAll(rows);
     }
 
