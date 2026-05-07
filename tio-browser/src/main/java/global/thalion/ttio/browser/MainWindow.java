@@ -1,10 +1,15 @@
 package global.thalion.ttio.browser;
 
+import global.thalion.ttio.browser.model.DatasetOpenTask;
+import global.thalion.ttio.browser.model.OpenDataset;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+
+import java.io.File;
 
 public class MainWindow {
 
@@ -17,6 +22,8 @@ public class MainWindow {
 
     private MenuItem openItem, closeItem, saveAsItem, exitItem;
     private MenuItem importItem, exportItem, downloadItem, uploadItem, diagnosticsItem;
+
+    private OpenDataset currentDataset;
 
     public void show(Stage primaryStage) {
         this.stage = primaryStage;
@@ -32,6 +39,7 @@ public class MainWindow {
         primaryStage.setScene(scene);
         primaryStage.setTitle("tio-browser");
         primaryStage.show();
+        wireFileActions();
     }
 
     private VBox buildTopBars() {
@@ -122,6 +130,76 @@ public class MainWindow {
     MenuItem exitMenuItem() { return exitItem; }
     MenuItem diagnosticsMenuItem() { return diagnosticsItem; }
     Stage stage() { return stage; }
+
+    private void wireFileActions() {
+        openItem.setOnAction(e -> openFileViaChooser());
+        closeItem.setOnAction(e -> closeCurrentDataset());
+        exitItem.setOnAction(e -> {
+            closeCurrentDataset();
+            javafx.application.Platform.exit();
+        });
+    }
+
+    private void openFileViaChooser() {
+        if (currentDataset != null) {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Close currently-open " + currentDataset.path() + "?",
+                ButtonType.OK, ButtonType.CANCEL);
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                return;
+            }
+            closeCurrentDataset();
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Open .tio file");
+        chooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("TTI-O dataset", "*.tio"));
+        File picked = chooser.showOpenDialog(stage);
+        if (picked == null) return;
+        loadDataset(picked.toString(), /* readOnly = */ true);
+    }
+
+    public void loadDataset(String path, boolean readOnly) {
+        DatasetOpenTask task = new DatasetOpenTask(path, readOnly);
+        statusBarLabel.setText("Opening " + path + "…");
+        task.setOnSucceeded(ev -> {
+            currentDataset = task.getValue();
+            updateStatusBarFromDataset();
+            // Tree population wired in Phase 2; detail pane in Phase 3.
+        });
+        task.setOnFailed(ev -> {
+            Throwable t = task.getException();
+            statusBarLabel.setText("(open failed)");
+            Alert err = new Alert(Alert.AlertType.ERROR,
+                "Could not open " + path + ":\n\n" + t.getMessage(),
+                ButtonType.OK);
+            err.setHeaderText("Open failed");
+            err.showAndWait();
+        });
+        Thread th = new Thread(task, "open-" + path);
+        th.setDaemon(true);
+        th.start();
+    }
+
+    private void updateStatusBarFromDataset() {
+        OpenDataset d = currentDataset;
+        if (d == null) { statusBarLabel.setText("(no file)"); return; }
+        statusBarLabel.setText(String.format(
+            "%s · v%s · MS=%d · Genomic=%d · Refs=%d %s",
+            d.path(), d.formatVersion(), d.msRunCount(), d.genomicRunCount(),
+            d.referenceCount(),
+            d.isEncrypted() ? "· 🔒 ENCRYPTED" : "· 🔓"));
+    }
+
+    private void closeCurrentDataset() {
+        if (currentDataset != null) {
+            currentDataset.close();
+            currentDataset = null;
+        }
+        updateStatusBarFromDataset();
+    }
+
+    public OpenDataset currentDataset() { return currentDataset; }
 
     public void dispose() {
         if (stage != null) stage.close();
