@@ -95,6 +95,12 @@ public final class DatasetTreeBuilder {
             case NMR_1D:
             case NMR_2D:
                 return TreeNodeKind.NMR_RUNS_GROUP;
+            case RAMAN:
+                return TreeNodeKind.RAMAN_RUNS_GROUP;
+            case IR:
+                return TreeNodeKind.IR_RUNS_GROUP;
+            case UV_VIS:
+                return TreeNodeKind.UV_VIS_RUNS_GROUP;
             case MS1_DDA:
             case MS2_DDA:
             case DIA:
