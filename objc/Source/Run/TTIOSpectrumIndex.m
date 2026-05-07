@@ -37,6 +37,9 @@
     NSData *_isolationTargetMzs;    // double[count]
     NSData *_isolationLowerOffsets; // double[count]
     NSData *_isolationUpperOffsets; // double[count]
+    // nil for legacy files; otherwise int32_t[count] with 0 = profile,
+    // 1 = centroided. Mirrors mzML CV terms MS:1000127 / MS:1000128.
+    NSData *_centroideds;
     NSUInteger _count;
 }
 
@@ -76,6 +79,35 @@
           isolationLowerOffsets:(NSData *)isolationLowerOffsets
           isolationUpperOffsets:(NSData *)isolationUpperOffsets
 {
+    return [self initWithOffsets:offsets
+                         lengths:lengths
+                  retentionTimes:retentionTimes
+                        msLevels:msLevels
+                      polarities:polarities
+                    precursorMzs:precursorMzs
+                precursorCharges:precursorCharges
+             basePeakIntensities:basePeakIntensities
+               activationMethods:activationMethods
+              isolationTargetMzs:isolationTargetMzs
+           isolationLowerOffsets:isolationLowerOffsets
+           isolationUpperOffsets:isolationUpperOffsets
+                      centroideds:nil];
+}
+
+- (instancetype)initWithOffsets:(NSData *)offsets
+                        lengths:(NSData *)lengths
+                 retentionTimes:(NSData *)retentionTimes
+                       msLevels:(NSData *)msLevels
+                     polarities:(NSData *)polarities
+                   precursorMzs:(NSData *)precursorMzs
+               precursorCharges:(NSData *)precursorCharges
+             basePeakIntensities:(NSData *)basePeakIntensities
+               activationMethods:(NSData *)activationMethods
+             isolationTargetMzs:(NSData *)isolationTargetMzs
+          isolationLowerOffsets:(NSData *)isolationLowerOffsets
+          isolationUpperOffsets:(NSData *)isolationUpperOffsets
+                      centroideds:(NSData *)centroideds
+{
     BOOL anyNil = !activationMethods || !isolationTargetMzs
                || !isolationLowerOffsets || !isolationUpperOffsets;
     BOOL allNil = !activationMethods && !isolationTargetMzs
@@ -96,6 +128,7 @@
         _isolationTargetMzs    = [isolationTargetMzs copy];
         _isolationLowerOffsets = [isolationLowerOffsets copy];
         _isolationUpperOffsets = [isolationUpperOffsets copy];
+        _centroideds         = [centroideds copy];
         _count               = offsets.length / sizeof(uint64_t);
     }
     return self;
@@ -130,6 +163,14 @@
     return [TTIOIsolationWindow windowWithTargetMz:t
                                         lowerOffset:lo
                                         upperOffset:hi];
+}
+
+- (BOOL)hasCentroided { return _centroideds != nil; }
+
+- (BOOL)centroidedAt:(NSUInteger)i
+{
+    if (!_centroideds) return NO;
+    return ((const int32_t *)_centroideds.bytes)[i] != 0;
 }
 
 - (NSIndexSet *)indicesInRetentionTimeRange:(TTIOValueRange *)range
@@ -200,6 +241,10 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
         if (!writeArray(g, @"isolation_lower_offsets", TTIOPrecisionFloat64, _isolationLowerOffsets, error)) return NO;
         if (!writeArray(g, @"isolation_upper_offsets", TTIOPrecisionFloat64, _isolationUpperOffsets, error)) return NO;
     }
+    // Optional centroided column — independent of M74 gating.
+    if (_centroideds) {
+        if (!writeArray(g, @"centroideds", TTIOPrecisionInt32, _centroideds, error)) return NO;
+    }
     return YES;
 }
 
@@ -233,6 +278,12 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
         ilo = readArray(g, @"isolation_lower_offsets", error); if (!ilo) return nil;
         iup = readArray(g, @"isolation_upper_offsets", error); if (!iup) return nil;
     }
+    // Optional centroided column — independent of M74 gating.
+    NSData *cent = nil;
+    if ([g hasChildNamed:@"centroideds"]) {
+        cent = readArray(g, @"centroideds", error);
+        if (!cent) return nil;
+    }
     return [[self alloc] initWithOffsets:offsets
                                  lengths:lengths
                           retentionTimes:rts
@@ -244,7 +295,8 @@ static NSData *readArray(id<TTIOStorageGroup> g, NSString *name, NSError **error
                         activationMethods:am
                       isolationTargetMzs:itm
                    isolationLowerOffsets:ilo
-                   isolationUpperOffsets:iup];
+                   isolationUpperOffsets:iup
+                              centroideds:cent];
 }
 
 + (instancetype)readFromStorageGroup:(id)parent error:(NSError **)error

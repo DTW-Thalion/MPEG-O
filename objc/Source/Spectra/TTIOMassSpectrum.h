@@ -50,6 +50,18 @@
  *  not reported. */
 @property (readonly, strong) TTIOIsolationWindow *isolationWindow;
 
+/** <code>YES</code> if this spectrum is centroided (mzML
+ *  MS:1000127), <code>NO</code> for profile mode (MS:1000128) or
+ *  when the centroided column is absent in the source file. Set by
+ *  <code>TTIOAcquisitionRun</code> at materialisation time from the
+ *  parent <code>TTIOSpectrumIndex</code>; default is <code>NO</code>.
+ *
+ *  <p>Cross-language equivalents: Java
+ *  <code>MassSpectrum.isCentroided()</code>, Python
+ *  <code>MassSpectrum.is_centroided</code>.</p>
+ */
+@property (nonatomic) BOOL isCentroided;
+
 /**
  * Designated initialiser.
  *

@@ -215,7 +215,10 @@ public class AcquisitionRun implements
             precursorMz, precursorCharge,
             spectrumIndex.msLevelAt(index),
             spectrumIndex.polarityAt(index),
-            null);
+            null,
+            spectrumIndex.activationMethodAt(index),
+            spectrumIndex.isolationWindowAt(index),
+            spectrumIndex.centroidedAt(index));
     }
 
     @Override

@@ -52,6 +52,11 @@ class MassSpectrum(Spectrum):
     scan_window: ValueRange | None = None
     activation_method: ActivationMethod = ActivationMethod.NONE
     isolation_window: IsolationWindow | None = None
+    # ``True`` if the spectrum is centroided (mzML MS:1000127),
+    # ``False`` for profile mode or when not specified. Cross-language:
+    # Java ``MassSpectrum.isCentroided()``, Objective-C
+    # ``-[TTIOMassSpectrum isCentroided]``.
+    is_centroided: bool = False
 
     @property
     def mz_array(self) -> SignalArray:
