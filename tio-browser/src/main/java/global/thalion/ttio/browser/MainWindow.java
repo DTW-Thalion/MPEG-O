@@ -68,15 +68,18 @@ public class MainWindow {
             boolean success = false;
             if (e.getDragboard().hasFiles()) {
                 java.io.File f = e.getDragboard().getFiles().get(0);
-                if (f.getName().endsWith(".tio")) {
+                if (f.getName().toLowerCase(java.util.Locale.ROOT).endsWith(".tio")) {
                     loadDataset(f.toString(), true);
                     success = true;
                 } else {
-                    // Phase 8 hooks the sniffer here to pre-select an importer.
-                    Alert info = new Alert(Alert.AlertType.INFORMATION,
-                        "Importer wizard pre-selection wired in Phase 8.\n"
-                        + "Dropped: " + f.toString(), ButtonType.OK);
-                    info.showAndWait();
+                    String sniffed =
+                        global.thalion.ttio.browser.importers.FormatSniffer
+                            .sniffFile(f.toPath());
+                    var dlg = new global.thalion.ttio.browser.importers
+                        .ImportDialog(primaryStage);
+                    dlg.preSelectFormat(sniffed);
+                    dlg.preSelectSource(f.toPath());
+                    dlg.showAndImport(target -> loadDataset(target.toString(), false));
                     success = true;
                 }
             }
@@ -230,6 +233,17 @@ public class MainWindow {
             javafx.application.Platform.exit();
         });
         saveAsItem.setOnAction(e -> saveAsViaChooser());
+        importItem.setOnAction(e -> openImportDialog(null, null));
+    }
+
+    /** Open the import wizard. {@code preFormat} and {@code preSource}
+     *  may be null; supplied non-null when invoked from drag-drop. */
+    private void openImportDialog(String preFormat, java.nio.file.Path preSource) {
+        var dlg = new global.thalion.ttio.browser.importers
+            .ImportDialog(stage);
+        if (preFormat != null) dlg.preSelectFormat(preFormat);
+        if (preSource != null) dlg.preSelectSource(preSource);
+        dlg.showAndImport(target -> loadDataset(target.toString(), false));
     }
 
     private void saveAsViaChooser() {
