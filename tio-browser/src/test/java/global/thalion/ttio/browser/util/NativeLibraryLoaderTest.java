@@ -21,12 +21,13 @@ class NativeLibraryLoaderTest {
     }
 
     @Test
-    void platformIdRecognizesMacX64AndAarch64() {
-        assertEquals("mac-x64",
+    void platformIdCollapsesMacToSingleId() {
+        // macOS uses a universal2 binary; both arches resolve to "mac".
+        assertEquals("mac",
             NativeLibraryLoader.platformId("Mac OS X", "x86_64"));
-        assertEquals("mac-aarch64",
+        assertEquals("mac",
             NativeLibraryLoader.platformId("Mac OS X", "aarch64"));
-        assertEquals("mac-aarch64",
+        assertEquals("mac",
             NativeLibraryLoader.platformId("Darwin", "arm64"));
     }
 
@@ -48,8 +49,8 @@ class NativeLibraryLoaderTest {
     void resourcePathMatchesShadeLayout() {
         assertEquals("/native/linux-x64/libttio_rans_jni.so",
             NativeLibraryLoader.resourcePath("linux-x64"));
-        assertEquals("/native/mac-aarch64/libttio_rans_jni.dylib",
-            NativeLibraryLoader.resourcePath("mac-aarch64"));
+        assertEquals("/native/mac/libttio_rans_jni.dylib",
+            NativeLibraryLoader.resourcePath("mac"));
         assertEquals("/native/win-x64/ttio_rans_jni.dll",
             NativeLibraryLoader.resourcePath("win-x64"));
         assertNull(NativeLibraryLoader.resourcePath("unknown"));
