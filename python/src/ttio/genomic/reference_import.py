@@ -219,14 +219,28 @@ class ReferenceImport:
         """Embed this reference at ``/study/references/<uri>/``
         inside ``dataset``'s open HDF5 file.
 
-        Layout (cross-language byte-equal):
+        Layout (cross-language byte-equal — matches Java's
+        ``SpectralDataset.embedReferencesForRuns`` and Python's
+        :func:`ttio.spectral_dataset._embed_references_for_runs`,
+        the canonical writer used by ``embedReference=True`` runs):
 
         ``/study/references/<uri>/``
-          attr ``md5``: 32-character lowercase hex string
-          attr ``total_bases``: int64 sum of sequence lengths
-          ``chromosomes/<name>/data``  uint8 dataset of the
-              chromosome's sequence bytes (case-preserving, no
-              newlines).
+          attr ``md5`` : 32-character lowercase hex string.
+          attr ``reference_uri`` : the URI string (mirrors the leaf
+              path; ``read_from_group`` falls back to the leaf when
+              absent, but the canonical writer always emits this).
+          ``chromosomes/<name>/`` one sub-group per chromosome, in
+              alphabetic order:
+
+            attr ``length`` : int64 sequence length in bytes.
+            ``data`` : UINT8 dataset of the chromosome's sequence
+                bytes (case-preserving, no newlines), ZLIB-compressed.
+
+        ``@total_bases`` (a v1.1.0-era attribute written here only,
+        never by the canonical embed-helper / Java writer) is no
+        longer emitted; ``ReferenceImport.read_from_group`` recomputes
+        it from the per-chromosome data, so the on-disk attribute
+        carried no information that wasn't also derivable.
 
         Parameters
         ----------
@@ -248,6 +262,11 @@ class ReferenceImport:
         """
         import numpy as np
 
+        from .. import _hdf5_io as io
+        from ..enums import Compression as _Compression
+        from ..enums import Precision as _Precision
+        from ..providers.hdf5 import _Group as _H5Group
+
         h5 = getattr(dataset, "file", None)
         if h5 is None:
             raise RuntimeError(
@@ -263,14 +282,30 @@ class ReferenceImport:
                     f"pass overwrite=True to replace."
                 )
             del h5[path]
-        ref_grp = h5.create_group(path)
-        ref_grp.attrs["md5"] = self.md5.hex().encode("ascii")
-        ref_grp.attrs["total_bases"] = np.int64(self.total_bases)
-        chrom_grp = ref_grp.create_group("chromosomes")
-        for name, seq in zip(self.chromosomes, self.sequences):
-            sub = chrom_grp.create_group(name)
-            sub.create_dataset(
+
+        # Use the StorageGroup adapter so the attribute layout
+        # (NULLTERM fixed-length strings via write_fixed_string_attr,
+        # int64 via write_int_attr) matches the canonical embed-helper
+        # writer and Java's embedReferencesForRuns byte-for-byte.
+        ref_h5 = h5.create_group(path)
+        ref_grp = _H5Group(ref_h5)
+        io.write_fixed_string_attr(ref_grp, "md5", self.md5.hex())
+        io.write_fixed_string_attr(ref_grp, "reference_uri", self.uri)
+        chroms_grp = ref_grp.create_group("chromosomes")
+        # Sort alphabetically so the on-disk child order matches what
+        # the canonical writer emits (read_from_group surfaces names in
+        # on-disk order).
+        for name in sorted(self.chromosomes):
+            seq = self.chromosome(name)
+            c = chroms_grp.create_group(name)
+            io.write_int_attr(c, "length", len(seq))
+            arr = np.frombuffer(seq, dtype=np.uint8)
+            ds = c.create_dataset(
                 "data",
-                data=np.frombuffer(seq, dtype=np.uint8),
-                compression="gzip",
+                _Precision.UINT8,
+                length=int(arr.shape[0]),
+                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+                compression=_Compression.ZLIB,
+                compression_level=6,
             )
+            ds.write(arr)
