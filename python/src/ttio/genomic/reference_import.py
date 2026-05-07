@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover
     from pathlib import Path
 
+    from ..providers.base import StorageGroup
     from ..spectral_dataset import SpectralDataset
 
 
@@ -39,16 +40,16 @@ def compute_reference_md5(chromosomes: list[str], sequences: list[bytes]) -> byt
     Algorithm (cross-language byte-exact):
         for each (name, seq) in sorted(zip(chromosomes, sequences),
                                        key=name):
-            h.update(name_utf8 + b"\\n")
             h.update(seq)
-            h.update(b"\\n")
         return h.digest()
 
-    Sorting by name makes the MD5 invariant to FASTA record order.
-    Names are encoded UTF-8; sequences are passed through verbatim
-    (case-preserving). The trailing ``\\n`` separators are pure
-    framing and never appear inside sequence bytes (FASTA forbids
-    embedded newlines per record).
+    Sorting by name makes the MD5 invariant to FASTA record order;
+    sequence bytes are concatenated verbatim (case-preserving) without
+    any framing. This is the single canonical form used both by the
+    REF_DIFF_V2 auto-embed writer (``_reference_md5_for_run``) and by
+    the FASTA-import path's ``@md5`` stamping — unified in v1.1.0
+    (previously the FASTA-import / public-helper path used a
+    name-framed form that disagreed with the writer; see CHANGELOG).
 
     Returns
     -------
@@ -62,11 +63,8 @@ def compute_reference_md5(chromosomes: list[str], sequences: list[bytes]) -> byt
         )
     items = sorted(zip(chromosomes, sequences), key=lambda kv: kv[0])
     h = hashlib.md5()
-    for name, seq in items:
-        h.update(name.encode("utf-8"))
-        h.update(b"\n")
+    for _name, seq in items:
         h.update(seq)
-        h.update(b"\n")
     return h.digest()
 
 
@@ -137,6 +135,81 @@ class ReferenceImport:
             f"(known: {sorted(self.chromosomes)})"
         )
 
+    @classmethod
+    def read_from_group(cls, ref_group: "StorageGroup") -> "ReferenceImport":
+        """Read an embedded reference from ``/study/references/<uri>/``.
+
+        Inverse of :func:`ttio.spectral_dataset._embed_references_for_runs`.
+        Per-chromosome sequences live at
+        ``<uri>/chromosomes/<name>/data`` (UINT8); the URI group
+        carries ``@reference_uri`` (the canonical URI string) and
+        ``@md5`` (32-character lowercase hex). The MD5 is preserved
+        verbatim from the on-disk attribute when present, so the
+        read-back value carries the same digest bytes the writer used —
+        load-bearing for cross-language byte-exact round-trip. When the
+        attribute is absent or malformed, the constructor falls back to
+        recomputing via :func:`compute_reference_md5`.
+
+        Chromosome names are returned in the order
+        :meth:`StorageGroup.child_names` yields them, which for the
+        canonical writer is alphabetic (the embed helper sorts before
+        persisting).
+
+        Cross-language equivalents
+        --------------------------
+        Java: ``ReferenceImport.readFromGroup(StorageGroup)``.
+
+        :since: 1.1.0
+        """
+        from .. import _hdf5_io as io
+
+        # URI: prefer @reference_uri, fall back to the leaf group name.
+        uri = io.read_string_attr(ref_group, "reference_uri", default=None)
+        if not uri:
+            # StorageGroup.name gives the full path for HDF5; take the
+            # leaf to mirror Java's refGroup.name() semantics.
+            full = ref_group.name
+            uri = full.rsplit("/", 1)[-1] if "/" in full else full
+
+        # MD5: read @md5 (lowercase hex string) verbatim. Parse to 16
+        # bytes; on absence or malformed input, leave as empty so the
+        # ReferenceImport constructor recomputes from sequences.
+        md5_bytes = b""
+        md5_hex = io.read_string_attr(ref_group, "md5", default=None)
+        if md5_hex and len(md5_hex) == 32:
+            try:
+                md5_bytes = bytes.fromhex(md5_hex)
+            except ValueError:
+                md5_bytes = b""
+
+        chrom_names: list[str] = []
+        sequences: list[bytes] = []
+        chroms_grp = ref_group.open_group("chromosomes")
+        try:
+            for name in chroms_grp.child_names():
+                chrom_grp = chroms_grp.open_group(name)
+                try:
+                    ds = chrom_grp.open_dataset("data")
+                    try:
+                        arr = ds.read()
+                        # Primitive UINT8 datasets always come back as
+                        # ndarray per the StorageDataset contract.
+                        chrom_names.append(name)
+                        sequences.append(bytes(arr))
+                    finally:
+                        ds.close()
+                finally:
+                    chrom_grp.close()
+        finally:
+            chroms_grp.close()
+
+        return cls(
+            uri=uri,
+            chromosomes=chrom_names,
+            sequences=sequences,
+            md5=md5_bytes,
+        )
+
     def write_to_dataset(
         self,
         dataset: "SpectralDataset",
@@ -146,14 +219,28 @@ class ReferenceImport:
         """Embed this reference at ``/study/references/<uri>/``
         inside ``dataset``'s open HDF5 file.
 
-        Layout (cross-language byte-equal):
+        Layout (cross-language byte-equal — matches Java's
+        ``SpectralDataset.embedReferencesForRuns`` and Python's
+        :func:`ttio.spectral_dataset._embed_references_for_runs`,
+        the canonical writer used by ``embedReference=True`` runs):
 
         ``/study/references/<uri>/``
-          attr ``md5``: 32-character lowercase hex string
-          attr ``total_bases``: int64 sum of sequence lengths
-          ``chromosomes/<name>/data``  uint8 dataset of the
-              chromosome's sequence bytes (case-preserving, no
-              newlines).
+          attr ``md5`` : 32-character lowercase hex string.
+          attr ``reference_uri`` : the URI string (mirrors the leaf
+              path; ``read_from_group`` falls back to the leaf when
+              absent, but the canonical writer always emits this).
+          ``chromosomes/<name>/`` one sub-group per chromosome, in
+              alphabetic order:
+
+            attr ``length`` : int64 sequence length in bytes.
+            ``data`` : UINT8 dataset of the chromosome's sequence
+                bytes (case-preserving, no newlines), ZLIB-compressed.
+
+        ``@total_bases`` (a v1.1.0-era attribute written here only,
+        never by the canonical embed-helper / Java writer) is no
+        longer emitted; ``ReferenceImport.read_from_group`` recomputes
+        it from the per-chromosome data, so the on-disk attribute
+        carried no information that wasn't also derivable.
 
         Parameters
         ----------
@@ -175,6 +262,11 @@ class ReferenceImport:
         """
         import numpy as np
 
+        from .. import _hdf5_io as io
+        from ..enums import Compression as _Compression
+        from ..enums import Precision as _Precision
+        from ..providers.hdf5 import _Group as _H5Group
+
         h5 = getattr(dataset, "file", None)
         if h5 is None:
             raise RuntimeError(
@@ -190,14 +282,30 @@ class ReferenceImport:
                     f"pass overwrite=True to replace."
                 )
             del h5[path]
-        ref_grp = h5.create_group(path)
-        ref_grp.attrs["md5"] = self.md5.hex().encode("ascii")
-        ref_grp.attrs["total_bases"] = np.int64(self.total_bases)
-        chrom_grp = ref_grp.create_group("chromosomes")
-        for name, seq in zip(self.chromosomes, self.sequences):
-            sub = chrom_grp.create_group(name)
-            sub.create_dataset(
+
+        # Use the StorageGroup adapter so the attribute layout
+        # (NULLTERM fixed-length strings via write_fixed_string_attr,
+        # int64 via write_int_attr) matches the canonical embed-helper
+        # writer and Java's embedReferencesForRuns byte-for-byte.
+        ref_h5 = h5.create_group(path)
+        ref_grp = _H5Group(ref_h5)
+        io.write_fixed_string_attr(ref_grp, "md5", self.md5.hex())
+        io.write_fixed_string_attr(ref_grp, "reference_uri", self.uri)
+        chroms_grp = ref_grp.create_group("chromosomes")
+        # Sort alphabetically so the on-disk child order matches what
+        # the canonical writer emits (read_from_group surfaces names in
+        # on-disk order).
+        for name in sorted(self.chromosomes):
+            seq = self.chromosome(name)
+            c = chroms_grp.create_group(name)
+            io.write_int_attr(c, "length", len(seq))
+            arr = np.frombuffer(seq, dtype=np.uint8)
+            ds = c.create_dataset(
                 "data",
-                data=np.frombuffer(seq, dtype=np.uint8),
-                compression="gzip",
+                _Precision.UINT8,
+                length=int(arr.shape[0]),
+                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+                compression=_Compression.ZLIB,
+                compression_level=6,
             )
+            ds.write(arr)

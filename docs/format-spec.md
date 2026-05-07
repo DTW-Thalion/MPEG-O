@@ -1172,46 +1172,109 @@ group's URI. A second run with the same URI but a different MD5
 raises `ValueError` at write time — the URI–MD5 binding is
 one-to-one within a file.
 
-### FASTA-import variant of the reference group
+### Single canonical layout for all writers
 
-The `FastaReader` / `FastaWriter` pair (Python
+Both the REF_DIFF_V2 auto-embed path (triggered when
+`WrittenGenomicRun.embed_reference == True` and a run uses
+REF_DIFF_V2) and the explicit `ReferenceImport.write_to_dataset()`
+path used by the `FastaReader` / `FastaWriter` pair (Python
 `ttio.importers.fasta` / `ttio.exporters.fasta`, Java
 `global.thalion.ttio.importers.FastaReader` /
 `...exporters.FastaWriter`, ObjC `TTIOFastaReader` /
-`TTIOFastaWriter`) embeds a reference under the same group prefix
-with a slightly extended attribute set:
+`TTIOFastaWriter`) emit the **same** group shape documented above:
+3-level `<uri>/chromosomes/<chrom_name>/data`, with
+`@reference_uri` and `@md5` on the URI group and `@length` on each
+per-chromosome group. The `@md5` attribute is computed by both
+paths using the same single canonical seq-only formula (see "MD5
+computation" below); byte-identical digests are guaranteed for the
+same content.
 
-```
-/study/references/<uri>/
-  @md5             : fixed-length string — 32-char hex
-  @total_bases     : int64 — sum of sequence lengths across the
-                     reference (FASTA-import layout extension)
-  chromosomes/
-    <chrom_name>/
-      data         : 1-D uint8 dataset, gzip-compressed,
-                     **case-preserving** (lowercase soft-masking
-                     survives the round-trip).
-```
+#### Historical note (pre-v1.1.1)
 
-Two intentional differences from the REF_DIFF_V2 auto-embedded
-layout above:
+Prior to v1.1.1, `ReferenceImport.write_to_dataset()` emitted a
+distinct **flat-layout variant** with attributes `@md5` and
+`@total_bases` on the URI group and flat `<group>/<chromName>`
+datasets (no nested `chromosomes/` sub-group, no `@reference_uri`,
+no per-chromosome `@length`). The chromosome `data` datasets were
+gzip-compressed and **case-preserving** (lowercase soft-masking
+bytes survived the round-trip), in contrast with the auto-embed
+path's uppercase-normalised ACGTN bytes. The flat layout was
+unified with the canonical 3-level form in v1.1.1 (commits
+`ab70a27` + `586d6bd`), making `write_to_dataset()` round-trippable
+through `SpectralDataset.references()`.
 
-1. **Case preservation.** FASTA-import keeps original byte values
-   so a round-trip through `.tio` does not lose soft-masking.
-   REF_DIFF_V2 auto-embed uppercase-normalises for codec
-   determinism.
-2. **`@total_bases` attribute.** FASTA-import adds this for
-   constant-time `total_bases` queries. REF_DIFF_V2 auto-embed
-   does not.
+Files written with the pre-1.1.1 flat layout retain their on-disk
+`@md5` verbatim (the canonical seq-only formula was already in
+effect from v1.1.0), and `read_from_group`'s fallback path reads
+their chromosome bytes directly. However, those files are **not**
+exposed through `SpectralDataset.references()` — readers needing
+the new accessor must rewrite the file via the v1.1.1+ writer. The
+`@total_bases` attribute and case-preserving lowercase round-trip
+are no longer emitted by any current writer.
 
-The `@md5` attribute is computed by both paths over the same
-content (sorted sequences in name order); FASTA-import additionally
-includes name framing (`name + 0x0A + sequence + 0x0A` per
-chromosome) so the digest is order-invariant against
-chromosome-set permutations. **As a result, the FASTA-import MD5
-will not match the REF_DIFF_V2-encoder MD5 for the same
-reference**; users mixing the two paths in a single `.tio` should
-coordinate which writer owns the reference.
+### Reading embedded references
+
+A `.tio` may embed one or more references at
+`/study/references/<reference_uri>/`. Each child group is one
+reference; under it sits a `chromosomes/` sub-group whose children
+are per-chromosome sub-groups. Each per-chromosome sub-group
+contains a `data` UINT8 dataset holding the raw sequence bytes
+(uppercase ACGTN; current writers normalise case for codec
+determinism — see "Historical note" above for pre-v1.1.1 layout).
+
+URI-group attributes:
+
+| Attribute        | Type   | Description                                                |
+|------------------|--------|------------------------------------------------------------|
+| `reference_uri`  | string | The reference URI (matches the group's leaf-name segment). |
+| `md5`            | string | 32-character lowercase hex digest of the sequences.        |
+
+Per-chromosome group attribute `length` carries the sequence length
+in bases (informational; equals the `data` dataset's length and may
+be ignored by readers).
+
+**MD5 computation.** The `@md5` attribute on each
+`/study/references/<uri>/` group is the MD5 of the **concatenated
+sequence bytes** in **alphabetic order of chromosome name** —
+i.e. `MD5(seq_for_chr_a || seq_for_chr_b || ...)` where `||`
+denotes byte concatenation, with no inter-chromosome framing.
+The same formula is used by all writers and by the
+`compute_reference_md5` (Python) / `ReferenceImport.computeMd5`
+(Java) / `+[TTIOReferenceImport computeMd5WithChromosomes:sequences:]`
+(ObjC) helpers. Unified in v1.1.0 (previously: the REF_DIFF_V2
+auto-embed path used this form while
+`ReferenceImport.write_to_dataset` and the standalone helpers used
+a name-framed `name + 0x0A + seq + 0x0A` form; see CHANGELOG for
+details).
+
+**Read-side accessor (v1.1.0+).** A freshly-opened dataset exposes
+embedded references through the `references()` accessor
+(`references` property in Python,
+`-[TTIOSpectralDataset references]` in ObjC), keyed by reference
+URI. Datasets written without embedded references (writer flag
+`embedReference = false`) return an empty map regardless of whether
+individual genomic runs carry a `referenceUri`.
+
+**Write-side helper (v1.1.0+).** Outside the auto-embed path,
+`ReferenceImport.write_to_dataset` (Python) /
+`ReferenceImport.writeToDataset` (Java) /
+`-[TTIOReferenceImport writeToDataset:overwrite:error:]` (ObjC)
+embed a `ReferenceImport` directly at
+`/study/references/<uri>/` on an open writable dataset. The
+on-disk layout is byte-identical to the auto-embed path (same
+`@md5` formula, same per-chromosome `chromosomes/<name>/data` +
+`@length` shape). All three implementations honour an `overwrite`
+parameter (default `False`/`NO`) — a write that collides with an
+existing URI raises (`FileExistsError` /
+`IllegalStateException` / `NSError` code 2201) unless overwrite
+is explicitly requested.
+
+The `@md5` attribute is preserved verbatim through `references()` —
+i.e. the returned `ReferenceImport.md5` matches the on-disk
+attribute byte-for-byte when present and well-formed. Missing or
+malformed values fall back to recomputation via the canonical helper
+(`compute_reference_md5` etc.), which means a read-back digest may
+differ from the writer-stamped one in that specific edge case.
 
 ### Default codec selection
 

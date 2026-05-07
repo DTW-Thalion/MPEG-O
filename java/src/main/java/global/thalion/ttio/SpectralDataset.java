@@ -55,6 +55,7 @@ public class SpectralDataset implements
     private final String isaInvestigationId;
     private final Map<String, AcquisitionRun> msRuns;
     private final Map<String, GenomicRun> genomicRuns;
+    private final Map<String, global.thalion.ttio.genomics.ReferenceImport> references;
     private final List<Identification> identifications;
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
@@ -71,6 +72,7 @@ public class SpectralDataset implements
                             String title, String isaInvestigationId,
                             Map<String, AcquisitionRun> msRuns,
                             Map<String, GenomicRun> genomicRuns,
+                            Map<String, global.thalion.ttio.genomics.ReferenceImport> references,
                             List<Identification> identifications,
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords,
@@ -82,10 +84,29 @@ public class SpectralDataset implements
         this.isaInvestigationId = isaInvestigationId;
         this.msRuns = msRuns;
         this.genomicRuns = genomicRuns != null ? genomicRuns : Map.of();
+        this.references = references != null ? references : Map.of();
         this.identifications = identifications;
         this.quantifications = quantifications;
         this.provenanceRecords = provenanceRecords;
         this.encryptedAlgorithm = encryptedAlgorithm != null ? encryptedAlgorithm : "";
+    }
+
+    // Forwarding constructor for callers that don't pass references (write
+    // paths that haven't yet read /study/references/ from disk). The
+    // Phase 0 tio-browser wiring populates references in the open paths;
+    // create paths leave it empty until the file is reopened.
+    private SpectralDataset(StorageProvider provider, Hdf5File file,
+                            FeatureFlags featureFlags,
+                            String title, String isaInvestigationId,
+                            Map<String, AcquisitionRun> msRuns,
+                            Map<String, GenomicRun> genomicRuns,
+                            List<Identification> identifications,
+                            List<Quantification> quantifications,
+                            List<ProvenanceRecord> provenanceRecords,
+                            String encryptedAlgorithm) {
+        this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
+                genomicRuns, Map.of(), identifications, quantifications,
+                provenanceRecords, encryptedAlgorithm);
     }
 
     // Pre-M82.3 constructors (kept for callers that don't use genomic_runs).
@@ -98,7 +119,7 @@ public class SpectralDataset implements
                             List<ProvenanceRecord> provenanceRecords,
                             String encryptedAlgorithm) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                Map.of(), identifications, quantifications, provenanceRecords,
+                Map.of(), Map.of(), identifications, quantifications, provenanceRecords,
                 encryptedAlgorithm);
     }
 
@@ -110,7 +131,7 @@ public class SpectralDataset implements
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                Map.of(), identifications, quantifications, provenanceRecords, "");
+                Map.of(), Map.of(), identifications, quantifications, provenanceRecords, "");
     }
 
     /** The absolute path of the underlying .tio file (null for in-memory datasets). */
@@ -131,6 +152,29 @@ public class SpectralDataset implements
     /** zero or more named genomic runs. Empty for pre-M82
      *  files; populated when {@code /study/genomic_runs/} is present. */
     public Map<String, GenomicRun> genomicRuns() { return genomicRuns; }
+
+    /**
+     * Returns embedded references discovered under
+     * {@code /study/references/} on this dataset.
+     *
+     * <p>Keys are reference URIs (the same string returned by
+     * {@link global.thalion.ttio.genomics.GenomicRun#referenceUri()}).
+     * Values are fully-materialized {@link
+     * global.thalion.ttio.genomics.ReferenceImport} instances ready
+     * for diff-based codecs and for inspection in user-facing
+     * tooling.
+     *
+     * <p>Datasets written without embedded references (writer flag
+     * {@code embedReference=false}) return an empty map even if
+     * {@link global.thalion.ttio.genomics.GenomicRun#referenceUri()}
+     * is non-null on individual runs.
+     *
+     * @return unmodifiable map; never null
+     * @since 1.1.0
+     */
+    public Map<String, global.thalion.ttio.genomics.ReferenceImport> references() {
+        return Collections.unmodifiableMap(references);
+    }
 
     // ── Phase 2 (post-M91) — canonical unified runs accessor ────────
 
@@ -263,6 +307,8 @@ public class SpectralDataset implements
             String isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
             Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();
+            Map<String, global.thalion.ttio.genomics.ReferenceImport> references =
+                    new LinkedHashMap<>();
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
@@ -312,6 +358,21 @@ public class SpectralDataset implements
                         }
                     }
 
+                    // /study/references/<uri>/ each holds an embedded reference
+                    // (1.1.0 — Phase 0 tio-browser read-back).
+                    if (study.hasChild("references")) {
+                        try (Hdf5Group refsGroup = study.openGroup("references")) {
+                            var refsAdapter = Hdf5Provider.adapterForGroup(refsGroup);
+                            for (String uri : refsGroup.childNames()) {
+                                try (var oneRef = refsAdapter.openGroup(uri)) {
+                                    references.put(uri,
+                                        global.thalion.ttio.genomics.ReferenceImport
+                                            .readFromGroup(oneRef));
+                                }
+                            }
+                        }
+                    }
+
                     idents = readIdentifications(study);
                     quants = readQuantifications(study);
                     prov = readProvenance(study);
@@ -319,7 +380,7 @@ public class SpectralDataset implements
             }
 
             return new SpectralDataset(provider, file, flags, title, isaId, runs,
-                    genomicRuns, idents, quants, prov, encryptedAlg);
+                    genomicRuns, references, idents, quants, prov, encryptedAlg);
         }
     }
 
@@ -348,6 +409,8 @@ public class SpectralDataset implements
             String title = null, isaId = null;
             Map<String, AcquisitionRun> runs = new LinkedHashMap<>();
             Map<String, GenomicRun> genomicRuns = new LinkedHashMap<>();
+            Map<String, global.thalion.ttio.genomics.ReferenceImport> references =
+                    new LinkedHashMap<>();
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
@@ -398,13 +461,26 @@ public class SpectralDataset implements
                             }
                         }
                     }
+                    // /study/references/<uri>/ each holds an embedded reference
+                    // (1.1.0 — Phase 0 tio-browser read-back).
+                    if (study.hasChild("references")) {
+                        try (var refsGroup = study.openGroup("references")) {
+                            for (String uri : refsGroup.childNames()) {
+                                try (var oneRef = refsGroup.openGroup(uri)) {
+                                    references.put(uri,
+                                        global.thalion.ttio.genomics.ReferenceImport
+                                            .readFromGroup(oneRef));
+                                }
+                            }
+                        }
+                    }
                     idents = readIdentificationsFromJson(study);
                     quants = readQuantificationsFromJson(study);
                     prov = readProvenanceFromJson(study);
                 }
             }
             return new SpectralDataset(provider, null, flags, title, isaId, runs,
-                    genomicRuns, idents, quants, prov, encryptedAlg);
+                    genomicRuns, references, idents, quants, prov, encryptedAlg);
         }
     }
 

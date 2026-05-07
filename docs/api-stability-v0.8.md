@@ -167,7 +167,7 @@ for safety.
 | FASTA writer + `.fai` index | **Stable** | v1.0 | `FastaWriter` with configurable line-wrap and samtools-compatible `.fai` index emission. Cross-language byte-equal output. |
 | FASTQ reader | **Stable** | v1.0 | `FastqReader` (Python / Java / ObjC) with auto-detect Phred offset (33 / 64). Internal storage normalises to Phred+33. See `docs/vendor-formats.md` §FASTQ. |
 | FASTQ writer | **Stable** | v1.0 | `FastqWriter` with selectable Phred output offset. Internal `0xFF` "qualities unknown" sentinel maps to Phred 0 on output. |
-| `ReferenceImport` value class + `write_to_dataset()` | **Stable** | v1.0 | Embeds a reference at `/study/references/<uri>/`. See `docs/format-spec.md` §"FASTA-import variant of the reference group". |
+| `ReferenceImport` value class + `write_to_dataset()` | **Stable** | v1.0 | Embeds a reference at `/study/references/<uri>/` using the canonical 3-level layout (unified with the REF_DIFF_V2 auto-embed path in v1.1.1). See `docs/format-spec.md` §10.10. |
 | FASTA / FASTQ CLIs (`fasta_import_cli`, `fasta_export_cli`, `fastq_import_cli`, `fastq_export_cli`, `FastaRoundTrip`, `FastqRoundTrip`, `TtioFastaRoundTrip`, `TtioFastqRoundTrip`) | **Stable** | v1.0 | One CLI surface per language; same byte-output contract as the in-process API. |
 
 ### 4.1 Transport (v0.10)

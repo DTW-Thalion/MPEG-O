@@ -17,6 +17,7 @@
 @class TTIOHDF5Group;
 @class TTIOGenomicRun;
 @class TTIOWrittenGenomicRun;
+@class TTIOReferenceImport;
 @protocol TTIOStorageProvider;
 
 /**
@@ -62,6 +63,20 @@
 /** Genomic runs keyed by name. Empty for files without genomic
  *  content. */
 @property (readonly, copy) NSDictionary<NSString *, TTIOGenomicRun *> *genomicRuns;
+
+/**
+ * Map of reference URI &rarr; <code>TTIOReferenceImport</code> for
+ * embedded references found under <code>/study/references/</code>.
+ *
+ * <p>Empty dictionary when no references were embedded at write
+ * time (writer flag <code>embedReference=NO</code>, the run was
+ * not eligible for a context-aware codec, or the file pre-dates
+ * the embedding feature). The setter is private; callers cannot
+ * mutate the returned dictionary.</p>
+ *
+ * @since 1.1.0
+ */
+@property (readonly, copy) NSDictionary<NSString *, TTIOReferenceImport *> *references;
 
 /** Dataset-wide identifications. */
 @property (readonly, copy) NSArray<TTIOIdentification *> *identifications;
