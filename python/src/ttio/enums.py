@@ -159,6 +159,9 @@ class AcquisitionMode(IntEnum):
     IMAGING = 6
     GENOMIC_WGS = 7   # whole-genome sequencing
     GENOMIC_WES = 8   # whole-exome sequencing
+    RAMAN = 9         # Raman spectroscopy
+    IR = 10           # Infrared spectroscopy
+    UV_VIS = 11       # UV-Visible spectroscopy
 
 
 class IRMode(IntEnum):

@@ -626,15 +626,33 @@ class SpectralDataset:
         object.__setattr__(self, "encrypted_algorithm", DEFAULT_ENCRYPTION_ALGORITHM)
 
     def decrypt_with_key(self, key: bytes) -> dict[str, bytes]:
-        """Decrypt every MS run's intensity channel.
+        """Decrypt every MS run's intensity channel into an in-memory overlay.
 
-        Returns a mapping of ``{run_name: plaintext_bytes}``. The on-disk
-        file is NOT modified — decryption is read-only.
+        Returns a mapping of ``{run_name: plaintext_bytes}``.
 
-        Side effect: each run's decrypted channel is cached in memory so
-        ``run.object_at_index(i).intensity_array`` works without re-decrypting
-        (Option 1 of the MCP-Server M5 handoff; mirrors ObjC
-        ``-[TTIOSpectralDataset decryptWithKey:]`` rehydration semantics).
+        **Read-only / asymmetric**: the on-disk file is NOT modified,
+        the root ``@encrypted`` attribute is left in place, and
+        :attr:`is_encrypted` continues to return ``True`` on this
+        instance and on any reopen. This is the asymmetric counterpart
+        to :meth:`encrypt_with_key` (which IS persistent +
+        flag-flipping) by design: in-memory rehydration lets a process
+        read encrypted data without rewriting the file.
+
+        To fully reverse encryption on disk and clear the
+        ``@encrypted`` attribute, use the classmethod
+        :meth:`decrypt_in_place` — close any open instance first.
+
+        Side effect: each run's decrypted channel is cached in memory
+        so ``run.object_at_index(i).intensity_array`` works without
+        re-decrypting (Option 1 of the MCP-Server M5 handoff; mirrors
+        ObjC ``-[TTIOSpectralDataset decryptWithKey:]`` rehydration
+        semantics).
+
+        Cross-language equivalents
+        --------------------------
+        Java: ``SpectralDataset.decryptWithKey(byte[])`` (same
+        in-memory-only semantics) · Objective-C:
+        ``-[TTIOSpectralDataset decryptWithKey:error:]`` (same).
         """
         return {name: run.decrypt_with_key(key) for name, run in self.ms_runs.items()}
 
@@ -885,6 +903,10 @@ class WrittenRun:
     isolation_lower_offsets: np.ndarray | None = None
     isolation_upper_offsets: np.ndarray | None = None
     nucleus_type: str = ""
+    # Optional NMR solvent label (e.g. "CDCl3", "DMSO-d6"). Empty when
+    # not specified or when the run is not NMR. Written as the
+    # ``@solvent`` string attribute on the run group.
+    solvent: str = ""
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     # signal compression codec. Valid values are the strings
     # recognised by :func:`ttio._hdf5_io.write_signal_channel` plus
@@ -905,6 +927,9 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
     io.write_fixed_string_attr(g, "spectrum_class", run.spectrum_class)
     if run.nucleus_type:
         io.write_fixed_string_attr(g, "nucleus_type", run.nucleus_type)
+
+    if getattr(run, "solvent", ""):
+        io.write_fixed_string_attr(g, "solvent", run.solvent)
 
     if run.provenance_records:
         prov = g.create_group("provenance")

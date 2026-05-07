@@ -317,6 +317,10 @@ class AcquisitionRun:
     # backward-compat with files written by v0.10 and earlier (which
     # didn't carry the attribute at all).
     modality: str = "mass_spectrometry"
+    # Optional NMR solvent label (e.g. "CDCl3", "DMSO-d6"). Empty when
+    # not specified or when the run is not NMR. Stored as the
+    # ``@solvent`` string attribute on the run group.
+    solvent: str = ""
     # chromatogram traces. Empty list on v0.3 files (group absent).
     chromatograms: list[Chromatogram] = field(default_factory=list)
     # signal cache holds protocol datasets, not h5py.Dataset.
@@ -363,6 +367,7 @@ class AcquisitionRun:
         modality = io.read_string_attr(
             sgroup, "modality", default="mass_spectrometry"
         ) or "mass_spectrometry"
+        solvent = io.read_string_attr(sgroup, "solvent", default="") or ""
 
         idx = SpectrumIndex.read(sgroup.open_group("spectrum_index"))
 
@@ -412,6 +417,7 @@ class AcquisitionRun:
             nucleus_type=nucleus,
             provenance_json=prov,
             modality=modality,
+            solvent=solvent,
             chromatograms=_read_chromatograms(sgroup),
             _numpress_channels=numpress_channels,
         )
@@ -424,6 +430,16 @@ class AcquisitionRun:
     def __iter__(self) -> Iterator[Spectrum]:
         for i in range(len(self)):
             yield self[i]
+
+    def spectra(self) -> list[Spectrum]:
+        """Return all spectra as a list.
+
+        Convenience for parity with the Java ``AcquisitionRun.spectra()``
+        and Objective-C ``-[TTIOAcquisitionRun spectra]`` accessors.
+        Equivalent to ``list(run)`` but provided as a named method so
+        cross-language code reads the same.
+        """
+        return list(self)
 
     def provenance(self) -> list[ProvenanceRecord]:
         """Per-run provenance records.

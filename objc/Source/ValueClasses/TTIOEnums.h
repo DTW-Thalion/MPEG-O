@@ -118,7 +118,10 @@ typedef NS_ENUM(NSUInteger, TTIOAcquisitionMode) {
     TTIOAcquisitionMode2DNMR,
     TTIOAcquisitionModeImaging,
     TTIOAcquisitionModeGenomicWGS,    // Whole-genome sequencing.
-    TTIOAcquisitionModeGenomicWES     // Whole-exome sequencing.
+    TTIOAcquisitionModeGenomicWES,    // Whole-exome sequencing.
+    TTIOAcquisitionModeRaman,         // Raman spectroscopy.
+    TTIOAcquisitionModeIR,            // Infrared spectroscopy.
+    TTIOAcquisitionModeUVVis          // UV-Visible spectroscopy.
 };
 
 /**
