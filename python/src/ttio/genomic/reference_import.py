@@ -40,16 +40,16 @@ def compute_reference_md5(chromosomes: list[str], sequences: list[bytes]) -> byt
     Algorithm (cross-language byte-exact):
         for each (name, seq) in sorted(zip(chromosomes, sequences),
                                        key=name):
-            h.update(name_utf8 + b"\\n")
             h.update(seq)
-            h.update(b"\\n")
         return h.digest()
 
-    Sorting by name makes the MD5 invariant to FASTA record order.
-    Names are encoded UTF-8; sequences are passed through verbatim
-    (case-preserving). The trailing ``\\n`` separators are pure
-    framing and never appear inside sequence bytes (FASTA forbids
-    embedded newlines per record).
+    Sorting by name makes the MD5 invariant to FASTA record order;
+    sequence bytes are concatenated verbatim (case-preserving) without
+    any framing. This is the single canonical form used both by the
+    REF_DIFF_V2 auto-embed writer (``_reference_md5_for_run``) and by
+    the FASTA-import path's ``@md5`` stamping — unified in v1.1.0
+    (previously the FASTA-import / public-helper path used a
+    name-framed form that disagreed with the writer; see CHANGELOG).
 
     Returns
     -------
@@ -63,11 +63,8 @@ def compute_reference_md5(chromosomes: list[str], sequences: list[bytes]) -> byt
         )
     items = sorted(zip(chromosomes, sequences), key=lambda kv: kv[0])
     h = hashlib.md5()
-    for name, seq in items:
-        h.update(name.encode("utf-8"))
-        h.update(b"\n")
+    for _name, seq in items:
         h.update(seq)
-        h.update(b"\n")
     return h.digest()
 
 

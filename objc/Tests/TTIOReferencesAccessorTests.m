@@ -30,10 +30,11 @@ static NSString *makeTempPath(NSString *suffix)
     return [NSTemporaryDirectory() stringByAppendingPathComponent:base];
 }
 
-/** Compute the canonical content MD5 (sorted by chrom, name + 0x0A +
- *  seq + 0x0A) and return its 32-char lowercase-hex form. Mirrors the
- *  writer's md5 attribute exactly so cross-language byte-equal MD5 is
- *  exercised on the read path. */
+/** Compute the canonical content MD5 (sorted by chrom name, then
+ *  concatenated sequence bytes — unified seq-only form, v1.1.0+) and
+ *  return its 32-char lowercase-hex form. Mirrors the writer's md5
+ *  attribute exactly so cross-language byte-equal MD5 is exercised on
+ *  the read path. */
 static NSString *md5HexForChroms(NSDictionary<NSString *, NSData *> *seqs)
 {
     NSArray<NSString *> *names =

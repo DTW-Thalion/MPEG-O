@@ -69,7 +69,11 @@
         [NSException raise:NSInvalidArgumentException
                     format:@"chromosomes / sequences length mismatch"];
     }
-    // Build (name -> seq) index then sort names.
+    // Build (name -> seq) index then sort names. Sequences are
+    // concatenated verbatim (case-preserving, no framing) — matches
+    // the REF_DIFF_V2 auto-embed writer (`_TTIO_M93_ReferenceMD5ForRun`)
+    // byte-for-byte. Unified in v1.1.0 with the writer's stamp; the
+    // previous name+0x0A+seq+0x0A form is gone.
     NSMutableDictionary<NSString *, NSData *> *byName =
         [NSMutableDictionary dictionaryWithCapacity:chromosomes.count];
     for (NSUInteger i = 0; i < chromosomes.count; i++) {
@@ -81,13 +85,8 @@
     MD5_CTX ctx;
     MD5_Init(&ctx);
     for (NSString *name in sorted) {
-        NSData *utf8 = [name dataUsingEncoding:NSUTF8StringEncoding];
-        MD5_Update(&ctx, utf8.bytes, utf8.length);
-        unsigned char lf = 0x0A;
-        MD5_Update(&ctx, &lf, 1);
         NSData *seq = byName[name];
         MD5_Update(&ctx, seq.bytes, seq.length);
-        MD5_Update(&ctx, &lf, 1);
     }
     unsigned char digest[16];
     MD5_Final(digest, &ctx);

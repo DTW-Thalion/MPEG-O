@@ -25,9 +25,10 @@ NS_ASSUME_NONNULL_BEGIN
  * <code>/study/references/&lt;uri&gt;/</code> groups.</p>
  *
  * <p>Cross-language byte-equal MD5: sort by chromosome name, then
- * digest <code>utf8(name) + 0x0A + sequence_bytes + 0x0A</code> for
- * each entry. The trailing <code>0x0A</code> separators never appear
- * inside FASTA sequence bytes, so the digest is unambiguous.</p>
+ * concatenate per-chromosome <code>sequence_bytes</code> verbatim
+ * (case-preserving, no framing) into the digest. Unified in v1.1.0
+ * with the REF_DIFF_V2 auto-embed writer's stamp; the previous
+ * <code>name + 0x0A + seq + 0x0A</code> form is gone.</p>
  *
  * <p><strong>Cross-language equivalents:</strong><br/>
  * Python: <code>ttio.genomic.reference_import.ReferenceImport</code><br/>

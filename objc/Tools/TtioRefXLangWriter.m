@@ -27,13 +27,12 @@
 #include <openssl/md5.h>
 #include <stdio.h>
 
-/** Writer-side MD5 (sequence-concat-only, sorted by chromosome name).
- *  Mirrors `_TTIO_M93_ReferenceMD5ForRun` in TTIOSpectralDataset.m
- *  exactly — that's what the production writer stamps into @md5, and
- *  cross-language parity hinges on byte-equality of that attribute.
- *  Note: this is NOT the same as the public-API
- *  +[TTIOReferenceImport computeMd5WithChromosomes:sequences:] which
- *  uses the name+0x0A+seq+0x0A canonical form. */
+/** The single canonical @md5 form (unified in v1.1.0): sort by
+ *  chromosome name, then digest the concatenated sequence bytes
+ *  verbatim. Mirrors `_TTIO_M93_ReferenceMD5ForRun` in
+ *  TTIOSpectralDataset.m and matches
+ *  +[TTIOReferenceImport computeMd5WithChromosomes:sequences:]
+ *  byte-for-byte. */
 static NSString *xlangMd5HexForChroms(NSDictionary<NSString *, NSData *> *seqs)
 {
     NSArray<NSString *> *names =

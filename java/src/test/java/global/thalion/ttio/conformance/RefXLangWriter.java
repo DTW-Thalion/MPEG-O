@@ -74,14 +74,13 @@ public final class RefXLangWriter {
             throws Exception {
         List<String> sortedNames = new ArrayList<>(chromSeqs.keySet());
         Collections.sort(sortedNames);
-        // Production writer ({@code SpectralDataset.referenceMd5ForRun}
-        // / Python's {@code _reference_md5_for_run} / ObjC's
-        // {@code _TTIO_M93_ReferenceMD5ForRun}) uses the
-        // sequence-concat-only form sorted by chromosome name, NOT the
-        // public-API {@code ReferenceImport.computeMd5}'s name+0x0A
-        // +seq+0x0A canonical form. We mirror the writer exactly so a
-        // file produced by this helper is byte-equal to one produced
-        // by the production writer (when its native gate is satisfied).
+        // The single canonical @md5 form (unified in v1.1.0): sort by
+        // chromosome name, then digest the concatenated sequence bytes
+        // verbatim. Same form used by the production writer
+        // ({@code SpectralDataset.referenceMd5ForRun} / Python's
+        // {@code _reference_md5_for_run} / ObjC's
+        // {@code _TTIO_M93_ReferenceMD5ForRun}) and by the public-API
+        // {@code ReferenceImport.computeMd5} helper.
         MessageDigest md = MessageDigest.getInstance("MD5");
         for (String n : sortedNames) md.update(chromSeqs.get(n));
         byte[] md5 = md.digest();
