@@ -6,6 +6,13 @@ shared_obj/
 *.so
 *.so.*
 
+# Native libraries bundled by the release workflow into
+# tio-browser/src/main/resources/native/<platform>/. CI stages these
+# at build time; we don't commit binaries.
+*.dylib
+*.dll
+tio-browser/src/main/resources/native/
+
 # autogsdoc output
 objc/Documentation/html/
 objc/Documentation/libTTIO/
