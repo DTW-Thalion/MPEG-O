@@ -11,15 +11,25 @@ invariant ``ReferenceImport.read_from_group`` /
 ``ReferenceImport.readFromGroup`` / ``-[TTIOReferenceImport
 readFromGroup:]`` were designed to guarantee.
 
-All three writer helpers use the same direct-graft pattern that the
-existing per-language reference tests use (Python's ``_seed_references``
-in ``test_references_accessor.py``, Java's
-``conformance.RefXLangWriter``, ObjC's ``TtioRefXLangWriter``). This
-sidesteps the asymmetric writer-side embed gates (Python: codec
-override OR libttio_rans; ObjC: libttio_rans unconditional; Java:
-production path requires native FQZCOMP for non-empty quality streams)
-while still exercising the same on-disk shape that fires when the
-production gates are satisfied.
+Phase 0 Task 0.12 (tio-browser): all three writer helpers now drive
+**production writer entry points** (no direct-graft):
+
+* Python — ``SpectralDataset.write_minimal`` then reopen
+  ``writable=True`` and call ``ReferenceImport.write_to_dataset``
+  (the public API added in Task 0.10).
+* Java — ``SpectralDataset.create`` (returns an open writable dataset)
+  and call ``ReferenceImport.writeToDataset`` (Task 0.10c parity).
+* ObjC — ``+[TTIOSpectralDataset writeMinimalToPath:...:genomicRuns:...]``
+  with one empty-read ``TTIOWrittenGenomicRun`` carrying
+  ``embedReference=YES`` + ``referenceChromSeqs=...``. Task 0.11
+  softened the embed gate so this no longer needs ``libttio_rans``;
+  this exercises the canonical writer path
+  (``_TTIO_M93_EmbedReferences``) end-to-end.
+
+That makes this the *first* place where all three production writer
+paths are end-to-end byte-equal-verified against each other (and
+each other's readers). The earlier direct-graft helpers proved the
+storage-provider layer agreed; this proves the writer layer does too.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -31,14 +41,10 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import h5py
-import numpy as np
 import pytest
 
 from ttio import SpectralDataset
-from ttio.spectral_dataset import _embed_references_for_runs
-from ttio.providers.hdf5 import _Group as _H5Group
-from ttio.written_genomic_run import WrittenGenomicRun
+from ttio.genomic.reference_import import ReferenceImport
 
 # ─── Paths to other-language artefacts ───────────────────────────────
 
@@ -143,39 +149,23 @@ def _objc_env() -> dict:
 # ─── Writers ────────────────────────────────────────────────────────
 
 def _write_python(out: Path) -> None:
-    """Direct-graft via ``_embed_references_for_runs`` — the same helper
-    the production writer uses when its gate fires."""
-    from ttio.enums import Compression
-
+    """Production-writer path: ``SpectralDataset.write_minimal`` to
+    create a runs-empty .tio, then reopen ``writable=True`` and call
+    the public ``ReferenceImport.write_to_dataset`` API (added in
+    Task 0.10). This is the same pattern
+    ``test_reference_import_write_round_trip.py`` exercises and is
+    the canonical Python embed path now that the public writer API
+    exists."""
     SpectralDataset.write_minimal(
         out, title="xlang", isa_investigation_id="XLANG001", runs={},
     )
-
-    run = WrittenGenomicRun(
-        acquisition_mode=7,  # AcquisitionMode.GENOMIC_WGS
-        reference_uri=URI,
-        platform="ILLUMINA",
-        sample_name="REF_TEST",
-        positions=np.zeros(0, dtype=np.int64),
-        mapping_qualities=np.zeros(0, dtype=np.uint8),
-        flags=np.zeros(0, dtype=np.uint32),
-        sequences=np.zeros(0, dtype=np.uint8),
-        qualities=np.zeros(0, dtype=np.uint8),
-        offsets=np.zeros(0, dtype=np.uint64),
-        lengths=np.zeros(0, dtype=np.uint32),
-        cigars=[],
-        read_names=[],
-        mate_chromosomes=[],
-        mate_positions=np.zeros(0, dtype=np.int64),
-        template_lengths=np.zeros(0, dtype=np.int32),
-        chromosomes=[],
-        signal_codec_overrides={"sequences": Compression.REF_DIFF_V2},
-        reference_chrom_seqs=KNOWN_REFS,
-        embed_reference=True,
+    ri = ReferenceImport(
+        uri=URI,
+        chromosomes=list(KNOWN_REFS.keys()),
+        sequences=list(KNOWN_REFS.values()),
     )
-    with h5py.File(str(out), "r+") as f:
-        study = f["study"]
-        _embed_references_for_runs(_H5Group(study), {"_seed": run})
+    with SpectralDataset.open(out, writable=True) as ds:
+        ri.write_to_dataset(ds)
 
 
 def _write_java(out: Path) -> None:
