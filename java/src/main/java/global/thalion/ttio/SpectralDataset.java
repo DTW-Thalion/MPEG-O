@@ -2062,6 +2062,28 @@ public class SpectralDataset implements
                         pool.addString(quants.get(row).normalizationMethod() != null
                                 ? quants.get(row).normalizationMethod() : "")
                 });
+        // Optional sidecar `quantification_units` JSON-array attribute on
+        // the study group: one string per row, parallel to the compound
+        // dataset above. Emitted only when at least one quantification
+        // carries a non-empty unit; absent on legacy files (units default
+        // to ""). JSON is used here rather than a VL-string dataset to
+        // keep the reader path single-attribute-read (Hdf5Group doesn't
+        // expose a string-dataset helper today).
+        boolean anyUnit = false;
+        for (Quantification q : quants) {
+            if (q.unit() != null && !q.unit().isEmpty()) { anyUnit = true; break; }
+        }
+        if (anyUnit) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < quants.size(); i++) {
+                if (i > 0) sb.append(",");
+                String u = quants.get(i).unit();
+                sb.append("\"").append((u == null ? "" : u)
+                        .replace("\\", "\\\\").replace("\"", "\\\"")).append("\"");
+            }
+            sb.append("]");
+            study.setStringAttribute("quantification_units", sb.toString());
+        }
         // quantifications_json mirror retired (see writeIdentifications).
     }
 
@@ -2070,12 +2092,18 @@ public class SpectralDataset implements
         if (study.hasChild("quantifications")) {
             List<Object[]> rows = Hdf5CompoundIO.readCompoundFull(
                     study, "quantifications", Hdf5CompoundIO.quantificationSchema());
+            List<String> units = study.hasAttribute("quantification_units")
+                    ? MiniJson.parseArrayOfStrings(
+                          study.readStringAttribute("quantification_units"))
+                    : null;
             List<Quantification> out = new ArrayList<>(rows.size());
-            for (Object[] r : rows) {
+            for (int i = 0; i < rows.size(); i++) {
+                Object[] r = rows.get(i);
                 String norm = (String) r[3];
                 if (norm != null && norm.isEmpty()) norm = null;
+                String unit = (units != null && i < units.size()) ? units.get(i) : "";
                 out.add(new Quantification(
-                        (String) r[0], (String) r[1], (Double) r[2], norm));
+                        (String) r[0], (String) r[1], (Double) r[2], norm, unit));
             }
             return out;
         }
@@ -2231,7 +2259,8 @@ public class SpectralDataset implements
                     ? MiniJson.getString(r, "normalization_method", null)
                     : null;
             if (norm != null && norm.isEmpty()) norm = null;
-            out.add(new Quantification(chem, sample, abund, norm));
+            String unit = MiniJson.getString(r, "unit", "");
+            out.add(new Quantification(chem, sample, abund, norm, unit));
         }
         return out;
     }

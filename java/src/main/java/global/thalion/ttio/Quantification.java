@@ -19,11 +19,31 @@ package global.thalion.ttio;
  * @param abundance           Measured abundance.
  * @param normalizationMethod Normalization method; may be {@code null}
  *                            or empty when unnormalized.
- *
+ * @param unit                Free-form unit label for {@link #abundance()}
+ *                            (e.g. {@code "ng/mL"}, {@code "peak-area"},
+ *                            {@code "ion-count"}, {@code "normalized"}).
+ *                            Empty when not specified — readers should
+ *                            interpret an empty unit as "implied by
+ *                            {@code normalizationMethod}".
  */
 public record Quantification(
     String chemicalEntity,
     String sampleRef,
     double abundance,
-    String normalizationMethod
-) {}
+    String normalizationMethod,
+    String unit
+) {
+    public Quantification {
+        if (unit == null) unit = "";
+    }
+
+    /**
+     * Pre-unit constructor; defaults {@code unit} to {@code ""}. Retained
+     * so that callers compiled against the 4-component record continue
+     * to work without source changes.
+     */
+    public Quantification(String chemicalEntity, String sampleRef,
+                          double abundance, String normalizationMethod) {
+        this(chemicalEntity, sampleRef, abundance, normalizationMethod, "");
+    }
+}

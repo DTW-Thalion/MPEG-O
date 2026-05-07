@@ -19,6 +19,11 @@ class Quantification:
     normalization_method : str, default ""
         Normalization method. Empty string represents an unnormalized
         abundance.
+    unit : str, default ""
+        Free-form unit label for ``abundance`` (e.g. ``"ng/mL"``,
+        ``"peak-area"``, ``"ion-count"``, ``"normalized"``). Empty when
+        not specified — readers should interpret an empty unit as
+        "implied by ``normalization_method``".
 
     Notes
     -----
@@ -34,3 +39,4 @@ class Quantification:
     sample_ref: str
     abundance: float
     normalization_method: str = ""
+    unit: str = ""

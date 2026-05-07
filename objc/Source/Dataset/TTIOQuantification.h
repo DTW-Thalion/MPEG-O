@@ -37,6 +37,27 @@
  *  reported. */
 @property (readonly, copy) NSString *normalizationMethod;
 
+/** Free-form unit label for <code>abundance</code> (e.g.
+ *  <code>@"ng/mL"</code>, <code>@"peak-area"</code>,
+ *  <code>@"ion-count"</code>, <code>@"normalized"</code>). Empty
+ *  string when not specified — readers should interpret an empty
+ *  unit as "implied by <code>normalizationMethod</code>".
+ *
+ *  <p>Cross-language equivalents: Java <code>Quantification.unit()</code>,
+ *  Python <code>Quantification.unit</code>.</p>
+ */
+@property (readonly, copy) NSString *unit;
+
+/**
+ * Pre-unit initialiser; defaults <code>unit</code> to empty string.
+ * Retained for source-compatibility with callers compiled against
+ * the 4-property API.
+ */
+- (instancetype)initWithChemicalEntity:(NSString *)entity
+                             sampleRef:(NSString *)sampleRef
+                             abundance:(double)abundance
+                   normalizationMethod:(NSString *)method;
+
 /**
  * Designated initialiser.
  *
@@ -45,12 +66,15 @@
  * @param abundance Abundance value.
  * @param method    Optional normalisation method; pass
  *                  <code>nil</code> for raw values.
+ * @param unit      Free-form unit label; pass empty string when not
+ *                  specified.
  * @return An initialised quantification.
  */
 - (instancetype)initWithChemicalEntity:(NSString *)entity
                              sampleRef:(NSString *)sampleRef
                              abundance:(double)abundance
-                   normalizationMethod:(NSString *)method;
+                   normalizationMethod:(NSString *)method
+                                  unit:(NSString *)unit;
 
 /** @return Plist-friendly dictionary representation. */
 - (NSDictionary *)asPlist;
