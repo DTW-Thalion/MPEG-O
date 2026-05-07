@@ -3,7 +3,7 @@ package global.thalion.ttio.browser.model;
 import global.thalion.ttio.SpectralDataset;
 import javafx.concurrent.Task;
 
-public class DatasetOpenTask extends Task<OpenDataset> {
+public final class DatasetOpenTask extends Task<OpenDataset> {
 
     private final String path;
     private final boolean readOnly;

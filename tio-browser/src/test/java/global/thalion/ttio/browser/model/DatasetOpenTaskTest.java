@@ -37,17 +37,15 @@ class DatasetOpenTaskTest {
         exec.submit(task);
         exec.shutdown();
         assertTrue(exec.awaitTermination(10, TimeUnit.SECONDS));
-        OpenDataset result = task.get();
-
-        assertNotNull(result);
-        assertEquals(FIXTURE.toString(), result.path());
-        assertTrue(result.readOnly());
-        assertNotNull(result.dataset());
-        assertEquals(1, result.msRunCount(), "minimal_ms.tio has 1 MS run");
-        assertEquals(0, result.genomicRunCount());
-        assertFalse(result.isEncrypted());
-
-        result.dataset().close();
+        try (OpenDataset result = task.get()) {
+            assertNotNull(result);
+            assertEquals(FIXTURE.toString(), result.path());
+            assertTrue(result.readOnly());
+            assertNotNull(result.dataset());
+            assertEquals(1, result.msRunCount(), "minimal_ms.tio has 1 MS run");
+            assertEquals(0, result.genomicRunCount());
+            assertFalse(result.isEncrypted());
+        }
     }
 
     @Test
@@ -59,11 +57,9 @@ class DatasetOpenTaskTest {
         exec.submit(task);
         exec.shutdown();
         assertTrue(exec.awaitTermination(10, TimeUnit.SECONDS));
-        OpenDataset result = task.get();
-
-        assertTrue(result.isEncrypted());
-        assertFalse(result.encryptionAlgorithm().isEmpty());
-
-        result.dataset().close();
+        try (OpenDataset result = task.get()) {
+            assertTrue(result.isEncrypted());
+            assertFalse(result.encryptionAlgorithm().isEmpty());
+        }
     }
 }

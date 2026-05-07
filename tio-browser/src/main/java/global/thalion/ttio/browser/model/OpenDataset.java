@@ -4,7 +4,7 @@ import global.thalion.ttio.SpectralDataset;
 
 import java.util.Objects;
 
-public final class OpenDataset {
+public final class OpenDataset implements AutoCloseable {
 
     private final String path;
     private final boolean readOnly;
