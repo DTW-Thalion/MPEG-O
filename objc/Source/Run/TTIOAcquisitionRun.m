@@ -901,7 +901,7 @@
     }
 
     if ([_spectrumClassName isEqualToString:@"TTIOMassSpectrum"]) {
-        return [[TTIOMassSpectrum alloc]
+        TTIOMassSpectrum *ms = [[TTIOMassSpectrum alloc]
                 initWithMzArray:channels[@"mz"]
                  intensityArray:channels[@"intensity"]
                         msLevel:[_spectrumIndex msLevelAt:index]
@@ -912,6 +912,8 @@
                     precursorMz:[_spectrumIndex precursorMzAt:index]
                 precursorCharge:[_spectrumIndex precursorChargeAt:index]
                           error:error];
+        if (ms) ms.isCentroided = [_spectrumIndex centroidedAt:index];
+        return ms;
     }
 
     if ([_spectrumClassName isEqualToString:@"TTIONMRSpectrum"]) {

@@ -130,6 +130,37 @@
           isolationLowerOffsets:(NSData *)isolationLowerOffsets
           isolationUpperOffsets:(NSData *)isolationUpperOffsets;
 
+/**
+ * Full initialiser including the optional <code>centroideds</code>
+ * column. <code>centroideds</code> may be <code>nil</code> (legacy
+ * file, no per-spectrum centroided info) or an <code>int32_t[count]</code>
+ * with <code>0 = profile, 1 = centroided</code>.
+ */
+- (instancetype)initWithOffsets:(NSData *)offsets
+                        lengths:(NSData *)lengths
+                 retentionTimes:(NSData *)retentionTimes
+                       msLevels:(NSData *)msLevels
+                     polarities:(NSData *)polarities
+                   precursorMzs:(NSData *)precursorMzs
+               precursorCharges:(NSData *)precursorCharges
+            basePeakIntensities:(NSData *)basePeakIntensities
+              activationMethods:(NSData *)activationMethods
+             isolationTargetMzs:(NSData *)isolationTargetMzs
+          isolationLowerOffsets:(NSData *)isolationLowerOffsets
+          isolationUpperOffsets:(NSData *)isolationUpperOffsets
+                     centroideds:(NSData *)centroideds;
+
+/**
+ * @return Whether spectrum <code>i</code> is centroided (mzML
+ * MS:1000127). Returns <code>NO</code> when the centroideds column is
+ * absent — callers needing to distinguish "unknown" from "profile"
+ * should also check <code>-hasCentroided</code>.
+ */
+- (BOOL)centroidedAt:(NSUInteger)index;
+
+/** @return YES when the centroideds column is present. */
+@property (readonly) BOOL hasCentroided;
+
 #pragma mark - Storage round-trip
 
 /**
