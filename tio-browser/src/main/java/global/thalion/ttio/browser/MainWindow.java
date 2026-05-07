@@ -1,0 +1,256 @@
+package global.thalion.ttio.browser;
+
+import global.thalion.ttio.browser.model.DatasetOpenTask;
+import global.thalion.ttio.browser.model.OpenDataset;
+import javafx.geometry.Orientation;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.FileChooser;
+import javafx.stage.Stage;
+
+import java.io.File;
+
+public class MainWindow {
+
+    private Stage stage;
+    private BorderPane root;
+    private Label statusBarLabel;
+    private SplitPane mainSplit;
+    private StackPane treeContainer;
+    private StackPane detailContainer;
+
+    private MenuItem openItem, closeItem, saveAsItem, exitItem;
+    private MenuItem importItem, exportItem, downloadItem, uploadItem, diagnosticsItem;
+
+    private OpenDataset currentDataset;
+
+    public void show(Stage primaryStage) {
+        this.stage = primaryStage;
+        this.root = new BorderPane();
+
+        root.setTop(buildTopBars());
+        root.setCenter(buildSplit());
+        root.setBottom(buildStatusBar());
+
+        Scene scene = new Scene(root, 1280, 800);
+        scene.getStylesheets().add(
+            getClass().getResource("/css/tio-browser.css").toExternalForm());
+        primaryStage.setScene(scene);
+        scene.setOnDragOver(e -> {
+            if (e.getDragboard().hasFiles()) {
+                e.acceptTransferModes(javafx.scene.input.TransferMode.COPY);
+            }
+        });
+        scene.setOnDragDropped(e -> {
+            boolean success = false;
+            if (e.getDragboard().hasFiles()) {
+                java.io.File f = e.getDragboard().getFiles().get(0);
+                if (f.getName().endsWith(".tio")) {
+                    loadDataset(f.toString(), true);
+                    success = true;
+                } else {
+                    // Phase 8 hooks the sniffer here to pre-select an importer.
+                    Alert info = new Alert(Alert.AlertType.INFORMATION,
+                        "Importer wizard pre-selection wired in Phase 8.\n"
+                        + "Dropped: " + f.toString(), ButtonType.OK);
+                    info.showAndWait();
+                    success = true;
+                }
+            }
+            e.setDropCompleted(success);
+            e.consume();
+        });
+        primaryStage.setTitle("tio-browser");
+        primaryStage.show();
+        wireFileActions();
+    }
+
+    private VBox buildTopBars() {
+        VBox box = new VBox(buildMenuBar(), buildToolBar());
+        return box;
+    }
+
+    private MenuBar buildMenuBar() {
+        Menu fileMenu = new Menu("File");
+        openItem = new MenuItem("Open…");
+        closeItem = new MenuItem("Close");
+        saveAsItem = new MenuItem("Save As…");
+        exitItem = new MenuItem("Exit");
+        fileMenu.getItems().addAll(openItem, closeItem, new SeparatorMenuItem(),
+            saveAsItem, new SeparatorMenuItem(), exitItem);
+
+        Menu importMenu = new Menu("Import");
+        importItem = new MenuItem("Import…");
+        importMenu.getItems().add(importItem);
+
+        Menu exportMenu = new Menu("Export");
+        exportItem = new MenuItem("Export…");
+        exportMenu.getItems().add(exportItem);
+
+        Menu transportMenu = new Menu("Transport");
+        downloadItem = new MenuItem("Download from server…");
+        uploadItem = new MenuItem("Upload to server…");
+        transportMenu.getItems().addAll(downloadItem, uploadItem);
+
+        Menu toolsMenu = new Menu("Tools");
+        diagnosticsItem = new MenuItem("Diagnostics…");
+        toolsMenu.getItems().add(diagnosticsItem);
+
+        Menu helpMenu = new Menu("Help");
+        helpMenu.getItems().add(new MenuItem("About"));
+
+        return new MenuBar(fileMenu, importMenu, exportMenu, transportMenu,
+                          toolsMenu, helpMenu);
+    }
+
+    private ToolBar buildToolBar() {
+        Button openBtn = new Button("Open");
+        openBtn.setOnAction(e -> openItem.fire());
+        Button saveAsBtn = new Button("Save As");
+        saveAsBtn.setOnAction(e -> saveAsItem.fire());
+        Button importBtn = new Button("Import…");
+        importBtn.setOnAction(e -> importItem.fire());
+        Button exportBtn = new Button("Export…");
+        exportBtn.setOnAction(e -> exportItem.fire());
+        Button downloadBtn = new Button("Download…");
+        downloadBtn.setOnAction(e -> downloadItem.fire());
+        Button uploadBtn = new Button("Upload…");
+        uploadBtn.setOnAction(e -> uploadItem.fire());
+        Button diagnosticsBtn = new Button("Diagnostics");
+        diagnosticsBtn.setOnAction(e -> diagnosticsItem.fire());
+        return new ToolBar(openBtn, saveAsBtn, new Separator(), importBtn,
+            exportBtn, new Separator(), downloadBtn, uploadBtn,
+            new Separator(), diagnosticsBtn);
+    }
+
+    private SplitPane buildSplit() {
+        mainSplit = new SplitPane();
+        mainSplit.setOrientation(Orientation.HORIZONTAL);
+        treeContainer = new StackPane(new Label("(no dataset open)"));
+        treeContainer.setMinWidth(240);
+        detailContainer = new StackPane(new Label("(open a .tio file to begin)"));
+        mainSplit.getItems().addAll(treeContainer, detailContainer);
+        mainSplit.setDividerPositions(0.30);
+        return mainSplit;
+    }
+
+    private HBox buildStatusBar() {
+        statusBarLabel = new Label("(no file)");
+        HBox bar = new HBox(statusBarLabel);
+        bar.getStyleClass().add("status-bar");
+        bar.setStyle("-fx-padding: 4 8 4 8; -fx-border-color: #888;"
+                   + " -fx-border-width: 1 0 0 0;");
+        return bar;
+    }
+
+    // Test/integration accessors -- package-private intentionally
+    BorderPane root() { return root; }
+    Label statusLabel() { return statusBarLabel; }
+    StackPane treeContainer() { return treeContainer; }
+    StackPane detailContainer() { return detailContainer; }
+    MenuItem openMenuItem() { return openItem; }
+    MenuItem closeMenuItem() { return closeItem; }
+    MenuItem exitMenuItem() { return exitItem; }
+    MenuItem diagnosticsMenuItem() { return diagnosticsItem; }
+    Stage stage() { return stage; }
+
+    private void wireFileActions() {
+        openItem.setOnAction(e -> openFileViaChooser());
+        closeItem.setOnAction(e -> closeCurrentDataset());
+        exitItem.setOnAction(e -> {
+            closeCurrentDataset();
+            javafx.application.Platform.exit();
+        });
+        saveAsItem.setOnAction(e -> saveAsViaChooser());
+    }
+
+    private void saveAsViaChooser() {
+        if (currentDataset == null) return;
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Save As");
+        chooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("TTI-O dataset", "*.tio"));
+        File target = chooser.showSaveDialog(stage);
+        if (target == null) return;
+        try {
+            java.nio.file.Files.copy(
+                java.nio.file.Paths.get(currentDataset.path()),
+                target.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // Switch open to the new path, read-write
+            String oldPath = currentDataset.path();
+            closeCurrentDataset();
+            loadDataset(target.toString(), /* readOnly = */ false);
+        } catch (java.io.IOException ex) {
+            Alert err = new Alert(Alert.AlertType.ERROR,
+                "Save As failed: " + ex.getMessage(), ButtonType.OK);
+            err.showAndWait();
+        }
+    }
+
+    private void openFileViaChooser() {
+        if (currentDataset != null) {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION,
+                "Close currently-open " + currentDataset.path() + "?",
+                ButtonType.OK, ButtonType.CANCEL);
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                return;
+            }
+            closeCurrentDataset();
+        }
+        FileChooser chooser = new FileChooser();
+        chooser.setTitle("Open .tio file");
+        chooser.getExtensionFilters().add(
+            new FileChooser.ExtensionFilter("TTI-O dataset", "*.tio"));
+        File picked = chooser.showOpenDialog(stage);
+        if (picked == null) return;
+        loadDataset(picked.toString(), /* readOnly = */ true);
+    }
+
+    public void loadDataset(String path, boolean readOnly) {
+        DatasetOpenTask task = new DatasetOpenTask(path, readOnly);
+        statusBarLabel.setText("Opening " + path + "…");
+        task.setOnSucceeded(ev -> {
+            currentDataset = task.getValue();
+            updateStatusBarFromDataset();
+            // Tree population wired in Phase 2; detail pane in Phase 3.
+        });
+        task.setOnFailed(ev -> {
+            Throwable t = task.getException();
+            statusBarLabel.setText("(open failed)");
+            Alert err = new Alert(Alert.AlertType.ERROR,
+                "Could not open " + path + ":\n\n" + t.getMessage(),
+                ButtonType.OK);
+            err.setHeaderText("Open failed");
+            err.showAndWait();
+        });
+        Thread th = new Thread(task, "open-" + path);
+        th.setDaemon(true);
+        th.start();
+    }
+
+    private void updateStatusBarFromDataset() {
+        OpenDataset d = currentDataset;
+        if (d == null) { statusBarLabel.setText("(no file)"); return; }
+        statusBarLabel.setText(String.format(
+            "%s · v%s · MS=%d · Genomic=%d · Refs=%d %s",
+            d.path(), d.formatVersion(), d.msRunCount(), d.genomicRunCount(),
+            d.referenceCount(),
+            d.isEncrypted() ? "· 🔒 ENCRYPTED" : "· 🔓"));
+    }
+
+    private void closeCurrentDataset() {
+        if (currentDataset != null) {
+            currentDataset.close();
+            currentDataset = null;
+        }
+        updateStatusBarFromDataset();
+    }
+
+    public OpenDataset currentDataset() { return currentDataset; }
+
+    public void dispose() {
+        if (stage != null) stage.close();
+    }
+}
