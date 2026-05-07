@@ -3563,6 +3563,26 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     return YES;
 }
 
+/**
+ * Decrypt every MS run's intensity channel into an in-memory overlay.
+ *
+ * <b>Read-only / asymmetric</b>: the on-disk file is NOT modified,
+ * the root <code>@encrypted</code> attribute is left in place, and
+ * <code>-isEncrypted</code> continues to return YES on this instance
+ * and on any reopen. This is the asymmetric counterpart to
+ * <code>-encryptWithKey:level:error:</code> (which IS persistent +
+ * flag-flipping) by design: in-memory rehydration lets a process
+ * read encrypted data without rewriting the file.
+ *
+ * To fully reverse encryption on disk and clear the
+ * <code>@encrypted</code> attribute, use the class method
+ * <code>+decryptInPlaceAtPath:withKey:error:</code> after closing
+ * any open instance.
+ *
+ * <p>Cross-language equivalents: Java
+ * <code>SpectralDataset.decryptWithKey(byte[])</code> (same), Python
+ * <code>SpectralDataset.decrypt_with_key</code> (same).</p>
+ */
 - (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error
 {
     if (!_filePath) {

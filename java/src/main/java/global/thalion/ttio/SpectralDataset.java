@@ -2298,6 +2298,26 @@ public class SpectralDataset implements
         this.encryptedAlgorithm = "aes-256-gcm";
     }
 
+    /**
+     * Decrypt every MS run's intensity channel into an in-memory
+     * overlay. <b>Read-only</b>: the on-disk file is NOT modified, the
+     * root {@code @encrypted} attribute is left in place, and
+     * {@link #isEncrypted()} continues to return {@code true} on this
+     * instance and on any reopen.
+     *
+     * <p>This is the <b>asymmetric</b> counterpart to
+     * {@link #encryptWithKey(byte[], global.thalion.ttio.Enums.EncryptionLevel)}
+     * (which IS persistent + flag-flipping) by design: in-memory rehydration
+     * lets a process read encrypted data without rewriting the file. To
+     * fully reverse encryption on disk and clear the {@code @encrypted}
+     * attribute, use the static {@link #decryptInPlace(String, byte[])}
+     * — close any open instance first.
+     *
+     * <p><b>Cross-language equivalents:</b> Python
+     * {@code SpectralDataset.decrypt_with_key} (same in-memory-only
+     * semantics; returns {@code dict[str, bytes]}), Objective-C
+     * {@code -[TTIOSpectralDataset decryptWithKey:error:]} (same).
+     */
     @Override
     public void decryptWithKey(byte[] key) throws Exception {
         for (var run : msRuns.values()) run.decryptWithKey(key);

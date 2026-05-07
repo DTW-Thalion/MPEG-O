@@ -57,6 +57,10 @@ public class AcquisitionRun implements
     // NMR-specific
     private final String nucleusType;
     private final double spectrometerFrequencyMHz;
+    /** Optional solvent label (e.g. "CDCl3", "DMSO-d6", "D2O"). Empty
+     *  string when not specified or when the run is not NMR. Stored as
+     *  the {@code @solvent} string attribute on the run group. */
+    private final String solvent;
 
     // omics modality this run carries. Storage attribute
     // {@code @modality} (UTF-8 string). Defaults to
@@ -92,10 +96,11 @@ public class AcquisitionRun implements
                           String nucleusType, double spectrometerFrequencyMHz) {
         this(name, acquisitionMode, spectrumIndex, instrumentConfig, channels,
                 chromatograms, provenanceRecords, nucleusType,
-                spectrometerFrequencyMHz, "mass_spectrometry");
+                spectrometerFrequencyMHz, "mass_spectrometry", "");
     }
 
-    /** full constructor including {@code modality}. */
+    /** Constructor with {@code modality} (pre-solvent overload retained
+     *  for backward compatibility; defaults solvent to empty). */
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
                           InstrumentConfig instrumentConfig,
@@ -104,6 +109,20 @@ public class AcquisitionRun implements
                           List<ProvenanceRecord> provenanceRecords,
                           String nucleusType, double spectrometerFrequencyMHz,
                           String modality) {
+        this(name, acquisitionMode, spectrumIndex, instrumentConfig, channels,
+                chromatograms, provenanceRecords, nucleusType,
+                spectrometerFrequencyMHz, modality, "");
+    }
+
+    /** Full constructor including {@code modality} and NMR {@code solvent}. */
+    public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
+                          SpectrumIndex spectrumIndex,
+                          InstrumentConfig instrumentConfig,
+                          Map<String, double[]> channels,
+                          List<Chromatogram> chromatograms,
+                          List<ProvenanceRecord> provenanceRecords,
+                          String nucleusType, double spectrometerFrequencyMHz,
+                          String modality, String solvent) {
         this.name = name;
         this.acquisitionMode = acquisitionMode;
         this.spectrumIndex = spectrumIndex;
@@ -115,6 +134,7 @@ public class AcquisitionRun implements
         this.spectrometerFrequencyMHz = spectrometerFrequencyMHz;
         this.modality = (modality == null || modality.isEmpty())
                 ? "mass_spectrometry" : modality;
+        this.solvent = solvent != null ? solvent : "";
     }
 
     public String name() { return name; }
@@ -128,6 +148,13 @@ public class AcquisitionRun implements
     public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
     /** omics modality (e.g. {@code "mass_spectrometry"}). */
     public String modality() { return modality; }
+    /** Optional NMR solvent label (e.g. "CDCl3"). Empty when not
+     *  specified or when the run is not NMR.
+     *
+     *  <p><b>Cross-language equivalents:</b> Python
+     *  {@code AcquisitionRun.solvent}, Objective-C
+     *  {@code -[TTIOAcquisitionRun solvent]}.</p> */
+    public String solvent() { return solvent; }
 
     public int spectrumCount() { return spectrumIndex.count(); }
 
@@ -193,6 +220,23 @@ public class AcquisitionRun implements
 
     @Override
     public int count() { return spectrumIndex.count(); }
+
+    /**
+     * Materialize all spectra in this run into a list. Convenience over the
+     * {@link #count()} + {@link #objectAtIndex(int)} pair for stream-based
+     * consumers; the returned list is unmodifiable.
+     *
+     * <p><b>Cross-language equivalents:</b> Python {@code AcquisitionRun.spectra()}
+     * (also iterable via {@code __iter__}), Objective-C
+     * {@code -[TTIOAcquisitionRun spectra]}.</p>
+     *
+     * @return immutable view of the run's spectra in index order
+     */
+    public List<Spectrum> spectra() {
+        List<Spectrum> out = new ArrayList<>(count());
+        for (int i = 0; i < count(); i++) out.add(objectAtIndex(i));
+        return Collections.unmodifiableList(out);
+    }
 
     // ---- Run conformance ----
 
@@ -336,6 +380,9 @@ public class AcquisitionRun implements
             if (nucleusType != null) {
                 runGroup.setAttribute("nucleus_type", nucleusType);
             }
+            if (solvent != null && !solvent.isEmpty()) {
+                runGroup.setAttribute("solvent", solvent);
+            }
             if (spectrometerFrequencyMHz > 0) {
                 try (StorageDataset ds = runGroup.createDataset(
                         "_spectrometer_freq_mhz", Precision.FLOAT64, 1, 0,
@@ -376,6 +423,9 @@ public class AcquisitionRun implements
             String nucleusType = runGroup.hasAttribute("nucleus_type")
                     ? (String) runGroup.getAttribute("nucleus_type") : null;
 
+            String solvent = runGroup.hasAttribute("solvent")
+                    ? (String) runGroup.getAttribute("solvent") : "";
+
             // optional @modality attribute. Pre-v0.11 runs
             // lack it and read back as mass-spec.
             String modality = "mass_spectrometry";
@@ -398,7 +448,7 @@ public class AcquisitionRun implements
             List<ProvenanceRecord> provenance = readProvenance(runGroup);
 
             return new AcquisitionRun(runName, mode, index, config, channels,
-                    chroms, provenance, nucleusType, freqMHz, modality);
+                    chroms, provenance, nucleusType, freqMHz, modality, solvent);
         }
     }
 

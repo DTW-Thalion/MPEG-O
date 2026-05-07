@@ -206,7 +206,13 @@ public final class Enums {
         /** Whole-genome sequencing.. */
         GENOMIC_WGS,
         /** Whole-exome sequencing.. */
-        GENOMIC_WES
+        GENOMIC_WES,
+        /** Raman spectroscopy. */
+        RAMAN,
+        /** Infrared spectroscopy. */
+        IR,
+        /** UV-Visible spectroscopy. */
+        UV_VIS
     }
 
     /** Chromatogram kind. */
