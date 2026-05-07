@@ -18,6 +18,15 @@ codec C kernels (`ref_diff_v2`, `mate_info_v2`, `name_tok_v2`,
   `java/src/main/java/global/thalion/ttio/codecs/TtioRansNative.java`).
 - **Objective-C** via direct `__has_include("ttio_rans.h")` linkage
   in `objc/Source/Codecs/TTIOFqzcompNx16Z.m`.
+- **`tio-browser` (JavaFX desktop GUI)** via the bundled-resource
+  loader — the cross-platform shaded jar embeds `libttio_rans_jni`
+  for Linux x86_64, macOS arm64, and Windows x86_64 under
+  `/native/<platform>/...` and extracts it to a temp file at first
+  call. End users get the genomic Read Inspector with no toolchain
+  setup. Unbundled platforms (Intel Mac, linux-aarch64, win-aarch64)
+  hit graceful degradation — the rest of the app keeps working. See
+  [`tio-browser/README.md`](../tio-browser/README.md) for the
+  install matrix.
 
 The library is **not** required for default operation — V1 streams
 are produced and consumed by every language binding without it. A
