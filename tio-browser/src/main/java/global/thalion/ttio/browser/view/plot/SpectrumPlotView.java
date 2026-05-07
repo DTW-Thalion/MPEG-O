@@ -77,6 +77,14 @@ public class SpectrumPlotView {
             return;
         }
         configureAxesFor(spec);
+        // Default stem mode for centroided MS spectra (mzML MS:1000127)
+        // and line mode for everything else. The toggle is still
+        // available for override on the next render.
+        if (spec instanceof MassSpectrum ms) {
+            stemToggle.setSelected(ms.isCentroided());
+        } else {
+            stemToggle.setSelected(false);
+        }
         currentX = xValuesFor(spec);
         currentY = yValuesFor(spec);
         rerender();
