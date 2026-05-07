@@ -163,6 +163,16 @@ public class MSImage {
                     Compression.ZLIB, 6)) {
                 ds.writeAll(intensityCube);
             }
+
+            if (mzAxis.length > 0) {
+                long[] axisShape  = { spectralPoints };
+                long[] axisChunks = { spectralPoints };
+                try (StorageDataset axisDs = ic.createDatasetND("mz_axis",
+                        Precision.FLOAT64, axisShape, axisChunks,
+                        Compression.ZLIB, 6)) {
+                    axisDs.writeAll(mzAxis);
+                }
+            }
         }
     }
 
