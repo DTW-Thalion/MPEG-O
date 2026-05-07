@@ -41,8 +41,8 @@ class QuantificationsTabTest extends ApplicationTest {
             t.update(open, new DatasetTreeNode(
                 TreeNodeKind.QUANTIFICATIONS, "quantifications", null));
             assertEquals(expected, t.table().getItems().size());
-            assertEquals(4, t.table().getColumns().size(),
-                "expected 4 columns: entity, sample, abundance, normalization");
+            assertEquals(5, t.table().getColumns().size(),
+                "expected 5 columns: entity, sample, abundance, unit, normalization");
         }
     }
 }
