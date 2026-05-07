@@ -1255,6 +1255,20 @@ URI. Datasets written without embedded references (writer flag
 `embedReference = false`) return an empty map regardless of whether
 individual genomic runs carry a `referenceUri`.
 
+**Write-side helper (v1.1.0+).** Outside the auto-embed path,
+`ReferenceImport.write_to_dataset` (Python) /
+`ReferenceImport.writeToDataset` (Java) /
+`-[TTIOReferenceImport writeToDataset:overwrite:error:]` (ObjC)
+embed a `ReferenceImport` directly at
+`/study/references/<uri>/` on an open writable dataset. The
+on-disk layout is byte-identical to the auto-embed path (same
+`@md5` formula, same per-chromosome `chromosomes/<name>/data` +
+`@length` shape). All three implementations honour an `overwrite`
+parameter (default `False`/`NO`) — a write that collides with an
+existing URI raises (`FileExistsError` /
+`IllegalStateException` / `NSError` code 2201) unless overwrite
+is explicitly requested.
+
 The `@md5` attribute is preserved verbatim through `references()` —
 i.e. the returned `ReferenceImport.md5` matches the on-disk
 attribute byte-for-byte when present and well-formed. Missing or

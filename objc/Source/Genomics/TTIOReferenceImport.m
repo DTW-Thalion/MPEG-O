@@ -17,6 +17,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOReferenceImport.h"
+#import "Dataset/TTIOSpectralDataset.h"
+#import "ValueClasses/TTIOEnums.h"
 #import <openssl/evp.h>
 #import <openssl/md5.h>
 
@@ -197,6 +199,112 @@ static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
         [hex appendFormat:@"%02x", bytes[i]];
     }
     return hex;
+}
+
+- (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
+                 error:(NSError **)error
+{
+    return [self writeToDataset:dataset overwrite:NO error:error];
+}
+
+- (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
+             overwrite:(BOOL)overwrite
+                 error:(NSError **)error
+{
+    if (dataset == nil) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2200
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"writeToDataset: dataset must not be nil"}];
+        return NO;
+    }
+    id<TTIOStorageProvider> provider = dataset.provider;
+    if (provider == nil || ![provider isOpen]) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2202
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"writeToDataset requires an open dataset with a "
+                       @"writable provider"}];
+        return NO;
+    }
+    id<TTIOStorageGroup> root = [provider rootGroupWithError:error];
+    if (root == nil) return NO;
+
+    id<TTIOStorageGroup> study = nil;
+    if ([root hasChildNamed:@"study"]) {
+        study = [root openGroupNamed:@"study" error:error];
+    } else {
+        study = [root createGroupNamed:@"study" error:error];
+    }
+    if (study == nil) return NO;
+
+    id<TTIOStorageGroup> refsGrp = nil;
+    if ([study hasChildNamed:@"references"]) {
+        refsGrp = [study openGroupNamed:@"references" error:error];
+    } else {
+        refsGrp = [study createGroupNamed:@"references" error:error];
+    }
+    if (refsGrp == nil) return NO;
+
+    if ([refsGrp hasChildNamed:_uri]) {
+        if (!overwrite) {
+            if (error) *error = [NSError
+                errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2201
+                       userInfo:@{NSLocalizedDescriptionKey:
+                           [NSString stringWithFormat:
+                                @"reference '%@' already embedded at "
+                                @"/study/references/%@; pass overwrite=YES "
+                                @"to replace.", _uri, _uri]}];
+            return NO;
+        }
+        if (![refsGrp deleteChildNamed:_uri error:error]) return NO;
+    }
+
+    id<TTIOStorageGroup> refGrp =
+        [refsGrp createGroupNamed:_uri error:error];
+    if (refGrp == nil) return NO;
+
+    if (![refGrp setAttributeValue:[self md5Hex]
+                           forName:@"md5"
+                             error:error]) return NO;
+    if (![refGrp setAttributeValue:_uri
+                           forName:@"reference_uri"
+                             error:error]) return NO;
+
+    id<TTIOStorageGroup> chromsGrp =
+        [refGrp createGroupNamed:@"chromosomes" error:error];
+    if (chromsGrp == nil) return NO;
+
+    // Build (name -> seq) map and sort by name so the on-disk child
+    // order matches the canonical embed-helper writer byte-for-byte.
+    NSMutableDictionary<NSString *, NSData *> *byName =
+        [NSMutableDictionary dictionaryWithCapacity:_chromosomes.count];
+    for (NSUInteger i = 0; i < _chromosomes.count; i++) {
+        byName[_chromosomes[i]] = _sequences[i];
+    }
+    NSArray<NSString *> *sortedNames =
+        [byName.allKeys sortedArrayUsingSelector:@selector(compare:)];
+
+    for (NSString *cname in sortedNames) {
+        NSData *seq = byName[cname];
+        id<TTIOStorageGroup> cg =
+            [chromsGrp createGroupNamed:cname error:error];
+        if (cg == nil) return NO;
+        if (![cg setAttributeValue:@((int64_t)seq.length)
+                           forName:@"length"
+                             error:error]) return NO;
+        id<TTIOStorageDataset> ds =
+            [cg createDatasetNamed:@"data"
+                          precision:TTIOPrecisionUInt8
+                             length:seq.length
+                          chunkSize:65536
+                        compression:TTIOCompressionZlib
+                   compressionLevel:6
+                              error:error];
+        if (ds == nil) return NO;
+        if (![ds writeAll:seq error:error]) return NO;
+    }
+    return YES;
 }
 
 @end
