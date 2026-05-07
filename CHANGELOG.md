@@ -48,6 +48,15 @@ by 1.0.0 are read identically by 1.1.0 and vice versa.
   `+[TTIOReferenceImport readFromGroup:]` (ObjC) — factory that
   materialises a `ReferenceImport` from its on-disk group.
 
+### Fixed
+
+- ObjC writer's reference-embed path no longer requires `libttio_rans`
+  to be available. Embedding `/study/references/<uri>/...` is pure HDF5
+  I/O and now fires whenever `embedReference=YES` on a
+  `TTIOWrittenGenomicRun`, matching Python's behavior. Signal-channel
+  encoding via REF_DIFF_V2 still gates on the native lib (unchanged).
+  Resolves the writer-gate asymmetry finding from Phase 0 Task 0.6.
+
 ### Changed
 
 - Unified `@md5` attribute computation on
