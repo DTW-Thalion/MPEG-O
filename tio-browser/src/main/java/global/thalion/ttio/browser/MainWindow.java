@@ -114,7 +114,7 @@ public class MainWindow {
 
     // Test/integration accessors -- package-private intentionally
     BorderPane root() { return root; }
-    Label statusBar() { return statusBarLabel; }
+    Label statusLabel() { return statusBarLabel; }
     StackPane treeContainer() { return treeContainer; }
     StackPane detailContainer() { return detailContainer; }
     MenuItem openMenuItem() { return openItem; }
