@@ -18,6 +18,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Windows native build is deferred — native/CMakeLists.txt uses
+        # GCC-style flags (-Wall -Wextra -Wpedantic, -msse4.1, -mavx2)
+        # that MSVC rejects, and per-source-file SIMD flag conventions
+        # differ between gcc/clang and MSVC. Cleaning that up is a
+        # separate side-quest from cross-platform native bundling and
+        # isn't on the critical path for Mac end-user testing. Tracked
+        # as a follow-up; for now Windows users get graceful degradation
+        # via NativeLibraryLoader.lastError() (genomic Read Inspector
+        # falls back to a placeholder).
         include:
           - os: ubuntu-22.04
             classifier: linux-x64
@@ -28,9 +37,6 @@ jobs:
           - os: macos-14
             classifier: mac-aarch64
             artifact_name: libttio_rans_jni.dylib
-          - os: windows-2022
-            classifier: win-x64
-            artifact_name: ttio_rans_jni.dll
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -49,31 +55,14 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install zlib
 
-      - name: Install zlib (Windows, via vcpkg)
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          # vcpkg is preinstalled at $VCPKG_INSTALLATION_ROOT (typically
-          # C:/vcpkg) on GHA windows-* runners. Install the x64 zlib
-          # triplet and let the CMake toolchain file in the next step
-          # expose it via find_package(ZLIB).
-          "$VCPKG_INSTALLATION_ROOT/vcpkg.exe" install zlib:x64-windows
-
       - name: Configure CMake
         shell: bash
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_17_X64 || env.JAVA_HOME }}
         run: |
           cd native
-          if [ "${{ runner.os }}" = "Windows" ]; then
-            cmake -B _build -DCMAKE_BUILD_TYPE=Release \
-              -DTTIO_RANS_BUILD_JNI=ON \
-              -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" \
-              -DVCPKG_TARGET_TRIPLET=x64-windows
-          else
-            cmake -B _build -DCMAKE_BUILD_TYPE=Release \
-              -DTTIO_RANS_BUILD_JNI=ON
-          fi
+          cmake -B _build -DCMAKE_BUILD_TYPE=Release \
+            -DTTIO_RANS_BUILD_JNI=ON
 
       - name: Build ttio_rans_jni
         shell: bash
@@ -133,11 +122,10 @@ jobs:
       - name: Stage natives into tio-browser resources
         run: |
           BASE=tio-browser/src/main/resources/native
-          mkdir -p $BASE/linux-x64 $BASE/mac-x64 $BASE/mac-aarch64 $BASE/win-x64
+          mkdir -p $BASE/linux-x64 $BASE/mac-x64 $BASE/mac-aarch64
           cp native-artifacts/native-linux-x64/libttio_rans_jni.so       $BASE/linux-x64/
           cp native-artifacts/native-mac-x64/libttio_rans_jni.dylib      $BASE/mac-x64/
           cp native-artifacts/native-mac-aarch64/libttio_rans_jni.dylib  $BASE/mac-aarch64/
-          cp native-artifacts/native-win-x64/ttio_rans_jni.dll           $BASE/win-x64/
           ls -laR $BASE
 
       - name: Install ttio jar to local M2
@@ -159,8 +147,7 @@ jobs:
           for path in \
               native/linux-x64/libttio_rans_jni.so \
               native/mac-x64/libttio_rans_jni.dylib \
-              native/mac-aarch64/libttio_rans_jni.dylib \
-              native/win-x64/ttio_rans_jni.dll; do
+              native/mac-aarch64/libttio_rans_jni.dylib; do
             if unzip -l "$JAR" | grep -q "$path"; then
               echo "  ✓ $path"
             else
