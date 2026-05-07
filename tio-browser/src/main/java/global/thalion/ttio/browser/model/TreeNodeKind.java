@@ -1,0 +1,31 @@
+package global.thalion.ttio.browser.model;
+
+public enum TreeNodeKind {
+    DATASET_ROOT,
+    STUDY_GROUP,
+    MS_RUNS_GROUP,
+    NMR_RUNS_GROUP,
+    RAMAN_RUNS_GROUP,
+    IR_RUNS_GROUP,
+    UV_VIS_RUNS_GROUP,
+    GENOMIC_RUNS_GROUP,
+    REFERENCES_GROUP,
+
+    MS_RUN,
+    NMR_RUN,
+    RAMAN_RUN,
+    IR_RUN,
+    UV_VIS_RUN,
+    GENOMIC_RUN,
+    REFERENCE,
+
+    SPECTRUM,
+    CHROMATOGRAM,
+    ALIGNED_READ,
+
+    IDENTIFICATIONS,
+    QUANTIFICATIONS,
+    PROVENANCE,
+    FEATURE_FLAGS,
+    ENCRYPTION
+}
