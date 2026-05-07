@@ -12,11 +12,15 @@ import global.thalion.ttio.browser.view.FeatureFlagsTab;
 import global.thalion.ttio.browser.view.IdentificationsTab;
 import global.thalion.ttio.browser.view.ProvenanceTab;
 import global.thalion.ttio.browser.view.QuantificationsTab;
+import global.thalion.ttio.browser.view.ReferenceTab;
+import global.thalion.ttio.browser.view.headers.GenomicHeadersTable;
 import global.thalion.ttio.browser.view.headers.MsHeadersTable;
 import global.thalion.ttio.browser.view.headers.NmrHeadersTable;
 import global.thalion.ttio.browser.view.headers.RamanHeadersTable;
 import global.thalion.ttio.browser.view.overview.OverviewTab;
+import global.thalion.ttio.browser.view.plot.ChromDistributionView;
 import global.thalion.ttio.browser.view.plot.ChromatogramPlotTab;
+import global.thalion.ttio.browser.view.plot.ReadInspectorTab;
 import global.thalion.ttio.browser.view.plot.SpectrumPlotTab;
 import javafx.geometry.Orientation;
 import javafx.scene.Scene;
@@ -172,6 +176,15 @@ public class MainWindow {
         detailPane.register(msHeaders);
         detailPane.register(nmrHeaders);
         detailPane.register(ramanHeaders);
+        // Phase 7 — genomic detail panes
+        GenomicHeadersTable genomicHeaders = new GenomicHeadersTable();
+        ReadInspectorTab readInspectorTab = new ReadInspectorTab();
+        genomicHeaders.onRowSelected(row -> readInspectorTab.render(row.full()));
+        detailPane.register(genomicHeaders);
+        detailPane.register(readInspectorTab);
+        detailPane.register(new ChromDistributionView());
+        detailPane.register(new ReferenceTab());
+        // Analytical extras
         detailPane.register(plotTab);
         detailPane.register(channelHexTab);
         detailPane.register(new ChromatogramPlotTab());
