@@ -4,11 +4,14 @@ import global.thalion.ttio.browser.model.DatasetOpenTask;
 import global.thalion.ttio.browser.model.DatasetTreeBuilder;
 import global.thalion.ttio.browser.model.DatasetTreeNode;
 import global.thalion.ttio.browser.model.OpenDataset;
+import global.thalion.ttio.browser.view.ChannelHexTab;
 import global.thalion.ttio.browser.view.DatasetTreeView;
 import global.thalion.ttio.browser.view.DetailPane;
 import global.thalion.ttio.browser.view.EncryptionTab;
 import global.thalion.ttio.browser.view.FeatureFlagsTab;
+import global.thalion.ttio.browser.view.IdentificationsTab;
 import global.thalion.ttio.browser.view.ProvenanceTab;
+import global.thalion.ttio.browser.view.QuantificationsTab;
 import global.thalion.ttio.browser.view.headers.MsHeadersTable;
 import global.thalion.ttio.browser.view.headers.NmrHeadersTable;
 import global.thalion.ttio.browser.view.headers.RamanHeadersTable;
@@ -149,17 +152,31 @@ public class MainWindow {
         NmrHeadersTable nmrHeaders = new NmrHeadersTable();
         RamanHeadersTable ramanHeaders = new RamanHeadersTable();
         SpectrumPlotTab plotTab = new SpectrumPlotTab();
-        // Bridge headers row-selection → SpectrumPlotTab.render. The Plot
-        // tab itself only resets on run-level selection; the headers
-        // tables drive the actual content.
-        msHeaders.onRowSelected(plotTab::render);
-        nmrHeaders.onRowSelected(plotTab::render);
-        ramanHeaders.onRowSelected(plotTab::render);
+        ChannelHexTab channelHexTab = new ChannelHexTab();
+        // Bridge headers row-selection → SpectrumPlotTab.render +
+        // ChannelHexTab.render. The Plot / Channels tabs themselves
+        // only reset on run-level selection; the headers tables drive
+        // the actual content.
+        msHeaders.onRowSelected(spec -> {
+            plotTab.render(spec);
+            channelHexTab.render(spec);
+        });
+        nmrHeaders.onRowSelected(spec -> {
+            plotTab.render(spec);
+            channelHexTab.render(spec);
+        });
+        ramanHeaders.onRowSelected(spec -> {
+            plotTab.render(spec);
+            channelHexTab.render(spec);
+        });
         detailPane.register(msHeaders);
         detailPane.register(nmrHeaders);
         detailPane.register(ramanHeaders);
         detailPane.register(plotTab);
+        detailPane.register(channelHexTab);
         detailPane.register(new ChromatogramPlotTab());
+        detailPane.register(new IdentificationsTab());
+        detailPane.register(new QuantificationsTab());
         detailPane.register(new ProvenanceTab());
         detailPane.register(new FeatureFlagsTab());
         detailPane.register(new EncryptionTab());
