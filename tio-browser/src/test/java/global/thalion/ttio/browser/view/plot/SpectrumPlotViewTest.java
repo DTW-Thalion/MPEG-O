@@ -95,6 +95,42 @@ class SpectrumPlotViewTest extends ApplicationTest {
     }
 
     @Test
+    void stemToggleAutoSelectsForCentroidedMs() throws Exception {
+        // Synthesize centroided + profile MS spectra directly so we don't
+        // depend on a fixture carrying the centroideds column on disk.
+        global.thalion.ttio.MassSpectrum centroidedMs =
+            new global.thalion.ttio.MassSpectrum(
+                new double[]{100, 200, 300}, new double[]{1, 5, 2},
+                0, 0.0, 0.0, 0,
+                1, global.thalion.ttio.Enums.Polarity.POSITIVE, null,
+                global.thalion.ttio.Enums.ActivationMethod.NONE, null,
+                /* centroided= */ true);
+        global.thalion.ttio.MassSpectrum profileMs =
+            new global.thalion.ttio.MassSpectrum(
+                new double[]{100, 200, 300}, new double[]{1, 5, 2},
+                0, 0.0, 0.0, 0,
+                1, global.thalion.ttio.Enums.Polarity.POSITIVE, null,
+                global.thalion.ttio.Enums.ActivationMethod.NONE, null,
+                /* centroided= */ false);
+
+        CountDownLatch done = new CountDownLatch(1);
+        AtomicReference<Boolean> stemAfterCentroid = new AtomicReference<>();
+        AtomicReference<Boolean> stemAfterProfile = new AtomicReference<>();
+        Platform.runLater(() -> {
+            view.render(centroidedMs);
+            stemAfterCentroid.set(view.stemToggle().isSelected());
+            view.render(profileMs);
+            stemAfterProfile.set(view.stemToggle().isSelected());
+            done.countDown();
+        });
+        assertTrue(done.await(5, TimeUnit.SECONDS));
+        assertEquals(Boolean.TRUE, stemAfterCentroid.get(),
+            "centroided MS should auto-select stem mode");
+        assertEquals(Boolean.FALSE, stemAfterProfile.get(),
+            "profile MS should default to line mode");
+    }
+
+    @Test
     void clearEmptiesChartData() throws Exception {
         try (SpectralDataset ds = SpectralDataset.open(
                 Paths.get("../java/src/test/resources/ttio/full_ms.tio")
