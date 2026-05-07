@@ -49,14 +49,31 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install zlib
 
+      - name: Install zlib (Windows, via vcpkg)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # vcpkg is preinstalled at $VCPKG_INSTALLATION_ROOT (typically
+          # C:/vcpkg) on GHA windows-* runners. Install the x64 zlib
+          # triplet and let the CMake toolchain file in the next step
+          # expose it via find_package(ZLIB).
+          "$VCPKG_INSTALLATION_ROOT/vcpkg.exe" install zlib:x64-windows
+
       - name: Configure CMake
         shell: bash
         env:
           JAVA_HOME: ${{ env.JAVA_HOME_17_X64 || env.JAVA_HOME }}
         run: |
           cd native
-          cmake -B _build -DCMAKE_BUILD_TYPE=Release \
-            -DTTIO_RANS_BUILD_JNI=ON
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake -B _build -DCMAKE_BUILD_TYPE=Release \
+              -DTTIO_RANS_BUILD_JNI=ON \
+              -DCMAKE_TOOLCHAIN_FILE="$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" \
+              -DVCPKG_TARGET_TRIPLET=x64-windows
+          else
+            cmake -B _build -DCMAKE_BUILD_TYPE=Release \
+              -DTTIO_RANS_BUILD_JNI=ON
+          fi
 
       - name: Build ttio_rans_jni
         shell: bash
