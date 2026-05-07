@@ -1622,7 +1622,16 @@ static NSData *_TTIO_M93_ReferenceMD5ForRun(TTIOWrittenGenomicRun *run)
 
 /** Embed each unique reference (keyed by reference_uri) once at
  *  ``/study/references/<uri>/``. Per-run dedup follows Q6 = C: same
- *  URI carrying two different MD5s in one file is a hard error. */
+ *  URI carrying two different MD5s in one file is a hard error.
+ *
+ *  Embedding is pure HDF5 I/O — it does not require
+ *  ``libttio_rans``. The native lib is needed only by the
+ *  signal-channel REF_DIFF_V2 encode path, which is gated
+ *  separately downstream (``_TTIO_V18_UseRefDiffV2``). Phase 0 Task
+ *  0.11 (tio-browser): firing on ``embedReference=YES`` plus a
+ *  non-nil ``referenceChromSeqs`` matches the spirit of Python's
+ *  writer — embed regardless of the encode-side codec
+ *  availability. */
 static BOOL _TTIO_M93_EmbedReferences(TTIOHDF5Group *study,
                                        NSDictionary *genomicRuns,
                                        NSError **error)
@@ -1635,10 +1644,10 @@ static BOOL _TTIO_M93_EmbedReferences(TTIOHDF5Group *study,
     for (TTIOWrittenGenomicRun *run in [genomicRuns objectEnumerator]) {
         if (!run.embedReference) continue;
         if (run.referenceChromSeqs == nil) continue;
-        // embed when the v1.8 refdiff_v2 default
-        // path is eligible. The v1 REF_DIFF override and its v1.5
-        // auto-default are gone.
-        if (!_TTIO_V18_UseRefDiffV2(run)) continue;
+        // Phase 0 Task 0.11: native-lib gate removed. Writing the
+        // chromosome bytes themselves is pure HDF5 I/O; the
+        // REF_DIFF_V2 encode-side gate stays at its call site
+        // (``_TTIO_V18_UseRefDiffV2``).
 
         NSData *md5 = _TTIO_M93_ReferenceMD5ForRun(run);
         NSString *uri = run.referenceUri ?: @"";

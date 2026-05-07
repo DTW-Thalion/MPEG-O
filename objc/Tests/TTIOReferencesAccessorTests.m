@@ -11,12 +11,19 @@
 // hinges on that shape — see ReferenceImport.readFromGroup in the
 // Java side, and ReferenceImport.read_from_group in the Python side).
 //
+// Phase 0 Task 0.11 (tio-browser) extends this file with
+// testEmbedReferencesWithoutNativeLib, which verifies that the writer
+// embeds chromosome bytes purely via HDF5 I/O — without requiring
+// libttio_rans to be linked.
+//
 // SPDX-License-Identifier: Apache-2.0
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOReferenceImport.h"
+#import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Codecs/TTIORefDiffV2.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Dataset.h"
@@ -202,9 +209,117 @@ static void testDatasetWithoutReferencesReturnsEmptyDict(void)
     unlink([path fileSystemRepresentation]);
 }
 
+/** Phase 0 Task 0.11: empty-read TTIOWrittenGenomicRun carrying
+ *  ``embedReference=YES`` plus a non-nil ``referenceChromSeqs``
+ *  drives the writer's embed loop without touching the native
+ *  REF_DIFF_V2 encoder. ``signalCompression=TTIOCompressionNone``
+ *  side-steps the v1.5 default-codec gate so the empty-quality byte
+ *  channel goes through plain HDF5 I/O instead of the FQZCOMP_NX16_Z
+ *  default that v1.5-candidate runs trigger when zlib is the channel
+ *  compression. */
+static TTIOWrittenGenomicRun *makeEmptyRunWithEmbedRefs(
+    NSDictionary<NSString *, NSData *> *seqs,
+    NSString *uri)
+{
+    NSData *empty = [NSData data];
+    TTIOWrittenGenomicRun *g = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:uri
+                       platform:@"ILLUMINA"
+                     sampleName:@"REF_TEST"
+                      positions:empty
+               mappingQualities:empty
+                          flags:empty
+                      sequences:empty
+                      qualities:empty
+                        offsets:empty
+                        lengths:empty
+                         cigars:@[]
+                      readNames:@[]
+                mateChromosomes:@[]
+                  matePositions:empty
+                templateLengths:empty
+                    chromosomes:@[]
+              signalCompression:TTIOCompressionNone];
+    g.embedReference = YES;
+    g.referenceChromSeqs = seqs;
+    return g;
+}
+
+static void testEmbedReferencesWithoutNativeLib(void)
+{
+    // Sanity: the env this test is meant to certify has no native lib.
+    // (The test still passes when native IS available, since the new
+    // gate is "embedReference=YES + referenceChromSeqs!=nil" — which
+    // strictly subsumes the old [TTIORefDiffV2 nativeAvailable] case.
+    // The PASS message records the actual env state for the log.)
+    BOOL haveNative = [TTIORefDiffV2 nativeAvailable];
+    if (haveNative) {
+        PASS(YES,
+             "1.1.0 #0.11: native REF_DIFF_V2 available — embed gate "
+             "must fire (subsuming case)");
+    } else {
+        PASS(YES,
+             "1.1.0 #0.11: native REF_DIFF_V2 NOT available — embed "
+             "gate must fire on embedReference=YES alone");
+    }
+
+    NSString *path = makeTempPath(@"embed_no_native");
+    unlink([path fileSystemRepresentation]);
+
+    NSData *chr1 = [@"ACGTACGTACGT" dataUsingEncoding:NSASCIIStringEncoding];
+    NSData *chr2 = [@"TTTTAAAACCCC" dataUsingEncoding:NSASCIIStringEncoding];
+    NSDictionary<NSString *, NSData *> *seqs =
+        @{@"chr1": chr1, @"chr2": chr2};
+
+    TTIOWrittenGenomicRun *g =
+        makeEmptyRunWithEmbedRefs(seqs, @"test-ref-no-native");
+
+    NSError *err = nil;
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                title:@"embed-no-native"
+                                   isaInvestigationId:@"NONATIVE001"
+                                               msRuns:@{}
+                                          genomicRuns:@{@"g0": g}
+                                      identifications:nil
+                                      quantifications:nil
+                                    provenanceRecords:nil
+                                                error:&err];
+    PASS(ok,
+         "1.1.0 #0.11: writeMinimalToPath succeeds for "
+         "embedReference=YES + empty-read run, no native lib");
+    PASS(err == nil,
+         "1.1.0 #0.11: writer leaves NSError nil on embed success");
+
+    TTIOSpectralDataset *opened =
+        [TTIOSpectralDataset readFromFilePath:path error:&err];
+    PASS(opened != nil && err == nil,
+         "1.1.0 #0.11: reopens the produced .tio cleanly");
+
+    NSDictionary<NSString *, TTIOReferenceImport *> *refs = opened.references;
+    PASS(refs != nil, "1.1.0 #0.11: -references is non-nil");
+    PASS([refs count] == 1,
+         "1.1.0 #0.11: exactly one embedded reference present "
+         "(writer embed gate fired without native)");
+
+    TTIOReferenceImport *r = refs[@"test-ref-no-native"];
+    PASS(r != nil,
+         "1.1.0 #0.11: the run's reference URI is keyed in -references");
+    PASS([r.chromosomes isEqualToArray:(@[@"chr1", @"chr2"])],
+         "1.1.0 #0.11: embedded chromosomes ordered alphabetically");
+    PASS([[r chromosomeNamed:@"chr1"] isEqualToData:chr1],
+         "1.1.0 #0.11: chr1 sequence round-trips byte-exact via embed path");
+    PASS([[r chromosomeNamed:@"chr2"] isEqualToData:chr2],
+         "1.1.0 #0.11: chr2 sequence round-trips byte-exact via embed path");
+
+    [opened closeFile];
+    unlink([path fileSystemRepresentation]);
+}
+
 void testReferencesAccessor(void);
 void testReferencesAccessor(void)
 {
     testFreshlyOpenedDatasetExposesEmbeddedReferences();
     testDatasetWithoutReferencesReturnsEmptyDict();
+    testEmbedReferencesWithoutNativeLib();
 }
