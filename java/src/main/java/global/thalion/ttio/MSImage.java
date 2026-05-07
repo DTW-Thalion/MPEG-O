@@ -141,6 +141,34 @@ public class MSImage {
         return result;
     }
 
+    /** Project this image as a list of {@link
+     *  global.thalion.ttio.importers.ImzMLReader.PixelSpectrum} records
+     *  in continuous mode (every pixel shares {@link #mzAxis}).
+     *
+     *  @throws IllegalStateException if {@code mzAxis} is empty.
+     */
+    public java.util.List<global.thalion.ttio.importers.ImzMLReader.PixelSpectrum>
+            toPixelSpectra() {
+        if (mzAxis.length == 0) {
+            throw new IllegalStateException(
+                "MSImage has no mz_axis; cannot project to imzML pixels. "
+                + "The .tio was written before format v1.2 added the spectral "
+                + "axis. Re-import from a source format that carries m/z "
+                + "calibration (imzML, mzML), or supply mz_axis explicitly.");
+        }
+        java.util.List<global.thalion.ttio.importers.ImzMLReader.PixelSpectrum>
+            pixels = new java.util.ArrayList<>(width * height);
+        for (int row = 0; row < height; row++) {
+            for (int col = 0; col < width; col++) {
+                double[] intensity = spectrumAt(row, col);
+                // x = col (image-plane), y = row, z = 1 (single plane).
+                pixels.add(new global.thalion.ttio.importers.ImzMLReader
+                    .PixelSpectrum(col, row, 1, mzAxis, intensity));
+            }
+        }
+        return pixels;
+    }
+
     /** Write this image cube to a storage study group.
      *
      *  <p>emits the cube as a 3-D dataset via

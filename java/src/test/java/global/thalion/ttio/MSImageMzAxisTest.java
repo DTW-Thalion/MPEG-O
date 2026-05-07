@@ -76,4 +76,41 @@ class MSImageMzAxisTest {
             new MSImage(w, h, sp, 0, 0.0, 0.0, "raster", cube, badMz,
                 "", "", List.of(), List.of(), List.of()));
     }
+
+    @Test
+    void toPixelSpectraReturnsContinuousModeList() {
+        int w = 2, h = 2, sp = 3;
+        double[] cube = new double[w * h * sp];
+        for (int i = 0; i < cube.length; i++) cube[i] = i * 1.0;
+        double[] mz = { 100.0, 200.0, 300.0 };
+        MSImage img = new MSImage(w, h, sp, 0, 1.0, 1.0, "raster",
+                cube, mz, "", "", List.of(), List.of(), List.of());
+
+        var pixels = img.toPixelSpectra();
+        assertEquals(w * h, pixels.size());
+        // Pixel (row=0, col=0): cube indices [0..2]
+        var p0 = pixels.get(0);
+        assertEquals(0, p0.x());
+        assertEquals(0, p0.y());
+        assertArrayEquals(mz, p0.mz(), 0.0);
+        assertArrayEquals(new double[] {0.0, 1.0, 2.0}, p0.intensity(), 0.0);
+        // Pixel (row=1, col=1): cube indices [9..11]
+        var p3 = pixels.get(3);
+        assertEquals(1, p3.x());
+        assertEquals(1, p3.y());
+        assertArrayEquals(mz, p3.mz(), 0.0);
+        assertArrayEquals(new double[] {9.0, 10.0, 11.0}, p3.intensity(), 0.0);
+    }
+
+    @Test
+    void toPixelSpectraRaisesWithEmptyAxis() {
+        int w = 2, h = 2, sp = 3;
+        double[] cube = new double[w * h * sp];
+        MSImage img = new MSImage(w, h, sp, 0, 1.0, 1.0, "raster",
+                cube, new double[0], "", "", List.of(), List.of(), List.of());
+        IllegalStateException e = assertThrows(IllegalStateException.class,
+                img::toPixelSpectra);
+        assertTrue(e.getMessage().contains("mz_axis"),
+                "error must mention mz_axis: " + e.getMessage());
+    }
 }
