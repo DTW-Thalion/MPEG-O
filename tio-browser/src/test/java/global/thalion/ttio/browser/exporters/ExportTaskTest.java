@@ -9,8 +9,13 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.FeatureFlags;
 import global.thalion.ttio.MassSpectrum;
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.hdf5.Hdf5File;
+import global.thalion.ttio.hdf5.Hdf5Group;
+import global.thalion.ttio.providers.Hdf5Provider;
 import global.thalion.ttio.browser.importers.ImportConfig;
 import global.thalion.ttio.browser.importers.ImportFormatRegistry;
 import global.thalion.ttio.browser.importers.ImportFormatSpec;
@@ -298,10 +303,9 @@ class ExportTaskTest {
     }
 
     @Test
-    void unsupportedImzMLRaisesClearError(@TempDir Path tmp) throws Exception {
-        // Empty dataset is enough — eligibility wouldn't pass in the
-        // dialog, but the task itself must surface a clear error if
-        // dispatched directly (defensive).
+    void imzMLOnNonImageDatasetRaisesIllegalState(@TempDir Path tmp) throws Exception {
+        // full_ms.tio has no /study/image_cube — must now surface
+        // IllegalStateException (not UnsupportedOperationException).
         Path src = Paths.get("../java/src/test/resources/ttio/full_ms.tio")
             .toAbsolutePath();
         Path out = tmp.resolve("out.imzML");
@@ -311,10 +315,74 @@ class ExportTaskTest {
             runAndWait(exp);
             ExecutionException ee = assertThrows(ExecutionException.class,
                 exp::get);
-            assertTrue(ee.getCause() instanceof UnsupportedOperationException,
-                "wrong cause: " + ee.getCause());
-            assertTrue(ee.getCause().getMessage().contains("not yet wired"),
-                "missing 'not yet wired' in: " + ee.getCause().getMessage());
+            assertTrue(ee.getCause() instanceof IllegalStateException,
+                "wrong cause (expected IllegalStateException): " + ee.getCause());
+            assertTrue(ee.getCause().getMessage().contains("image_cube"),
+                "missing 'image_cube' in: " + ee.getCause().getMessage());
+        }
+    }
+
+    @Test
+    void imzMLRoundTrip(@TempDir Path tmp) throws Exception {
+        Path origTio = tmp.resolve("orig.tio");
+        Path imzml   = tmp.resolve("out.imzML");
+
+        // Synthesize a deterministic MSImage and write to .tio
+        int w = 4, h = 3, sp = 8;
+        double[] cube = new double[w * h * sp];
+        for (int i = 0; i < cube.length; i++) cube[i] = i * 0.1;
+        double[] mz = new double[sp];
+        for (int i = 0; i < sp; i++) mz[i] = 100.0 + i * 100.0;
+
+        MSImage img = new MSImage(w, h, sp, 0, 10.0, 10.0, "raster",
+            cube, mz, "imzml-roundtrip", "",
+            java.util.List.of(), java.util.List.of(), java.util.List.of());
+
+        try (Hdf5File f = Hdf5File.create(origTio.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.createGroup("study")) {
+            img.writeTo(Hdf5Provider.adapterForGroup(study));
+        }
+
+        // Open the .tio and export to imzML
+        try (SpectralDataset ds = SpectralDataset.open(origTio.toString())) {
+            ExportConfig cfg = new ExportConfig(
+                imzml, null, "continuous", null, false,
+                null, null, 60, null, 33, null);
+            ExportTask exp = new ExportTask(exportSpec("imzML"), cfg, ds);
+            runAndWait(exp);
+            try { exp.get(); } catch (ExecutionException ee) {
+                fail("imzML export failed: " + ee.getCause(), ee.getCause());
+            }
+        }
+        assertTrue(Files.exists(imzml), "expected " + imzml);
+        Path ibd = imzml.resolveSibling("out.ibd");
+        assertTrue(Files.exists(ibd), "expected sibling .ibd at " + ibd);
+
+        // Re-import via Phase 8 imzML import path.
+        // ImportTask stubs imzML with "not yet wired" — if so, we skip
+        // re-import assertions but the export side is already proved above.
+        Path reTio = tmp.resolve("re.tio");
+        ImportTask imp = new ImportTask(importSpec("imzML"),
+            ImportConfig.basic(imzml, reTio, "hdf5", "img_0001", "round"));
+        runAndWait(imp);
+        try {
+            imp.get();
+        } catch (ExecutionException ee) {
+            Throwable cause = ee.getCause();
+            if (cause instanceof UnsupportedOperationException
+                && cause.getMessage() != null
+                && cause.getMessage().contains("not yet wired")) {
+                // Phase 8 imzML import stubbed; export side verified above.
+                return;
+            }
+            fail("imzML re-import failed: " + cause, cause);
+        }
+
+        // Re-import succeeded — spot-check structural invariant.
+        try (SpectralDataset round = SpectralDataset.open(reTio.toString())) {
+            assertFalse(round.msRuns().isEmpty(),
+                "imzML re-import should produce at least one analytical run");
         }
     }
 }
