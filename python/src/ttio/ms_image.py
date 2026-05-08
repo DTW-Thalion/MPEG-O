@@ -5,12 +5,10 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .spectral_dataset import SpectralDataset
-
 
 @dataclass(slots=True)
 class MSImage:
-    """Mass-spectrometry imaging dataset: a ``width × height`` grid of
+    """Mass-spectrometry imaging dataset: a ``width x height`` grid of
     pixels, each pixel a spectral profile of ``spectral_points`` values.
 
     Parameters
@@ -21,6 +19,11 @@ class MSImage:
         Number of float64 values per pixel.
     intensity : numpy.ndarray, default empty rank-3 array
         Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
+    mz_axis : numpy.ndarray, default empty 1-D array
+        1-D float64 array of length ``spectral_points`` giving the m/z
+        calibration for each spectral bin.  Empty when the file was
+        written before format v1.2 (legacy files); use
+        :meth:`to_pixel_spectra` only when this is populated.
     pixel_size_x, pixel_size_y : float, default 0.0
         Spatial pixel size (implementation-defined units).
     scan_pattern : str, default ""
@@ -32,7 +35,7 @@ class MSImage:
         from ``TTIOSpectralDataset``; in Python they are composed
         directly onto ``MSImage``.
     identifications : list, default []
-        Dataset-level identifications (composed — see Notes).
+        Dataset-level identifications (composed -- see Notes).
     quantifications : list, default []
         Dataset-level quantifications (composed).
     provenance_records : list, default []
@@ -53,7 +56,7 @@ class MSImage:
 
     Cross-language equivalents
     --------------------------
-    Objective-C: ``TTIOMSImage`` · Java:
+    Objective-C: ``TTIOMSImage`` - Java:
     ``global.thalion.ttio.MSImage``.
     """
 
@@ -63,6 +66,7 @@ class MSImage:
     pixel_size_x: float = 0.0
     pixel_size_y: float = 0.0
     intensity: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0)))
+    mz_axis: np.ndarray = field(default_factory=lambda: np.zeros(0))   # NEW
     scan_pattern: str = ""
     tile_size: int = 0
 
@@ -87,6 +91,12 @@ class MSImage:
                 f"(height, width, spectral_points)="
                 f"{(self.height, self.width, self.spectral_points)}"
             )
+        if self.mz_axis.size > 0:
+            if self.mz_axis.ndim != 1 or self.mz_axis.shape[0] != self.spectral_points:
+                raise ValueError(
+                    f"mz_axis shape {self.mz_axis.shape} does not match "
+                    f"spectral_points={self.spectral_points}"
+                )
 
 
-__all__ = ["MSImage", "SpectralDataset"]
+__all__ = ["MSImage"]
