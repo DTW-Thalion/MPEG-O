@@ -56,7 +56,7 @@ _JAVA_TARGET = _JAVA / "target"
 _JAVA_CLASSES = _JAVA_TARGET / "classes"
 _JAVA_TEST_CLASSES = _JAVA_TARGET / "test-classes"
 _JAVA_CLASSPATH_TXT = _JAVA_TARGET / "classpath.txt"
-_JAVA_HDF5_JAR = Path("/usr/share/java/jarhdf5.jar")
+_JAVA_HDF5_JAR = Path("/usr/local/lib/jarhdf5.jar")  # source-built HDF5 1.14
 
 _OBJC_BIN = _OBJC / "Tools" / "obj"
 _OBJC_LIB = _OBJC / "Source" / "obj"
@@ -135,6 +135,20 @@ def _java_classpath() -> str:
     ))
 
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
+
 def _objc_env() -> dict:
     """Env extending LD_LIBRARY_PATH so libTTIO is resolvable."""
     env = os.environ.copy()
@@ -171,7 +185,7 @@ def _write_python(out: Path) -> None:
 def _write_java(out: Path) -> None:
     if not _java_runtime_available():
         pytest.skip("Java conformance helpers not built (run `mvn test-compile` in java/)")
-    cmd = ["java", "-cp", _java_classpath(),
+    cmd = ["java", *_JAVA_FLAGS, "-cp", _java_classpath(),
            "global.thalion.ttio.conformance.RefXLangWriter", str(out)]
     subprocess.run(cmd, check=True, capture_output=True, timeout=60)
 
@@ -201,7 +215,7 @@ def _read_python(tio: Path) -> dict:
 def _read_java(tio: Path) -> dict:
     if not _java_runtime_available():
         pytest.skip("Java conformance helpers not built (run `mvn test-compile` in java/)")
-    cmd = ["java", "-cp", _java_classpath(),
+    cmd = ["java", *_JAVA_FLAGS, "-cp", _java_classpath(),
            "global.thalion.ttio.conformance.RefXLangReader", str(tio)]
     out = subprocess.run(cmd, check=True, capture_output=True, text=True, timeout=60)
     # Reader prints exactly one JSON line on stdout. Filter for the
