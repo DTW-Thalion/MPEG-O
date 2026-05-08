@@ -110,8 +110,8 @@ class MSImage:
         ic.set_attribute("width", int(self.width))
         ic.set_attribute("height", int(self.height))
         ic.set_attribute("spectral_points", int(self.spectral_points))
-        ic.set_attribute("pixel_size_x", str(self.pixel_size_x))
-        ic.set_attribute("pixel_size_y", str(self.pixel_size_y))
+        ic.set_attribute("pixel_size_x", float(self.pixel_size_x))
+        ic.set_attribute("pixel_size_y", float(self.pixel_size_y))
         ic.set_attribute("scan_pattern", self.scan_pattern)
 
         intensity_ds = ic.create_dataset_nd(

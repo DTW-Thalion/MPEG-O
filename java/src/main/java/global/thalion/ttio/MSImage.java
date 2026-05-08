@@ -170,6 +170,21 @@ public class MSImage {
         return pixels;
     }
 
+    /**
+     * Parse a {@code pixel_size_x}/{@code pixel_size_y} attribute that may be
+     * stored as a native-double (new form, written since 1.2.0 fix) or as a
+     * VL_STRING (legacy form written by Java and Python before the fix).
+     * Returns 0.0 when the attribute is absent.
+     */
+    private static double parseDoubleAttr(
+            global.thalion.ttio.providers.StorageGroup grp, String attr) {
+        if (!grp.hasAttribute(attr)) return 0.0;
+        Object raw = grp.getAttribute(attr);
+        if (raw instanceof Number n) return n.doubleValue();
+        if (raw instanceof String s) return Double.parseDouble(s);
+        return 0.0;
+    }
+
     /** Write this image cube to a storage study group.
      *
      *  <p>emits the cube as a 3-D dataset via
@@ -180,8 +195,8 @@ public class MSImage {
             ic.setAttribute("width", (long) width);
             ic.setAttribute("height", (long) height);
             ic.setAttribute("spectral_points", (long) spectralPoints);
-            ic.setAttribute("pixel_size_x", String.valueOf(pixelSizeX));
-            ic.setAttribute("pixel_size_y", String.valueOf(pixelSizeY));
+            ic.setAttribute("pixel_size_x", Double.valueOf(pixelSizeX));
+            ic.setAttribute("pixel_size_y", Double.valueOf(pixelSizeY));
             if (scanPattern != null)
                 ic.setAttribute("scan_pattern", scanPattern);
 
@@ -214,12 +229,8 @@ public class MSImage {
             int width = ((Number) ic.getAttribute("width")).intValue();
             int height = ((Number) ic.getAttribute("height")).intValue();
             int spectralPoints = ((Number) ic.getAttribute("spectral_points")).intValue();
-            double pixelSizeX = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_x")
-                            ? (String) ic.getAttribute("pixel_size_x") : "0");
-            double pixelSizeY = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_y")
-                            ? (String) ic.getAttribute("pixel_size_y") : "0");
+            double pixelSizeX = parseDoubleAttr(ic, "pixel_size_x");
+            double pixelSizeY = parseDoubleAttr(ic, "pixel_size_y");
             String scanPattern = ic.hasAttribute("scan_pattern")
                     ? (String) ic.getAttribute("scan_pattern") : null;
 
