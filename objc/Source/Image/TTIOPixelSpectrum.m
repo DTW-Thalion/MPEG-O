@@ -18,7 +18,7 @@
         _x = x;
         _y = y;
         _z = z;
-        _mz = [mz copy];
+        _mz = mz;
         _intensity = [intensity copy];
     }
     return self;

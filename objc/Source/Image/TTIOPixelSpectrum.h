@@ -18,7 +18,7 @@
 
 /** Length-spectralPoints float64 m/z values. Shared across pixels in
  *  continuous mode. */
-@property (readonly, copy) NSData *mz;
+@property (readonly, strong) NSData *mz;
 
 /** Length-spectralPoints float64 intensity values. */
 @property (readonly, copy) NSData *intensity;
