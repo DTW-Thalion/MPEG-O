@@ -3928,3 +3928,21 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 }
 
 @end
+
+#import "../Image/TTIOMSImage.h"
+
+@implementation TTIOSpectralDataset (Image)
+
+- (TTIOMSImage *)msImage
+{
+    if ([self isKindOfClass:[TTIOMSImage class]]) {
+        return (TTIOMSImage *)self;
+    }
+    NSString *path = [self filePath];
+    if (path == nil) return nil;
+    NSError *err = nil;
+    TTIOMSImage *img = [TTIOMSImage readFromFilePath:path error:&err];
+    return img;
+}
+
+@end
