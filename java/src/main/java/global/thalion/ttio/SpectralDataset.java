@@ -56,6 +56,7 @@ public class SpectralDataset implements
     private final Map<String, AcquisitionRun> msRuns;
     private final Map<String, GenomicRun> genomicRuns;
     private final Map<String, global.thalion.ttio.genomics.ReferenceImport> references;
+    private final MSImage image;  // null when /study/image_cube absent
     private final List<Identification> identifications;
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
@@ -73,6 +74,7 @@ public class SpectralDataset implements
                             Map<String, AcquisitionRun> msRuns,
                             Map<String, GenomicRun> genomicRuns,
                             Map<String, global.thalion.ttio.genomics.ReferenceImport> references,
+                            MSImage image,
                             List<Identification> identifications,
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords,
@@ -85,6 +87,7 @@ public class SpectralDataset implements
         this.msRuns = msRuns;
         this.genomicRuns = genomicRuns != null ? genomicRuns : Map.of();
         this.references = references != null ? references : Map.of();
+        this.image = image;
         this.identifications = identifications;
         this.quantifications = quantifications;
         this.provenanceRecords = provenanceRecords;
@@ -105,7 +108,7 @@ public class SpectralDataset implements
                             List<ProvenanceRecord> provenanceRecords,
                             String encryptedAlgorithm) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                genomicRuns, Map.of(), identifications, quantifications,
+                genomicRuns, Map.of(), null, identifications, quantifications,
                 provenanceRecords, encryptedAlgorithm);
     }
 
@@ -119,7 +122,7 @@ public class SpectralDataset implements
                             List<ProvenanceRecord> provenanceRecords,
                             String encryptedAlgorithm) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                Map.of(), Map.of(), identifications, quantifications, provenanceRecords,
+                Map.of(), Map.of(), null, identifications, quantifications, provenanceRecords,
                 encryptedAlgorithm);
     }
 
@@ -131,7 +134,7 @@ public class SpectralDataset implements
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                Map.of(), Map.of(), identifications, quantifications, provenanceRecords, "");
+                Map.of(), Map.of(), null, identifications, quantifications, provenanceRecords, "");
     }
 
     /** The absolute path of the underlying .tio file (null for in-memory datasets). */
@@ -175,6 +178,10 @@ public class SpectralDataset implements
     public Map<String, global.thalion.ttio.genomics.ReferenceImport> references() {
         return Collections.unmodifiableMap(references);
     }
+
+    /** The embedded MSImage when /study/image_cube is present; null otherwise.
+     *  @since 1.2.0 */
+    public MSImage image() { return image; }
 
     // ── Phase 2 (post-M91) — canonical unified runs accessor ────────
 
@@ -312,6 +319,7 @@ public class SpectralDataset implements
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
+            MSImage image = null;
 
             if (root.hasChild("study")) {
                 try (Hdf5Group study = root.openGroup("study")) {
@@ -373,6 +381,12 @@ public class SpectralDataset implements
                         }
                     }
 
+                    // /study/image_cube — eagerly materialise into a value object (1.2.0).
+                    if (study.hasChild("image_cube")) {
+                        image = MSImage.readFrom(
+                            global.thalion.ttio.providers.Hdf5Provider
+                                .adapterForGroup(study));
+                    }
                     idents = readIdentifications(study);
                     quants = readQuantifications(study);
                     prov = readProvenance(study);
@@ -380,7 +394,7 @@ public class SpectralDataset implements
             }
 
             return new SpectralDataset(provider, file, flags, title, isaId, runs,
-                    genomicRuns, references, idents, quants, prov, encryptedAlg);
+                    genomicRuns, references, image, idents, quants, prov, encryptedAlg);
         }
     }
 
@@ -480,7 +494,7 @@ public class SpectralDataset implements
                 }
             }
             return new SpectralDataset(provider, null, flags, title, isaId, runs,
-                    genomicRuns, references, idents, quants, prov, encryptedAlg);
+                    genomicRuns, references, null, idents, quants, prov, encryptedAlg);
         }
     }
 

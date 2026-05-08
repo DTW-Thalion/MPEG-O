@@ -303,4 +303,15 @@
 
 @end
 
+
+@class TTIOMSImage;
+
+@interface TTIOSpectralDataset (Image)
+/** The embedded MSImage when /study/image_cube is present; nil otherwise.
+ *  For an open TTIOMSImage instance, returns self (the subclass relationship
+ *  makes this trivial).
+ *  @since 1.2.0 */
+@property (readonly, nullable) TTIOMSImage *msImage;
+@end
+
 #endif
