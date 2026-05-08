@@ -53,6 +53,7 @@ libTTIO_HEADER_FILES = \
 	Dataset/TTIOWrittenRun.h \
 	Dataset/TTIOCompoundIO.h \
 	Image/TTIOMSImage.h \
+	Image/TTIOPixelSpectrum.h \
 	Image/TTIORamanImage.h \
 	Image/TTIOIRImage.h \
 	Protection/TTIOAccessPolicy.h \
@@ -168,6 +169,7 @@ libTTIO_OBJC_FILES = \
 	Dataset/TTIOWrittenRun.m \
 	Dataset/TTIOCompoundIO.m \
 	Image/TTIOMSImage.m \
+	Image/TTIOPixelSpectrum.m \
 	Image/TTIORamanImage.m \
 	Image/TTIOIRImage.m \
 	Protection/TTIOAccessPolicy.m \

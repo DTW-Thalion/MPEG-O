@@ -105,7 +105,8 @@ TTIOTests_OBJC_FILES = \
 	TestFastaFastqIo.m \
 	TestFastaFastqTioRoundTrip.m \
 	TTIOReferencesAccessorTests.m \
-	TTIOReferenceImportWriteToDatasetTests.m
+	TTIOReferenceImportWriteToDatasetTests.m \
+	TestMSImageMzAxis.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

@@ -7,9 +7,11 @@ package global.thalion.ttio;
 
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.Enums.Precision;
+import global.thalion.ttio.importers.ImzMLReader;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -49,6 +51,7 @@ public class MSImage {
     private final double pixelSizeY;
     private final String scanPattern;
     private final double[] intensityCube;
+    private final double[] mzAxis;     // NEW -- length 0 (legacy) or == spectralPoints
 
     // Dataset-level composition fields
     private final String title;
@@ -57,9 +60,10 @@ public class MSImage {
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
 
+    /** Designated constructor (1.2.0): includes mzAxis. */
     public MSImage(int width, int height, int spectralPoints, int tileSize,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
-                   double[] intensityCube,
+                   double[] intensityCube, double[] mzAxis,
                    String title, String isaInvestigationId,
                    List<Identification> identifications,
                    List<Quantification> quantifications,
@@ -72,6 +76,13 @@ public class MSImage {
         this.pixelSizeY = pixelSizeY;
         this.scanPattern = scanPattern;
         this.intensityCube = intensityCube;
+        if (mzAxis == null) mzAxis = new double[0];
+        if (mzAxis.length > 0 && mzAxis.length != spectralPoints) {
+            throw new IllegalArgumentException(
+                "mzAxis length " + mzAxis.length
+                + " does not match spectralPoints=" + spectralPoints);
+        }
+        this.mzAxis = mzAxis;
         this.title = title != null ? title : "";
         this.isaInvestigationId = isaInvestigationId != null ? isaInvestigationId : "";
         this.identifications = identifications != null ? List.copyOf(identifications) : List.of();
@@ -79,12 +90,26 @@ public class MSImage {
         this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
     }
 
-    /** Convenience — image-only construction (empty dataset-level metadata). */
+    /** Backwards-compat 13-arg ctor (1.1.x callers): defaults mzAxis to empty. */
+    public MSImage(int width, int height, int spectralPoints, int tileSize,
+                   double pixelSizeX, double pixelSizeY, String scanPattern,
+                   double[] intensityCube,
+                   String title, String isaInvestigationId,
+                   List<Identification> identifications,
+                   List<Quantification> quantifications,
+                   List<ProvenanceRecord> provenanceRecords) {
+        this(width, height, spectralPoints, tileSize,
+             pixelSizeX, pixelSizeY, scanPattern, intensityCube, new double[0],
+             title, isaInvestigationId,
+             identifications, quantifications, provenanceRecords);
+    }
+
+    /** Convenience -- image-only construction (empty dataset-level metadata). */
     public MSImage(int width, int height, int spectralPoints,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
                    double[] intensityCube) {
         this(width, height, spectralPoints, 0,
-             pixelSizeX, pixelSizeY, scanPattern, intensityCube,
+             pixelSizeX, pixelSizeY, scanPattern, intensityCube, new double[0],
              "", "", List.of(), List.of(), List.of());
     }
 
@@ -96,6 +121,8 @@ public class MSImage {
     public double pixelSizeY() { return pixelSizeY; }
     public String scanPattern() { return scanPattern; }
     public double[] intensityCube() { return intensityCube; }
+    /** The shared m/z axis when present; empty array for legacy files. */
+    public double[] mzAxis() { return mzAxis; }
 
     public String title() { return title; }
     public String isaInvestigationId() { return isaInvestigationId; }
@@ -114,6 +141,33 @@ public class MSImage {
         double[] result = new double[spectralPoints];
         System.arraycopy(intensityCube, base, result, 0, spectralPoints);
         return result;
+    }
+
+    /** Project this image as a list of {@link
+     *  global.thalion.ttio.importers.ImzMLReader.PixelSpectrum} records
+     *  in continuous mode (every pixel shares {@link #mzAxis}).
+     *
+     *  @throws IllegalStateException if {@code mzAxis} is empty.
+     */
+    public List<ImzMLReader.PixelSpectrum>
+            toPixelSpectra() {
+        if (mzAxis.length == 0) {
+            throw new IllegalStateException(
+                "MSImage has no mz_axis; cannot project to imzML pixels. "
+                + "The .tio was written before format v1.2 added the spectral "
+                + "axis. Re-import from a source format that carries m/z "
+                + "calibration (imzML, mzML), or supply mz_axis explicitly.");
+        }
+        List<ImzMLReader.PixelSpectrum>
+            pixels = new ArrayList<>(width * height);
+        for (int row = 0; row < height; row++) {
+            for (int col = 0; col < width; col++) {
+                double[] intensity = spectrumAt(row, col);
+                // x = col (image-plane), y = row, z = 1 (single plane).
+                pixels.add(new ImzMLReader.PixelSpectrum(col, row, 1, mzAxis, intensity));
+            }
+        }
+        return pixels;
     }
 
     /** Write this image cube to a storage study group.
@@ -137,6 +191,16 @@ public class MSImage {
                     Precision.FLOAT64, shape, chunks,
                     Compression.ZLIB, 6)) {
                 ds.writeAll(intensityCube);
+            }
+
+            if (mzAxis.length > 0) {
+                long[] axisShape  = { spectralPoints };
+                long[] axisChunks = { spectralPoints };
+                try (StorageDataset axisDs = ic.createDatasetND("mz_axis",
+                        Precision.FLOAT64, axisShape, axisChunks,
+                        Compression.ZLIB, 6)) {
+                    axisDs.writeAll(mzAxis);
+                }
             }
         }
     }
@@ -164,8 +228,17 @@ public class MSImage {
                 // route through the storage protocol.
                 cube = (double[]) ds.readAll();
             }
-            return new MSImage(width, height, spectralPoints,
-                    pixelSizeX, pixelSizeY, scanPattern, cube);
+
+            double[] mzAxis = new double[0];
+            if (ic.hasChild("mz_axis")) {
+                try (StorageDataset axisDs = ic.openDataset("mz_axis")) {
+                    mzAxis = (double[]) axisDs.readAll();
+                }
+            }
+
+            return new MSImage(width, height, spectralPoints, 0,
+                    pixelSizeX, pixelSizeY, scanPattern, cube, mzAxis,
+                    "", "", List.of(), List.of(), List.of());
         }
     }
 }

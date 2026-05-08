@@ -3928,3 +3928,31 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 }
 
 @end
+
+#import "../Image/TTIOMSImage.h"
+#import <objc/runtime.h>
+
+@implementation TTIOSpectralDataset (Image)
+
+- (TTIOMSImage *)msImage
+{
+    if ([self isKindOfClass:[TTIOMSImage class]]) {
+        return (TTIOMSImage *)self;
+    }
+    static const void * const kMsImageCacheKey = &kMsImageCacheKey;
+    TTIOMSImage *cached = objc_getAssociatedObject(self, kMsImageCacheKey);
+    if (cached != nil) {
+        return cached;
+    }
+    NSString *path = [self filePath];
+    if (path == nil) return nil;
+    NSError *err = nil;
+    TTIOMSImage *img = [TTIOMSImage readFromFilePath:path error:&err];
+    if (img != nil) {
+        objc_setAssociatedObject(self, kMsImageCacheKey, img,
+                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return img;
+}
+
+@end

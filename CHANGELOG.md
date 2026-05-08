@@ -66,6 +66,38 @@ public API is stable from onward.
 
 ---
 
+## [1.2.0] — 2026-05-08
+
+### Added
+- **`MSImage.mz_axis`**: shared m/z spectral axis on `MSImage` across
+  Java, Python, and ObjC. Persisted as a 1-D FLOAT64 dataset under
+  `/study/image_cube/mz_axis`. Required for imzML export of an
+  `MSImage`-bearing `.tio`.
+- **`MSImage.toPixelSpectra()` / `to_pixel_spectra()` / `-pixelSpectra`**:
+  continuous-mode projection of the cube into per-pixel `(mz, intensity)`
+  records suitable for `ImzMLWriter.write`.
+- **`SpectralDataset.image()` / `.image` / `-msImage`**: accessor on the
+  open dataset returning the materialised `MSImage` if `/study/image_cube`
+  is present. Pattern mirrors the 1.1.0 `references()` accessor.
+- **Python `SpectralDataset.write_minimal(image=...)`**: high-level
+  kwarg writes the image cube alongside runs.
+- **Python `MSImage.write_to(study_group)` / `MSImage.read_from(study_group)`**:
+  standalone storage methods mirroring Java's `writeTo` / `readFrom`.
+- **ObjC `TTIOPixelSpectrum`**: new value class for `-pixelSpectra` output.
+
+### Backwards compatibility
+- v1.1.x `.tio` files without `mz_axis` read as empty axis; the imzML
+  exporter raises a clear error pointing at re-import.
+- v1.1.x readers transparently skip the `mz_axis` dataset when reading
+  v1.2.0-written files.
+
+### Cross-language conformance
+- New `python/tests/conformance/test_msimage_xlang.py` asserts byte-equal
+  `mz_axis` payloads when written by Python and read back by Java + ObjC.
+- Bug fix: `Hdf5Group.openDataset` (Java) now correctly handles N-D datasets,
+  fixing a silent length-truncation that previously made Python-written
+  `.tio` files unreadable from Java.
+
 ## [1.1.0] — 2026-05-06
 
 Pure additive release. No wire-format change: `.tio` files written

@@ -5,6 +5,7 @@
 #import "Dataset/TTIOSpectralDataset.h"
 
 @class TTIOHDF5Group;
+@class TTIOPixelSpectrum;
 
 /**
  * <p><em>Inherits From:</em> TTIOSpectralDataset : NSObject</p>
@@ -58,6 +59,9 @@
  *  when unknown. */
 @property (readonly, copy) NSString *scanPattern;
 
+/** Length-spectralPoints float64 array; nil for legacy files. */
+@property (readonly, copy, nullable) NSData *mzAxis;
+
 #pragma mark - Initialisation
 
 /**
@@ -87,6 +91,28 @@
                    pixelSizeY:(double)pixelSizeY
                   scanPattern:(NSString *)scanPattern
                          cube:(NSData *)cube;
+
+/**
+ * Designated initialiser including mzAxis (1.2.0+).
+ */
+- (instancetype)initWithTitle:(NSString *)title
+           isaInvestigationId:(NSString *)isaId
+              identifications:(NSArray *)identifications
+              quantifications:(NSArray *)quantifications
+            provenanceRecords:(NSArray *)provenance
+                        width:(NSUInteger)width
+                       height:(NSUInteger)height
+               spectralPoints:(NSUInteger)spectralPoints
+                     tileSize:(NSUInteger)tileSize
+                   pixelSizeX:(double)pixelSizeX
+                   pixelSizeY:(double)pixelSizeY
+                  scanPattern:(NSString *)scanPattern
+                         cube:(NSData *)cube
+                       mzAxis:(nullable NSData *)mzAxis;
+
+/** Project this image as a continuous-mode pixel list. Raises
+ *  NSInternalInconsistencyException when mzAxis is nil/empty. */
+- (NSArray<TTIOPixelSpectrum *> *)pixelSpectra;
 
 #pragma mark - Persistence
 

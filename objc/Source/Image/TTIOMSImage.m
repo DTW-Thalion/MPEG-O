@@ -16,6 +16,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOMSImage.h"
+#import "TTIOPixelSpectrum.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Errors.h"
@@ -59,7 +60,39 @@
                   scanPattern:(NSString *)scanPattern
                          cube:(NSData *)cube
 {
+    return [self initWithTitle:title
+            isaInvestigationId:isaId
+               identifications:identifications
+               quantifications:quantifications
+             provenanceRecords:provenance
+                         width:width
+                        height:height
+                spectralPoints:spectralPoints
+                      tileSize:tileSize
+                    pixelSizeX:pixelSizeX
+                    pixelSizeY:pixelSizeY
+                   scanPattern:scanPattern
+                          cube:cube
+                        mzAxis:nil];
+}
+
+- (instancetype)initWithTitle:(NSString *)title
+           isaInvestigationId:(NSString *)isaId
+              identifications:(NSArray *)identifications
+              quantifications:(NSArray *)quantifications
+            provenanceRecords:(NSArray *)provenance
+                        width:(NSUInteger)width
+                       height:(NSUInteger)height
+               spectralPoints:(NSUInteger)spectralPoints
+                     tileSize:(NSUInteger)tileSize
+                   pixelSizeX:(double)pixelSizeX
+                   pixelSizeY:(double)pixelSizeY
+                  scanPattern:(NSString *)scanPattern
+                         cube:(NSData *)cube
+                       mzAxis:(NSData *)mzAxis
+{
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
+    NSParameterAssert(mzAxis == nil || mzAxis.length == spectralPoints * sizeof(double));
     self = [super initWithTitle:title
              isaInvestigationId:isaId
                          msRuns:@{}
@@ -77,6 +110,7 @@
         _pixelSizeY     = pixelSizeY;
         _scanPattern    = [scanPattern copy];
         _cube           = [cube copy];
+        _mzAxis         = [mzAxis copy];
     }
     return self;
 }
@@ -91,6 +125,7 @@ static BOOL writeImageCubeUnderGroup(hid_t parentGid,
                                       double pxX, double pxY,
                                       NSString *scanPattern,
                                       const void *cubeBytes,
+                                      NSData *mzAxis,
                                       NSError **error)
 {
     hid_t imageGroup = H5Gcreate2(parentGid, "image_cube",
@@ -159,6 +194,38 @@ static BOOL writeImageCubeUnderGroup(hid_t parentGid,
         H5Awrite(a, strType, &cs);
         H5Aclose(a);
         H5Tclose(strType);
+    }
+
+    // mz_axis 1-D dataset (1.2.0+)
+    if (mzAxis != nil && mzAxis.length == sp * sizeof(double)) {
+        hsize_t axisDims[1] = { (hsize_t)sp };
+        hid_t axisSpace = H5Screate_simple(1, axisDims, NULL);
+        hid_t axisPlist = H5Pcreate(H5P_DATASET_CREATE);
+        H5Pset_chunk(axisPlist, 1, axisDims);
+        H5Pset_deflate(axisPlist, 6);
+        hid_t axisDid = H5Dcreate2(imageGroup, "mz_axis",
+                                    H5T_NATIVE_DOUBLE, axisSpace,
+                                    H5P_DEFAULT, axisPlist, H5P_DEFAULT);
+        if (axisDid < 0) {
+            H5Pclose(axisPlist); H5Sclose(axisSpace);
+            H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+            H5Sclose(scalar); H5Gclose(imageGroup);
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
+                @"H5Dcreate2 mz_axis failed");
+            return NO;
+        }
+        herr_t s2 = H5Dwrite(axisDid, H5T_NATIVE_DOUBLE,
+                              H5S_ALL, H5S_ALL, H5P_DEFAULT, mzAxis.bytes);
+        H5Dclose(axisDid);
+        H5Pclose(axisPlist);
+        H5Sclose(axisSpace);
+        if (s2 < 0) {
+            H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+            H5Sclose(scalar); H5Gclose(imageGroup);
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+                @"H5Dwrite mz_axis failed");
+            return NO;
+        }
     }
 
     #undef WRITE_INT_ATTR
@@ -237,6 +304,18 @@ static NSData *readImageCubeFromGroup(hid_t imageGroup,
     return cube;
 }
 
+static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
+{
+    if (H5Lexists(imageGroup, "mz_axis", H5P_DEFAULT) <= 0) return nil;
+    hid_t did = H5Dopen2(imageGroup, "mz_axis", H5P_DEFAULT);
+    if (did < 0) return nil;
+    NSMutableData *axis = [NSMutableData dataWithLength:sp * sizeof(double)];
+    herr_t s = H5Dread(did, H5T_NATIVE_DOUBLE,
+                       H5S_ALL, H5S_ALL, H5P_DEFAULT, axis.mutableBytes);
+    H5Dclose(did);
+    return s < 0 ? nil : [axis copy];
+}
+
 #pragma mark - TTIOSpectralDataset hooks
 
 - (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
@@ -246,7 +325,7 @@ static NSData *readImageCubeFromGroup(hid_t imageGroup,
     return writeImageCubeUnderGroup(studyGroup.groupId,
                                      _width, _height, _spectralPoints, _tileSize,
                                      _pixelSizeX, _pixelSizeY, _scanPattern,
-                                     _cube.bytes, error);
+                                     _cube.bytes, _mzAxis, error);
 }
 
 - (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
@@ -261,6 +340,7 @@ static NSData *readImageCubeFromGroup(hid_t imageGroup,
     readImageMetaFromGroup(imageGroup, &meta);
 
     NSData *cube = readImageCubeFromGroup(imageGroup, meta.width, meta.height, meta.sp, error);
+    NSData *axis = readMzAxisFromGroup(imageGroup, meta.sp);
     H5Gclose(imageGroup);
     if (!cube) { if (meta.scanPattern) free(meta.scanPattern); return NO; }
 
@@ -275,6 +355,7 @@ static NSData *readImageCubeFromGroup(hid_t imageGroup,
                         : @"";
     if (meta.scanPattern) free(meta.scanPattern);
     _cube           = [cube copy];
+    _mzAxis         = axis;
     return YES;
 }
 
@@ -298,15 +379,19 @@ static NSData *readImageCubeFromGroup(hid_t imageGroup,
             NSData *cube = readImageCubeFromGroup(legacyGroup,
                                                     meta.width, meta.height, meta.sp,
                                                     error);
+            NSData *axis = readMzAxisFromGroup(legacyGroup, meta.sp);
             H5Gclose(legacyGroup);
             H5Fclose(probe);
             if (!cube) return nil;
             TTIOMSImage *img = [[TTIOMSImage alloc]
-                                 initWithWidth:meta.width
-                                        height:meta.height
-                                spectralPoints:meta.sp
-                                      tileSize:meta.tileSize
-                                          cube:cube];
+                                 initWithTitle:@"" isaInvestigationId:@""
+                                 identifications:@[] quantifications:@[]
+                                 provenanceRecords:@[]
+                                 width:meta.width height:meta.height
+                                 spectralPoints:meta.sp tileSize:meta.tileSize
+                                 pixelSizeX:meta.pixelSizeX pixelSizeY:meta.pixelSizeY
+                                 scanPattern:meta.scanPattern ? @(meta.scanPattern) : @""
+                                 cube:cube mzAxis:axis];
             if (meta.scanPattern) free(meta.scanPattern);
             return img;
         }
@@ -384,6 +469,36 @@ static NSData *readImageCubeFromGroup(hid_t imageGroup,
         return nil;
     }
     return out;
+}
+
+#pragma mark - imzML projection
+
+- (NSArray<TTIOPixelSpectrum *> *)pixelSpectra
+{
+    if (_mzAxis == nil || _mzAxis.length == 0) {
+        [NSException raise:NSInternalInconsistencyException
+                    format:@"MSImage has no mz_axis; cannot project to imzML "
+                           @"pixels. The .tio was written before format v1.2 "
+                           @"added the spectral axis. Re-import from a source "
+                           @"format that carries m/z calibration (imzML, mzML), "
+                           @"or supply mz_axis explicitly."];
+
+    }
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:_width * _height];
+    const double *cubeP = (const double *)_cube.bytes;
+    for (NSUInteger row = 0; row < _height; row++) {
+        for (NSUInteger col = 0; col < _width; col++) {
+            NSUInteger base = (row * _width + col) * _spectralPoints;
+            NSData *intensity =
+                [NSData dataWithBytes:cubeP + base
+                               length:_spectralPoints * sizeof(double)];
+            [out addObject:[[TTIOPixelSpectrum alloc]
+                              initWithX:col y:row z:1
+                                     mz:_mzAxis
+                              intensity:intensity]];
+        }
+    }
+    return [out copy];
 }
 
 #pragma mark - Equality
