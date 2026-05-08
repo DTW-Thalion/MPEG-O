@@ -107,7 +107,8 @@ void testMilestone12(void)
                                                     error:&err];
         PASS(tile.length == TS * TS * SP * sizeof(double),
              "tile read via /study/image_cube layout");
-        [back closeFile];
+        // TTIOMSImage no longer inherits TTIOSpectralDataset; HDF5 handles
+        // are already closed by -readFromFilePath:. No closeFile needed.
         unlink([path fileSystemRepresentation]);
     }
 
