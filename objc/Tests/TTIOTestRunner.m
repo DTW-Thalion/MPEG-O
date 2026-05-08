@@ -112,6 +112,7 @@ extern void testReferenceImportWriteToDataset(void);
 extern void testMSImageMzAxis(void);
 extern void testMSImageLegacyMzAxisAbsent(void);
 extern void testSpectralDatasetMsImageAccessor(void);
+extern void testPixelSpectraRaisesWhenMzAxisAbsent(void);
 
 int main(int argc, const char *argv[])
 {
@@ -560,6 +561,12 @@ int main(int argc, const char *argv[])
         START_SET("1.2.0: TTIOSpectralDataset.msImage accessor (category)")
             testSpectralDatasetMsImageAccessor();
         END_SET("1.2.0: TTIOSpectralDataset.msImage accessor (category)")
+
+        START_SET("1.2.0: TTIOMSImage pixelSpectra raises on missing mzAxis")
+        {
+            testPixelSpectraRaisesWhenMzAxisAbsent();
+        }
+        END_SET("1.2.0: TTIOMSImage pixelSpectra raises on missing mzAxis")
     }
     return 0;
 }

@@ -114,3 +114,30 @@ void testSpectralDatasetMsImageAccessor(void)
     PASS([via.mzAxis isEqualToData:mz], "mzAxis byte-equal via accessor");
     unlink([path fileSystemRepresentation]);
 }
+
+void testPixelSpectraRaisesWhenMzAxisAbsent(void)
+{
+    const NSUInteger W = 2, H = 2, SP = 3;
+    NSMutableData *cube = [NSMutableData dataWithLength:W * H * SP * sizeof(double)];
+
+    // Use the legacy 5-arg ctor (no mzAxis) to construct an MSImage
+    // without an axis.
+    TTIOMSImage *img = [[TTIOMSImage alloc] initWithWidth:W
+                                                    height:H
+                                            spectralPoints:SP
+                                                  tileSize:0
+                                                      cube:cube];
+    PASS(img.mzAxis == nil, "ctor leaves mzAxis nil");
+
+    BOOL raised = NO;
+    @try {
+        [img pixelSpectra];
+    } @catch (NSException *e) {
+        raised = YES;
+        PASS([e.name isEqualToString:NSInternalInconsistencyException],
+             "raised NSInternalInconsistencyException");
+        PASS([e.reason rangeOfString:@"mz_axis"].location != NSNotFound,
+             "exception reason mentions mz_axis");
+    }
+    PASS(raised, "pixelSpectra raised exception when mzAxis is nil");
+}
