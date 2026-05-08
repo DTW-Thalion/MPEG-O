@@ -16,6 +16,8 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import struct
+
 import numpy as np
 import pytest
 
@@ -121,5 +123,57 @@ def test_mz_axis_byte_equal_xlang(tmp_path: Path) -> None:
         )
         assert objc_proc.stdout == expected, (
             f"ObjC mz_axis bytes differ: got {len(objc_proc.stdout)} bytes")
+    else:
+        pytest.skip("ObjC conformance reader not built")
+
+
+PIXEL_SIZE_X = 10.0
+PIXEL_SIZE_Y = 10.0
+
+
+def test_pixel_size_byte_equal_xlang(tmp_path: Path) -> None:
+    """Python writes; Java + ObjC read; pixel_size_x/y values match Python ground truth."""
+    out = tmp_path / "xlang_pxy.tio"
+    img = MSImage(
+        width=W, height=H, spectral_points=SP,
+        intensity=INTENSITY, mz_axis=MZ_AXIS,
+        pixel_size_x=PIXEL_SIZE_X, pixel_size_y=PIXEL_SIZE_Y,
+        scan_pattern="raster",
+    )
+    SpectralDataset.write_minimal(
+        out, title="xlang_pxy", isa_investigation_id="", runs={}, image=img,
+    )
+
+    # Python ground-truth: 8 bytes each for pixel_size_x and pixel_size_y
+    expected_x = struct.pack("<d", PIXEL_SIZE_X)
+    expected_y = struct.pack("<d", PIXEL_SIZE_Y)
+    assert len(expected_x) == 8
+    assert len(expected_y) == 8
+
+    # Java reader
+    if _java_runtime_available():
+        for field, expected in (("pixel_size_x", expected_x), ("pixel_size_y", expected_y)):
+            java_proc = subprocess.run(
+                ["java", "-cp", _java_classpath(),
+                 "global.thalion.ttio.conformance.MsImageXLangReader",
+                 str(out), f"--field={field}"],
+                check=True, capture_output=True, timeout=60,
+            )
+            got = struct.unpack("<d", java_proc.stdout)[0]
+            assert abs(got - struct.unpack("<d", expected)[0]) < 1e-15, (
+                f"Java {field} mismatch: got {got}")
+    else:
+        pytest.skip("Java conformance reader not built")
+
+    # ObjC reader
+    if _objc_runtime_available():
+        for field, expected in (("pixel_size_x", expected_x), ("pixel_size_y", expected_y)):
+            objc_proc = subprocess.run(
+                [str(_OBJC_BIN / "TtioMsImageXLangReader"), str(out), f"--field={field}"],
+                check=True, capture_output=True, timeout=60, env=_objc_env(),
+            )
+            got = struct.unpack("<d", objc_proc.stdout)[0]
+            assert abs(got - struct.unpack("<d", expected)[0]) < 1e-15, (
+                f"ObjC {field} mismatch: got {got}")
     else:
         pytest.skip("ObjC conformance reader not built")

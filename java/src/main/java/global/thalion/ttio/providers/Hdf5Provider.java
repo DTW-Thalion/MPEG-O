@@ -286,10 +286,13 @@ public final class Hdf5Provider implements StorageProvider {
             if (tclass == HDF5Constants.H5T_INTEGER) {
                 return delegate.readIntegerAttribute(name, 0L);
             }
+            if (tclass == HDF5Constants.H5T_FLOAT) {
+                return delegate.readDoubleAttribute(name, 0.0);
+            }
             if (tclass == HDF5Constants.H5T_STRING) {
                 return delegate.readStringAttribute(name);
             }
-            // Unknown class (float, compound, …) — try string first,
+            // Unknown class (compound, …) — try string first,
             // then integer, to preserve the prior behaviour for edge
             // cases not yet exercised by the test suite.
             try { return delegate.readStringAttribute(name); }
@@ -317,6 +320,8 @@ public final class Hdf5Provider implements StorageProvider {
         @Override public void setAttribute(String name, Object value) {
             if (value instanceof String s) {
                 delegate.setStringAttribute(name, s);
+            } else if (value instanceof Double d) {
+                delegate.setDoubleAttribute(name, d);
             } else if (value instanceof Number n) {
                 delegate.setIntegerAttribute(name, n.longValue());
             } else if (value == null) {
