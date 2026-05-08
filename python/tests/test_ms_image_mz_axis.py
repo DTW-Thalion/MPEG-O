@@ -91,3 +91,30 @@ def test_to_pixel_spectra_raises_with_empty_axis() -> None:
     )
     with pytest.raises(RuntimeError, match="mz_axis"):
         img.to_pixel_spectra()
+
+
+def test_spectral_dataset_image_property(tmp_path: Path) -> None:
+    """SpectralDataset.write_minimal(image=...) persists the cube;
+    SpectralDataset.image property reads it back."""
+    from ttio import SpectralDataset
+
+    img = _build_image(2, 2, 4)
+    out = tmp_path / "ds_with_image.tio"
+    SpectralDataset.write_minimal(
+        out, title="img-test", isa_investigation_id="",
+        runs={}, image=img,
+    )
+
+    with SpectralDataset.open(out) as ds:
+        materialised = ds.image
+        assert materialised is not None
+        assert materialised.width == 2
+        np.testing.assert_array_equal(materialised.mz_axis, img.mz_axis)
+
+
+def test_spectral_dataset_image_property_returns_none_when_absent(tmp_path: Path) -> None:
+    from ttio import SpectralDataset
+    out = tmp_path / "no_image.tio"
+    SpectralDataset.write_minimal(out, title="", isa_investigation_id="", runs={})
+    with SpectralDataset.open(out) as ds:
+        assert ds.image is None

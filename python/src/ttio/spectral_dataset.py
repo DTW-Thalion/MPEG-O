@@ -28,6 +28,7 @@ from .genomic.reference_import import ReferenceImport  # tio-browser Phase 0
 from .genomic_run import GenomicRun  # M82
 from .enums import EncryptionLevel
 from .feature_flags import FeatureFlags
+from .ms_image import MSImage
 from .identification import Identification
 from .providers import StorageProvider, open_provider
 from .providers.base import StorageGroup
@@ -111,6 +112,9 @@ class SpectralDataset:
     # ``provider.native_handle()`` instead of ``file`` directly.
     # Encryptable conformance.
     _access_policy: AccessPolicy | None = field(default=None, repr=False)
+    # Lazy image cache — populated on first access of the `image` property.
+    _image_cache_loaded: bool = field(default=False, repr=False)
+    _image_cache: "MSImage | None" = field(default=None, repr=False)
 
     # ------------------------------------------------------------- lifecycle
 
@@ -433,6 +437,26 @@ class SpectralDataset:
         return MappingProxyType(self._references)
 
     @property
+    def image(self) -> "MSImage | None":
+        """The embedded MSImage if /study/image_cube is present.
+
+        Lazy: reads the cube on first access, caches the result.
+        Returns ``None`` when no image group exists.
+
+        :since: 1.2.0
+        """
+        if not self._image_cache_loaded:
+            self._image_cache_loaded = True
+            try:
+                root = self.provider.root_group()
+                if root.has_child("study"):
+                    study = root.open_group("study")
+                    self._image_cache = MSImage.read_from(study)
+            except Exception:
+                self._image_cache = None
+        return self._image_cache
+
+    @property
     def all_runs(self) -> Mapping[str, AcquisitionRun]:
         """Union of MS and NMR runs, keyed by run name.
 
@@ -740,6 +764,7 @@ class SpectralDataset:
         provenance: list[ProvenanceRecord] | None = None,
         features: list[str] | None = None,
         provider: str | StorageProvider = "hdf5",
+        image: "MSImage | None" = None,           # NEW (1.2.0)
     ) -> Path:
         """Write a minimal v1.1 ``.tio`` file from in-memory data.
 
@@ -836,6 +861,12 @@ class SpectralDataset:
                     _write_quantifications(study, quantifications)
                 if provenance:
                     _write_provenance(study, provenance)
+                if image is not None:
+                    # Wrap the raw h5py.Group in the package-private adapter
+                    # so MSImage.write_to (which expects a StorageGroup) works
+                    # uniformly across both the fast-path and protocol-path branches.
+                    from ttio.providers.hdf5 import _Group as _Hdf5Group
+                    image.write_to(_Hdf5Group(study))
             return p
 
         # Provider-driven write path — Memory / SQLite / Zarr / future.
@@ -881,6 +912,8 @@ class SpectralDataset:
                 _write_quantifications(study, quantifications)
             if provenance:
                 _write_provenance(study, provenance)
+            if image is not None:
+                image.write_to(study)   # study is already a StorageGroup here
         finally:
             if owns_provider:
                 sp.close()
