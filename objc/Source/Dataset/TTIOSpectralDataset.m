@@ -1545,21 +1545,6 @@ static NSError *makeProviderWriteNotImplementedError(NSString *url) {
         }
     }
 
-    // Subclass hook: adds its own datasets under /study/ before close.
-    // Subclasses use HDF5-direct features (MSImage cube), so this hook
-    // takes a concrete TTIOHDF5Group *. The non-HDF5 rejection above
-    // ensures we only get here with HDF5 when a subclass is involved,
-    // so the cast is safe.
-    if ([self class] != [TTIOSpectralDataset class]) {
-        if (![study isKindOfClass:[TTIOHDF5Group class]]) {
-            if (error) *error = makeProviderWriteNotImplementedError(path);
-            [provider close]; return NO;
-        }
-        if (![self writeAdditionalStudyContent:(TTIOHDF5Group *)study error:error]) {
-            [provider close]; return NO;
-        }
-    }
-
     if (_transitions) {
         NSData *tdata = [NSJSONSerialization dataWithJSONObject:[_transitions asPlist]
                                                         options:0
@@ -3414,9 +3399,6 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     }
     ds->_references = [refs copy];
 
-    // Subclass hook: read additional /study/ content while file is open.
-    (void)[ds readAdditionalStudyContent:study error:NULL];
-
     if ([root hasAttributeNamed:@"access_policy_json"]) {
         ds->_accessPolicy = decodeAccessPolicy(
             [root stringAttributeNamed:@"access_policy_json" error:NULL]);
@@ -3641,22 +3623,6 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 
 - (TTIOAccessPolicy *)accessPolicy { return _accessPolicy; }
 - (void)setAccessPolicy:(TTIOAccessPolicy *)policy { _accessPolicy = policy; }
-
-#pragma mark - Subclass hooks (default no-ops)
-
-- (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                              error:(NSError **)error
-{
-    (void)studyGroup; (void)error;
-    return YES;
-}
-
-- (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                             error:(NSError **)error
-{
-    (void)studyGroup; (void)error;
-    return YES;
-}
 
 #pragma mark - Compound dataset sealing (encryption of /study compound datasets)
 
@@ -3936,9 +3902,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 
 - (TTIOMSImage *)msImage
 {
-    if ([self isKindOfClass:[TTIOMSImage class]]) {
-        return (TTIOMSImage *)self;
-    }
+    // TTIOMSImage no longer inherits from TTIOSpectralDataset; always
+    // materialise from file path via the image class factory.
     static const void * const kMsImageCacheKey = &kMsImageCacheKey;
     TTIOMSImage *cached = objc_getAssociatedObject(self, kMsImageCacheKey);
     if (cached != nil) {
