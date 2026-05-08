@@ -109,9 +109,9 @@ fi
 
 # --- HDF5 ------------------------------------------------------------------
 hdf5_hdr=""
-for cand in /usr/include/hdf5.h \
-            /usr/include/hdf5/serial/hdf5.h \
-            /usr/local/include/hdf5.h; do
+for cand in /usr/local/include/hdf5.h \
+            /usr/include/hdf5.h \
+            /usr/include/hdf5/serial/hdf5.h; do
     if [ -f "$cand" ]; then hdf5_hdr="$cand"; break; fi
 done
 if [ -n "$hdf5_hdr" ]; then
@@ -119,9 +119,9 @@ if [ -n "$hdf5_hdr" ]; then
     # Probe libhdf5 for ROS3 VFD (cloud-native .tio access). Apt's
     # libhdf5 ships ROS3 enabled; custom builds may not.
     hdf5_lib=""
-    for cand in /usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so \
-                /usr/lib/libhdf5.so \
-                /usr/local/lib/libhdf5.so; do
+    for cand in /usr/local/lib/libhdf5.so \
+                /usr/lib/x86_64-linux-gnu/hdf5/serial/libhdf5.so \
+                /usr/lib/libhdf5.so; do
         if [ -f "$cand" ]; then hdf5_lib="$cand"; break; fi
     done
     if [ -n "$hdf5_lib" ] && command -v nm >/dev/null 2>&1 &&
@@ -131,7 +131,7 @@ if [ -n "$hdf5_hdr" ]; then
         note "libhdf5 built without ROS3 VFD — +openS3URL: will fail"
     fi
 else
-    fail "libhdf5 headers not found (install libhdf5-dev)"
+    fail "libhdf5 headers not found (run scripts/install-hdf5.sh from repo root)"
 fi
 
 # --- zlib ------------------------------------------------------------------
