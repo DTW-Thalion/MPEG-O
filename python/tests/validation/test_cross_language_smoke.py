@@ -41,6 +41,19 @@ from ttio import Identification, SpectralDataset, WrittenRun
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 
 def _resolve_objc_verify() -> tuple[Path, dict[str, str]] | None:
     """Locate the built TtioVerify binary + the env vars needed to run it."""
@@ -91,11 +104,11 @@ def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
         return None
     full_cp = f"{classes}:{cp}"
     env = os.environ.copy()
-    # Linux convention path for the JNI HDF5 library; override via
-    # TTIO_JAVA_LIB_PATH for non-Debian distros.
+    # Library path for HDF5 1.14 (source-built) + JNI libs; override via
+    # TTIO_JAVA_LIB_PATH for non-standard installs.
     env.setdefault(
         "TTIO_JAVA_LIB_PATH",
-        "/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial",
+        "/usr/local/lib",
     )
     # Append the libttio_rans build dir so Java's TtioRansNative
     # System.loadLibrary("ttio_rans") resolves in the subprocess.
@@ -116,6 +129,8 @@ def _resolve_java_verify() -> tuple[list[str], dict[str, str]] | None:
         java_lib_path = f"{java_lib_path}:{rans_lib_dir}"
     argv = [
         "java",
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
         f"-Djava.library.path={java_lib_path}",
         "-cp", full_cp,
         "global.thalion.ttio.tools.TtioVerify",

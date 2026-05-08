@@ -23,6 +23,19 @@ OBJC_LIB_DIR = "/home/toddw/TTI-O/objc/Source/obj"
 NATIVE_LIB_DIR = "/home/toddw/TTI-O/native/_build"
 JAVA_TARGET_DIR = "/home/toddw/TTI-O/java/target"
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 
 def _extract_names(bam_path: str, out_txt: str) -> int:
     proc = subprocess.run(
@@ -87,8 +100,8 @@ def test_three_lang_byte_equal(corpus, bam_path, capsys):
         java_path = f"{td}/java.bin"
         subprocess.run(
             [
-                "java",
-                f"-Djava.library.path={NATIVE_LIB_DIR}",
+                "java", *_JAVA_FLAGS,
+                f"-Djava.library.path=/usr/local/lib:{NATIVE_LIB_DIR}",
                 "-cp", jar,
                 "global.thalion.ttio.tools.NameTokenizedV2Cli",
                 names_txt, java_path,

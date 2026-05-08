@@ -29,6 +29,19 @@ NATIVE_LIB_DIR = REPO / "native" / "_build"
 JAVA_JAR = REPO / "java" / "target" / "ttio-1.0.0.jar"
 OBJC_CLI = REPO / "objc" / "Tools" / "obj" / "TtioMateInfoV2Cli"
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 CORPORA = [
     ("chr22",          REPO / "data/genomic/na12878/na12878.chr22.lean.mapped.bam"),
     ("wes",            REPO / "data/genomic/na12878_wes/na12878_wes.chr22.bam"),
@@ -85,8 +98,8 @@ def test_mate_info_v2_cross_language_byte_equal(tmp_path, name, bam_path):
     # Step 4: Encode via Java subprocess (direct java, NOT mvn exec).
     java_out = tmp_path / f"{name}_java.bin"
     java_proc = subprocess.run(
-        ["java",
-         f"-Djava.library.path={NATIVE_LIB_DIR}",
+        ["java", *_JAVA_FLAGS,
+         f"-Djava.library.path=/usr/local/lib:{NATIVE_LIB_DIR}",
          "-cp", str(JAVA_JAR),
          "global.thalion.ttio.tools.MateInfoV2Cli",
          str(files["mc"]), str(files["mp"]), str(files["ts"]),

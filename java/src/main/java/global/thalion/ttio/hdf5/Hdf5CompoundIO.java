@@ -9,6 +9,14 @@ import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5LibraryException;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.Linker;
+import java.lang.foreign.MemoryLayout;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.foreign.ValueLayout;
+import java.lang.invoke.MethodHandle;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -16,26 +24,36 @@ import java.util.List;
 
 /**
  * Write/read helper for the fixed compound metadata datasets described
- * in format-spec section 6. Supports variable-length strings in writes via a
- * split-write strategy compatible with HDF5 1.14 Java bindings.
+ * in format-spec section 6. Supports variable-length fields (VL_STRING and
+ * VL_BYTES) in writes via a split-write strategy compatible with HDF5 1.14
+ * Java bindings.
  *
- * <p><b>HDF5 1.14 compatibility note:</b> The {@code H5Dwrite(byte[])} JNI
- * path in 1.14 detects VL_STRING (char*) fields in the memory type and calls
- * {@code GetObjectArrayElement} expecting Java String objects -- crashing on
- * the raw C-string pointer values stored by the old {@link NativeStringPool}
- * approach.  VL_BYTES ({@code hvl_t}) fields are unaffected by this
- * change.</p>
+ * <p><b>HDF5 1.14 compatibility note:</b> The HDF5 1.14 JNI wrapper for
+ * {@code H5Dwrite} and {@code H5DwriteVL} calls {@code h5str_detect_vlen}
+ * on the memory type before every write, and if any {@code H5T_VLEN} field
+ * is present it routes through {@code translate_wbuf} /
+ * {@code translate_rbuf}, which calls {@code GetObjectArrayElement} on a
+ * {@code jbyteArray} -- undefined behaviour that causes a JVM SIGSEGV.</p>
  *
- * <p>When a schema contains VL_STRING fields, the write path splits:
- * non-string fields (including VL_BYTES) are written via a byte buffer using
- * a memory type that excludes VL_STRING, then each VL_STRING column is written
- * separately via {@link H5#H5Dwrite_VLStrings}. When no VL_STRING fields are
- * present, the original full-compound byte-buffer approach is used unchanged.</p>
+ * <p>When a schema contains any VL field (VL_STRING or VL_BYTES), the write
+ * path splits:
+ * <ol>
+ *   <li>Create the dataset with the full compound file type.</li>
+ *   <li>Write only the non-VL (primitive) fields via
+ *       {@code H5Dwrite(byte[])} with a projection memory type that excludes
+ *       all VL fields.</li>
+ *   <li>Write each VL_STRING column via
+ *       {@link H5#H5Dwrite_VLStrings(long,long,long,long,long,Object[])}.</li>
+ *   <li>Write each VL_BYTES column via the {@link VlBytesFFM} helper, which
+ *       uses the Java 21 Foreign Function &amp; Memory (FFM) API to call the
+ *       native C {@code H5Dwrite} directly, bypassing the JNI
+ *       {@code translate_wbuf} path entirely.</li>
+ * </ol>
+ * For schemas with no VL fields at all, the original full-compound
+ * byte-buffer approach is used unchanged (compatible with HDF5 1.14).</p>
  *
- * <p>The read path applies the same split strategy when VL_STRING fields are
+ * <p>The read path applies the same split strategy when any VL field is
  * present.</p>
- *
- *
  */
 public final class Hdf5CompoundIO {
 
@@ -79,9 +97,8 @@ public final class Hdf5CompoundIO {
 
     /**
      * Packs row values into the compound value array. VL_STRING fields are
-     * returned as {@link String} objects (via
-     * {@link NativeStringPool#addString(String)}, which is now a pass-through);
-     * primitives as their boxed numeric types; VL_BYTES as {@code byte[]}.
+     * returned as {@link String} objects; primitives as their boxed numeric
+     * types; VL_BYTES as {@code byte[]}.
      */
     @FunctionalInterface
     public interface RowPacker {
@@ -124,20 +141,10 @@ public final class Hdf5CompoundIO {
     // -- Write ---------------------------------------------------------
 
     /**
-     * Write a compound dataset. For schemas with VL_STRING fields, uses a
-     * split strategy to avoid the HDF5 1.14 crash:
-     * <ol>
-     *   <li>Create the dataset with the full compound file type.</li>
-     *   <li>Write non-string fields (primitives + VL_BYTES) via
-     *       {@code H5Dwrite(byte[])} with a projection memory type that
-     *       excludes VL_STRING. VL_BYTES use the native hvl_t pointer layout
-     *       via {@link NativeBytesPool} (unaffected by the 1.14 change).</li>
-     *   <li>Write each VL_STRING column via
-     *       {@link H5#H5Dwrite_VLStrings(long, long, long, long, long, Object[])}
-     *       with a single-field compound memory type.</li>
-     * </ol>
-     * For schemas without VL_STRING fields, uses the original full-compound
-     * byte-buffer approach (compatible with 1.14 for VL_BYTES).
+     * Write a compound dataset. For schemas with any VL field (VL_STRING or
+     * VL_BYTES), uses a split strategy to avoid the HDF5 1.14 crash.
+     * For schemas without any VL fields, uses the original full-compound
+     * byte-buffer approach.
      */
     public static void writeCompoundDataset(Hdf5Group parent, String datasetName,
                                              Schema schema, int count,
@@ -147,10 +154,11 @@ public final class Hdf5CompoundIO {
             return;
         }
 
-        boolean hasVlString = schema.fields.stream()
-                .anyMatch(f -> f.kind() == FieldKind.VL_STRING);
+        boolean hasVl = schema.fields.stream()
+                .anyMatch(f -> f.kind() == FieldKind.VL_STRING
+                            || f.kind() == FieldKind.VL_BYTES);
 
-        if (hasVlString) {
+        if (hasVl) {
             writeCompoundSplit(parent, datasetName, schema, count, packer);
         } else {
             writeCompoundOriginal(parent, datasetName, schema, count, packer);
@@ -158,30 +166,20 @@ public final class Hdf5CompoundIO {
     }
 
     /**
-     * Original byte-buffer write path -- used when no VL_STRING fields are
-     * present (compatible with HDF5 1.14 for VL_BYTES).
+     * Original byte-buffer write path -- used when no VL fields are present
+     * (compatible with HDF5 1.14).
      */
     private static void writeCompoundOriginal(Hdf5Group parent, String datasetName,
                                                Schema schema, int count,
                                                RowPacker packer) {
         Hdf5File owner = parent.owningFile();
         owner.lockForWriting();
-        long strType = -1, vlBytesType = -1, ctype = -1, dspace = -1, dset = -1;
-        try (NativeStringPool pool = new NativeStringPool();
-             NativeBytesPool bytesPool = new NativeBytesPool()) {
-            strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
-            H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
-            vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
-
+        long ctype = -1, dspace = -1, dset = -1;
+        try (NativeStringPool pool = new NativeStringPool()) {
             ctype = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, schema.totalSize);
             for (int i = 0; i < schema.fields.size(); i++) {
                 Field f = schema.fields.get(i);
-                long t = switch (f.kind()) {
-                    case VL_STRING -> strType;
-                    case VL_BYTES  -> vlBytesType;
-                    default        -> f.kind().nativeType;
-                };
-                H5.H5Tinsert(ctype, f.name(), schema.offsets[i], t);
+                H5.H5Tinsert(ctype, f.name(), schema.offsets[i], f.kind().nativeType);
             }
 
             ByteBuffer buf = ByteBuffer.allocate(schema.totalSize * count)
@@ -192,17 +190,10 @@ public final class Hdf5CompoundIO {
                 for (int i = 0; i < schema.fields.size(); i++) {
                     int off = base + schema.offsets[i];
                     switch (schema.fields.get(i).kind()) {
-                        case VL_STRING -> buf.putLong(off, (Long) vals[i]);
-                        case VL_BYTES -> {
-                            byte[] b = (byte[]) vals[i];
-                            if (b == null) b = new byte[0];
-                            long addr = bytesPool.addBytes(b);
-                            buf.putLong(off, b.length);
-                            buf.putLong(off + 8, addr);
-                        }
                         case UINT32  -> buf.putInt(off, ((Number) vals[i]).intValue());
                         case INT64   -> buf.putLong(off, ((Number) vals[i]).longValue());
                         case FLOAT64 -> buf.putDouble(off, ((Number) vals[i]).doubleValue());
+                        default -> { /* no VL fields in this path */ }
                     }
                 }
             }
@@ -226,19 +217,24 @@ public final class Hdf5CompoundIO {
                     "compound write '%s' failed: %s"
                     .formatted(datasetName, e.getMessage()));
         } finally {
-            if (dset >= 0)        try { H5.H5Dclose(dset);         } catch (Exception ig) {}
-            if (dspace >= 0)      try { H5.H5Sclose(dspace);       } catch (Exception ig) {}
-            if (ctype >= 0)       try { H5.H5Tclose(ctype);        } catch (Exception ig) {}
-            if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType);  } catch (Exception ig) {}
-            if (strType >= 0)     try { H5.H5Tclose(strType);      } catch (Exception ig) {}
+            if (dset >= 0)   try { H5.H5Dclose(dset);   } catch (Exception ig) {}
+            if (dspace >= 0) try { H5.H5Sclose(dspace); } catch (Exception ig) {}
+            if (ctype >= 0)  try { H5.H5Tclose(ctype);  } catch (Exception ig) {}
             owner.unlockForWriting();
         }
     }
 
     /**
-     * Split write path -- used when VL_STRING fields are present.
-     * Writes non-string fields first (byte buffer, no VL_STRING in mem type),
-     * then each VL_STRING column via H5Dwrite_VLStrings.
+     * Split write path -- used when any VL field (VL_STRING or VL_BYTES) is
+     * present.
+     * <p>Pass 1: primitive (non-VL) fields via byte buffer with a projection
+     * memory type that contains no VL fields, so HDF5 1.14
+     * {@code translate_wbuf} does not fire.
+     * <p>Pass 2: each VL_STRING column via {@code H5Dwrite_VLStrings}.
+     * <p>Pass 3: each VL_BYTES column via the FFM helper
+     * {@link VlBytesFFM#write(long, long, long, int, byte[][])} which calls
+     * the native C {@code H5Dwrite} directly, bypassing the JNI
+     * {@code translate_wbuf} interception entirely.
      */
     private static void writeCompoundSplit(Hdf5Group parent, String datasetName,
                                             Schema schema, int count,
@@ -246,8 +242,7 @@ public final class Hdf5CompoundIO {
         Hdf5File owner = parent.owningFile();
         owner.lockForWriting();
         long strType = -1, vlBytesType = -1, fileType = -1, dspace = -1, dset = -1;
-        try (NativeStringPool pool = new NativeStringPool();
-             NativeBytesPool bytesPool = new NativeBytesPool()) {
+        try (NativeStringPool pool = new NativeStringPool()) {
 
             strType = H5.H5Tcopy(HDF5Constants.H5T_C_S1);
             H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
@@ -280,30 +275,29 @@ public final class Hdf5CompoundIO {
                 allVals[row] = packer.valuesFor(row, pool);
             }
 
-            // -- Pass 1: non-VL-STRING fields via byte buffer ---------------
-            // Memory type excludes VL_STRING so 1.14 does not trigger the
-            // VL-string object-array detection path.
-            Schema nonStrSchema = nonStringProjection(schema);
-            if (!nonStrSchema.fields.isEmpty()) {
+            // -- Pass 1: primitive (non-VL) fields via byte buffer ---------
+            // Memory type contains no VL fields, so HDF5 1.14's
+            // translate_wbuf does not fire for VL_STRING or VL_BYTES.
+            Schema primSchema = primitiveProjection(schema);
+            if (!primSchema.fields.isEmpty()) {
                 long memType = -1;
                 try {
                     memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
-                                           nonStrSchema.totalSize);
-                    for (int i = 0; i < nonStrSchema.fields.size(); i++) {
-                        Field f = nonStrSchema.fields.get(i);
-                        long t = (f.kind() == FieldKind.VL_BYTES)
-                                 ? vlBytesType : f.kind().nativeType;
-                        H5.H5Tinsert(memType, f.name(), nonStrSchema.offsets[i], t);
+                                           primSchema.totalSize);
+                    for (int i = 0; i < primSchema.fields.size(); i++) {
+                        Field f = primSchema.fields.get(i);
+                        H5.H5Tinsert(memType, f.name(), primSchema.offsets[i],
+                                     f.kind().nativeType);
                     }
                     ByteBuffer buf =
-                        ByteBuffer.allocate(nonStrSchema.totalSize * count)
+                        ByteBuffer.allocate(primSchema.totalSize * count)
                                   .order(ByteOrder.nativeOrder());
                     for (int row = 0; row < count; row++) {
                         Object[] vals = allVals[row];
-                        int base = row * nonStrSchema.totalSize;
-                        for (int pi = 0; pi < nonStrSchema.fields.size(); pi++) {
-                            Field f = nonStrSchema.fields.get(pi);
-                            int off = base + nonStrSchema.offsets[pi];
+                        int base = row * primSchema.totalSize;
+                        for (int pi = 0; pi < primSchema.fields.size(); pi++) {
+                            Field f = primSchema.fields.get(pi);
+                            int off = base + primSchema.offsets[pi];
                             int origIdx = schema.fields.indexOf(f);
                             switch (f.kind()) {
                                 case UINT32  ->
@@ -312,14 +306,7 @@ public final class Hdf5CompoundIO {
                                     buf.putLong(off, ((Number) vals[origIdx]).longValue());
                                 case FLOAT64 ->
                                     buf.putDouble(off, ((Number) vals[origIdx]).doubleValue());
-                                case VL_BYTES -> {
-                                    byte[] b = (byte[]) vals[origIdx];
-                                    if (b == null) b = new byte[0];
-                                    long addr = bytesPool.addBytes(b);
-                                    buf.putLong(off, b.length);
-                                    buf.putLong(off + 8, addr);
-                                }
-                                default -> { /* unreachable */ }
+                                default -> { /* no VL in primitive projection */ }
                             }
                         }
                     }
@@ -328,7 +315,7 @@ public final class Hdf5CompoundIO {
                             HDF5Constants.H5P_DEFAULT, buf.array());
                     if (rc < 0) {
                         throw new Hdf5Errors.DatasetWriteException(
-                                "H5Dwrite (non-string) failed for '%s'"
+                                "H5Dwrite (primitives) failed for '%s'"
                                 .formatted(datasetName));
                     }
                 } finally {
@@ -336,7 +323,7 @@ public final class Hdf5CompoundIO {
                 }
             }
 
-            // -- Pass 2: VL_STRING columns via H5Dwrite_VLStrings -----------
+            // -- Pass 2: VL_STRING columns via H5Dwrite_VLStrings ----------
             for (int i = 0; i < schema.fields.size(); i++) {
                 Field f = schema.fields.get(i);
                 if (f.kind() != FieldKind.VL_STRING) continue;
@@ -361,6 +348,32 @@ public final class Hdf5CompoundIO {
                                 "H5Dwrite_VLStrings failed for '%s' in '%s'"
                                 .formatted(f.name(), datasetName));
                     }
+                } finally {
+                    if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ig) {}
+                }
+            }
+
+            // -- Pass 3: VL_BYTES columns via FFM (bypass translate_wbuf) ---
+            // Build a compound memtype containing only this one VL_BYTES field
+            // and call the native C H5Dwrite directly via the FFM API.
+            // This avoids the HDF5 1.14 JNI translate_wbuf SIGSEGV entirely.
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                if (f.kind() != FieldKind.VL_BYTES) continue;
+
+                byte[][] colData = new byte[count][];
+                for (int row = 0; row < count; row++) {
+                    Object v = allVals[row][i];
+                    colData[row] = (v instanceof byte[] b) ? b : new byte[0];
+                }
+
+                long memType = -1;
+                try {
+                    memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                           FieldKind.VL_BYTES.byteSize);
+                    H5.H5Tinsert(memType, f.name(), 0, vlBytesType);
+                    VlBytesFFM.write(dset, memType,
+                            HDF5Constants.H5S_ALL, count, colData);
                 } finally {
                     if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ig) {}
                 }
@@ -493,15 +506,19 @@ public final class Hdf5CompoundIO {
 
     /**
      * Read a compound dataset returning all fields. Uses a split-read strategy
-     * for HDF5 1.14 compatibility when VL_STRING fields are present:
+     * for HDF5 1.14 compatibility when any VL field (VL_STRING or VL_BYTES) is
+     * present:
      * <ol>
-     *   <li>Read non-string fields (primitives + VL_BYTES) via
-     *       {@code H5Dread(byte[])} with a projection memory type that
-     *       excludes VL_STRING.</li>
+     *   <li>Read primitive (non-VL) fields via {@code H5Dread(byte[])} with a
+     *       projection memory type that excludes all VL fields.</li>
      *   <li>Read each VL_STRING column via
-     *       {@link H5#H5Dread_VLStrings(long, long, long, long, long, Object[])}.</li>
+     *       {@link H5#H5Dread_VLStrings(long,long,long,long,long,Object[])}.</li>
+     *   <li>Read each VL_BYTES column via the FFM helper
+     *       {@link VlBytesFFM#read(long, long, long, int)} which calls
+     *       the native C {@code H5Dread} directly, bypassing the JNI
+     *       {@code translate_rbuf} interception entirely.</li>
      * </ol>
-     * When no VL_STRING fields are present, uses the original full-compound
+     * When no VL fields are present, uses the original full-compound
      * byte-buffer approach.
      */
     public static List<Object[]> readCompoundFull(Hdf5Group parent,
@@ -510,7 +527,6 @@ public final class Hdf5CompoundIO {
         Hdf5File owner = parent.owningFile();
         owner.lockForReading();
         long dset = -1, memType = -1, strType = -1, vlBytesType = -1, fspace = -1;
-        byte[] buf = null;
         int count = 0;
         try {
             dset = H5.H5Dopen(parent.getGroupId(), datasetName,
@@ -527,23 +543,20 @@ public final class Hdf5CompoundIO {
             H5.H5Tset_size(strType, HDF5Constants.H5T_VARIABLE);
             vlBytesType = H5.H5Tvlen_create(HDF5Constants.H5T_NATIVE_UCHAR);
 
-            boolean hasVlString = schema.fields.stream()
-                    .anyMatch(f -> f.kind() == FieldKind.VL_STRING);
+            boolean hasVl = schema.fields.stream()
+                    .anyMatch(f -> f.kind() == FieldKind.VL_STRING
+                                || f.kind() == FieldKind.VL_BYTES);
 
-            if (!hasVlString) {
-                // Original full-compound path -- safe in 1.14 without VL_STRING
+            if (!hasVl) {
+                // Original full-compound path -- safe in 1.14 without VL fields
                 memType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, schema.totalSize);
                 for (int i = 0; i < schema.fields.size(); i++) {
                     Field f = schema.fields.get(i);
-                    long t = switch (f.kind()) {
-                        case VL_STRING -> strType;
-                        case VL_BYTES  -> vlBytesType;
-                        default        -> f.kind().nativeType;
-                    };
-                    H5.H5Tinsert(memType, f.name(), schema.offsets[i], t);
+                    H5.H5Tinsert(memType, f.name(), schema.offsets[i],
+                                 f.kind().nativeType);
                 }
 
-                buf = new byte[schema.totalSize * count];
+                byte[] buf = new byte[schema.totalSize * count];
                 int rc = H5.H5Dread(dset, memType,
                                     HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
                                     HDF5Constants.H5P_DEFAULT, buf);
@@ -560,17 +573,7 @@ public final class Hdf5CompoundIO {
                             case UINT32  -> bb.getInt(off);
                             case INT64   -> bb.getLong(off);
                             case FLOAT64 -> bb.getDouble(off);
-                            case VL_STRING -> {
-                                long addr = bb.getLong(off);
-                                yield addr == 0 ? "" : readCStringUtf8(addr);
-                            }
-                            case VL_BYTES -> {
-                                long len  = bb.getLong(off);
-                                long addr = bb.getLong(off + 8);
-                                yield len == 0 || addr == 0
-                                      ? new byte[0]
-                                      : NativeBytesPool.readBytes(addr, len);
-                            }
+                            default      -> null; // unreachable: no VL in this branch
                         };
                     }
                     out.add(rec);
@@ -578,62 +581,46 @@ public final class Hdf5CompoundIO {
                 return out;
             }
 
-            // -- Split read path for schemas with VL_STRING ---------------
+            // -- Split read path for schemas with any VL field -------------
             Object[][] result = new Object[count][schema.fields.size()];
 
-            // Pass 1: non-string fields (primitives + VL_BYTES)
-            Schema nonStrSchema = nonStringProjection(schema);
-            if (!nonStrSchema.fields.isEmpty()) {
-                long nonStrMemType = -1;
-                byte[] nonStrBuf = null;
+            // Pass 1: primitive (non-VL) fields via byte buffer
+            Schema primSchema = primitiveProjection(schema);
+            if (!primSchema.fields.isEmpty()) {
+                long primMemType = -1;
                 try {
-                    nonStrMemType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
-                                                  nonStrSchema.totalSize);
-                    for (int i = 0; i < nonStrSchema.fields.size(); i++) {
-                        Field f = nonStrSchema.fields.get(i);
-                        long t = (f.kind() == FieldKind.VL_BYTES)
-                                 ? vlBytesType : f.kind().nativeType;
-                        H5.H5Tinsert(nonStrMemType, f.name(),
-                                     nonStrSchema.offsets[i], t);
+                    primMemType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                               primSchema.totalSize);
+                    for (int i = 0; i < primSchema.fields.size(); i++) {
+                        Field f = primSchema.fields.get(i);
+                        H5.H5Tinsert(primMemType, f.name(),
+                                     primSchema.offsets[i], f.kind().nativeType);
                     }
-                    nonStrBuf = new byte[nonStrSchema.totalSize * count];
-                    int rc = H5.H5Dread(dset, nonStrMemType,
+                    byte[] primBuf = new byte[primSchema.totalSize * count];
+                    int rc = H5.H5Dread(dset, primMemType,
                             HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
-                            HDF5Constants.H5P_DEFAULT, nonStrBuf);
+                            HDF5Constants.H5P_DEFAULT, primBuf);
                     if (rc < 0) return List.of();
 
-                    ByteBuffer bb = ByteBuffer.wrap(nonStrBuf)
+                    ByteBuffer bb = ByteBuffer.wrap(primBuf)
                                               .order(ByteOrder.nativeOrder());
                     for (int row = 0; row < count; row++) {
-                        for (int pi = 0; pi < nonStrSchema.fields.size(); pi++) {
-                            Field f = nonStrSchema.fields.get(pi);
-                            int off = row * nonStrSchema.totalSize
-                                    + nonStrSchema.offsets[pi];
+                        for (int pi = 0; pi < primSchema.fields.size(); pi++) {
+                            Field f = primSchema.fields.get(pi);
+                            int off = row * primSchema.totalSize
+                                    + primSchema.offsets[pi];
                             int origIdx = schema.fields.indexOf(f);
                             result[row][origIdx] = switch (f.kind()) {
                                 case UINT32  -> bb.getInt(off);
                                 case INT64   -> bb.getLong(off);
                                 case FLOAT64 -> bb.getDouble(off);
-                                case VL_BYTES -> {
-                                    long len  = bb.getLong(off);
-                                    long addr = bb.getLong(off + 8);
-                                    yield len == 0 || addr == 0
-                                          ? new byte[0]
-                                          : NativeBytesPool.readBytes(addr, len);
-                                }
                                 default -> null;
                             };
                         }
                     }
                 } finally {
-                    if (nonStrBuf != null && nonStrMemType >= 0 && fspace >= 0) {
-                        try {
-                            H5.H5Dvlen_reclaim(nonStrMemType, fspace,
-                                    HDF5Constants.H5P_DEFAULT, nonStrBuf);
-                        } catch (Exception ignored) {}
-                    }
-                    if (nonStrMemType >= 0)
-                        try { H5.H5Tclose(nonStrMemType); } catch (Exception ig) {}
+                    if (primMemType >= 0)
+                        try { H5.H5Tclose(primMemType); } catch (Exception ig) {}
                 }
             }
 
@@ -663,6 +650,29 @@ public final class Hdf5CompoundIO {
                 }
             }
 
+            // Pass 3: VL_BYTES columns via FFM (bypass translate_rbuf)
+            // Call native C H5Dread directly to read hvl_t compound fields
+            // without triggering the JNI translate_rbuf crash.
+            for (int i = 0; i < schema.fields.size(); i++) {
+                Field f = schema.fields.get(i);
+                if (f.kind() != FieldKind.VL_BYTES) continue;
+
+                long vlMemType = -1;
+                try {
+                    vlMemType = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND,
+                                             FieldKind.VL_BYTES.byteSize);
+                    H5.H5Tinsert(vlMemType, f.name(), 0, vlBytesType);
+                    byte[][] colData = VlBytesFFM.read(dset, vlMemType,
+                            HDF5Constants.H5S_ALL, count);
+                    for (int row = 0; row < count; row++) {
+                        result[row][i] = colData[row];
+                    }
+                } finally {
+                    if (vlMemType >= 0)
+                        try { H5.H5Tclose(vlMemType); } catch (Exception ig) {}
+                }
+            }
+
             // Assemble output, filling nulls with defaults
             List<Object[]> out = new ArrayList<>(count);
             for (int row = 0; row < count; row++) {
@@ -685,58 +695,13 @@ public final class Hdf5CompoundIO {
         } catch (HDF5LibraryException e) {
             return List.of();
         } finally {
-            if (buf != null && memType >= 0 && fspace >= 0) {
-                try {
-                    H5.H5Dvlen_reclaim(memType, fspace, HDF5Constants.H5P_DEFAULT,
-                                       buf);
-                } catch (Exception ignored) {}
-            }
             if (fspace >= 0)      try { H5.H5Sclose(fspace);       } catch (Exception ignored) {}
-            if (memType >= 0)     try { H5.H5Tclose(memType);       } catch (Exception ignored) {}
+            if (memType >= 0)     try { H5.H5Tclose(memType);      } catch (Exception ignored) {}
             if (vlBytesType >= 0) try { H5.H5Tclose(vlBytesType);  } catch (Exception ignored) {}
-            if (strType >= 0)     try { H5.H5Tclose(strType);       } catch (Exception ignored) {}
-            if (dset >= 0)        try { H5.H5Dclose(dset);          } catch (Exception ignored) {}
+            if (strType >= 0)     try { H5.H5Tclose(strType);      } catch (Exception ignored) {}
+            if (dset >= 0)        try { H5.H5Dclose(dset);         } catch (Exception ignored) {}
             owner.unlockForReading();
         }
-    }
-
-    /** Read a C-style null-terminated UTF-8 string from a native address. */
-    private static String readCStringUtf8(long addr) {
-        final int MAX = 65536;
-        byte[] tmp = new byte[256];
-        int n = 0;
-        while (n < MAX) {
-            byte b = sun.misc.Unsafe.class
-                .cast(unsafeInstance()).getByte(addr + n);
-            if (b == 0) break;
-            if (n == tmp.length) {
-                byte[] grown = new byte[tmp.length * 2];
-                System.arraycopy(tmp, 0, grown, 0, tmp.length);
-                tmp = grown;
-            }
-            tmp[n++] = b;
-        }
-        return new String(tmp, 0, n, java.nio.charset.StandardCharsets.UTF_8);
-    }
-
-    private static sun.misc.Unsafe unsafeInstance() {
-        try {
-            java.lang.reflect.Field f =
-                sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            return (sun.misc.Unsafe) f.get(null);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
-
-    /** Projection: fields whose kind is not VL_STRING. */
-    private static Schema nonStringProjection(Schema full) {
-        List<Field> out = new ArrayList<>();
-        for (Field f : full.fields) {
-            if (f.kind() != FieldKind.VL_STRING) out.add(f);
-        }
-        return new Schema(out);
     }
 
     /** Projection: only primitive (non-VL) fields. */

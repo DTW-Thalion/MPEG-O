@@ -43,6 +43,20 @@ JAVA_CLASSES = REPO_ROOT / "java" / "target" / "classes"
 JAVA_CLASSPATH_FILE = REPO_ROOT / "java" / "target" / "classpath.txt"
 
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
+
 def _java_classpath() -> str | None:
     if not JAVA_CLASSES.exists():
         return None
@@ -50,7 +64,7 @@ def _java_classpath() -> str | None:
     parts = [str(JAVA_CLASSES)]
     if extra:
         parts.append(extra)
-    hdf5_jar = "/usr/share/java/jarhdf5.jar"
+    hdf5_jar = "/usr/local/lib/jarhdf5.jar"  # source-built HDF5 1.14
     if Path(hdf5_jar).exists():
         parts.append(hdf5_jar)
     return ":".join(parts)
@@ -107,7 +121,7 @@ def _java_parse_xy(jdx_path: Path) -> tuple[np.ndarray, np.ndarray, str]:
             check=True, capture_output=True, timeout=60,
         )
     out = subprocess.run(
-        ["java", "-cp", f"{cp}:{driver_dir}", "M73Driver", str(jdx_path)],
+        ["java", *_JAVA_FLAGS, "-cp", f"{cp}:{driver_dir}", "M73Driver", str(jdx_path)],
         check=True, capture_output=True, timeout=60,
     ).stdout.decode("utf-8")
     xs: list[float] = []

@@ -32,7 +32,7 @@ _OBJC = _REPO / "objc"
 _JAVA_CLASSES = _JAVA / "target" / "classes"
 _JAVA_TEST_CLASSES = _JAVA / "target" / "test-classes"
 _JAVA_CLASSPATH_TXT = _JAVA / "target" / "classpath.txt"
-_JAVA_HDF5_JAR = Path("/usr/share/java/jarhdf5.jar")
+_JAVA_HDF5_JAR = Path("/usr/local/lib/jarhdf5.jar")  # source-built HDF5 1.14
 
 _OBJC_BIN = _OBJC / "Tools" / "obj"
 _OBJC_LIB = _OBJC / "Source" / "obj"
@@ -74,6 +74,20 @@ def _java_classpath() -> str:
     ))
 
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
+
 def _objc_env() -> dict:
     env = os.environ.copy()
     extra = [str(_OBJC_LIB), "/usr/local/lib"]
@@ -106,7 +120,7 @@ def test_raman_image_wavenumbers_byte_equal_xlang(tmp_path: Path) -> None:
     # Java reader
     if _java_runtime_available():
         java_proc = subprocess.run(
-            ["java", "-cp", _java_classpath(),
+            ["java", *_JAVA_FLAGS, "-cp", _java_classpath(),
              "global.thalion.ttio.conformance.RamanImageXLangReader", str(out)],
             check=True, capture_output=True, timeout=60,
         )
