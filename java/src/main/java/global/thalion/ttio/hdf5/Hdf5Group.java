@@ -197,6 +197,23 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /**
+     * Open a named dataset in this group.
+     *
+     * <p><b>N-D dataset fix (Phase 3 / 2026-05-07):</b> the original implementation
+     * allocated {@code long[1]} for {@link H5#H5Sget_simple_extent_dims} and passed
+     * {@code dims[0]} as the element count. This worked for Java-written .tio files
+     * because the writer flattens every N-D array to a 1-D HDF5 dataset and records
+     * the true shape in a {@code __shape_<name>__} group attribute. Python-written
+     * files (h5py native N-D layout) store the intensity cube as a genuine 3-D dataset,
+     * e.g. shape {@code (height, width, spectral_points)}. The old code silently
+     * truncated the reported length to {@code dims[0] == height}, returning a buffer
+     * of 3 elements instead of 96 for a (3, 4, 8) cube. This broke
+     * {@link global.thalion.ttio.SpectralDataset#open} + {@code .image()} for every
+     * Python-written MSImage, corrupting pixel spectra in the tio-browser imzML export
+     * workflow. Fixed by querying the actual rank and computing the full element count
+     * as the product of all dimension extents.</p>
+     */
     public Hdf5Dataset openDataset(String name) {
         file.lockForReading();
         try {
@@ -204,15 +221,23 @@ public class Hdf5Group implements AutoCloseable {
             if (did < 0) throw new Hdf5Errors.DatasetOpenException(name);
 
             long space = H5.H5Dget_space(did);
-            long[] dims = new long[1];
-            H5.H5Sget_simple_extent_dims(space, dims, null);
+            // Query the actual rank so N-D datasets (e.g. Python/h5py native
+            // multi-dim layout) are handled correctly. A hardcoded long[1] only
+            // captured dims[0] and silently truncated the total element count.
+            int rank = H5.H5Sget_simple_extent_ndims(space);
+            long[] dims = new long[Math.max(rank, 1)]; // guard against rank=0 scalar
+            if (rank > 0) {
+                H5.H5Sget_simple_extent_dims(space, dims, null);
+            }
             H5.H5Sclose(space);
 
             long htid = H5.H5Dget_type(did);
             Precision precision = precisionFromType(htid);
             H5.H5Tclose(htid);
 
-            return new Hdf5Dataset(did, precision, dims[0], file);
+            long total = 1;
+            for (int i = 0; i < rank; i++) total *= dims[i];
+            return new Hdf5Dataset(did, precision, total, file);
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.DatasetOpenException(name);
         } finally {
