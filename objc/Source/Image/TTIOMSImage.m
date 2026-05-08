@@ -3,8 +3,8 @@
  * TTI-O Objective-C Implementation
  *
  * Class:         TTIOMSImage
- * Inherits From: TTIOSpectralDataset : NSObject
- * Conforms To:   TTIOEncryptable (inherited)
+ * Inherits From: NSObject  (composition pattern)
+ * (dataset-level fields owned directly)
  * Declared In:   Image/TTIOMSImage.h
  *
  * Mass-spectrometry imaging dataset (3-D cube of float64 spectral
@@ -16,6 +16,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOMSImage.h"
+#import "Dataset/TTIOSpectralDataset.h"
 #import "TTIOPixelSpectrum.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
@@ -93,15 +94,13 @@
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
     NSParameterAssert(mzAxis == nil || mzAxis.length == spectralPoints * sizeof(double));
-    self = [super initWithTitle:title
-             isaInvestigationId:isaId
-                         msRuns:@{}
-                        nmrRuns:@{}
-                identifications:identifications
-                quantifications:quantifications
-              provenanceRecords:provenance
-                    transitions:nil];
+    self = [super init];
     if (self) {
+        _title              = [title copy];
+        _isaInvestigationId = [isaId copy];
+        _identifications    = [identifications copy] ?: @[];
+        _quantifications    = [quantifications copy] ?: @[];
+        _provenanceRecords  = [provenance copy] ?: @[];
         _width          = width;
         _height         = height;
         _spectralPoints = spectralPoints;
@@ -316,48 +315,49 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
     return s < 0 ? nil : [axis copy];
 }
 
-#pragma mark - TTIOSpectralDataset hooks
 
-- (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                              error:(NSError **)error
+#pragma mark - Persistence
+
+- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
+    // Write dataset-level structure using TTIOSpectralDataset as a write helper,
+    // then append the image_cube group directly under /study/.
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                               title:_title
+                                  isaInvestigationId:_isaInvestigationId
+                                              msRuns:@{}
+                                     identifications:_identifications
+                                     quantifications:_quantifications
+                                   provenanceRecords:_provenanceRecords
+                                               error:error];
+    if (!ok) return NO;
+
     if (_width == 0 || _height == 0 || _spectralPoints == 0) return YES;
-    return writeImageCubeUnderGroup(studyGroup.groupId,
-                                     _width, _height, _spectralPoints, _tileSize,
-                                     _pixelSizeX, _pixelSizeY, _scanPattern,
-                                     _cube.bytes, _mzAxis, error);
+
+    // Re-open the file to append the image_cube group under /study/.
+    hid_t fid = H5Fopen([path fileSystemRepresentation],
+                         H5F_ACC_RDWR, H5P_DEFAULT);
+    if (fid < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen,
+            @"H5Fopen RDWR failed for image_cube append");
+        return NO;
+    }
+    hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+    if (studyGid < 0) {
+        H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorGroupOpen,
+            @"H5Gopen2 /study failed");
+        return NO;
+    }
+    ok = writeImageCubeUnderGroup(studyGid,
+                                   _width, _height, _spectralPoints, _tileSize,
+                                   _pixelSizeX, _pixelSizeY, _scanPattern,
+                                   _cube.bytes, _mzAxis, error);
+    H5Gclose(studyGid);
+    H5Fclose(fid);
+    return ok;
 }
 
-- (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                             error:(NSError **)error
-{
-    if (![studyGroup hasChildNamed:@"image_cube"]) return YES;
-    hid_t imageGroup = H5Gopen2(studyGroup.groupId, "image_cube", H5P_DEFAULT);
-    if (imageGroup < 0) return YES;
-
-    ttio_image_meta_t meta;
-    memset(&meta, 0, sizeof(meta));
-    readImageMetaFromGroup(imageGroup, &meta);
-
-    NSData *cube = readImageCubeFromGroup(imageGroup, meta.width, meta.height, meta.sp, error);
-    NSData *axis = readMzAxisFromGroup(imageGroup, meta.sp);
-    H5Gclose(imageGroup);
-    if (!cube) { if (meta.scanPattern) free(meta.scanPattern); return NO; }
-
-    _width          = meta.width;
-    _height         = meta.height;
-    _spectralPoints = meta.sp;
-    _tileSize       = meta.tileSize;
-    _pixelSizeX     = meta.pixelSizeX;
-    _pixelSizeY     = meta.pixelSizeY;
-    _scanPattern    = meta.scanPattern
-                        ? [[NSString alloc] initWithUTF8String:meta.scanPattern]
-                        : @"";
-    if (meta.scanPattern) free(meta.scanPattern);
-    _cube           = [cube copy];
-    _mzAxis         = axis;
-    return YES;
-}
 
 #pragma mark - Read with v0.1 fallback
 
@@ -398,9 +398,61 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
         H5Fclose(probe);
     }
 
-    // v0.2 path: super reader invokes -readAdditionalStudyContent:
-    // which populates the image fields from /study/image_cube.
-    return (TTIOMSImage *)[super readFromFilePath:path error:error];
+    // v0.2+ path: read dataset-level metadata via TTIOSpectralDataset,
+    // then read image_cube directly.
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:error];
+    if (!ds) return nil;
+
+    hid_t fid2 = H5Fopen([path fileSystemRepresentation],
+                          H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (fid2 < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen, @"H5Fopen failed");
+        return nil;
+    }
+    hid_t studyGid2 = H5Gopen2(fid2, "study", H5P_DEFAULT);
+    if (studyGid2 < 0 || H5Lexists(studyGid2, "image_cube", H5P_DEFAULT) <= 0) {
+        if (studyGid2 >= 0) H5Gclose(studyGid2);
+        H5Fclose(fid2);
+        return [[TTIOMSImage alloc]
+                initWithTitle:ds.title
+           isaInvestigationId:ds.isaInvestigationId
+              identifications:ds.identifications
+              quantifications:ds.quantifications
+            provenanceRecords:ds.provenanceRecords
+                        width:0 height:0 spectralPoints:0 tileSize:0
+                    pixelSizeX:0 pixelSizeY:0 scanPattern:@""
+                         cube:[NSData data] mzAxis:nil];
+    }
+    hid_t imageGroup2 = H5Gopen2(studyGid2, "image_cube", H5P_DEFAULT);
+    H5Gclose(studyGid2);
+    if (imageGroup2 < 0) {
+        H5Fclose(fid2);
+        if (error) *error = TTIOMakeError(TTIOErrorGroupOpen, @"image_cube open failed");
+        return nil;
+    }
+    ttio_image_meta_t meta2; memset(&meta2, 0, sizeof(meta2));
+    readImageMetaFromGroup(imageGroup2, &meta2);
+    NSData *cube2 = readImageCubeFromGroup(imageGroup2, meta2.width, meta2.height, meta2.sp, error);
+    NSData *axis2 = readMzAxisFromGroup(imageGroup2, meta2.sp);
+    H5Gclose(imageGroup2);
+    H5Fclose(fid2);
+    if (!cube2) return nil;
+
+    NSString *scanPat = meta2.scanPattern
+                          ? [[NSString alloc] initWithUTF8String:meta2.scanPattern]
+                          : @"";
+    if (meta2.scanPattern) free(meta2.scanPattern);
+
+    return [[TTIOMSImage alloc]
+            initWithTitle:ds.title
+       isaInvestigationId:ds.isaInvestigationId
+          identifications:ds.identifications
+          quantifications:ds.quantifications
+        provenanceRecords:ds.provenanceRecords
+                    width:meta2.width height:meta2.height
+           spectralPoints:meta2.sp tileSize:meta2.tileSize
+               pixelSizeX:meta2.pixelSizeX pixelSizeY:meta2.pixelSizeY
+              scanPattern:scanPat cube:cube2 mzAxis:axis2];
 }
 
 #pragma mark - Tile read
