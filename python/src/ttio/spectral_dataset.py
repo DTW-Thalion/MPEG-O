@@ -447,13 +447,14 @@ class SpectralDataset:
         """
         if not self._image_cache_loaded:
             self._image_cache_loaded = True
-            try:
+            if self.provider is None:
+                self._image_cache = None
+            else:
                 root = self.provider.root_group()
                 if root.has_child("study"):
                     study = root.open_group("study")
                     self._image_cache = MSImage.read_from(study)
-            except Exception:
-                self._image_cache = None
+                # else: _image_cache stays None (already initialized)
         return self._image_cache
 
     @property
@@ -764,7 +765,7 @@ class SpectralDataset:
         provenance: list[ProvenanceRecord] | None = None,
         features: list[str] | None = None,
         provider: str | StorageProvider = "hdf5",
-        image: "MSImage | None" = None,           # NEW (1.2.0)
+        image: "MSImage | None" = None,
     ) -> Path:
         """Write a minimal v1.1 ``.tio`` file from in-memory data.
 

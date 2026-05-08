@@ -66,7 +66,7 @@ class MSImage:
     pixel_size_x: float = 0.0
     pixel_size_y: float = 0.0
     intensity: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0)))
-    mz_axis: np.ndarray = field(default_factory=lambda: np.zeros(0))   # NEW
+    mz_axis: np.ndarray = field(default_factory=lambda: np.zeros(0))
     scan_pattern: str = ""
     tile_size: int = 0
 
@@ -78,7 +78,7 @@ class MSImage:
     provenance_records: list = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if self.width == 0 and self.height == 0 and self.spectral_points == 0:
+        if self.width == 0 and self.height == 0 and self.spectral_points == 0 and self.mz_axis.size == 0:
             return  # empty default OK
         if self.intensity.ndim != 3:
             raise ValueError(
@@ -112,8 +112,7 @@ class MSImage:
         ic.set_attribute("spectral_points", int(self.spectral_points))
         ic.set_attribute("pixel_size_x", str(self.pixel_size_x))
         ic.set_attribute("pixel_size_y", str(self.pixel_size_y))
-        if self.scan_pattern:
-            ic.set_attribute("scan_pattern", self.scan_pattern)
+        ic.set_attribute("scan_pattern", self.scan_pattern)
 
         intensity_ds = ic.create_dataset_nd(
             "intensity", Precision.FLOAT64,

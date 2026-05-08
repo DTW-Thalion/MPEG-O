@@ -82,6 +82,10 @@ def test_to_pixel_spectra_continuous_mode() -> None:
     assert p3.x == 1 and p3.y == 1
     np.testing.assert_array_equal(p3.mz, img.mz_axis)
     np.testing.assert_array_equal(p3.intensity, img.intensity[1, 1])
+    # Continuous mode contract: pixels share the SAME mz array object,
+    # not just equal values. Downstream imzML writers rely on this.
+    assert p0.mz is img.mz_axis
+    assert p3.mz is img.mz_axis
 
 
 def test_to_pixel_spectra_raises_with_empty_axis() -> None:
@@ -118,3 +122,25 @@ def test_spectral_dataset_image_property_returns_none_when_absent(tmp_path: Path
     SpectralDataset.write_minimal(out, title="", isa_investigation_id="", runs={})
     with SpectralDataset.open(out) as ds:
         assert ds.image is None
+
+
+def test_zero_dim_image_with_mz_axis_rejected() -> None:
+    """Empty-default shortcut must not bypass mz_axis validation."""
+    with pytest.raises(ValueError, match="mz_axis"):
+        MSImage(width=0, height=0, spectral_points=0,
+                mz_axis=np.zeros(5))
+
+
+def test_spectral_dataset_image_property_caches(tmp_path: Path) -> None:
+    """Repeated .image calls return the same cached MSImage object."""
+    from ttio import SpectralDataset
+    img = _build_image(2, 2, 4)
+    out = tmp_path / "cached.tio"
+    SpectralDataset.write_minimal(
+        out, title="cache", isa_investigation_id="",
+        runs={}, image=img,
+    )
+    with SpectralDataset.open(out) as ds:
+        first = ds.image
+        second = ds.image
+        assert first is second, "second .image call should return cached object"
