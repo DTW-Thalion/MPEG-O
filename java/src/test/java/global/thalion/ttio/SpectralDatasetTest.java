@@ -794,4 +794,44 @@ class SpectralDatasetTest {
             new SpectrumIndex(n, offsets, lengths, rt, ms, pol, pmz, pc, bpi,
                               acts, null, null, null));
     }
+
+    @Test
+    void imageAccessorReturnsMaterialisedMSImage() throws java.io.IOException {
+        java.nio.file.Path path = tempDir.resolve("ds_with_image.tio");
+        int w = 2, h = 2, sp = 4;
+        double[] cube = new double[w * h * sp];
+        for (int i = 0; i < cube.length; i++) cube[i] = i * 0.5;
+        double[] mz = { 100.0, 200.0, 300.0, 400.0 };
+        MSImage img = new MSImage(w, h, sp, 0, 1.0, 1.0, "raster",
+                cube, mz, "", "", List.of(), List.of(), List.of());
+
+        try (Hdf5File f = Hdf5File.create(path.toString());
+             Hdf5Group root = f.rootGroup()) {
+            FeatureFlags.defaultCurrent()
+                    .with(FeatureFlags.OPT_NATIVE_MSIMAGE_CUBE)
+                    .writeTo(root);
+            try (Hdf5Group study = root.createGroup("study")) {
+                img.writeTo(global.thalion.ttio.providers.Hdf5Provider
+                        .adapterForGroup(study));
+            }
+        }
+
+        try (SpectralDataset ds = SpectralDataset.open(path.toString())) {
+            MSImage materialised = ds.image();
+            assertNotNull(materialised, "image() should return non-null when present");
+            assertEquals(w, materialised.width());
+            assertEquals(h, materialised.height());
+            assertEquals(sp, materialised.spectralPoints());
+            assertArrayEquals(mz, materialised.mzAxis(), 0.0);
+        }
+    }
+
+    @Test
+    void imageAccessorReturnsNullWhenAbsent() {
+        // full_ms.tio has no image_cube
+        String fixture = getFixturePath("full_ms.tio");
+        try (SpectralDataset ds = SpectralDataset.open(fixture)) {
+            assertNull(ds.image(), "image() returns null on non-imaging .tio");
+        }
+    }
 }
