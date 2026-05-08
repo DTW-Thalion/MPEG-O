@@ -40,6 +40,19 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 OBJC_CLI = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioPerAU"
 JAVA_CLASS = "global.thalion.ttio.tools.PerAUCli"
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 
 def _objc_available() -> bool:
     return OBJC_CLI.is_file() and (REPO_ROOT / "objc" / "Source" / "obj").is_dir()
@@ -65,11 +78,11 @@ def _java_classpath() -> str | None:
         return None
     cp = cp_file.read_text().strip()
     # HDF5 is declared as a 'system' scope dependency in pom.xml
-    # (jhdf5 → /usr/share/java/jarhdf5.jar), which mvn
+    # (jhdf5 → /usr/local/lib/jarhdf5.jar source-built), which mvn
     # dependency:build-classpath -DincludeScope=test does NOT emit.
     # Append it explicitly so PerAUCli + writers can load
     # hdf.hdf5lib.* classes at runtime.
-    hdf5_jar = "/usr/share/java/jarhdf5.jar"
+    hdf5_jar = "/usr/local/lib/jarhdf5.jar"  # source-built HDF5 1.14
     if Path(hdf5_jar).exists():
         cp = f"{cp}:{hdf5_jar}"
     return f"{classes}:{cp}"
@@ -171,9 +184,8 @@ def _encrypt_java(src_tio: Path, dst_tio: Path, key: Path) -> None:
     cp = _java_classpath()
     if cp is None:
         pytest.skip("Java classpath not available")
-    native_path = "/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial"
     proc = subprocess.run(
-        ["java", f"-Djava.library.path={native_path}", "-cp", cp,
+        ["java", *_JAVA_FLAGS, "-cp", cp,
          JAVA_CLASS, "encrypt",
          str(src_tio), str(dst_tio), str(key)],
         capture_output=True, text=True, timeout=120,

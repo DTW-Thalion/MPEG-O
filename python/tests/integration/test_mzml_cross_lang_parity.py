@@ -45,6 +45,19 @@ JAVA_TARGET = REPO_ROOT / "java" / "target"
 OBJC_TOOL_MZML = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioMzMLProbe"
 OBJC_LIB_DIR = REPO_ROOT / "objc" / "Source" / "obj"
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 
 def _have_java() -> bool:
     if shutil.which("java") is None:
@@ -59,7 +72,7 @@ def _have_objc() -> bool:
 
 def _run_java_probe(in_path: Path) -> dict:
     cmd = [
-        "java", "-cp", str(JAVA_TARGET / "classes"),
+        "java", *_JAVA_FLAGS, "-cp", str(JAVA_TARGET / "classes"),
         "global.thalion.ttio.tools.MzMLProbe", str(in_path),
     ]
     res = subprocess.run(cmd, capture_output=True, text=True)

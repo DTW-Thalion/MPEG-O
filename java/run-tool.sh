@@ -14,9 +14,11 @@ set -e
 here="$(cd "$(dirname "$0")" && pwd)"
 cd "$here"
 
-# Detect HDF5 jar and native libs.
+# Detect HDF5 jar and native libs (source-built HDF5 1.14 at /usr/local/lib).
 if [ -z "${TTIO_HDF5_JAR:-}" ]; then
-    if [ -f /usr/share/java/jarhdf5.jar ]; then
+    if [ -f /usr/local/lib/jarhdf5.jar ]; then
+        TTIO_HDF5_JAR=/usr/local/lib/jarhdf5.jar
+    elif [ -f /usr/share/java/jarhdf5.jar ]; then
         TTIO_HDF5_JAR=/usr/share/java/jarhdf5.jar
     else
         echo "run-tool.sh: set TTIO_HDF5_JAR to the jhdf5 jar path" >&2
@@ -24,7 +26,7 @@ if [ -z "${TTIO_HDF5_JAR:-}" ]; then
     fi
 fi
 if [ -z "${TTIO_HDF5_NATIVE:-}" ]; then
-    TTIO_HDF5_NATIVE=/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial
+    TTIO_HDF5_NATIVE=/usr/local/lib
 fi
 
 # Ensure the project is built so target/classes exists.
@@ -41,4 +43,5 @@ if [ ! -f "$cp_file" ] || [ pom.xml -nt "$cp_file" ]; then
 fi
 
 CLASSPATH="target/classes:$(cat "$cp_file"):$TTIO_HDF5_JAR"
-exec java -cp "$CLASSPATH" -Djava.library.path="$TTIO_HDF5_NATIVE" "$@"
+exec java --enable-preview --enable-native-access=ALL-UNNAMED \
+    -cp "$CLASSPATH" -Djava.library.path="$TTIO_HDF5_NATIVE" "$@"
