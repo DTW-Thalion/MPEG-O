@@ -109,6 +109,9 @@ extern void testFastaFastqIo(void);
 extern void testFastaFastqTioRoundTrip(void);
 extern void testReferencesAccessor(void);
 extern void testReferenceImportWriteToDataset(void);
+extern void testMSImageMzAxis(void);
+extern void testMSImageLegacyMzAxisAbsent(void);
+extern void testSpectralDatasetMsImageAccessor(void);
 
 int main(int argc, const char *argv[])
 {
@@ -545,6 +548,18 @@ int main(int argc, const char *argv[])
         START_SET("1.1.0: ReferenceImport.writeToDataset round-trip (Phase 0 tio-browser)")
             testReferenceImportWriteToDataset();
         END_SET("1.1.0: ReferenceImport.writeToDataset round-trip (Phase 0 tio-browser)")
+
+        START_SET("1.2.0: TTIOMSImage.mzAxis property + persistence + pixelSpectra")
+            testMSImageMzAxis();
+        END_SET("1.2.0: TTIOMSImage.mzAxis property + persistence + pixelSpectra")
+
+        START_SET("1.2.0: TTIOMSImage legacy (no mzAxis) round-trip")
+            testMSImageLegacyMzAxisAbsent();
+        END_SET("1.2.0: TTIOMSImage legacy (no mzAxis) round-trip")
+
+        START_SET("1.2.0: TTIOSpectralDataset.msImage accessor (category)")
+            testSpectralDatasetMsImageAccessor();
+        END_SET("1.2.0: TTIOSpectralDataset.msImage accessor (category)")
     }
     return 0;
 }
