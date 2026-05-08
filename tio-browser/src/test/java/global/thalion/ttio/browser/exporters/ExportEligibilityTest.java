@@ -2,8 +2,14 @@ package global.thalion.ttio.browser.exporters;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.hdf5.Hdf5File;
+import global.thalion.ttio.hdf5.Hdf5Group;
+import global.thalion.ttio.providers.Hdf5Provider;
+import org.junit.jupiter.api.io.TempDir;
 import global.thalion.ttio.browser.model.OpenDataset;
 import org.junit.jupiter.api.Test;
 
@@ -98,6 +104,27 @@ class ExportEligibilityTest {
             ExportFormatSpec spec = specByName("mzML (indexed)");
             assertEquals(spec.description,
                 ExportEligibility.tooltipReason(spec, d));
+        }
+    }
+
+    @Test
+    void imzmlEligibleOnImageBearingDataset(@TempDir Path tmp) throws Exception {
+        Path tio = tmp.resolve("img.tio");
+        int w = 2, h = 2, sp = 4;
+        double[] cube = new double[w * h * sp];
+        double[] mz = { 100.0, 200.0, 300.0, 400.0 };
+        MSImage img = new MSImage(w, h, sp, 0, 1.0, 1.0, "raster",
+            cube, mz, "", "",
+            List.of(), List.of(), List.of());
+        try (Hdf5File f = Hdf5File.create(tio.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.createGroup("study")) {
+            img.writeTo(Hdf5Provider.adapterForGroup(study));
+        }
+
+        try (OpenDataset d = openRO(tio)) {
+            assertTrue(ExportEligibility.check(specByName("imzML"), d),
+                "imzML should be eligible on dataset with /study/image_cube");
         }
     }
 }

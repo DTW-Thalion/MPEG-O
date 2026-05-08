@@ -11,12 +11,14 @@ import global.thalion.ttio.IRSpectrum;
 import global.thalion.ttio.RamanSpectrum;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.UVVisSpectrum;
 import global.thalion.ttio.exporters.BamWriter;
 import global.thalion.ttio.exporters.CramWriter;
 import global.thalion.ttio.exporters.FastaWriter;
 import global.thalion.ttio.exporters.FastqWriter;
 import global.thalion.ttio.exporters.ISAExporter;
+import global.thalion.ttio.exporters.ImzMLWriter;
 import global.thalion.ttio.exporters.JcampDxEncoding;
 import global.thalion.ttio.exporters.JcampDxWriter;
 import global.thalion.ttio.exporters.MzMLWriter;
@@ -52,8 +54,8 @@ import javafx.concurrent.Task;
  *   <li>FASTQ — first genomic run via {@link FastqWriter}.</li>
  * </ul>
  *
- * <p>Stubbed: imzML (requires PixelSpectrum re-projection — Phase 10
- * follow-up).</p>
+ * <p>All 11 format rows wired as of 1.2.0, including imzML via
+ * {@link MSImage#toPixelSpectra()}.</p>
  */
 public final class ExportTask extends Task<Void> {
 
@@ -82,9 +84,7 @@ public final class ExportTask extends Task<Void> {
             case "FASTA (reference)" -> exportFastaReference();
             case "FASTA (reads)"     -> exportFastaReads();
             case "FASTQ"          -> exportFastq();
-            case "imzML" -> throw new UnsupportedOperationException(
-                "imzML export not yet wired in Phase 9 — requires " +
-                "PixelSpectrum re-projection follow-up.");
+            case "imzML" -> exportImzML();
             default -> throw new UnsupportedOperationException(
                 spec.name + " export not wired.");
         }
@@ -188,6 +188,24 @@ public final class ExportTask extends Task<Void> {
         GenomicRun run = pickGenomicRun();
         FastqWriter.write(run, config.targetPath,
             config.gzipOutput, config.fastqPhred);
+    }
+
+    private void exportImzML() {
+        MSImage img = dataset.image();
+        if (img == null) {
+            throw new IllegalStateException(
+                "imzML export requires an MSImage in /study/image_cube; "
+                + "this .tio has none.");
+        }
+        ImzMLWriter.write(
+            img.toPixelSpectra(),
+            config.targetPath,
+            /* ibdPath */ null,
+            config.imzMlMode,
+            img.width(), img.height(), 1,
+            img.pixelSizeX(), img.pixelSizeY(),
+            img.scanPattern() != null ? img.scanPattern() : "flyback",
+            /* uuidHex */ null);
     }
 
     // ── helpers ─────────────────────────────────────────────────────
