@@ -3,8 +3,7 @@
  * TTI-O Objective-C Implementation
  *
  * Class:         TTIOIRImage
- * Inherits From: TTIOSpectralDataset : NSObject
- * Conforms To:   TTIOEncryptable (inherited)
+ * Inherits From: NSObject  (composition pattern - dataset-level fields owned directly)
  * Declared In:   Image/TTIOIRImage.h
  *
  * Mid-IR imaging dataset (transmittance or absorbance). 3-D cube +
@@ -15,6 +14,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOIRImage.h"
+#import "Dataset/TTIOSpectralDataset.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Errors.h"
@@ -70,15 +70,13 @@
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
     NSParameterAssert(wavenumbers.length == spectralPoints * sizeof(double));
-    self = [super initWithTitle:title
-             isaInvestigationId:isaId
-                         msRuns:@{}
-                        nmrRuns:@{}
-                identifications:identifications
-                quantifications:quantifications
-              provenanceRecords:provenance
-                    transitions:nil];
+    self = [super init];
     if (self) {
+        _title              = [title copy];
+        _isaInvestigationId = [isaId copy];
+        _identifications    = [identifications copy] ?: @[];
+        _quantifications    = [quantifications copy] ?: @[];
+        _provenanceRecords  = [provenance copy] ?: @[];
         _width           = width;
         _height          = height;
         _spectralPoints  = spectralPoints;
@@ -189,102 +187,115 @@ static BOOL writeIRCube(hid_t parentGid,
     return YES;
 }
 
-- (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                              error:(NSError **)error
+- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                               title:_title
+                                  isaInvestigationId:_isaInvestigationId
+                                              msRuns:@{}
+                                     identifications:_identifications
+                                     quantifications:_quantifications
+                                   provenanceRecords:_provenanceRecords
+                                               error:error];
+    if (!ok) return NO;
     if (_width == 0 || _height == 0 || _spectralPoints == 0) return YES;
-    return writeIRCube(studyGroup.groupId,
-                        _width, _height, _spectralPoints, _tileSize,
-                        _pixelSizeX, _pixelSizeY, _scanPattern,
-                        _mode, _resolutionCmInv,
-                        _cube.bytes, _wavenumbers.bytes, error);
+    hid_t fid = H5Fopen([path fileSystemRepresentation], H5F_ACC_RDWR, H5P_DEFAULT);
+    if (fid < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen, @"H5Fopen RDWR failed");
+        return NO;
+    }
+    hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+    if (studyGid < 0) { H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorGroupOpen, @"H5Gopen2 /study failed");
+        return NO;
+    }
+    ok = writeIRCube(studyGid,
+                      _width, _height, _spectralPoints, _tileSize,
+                      _pixelSizeX, _pixelSizeY, _scanPattern,
+                      _mode, _resolutionCmInv,
+                      _cube.bytes, _wavenumbers.bytes, error);
+    H5Gclose(studyGid);
+    H5Fclose(fid);
+    return ok;
 }
 
-- (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                             error:(NSError **)error
++ (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error
 {
-    if (![studyGroup hasChildNamed:@TTIO_IR_IMAGE_GROUP]) return YES;
-    hid_t g = H5Gopen2(studyGroup.groupId, TTIO_IR_IMAGE_GROUP, H5P_DEFAULT);
-    if (g < 0) return YES;
-
-    int64_t vi; double vd;
-    hid_t a;
-    a = H5Aopen(g, "width",           H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); _width  = (NSUInteger)vi;
-    a = H5Aopen(g, "height",          H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); _height = (NSUInteger)vi;
-    a = H5Aopen(g, "spectral_points", H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); _spectralPoints = (NSUInteger)vi;
-    a = H5Aopen(g, "tile_size",       H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); _tileSize = (NSUInteger)vi;
-
-    _pixelSizeX = 0; _pixelSizeY = 0;
-    if (H5Aexists(g, "pixel_size_x") > 0) {
-        a = H5Aopen(g, "pixel_size_x", H5P_DEFAULT);
-        H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); _pixelSizeX = vd;
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:error];
+    if (!ds) return nil;
+    hid_t fid = H5Fopen([path fileSystemRepresentation], H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (fid < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen, @"H5Fopen failed");
+        return nil;
     }
-    if (H5Aexists(g, "pixel_size_y") > 0) {
-        a = H5Aopen(g, "pixel_size_y", H5P_DEFAULT);
-        H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); _pixelSizeY = vd;
+    hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+    if (studyGid < 0 || H5Lexists(studyGid, TTIO_IR_IMAGE_GROUP, H5P_DEFAULT) <= 0) {
+        if (studyGid >= 0) H5Gclose(studyGid);
+        H5Fclose(fid);
+        return nil;
     }
-    _resolutionCmInv = 0;
-    if (H5Aexists(g, "resolution_cm_inv") > 0) {
-        a = H5Aopen(g, "resolution_cm_inv", H5P_DEFAULT);
-        H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); _resolutionCmInv = vd;
+    hid_t g = H5Gopen2(studyGid, TTIO_IR_IMAGE_GROUP, H5P_DEFAULT);
+    H5Gclose(studyGid);
+    if (g < 0) { H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorGroupOpen, @"ir_image_cube open failed");
+        return nil;
     }
-    _mode = TTIOIRModeTransmittance;
+    int64_t vi; double vd; hid_t a;
+    NSUInteger rWidth, rHeight, rSp, rTileSize;
+    a = H5Aopen(g, "width",           H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rWidth  = (NSUInteger)vi;
+    a = H5Aopen(g, "height",          H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rHeight = (NSUInteger)vi;
+    a = H5Aopen(g, "spectral_points", H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rSp = (NSUInteger)vi;
+    a = H5Aopen(g, "tile_size",       H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rTileSize = (NSUInteger)vi;
+    double pxX = 0, pxY = 0, resCmInv = 0;
+    if (H5Aexists(g, "pixel_size_x") > 0)      { a = H5Aopen(g, "pixel_size_x",      H5P_DEFAULT); H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); pxX = vd; }
+    if (H5Aexists(g, "pixel_size_y") > 0)      { a = H5Aopen(g, "pixel_size_y",      H5P_DEFAULT); H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); pxY = vd; }
+    if (H5Aexists(g, "resolution_cm_inv") > 0) { a = H5Aopen(g, "resolution_cm_inv", H5P_DEFAULT); H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); resCmInv = vd; }
+    TTIOIRMode rMode = TTIOIRModeTransmittance;
     if (H5Aexists(g, "ir_mode") > 0) {
-        a = H5Aopen(g, "ir_mode", H5P_DEFAULT);
-        hid_t t = H5Aget_type(a);
+        a = H5Aopen(g, "ir_mode", H5P_DEFAULT); hid_t t = H5Aget_type(a);
         char *cs = NULL; H5Aread(a, t, &cs);
-        if (cs && strcmp(cs, "absorbance") == 0) _mode = TTIOIRModeAbsorbance;
-        if (cs) {
-            hid_t sp = H5Aget_space(a);
-            H5Dvlen_reclaim(t, sp, H5P_DEFAULT, &cs);
-            H5Sclose(sp);
-        }
+        if (cs && strcmp(cs, "absorbance") == 0) rMode = TTIOIRModeAbsorbance;
+        if (cs) { hid_t ssp = H5Aget_space(a); H5Dvlen_reclaim(t, ssp, H5P_DEFAULT, &cs); H5Sclose(ssp); }
         H5Tclose(t); H5Aclose(a);
     }
-    _scanPattern = @"";
+    NSString *scanPat = @"";
     if (H5Aexists(g, "scan_pattern") > 0) {
-        a = H5Aopen(g, "scan_pattern", H5P_DEFAULT);
-        hid_t t = H5Aget_type(a);
+        a = H5Aopen(g, "scan_pattern", H5P_DEFAULT); hid_t t = H5Aget_type(a);
         char *cs = NULL; H5Aread(a, t, &cs);
-        if (cs) {
-            _scanPattern = [[NSString alloc] initWithUTF8String:cs];
-            hid_t sp = H5Aget_space(a);
-            H5Dvlen_reclaim(t, sp, H5P_DEFAULT, &cs);
-            H5Sclose(sp);
-        }
+        if (cs) { scanPat = [[NSString alloc] initWithUTF8String:cs];
+                  hid_t ssp = H5Aget_space(a); H5Dvlen_reclaim(t, ssp, H5P_DEFAULT, &cs); H5Sclose(ssp); }
         H5Tclose(t); H5Aclose(a);
     }
-
     hid_t did = H5Dopen2(g, "intensity", H5P_DEFAULT);
-    if (did < 0) {
-        H5Gclose(g);
-        if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
-            @"intensity dataset missing");
-        return NO;
+    if (did < 0) { H5Gclose(g); H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen, @"intensity dataset missing");
+        return nil;
     }
-    NSMutableData *cube = [NSMutableData dataWithLength:_width*_height*_spectralPoints*sizeof(double)];
-    herr_t s = H5Dread(did, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
-                       H5P_DEFAULT, cube.mutableBytes);
+    NSMutableData *cube = [NSMutableData dataWithLength:rWidth*rHeight*rSp*sizeof(double)];
+    herr_t hs = H5Dread(did, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, cube.mutableBytes);
     H5Dclose(did);
-    if (s < 0) {
-        H5Gclose(g);
-        if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
-            @"intensity H5Dread failed");
-        return NO;
+    if (hs < 0) { H5Gclose(g); H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetRead, @"intensity H5Dread failed");
+        return nil;
     }
-    _cube = [cube copy];
-
     hid_t wDid = H5Dopen2(g, "wavenumbers", H5P_DEFAULT);
-    if (wDid < 0) { H5Gclose(g); return NO; }
-    NSMutableData *wv = [NSMutableData dataWithLength:_spectralPoints*sizeof(double)];
+    if (wDid < 0) { H5Gclose(g); H5Fclose(fid); return nil; }
+    NSMutableData *wv = [NSMutableData dataWithLength:rSp*sizeof(double)];
     H5Dread(wDid, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL, H5P_DEFAULT, wv.mutableBytes);
-    H5Dclose(wDid);
-    _wavenumbers = [wv copy];
-
-    H5Gclose(g);
-    return YES;
+    H5Dclose(wDid); H5Gclose(g); H5Fclose(fid);
+    return [[TTIOIRImage alloc]
+            initWithTitle:ds.title
+       isaInvestigationId:ds.isaInvestigationId
+          identifications:ds.identifications
+          quantifications:ds.quantifications
+        provenanceRecords:ds.provenanceRecords
+                    width:rWidth height:rHeight
+           spectralPoints:rSp tileSize:rTileSize
+               pixelSizeX:pxX pixelSizeY:pxY
+              scanPattern:scanPat mode:rMode
+             resolutionCmInv:resCmInv
+                         cube:[cube copy] wavenumbers:[wv copy]];
 }
-
 - (BOOL)isEqual:(id)other
 {
     if (other == self) return YES;
