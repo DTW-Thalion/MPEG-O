@@ -169,6 +169,20 @@ def _objc_tool_available(name: str) -> bool:
     return (REPO_ROOT / "objc" / "Tools" / "obj" / name).is_file()
 
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
+
 def _run_java(cli: str, *args: str) -> None:
     classes = REPO_ROOT / "java" / "target" / "classes"
     m2 = Path.home() / ".m2" / "repository"
@@ -176,10 +190,9 @@ def _run_java(cli: str, *args: str) -> None:
     for pattern in ("*Java-WebSocket*.jar", "*slf4j*.jar",
                      "*sqlite-jdbc*.jar", "*bcprov*.jar"):
         jars.extend(str(p) for p in m2.rglob(pattern))
-    cp = ":".join([str(classes), "/usr/share/java/jarhdf5.jar", *jars])
+    cp = ":".join([str(classes), "/usr/local/lib/jarhdf5.jar", *jars])  # source-built HDF5 1.14
     subprocess.run(
-        ["java", "-cp", cp,
-         "-Djava.library.path=/usr/lib/x86_64-linux-gnu/jni",
+        ["java", *_JAVA_FLAGS, "-cp", cp,
          f"global.thalion.ttio.tools.{cli}", *args],
         check=True, capture_output=True,
     )

@@ -423,57 +423,7 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
-    public void setDoubleAttribute(String name, double value) {
-        file.lockForWriting();
-        long space = -1, aid = -1;
-        try {
-            space = H5.H5Screate(HDF5Constants.H5S_SCALAR);
-            if (H5.H5Aexists(groupId, name)) {
-                H5.H5Adelete(groupId, name);
-            }
-            aid = H5.H5Acreate(groupId, name, HDF5Constants.H5T_NATIVE_DOUBLE,
-                    space, HDF5Constants.H5P_DEFAULT, HDF5Constants.H5P_DEFAULT);
-            if (aid < 0) throw new Hdf5Errors.AttributeException(
-                    "H5Acreate2 (double) failed for '" + name + "'");
-
-            double[] data = { value };
-            H5.H5Awrite(aid, HDF5Constants.H5T_NATIVE_DOUBLE, data);
-        } catch (HDF5LibraryException e) {
-            throw new Hdf5Errors.AttributeException(
-                    "setDoubleAttribute failed for '" + name + "': " + e.getMessage());
-        } finally {
-            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
-            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ignored) {}
-            file.unlockForWriting();
-        }
-    }
-
-    /**
-     * Read a double attribute. Returns the value, or {@code defaultValue}
-     * if the attribute does not exist.
-     */
-    public double readDoubleAttribute(String name, double defaultValue) {
-        file.lockForReading();
-        long aid = -1;
-        try {
-            if (!H5.H5Aexists(groupId, name)) {
-                return defaultValue;
-            }
-            aid = H5.H5Aopen(groupId, name, HDF5Constants.H5P_DEFAULT);
-            if (aid < 0) return defaultValue;
-
-            double[] data = new double[1];
-            H5.H5Aread(aid, HDF5Constants.H5T_NATIVE_DOUBLE, data);
-            return data[0];
-        } catch (HDF5LibraryException e) {
-            return defaultValue;
-        } finally {
-            if (aid >= 0) try { H5.H5Aclose(aid); } catch (Exception ignored) {}
-            file.unlockForReading();
-        }
-    }
-
-        public boolean hasAttribute(String name) {
+    public boolean hasAttribute(String name) {
         file.lockForReading();
         try {
             return H5.H5Aexists(groupId, name);

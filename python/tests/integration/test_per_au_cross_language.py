@@ -36,6 +36,19 @@ OBJC_CLI = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioPerAU"
 
 JAVA_CLASS = "global.thalion.ttio.tools.PerAUCli"
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 
 def _java_classpath() -> str | None:
     """Build a classpath string usable by the Java PerAUCli, or return
@@ -61,7 +74,7 @@ def _java_classpath() -> str | None:
     extra = cp_file.read_text().strip() if cp_file.exists() else ""
     # jarhdf5 is scope=system in pom.xml; build-classpath won't include
     # it. Splice it in manually.
-    hdf5_jar = "/usr/share/java/jarhdf5.jar"
+    hdf5_jar = "/usr/local/lib/jarhdf5.jar"  # source-built HDF5 1.14
     parts = [str(classes)]
     if extra:
         parts.append(extra)
@@ -142,9 +155,8 @@ def _run_objc(*args: str) -> None:
 def _run_java(*args: str) -> None:
     cp = _java_classpath()
     assert cp is not None
-    native_path = "/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial"
     subprocess.run(
-        ["java", f"-Djava.library.path={native_path}", "-cp", cp, JAVA_CLASS,
+        ["java", *_JAVA_FLAGS, "-cp", cp, JAVA_CLASS,
          *args],
         check=True, capture_output=True,
     )

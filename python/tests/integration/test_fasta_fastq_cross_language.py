@@ -29,6 +29,19 @@ OBJC_TOOL_FASTA = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioFastaRoundTrip"
 OBJC_TOOL_FASTQ = REPO_ROOT / "objc" / "Tools" / "obj" / "TtioFastqRoundTrip"
 OBJC_LIB_DIR = REPO_ROOT / "objc" / "Source" / "obj"
 
+# Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
+# VL_BYTES handling; classes compiled with --enable-preview cannot be
+# loaded without the same flag at runtime.
+# `-Djava.library.path=/usr/local/lib` forces loading the source-built
+# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
+# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
+# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
+_JAVA_FLAGS = [
+    "--enable-preview",
+    "--enable-native-access=ALL-UNNAMED",
+    "-Djava.library.path=/usr/local/lib",
+]
+
 
 def _have_java() -> bool:
     if shutil.which("java") is None:
@@ -72,7 +85,7 @@ def _run_objc(tool: Path, in_path: Path, out_path: Path,
 
 def _run_java(klass: str, in_path: Path, out_path: Path,
               extra: list[str] | None = None) -> None:
-    cmd = ["java", "-cp", _java_classpath(), klass, str(in_path), str(out_path)]
+    cmd = ["java", *_JAVA_FLAGS, "-cp", _java_classpath(), klass, str(in_path), str(out_path)]
     if extra:
         cmd.extend(extra)
     res = subprocess.run(cmd, capture_output=True, text=True)
