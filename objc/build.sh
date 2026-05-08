@@ -35,6 +35,12 @@ done
 
 "$here/check-deps.sh"
 
+# Ensure native/_build/libttio_rans.so is built before linking libTTIO.
+# ObjC genomic codec dispatch relies on this; without it the build is
+# silently codec-less and 45+ tests fail at runtime with
+# NSInternalInconsistencyException.
+"$here/../scripts/build-native.sh"
+
 if ! command -v clang >/dev/null 2>&1; then
     echo "build.sh: clang is required but was not found on PATH" >&2
     exit 1

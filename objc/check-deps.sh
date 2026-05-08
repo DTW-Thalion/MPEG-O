@@ -141,6 +141,23 @@ else
     fail "zlib.h not found (install zlib1g-dev)"
 fi
 
+# --- libttio_rans (native genomic codecs) ----------------------------------
+# Required for genomic codec dispatch. Without it, libTTIO compiles but
+# any test that writes a genomic run with read_names raises
+# NSInternalInconsistencyException at runtime (NAME_TOKENIZED_V2,
+# REF_DIFF_V2, FQZCOMP_NX16). Build via scripts/build-native.sh.
+ttio_rans_lib=""
+for cand in ../native/_build/libttio_rans.so \
+            ../../native/_build/libttio_rans.so \
+            "$(cd "$(dirname "$0")/.." && pwd)/native/_build/libttio_rans.so"; do
+    if [ -f "$cand" ]; then ttio_rans_lib="$cand"; break; fi
+done
+if [ -n "$ttio_rans_lib" ]; then
+    ok "libttio_rans built ($ttio_rans_lib)"
+else
+    fail "libttio_rans.so not found (run scripts/build-native.sh from repo root)"
+fi
+
 # --- OpenSSL (Milestone 7, optional today) ---------------------------------
 if [ -f /usr/include/openssl/ssl.h ] || [ -f /usr/local/include/openssl/ssl.h ]; then
     ok "openssl headers"
