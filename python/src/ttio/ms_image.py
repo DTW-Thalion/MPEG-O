@@ -98,5 +98,96 @@ class MSImage:
                     f"spectral_points={self.spectral_points}"
                 )
 
+    def write_to(self, study_group) -> None:
+        """Write this image cube under ``<study_group>/image_cube/``.
+
+        Mirrors :meth:`global.thalion.ttio.MSImage.writeTo` -- intensity
+        as a 3-D ``[h, w, sp]`` dataset, optional ``mz_axis`` 1-D
+        dataset when populated.
+        """
+        from ttio.enums import Compression, Precision
+        ic = study_group.create_group("image_cube")
+        ic.set_attribute("width", int(self.width))
+        ic.set_attribute("height", int(self.height))
+        ic.set_attribute("spectral_points", int(self.spectral_points))
+        ic.set_attribute("pixel_size_x", str(self.pixel_size_x))
+        ic.set_attribute("pixel_size_y", str(self.pixel_size_y))
+        if self.scan_pattern:
+            ic.set_attribute("scan_pattern", self.scan_pattern)
+
+        intensity_ds = ic.create_dataset_nd(
+            "intensity", Precision.FLOAT64,
+            shape=(self.height, self.width, self.spectral_points),
+            chunks=(1, 1, self.spectral_points),
+            compression=Compression.ZLIB, compression_level=6,
+        )
+        intensity_ds.write(np.ascontiguousarray(self.intensity, dtype=np.float64))
+
+        if self.mz_axis.size > 0:
+            axis_ds = ic.create_dataset_nd(
+                "mz_axis", Precision.FLOAT64,
+                shape=(self.spectral_points,),
+                chunks=(self.spectral_points,),
+                compression=Compression.ZLIB, compression_level=6,
+            )
+            axis_ds.write(np.ascontiguousarray(self.mz_axis, dtype=np.float64))
+
+    @classmethod
+    def read_from(cls, study_group) -> "MSImage | None":
+        """Read an MSImage cube from a study group; return None if absent."""
+        if not study_group.has_child("image_cube"):
+            return None
+        ic = study_group.open_group("image_cube")
+        width = int(ic.get_attribute("width"))
+        height = int(ic.get_attribute("height"))
+        spectral_points = int(ic.get_attribute("spectral_points"))
+        pixel_size_x = (float(ic.get_attribute("pixel_size_x"))
+                         if ic.has_attribute("pixel_size_x") else 0.0)
+        pixel_size_y = (float(ic.get_attribute("pixel_size_y"))
+                         if ic.has_attribute("pixel_size_y") else 0.0)
+        scan_pattern = (ic.get_attribute("scan_pattern")
+                         if ic.has_attribute("scan_pattern") else "")
+
+        intensity_raw = np.asarray(ic.open_dataset("intensity").read())
+        intensity = intensity_raw.reshape(height, width, spectral_points)
+
+        if ic.has_child("mz_axis"):
+            mz_axis = np.asarray(ic.open_dataset("mz_axis").read(), dtype=np.float64)
+        else:
+            mz_axis = np.zeros(0)
+
+        return cls(
+            width=width, height=height, spectral_points=spectral_points,
+            pixel_size_x=pixel_size_x, pixel_size_y=pixel_size_y,
+            intensity=intensity, mz_axis=mz_axis, scan_pattern=scan_pattern,
+        )
+
+    def to_pixel_spectra(self):
+        """Project this image as a list of continuous-mode pixel records.
+
+        Returns a list of :class:`ttio.importers.imzml.ImzMLPixelSpectrum`
+        objects, one per pixel, all sharing :attr:`mz_axis` as their
+        ``mz`` array.
+
+        Raises ``RuntimeError`` when ``mz_axis`` is empty (legacy file).
+        """
+        if self.mz_axis.size == 0:
+            raise RuntimeError(
+                "MSImage has no mz_axis; cannot project to imzML pixels. "
+                "The .tio was written before format v1.2 added the spectral "
+                "axis. Re-import from a source format that carries m/z "
+                "calibration (imzML, mzML), or supply mz_axis explicitly."
+            )
+        from ttio.importers.imzml import ImzMLPixelSpectrum
+        pixels = []
+        for row in range(self.height):
+            for col in range(self.width):
+                pixels.append(ImzMLPixelSpectrum(
+                    x=col, y=row, z=1,
+                    mz=self.mz_axis,
+                    intensity=self.intensity[row, col],
+                ))
+        return pixels
+
 
 __all__ = ["MSImage"]
