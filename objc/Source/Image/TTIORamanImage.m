@@ -3,8 +3,7 @@
  * TTI-O Objective-C Implementation
  *
  * Class:         TTIORamanImage
- * Inherits From: TTIOSpectralDataset : NSObject
- * Conforms To:   TTIOEncryptable (inherited)
+ * Inherits From: NSObject  (composition pattern — dataset-level fields owned directly)
  * Declared In:   Image/TTIORamanImage.h
  *
  * Raman imaging dataset. 3-D cube + shared 1-D wavenumbers axis;
@@ -14,6 +13,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIORamanImage.h"
+#import "Dataset/TTIOSpectralDataset.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Errors.h"
@@ -69,15 +69,13 @@
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
     NSParameterAssert(wavenumbers.length == spectralPoints * sizeof(double));
-    self = [super initWithTitle:title
-             isaInvestigationId:isaId
-                         msRuns:@{}
-                        nmrRuns:@{}
-                identifications:identifications
-                quantifications:quantifications
-              provenanceRecords:provenance
-                    transitions:nil];
+    self = [super init];
     if (self) {
+        _title              = [title copy];
+        _isaInvestigationId = [isaId copy];
+        _identifications    = [identifications copy] ?: @[];
+        _quantifications    = [quantifications copy] ?: @[];
+        _provenanceRecords  = [provenance copy] ?: @[];
         _width                  = width;
         _height                 = height;
         _spectralPoints         = spectralPoints;
@@ -292,55 +290,106 @@ static NSData *readWavenumbers(hid_t g, NSUInteger sp, NSError **error)
     return out;
 }
 
-#pragma mark - TTIOSpectralDataset hooks
 
-- (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                              error:(NSError **)error
+#pragma mark - Persistence
+
+- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
+    // Write dataset-level structure using TTIOSpectralDataset as a write helper,
+    // then append the raman_image_cube group directly under /study/.
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                               title:_title
+                                  isaInvestigationId:_isaInvestigationId
+                                              msRuns:@{}
+                                     identifications:_identifications
+                                     quantifications:_quantifications
+                                   provenanceRecords:_provenanceRecords
+                                               error:error];
+    if (!ok) return NO;
+
     if (_width == 0 || _height == 0 || _spectralPoints == 0) return YES;
-    return writeCubeGroup(studyGroup.groupId,
-                           TTIO_RAMAN_IMAGE_GROUP,
-                           _width, _height, _spectralPoints, _tileSize,
-                           _pixelSizeX, _pixelSizeY, _scanPattern,
-                           _cube.bytes, _wavenumbers.bytes,
-                           @{ @"excitation_wavelength_nm": @(_excitationWavelengthNm),
-                              @"laser_power_mw":           @(_laserPowerMw) },
-                           @{},
-                           error);
+
+    hid_t fid = H5Fopen([path fileSystemRepresentation],
+                         H5F_ACC_RDWR, H5P_DEFAULT);
+    if (fid < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen,
+            @"H5Fopen RDWR failed for raman_image_cube append");
+        return NO;
+    }
+    hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+    if (studyGid < 0) {
+        H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorGroupOpen,
+            @"H5Gopen2 /study failed");
+        return NO;
+    }
+    ok = writeCubeGroup(studyGid,
+                         TTIO_RAMAN_IMAGE_GROUP,
+                         _width, _height, _spectralPoints, _tileSize,
+                         _pixelSizeX, _pixelSizeY, _scanPattern,
+                         _cube.bytes, _wavenumbers.bytes,
+                         @{ @"excitation_wavelength_nm": @(_excitationWavelengthNm),
+                            @"laser_power_mw":           @(_laserPowerMw) },
+                         @{},
+                         error);
+    H5Gclose(studyGid);
+    H5Fclose(fid);
+    return ok;
 }
 
-- (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                             error:(NSError **)error
++ (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error
 {
-    if (![studyGroup hasChildNamed:@TTIO_RAMAN_IMAGE_GROUP]) return YES;
-    hid_t g = H5Gopen2(studyGroup.groupId, TTIO_RAMAN_IMAGE_GROUP, H5P_DEFAULT);
-    if (g < 0) return YES;
+    // Read dataset-level metadata via TTIOSpectralDataset, then
+    // read the raman_image_cube group directly.
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:error];
+    if (!ds) return nil;
 
+    hid_t fid = H5Fopen([path fileSystemRepresentation],
+                         H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (fid < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen, @"H5Fopen failed");
+        return nil;
+    }
+    hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+    if (studyGid < 0 || H5Lexists(studyGid, TTIO_RAMAN_IMAGE_GROUP, H5P_DEFAULT) <= 0) {
+        if (studyGid >= 0) H5Gclose(studyGid);
+        H5Fclose(fid);
+        return nil;  // No raman_image_cube in this file.
+    }
+    hid_t g = H5Gopen2(studyGid, TTIO_RAMAN_IMAGE_GROUP, H5P_DEFAULT);
+    H5Gclose(studyGid);
+    if (g < 0) {
+        H5Fclose(fid);
+        if (error) *error = TTIOMakeError(TTIOErrorGroupOpen, @"raman_image_cube open failed");
+        return nil;
+    }
     ttio_img_core_t meta; memset(&meta, 0, sizeof(meta));
     readCoreMeta(g, &meta);
     double excNm = readDoubleAttr(g, "excitation_wavelength_nm");
     double pwMw  = readDoubleAttr(g, "laser_power_mw");
-
     NSData *cube = readCube(g, meta.width, meta.height, meta.sp, error);
     NSData *wv   = readWavenumbers(g, meta.sp, error);
     H5Gclose(g);
-    if (!cube || !wv) { if (meta.scanPattern) free(meta.scanPattern); return NO; }
+    H5Fclose(fid);
+    if (!cube || !wv) { if (meta.scanPattern) free(meta.scanPattern); return nil; }
 
-    _width                  = meta.width;
-    _height                 = meta.height;
-    _spectralPoints         = meta.sp;
-    _tileSize               = meta.tileSize;
-    _pixelSizeX             = meta.pixelSizeX;
-    _pixelSizeY             = meta.pixelSizeY;
-    _scanPattern            = meta.scanPattern
-                                ? [[NSString alloc] initWithUTF8String:meta.scanPattern]
-                                : @"";
+    NSString *scanPat = meta.scanPattern
+                          ? [[NSString alloc] initWithUTF8String:meta.scanPattern]
+                          : @"";
     if (meta.scanPattern) free(meta.scanPattern);
-    _excitationWavelengthNm = excNm;
-    _laserPowerMw           = pwMw;
-    _cube                   = [cube copy];
-    _wavenumbers            = [wv copy];
-    return YES;
+
+    return [[TTIORamanImage alloc]
+            initWithTitle:ds.title
+       isaInvestigationId:ds.isaInvestigationId
+          identifications:ds.identifications
+          quantifications:ds.quantifications
+        provenanceRecords:ds.provenanceRecords
+                    width:meta.width height:meta.height
+           spectralPoints:meta.sp tileSize:meta.tileSize
+               pixelSizeX:meta.pixelSizeX pixelSizeY:meta.pixelSizeY
+              scanPattern:scanPat
+       excitationWavelengthNm:excNm laserPowerMw:pwMw
+                         cube:cube wavenumbers:wv];
 }
 
 #pragma mark - Equality
