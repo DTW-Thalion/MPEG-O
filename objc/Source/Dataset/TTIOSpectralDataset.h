@@ -282,25 +282,6 @@
                      withKey:(NSData *)key
                        error:(NSError **)error;
 
-#pragma mark - Subclass hooks
-
-/**
- * Override hook for subclasses (e.g. <code>TTIOMSImage</code>) to
- * write their own datasets under <code>/study/</code> after the
- * base dataset has been written. Default is a no-op. Return
- * <code>NO</code> to abort the write.
- */
-- (BOOL)writeAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                              error:(NSError **)error;
-
-/**
- * Override hook for subclasses to read their own datasets under
- * <code>/study/</code> after the base dataset has been loaded.
- * Default is a no-op.
- */
-- (BOOL)readAdditionalStudyContent:(TTIOHDF5Group *)studyGroup
-                             error:(NSError **)error;
-
 @end
 
 
@@ -308,8 +289,8 @@
 
 @interface TTIOSpectralDataset (Image)
 /** The embedded MSImage when /study/image_cube is present; nil otherwise.
- *  For an open TTIOMSImage instance, returns self (the subclass relationship
- *  makes this trivial).
+ *  Reads and materialises the image from the file when called on a plain
+ *  TTIOSpectralDataset.
  *  @since 1.2.0 */
 @property (readonly, nullable) TTIOMSImage *msImage;
 @end
