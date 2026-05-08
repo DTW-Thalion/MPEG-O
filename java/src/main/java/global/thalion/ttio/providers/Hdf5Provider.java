@@ -493,10 +493,11 @@ public final class Hdf5Provider implements StorageProvider {
 
         @Override
         public Object readAll() {
-            // route VL_BYTES *and* VL_STRING compounds to the
-            // full reader. The full reader now dereferences VL_STRING
-            // char* pointers via Unsafe (was hardcoded to "" prior to
-            // an earlier release); VL_BYTES uses the same NativeBytesPool path.
+            // Route VL_BYTES and VL_STRING compounds to the split
+            // full reader/writer. VL_STRING uses H5Dwrite_VLStrings /
+            // H5Dread_VLStrings; VL_BYTES uses the FFM helper VlBytesFFM
+            // which calls native C H5Dwrite/H5Dread directly, bypassing
+            // the HDF5 1.14 JNI translate_wbuf/translate_rbuf SIGSEGV.
             // Pure-primitive compounds still take the lighter
             // primitives path for consistency with prior behavior.
             boolean hasVl = schema.fields.stream().anyMatch(f ->
