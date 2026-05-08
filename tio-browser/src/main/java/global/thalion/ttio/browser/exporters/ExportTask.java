@@ -25,6 +25,8 @@ import global.thalion.ttio.exporters.NmrMLWriter;
 import global.thalion.ttio.genomics.GenomicIndex;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
+import global.thalion.ttio.MSImage;
+import global.thalion.ttio.exporters.ImzMLWriter;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import javafx.concurrent.Task;
 
@@ -52,8 +54,8 @@ import javafx.concurrent.Task;
  *   <li>FASTQ — first genomic run via {@link FastqWriter}.</li>
  * </ul>
  *
- * <p>Stubbed: imzML (requires PixelSpectrum re-projection — Phase 10
- * follow-up).</p>
+ * <p>All 11 format rows wired as of 1.2.0, including imzML via
+ * {@link MSImage#toPixelSpectra()}.</p>
  */
 public final class ExportTask extends Task<Void> {
 
@@ -82,9 +84,7 @@ public final class ExportTask extends Task<Void> {
             case "FASTA (reference)" -> exportFastaReference();
             case "FASTA (reads)"     -> exportFastaReads();
             case "FASTQ"          -> exportFastq();
-            case "imzML" -> throw new UnsupportedOperationException(
-                "imzML export not yet wired in Phase 9 — requires " +
-                "PixelSpectrum re-projection follow-up.");
+            case "imzML" -> exportImzML();
             default -> throw new UnsupportedOperationException(
                 spec.name + " export not wired.");
         }
@@ -188,6 +188,24 @@ public final class ExportTask extends Task<Void> {
         GenomicRun run = pickGenomicRun();
         FastqWriter.write(run, config.targetPath,
             config.gzipOutput, config.fastqPhred);
+    }
+
+    private void exportImzML() {
+        MSImage img = dataset.image();
+        if (img == null) {
+            throw new IllegalStateException(
+                "imzML export requires an MSImage in /study/image_cube; "
+                + "this .tio has none.");
+        }
+        ImzMLWriter.write(
+            img.toPixelSpectra(),
+            config.targetPath,
+            /* ibdPath */ null,
+            config.imzMlMode,
+            img.width(), img.height(), 1,
+            img.pixelSizeX(), img.pixelSizeY(),
+            img.scanPattern() != null ? img.scanPattern() : "flyback",
+            /* uuidHex */ null);
     }
 
     // ── helpers ─────────────────────────────────────────────────────
