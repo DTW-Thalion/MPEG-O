@@ -2,23 +2,21 @@
 #define TTIO_MS_IMAGE_H
 
 #import <Foundation/Foundation.h>
-#import "Dataset/TTIOSpectralDataset.h"
 
 @class TTIOHDF5Group;
 @class TTIOPixelSpectrum;
 
 /**
- * <p><em>Inherits From:</em> TTIOSpectralDataset : NSObject</p>
- * <p><em>Conforms To:</em> TTIOEncryptable (inherited)</p>
+ * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Image/TTIOMSImage.h</p>
  *
  * <p>Mass-spectrometry imaging dataset: a
  * <code>width &#215; height</code> grid of pixels, each pixel a
  * spectral profile of <code>spectralPoints</code> float64 values.
- * Inherits from <code>TTIOSpectralDataset</code> so it carries
- * identifications, quantifications, provenance records, and the
- * <code>TTIOEncryptable</code> / <code>-closeFile</code>
- * semantics for free.</p>
+ * Carries dataset-level fields (title, identifications,
+ * quantifications, provenance) directly — composition over
+ * <code>TTIOSpectralDataset</code>, mirroring the Java and Python
+ * equivalents.</p>
  *
  * <p>The image cube is persisted under
  * <code>/study/image_cube/</code> as a 3-D HDF5 dataset with
@@ -31,7 +29,26 @@
  * Python: <code>ttio.ms_image.MSImage</code><br/>
  * Java: <code>global.thalion.ttio.MSImage</code></p>
  */
-@interface TTIOMSImage : TTIOSpectralDataset
+@interface TTIOMSImage : NSObject
+
+#pragma mark - Dataset-level fields (composition: previously inherited from TTIOSpectralDataset)
+
+/** Free-form dataset title. */
+@property (readonly, copy) NSString *title;
+
+/** ISA-Tab investigation identifier this dataset belongs to. */
+@property (readonly, copy) NSString *isaInvestigationId;
+
+/** Dataset-wide identifications. */
+@property (readonly, copy) NSArray *identifications;
+
+/** Dataset-wide quantifications. */
+@property (readonly, copy) NSArray *quantifications;
+
+/** Dataset-wide provenance records. */
+@property (readonly, copy) NSArray *provenanceRecords;
+
+#pragma mark - Image-specific fields
 
 /** Image width in pixels. */
 @property (readonly) NSUInteger width;
@@ -65,8 +82,8 @@
 #pragma mark - Initialisation
 
 /**
- * Convenience initialiser for image-only datasets. Inherited
- * dataset fields default to empty / nil.
+ * Convenience initialiser for image-only datasets.
+ * Dataset-level fields default to empty / nil.
  */
 - (instancetype)initWithWidth:(NSUInteger)width
                        height:(NSUInteger)height
@@ -125,9 +142,16 @@
 + (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
 
 /**
- * Reads a <code>tileWidth &#215; tileHeight</code> tile starting
- * at <code>(x, y)</code>. Supports both the canonical and legacy
- * cube paths.
+ * Writes this image to <code>path</code>. Creates the full
+ * dataset-level HDF5 structure under <code>/study/</code> and the
+ * <code>image_cube</code> group within it.
+ */
+- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error;
+
+/**
+ * Reads a <code>tileWidth</code> x <code>tileHeight</code> tile
+ * starting at <code>(x, y)</code>. Supports both the canonical
+ * and legacy cube paths.
  */
 + (NSData *)readTileFromFilePath:(NSString *)path
                              atX:(NSUInteger)x

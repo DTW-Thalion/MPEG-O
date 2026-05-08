@@ -2,14 +2,12 @@
 #define TTIO_IR_IMAGE_H
 
 #import <Foundation/Foundation.h>
-#import "Dataset/TTIOSpectralDataset.h"
 #import "ValueClasses/TTIOEnums.h"
 
 @class TTIOHDF5Group;
 
 /**
- * <p><em>Inherits From:</em> TTIOSpectralDataset : NSObject</p>
- * <p><em>Conforms To:</em> TTIOEncryptable (inherited)</p>
+ * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Declared In:</em> Image/TTIOIRImage.h</p>
  *
  * <p>Mid-IR (FTIR microscopy) imaging dataset: a
@@ -27,7 +25,27 @@
  * Python: <code>ttio.ir_image.IRImage</code><br/>
  * Java: <code>global.thalion.ttio.IRImage</code></p>
  */
-@interface TTIOIRImage : TTIOSpectralDataset
+@interface TTIOIRImage : NSObject
+
+#pragma mark - Dataset-level fields (composition)
+
+/** Free-form dataset title. */
+@property (readonly, copy) NSString *title;
+
+/** ISA-Tab investigation identifier this dataset belongs to. */
+@property (readonly, copy) NSString *isaInvestigationId;
+
+/** Dataset-wide identifications. */
+@property (readonly, copy) NSArray *identifications;
+
+/** Dataset-wide quantifications. */
+@property (readonly, copy) NSArray *quantifications;
+
+/** Dataset-wide provenance records. */
+@property (readonly, copy) NSArray *provenanceRecords;
+
+#pragma mark - Image-specific fields
+
 
 /** Image width in pixels. */
 @property (readonly) NSUInteger width;
@@ -93,6 +111,18 @@
               resolutionCmInv:(double)resolutionCmInv
                          cube:(NSData *)cube
                   wavenumbers:(NSData *)wavenumbers;
+
+#pragma mark - Persistence
+
+/**
+ * Reads an IR image from <code>path</code>.
+ */
++ (instancetype)readFromFilePath:(NSString *)path error:(NSError **)error;
+
+/**
+ * Writes this image to <code>path</code>.
+ */
+- (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error;
 
 @end
 
