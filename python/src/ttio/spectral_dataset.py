@@ -29,6 +29,7 @@ from .genomic_run import GenomicRun  # M82
 from .enums import EncryptionLevel
 from .feature_flags import FeatureFlags
 from .ms_image import MSImage
+from .raman_image import RamanImage
 from .identification import Identification
 from .providers import StorageProvider, open_provider
 from .providers.base import StorageGroup
@@ -115,6 +116,9 @@ class SpectralDataset:
     # Lazy image cache — populated on first access of the `image` property.
     _image_cache_loaded: bool = field(default=False, repr=False)
     _image_cache: "MSImage | None" = field(default=None, repr=False)
+    # Lazy raman_image cache — populated on first access of the `raman_image` property.
+    _raman_image_cache_loaded: bool = field(default=False, repr=False)
+    _raman_image_cache: "RamanImage | None" = field(default=None, repr=False)
 
     # ------------------------------------------------------------- lifecycle
 
@@ -458,6 +462,27 @@ class SpectralDataset:
         return self._image_cache
 
     @property
+    def raman_image(self) -> "RamanImage | None":
+        """The embedded RamanImage if /study/raman_image_cube is present.
+
+        Lazy: reads the cube on first access, caches the result.
+        Returns ``None`` when no raman image group exists.
+
+        :since: 1.2.0
+        """
+        if not self._raman_image_cache_loaded:
+            self._raman_image_cache_loaded = True
+            if self.provider is None:
+                self._raman_image_cache = None
+            else:
+                root = self.provider.root_group()
+                if root.has_child("study"):
+                    study = root.open_group("study")
+                    self._raman_image_cache = RamanImage.read_from(study)
+                # else: _raman_image_cache stays None (already initialized)
+        return self._raman_image_cache
+
+    @property
     def all_runs(self) -> Mapping[str, AcquisitionRun]:
         """Union of MS and NMR runs, keyed by run name.
 
@@ -766,6 +791,7 @@ class SpectralDataset:
         features: list[str] | None = None,
         provider: str | StorageProvider = "hdf5",
         image: "MSImage | None" = None,
+        raman_image: "RamanImage | None" = None,
     ) -> Path:
         """Write a minimal v1.1 ``.tio`` file from in-memory data.
 
@@ -862,12 +888,15 @@ class SpectralDataset:
                     _write_quantifications(study, quantifications)
                 if provenance:
                     _write_provenance(study, provenance)
-                if image is not None:
+                if image is not None or raman_image is not None:
                     # Wrap the raw h5py.Group in the package-private adapter
-                    # so MSImage.write_to (which expects a StorageGroup) works
+                    # so write_to (which expects a StorageGroup) works
                     # uniformly across both the fast-path and protocol-path branches.
                     from ttio.providers.hdf5 import _Group as _Hdf5Group
-                    image.write_to(_Hdf5Group(study))
+                    if image is not None:
+                        image.write_to(_Hdf5Group(study))
+                    if raman_image is not None:
+                        raman_image.write_to(_Hdf5Group(study))
             return p
 
         # Provider-driven write path — Memory / SQLite / Zarr / future.
@@ -915,6 +944,8 @@ class SpectralDataset:
                 _write_provenance(study, provenance)
             if image is not None:
                 image.write_to(study)   # study is already a StorageGroup here
+            if raman_image is not None:
+                raman_image.write_to(study)   # study is already a StorageGroup here
         finally:
             if owns_provider:
                 sp.close()
