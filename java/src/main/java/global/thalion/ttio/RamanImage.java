@@ -127,10 +127,10 @@ public class RamanImage {
             ic.setAttribute("width", (long) width);
             ic.setAttribute("height", (long) height);
             ic.setAttribute("spectral_points", (long) spectralPoints);
-            ic.setAttribute("pixel_size_x", String.valueOf(pixelSizeX));
-            ic.setAttribute("pixel_size_y", String.valueOf(pixelSizeY));
-            ic.setAttribute("excitation_wavelength_nm", String.valueOf(excitationWavelengthNm));
-            ic.setAttribute("laser_power_mw", String.valueOf(laserPowerMw));
+            ic.setAttribute("pixel_size_x", Double.valueOf(pixelSizeX));
+            ic.setAttribute("pixel_size_y", Double.valueOf(pixelSizeY));
+            ic.setAttribute("excitation_wavelength_nm", Double.valueOf(excitationWavelengthNm));
+            ic.setAttribute("laser_power_mw", Double.valueOf(laserPowerMw));
             if (scanPattern != null)
                 ic.setAttribute("scan_pattern", scanPattern);
             if (tileSize > 0)
@@ -149,7 +149,7 @@ public class RamanImage {
             long[] axisChunks = { spectralPoints };
             try (StorageDataset wn = ic.createDatasetND("wavenumbers",
                     Precision.FLOAT64, axisShape, axisChunks,
-                    Compression.NONE, 0)) {
+                    Compression.ZLIB, 6)) {
                 wn.writeAll(wavenumbers);
             }
         }
@@ -162,18 +162,14 @@ public class RamanImage {
             int width = ((Number) ic.getAttribute("width")).intValue();
             int height = ((Number) ic.getAttribute("height")).intValue();
             int spectralPoints = ((Number) ic.getAttribute("spectral_points")).intValue();
-            double pixelSizeX = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_x")
-                            ? (String) ic.getAttribute("pixel_size_x") : "0");
-            double pixelSizeY = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_y")
-                            ? (String) ic.getAttribute("pixel_size_y") : "0");
-            double excitationWavelengthNm = Double.parseDouble(
-                    ic.hasAttribute("excitation_wavelength_nm")
-                            ? (String) ic.getAttribute("excitation_wavelength_nm") : "0");
-            double laserPowerMw = Double.parseDouble(
-                    ic.hasAttribute("laser_power_mw")
-                            ? (String) ic.getAttribute("laser_power_mw") : "0");
+            double pixelSizeX = ic.hasAttribute("pixel_size_x")
+                    ? parseDoubleAttr(ic.getAttribute("pixel_size_x")) : 0.0;
+            double pixelSizeY = ic.hasAttribute("pixel_size_y")
+                    ? parseDoubleAttr(ic.getAttribute("pixel_size_y")) : 0.0;
+            double excitationWavelengthNm = ic.hasAttribute("excitation_wavelength_nm")
+                    ? parseDoubleAttr(ic.getAttribute("excitation_wavelength_nm")) : 0.0;
+            double laserPowerMw = ic.hasAttribute("laser_power_mw")
+                    ? parseDoubleAttr(ic.getAttribute("laser_power_mw")) : 0.0;
             String scanPattern = ic.hasAttribute("scan_pattern")
                     ? (String) ic.getAttribute("scan_pattern") : null;
             int tileSize = ic.hasAttribute("tile_size")
@@ -193,5 +189,20 @@ public class RamanImage {
                     cube, wn,
                     "", "", List.of(), List.of(), List.of());
         }
+    }
+
+    /**
+     * Parse a double attribute that may be stored as either a
+     * {@link Number} (new native-double form) or a {@link String}
+     * (legacy form written before the PR #31 fix).
+     *
+     * <p>Copy-pasted from {@code MSImage} deliberately: the helper is
+     * small, and cross-class coupling via a shared utility would
+     * require widening the package-private API surface without
+     * meaningful benefit.</p>
+     */
+    private static double parseDoubleAttr(Object value) {
+        if (value instanceof Number n) return n.doubleValue();
+        return Double.parseDouble((String) value);
     }
 }
