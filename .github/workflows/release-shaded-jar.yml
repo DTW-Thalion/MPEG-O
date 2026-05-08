@@ -146,9 +146,8 @@ jobs:
     name: Build shaded fat-jar with all natives bundled
     needs: build-native
     # Bundling does not produce native code (just maven shade staging),
-    # so runner glibc doesn't matter. Use 24.04 which packages the
-    # HDF5 Java bindings under libhdf5-java (jammy renamed/dropped
-    # libjarhdf5-java).
+    # so runner glibc doesn't matter. Uses HDF5 1.14 from source
+    # (via scripts/install-hdf5.sh) so the build is not tied to apt packages.
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -159,10 +158,17 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Install HDF5 (system jar dep)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libhdf5-dev libhdf5-jni libhdf5-java
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Download all native artifacts
         uses: actions/download-artifact@v4
@@ -182,12 +188,12 @@ jobs:
         run: |
           cd java
           mvn -B install -DskipTests -Djacoco.skip=true \
-              -Dhdf5.jar=/usr/share/java/jarhdf5.jar
+              -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
 
       - name: Build tio-browser shaded jar
         run: |
           cd tio-browser
-          mvn -B package -DskipTests -Dhdf5.jar=/usr/share/java/jarhdf5.jar
+          mvn -B package -DskipTests -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
 
       - name: Verify natives are in shaded jar
         run: |
