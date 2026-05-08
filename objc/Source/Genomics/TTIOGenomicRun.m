@@ -851,17 +851,16 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     if ([sig respondsToSelector:@selector(unwrap)]) {
         TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
         if (hg) {
-            H5O_info_t info;
-            herr_t s = H5Oget_info_by_name([hg groupId], "mate_info",
-                                           &info, H5P_DEFAULT);
+            H5O_info2_t info;
+            herr_t s = H5Oget_info_by_name3([hg groupId], "mate_info",
+                                           &info, H5O_INFO_BASIC, H5P_DEFAULT);
             if (s >= 0 && info.type == H5O_TYPE_GROUP) {
                 // It is a group. Probe further for inline_v2 dataset.
                 TTIOHDF5Group *mateGrp = [hg openGroupNamed:@"mate_info" error:NULL];
                 if (mateGrp) {
-                    H5O_info_t dsInfo;
-                    herr_t s2 = H5Oget_info_by_name([mateGrp groupId],
-                                                    "inline_v2", &dsInfo,
-                                                    H5P_DEFAULT);
+                    H5O_info2_t dsInfo;
+                    herr_t s2 = H5Oget_info_by_name3([mateGrp groupId],
+                                                    "inline_v2", &dsInfo, H5O_INFO_BASIC, H5P_DEFAULT);
                     if (s2 >= 0 && dsInfo.type == H5O_TYPE_DATASET) {
                         _mateInfoLinkType = 2;  // v1.7 inline_v2
                         return YES;
@@ -921,10 +920,10 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     }
     if ([sig respondsToSelector:@selector(unwrap)]) {
         TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
-        H5O_info_t info;
+        H5O_info2_t info;
         memset(&info, 0, sizeof(info));
-        herr_t s = H5Oget_info_by_name([hg groupId], "sequences",
-                                       &info, H5P_DEFAULT);
+        herr_t s = H5Oget_info_by_name3([hg groupId], "sequences",
+                                       &info, H5O_INFO_BASIC, H5P_DEFAULT);
         if (s >= 0 && info.type == H5O_TYPE_GROUP) {
             _sequencesLinkType = 1;
             return YES;
@@ -1515,9 +1514,9 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
     if ([sig respondsToSelector:@selector(unwrap)]) {
         TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
         if (![hg hasChildNamed:@"sequences"]) return nil;
-        H5O_info_t info; memset(&info, 0, sizeof(info));
-        if (H5Oget_info_by_name([hg groupId], "sequences",
-                                &info, H5P_DEFAULT) < 0) return nil;
+        H5O_info2_t info; memset(&info, 0, sizeof(info));
+        if (H5Oget_info_by_name3([hg groupId], "sequences",
+                                &info, H5O_INFO_BASIC, H5P_DEFAULT) < 0) return nil;
         if (info.type != H5O_TYPE_GROUP) return nil;
         TTIOHDF5Group *seqGrp = [hg openGroupNamed:@"sequences" error:NULL];
         if (!seqGrp || ![seqGrp hasChildNamed:@"refdiff_v2"]) return nil;

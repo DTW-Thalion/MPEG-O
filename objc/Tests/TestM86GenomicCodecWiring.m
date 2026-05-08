@@ -1746,10 +1746,10 @@ static BOOL m86PhFMateInfoIsGroup(const char *path)
 {
     hid_t f = H5Fopen(path, H5F_ACC_RDONLY, H5P_DEFAULT);
     if (f < 0) return NO;
-    H5O_info_t info;
-    herr_t s = H5Oget_info_by_name(f,
+    H5O_info2_t info;
+    herr_t s = H5Oget_info_by_name3(f,
         "study/genomic_runs/genomic_0001/signal_channels/mate_info",
-        &info, H5P_DEFAULT);
+        &info, H5O_INFO_BASIC, H5P_DEFAULT);
     BOOL isGroup = (s >= 0 && info.type == H5O_TYPE_GROUP);
     H5Fclose(f);
     return isGroup;
