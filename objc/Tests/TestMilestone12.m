@@ -74,8 +74,10 @@ void testMilestone12(void)
                                     pixelSizeY:10.0
                                    scanPattern:@"raster"
                                           cube:cube];
-        PASS([img isKindOfClass:[TTIOSpectralDataset class]],
-             "TTIOMSImage is-a TTIOSpectralDataset");
+        PASS([img isKindOfClass:[NSObject class]],
+             "TTIOMSImage is-a NSObject (composition pattern, no longer inherits TTIOSpectralDataset)");
+        PASS(img.title != nil,
+             "TTIOMSImage carries title directly (composition)");
         PASS(img.identifications.count == 1,
              "MSImage carries inherited identifications");
         PASS([img.scanPattern isEqualToString:@"raster"], "scanPattern stored");

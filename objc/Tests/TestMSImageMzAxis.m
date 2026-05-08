@@ -1,6 +1,7 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "Image/TTIOMSImage.h"
+#import "Dataset/TTIOSpectralDataset.h"
 #import "Image/TTIOPixelSpectrum.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import <unistd.h>
