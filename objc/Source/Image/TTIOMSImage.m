@@ -92,12 +92,7 @@
                        mzAxis:(NSData *)mzAxis
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
-    if (mzAxis != nil && mzAxis.length != spectralPoints * sizeof(double)) {
-        [NSException raise:NSInvalidArgumentException
-                    format:@"mzAxis length %lu does not match spectralPoints=%lu",
-                           (unsigned long)mzAxis.length,
-                           (unsigned long)(spectralPoints * sizeof(double))];
-    }
+    NSParameterAssert(mzAxis == nil || mzAxis.length == spectralPoints * sizeof(double));
     self = [super initWithTitle:title
              isaInvestigationId:isaId
                          msRuns:@{}
@@ -211,13 +206,26 @@ static BOOL writeImageCubeUnderGroup(hid_t parentGid,
         hid_t axisDid = H5Dcreate2(imageGroup, "mz_axis",
                                     H5T_NATIVE_DOUBLE, axisSpace,
                                     H5P_DEFAULT, axisPlist, H5P_DEFAULT);
-        if (axisDid >= 0) {
-            H5Dwrite(axisDid, H5T_NATIVE_DOUBLE,
-                     H5S_ALL, H5S_ALL, H5P_DEFAULT, mzAxis.bytes);
-            H5Dclose(axisDid);
+        if (axisDid < 0) {
+            H5Pclose(axisPlist); H5Sclose(axisSpace);
+            H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+            H5Sclose(scalar); H5Gclose(imageGroup);
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
+                @"H5Dcreate2 mz_axis failed");
+            return NO;
         }
+        herr_t s2 = H5Dwrite(axisDid, H5T_NATIVE_DOUBLE,
+                              H5S_ALL, H5S_ALL, H5P_DEFAULT, mzAxis.bytes);
+        H5Dclose(axisDid);
         H5Pclose(axisPlist);
         H5Sclose(axisSpace);
+        if (s2 < 0) {
+            H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+            H5Sclose(scalar); H5Gclose(imageGroup);
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+                @"H5Dwrite mz_axis failed");
+            return NO;
+        }
     }
 
     #undef WRITE_INT_ATTR
