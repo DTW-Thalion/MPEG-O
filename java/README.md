@@ -32,7 +32,7 @@ the system HDF5 JNI shared library. If your distro installs it elsewhere,
 override via:
 
 ```bash
-mvn verify -Dhdf5.native.path=/path/to/jni/dir
+mvn verify -Dhdf5.native.path=/usr/local/lib
 ```
 
 ## Architecture

@@ -84,17 +84,10 @@
 #ifdef H5_HAVE_ROS3_VFD
     return YES;
 #else
-    // Probe at runtime — apt's libhdf5 exports H5Pset_fapl_ros3 even
-    // when the compile-time macro isn't exposed in the header we ship
-    // against. Call H5Zfilter_avail on a sentinel; safer is to try to
-    // set the ROS3 fapl on a transient plist and observe.
-    hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
-    if (fapl < 0) return NO;
-    H5FD_ros3_fapl_t cfg = { .version = H5FD_CURR_ROS3_FAPL_T_VERSION,
-                              .authenticate = false };
-    herr_t rc = H5Pset_fapl_ros3(fapl, &cfg);
-    H5Pclose(fapl);
-    return rc >= 0 ? YES : NO;
+    // ROS3 VFD not compiled in -- HDF5 was built without --with-ros3-vfd.
+    // Source-built HDF5 1.14 requires explicit --with-ros3-vfd at configure
+    // time. S3 cloud access is unavailable; +openS3URL: will return an error.
+    return NO;
 #endif
 }
 
@@ -132,6 +125,7 @@ static NSString *translateS3URL(NSString *url, NSString *region)
         return nil;
     }
 
+#ifdef H5_HAVE_ROS3_VFD
     if (awsRegion.length == 0) {
         const char *env = getenv("AWS_REGION");
         awsRegion = env ? [NSString stringWithUTF8String:env] : @"us-east-1";
@@ -168,13 +162,13 @@ static NSString *translateS3URL(NSString *url, NSString *region)
     // Session token requires the newer ros3 fapl (v2). Apply it only
     // when the caller provides one; older libhdf5 versions lack the
     // helper and will skip the call.
-#if defined(H5_HAVE_ROS3_VFD) && defined(H5FD_ROS3_MAX_SECRET_TOK_LEN)
+#  if defined(H5FD_ROS3_MAX_SECRET_TOK_LEN)
     if (sessionToken.length > 0) {
         H5Pset_fapl_ros3_token(fapl, [sessionToken UTF8String]);
     }
-#else
+#  else
     (void)sessionToken;
-#endif
+#  endif
 
     hid_t fid = H5Fopen([httpsURL UTF8String], H5F_ACC_RDONLY, fapl);
     H5Pclose(fapl);
@@ -185,6 +179,11 @@ static NSString *translateS3URL(NSString *url, NSString *region)
         return nil;
     }
     return [[self alloc] initWithFileId:fid path:httpsURL];
+#else
+    // H5_HAVE_ROS3_VFD not defined -- unreachable (isS3Supported returned NO above)
+    (void)awsRegion; (void)accessKeyId; (void)secretAccessKey; (void)sessionToken;
+    return nil;
+#endif
 }
 
 - (instancetype)initWithFileId:(hid_t)fid path:(NSString *)path

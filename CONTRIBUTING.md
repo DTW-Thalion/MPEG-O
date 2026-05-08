@@ -9,7 +9,8 @@ by a dedicated harness.
 
 ```bash
 # 1. System prerequisites (Ubuntu 24.04 / WSL):
-sudo apt-get install -y libhdf5-dev zlib1g-dev cmake ninja-build
+sudo apt-get install -y zlib1g-dev cmake ninja-build
+bash scripts/install-hdf5.sh   # builds + installs HDF5 1.14.6 to /usr/local
 
 # 2. One-shot dev setup: builds the native rANS library + installs
 #    Python with the broadest test extras + prints env vars.
@@ -146,7 +147,7 @@ TTIO_INCLUDE_LONG_TAIL=1 pytest tests/stress/test_fasta_fastq_benchmark.py
 
 # Java — transport encode + decode timing on a source .tio.
 java -Djava.library.path=$REPO/native/_build:/usr/lib/x86_64-linux-gnu/jni \
-     -cp "java/target/classes:$(deps):/usr/share/java/jarhdf5.jar" \
+     -cp "java/target/classes:$(deps):/usr/local/lib/jarhdf5.jar" \
      global.thalion.ttio.tools.Benchmark <source.tio> [output.json]
 
 # ObjC — same shape via mono-free Objective-C binary.

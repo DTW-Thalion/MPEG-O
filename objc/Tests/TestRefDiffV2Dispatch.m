@@ -156,11 +156,11 @@ static int rdv2dSequencesObjectType(const char *cpath)
 {
     hid_t f = H5Fopen(cpath, H5F_ACC_RDONLY, H5P_DEFAULT);
     if (f < 0) return -1;
-    H5O_info_t oinfo;
+    H5O_info2_t oinfo;
     memset(&oinfo, 0, sizeof(oinfo));
-    herr_t s = H5Oget_info_by_name(
+    herr_t s = H5Oget_info_by_name3(
         f, "study/genomic_runs/genomic_0001/signal_channels/sequences",
-        &oinfo, H5P_DEFAULT);
+        &oinfo, H5O_INFO_BASIC, H5P_DEFAULT);
     H5Fclose(f);
     if (s < 0) return -1;
     return (int)oinfo.type;

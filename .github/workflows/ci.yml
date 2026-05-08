@@ -47,7 +47,6 @@ jobs:
             make \
             git \
             ca-certificates \
-            libhdf5-dev \
             zlib1g-dev \
             libssl-dev \
             libxml2-dev \
@@ -126,12 +125,24 @@ jobs:
           clang --version
           ${INSTALL_PREFIX}/bin/gnustep-config --variable=GNUSTEP_MAKEFILES
           ${INSTALL_PREFIX}/bin/gnustep-config --objc-flags || true
-          dpkg -s libhdf5-dev | grep Version || true
+          grep -oP 'HDF5 Version:\s+\K[\d.]+' /usr/local/lib/libhdf5.settings 2>/dev/null || echo 'HDF5 settings not found'
           ls -l ${INSTALL_PREFIX}/lib/libobjc.so* || true
           ls -l ${INSTALL_PREFIX}/lib/libgnustep-base.so* || true
 
-      # M23: probe H5is_library_threadsafe() and log the result. apt's
-      # libhdf5-dev is serial; TTIOHDF5File detects that at open time and
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
+      # M23: probe H5is_library_threadsafe() and log the result. Source-built
+      # HDF5 1.14.6 is serial (not threadsafe); TTIOHDF5File detects that at open
       # falls back to exclusive-only wrapper locking (see -isThreadSafe).
       # The log makes the runtime mode visible in every CI run.
       - name: Probe HDF5 thread-safety (informational)
@@ -147,7 +158,7 @@ jobs:
               return 0;
           }
           EOF
-          clang /tmp/h5ts.c -lhdf5 -o /tmp/h5ts
+          clang /tmp/h5ts.c -I/usr/local/include -L/usr/local/lib -lhdf5 -Wl,-rpath,/usr/local/lib -o /tmp/h5ts
           /tmp/h5ts
 
       - name: Dependency check
@@ -212,10 +223,21 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libhdf5-dev \
             zlib1g-dev \
             cmake \
             ninja-build
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Build native rANS library
         # Required for the v2 genomic codecs (MATE_INLINE_V2,
@@ -275,7 +297,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libhdf5-dev zlib1g-dev cmake ninja-build
+            zlib1g-dev cmake ninja-build
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Build native rANS library
         run: |
@@ -317,7 +351,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libhdf5-dev zlib1g-dev cmake ninja-build
+            zlib1g-dev cmake ninja-build
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Build native rANS library
         run: |
@@ -367,7 +413,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libhdf5-dev zlib1g-dev cmake ninja-build samtools
+            zlib1g-dev cmake ninja-build samtools
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Build native rANS library
         run: |
@@ -430,7 +488,19 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libhdf5-dev zlib1g-dev cmake ninja-build mono-complete
+            zlib1g-dev cmake ninja-build mono-complete
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Build native rANS library
         run: |
@@ -489,11 +559,18 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            libhdf5-dev libhdf5-java libhdf5-jni
+
+      - name: Cache HDF5 1.14
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -548,10 +625,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build make git ca-certificates \
-            libhdf5-dev zlib1g-dev libssl-dev libxml2-dev \
+            zlib1g-dev libssl-dev libxml2-dev \
             libgnutls28-dev libffi-dev libicu-dev \
             libblocksruntime-dev libcurl4-openssl-dev tzdata \
             python3 python3-pip
+
+      - name: Cache HDF5 1.14 (perf job)
+        id: cache-hdf5-perf
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source (perf job)
+        if: steps.cache-hdf5-perf.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 perf (always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Cache GNUstep stack
         id: gnustep-cache
@@ -634,12 +723,10 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - name: Install libhdf5-java
-        run: sudo apt-get install -y --no-install-recommends libhdf5-java libhdf5-jni
       - name: Compile Java + materialise runtime classpath
         working-directory: java
         run: |
-          mvn -B test-compile
+          mvn -B test-compile -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
           mvn -B dependency:build-classpath \
               -Dmdep.outputFile=target/runtime-classpath.txt
 
@@ -689,9 +776,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang cmake ninja-build make git ca-certificates \
-            libhdf5-dev zlib1g-dev libssl-dev libxml2-dev \
+            zlib1g-dev libssl-dev libxml2-dev \
             libgnutls28-dev libffi-dev libicu-dev \
             libblocksruntime-dev libcurl4-openssl-dev tzdata
+
+      - name: Cache HDF5 1.14 (cross-compat)
+        id: cache-hdf5-cc
+        uses: actions/cache@v4
+        with:
+          path: /usr/local
+          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+      - name: Install HDF5 1.14 from source (cross-compat)
+        if: steps.cache-hdf5-cc.outputs.cache-hit != 'true'
+        run: bash scripts/install-hdf5.sh 1.14.6
+      - name: Update ldconfig for HDF5 (cross-compat, always)
+        run: sudo ldconfig /usr/local/lib
 
       - name: Cache GNUstep stack
         id: gnustep-cache
@@ -786,9 +885,6 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-
-      - name: Install HDF5 Java bindings
-        run: sudo apt-get install -y --no-install-recommends libhdf5-java libhdf5-jni
 
       - name: Java reads ObjC fixtures
         working-directory: java
