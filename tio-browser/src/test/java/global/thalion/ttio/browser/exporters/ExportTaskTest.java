@@ -3,13 +3,13 @@ package global.thalion.ttio.browser.exporters;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 import global.thalion.ttio.AcquisitionRun;
-import global.thalion.ttio.FeatureFlags;
 import global.thalion.ttio.MassSpectrum;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
@@ -336,7 +336,7 @@ class ExportTaskTest {
 
         MSImage img = new MSImage(w, h, sp, 0, 10.0, 10.0, "raster",
             cube, mz, "imzml-roundtrip", "",
-            java.util.List.of(), java.util.List.of(), java.util.List.of());
+            List.of(), List.of(), List.of());
 
         try (Hdf5File f = Hdf5File.create(origTio.toString());
              Hdf5Group root = f.rootGroup();
