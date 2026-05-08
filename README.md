@@ -231,7 +231,9 @@ validation harnesses (mzML XSD, pyteomics, pymzml, isatools-driven
 ISA-Tab tests):
 
 ```bash
-sudo apt install libhdf5-dev libhdf5-serial-dev samtools
+sudo apt install zlib1g-dev samtools
+# HDF5 1.14.6 is installed from source (h5py bundles its own HDF5):
+bash scripts/install-hdf5.sh
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip setuptools wheel
@@ -253,8 +255,9 @@ cd python && pytest --cov=src/ttio --cov-report=term --cov-report=html
 ### Building the Java implementation
 
 ```bash
-# Prerequisites: JDK 17+, Maven 3.8+, libhdf5-dev, libhdf5-java, libhdf5-jni
-sudo apt-get install openjdk-17-jdk-headless maven libhdf5-dev libhdf5-java libhdf5-jni
+# Prerequisites: JDK 17+, Maven 3.8+, HDF5 1.14.6 (from source)
+sudo apt-get install openjdk-17-jdk-headless maven
+bash scripts/install-hdf5.sh   # builds + installs HDF5 1.14.6 to /usr/local
 
 cd java
 mvn verify -B
@@ -262,7 +265,7 @@ mvn verify -B
 
 ## Building the Objective-C Reference Implementation
 
-Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.10), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `TTIOCompressionLZ4` support; LZ4-dependent tests skip cleanly when the plugin isn't loadable.
+Requires **GNUstep Base**, **GNUstep Make**, a compatible **Objective-C compiler** (clang, ARC required), **libhdf5** (≥ 1.14, built from source via scripts/install-hdf5.sh), **zlib**, and **OpenSSL/libcrypto**. Optional: the LZ4 HDF5 filter plugin (filter id 32004) for `TTIOCompressionLZ4` support; LZ4-dependent tests skip cleanly when the plugin isn't loadable.
 
 ### Ubuntu / Debian / WSL
 

@@ -5,59 +5,33 @@
  */
 package global.thalion.ttio.hdf5;
 
-import sun.misc.Unsafe;
-
-import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-
 /**
- * Pool of {@code sun.misc.Unsafe}-allocated, UTF-8 encoded, null-terminated
- * C strings.
+ * String pass-through for HDF5 1.14 compatibility.
  *
- * <p>Exists because the HDF5 Java native binding (JHI5 1.10.x) cannot
- * marshal variable-length string fields inside a compound dataset: its
- * {@code H5Dwrite(byte[])} path treats the buffer as opaque, which is
- * exactly what we need as long as the VL-string slots contain valid C
- * pointers. This pool hands out those pointers. {@link #close()} must
- * run after the {@code H5Dwrite} call so the native memory stays valid
- * for the duration of the write.</p>
+ * <p>In HDF5 1.10, {@code H5Dwrite(byte[])} with a compound memory type
+ * containing VL_STRING fields required raw C-string pointers in the byte
+ * buffer. This class formerly allocated those pointers via
+ * {@code sun.misc.Unsafe}. In HDF5 1.14, the JNI path detects VL_STRING
+ * fields in the memory type and calls {@code GetObjectArrayElement},
+ * expecting Java {@link String} objects — making the raw-pointer approach
+ * crash.</p>
+ *
+ * <p>The write path now routes VL_STRING columns through
+ * {@link hdf.hdf5lib.H5#H5Dwrite_VLStrings}, so this pool is reduced to a
+ * no-op pass-through that returns the {@link String} directly. The
+ * {@link AutoCloseable} contract is preserved for API compatibility.</p>
  *
  *
  */
 public final class NativeStringPool implements AutoCloseable {
 
-    private static final Unsafe UNSAFE = obtainUnsafe();
-
-    private final List<Long> allocations = new ArrayList<>();
-
-    /** Copy {@code s} (or {@code ""} if null) into native memory. */
-    public long addString(String s) {
-        String src = s == null ? "" : s;
-        byte[] bytes = src.getBytes(StandardCharsets.UTF_8);
-        long addr = UNSAFE.allocateMemory(bytes.length + 1L);
-        for (int i = 0; i < bytes.length; i++) {
-            UNSAFE.putByte(addr + i, bytes[i]);
-        }
-        UNSAFE.putByte(addr + bytes.length, (byte) 0);
-        allocations.add(addr);
-        return addr;
+    /** Return {@code s} as-is (or empty string if null). No native allocation. */
+    public String addString(String s) {
+        return s == null ? "" : s;
     }
 
     @Override
     public void close() {
-        for (long a : allocations) UNSAFE.freeMemory(a);
-        allocations.clear();
-    }
-
-    private static Unsafe obtainUnsafe() {
-        try {
-            Field f = Unsafe.class.getDeclaredField("theUnsafe");
-            f.setAccessible(true);
-            return (Unsafe) f.get(null);
-        } catch (ReflectiveOperationException e) {
-            throw new ExceptionInInitializerError(e);
-        }
+        // nothing to free
     }
 }

@@ -4,7 +4,7 @@
 # /usr or /usr/local, e.g.:
 #     make HDF5_PREFIX=/opt/homebrew
 
-HDF5_PREFIX ?= /usr
+HDF5_PREFIX ?= /usr/local
 
 # ---------------------------------------------------------------------------
 # Toolchain note
@@ -41,7 +41,6 @@ TTIO_OBJC_RUNTIME ?= gnustep-2.0
 # Build flags
 # ---------------------------------------------------------------------------
 ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include
-ADDITIONAL_CPPFLAGS += -I$(HDF5_PREFIX)/include/hdf5/serial
 
 # On the apt gnustep-1.8 path, libobjc's runtime headers (objc/objc.h,
 # objc/runtime.h, ...) ship inside gcc's internal include directory,
@@ -99,8 +98,9 @@ ADDITIONAL_OBJCFLAGS  += -I$(GNUSTEP_MAKEFILES)/TestFramework
 ADDITIONAL_OBJCCFLAGS += -I$(GNUSTEP_MAKEFILES)/TestFramework
 
 ADDITIONAL_LDFLAGS += -L/usr/local/lib
+ADDITIONAL_LDFLAGS += -Wl,-rpath,/usr/local/lib
 ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib
-ADDITIONAL_LDFLAGS += -L$(HDF5_PREFIX)/lib/x86_64-linux-gnu/hdf5/serial
+ADDITIONAL_LDFLAGS += -Wl,-rpath,$(HDF5_PREFIX)/lib
 ADDITIONAL_LDFLAGS += -lsqlite3
 
 # v0.8 M49: post-quantum crypto via liboqs. Probe $OQS_PREFIX and

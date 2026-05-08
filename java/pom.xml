@@ -32,11 +32,11 @@
     </properties>
 
     <dependencies>
-        <!-- HDF5 Java bindings (system package: libhdf5-java) -->
+        <!-- HDF5 Java bindings (source-built HDF5 1.14.6 via scripts/install-hdf5.sh) -->
         <dependency>
             <groupId>org.hdfgroup</groupId>
             <artifactId>hdf5</artifactId>
-            <version>1.10.10</version>
+            <version>1.14.6</version>
             <scope>system</scope>
             <systemPath>${hdf5.jar.path}</systemPath>
         </dependency>
@@ -102,14 +102,14 @@
                 <os><family>unix</family></os>
             </activation>
             <properties>
-                <hdf5.jar.path>/usr/share/java/jarhdf5.jar</hdf5.jar.path>
+                <hdf5.jar.path>/usr/local/lib/jarhdf5.jar</hdf5.jar.path>
                 <!-- L3 V4 (CRAM 3.1 fqzcomp) tests need libttio_rans_jni.so on
                      java.library.path. The native build dir is appended so
                      `mvn test` works from any session without a per-invocation
                      -Dhdf5.native.path override. CI/devs without the native
                      build still pass — V4 tests are gated on
                      TtioRansNative.isAvailable(). -->
-                <hdf5.native.path>/usr/lib/x86_64-linux-gnu/jni:/usr/lib/x86_64-linux-gnu/hdf5/serial:/home/toddw/TTI-O/native/_build</hdf5.native.path>
+                <hdf5.native.path>/usr/local/lib:/home/toddw/TTI-O/native/_build</hdf5.native.path>
             </properties>
         </profile>
     </profiles>
