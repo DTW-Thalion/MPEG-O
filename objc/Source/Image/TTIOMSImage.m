@@ -469,9 +469,12 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
 {
     if (_mzAxis == nil || _mzAxis.length == 0) {
         [NSException raise:NSInternalInconsistencyException
-                    format:@"TTIOMSImage has no mzAxis; cannot project to "
-                           @"imzML pixels. The .tio was written before format "
-                           @"v1.2 added the spectral axis."];
+                    format:@"MSImage has no mz_axis; cannot project to imzML "
+                           @"pixels. The .tio was written before format v1.2 "
+                           @"added the spectral axis. Re-import from a source "
+                           @"format that carries m/z calibration (imzML, mzML), "
+                           @"or supply mz_axis explicitly."];
+
     }
     NSMutableArray *out = [NSMutableArray arrayWithCapacity:_width * _height];
     const double *cubeP = (const double *)_cube.bytes;
