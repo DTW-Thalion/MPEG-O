@@ -44,16 +44,28 @@ Python in-memory store).
 ## Native rANS library
 
 `libttio_rans.so` (or `.dylib` on macOS, `.dll` on Windows) is
-mandatory at runtime for the v2 genomic codecs. Build with:
+mandatory at runtime for the v2 genomic codecs. Build via the
+provided idempotent script:
+
+```bash
+bash scripts/build-native.sh
+export TTIO_RANS_LIB_PATH="$(pwd)/native/_build/libttio_rans.so"
+```
+
+The script is invoked automatically by `objc/build.sh` (so
+`./build.sh` from `objc/` will build the native lib first if missing)
+and by the ObjC CI job. The Python / Java jobs build their own copy
+inline with the JNI variant flag (`-DTTIO_RANS_BUILD_JNI=ON`).
+
+Tests look up the library via `TTIO_RANS_LIB_PATH` first, then
+fall back to `native/_build/libttio_rans.so` from the repo root.
+
+Direct cmake invocation (equivalent):
 
 ```bash
 cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
 cmake --build native/_build --parallel
-export TTIO_RANS_LIB_PATH="$(pwd)/native/_build/libttio_rans.so"
 ```
-
-Tests look up the library via `TTIO_RANS_LIB_PATH` first, then
-fall back to `native/_build/libttio_rans.so` from the repo root.
 
 ## Java
 

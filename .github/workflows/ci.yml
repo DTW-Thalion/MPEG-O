@@ -161,6 +161,9 @@ jobs:
           clang /tmp/h5ts.c -I/usr/local/include -L/usr/local/lib -lhdf5 -Wl,-rpath,/usr/local/lib -o /tmp/h5ts
           /tmp/h5ts
 
+      - name: Build native libttio_rans (required by ObjC genomic codecs)
+        run: ./scripts/build-native.sh
+
       - name: Dependency check
         working-directory: objc
         run: ./check-deps.sh
