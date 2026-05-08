@@ -7,16 +7,18 @@ package global.thalion.ttio;
 
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.Enums.Precision;
+import global.thalion.ttio.importers.ImzMLReader;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Imaging mass spectrometry dataset with spatial grid and tile access.
  *
  * <p>Stored as a 3-D intensity cube
- * ({@code height x width x spectralPoints}) under
+ * ({@code height × width × spectralPoints}) under
  * {@code /study/image_cube/}.</p>
  *
  * <p>I/O routed through {@link StorageGroup} /
@@ -147,7 +149,7 @@ public class MSImage {
      *
      *  @throws IllegalStateException if {@code mzAxis} is empty.
      */
-    public java.util.List<global.thalion.ttio.importers.ImzMLReader.PixelSpectrum>
+    public List<ImzMLReader.PixelSpectrum>
             toPixelSpectra() {
         if (mzAxis.length == 0) {
             throw new IllegalStateException(
@@ -156,14 +158,13 @@ public class MSImage {
                 + "axis. Re-import from a source format that carries m/z "
                 + "calibration (imzML, mzML), or supply mz_axis explicitly.");
         }
-        java.util.List<global.thalion.ttio.importers.ImzMLReader.PixelSpectrum>
-            pixels = new java.util.ArrayList<>(width * height);
+        List<ImzMLReader.PixelSpectrum>
+            pixels = new ArrayList<>(width * height);
         for (int row = 0; row < height; row++) {
             for (int col = 0; col < width; col++) {
                 double[] intensity = spectrumAt(row, col);
                 // x = col (image-plane), y = row, z = 1 (single plane).
-                pixels.add(new global.thalion.ttio.importers.ImzMLReader
-                    .PixelSpectrum(col, row, 1, mzAxis, intensity));
+                pixels.add(new ImzMLReader.PixelSpectrum(col, row, 1, mzAxis, intensity));
             }
         }
         return pixels;

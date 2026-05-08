@@ -827,7 +827,7 @@ class SpectralDatasetTest {
     }
 
     @Test
-    void imageAccessorReturnsNullWhenAbsent() {
+    void imageAccessorReturnsNullWhenAbsent() throws Exception {
         // full_ms.tio has no image_cube
         String fixture = getFixturePath("full_ms.tio");
         try (SpectralDataset ds = SpectralDataset.open(fixture)) {
