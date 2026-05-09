@@ -163,7 +163,7 @@ mark).
 To run the bundled JAR with a `.tio` opened at launch:
 
 ```bash
-java -jar tio-browser-0.1.0-shaded.jar --open path/to/dataset.tio
+java -jar tio-browser-1.3.0-shaded.jar --open path/to/dataset.tio
 ```
 
 ## Diagnostics
