@@ -17,6 +17,7 @@
  */
 #import "TTIOZarrProvider.h"
 #import "TTIOProviderRegistry.h"
+#import "Core/TTIOPortability.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import "ValueClasses/TTIOEnums.h"
 #import <zlib.h>
@@ -204,7 +205,7 @@ static BOOL zWriteFile(NSString *path, NSData *bytes, NSError **error)
 
 static NSData *zReadFile(NSString *path, NSError **error)
 {
-    return [NSData dataWithContentsOfFile:path options:0 error:error];
+    return TTIODataWithContentsOfFileE(path, error);
 }
 
 // v1.0 Zarr v3: a single ``zarr.json`` per node carries metadata +
@@ -229,7 +230,7 @@ static NSMutableDictionary *zReadMeta(NSString *dir, NSError **error)
 static BOOL zWriteMeta(NSString *dir, NSDictionary *meta, NSError **error)
 {
     NSData *d = [NSJSONSerialization dataWithJSONObject:meta
-                                                 options:NSJSONWritingSortedKeys
+                                                 options:TTIO_JSON_SORTED_KEYS
                                                    error:error];
     if (!d) return NO;
     return zWriteFile(zMetaPath(dir), d, error);
