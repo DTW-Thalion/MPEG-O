@@ -17,8 +17,9 @@ import global.thalion.ttio.SignalArray;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
-import global.thalion.ttio.hdf5.Hdf5File;
-import global.thalion.ttio.hdf5.Hdf5Group;
+import global.thalion.ttio.providers.ProviderRegistry;
+import global.thalion.ttio.providers.StorageGroup;
+import global.thalion.ttio.providers.StorageProvider;
 import global.thalion.ttio.importers.BamReader;
 import global.thalion.ttio.importers.BrukerTDFReader;
 import global.thalion.ttio.importers.CramReader;
@@ -32,7 +33,6 @@ import global.thalion.ttio.importers.NmrMLReader;
 import global.thalion.ttio.importers.SamReader;
 import global.thalion.ttio.importers.ThermoRawReader;
 import global.thalion.ttio.importers.WatersMassLynxReader;
-import global.thalion.ttio.providers.Hdf5Provider;
 import javafx.concurrent.Task;
 
 /**
@@ -210,14 +210,15 @@ public final class ImportTask extends Task<Void> {
             config.datasetTitle, "",
             List.of(), List.of(), List.of());
 
-        try (Hdf5File f = Hdf5File.create(config.targetTio.toString());
-             Hdf5Group root = f.rootGroup()) {
+        try (StorageProvider provider = ProviderRegistry.open(
+                config.targetTio.toString(), StorageProvider.Mode.CREATE)) {
+            StorageGroup root = provider.rootGroup();
             FeatureFlags.defaultCurrent().writeTo(root);
-            try (Hdf5Group study = root.createGroup("study")) {
+            try (StorageGroup study = root.createGroup("study")) {
                 if (!config.datasetTitle.isEmpty()) {
-                    study.setStringAttribute("title", config.datasetTitle);
+                    study.setAttribute("title", config.datasetTitle);
                 }
-                img.writeTo(Hdf5Provider.adapterForGroup(study));
+                img.writeTo(study);
             }
         }
     }

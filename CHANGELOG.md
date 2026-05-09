@@ -13,13 +13,35 @@ public API is stable from onward.
 
 ### Added
 
-- **`tio-browser` desktop GUI (Phases 0–7 + native bundling)** —
+- **`tio-browser` desktop GUI (Phases 0–13 + native bundling)** —
   JavaFX desktop application for inspecting `.tio` datasets, peer to
   the Java / Python / ObjC reference implementations. Cross-platform
   shaded jar bundles `libttio_rans_jni` for **Linux x86_64**, **macOS
   Apple Silicon (arm64)**, and **Windows x86_64**; end users can run
   `java -jar tio-browser-<ver>-shaded.jar` without any toolchain
-  setup beyond a JDK 17+ runtime. `NativeLibraryLoader` resolves the
+  setup beyond a JDK 17+ runtime.
+
+  - **Phase 8** — Import wizard: 13-format dispatch (mzML, ImzML,
+    nmrML, JCAMP-DX, BAM/SAM/CRAM, FASTA, FASTQ, mzTab, Thermo,
+    Waters, Bruker), drag-and-drop with format auto-detection.
+  - **Phase 9** — Export dialog: 11 export formats with eligibility-
+    based greying when the open `.tio` doesn't contain the required
+    run kind.
+  - **Phase 10/11** — Transport: download `.tis` streams from
+    `http(s)`/`ws(s)` URLs into a local `.tio`; upload a local `.tio`
+    as a `.tis` byte stream to the same URL families. Server-side
+    filters (run kind, dataset-id list, RT range) let clients fetch
+    subsets without downloading the whole file.
+  - **Phase 12** — Diagnostics dialog (Tools → Diagnostics): probes
+    HDF5 JNI, `samtools`, `ThermoRawFileParser`, `masslynxraw`, and
+    the Bruker Python helper. Greys out Import/Export format rows
+    whose binary isn't available, with tooltips listing the missing
+    dep. Re-probe button picks up newly-installed binaries without
+    restarting the app via a listener bus.
+  - **Phase 13** — Distribution: `--open <path>` CLI flag for the
+    shaded JAR opens a dataset at launch; `mvn -P native-package
+    package` runs `jpackage` to produce platform-native installers
+    (`.deb`/`.rpm`/`.dmg`/`.msi`) at `target/installer/`. `NativeLibraryLoader` resolves the
   library via `System.loadLibrary` → bundled-resource extract →
   graceful degradation (Intel Mac and other unbundled platforms get
   a placeholder in the genomic Read Inspector; all non-genomic
