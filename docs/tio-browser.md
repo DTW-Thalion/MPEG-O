@@ -13,7 +13,7 @@ For build/install instructions see
 - **File → Open** picks a `.tio` from a file dialog.
 - **Drag-and-drop** any `.tio` onto the window (drops on file types
   the importer recognizes route through the Import wizard instead).
-- **CLI**: `java -jar tio-browser-0.1.0-shaded.jar --open path/to/dataset.tio`
+- **CLI**: `java -jar tio-browser-1.3.0-shaded.jar --open path/to/dataset.tio`
   opens the dataset at launch.
 
 The status bar shows `path · vN.N.N · MS=N · Genomic=N · Refs=N · 🔓/🔒`

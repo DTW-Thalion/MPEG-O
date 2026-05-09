@@ -11,6 +11,8 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-05-09
+
 ### Added
 
 - **`tio-browser` desktop GUI (Phases 0–13 + native bundling)** —

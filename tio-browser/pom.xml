@@ -7,7 +7,7 @@
 
     <groupId>global.thalion</groupId>
     <artifactId>tio-browser</artifactId>
-    <version>0.1.0</version>
+    <version>1.3.0</version>
     <packaging>jar</packaging>
 
     <name>tio-browser</name>
@@ -282,13 +282,13 @@
                                         <argument>--input</argument>
                                         <argument>target/installer-staging</argument>
                                         <argument>--main-jar</argument>
-                                        <argument>tio-browser-0.1.0-shaded.jar</argument>
+                                        <argument>tio-browser-1.3.0-shaded.jar</argument>
                                         <argument>--main-class</argument>
                                         <argument>global.thalion.ttio.browser.AppLauncher</argument>
                                         <argument>--name</argument>
                                         <argument>tio-browser</argument>
                                         <argument>--app-version</argument>
-                                        <argument>0.1.0</argument>
+                                        <argument>1.3.0</argument>
                                         <argument>--vendor</argument>
                                         <argument>Thalion</argument>
                                         <argument>--icon</argument>
