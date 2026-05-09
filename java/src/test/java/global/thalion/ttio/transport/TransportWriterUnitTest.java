@@ -257,9 +257,31 @@ class TransportWriterUnitTest {
         // The compressed channel data must round-trip back to the same
         // values via ZLIB inflate in the reader.
         Path rt = tmp.resolve("rt.tio");
-        try (TransportReader tr = new TransportReader(out.toByteArray());
+        byte[] streamBytes = out.toByteArray();
+        try (TransportReader tr = new TransportReader(streamBytes);
              SpectralDataset ds = tr.materializeTo(rt.toString())) {
             assertEquals(2, ds.msRuns().get("run_0001").spectrumCount());
+        }
+        // Verify at the wire level that AU channels carry compression=ZLIB
+        // (round-trip alone can't observe this — the reader inflates).
+        try (TransportReader tr = new TransportReader(streamBytes)) {
+            List<TransportReader.PacketRecord> pkts = tr.readAllPackets();
+            boolean sawAu = false;
+            for (TransportReader.PacketRecord rec : pkts) {
+                if (rec.header.packetType == PacketType.ACCESS_UNIT) {
+                    sawAu = true;
+                    AccessUnit au = AccessUnit.decode(rec.payload);
+                    assertFalse(au.channels.isEmpty(),
+                        "AU has no channels");
+                    for (ChannelData ch : au.channels) {
+                        assertEquals(Enums.Compression.ZLIB.ordinal(),
+                            ch.compression,
+                            "channel " + ch.name + " not ZLIB-compressed");
+                    }
+                    break;
+                }
+            }
+            assertTrue(sawAu, "stream contained no ACCESS_UNIT packets");
         }
     }
 
@@ -280,13 +302,41 @@ class TransportWriterUnitTest {
         }
         src.close();
         // Decode the stream back and verify the bulk-mode feature is absent.
-        try (TransportReader tr = new TransportReader(out.toByteArray())) {
+        byte[] streamBytes = out.toByteArray();
+        try (TransportReader tr = new TransportReader(streamBytes)) {
             // Round-trip parse — reader must not raise the
             // "bulk_mode_v2_blobs but no BlobV2*" guard.
             Path rt = tmp.resolve("rt.tio");
             try (SpectralDataset ds = tr.materializeTo(rt.toString())) {
                 assertEquals(2, ds.msRuns().get("run_0001").spectrumCount());
             }
+        }
+        // Wire-level: parse the StreamHeader payload and assert the
+        // BULK_MODE_V2_BLOBS feature is NOT in the declared feature list.
+        try (TransportReader tr = new TransportReader(streamBytes)) {
+            List<TransportReader.PacketRecord> pkts = tr.readAllPackets();
+            assertFalse(pkts.isEmpty(), "stream is empty");
+            TransportReader.PacketRecord first = pkts.get(0);
+            assertEquals(PacketType.STREAM_HEADER, first.header.packetType,
+                "first packet must be StreamHeader");
+            java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(first.payload)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+            // Skip format_version, title, isa (each LE u16 length + bytes).
+            for (int i = 0; i < 3; i++) {
+                int len = buf.getShort() & 0xFFFF;
+                buf.position(buf.position() + len);
+            }
+            int nFeatures = buf.getShort() & 0xFFFF;
+            List<String> features = new ArrayList<>(nFeatures);
+            for (int i = 0; i < nFeatures; i++) {
+                int len = buf.getShort() & 0xFFFF;
+                byte[] b = new byte[len];
+                buf.get(b);
+                features.add(new String(b, java.nio.charset.StandardCharsets.UTF_8));
+            }
+            assertFalse(features.contains(PacketType.BULK_MODE_V2_BLOBS_FEATURE),
+                "bulk_mode_v2_blobs feature must NOT be declared on a "
+                + "pure-MS dataset; got features=" + features);
         }
     }
 

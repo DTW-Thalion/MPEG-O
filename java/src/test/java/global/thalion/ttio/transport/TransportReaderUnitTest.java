@@ -21,7 +21,6 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -244,7 +243,7 @@ class TransportReaderUnitTest {
     // ── Stream-shape errors ───────────────────────────────────────
 
     @Test
-    void firstPacketMustBeStreamHeader() {
+    void firstPacketMustBeStreamHeader(@TempDir Path tmp) {
         // Emit a DatasetHeader before any StreamHeader.
         byte[] dsHdrPayload = concat(
             u16(1),                  // dataset_id
@@ -257,11 +256,12 @@ class TransportReaderUnitTest {
             u32(0)                   // expected_au_count
         );
         byte[] stream = makePacket(PacketType.DATASET_HEADER, 1, 0, dsHdrPayload);
+        Path out = tmp.resolve("should-not-create.tio");
         try (TransportReader tr = new TransportReader(stream)) {
             // readAllPackets succeeds (no StreamHeader is fine at the
             // raw-packet level), but materializeTo enforces ordering.
             assertThrows(IOException.class,
-                () -> tr.materializeTo("/tmp/should-not-create.tio"));
+                () -> tr.materializeTo(out.toString()));
         } catch (IOException e) {
             fail(e);
         }
