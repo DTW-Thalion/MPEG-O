@@ -39,7 +39,6 @@ from ttio.transport.codec import (
 from ttio.transport.packets import (
     BULK_MODE_V2_BLOBS_FEATURE,
     HEADER_MAGIC,
-    HEADER_SIZE,
     VERSION,
     AccessUnit,
     ChannelData,
@@ -175,7 +174,7 @@ class TestTransportWriterMisc:
         with TransportWriter(out, use_compression=False) as tw:
             assert tw.use_compression is False
 
-    def test_write_blob_v2_mate_info_emits_packet(self, tmp_path):
+    def test_write_blob_v2_mate_info_emits_packet(self):
         # Calling the helper directly emits one BLOB_V2_MATE_INFO
         # packet with the correct payload. Avoids the full
         # write_dataset path so we exercise the helper in isolation.
@@ -194,7 +193,7 @@ class TestTransportWriterMisc:
                 types.append(int(h.packet_type))
         assert types == [int(PacketType.BLOB_V2_MATE_INFO)]
 
-    def test_write_blob_v2_ref_diff_emits_packet(self, tmp_path):
+    def test_write_blob_v2_ref_diff_emits_packet(self):
         buf = io.BytesIO()
         with TransportWriter(buf) as tw:
             tw.write_blob_v2_ref_diff(
@@ -205,7 +204,7 @@ class TestTransportWriterMisc:
             types = [int(h.packet_type) for h, _ in tr.iter_packets()]
         assert types == [int(PacketType.BLOB_V2_REF_DIFF)]
 
-    def test_write_blob_v2_name_tok_emits_packet(self, tmp_path):
+    def test_write_blob_v2_name_tok_emits_packet(self):
         buf = io.BytesIO()
         with TransportWriter(buf) as tw:
             tw.write_blob_v2_name_tok(dataset_id=4, blob=b"tok")
@@ -948,7 +947,7 @@ class TestSpectrumWithoutSignalArray:
     """Spectrum.has_signal_array(name) returning False makes
     ``_spectrum_to_access_unit`` skip the channel (line 765)."""
 
-    def test_skips_channel_without_signal_array(self, tmp_path):
+    def test_skips_channel_without_signal_array(self, monkeypatch, tmp_path):
         src = _make_minimal_dataset(tmp_path / "src.tio")
         ds = SpectralDataset.open(src)
         try:
@@ -959,7 +958,7 @@ class TestSpectrumWithoutSignalArray:
             # channel_names list to include an extra entry; the
             # codec should silently skip it.
             extra_names = list(run.channel_names) + ["__nonexistent__"]
-            object.__setattr__(run, "channel_names", extra_names)
+            monkeypatch.setattr(run, "channel_names", extra_names)
             au = _spectrum_to_access_unit(spectrum, run)
             # Only the real channels should appear.
             assert {ch.name for ch in au.channels} == {"mz", "intensity"}
