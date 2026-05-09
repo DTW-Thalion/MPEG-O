@@ -237,6 +237,8 @@ public class MainWindow {
         exportItem.setOnAction(e -> openExportDialog());
         downloadItem.setOnAction(e -> openDownloadDialog());
         uploadItem.setOnAction(e -> openUploadDialog());
+        diagnosticsItem.setOnAction(e ->
+            global.thalion.ttio.browser.diag.DiagnosticsDialog.show(stage));
     }
 
     /** Open the transport download wizard. */

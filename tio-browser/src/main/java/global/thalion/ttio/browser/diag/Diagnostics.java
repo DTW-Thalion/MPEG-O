@@ -2,6 +2,7 @@ package global.thalion.ttio.browser.diag;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Static registry of external dependency probes plus a small cache.
@@ -47,12 +48,46 @@ public final class Diagnostics {
 
     private static volatile List<ProbeResult> cache = List.of();
 
+    /**
+     * Listeners notified after every {@link #probeAll()} call. Used by
+     * the Import / Export dialogs to re-render their format rows when
+     * the user clicks Re-probe in the Diagnostics dialog.
+     *
+     * <p>{@link CopyOnWriteArrayList} keeps add / remove / iterate
+     * thread-safe without a lock; listener counts are tiny (one or two
+     * dialogs at a time), so the copy-on-write cost is negligible.</p>
+     */
+    private static final List<Runnable> CACHE_REFRESH_LISTENERS =
+        new CopyOnWriteArrayList<>();
+
     private Diagnostics() {}
 
-    /** Re-probe every registered dependency and refresh the cache. */
+    /** Re-probe every registered dependency and refresh the cache.
+     *  After the cache is updated, all registered cache-refresh listeners
+     *  are invoked on the calling thread. */
     public static List<ProbeResult> probeAll() {
         cache = PROBES.stream().map(BinaryProbe::probe).toList();
+        for (Runnable r : CACHE_REFRESH_LISTENERS) {
+            try {
+                r.run();
+            } catch (RuntimeException ignored) {
+                // Listener errors must not break the probe pipeline.
+            }
+        }
         return cache;
+    }
+
+    /** Register {@code listener} to be invoked after every successful
+     *  {@link #probeAll()}. Idempotent if the same listener is added
+     *  twice (no de-duplication on identity). */
+    public static void addCacheRefreshListener(Runnable listener) {
+        if (listener != null) CACHE_REFRESH_LISTENERS.add(listener);
+    }
+
+    /** De-register a previously {@linkplain #addCacheRefreshListener
+     *  registered} listener. No-op if the listener was never registered. */
+    public static void removeCacheRefreshListener(Runnable listener) {
+        if (listener != null) CACHE_REFRESH_LISTENERS.remove(listener);
     }
 
     /** @return last {@link #probeAll()} result, or empty list before first probe. */

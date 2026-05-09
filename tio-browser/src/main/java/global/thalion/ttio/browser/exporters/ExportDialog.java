@@ -6,6 +6,7 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.browser.diag.Diagnostics;
 import global.thalion.ttio.browser.exporters.ExportFormatSpec.ExtraField;
 import global.thalion.ttio.browser.model.OpenDataset;
 import javafx.beans.value.ChangeListener;
@@ -80,11 +81,23 @@ public final class ExportDialog {
 
     private Consumer<Path> onExported;
 
+    /** Refreshes the format list cell rendering when Diagnostics re-probes. */
+    private final Runnable diagnosticsRefresh = () ->
+        javafx.application.Platform.runLater(() -> {
+            var sel = formatList.getSelectionModel().getSelectedItem();
+            formatList.setItems(FXCollections.observableArrayList(
+                ExportFormatRegistry.all()));
+            if (sel != null) formatList.getSelectionModel().select(sel);
+        });
+
     public ExportDialog(Window owner, OpenDataset openDataset) {
         this.owner = owner;
         this.openDataset = openDataset;
         buildUi();
         wireFormatChangeListener();
+        Diagnostics.addCacheRefreshListener(diagnosticsRefresh);
+        stage.setOnHidden(e ->
+            Diagnostics.removeCacheRefreshListener(diagnosticsRefresh));
     }
 
     public void showAndExport(Consumer<Path> onExported) {
@@ -116,15 +129,20 @@ public final class ExportDialog {
                     boolean eligible =
                         ExportEligibility.check(spec, openDataset);
                     boolean onClasspath = spec.writerOnClasspath();
+                    boolean binaryOk = spec.binaryAvailable();
                     String tooltip =
                         ExportEligibility.tooltipReason(spec, openDataset);
                     if (!onClasspath) {
                         setText(spec.name + "  (writer missing)");
                         tooltip = "Writer class not on classpath: "
                             + spec.writerClassFqn;
+                    } else if (!binaryOk) {
+                        setText(spec.name + "  (unavailable)");
+                        tooltip = "Requires `" + spec.requiredBinary
+                            + "` on PATH";
                     }
                     setTooltip(new Tooltip(tooltip));
-                    setDisable(!(eligible && onClasspath));
+                    setDisable(!(eligible && onClasspath && binaryOk));
                 }
             });
 
