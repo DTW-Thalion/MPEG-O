@@ -315,8 +315,15 @@ def test_12_decode_malformed() -> None:
 # ── Throughput (13) ────────────────────────────────────────────────
 
 
+@pytest.mark.perf
 def test_13_throughput() -> None:
-    """Encode/decode 10 MiB — log MB/s; PASS if encode ≥ 50, decode ≥ 100."""
+    """Encode/decode 10 MiB — log MB/s; PASS if encode ≥ 50, decode ≥ 100.
+
+    Marked perf so the default suite excludes it (pyproject.toml addopts
+    deselect perf). Throughput thresholds calibrated for the dev box, not
+    GHA runners — cross-environment perf gating lives in the dedicated
+    perf-regression job, not the unit suite.
+    """
     n = 10 * 1024 * 1024
     data = bytes((b % 41) for b in os.urandom(n))
 
