@@ -235,6 +235,13 @@ public class MainWindow {
         saveAsItem.setOnAction(e -> saveAsViaChooser());
         importItem.setOnAction(e -> openImportDialog(null, null));
         exportItem.setOnAction(e -> openExportDialog());
+        downloadItem.setOnAction(e -> openDownloadDialog());
+    }
+
+    /** Open the transport download wizard. */
+    private void openDownloadDialog() {
+        var dlg = new global.thalion.ttio.browser.transport.DownloadDialog(stage);
+        dlg.showAndDownload(target -> loadDataset(target.toString(), false));
     }
 
     /** Open the export wizard. No-op if no dataset is currently open. */
