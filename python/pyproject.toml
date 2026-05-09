@@ -131,16 +131,15 @@ omit = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
-# Minimum overall line coverage. Lowered from 84 to 76 post-#48: the
-# default-filter pytest run on GHA measures 76.95%, dragged down by
-# uncovered code added recently — PR #44 liboqs defensive _oqs() catch,
-# new transport upload paths (#41/#42), and the throughput tests we
-# marked perf in #47 (no longer exercising their decoder paths under
-# the default suite). Per-file coverage in tools/ remains 71-100%;
-# the aggregate is also dragged by vendor-importer files (Bruker /
-# Thermo / Waters) that need proprietary fixtures. Restore via
-# dedicated coverage work, not by raising the gate without tests.
-fail_under = 76
+# Minimum overall line coverage. Restored to 84 (from a temporary 76
+# floor introduced post-#48) by the coverage-restoration plan landed
+# in #50: targeted tests added for transport.{codec,packets} (#P.1),
+# tools.{fasta,fastq,per_au}_cli (#P.3), codecs.rans, _hdf5_io, and
+# encryption (#P.3b). Local default-filter pytest run measures ~85%;
+# the 84 floor leaves a small buffer. Vendor-importer files (Bruker /
+# Thermo / Waters) remain excluded from targeted coverage work — they
+# need proprietary fixtures.
+fail_under = 84
 exclude_lines = [
     "pragma: no cover",
     "raise NotImplementedError",
