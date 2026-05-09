@@ -135,6 +135,66 @@ via MSYS2** (`msys2/setup-msys2@v2`) provides POSIX threads natively
 and the existing GCC-style warning + SIMD compile flags work
 unchanged.
 
+## Native installers (optional)
+
+`tio-browser/pom.xml` ships a `native-package` Maven profile that
+wraps `jpackage` to produce a platform-native installer:
+
+```bash
+mvn -pl tio-browser package -P native-package \
+    -Dhdf5.jar=/usr/share/java/jarhdf5.jar
+```
+
+Output at `tio-browser/target/installer/`:
+
+- Linux: `.deb` (Debian/Ubuntu) or `.rpm` (Red Hat/Fedora) —
+  autodetected. Requires `apt install fakeroot dpkg-dev` for `.deb`
+  or `apt install rpm` for `.rpm`. `binutils` (for `objcopy`) must be
+  on PATH for any format.
+- macOS: `.dmg`. Build must run on macOS.
+- Windows: `.msi`. Build must run on Windows; `wix311` or newer
+  required on PATH.
+
+The installer bundles a JRE (~33 MB) so the resulting `.deb`/`.dmg`/
+`.msi` is around 66 MB. The installed app uses the icon at
+`tio-browser/src/main/resources/icons/app-icon.png` (the Thalion "T"
+mark).
+
+To run the bundled JAR with a `.tio` opened at launch:
+
+```bash
+java -jar tio-browser-0.1.0-shaded.jar --open path/to/dataset.tio
+```
+
+## Diagnostics
+
+Tools → Diagnostics opens a modal dialog showing the live status of
+every external dependency the library can use:
+
+- HDF5 JNI (in-process probe via `H5.H5get_libversion`)
+- `samtools` on PATH (required for BAM/SAM/CRAM import/export)
+- `ThermoRawFileParser` on PATH (for Thermo `.raw` import; honors the
+  `THERMORAWFILEPARSER` env var if set)
+- `masslynxraw` on PATH (for Waters `.RAW` import; honors
+  `MASSLYNXRAW` env var)
+- `python3` (or `python` on Windows) with `opentimspy` importable
+  (for Bruker timsTOF `.d` import)
+
+Greyed-out format rows in Import / Export tell you which binary is
+missing. The **Re-probe** button picks up newly-installed binaries
+without restarting the app.
+
+## Known limitations (v0.1)
+
+- No multi-document tabs — one open `.tio` at a time.
+- No live importer progress (importers don't expose progress
+  callbacks yet).
+- No alignment-coverage track visualization (per-read inspector
+  only).
+- No telemetry, auto-update, or crash reporter.
+- macOS app bundles produced by `jpackage` are unsigned — users may
+  need right-click → Open on first launch.
+
 ## License
 
 LGPL-3.0-or-later. See [`../LICENSE`](../LICENSE).
