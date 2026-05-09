@@ -36,6 +36,13 @@
             <version>${ttio.version}</version>
         </dependency>
 
+        <!-- WebSocket client/server for Transport upload/download -->
+        <dependency>
+            <groupId>org.java-websocket</groupId>
+            <artifactId>Java-WebSocket</artifactId>
+            <version>1.5.7</version>
+        </dependency>
+
         <dependency>
             <groupId>org.hdfgroup</groupId>
             <artifactId>hdf5</artifactId>
