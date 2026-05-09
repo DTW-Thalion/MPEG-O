@@ -15,7 +15,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * Copyright (c) 2026 The Thalion Initiative
  */
-#import <dispatch/dispatch.h>
+#include <pthread.h>
 #import "TTIOSpectralDataset.h"
 #import "TTIOWrittenRun.h"
 #import "TTIOIdentification.h"
@@ -105,37 +105,27 @@ static BOOL datasetRunsHaveActivationDetail(NSDictionary *msRuns)
 // @compression attribute write that the read path keys on. See
 // HANDOFF.md M86 §2 + Binding Decisions §86–§89.
 
+static NSSet *_TTIO_M86_AllowedOverrideChannels_storage = nil;
+static void _TTIO_M86_AllowedOverrideChannels_init(void)
+{
+    // read_names joins sequences/qualities as override-eligible (only
+    // NAME_TOKENIZED, §113). cigars accepts {RANS0/1, NAME_TOKENIZED}
+    // (§120). mate_info_{chrom,pos,tlen} are the three per-field
+    // virtual channels that trigger the mate_info schema lift
+    // (§125–126); bare "mate_info" remains rejected (§143). The
+    // integer channels (positions/flags/mapping_qualities) are now
+    // stored only under genomic_index/ — _TTIO_M86_DroppedIntChannels
+    // produces the dedicated v1.6 rejection.
+    _TTIO_M86_AllowedOverrideChannels_storage = [NSSet setWithArray:@[
+        @"sequences", @"qualities", @"read_names", @"cigars",
+        @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
+    ]];
+}
 static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
 {
-    static NSSet *s = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        // read_names joins sequences/qualities as an
-        // override-eligible channel, but its only valid codec is
-        // NAME_TOKENIZED (Binding Decision §113).
-        // positions/flags/mapping_qualities (integer
-        // channels) join the override-eligible set; their only valid
-        // codecs are RANS_ORDER0/1 (Binding Decision §117).
-        // cigars joins the override-eligible set;
-        // accepts {RANS_ORDER0, RANS_ORDER1, NAME_TOKENIZED} per
-        // Binding Decision §120.
-        // mate_info_chrom / mate_info_pos /
-        // mate_info_tlen join the override-eligible set as the
-        // three per-field "virtual channel" names that trigger the
-        // mate_info schema lift (Binding Decisions §125, §126). The
-        // bare "mate_info" key remains rejected with a discoverable
-        // error pointing at the per-field names (Gotcha §143).
-        // positions / flags / mapping_qualities REMOVED from the
-        // override-eligible set. These per-record integer fields are
-        // stored only under genomic_index/ now (mirroring MS's
-        // spectrum_index/ pattern). _TTIO_M86_DroppedIntChannels
-        // catches the keys with a dedicated v1.6 error.
-        s = [NSSet setWithArray:@[
-            @"sequences", @"qualities", @"read_names", @"cigars",
-            @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
-        ]];
-    });
-    return s;
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, _TTIO_M86_AllowedOverrideChannels_init);
+    return _TTIO_M86_AllowedOverrideChannels_storage;
 }
 
 /** Per-channel allowed-codec map (M86 Phase D §119, Phase E §113).
@@ -147,90 +137,82 @@ static NSSet *_TTIO_M86_AllowedOverrideChannels(void)
  *  meaningful on the byte-stream channels (Binding Decision §113);
  *  conversely the byte-stream codecs are not valid on read_names
  *  because the source data is NSArray<NSString *>, not NSData. */
+static NSDictionary<NSString *, NSSet<NSNumber *> *>
+    *_TTIO_M86_AllowedOverrideCodecsByChannel_storage = nil;
+static void _TTIO_M86_AllowedOverrideCodecsByChannel_init(void)
+{
+    // REF_DIFF v1 (id 9) removed from sequences override surface — use
+    // the default (refdiff_v2) or RANS / BASE_PACK. NAME_TOKENIZED v1
+    // (id 8) similarly removed from read_names; default is name_tok_v2.
+    NSSet *seqAllowed = [NSSet setWithArray:@[
+        @(TTIOCompressionRansOrder0),
+        @(TTIOCompressionRansOrder1),
+        @(TTIOCompressionBasePack),
+    ]];
+    NSSet *qualAllowed = [NSSet setWithArray:@[
+        @(TTIOCompressionRansOrder0),
+        @(TTIOCompressionRansOrder1),
+        @(TTIOCompressionBasePack),
+        @(TTIOCompressionQualityBinned),
+        @(TTIOCompressionFqzcompNx16Z),  // M94.Z v1.2
+    ]];
+    NSSet *nameAllowed = [NSSet set];
+    // cigars: rANS pair only over length-prefix-concat CIGARs (§2.5,
+    // Gotcha §139). BASE_PACK / QUALITY_BINNED are wrong-content
+    // (CIGAR digits + MIDNSHP=X — neither ACGT nor Phred).
+    NSSet *cigarAllowed = [NSSet setWithArray:@[
+        @(TTIOCompressionRansOrder0),
+        @(TTIOCompressionRansOrder1),
+    ]];
+    // M86 Phase B (§117): integer channels accept rANS only. The
+    // others (BASE_PACK, QUALITY_BINNED, NAME_TOKENIZED) don't preserve
+    // int64/uint32/uint8 values. rANS is content-agnostic over the LE
+    // byte representation (§118).
+    NSSet *intAllowed = [NSSet setWithArray:@[
+        @(TTIOCompressionRansOrder0),
+        @(TTIOCompressionRansOrder1),
+        @(TTIOCompressionDeltaRansOrder0),  // delta + rANS
+    ]];
+    // mate_info_chrom shares cigars' allowed set (rANS pair over
+    // length-prefix-concat). The two integer fields mirror the
+    // existing integer channels (rANS pair only).
+    NSSet *mateChromAllowed = [NSSet setWithArray:@[
+        @(TTIOCompressionRansOrder0),
+        @(TTIOCompressionRansOrder1),
+    ]];
+    _TTIO_M86_AllowedOverrideCodecsByChannel_storage = @{
+        @"sequences":         seqAllowed,
+        @"qualities":         qualAllowed,
+        @"read_names":        nameAllowed,
+        @"cigars":            cigarAllowed,
+        @"mate_info_chrom":   mateChromAllowed,
+        @"mate_info_pos":     intAllowed,
+        @"mate_info_tlen":    intAllowed,
+    };
+}
 static NSDictionary<NSString *, NSSet<NSNumber *> *> *_TTIO_M86_AllowedOverrideCodecsByChannel(void)
 {
-    static NSDictionary *d = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        // REF_DIFF v1 (id 9) removed from
-        // sequences override surface — use the default (refdiff_v2) or
-        // RANS / BASE_PACK on sequences. NAME_TOKENIZED v1 (id 8) is
-        // similarly removed from read_names; default is name_tok_v2.
-        NSSet *seqAllowed = [NSSet setWithArray:@[
-            @(TTIOCompressionRansOrder0),
-            @(TTIOCompressionRansOrder1),
-            @(TTIOCompressionBasePack),
-        ]];
-        NSSet *qualAllowed = [NSSet setWithArray:@[
-            @(TTIOCompressionRansOrder0),
-            @(TTIOCompressionRansOrder1),
-            @(TTIOCompressionBasePack),
-            @(TTIOCompressionQualityBinned),
-            @(TTIOCompressionFqzcompNx16Z),  // M94.Z v1.2
-        ]];
-        NSSet *nameAllowed = [NSSet set];
-        // cigars accepts only the rANS codec
-        // pair operating on a length-prefix-concat byte stream of the
-        // CIGAR strings (varint(len)+bytes per CIGAR — §2.5 / Gotcha
-        // §139). NAME_TOKENIZED v1 (id 8) was removed in Phase 2c;
-        // BASE_PACK and QUALITY_BINNED are wrong-content (CIGARs
-        // contain digits + operator letters MIDNSHP=X, none of which
-        // are ACGT or Phred values).
-        NSSet *cigarAllowed = [NSSet setWithArray:@[
-            @(TTIOCompressionRansOrder0),
-            @(TTIOCompressionRansOrder1),
-        ]];
-        // M86 Phase B (Binding Decision §117): integer channels accept
-        // ONLY the rANS codecs. BASE_PACK 2-bit-packs ACGT bytes,
-        // QUALITY_BINNED quantises Phred scores onto 8 bins, and
-        // NAME_TOKENIZED tokenises UTF-8 strings — none of those
-        // preserve int64/uint32/uint8 values. The rANS coders are
-        // content-agnostic byte-stream codecs and operate correctly
-        // on the little-endian byte representation of integer arrays
-        // (Binding Decision §118).
-        NSSet *intAllowed = [NSSet setWithArray:@[
-            @(TTIOCompressionRansOrder0),
-            @(TTIOCompressionRansOrder1),
-            @(TTIOCompressionDeltaRansOrder0),  // delta + rANS
-        ]];
-        // mate_info_chrom shares cigars' allowed
-        // set (rANS pair via length-prefix-concat). NAME_TOKENIZED v1
-        // (id 8) removed in Phase 2c. The integer fields
-        // mate_info_pos / mate_info_tlen mirror the existing integer
-        // channels (rANS pair only).
-        NSSet *mateChromAllowed = [NSSet setWithArray:@[
-            @(TTIOCompressionRansOrder0),
-            @(TTIOCompressionRansOrder1),
-        ]];
-        // positions / flags / mapping_qualities REMOVED — see
-        // _TTIO_M86_DroppedIntChannels for the dedicated reject.
-        d = @{
-            @"sequences":         seqAllowed,
-            @"qualities":         qualAllowed,
-            @"read_names":        nameAllowed,
-            @"cigars":            cigarAllowed,
-            @"mate_info_chrom":   mateChromAllowed,
-            @"mate_info_pos":     intAllowed,
-            @"mate_info_tlen":    intAllowed,
-        };
-    });
-    return d;
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, _TTIO_M86_AllowedOverrideCodecsByChannel_init);
+    return _TTIO_M86_AllowedOverrideCodecsByChannel_storage;
 }
 
 /** v1.6 (L4): per-record integer metadata channels no longer accept
  *  signal_codec_overrides — they are stored exclusively under
  *  genomic_index/ now. Validation raises a dedicated v1.6 error
  *  pointing at genomic_index/ when one of these keys is present. */
+static NSSet<NSString *> *_TTIO_M86_DroppedIntChannels_storage = nil;
+static void _TTIO_M86_DroppedIntChannels_init(void)
+{
+    _TTIO_M86_DroppedIntChannels_storage = [NSSet setWithArray:@[
+        @"positions", @"flags", @"mapping_qualities",
+    ]];
+}
 static NSSet<NSString *> *_TTIO_M86_DroppedIntChannels(void)
 {
-    static NSSet *s = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        s = [NSSet setWithArray:@[
-            @"positions", @"flags", @"mapping_qualities",
-        ]];
-    });
-    return s;
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, _TTIO_M86_DroppedIntChannels_init);
+    return _TTIO_M86_DroppedIntChannels_storage;
 }
 
 /** Validate the per-channel codec overrides BEFORE any HDF5 mutation.
@@ -890,17 +872,19 @@ static BOOL _TTIO_V17_UseMateInlineV2(TTIOWrittenGenomicRun *run)
  *  inline_v2 is the only mate_info layout under v1.0. Called after
  *  the standard _TTIO_M86_ValidateOverrides check so baseline
  *  unknown-channel errors are already handled. */
+static NSSet<NSString *> *_TTIO_V17_MateKeys_storage = nil;
+static void _TTIO_V17_MateKeys_init(void)
+{
+    _TTIO_V17_MateKeys_storage = [NSSet setWithArray:@[
+        @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
+    ]];
+}
 static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
 {
-    static NSSet<NSString *> *mateKeys = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        mateKeys = [NSSet setWithArray:@[
-            @"mate_info_chrom", @"mate_info_pos", @"mate_info_tlen",
-        ]];
-    });
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, _TTIO_V17_MateKeys_init);
     for (NSString *chName in run.signalCodecOverrides) {
-        if ([mateKeys containsObject:chName]) {
+        if ([_TTIO_V17_MateKeys_storage containsObject:chName]) {
             [NSException raise:NSInvalidArgumentException
                         format:@"signalCodecOverrides['%@']: per-field "
                                @"mate_info_* overrides are no longer "

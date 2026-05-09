@@ -13,7 +13,7 @@
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
-#import <dispatch/dispatch.h>
+#include <pthread.h>
 #import "TTIOTransportPacket.h"
 
 const uint8_t TTIOTransportHeaderMagic[2] = {'T', 'I'};
@@ -30,19 +30,21 @@ const uint8_t TTIOTransportCodecIdNameTokenizedV2 = 15;
 // ---------------------------------------------------------------- CRC-32C
 
 static uint32_t TTIOTransportCRC32CTable[256];
+static void TTIOTransportCRC32CBuildTableImpl(void)
+{
+    const uint32_t poly = 0x82F63B78u;  // Castagnoli, reflected
+    for (int b = 0; b < 256; b++) {
+        uint32_t crc = (uint32_t)b;
+        for (int i = 0; i < 8; i++) {
+            crc = (crc >> 1) ^ ((crc & 1u) ? poly : 0u);
+        }
+        TTIOTransportCRC32CTable[b] = crc;
+    }
+}
 static void TTIOTransportCRC32CBuildTable(void)
 {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        const uint32_t poly = 0x82F63B78u;  // Castagnoli, reflected
-        for (int b = 0; b < 256; b++) {
-            uint32_t crc = (uint32_t)b;
-            for (int i = 0; i < 8; i++) {
-                crc = (crc >> 1) ^ ((crc & 1u) ? poly : 0u);
-            }
-            TTIOTransportCRC32CTable[b] = crc;
-        }
-    });
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, TTIOTransportCRC32CBuildTableImpl);
 }
 
 uint32_t TTIOTransportCRC32C(const uint8_t *data, NSUInteger length)
