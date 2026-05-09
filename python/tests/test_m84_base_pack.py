@@ -317,8 +317,16 @@ def test_13_soft_masking_roundtrip() -> None:
 # ── Throughput (14) ─────────────────────────────────────────────────
 
 
+@pytest.mark.perf
 def test_14_throughput_pure_acgt_10mb() -> None:
-    """Encode/decode 10 MB pure ACGT — log MB/s; PASS if encode ≥ 20, decode ≥ 50."""
+    """Encode/decode 10 MB pure ACGT — log MB/s; PASS if encode ≥ 20, decode ≥ 50.
+
+    Marked perf so the default suite (which has `addopts = -m 'not perf ...'`
+    in pyproject.toml) excludes it. GHA runners hit ~5 MB/s where the dev
+    box hits ~30 MB/s; the absolute threshold isn't a meaningful regression
+    signal across heterogeneous runners. The push-to-main perf-regression
+    job uses tools/perf/baseline.json on consistent hardware instead.
+    """
     n = 10 * (1 << 20)
     data = b"ACGT" * (n // 4)
     assert len(data) == n
