@@ -26,9 +26,26 @@ class ExportFormatRegistryTest {
     }
 
     @Test
-    void availableEqualsAllWhenAllWritersResolve() {
-        assertEquals(ExportFormatRegistry.all().size(),
-            ExportFormatRegistry.available().size());
+    void availableContainsOnlyFullyAvailableFormats() {
+        // Phase 12.2: available() now filters by both writer-on-classpath
+        // AND requiredBinary availability.
+        for (ExportFormatSpec spec : ExportFormatRegistry.available()) {
+            assertTrue(spec.writerOnClasspath(),
+                "available() must only include classpath-resolved writers: "
+                + spec.name);
+            assertTrue(spec.binaryAvailable(),
+                "available() must only include binary-satisfied formats: "
+                + spec.name);
+        }
+        // Every non-binary-gated writer-on-classpath format must always
+        // be available.
+        for (ExportFormatSpec spec : ExportFormatRegistry.all()) {
+            if (spec.requiredBinary == null && spec.writerOnClasspath()) {
+                assertTrue(ExportFormatRegistry.available().contains(spec),
+                    "non-gated format must always be in available(): "
+                    + spec.name);
+            }
+        }
     }
 
     @Test

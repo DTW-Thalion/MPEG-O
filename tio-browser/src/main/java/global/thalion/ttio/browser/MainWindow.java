@@ -89,6 +89,23 @@ public class MainWindow {
         primaryStage.setTitle("tio-browser");
         primaryStage.show();
         wireFileActions();
+        // Fire-and-forget: kick the binary-probe cache so Import/Export
+        // dialogs don't show every binary-gated format as "(unavailable)"
+        // until the user opens Diagnostics. Daemon thread so it never
+        // blocks app exit; failures are logged and ignored — probe
+        // failure must not break the app.
+        Thread probeThread = new Thread(() -> {
+            try {
+                global.thalion.ttio.browser.diag.Diagnostics.probeAll();
+            } catch (Throwable t) {
+                java.util.logging.Logger
+                    .getLogger(MainWindow.class.getName())
+                    .log(java.util.logging.Level.WARNING,
+                         "Startup diagnostics probe failed", t);
+            }
+        }, "diagnostics-startup-probe");
+        probeThread.setDaemon(true);
+        probeThread.start();
     }
 
     private VBox buildTopBars() {
@@ -237,6 +254,8 @@ public class MainWindow {
         exportItem.setOnAction(e -> openExportDialog());
         downloadItem.setOnAction(e -> openDownloadDialog());
         uploadItem.setOnAction(e -> openUploadDialog());
+        diagnosticsItem.setOnAction(e ->
+            global.thalion.ttio.browser.diag.DiagnosticsDialog.show(stage));
     }
 
     /** Open the transport download wizard. */

@@ -2,6 +2,8 @@ package global.thalion.ttio.browser.exporters;
 
 import java.util.List;
 
+import global.thalion.ttio.browser.diag.Diagnostics;
+
 /**
  * Single row of the {@link ExportFormatRegistry} matrix. Mirrors
  * {@code ImportFormatSpec} on the export side: name, target writer
@@ -41,6 +43,8 @@ public final class ExportFormatSpec {
     public final Eligibility eligibility;
     public final ExtraField extras;
     public final String description;
+    /** Diagnostics probe name this format depends on; {@code null} if none. */
+    public final String requiredBinary;
 
     public ExportFormatSpec(String name,
                             String writerClassFqn,
@@ -48,12 +52,23 @@ public final class ExportFormatSpec {
                             Eligibility eligibility,
                             ExtraField extras,
                             String description) {
+        this(name, writerClassFqn, fileExts, eligibility, extras, description, null);
+    }
+
+    public ExportFormatSpec(String name,
+                            String writerClassFqn,
+                            List<String> fileExts,
+                            Eligibility eligibility,
+                            ExtraField extras,
+                            String description,
+                            String requiredBinary) {
         this.name = name;
         this.writerClassFqn = writerClassFqn;
         this.fileExts = List.copyOf(fileExts);
         this.eligibility = eligibility;
         this.extras = extras;
         this.description = description;
+        this.requiredBinary = requiredBinary;
     }
 
     public boolean writerOnClasspath() {
@@ -63,6 +78,12 @@ public final class ExportFormatSpec {
         } catch (ClassNotFoundException e) {
             return false;
         }
+    }
+
+    /** @return {@code true} if the format's required binary is on PATH (per
+     *  {@link Diagnostics#cached()}), or {@code true} if no binary is required. */
+    public boolean binaryAvailable() {
+        return requiredBinary == null || Diagnostics.isAvailable(requiredBinary);
     }
 
     @Override

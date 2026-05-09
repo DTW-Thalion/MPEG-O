@@ -38,6 +38,9 @@ public final class ExportEligibility {
     }
 
     public static String tooltipReason(ExportFormatSpec spec, OpenDataset d) {
+        if (!spec.binaryAvailable()) {
+            return "Requires `" + spec.requiredBinary + "` on PATH";
+        }
         if (check(spec, d)) return spec.description;
         switch (spec.eligibility) {
             case MS_RUNS_PRESENT:           return "No MS runs in this file.";
