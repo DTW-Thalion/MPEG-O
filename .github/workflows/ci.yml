@@ -256,6 +256,18 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Cache liboqs
+        id: cache-liboqs
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/liboqs.so
+          key: liboqs-0.10.1-${{ runner.os }}
+      - name: Install liboqs (PQC native library)
+        if: steps.cache-liboqs.outputs.cache-hit != 'true'
+        run: bash scripts/install-liboqs.sh 0.10.1
+      - name: Update ldconfig for liboqs (always)
+        run: sudo ldconfig /usr/local/lib
+
       - name: Install ttio in editable mode
         working-directory: python
         run: |

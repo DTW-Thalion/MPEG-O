@@ -95,6 +95,17 @@ def _oqs():  # type: ignore[no-untyped-def]
             "ttio.pqc requires the optional 'liboqs-python' dependency — "
             "install with: pip install 'ttio[pqc]'"
         ) from exc
+    except (RuntimeError, OSError) as exc:  # pragma: no cover - native-lib gating
+        # liboqs-python is installed but the native shared library is missing
+        # (e.g., "No oqs shared libraries found" on environments without a
+        # system-installed liboqs). Convert to PQCUnavailableError so
+        # is_available() returns False instead of propagating an uncaught
+        # raise at pytest-collection time.
+        raise PQCUnavailableError(
+            "ttio.pqc requires a system-installed liboqs shared library — "
+            "build via scripts/install-liboqs.sh or install liboqs system-wide. "
+            f"Underlying error: {exc}"
+        ) from exc
     return oqs
 
 
