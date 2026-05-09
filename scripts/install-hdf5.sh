@@ -78,11 +78,13 @@ cd "${WORK}/hdf5-${VERSION_DOTTED}"
 # ---------------------------------------------------------------------------
 # Configure + build
 # ---------------------------------------------------------------------------
-echo "Configuring HDF5 ${VERSION} (prefix=${PREFIX}, --enable-java --enable-threadsafe) ..."
-# --enable-threadsafe + --enable-java is marked "unsupported" by HDF Group but
-# works in practice. --enable-unsupported is required to override the configure
-# guard. --enable-cxx is dropped because libhdf5_cpp is incompatible with
-# --enable-threadsafe and TTI-O does not use the C++ bindings.
+echo "Configuring HDF5 ${VERSION} (prefix=${PREFIX}, --enable-java --enable-threadsafe --enable-hl) ..."
+# --enable-threadsafe + --enable-java + --enable-hl is marked "unsupported" by
+# HDF Group but works in practice. --enable-unsupported is required to override
+# the configure guard. --enable-cxx is dropped because libhdf5_cpp is
+# incompatible with --enable-threadsafe and TTI-O does not use the C++ bindings.
+# HL (high-level) is required for hdf5_hl.h / H5DSset_scale used by the ObjC
+# NMR2D spectrum implementation (objc/Source/Spectra/TTIONMR2DSpectrum.m).
 ./configure \
     --prefix="${PREFIX}" \
     --enable-java \
@@ -92,7 +94,7 @@ echo "Configuring HDF5 ${VERSION} (prefix=${PREFIX}, --enable-java --enable-thre
     --disable-static \
     --disable-tests \
     --disable-tools \
-    --disable-hl \
+    --enable-hl \
     --with-ros3-vfd
 
 echo "Building HDF5 ($(nproc) parallel jobs) ..."
