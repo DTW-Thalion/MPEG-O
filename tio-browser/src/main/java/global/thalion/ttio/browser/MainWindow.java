@@ -236,12 +236,20 @@ public class MainWindow {
         importItem.setOnAction(e -> openImportDialog(null, null));
         exportItem.setOnAction(e -> openExportDialog());
         downloadItem.setOnAction(e -> openDownloadDialog());
+        uploadItem.setOnAction(e -> openUploadDialog());
     }
 
     /** Open the transport download wizard. */
     private void openDownloadDialog() {
         var dlg = new global.thalion.ttio.browser.transport.DownloadDialog(stage);
         dlg.showAndDownload(target -> loadDataset(target.toString(), false));
+    }
+
+    /** Open the transport upload wizard. */
+    private void openUploadDialog() {
+        String defaultPath = currentDataset != null ? currentDataset.path() : "";
+        var dlg = new global.thalion.ttio.browser.transport.UploadDialog(stage, defaultPath);
+        dlg.showAndUpload(() -> statusBarLabel.setText("Upload complete."));
     }
 
     /** Open the export wizard. No-op if no dataset is currently open. */
