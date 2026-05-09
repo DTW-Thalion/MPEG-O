@@ -359,9 +359,10 @@ class ExportTaskTest {
         Path ibd = imzml.resolveSibling("out.ibd");
         assertTrue(Files.exists(ibd), "expected sibling .ibd at " + ibd);
 
-        // Re-import via Phase 8 imzML import path.
-        // ImportTask stubs imzML with "not yet wired" — if so, we skip
-        // re-import assertions but the export side is already proved above.
+        // Re-import via Phase 8.x imzML import path (wired in PR #39).
+        // The import projects pixels back into an MSImage cube — NOT into
+        // an analytical msRun — so we assert on .image() rather than on
+        // msRuns(). Continuous-mode files round-trip; processed-mode raises.
         Path reTio = tmp.resolve("re.tio");
         ImportTask imp = new ImportTask(importSpec("imzML"),
             ImportConfig.basic(imzml, reTio, "hdf5", "img_0001", "round"));
@@ -369,20 +370,15 @@ class ExportTaskTest {
         try {
             imp.get();
         } catch (ExecutionException ee) {
-            Throwable cause = ee.getCause();
-            if (cause instanceof UnsupportedOperationException
-                && cause.getMessage() != null
-                && cause.getMessage().contains("not yet wired")) {
-                // Phase 8 imzML import stubbed; export side verified above.
-                return;
-            }
-            fail("imzML re-import failed: " + cause, cause);
+            fail("imzML re-import failed: " + ee.getCause(), ee.getCause());
         }
 
-        // Re-import succeeded — spot-check structural invariant.
+        // Re-import succeeded — spot-check structural invariants.
         try (SpectralDataset round = SpectralDataset.open(reTio.toString())) {
-            assertFalse(round.msRuns().isEmpty(),
-                "imzML re-import should produce at least one analytical run");
+            MSImage imgRound = round.image();
+            assertNotNull(imgRound, "imzML re-import should produce an MSImage");
+            assertTrue(imgRound.mzAxis().length > 0,
+                "round-tripped MSImage must carry an mz_axis");
         }
     }
 }
