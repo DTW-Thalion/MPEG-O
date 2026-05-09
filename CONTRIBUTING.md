@@ -48,24 +48,19 @@ mandatory at runtime for the v2 genomic codecs. Build via the
 provided idempotent script:
 
 ```bash
-bash scripts/build-native.sh
+bash scripts/build-native.sh           # C-only library (ObjC, Python ctypes)
+bash scripts/build-native.sh --jni     # plus libttio_rans_jni.so (Java JNI)
 export TTIO_RANS_LIB_PATH="$(pwd)/native/_build/libttio_rans.so"
 ```
 
-The script is invoked automatically by `objc/build.sh` (so
-`./build.sh` from `objc/` will build the native lib first if missing)
-and by the ObjC CI job. The Python / Java jobs build their own copy
-inline with the JNI variant flag (`-DTTIO_RANS_BUILD_JNI=ON`).
+The script is idempotent and invoked automatically by `objc/build.sh`
+(so `./build.sh` from `objc/` will build the native lib first if
+missing) and by the ObjC CI job. Python and Java CI jobs use the
+`--jni` flag to also produce `libttio_rans_jni.so` for the JNI
+wrapper.
 
 Tests look up the library via `TTIO_RANS_LIB_PATH` first, then
 fall back to `native/_build/libttio_rans.so` from the repo root.
-
-Direct cmake invocation (equivalent):
-
-```bash
-cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
-cmake --build native/_build --parallel
-```
 
 ## Java
 
