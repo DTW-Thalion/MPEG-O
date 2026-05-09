@@ -4,8 +4,13 @@
 # Usage: ./scripts/install-liboqs.sh [VERSION]
 #
 # Defaults:
-#   VERSION  0.10.1
+#   VERSION  0.14.0
 #   PREFIX   /usr/local  (override via OQS_PREFIX env var)
+#
+# Version note: must match the major.minor of the installed `liboqs-python`
+# wrapper to avoid undefined-symbol errors at import time. liboqs 0.14.x
+# adds `OQS_SIG_supports_ctx_str` which liboqs-python>=0.13 looks up
+# eagerly during module init.
 #
 # Installs:
 #   $PREFIX/lib/liboqs.so            shared library
@@ -26,7 +31,7 @@
 
 set -euo pipefail
 
-VERSION="${1:-0.10.1}"
+VERSION="${1:-0.14.0}"
 PREFIX="${OQS_PREFIX:-/usr/local}"
 
 # ---------------------------------------------------------------------------

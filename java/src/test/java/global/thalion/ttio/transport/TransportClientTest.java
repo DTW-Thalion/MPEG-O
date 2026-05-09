@@ -11,6 +11,8 @@ import global.thalion.ttio.MassSpectrum;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -36,6 +38,31 @@ import static org.junit.jupiter.api.Assertions.*;
  * not available on PATH.</p>
  */
 class TransportClientTest {
+
+    /**
+     * Skip the whole class when {@code python3 -m ttio.tools.transport_server_cli}
+     * isn't available — i.e., on the Java-only CI runner that does not install
+     * the Python ttio package. Cross-language coverage runs in the dedicated
+     * cross-lang parity job (see ci.yml) which sets up both runtimes.
+     */
+    @BeforeAll
+    static void skipUnlessPythonTtioAvailable() {
+        boolean available;
+        try {
+            Path venvPython = Path.of(System.getProperty("user.home"),
+                    "TTI-O", "python", ".venv", "bin", "python");
+            String pythonBin = Files.isExecutable(venvPython)
+                    ? venvPython.toString() : "python3";
+            Process probe = new ProcessBuilder(pythonBin, "-c",
+                    "import ttio.tools.transport_server_cli")
+                    .redirectErrorStream(true).start();
+            available = probe.waitFor(10, TimeUnit.SECONDS) && probe.exitValue() == 0;
+        } catch (IOException | InterruptedException ignored) {
+            available = false;
+        }
+        Assumptions.assumeTrue(available,
+                "ttio Python package not importable — skipping cross-language transport tests");
+    }
 
     private static SpectralDataset buildFixture(Path dir) {
         int n = 5;
