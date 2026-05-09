@@ -42,4 +42,13 @@ class AppArgsTest {
     void nullArgsReturnsEmpty() {
         assertEquals(Optional.empty(), App.parseOpenPath(null));
     }
+
+    @Test
+    void openFlagWithEmptyStringValueReturnsEmpty() {
+        // Closes the dead-branch coverage gap on App.parseOpenPath's
+        // !v.isEmpty() guard. Treats `--open ""` the same as `--open`
+        // alone — silent skip rather than a crash or alert.
+        assertEquals(Optional.empty(),
+            App.parseOpenPath(List.of("--open", "")));
+    }
 }
