@@ -206,8 +206,12 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
+      # Run 3.12 on every PR/push; expand to the full supported matrix
+      # (3.11 + 3.12) on the nightly schedule. Floor is 3.11 per
+      # python/pyproject.toml `requires-python`; nightly catches
+      # 3.11-only regressions without paying ~9min of CI per PR.
       matrix:
-        python-version: ["3.11", "3.12"]
+        python-version: ${{ github.event_name == 'schedule' && fromJSON('["3.11", "3.12"]') || fromJSON('["3.12"]') }}
     env:
       # Phase 2c-T + v2 codecs (mate_info_v2, ref_diff_v2,
       # name_tokenized_v2, fqzcomp_nx16_z) require the native rANS
