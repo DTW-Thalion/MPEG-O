@@ -14,7 +14,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * Copyright (c) 2026 The Thalion Initiative
  */
-#import <dispatch/dispatch.h>
+#include <pthread.h>
 #import "TTIOJcampDxDecode.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
@@ -35,48 +35,51 @@ static NSValue *codeVal(int digit, int sign)
     return [NSValue valueWithBytes:&c objCType:@encode(TTIOCompCode)];
 }
 
+static void setupTablesImpl(void)
+{
+    NSMutableDictionary *sqz = [NSMutableDictionary dictionary];
+    sqz[@('@')] = codeVal(0, +1);
+    const char *posS = "ABCDEFGHI";
+    const char *negS = "abcdefghi";
+    for (int i = 0; i < 9; i++) {
+        sqz[@((unichar)posS[i])] = codeVal(i + 1, +1);
+        sqz[@((unichar)negS[i])] = codeVal(i + 1, -1);
+    }
+    gSqz = sqz;
+
+    NSMutableDictionary *dif = [NSMutableDictionary dictionary];
+    dif[@('%')] = codeVal(0, +1);
+    const char *posD = "JKLMNOPQR";
+    const char *negD = "jklmnopqr";
+    for (int i = 0; i < 9; i++) {
+        dif[@((unichar)posD[i])] = codeVal(i + 1, +1);
+        dif[@((unichar)negD[i])] = codeVal(i + 1, -1);
+    }
+    gDif = dif;
+
+    NSMutableDictionary *dup = [NSMutableDictionary dictionary];
+    const char *dupC = "STUVWXYZ";
+    for (int i = 0; i < 8; i++) {
+        dup[@((unichar)dupC[i])] = @(i + 2);
+    }
+    dup[@('s')] = @9;
+    gDup = dup;
+
+    NSMutableCharacterSet *cs = [NSMutableCharacterSet new];
+    for (NSNumber *k in sqz) { [cs addCharactersInString:[NSString stringWithFormat:@"%C", [k unsignedShortValue]]]; }
+    for (NSNumber *k in dif) { [cs addCharactersInString:[NSString stringWithFormat:@"%C", [k unsignedShortValue]]]; }
+    for (NSNumber *k in dup) { [cs addCharactersInString:[NSString stringWithFormat:@"%C", [k unsignedShortValue]]]; }
+    gCompressionChars = [cs copy];
+
+    NSMutableCharacterSet *det = [cs mutableCopy];
+    [det removeCharactersInString:@"Ee"];
+    gDetectChars = [det copy];
+}
+
 static void setupTables(void)
 {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        NSMutableDictionary *sqz = [NSMutableDictionary dictionary];
-        sqz[@('@')] = codeVal(0, +1);
-        const char *posS = "ABCDEFGHI";
-        const char *negS = "abcdefghi";
-        for (int i = 0; i < 9; i++) {
-            sqz[@((unichar)posS[i])] = codeVal(i + 1, +1);
-            sqz[@((unichar)negS[i])] = codeVal(i + 1, -1);
-        }
-        gSqz = sqz;
-
-        NSMutableDictionary *dif = [NSMutableDictionary dictionary];
-        dif[@('%')] = codeVal(0, +1);
-        const char *posD = "JKLMNOPQR";
-        const char *negD = "jklmnopqr";
-        for (int i = 0; i < 9; i++) {
-            dif[@((unichar)posD[i])] = codeVal(i + 1, +1);
-            dif[@((unichar)negD[i])] = codeVal(i + 1, -1);
-        }
-        gDif = dif;
-
-        NSMutableDictionary *dup = [NSMutableDictionary dictionary];
-        const char *dupC = "STUVWXYZ";
-        for (int i = 0; i < 8; i++) {
-            dup[@((unichar)dupC[i])] = @(i + 2);
-        }
-        dup[@('s')] = @9;
-        gDup = dup;
-
-        NSMutableCharacterSet *cs = [NSMutableCharacterSet new];
-        for (NSNumber *k in sqz) { [cs addCharactersInString:[NSString stringWithFormat:@"%C", [k unsignedShortValue]]]; }
-        for (NSNumber *k in dif) { [cs addCharactersInString:[NSString stringWithFormat:@"%C", [k unsignedShortValue]]]; }
-        for (NSNumber *k in dup) { [cs addCharactersInString:[NSString stringWithFormat:@"%C", [k unsignedShortValue]]]; }
-        gCompressionChars = [cs copy];
-
-        NSMutableCharacterSet *det = [cs mutableCopy];
-        [det removeCharactersInString:@"Ee"];
-        gDetectChars = [det copy];
-    });
+    static pthread_once_t once = PTHREAD_ONCE_INIT;
+    pthread_once(&once, setupTablesImpl);
 }
 
 @implementation TTIOJcampDxDecode
