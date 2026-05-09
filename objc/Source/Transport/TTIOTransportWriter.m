@@ -16,6 +16,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOTransportWriter.h"
+#import "Core/TTIOPortability.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
@@ -333,7 +334,7 @@ static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
         @"serial_number": cfg.serialNumber ?: @"",
         @"source_type": cfg.sourceType ?: @"",
     };
-    NSData *json = [NSJSONSerialization dataWithJSONObject:d options:NSJSONWritingSortedKeys error:nil];
+    NSData *json = [NSJSONSerialization dataWithJSONObject:d options:TTIO_JSON_SORTED_KEYS error:nil];
     return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }
 
@@ -425,7 +426,7 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
         @"sample_name":   run.sampleName    ?: @"",
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:d
-                                                    options:NSJSONWritingSortedKeys
+                                                    options:TTIO_JSON_SORTED_KEYS
                                                       error:nil];
     return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }

@@ -21,6 +21,7 @@
 #import "TTIOAccessUnit.h"
 #import "TTIOTransportWriter.h"
 #import "TTIOAUFilter.h"
+#import "Core/TTIOPortability.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
@@ -113,7 +114,7 @@ static NSString *instrumentJSON(TTIOInstrumentConfig *cfg)
         @"source_type": cfg.sourceType ?: @"",
     };
     NSData *json = [NSJSONSerialization dataWithJSONObject:d
-                                                     options:NSJSONWritingSortedKeys
+                                                     options:TTIO_JSON_SORTED_KEYS
                                                        error:nil];
     return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }
