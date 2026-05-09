@@ -573,6 +573,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Build native libttio_rans (+ JNI for Java tests)
+        run: bash scripts/build-native.sh --jni
+
       - name: Build and test
         working-directory: java
         # V1: `mvn verify` triggers JaCoCo's report execution (bound
