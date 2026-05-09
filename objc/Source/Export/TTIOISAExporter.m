@@ -18,23 +18,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// NSJSONWritingSortedKeys is declared by Apple Foundation (10.13+,
-// value 1UL<<2) and by GNUstep when GS_API_VERSION includes 10.13+
-// APIs (value 1UL<<1). The GHA gnustep-base 1.31.1 build closes the
-// API gate so the symbol isn't declared at compile time. Use the
-// platform-correct literal so the code compiles regardless;
-// implementations honor the bit when present, ignore unknown option
-// bits otherwise. Byte-parity with Python's json.dumps(sort_keys=True)
-// is a soft target — exercised by M27 ISA tests on Apple/dev-box but
-// not byte-compared by any CI cross-language test.
-#ifdef __APPLE__
-#  define TTIO_JSON_SORTED_KEYS ((NSJSONWritingOptions)(1UL << 2))
-#else
-#  define TTIO_JSON_SORTED_KEYS ((NSJSONWritingOptions)(1UL << 1))
-#endif
-
 #import "TTIOISAExporter.h"
 
+#import "Core/TTIOPortability.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"

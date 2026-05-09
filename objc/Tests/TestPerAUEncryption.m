@@ -11,6 +11,7 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import <string.h>
+#import <unistd.h>  // getpid() for unique tmp paths under tests
 
 #import "Protection/TTIOPerAUEncryption.h"
 #import "Providers/TTIOCompoundField.h"

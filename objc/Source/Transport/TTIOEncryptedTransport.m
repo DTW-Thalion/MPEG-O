@@ -18,6 +18,7 @@
 #import "TTIOTransportPacket.h"
 #import "TTIOTransportReader.h"
 #import "TTIOAccessUnit.h"
+#import "Core/TTIOPortability.h"
 #import "Protection/TTIOPerAUEncryption.h"
 #import "Providers/TTIOProviderRegistry.h"
 #import "Providers/TTIOStorageProtocols.h"
@@ -461,7 +462,7 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             };
             NSData *gMetaJsonData =
                 [NSJSONSerialization dataWithJSONObject:gMetaDict
-                                                  options:NSJSONWritingSortedKeys
+                                                  options:TTIO_JSON_SORTED_KEYS
                                                     error:NULL];
             NSString *gMetaJson =
                 [[NSString alloc] initWithData:gMetaJsonData
