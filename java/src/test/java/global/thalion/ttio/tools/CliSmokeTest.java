@@ -15,6 +15,9 @@ import global.thalion.ttio.Quantification;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 
+import hdf.hdf5lib.H5;
+import hdf.hdf5lib.HDF5Constants;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -127,6 +130,34 @@ public class CliSmokeTest {
             // close
         }
         return Path.of(path);
+    }
+
+    /** Return true if the given dataset path inside the HDF5 file carries a
+     *  {@code @ttio_signature} attribute. Used to confirm PQCTool's
+     *  {@code hdf5-sign} / {@code provider-sign} actually wrote the
+     *  attribute (otherwise a silently-broken sign command would still
+     *  pass the smoke tests because PQCTool only crashes the JVM on
+     *  exceptions). Mirrors the read path in
+     *  {@link PQCTool}'s {@code signOrVerifyHdf5}. */
+    private static boolean hdf5DatasetHasSignature(Path file, String dsPath) {
+        try {
+            long fid = H5.H5Fopen(file.toString(),
+                HDF5Constants.H5F_ACC_RDONLY, HDF5Constants.H5P_DEFAULT);
+            if (fid < 0) return false;
+            try {
+                long did = H5.H5Dopen(fid, dsPath, HDF5Constants.H5P_DEFAULT);
+                if (did < 0) return false;
+                try {
+                    return H5.H5Aexists(did, "ttio_signature");
+                } finally {
+                    H5.H5Dclose(did);
+                }
+            } finally {
+                H5.H5Fclose(fid);
+            }
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** Run {@code action} with stdout + stderr swallowed. */
@@ -330,15 +361,22 @@ public class CliSmokeTest {
                 tio.toString(), dsPath, sk.toString()}); }
             catch (Exception e) { throw new RuntimeException(e); }
         });
+        assertTrue(hdf5DatasetHasSignature(tio, dsPath),
+            "hdf5-sign should write @ttio_signature on " + dsPath);
 
         // provider-sign on a file:// URL exercises the provider-dispatched
-        // signOrVerifyProvider() path.
+        // signOrVerifyProvider() path. We sign a different dataset to keep
+        // the prior hdf5-sign result independently verifiable, then assert
+        // the provider path also wrote @ttio_signature.
+        String dsPath2 = "/study/ms_runs/run_0001/signal_channels/mz_values";
         String url = "file://" + tio.toString();
         captureStdout(() -> {
             try { PQCTool.main(new String[]{"provider-sign",
-                url, dsPath, sk.toString()}); }
+                url, dsPath2, sk.toString()}); }
             catch (Exception e) { throw new RuntimeException(e); }
         });
+        assertTrue(hdf5DatasetHasSignature(tio, dsPath2),
+            "provider-sign should write @ttio_signature on " + dsPath2);
     }
 
     @Test
@@ -364,6 +402,8 @@ public class CliSmokeTest {
                 tio.toString(), posPath, sk.toString()}); }
             catch (Exception e) { throw new RuntimeException(e); }
         });
+        assertTrue(hdf5DatasetHasSignature(tio, posPath),
+            "hdf5-sign should write @ttio_signature on " + posPath);
 
         String flagsPath = "/study/genomic_runs/genomic_0001/genomic_index/flags";
         captureStdout(() -> {
@@ -371,6 +411,8 @@ public class CliSmokeTest {
                 tio.toString(), flagsPath, sk.toString()}); }
             catch (Exception e) { throw new RuntimeException(e); }
         });
+        assertTrue(hdf5DatasetHasSignature(tio, flagsPath),
+            "hdf5-sign should write @ttio_signature on " + flagsPath);
     }
 
     // ───────────────────────────────────────────────────────────────────
