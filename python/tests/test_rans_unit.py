@@ -36,6 +36,10 @@ def _force_python_roundtrip(data: bytes, order: int) -> bytes:
 
 # ---------------------------------------------------- _normalise_freqs ---
 
+# Note: the "alphabet too large" error path in _normalise_freqs is unreachable
+# from the public API (which fixes the alphabet at 256 with M=4096); it would
+# only fire for M-symbol alphabets. No behavioural test covers it.
+
 
 class TestNormaliseFreqs:
     def test_uniform_input_normalises_to_M(self) -> None:
@@ -62,11 +66,10 @@ class TestNormaliseFreqs:
             assert freq[s] == 0
 
     def test_negative_delta_subtraction_path(self) -> None:
-        # Many symbols with small counts — produces total > M after the
-        # ``max(1, ...)`` floor, forcing the negative-delta branch.
-        cnt = [1] * 256  # every symbol: scaled = max(1, 1*M//256) = 16
-        # sum(freq) = 256*16 = 4096 = M, so test with non-uniform low input.
-        cnt = [1] * 200 + [0] * 56  # 200 symbols at scaled = max(1, 1*M//200) = max(1, 20) = 20
+        # 200 symbols at scaled = max(1, 1*M//200) = max(1, 20) = 20, summing to
+        # 4000 < M=4096 — but the floored proportional scale combined with the
+        # round-robin top-up exercises the negative-delta subtraction branch.
+        cnt = [1] * 200 + [0] * 56
         freq = R._normalise_freqs(cnt)
         assert sum(freq) == R.M
 
@@ -87,21 +90,6 @@ class TestNormaliseFreqs:
         for s in range(256):
             if s != 42:
                 assert freq[s] == 0
-
-    def test_alphabet_too_large_raises(self) -> None:
-        # If the alphabet is so large and uniform that the proportional
-        # scale + minimum-1 floor produces a sum greater than M and
-        # every symbol is pinned at 1, the round-robin reduction can't
-        # reduce further and raises.
-        # 4097 distinct... but we have only 256 slots; instead, force
-        # the case where 256 symbols all have very small counts and
-        # the sum > M with all freqs forced to 1: cnt = [1]*256 gives
-        # scaled = max(1, M // total) = max(1, 4096 // 256) = 16, so
-        # sum = 4096 == M, no error. The error path is unreachable
-        # with 256-symbol alphabet and M=4096; M-symbol alphabets
-        # would trigger it but our API constrains symbols to 256.
-        # Skip: covered for line presence but not behaviourally.
-        pass
 
 
 # ------------------------------------------------------ _cumulative ---
