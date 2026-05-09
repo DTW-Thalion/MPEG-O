@@ -55,6 +55,7 @@ jobs:
             libicu-dev \
             libblocksruntime-dev \
             libcurl4-openssl-dev \
+            libwebsockets-dev \
             tzdata
 
       - name: Cache GNUstep stack (libobjc2 + tools-make + libs-base)
