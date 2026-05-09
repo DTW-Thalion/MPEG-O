@@ -198,4 +198,68 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Phase 13.2: native-package profile wraps jpackage to produce a
+      platform-native installer (.deb / .rpm / .msi / .pkg, autodetected).
+
+      Activate with:  mvn -P native-package -DskipTests package
+
+      Output: target/installer/tio-browser_VERSION_ARCH.EXT
+
+      Linux .deb requires:  apt install fakeroot dpkg-dev
+      Linux .rpm requires:  apt install rpm
+      All formats require:  binutils (objcopy)
+      Requires JDK 14+ (jpackage); tested with OpenJDK 21.
+
+      Note: the icon argument is intentionally omitted because the project
+      currently ships an ASCII placeholder at src/main/resources/icons/
+      app-icon.png. jpackage will use Java's default icon. Replace the
+      stub with a real PNG/ICO/ICNS and re-add the icon argument when
+      available.
+
+      Note: input is set to the full target directory per the plan
+      (Phase 13.2 as-written). A future phase may switch to a staged
+      input dir to reduce installer size.
+    -->
+    <profiles>
+        <profile>
+            <id>native-package</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage</id>
+                                <phase>package</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>jpackage</executable>
+                                    <arguments>
+                                        <argument>--input</argument>
+                                        <argument>target</argument>
+                                        <argument>--main-jar</argument>
+                                        <argument>tio-browser-0.1.0-shaded.jar</argument>
+                                        <argument>--main-class</argument>
+                                        <argument>global.thalion.ttio.browser.AppLauncher</argument>
+                                        <argument>--name</argument>
+                                        <argument>tio-browser</argument>
+                                        <argument>--app-version</argument>
+                                        <argument>0.1.0</argument>
+                                        <argument>--vendor</argument>
+                                        <argument>Thalion</argument>
+                                        <argument>--dest</argument>
+                                        <argument>target/installer</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
