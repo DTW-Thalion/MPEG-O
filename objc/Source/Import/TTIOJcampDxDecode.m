@@ -14,6 +14,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * Copyright (c) 2026 The Thalion Initiative
  */
+#import <dispatch/dispatch.h>
 #import "TTIOJcampDxDecode.h"
 #import "HDF5/TTIOHDF5Errors.h"
 

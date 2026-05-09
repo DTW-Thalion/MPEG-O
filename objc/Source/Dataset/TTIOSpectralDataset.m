@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  * Copyright (c) 2026 The Thalion Initiative
  */
+#import <dispatch/dispatch.h>
 #import "TTIOSpectralDataset.h"
 #import "TTIOWrittenRun.h"
 #import "TTIOIdentification.h"

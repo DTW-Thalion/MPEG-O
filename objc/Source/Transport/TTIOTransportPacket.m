@@ -13,6 +13,7 @@
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
+#import <dispatch/dispatch.h>
 #import "TTIOTransportPacket.h"
 
 const uint8_t TTIOTransportHeaderMagic[2] = {'T', 'I'};
