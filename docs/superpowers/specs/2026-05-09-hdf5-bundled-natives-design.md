@@ -119,6 +119,8 @@ The `jarhdf5` dependency switches from `<scope>system</scope>` to either:
 
 Either way, the JHI5 classes ship in each per-platform shaded JAR.
 
+**Decision (Task A.1, 2026-05-09): Option B (local-repo vendoring).** A `repo1.maven.org` search for `g:org.hdfgroup` returns a single artifact, `org.hdfgroup:hdf-java:2.6.1` (published 2010), which predates HDF5 1.12 and lacks `H5.H5PLappend`. Other candidates surfaced (`org.broadinstitute:hdf5-java-bindings:1.2.0-hdf5_2.11.0`, the `org.scala-saddle:jhdf5` family, `io.jhdf:jhdf`) are either too old, target a different package (`ch.systemsx.cisd.hdf5`), or are pure-Java readers without the `hdf.hdf5lib.H5` JNI binding required by `Hdf5NativeLoader`. HDFGroup itself does not publish JHI5 to Maven Central. Strategy: vendor the locally-built `/usr/local/lib/jarhdf5-1.14.6.jar` (HDF5 1.14.6, confirmed via `javap` to expose both `H5get_libversion(int[])` and `H5PLappend(String)`) into a per-build Maven repo at `tio-browser/local-repo/` with coordinates `org.hdfgroup:jarhdf5:1.14.6`. The pom adds `<repository><id>local-jhi5</id><url>file://${project.basedir}/local-repo</url></repository>` and depends on it with `<scope>compile</scope>` so the classes shade into each per-platform JAR. CI installs the jar with `mvn install:install-file -Dfile=$STAGED_JARHDF5 -DgroupId=org.hdfgroup -DartifactId=jarhdf5 -Dversion=1.14.6 -Dpackaging=jar -DlocalRepositoryPath=tio-browser/local-repo` before `mvn package`. Phase A.4 implements this.
+
 ---
 
 ## Loader flow
