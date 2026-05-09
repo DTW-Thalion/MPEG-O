@@ -145,6 +145,9 @@
                 <version>3.2.5</version>
                 <configuration>
                     <argLine>
+                        --enable-preview
+                        --enable-native-access=ALL-UNNAMED
+                        -Djava.library.path=/usr/local/lib:${project.basedir}/../native/_build
                         -Dtestfx.robot=glass
                         -Dtestfx.headless=true
                         -Dprism.order=sw
