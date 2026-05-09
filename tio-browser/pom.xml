@@ -198,4 +198,110 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+      Phase 13.2: native-package profile wraps jpackage to produce a
+      platform-native installer (.deb / .rpm / .msi / .pkg, autodetected).
+
+      Activate with:  mvn -P native-package -DskipTests package
+
+      Output: target/installer/tio-browser_VERSION_ARCH.EXT
+
+      Linux .deb requires:  apt install fakeroot dpkg-dev
+      Linux .rpm requires:  apt install rpm
+      All formats require:  binutils (objcopy)
+      Requires JDK 14+ (jpackage); tested with OpenJDK 21.
+
+      Pipeline:
+       1. maven-resources-plugin copies the shaded JAR into a clean
+          target/installer-staging/ dir.
+       2. exec-maven-plugin invokes jpackage with the input arg pointing
+          at the staging dir.
+
+      The staging dir is cosmetic, not size-reducing: jpackage's
+      main-jar argument already filters target/ down to the named JAR's
+      transitive deps. The ~66 MB .deb is dominated by the bundled JRE,
+      not the input-dir contents. A future optimization (a list of
+      add-modules pinning the needed JDK modules: java.base, java.logging,
+      javafx.controls, javafx.graphics, javafx.fxml) would slim the JRE.
+
+      The staging dir's value is making the input scope explicit so a
+      future change to target/ contents (e.g. a new build artifact) can't
+      accidentally land in the installer.
+
+      The icon is src/main/resources/icons/app-icon.png — the Thalion
+      "T" mark fetched from biobank.thalion.global, rasterized to
+      512x512 transparent PNG.
+    -->
+    <profiles>
+        <profile>
+            <id>native-package</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-resources-plugin</artifactId>
+                        <executions>
+                            <execution>
+                                <id>stage-jpackage-input</id>
+                                <!-- Must run before jpackage (also bound to package). The shaded JAR
+                                     itself is produced by maven-shade-plugin on package, which is
+                                     phase-bound but earlier in the package goal sequence due to plugin
+                                     declaration order. We re-stage during package's later sub-phase
+                                     by ordering this execution after the shade plugin in the parent
+                                     build. Concretely: maven-shade-plugin → maven-resources-plugin
+                                     (staging) → exec-maven-plugin (jpackage). -->
+                                <phase>package</phase>
+                                <goals><goal>copy-resources</goal></goals>
+                                <configuration>
+                                    <outputDirectory>${project.build.directory}/installer-staging</outputDirectory>
+                                    <resources>
+                                        <resource>
+                                            <directory>${project.build.directory}</directory>
+                                            <includes>
+                                                <include>tio-browser-${project.version}-shaded.jar</include>
+                                            </includes>
+                                        </resource>
+                                    </resources>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.4.1</version>
+                        <executions>
+                            <execution>
+                                <id>jpackage</id>
+                                <phase>package</phase>
+                                <goals><goal>exec</goal></goals>
+                                <configuration>
+                                    <executable>jpackage</executable>
+                                    <arguments>
+                                        <argument>--input</argument>
+                                        <argument>target/installer-staging</argument>
+                                        <argument>--main-jar</argument>
+                                        <argument>tio-browser-0.1.0-shaded.jar</argument>
+                                        <argument>--main-class</argument>
+                                        <argument>global.thalion.ttio.browser.AppLauncher</argument>
+                                        <argument>--name</argument>
+                                        <argument>tio-browser</argument>
+                                        <argument>--app-version</argument>
+                                        <argument>0.1.0</argument>
+                                        <argument>--vendor</argument>
+                                        <argument>Thalion</argument>
+                                        <argument>--icon</argument>
+                                        <argument>src/main/resources/icons/app-icon.png</argument>
+                                        <argument>--dest</argument>
+                                        <argument>target/installer</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>
