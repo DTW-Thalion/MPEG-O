@@ -145,6 +145,12 @@ jobs:
     # so runner glibc doesn't matter. Uses HDF5 1.14 from source
     # (via scripts/install-hdf5.sh) so the build is not tied to apt packages.
     runs-on: ubuntu-24.04
+    # softprops/action-gh-release calls the GitHub REST API to create
+    # the Release; the default GITHUB_TOKEN is read-only on repos with
+    # tightened defaults. Grant `contents: write` for this job only so
+    # the publish step can create / update the Release.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
