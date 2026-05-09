@@ -3,6 +3,8 @@ package global.thalion.ttio.browser.diag;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Static registry of external dependency probes plus a small cache.
@@ -13,6 +15,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * for feature gating.
  */
 public final class Diagnostics {
+
+    private static final Logger LOGGER =
+        Logger.getLogger(Diagnostics.class.getName());
 
     /**
      * Linux/macOS often have {@code python3} but not {@code python}; Windows
@@ -70,8 +75,11 @@ public final class Diagnostics {
         for (Runnable r : CACHE_REFRESH_LISTENERS) {
             try {
                 r.run();
-            } catch (RuntimeException ignored) {
-                // Listener errors must not break the probe pipeline.
+            } catch (RuntimeException e) {
+                // Listener errors must not break the probe pipeline,
+                // but they should still be visible during debugging.
+                LOGGER.log(Level.WARNING,
+                    "Diagnostics cache-refresh listener threw", e);
             }
         }
         return cache;

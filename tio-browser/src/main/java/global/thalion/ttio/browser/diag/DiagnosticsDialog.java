@@ -124,6 +124,18 @@ public final class DiagnosticsDialog {
         return table;
     }
 
+    /**
+     * Run {@link Diagnostics#probeAll()} on a background daemon thread
+     * and refresh the dialog's table on the JavaFX thread when done.
+     *
+     * <p><b>Task lifetime policy:</b> the Task intentionally outlives the
+     * dialog. When the user clicks Re-probe and immediately closes, the
+     * Task still completes, fires the listener bus, and any <em>other</em>
+     * still-open Import/Export dialog refreshes its format-list cell
+     * factory. The cost is one stale
+     * {@code Platform.runLater(() -> table.setItems(...))} call after the
+     * dialog's scene is hidden, which JavaFX silently no-ops.</p>
+     */
     private static void reprobe(TableView<ProbeResult> table,
                                 Button reprobeBtn, Label statusLabel) {
         reprobeBtn.setDisable(true);
