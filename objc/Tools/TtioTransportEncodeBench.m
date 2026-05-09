@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>  // getpid() for unique tmp paths
 
 
 static double monotonic_seconds(void) {
