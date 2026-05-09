@@ -314,13 +314,8 @@ jobs:
       - name: Update ldconfig for HDF5 (always)
         run: sudo ldconfig /usr/local/lib
 
-      - name: Build native rANS library
-        run: |
-          cmake -B native/_build -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DTTIO_RANS_BUILD_JNI=ON \
-                native
-          cmake --build native/_build --parallel
+      - name: Build native rANS library (JNI)
+        run: bash scripts/build-native.sh --jni
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -368,13 +363,8 @@ jobs:
       - name: Update ldconfig for HDF5 (always)
         run: sudo ldconfig /usr/local/lib
 
-      - name: Build native rANS library
-        run: |
-          cmake -B native/_build -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DTTIO_RANS_BUILD_JNI=ON \
-                native
-          cmake --build native/_build --parallel
+      - name: Build native rANS library (JNI)
+        run: bash scripts/build-native.sh --jni
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -430,13 +420,8 @@ jobs:
       - name: Update ldconfig for HDF5 (always)
         run: sudo ldconfig /usr/local/lib
 
-      - name: Build native rANS library
-        run: |
-          cmake -B native/_build -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DTTIO_RANS_BUILD_JNI=ON \
-                native
-          cmake --build native/_build --parallel
+      - name: Build native rANS library (JNI)
+        run: bash scripts/build-native.sh --jni
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -505,13 +490,8 @@ jobs:
       - name: Update ldconfig for HDF5 (always)
         run: sudo ldconfig /usr/local/lib
 
-      - name: Build native rANS library
-        run: |
-          cmake -B native/_build -G Ninja \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DTTIO_RANS_BUILD_JNI=ON \
-                native
-          cmake --build native/_build --parallel
+      - name: Build native rANS library (JNI)
+        run: bash scripts/build-native.sh --jni
 
       - name: Install ThermoRawFileParser CLI (mono + v1.4.5 binary)
         # Wrapper script lets the test's shutil.which(...) resolve.
