@@ -135,7 +135,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -235,7 +235,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -261,10 +261,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local/lib/liboqs.so
-          key: liboqs-0.10.1-${{ runner.os }}
+          key: liboqs-0.14.0-${{ runner.os }}
       - name: Install liboqs (PQC native library)
         if: steps.cache-liboqs.outputs.cache-hit != 'true'
-        run: bash scripts/install-liboqs.sh 0.10.1
+        run: bash scripts/install-liboqs.sh 0.14.0
       - name: Update ldconfig for liboqs (always)
         run: sudo ldconfig /usr/local/lib
 
@@ -319,7 +319,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -368,7 +368,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -425,7 +425,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -495,7 +495,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -554,13 +554,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install samtools (required by BamReader edge-case tests)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends samtools
 
       - name: Cache HDF5 1.14
         id: cache-hdf5
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -633,7 +637,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source (perf job)
         if: steps.cache-hdf5-perf.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -783,7 +787,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
+          key: hdf5-1.14.6-hl-${{ runner.os }}
       - name: Install HDF5 1.14 from source (cross-compat)
         if: steps.cache-hdf5-cc.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
