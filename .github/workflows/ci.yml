@@ -535,7 +535,7 @@ jobs:
                  -v --tb=short
 
   java-test:
-    name: Java — build & test (Maven + JDK 17)
+    name: Java — build & test (Maven + JDK 21)
     runs-on: ubuntu-latest
 
     steps:
@@ -555,11 +555,11 @@ jobs:
       - name: Update ldconfig for HDF5 (always)
         run: sudo ldconfig /usr/local/lib
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Build and test
         working-directory: java
@@ -701,11 +701,11 @@ jobs:
       # P2 (perf workplan): Java is now in the regression-detection
       # loop via ProfileHarnessFull --json. Provision JDK + HDF5
       # JNI bindings the same way the cross-compat job does.
-      - name: Install JDK 17 + HDF5 Java bindings
+      - name: Install JDK 21 + HDF5 Java bindings
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - name: Compile Java + materialise runtime classpath
         working-directory: java
         run: |
@@ -863,11 +863,11 @@ jobs:
             tests/test_compression_codecs.py \
             tests/test_per_run_provenance.py
 
-      - name: Install JDK 17
+      - name: Install JDK 21
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - name: Java reads ObjC fixtures
         working-directory: java
