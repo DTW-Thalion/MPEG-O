@@ -4,6 +4,7 @@ import java.io.File;
 import java.nio.file.Path;
 import java.util.function.Consumer;
 
+import global.thalion.ttio.browser.diag.Diagnostics;
 import global.thalion.ttio.browser.importers.ImportFormatSpec.ExtraField;
 import global.thalion.ttio.browser.importers.ImportFormatSpec.SourceKind;
 import javafx.beans.value.ChangeListener;
@@ -74,10 +75,25 @@ public final class ImportDialog {
 
     private Consumer<Path> onImported;
 
+    /** Refreshes the format combo's cell rendering when Diagnostics
+     *  re-probes (so newly-installed binaries un-grey their rows
+     *  and newly-missing binaries get greyed). Held as a field so we
+     *  can de-register on close. */
+    private final Runnable diagnosticsRefresh = () ->
+        javafx.application.Platform.runLater(() -> {
+            // Force ListCell re-render by toggling the items list.
+            var sel = formatBox.getSelectionModel().getSelectedItem();
+            formatBox.getItems().setAll(ImportFormatRegistry.all());
+            if (sel != null) formatBox.getSelectionModel().select(sel);
+        });
+
     public ImportDialog(Window owner) {
         this.owner = owner;
         buildUi();
         wireFormatChangeListener();
+        Diagnostics.addCacheRefreshListener(diagnosticsRefresh);
+        stage.setOnHidden(e ->
+            Diagnostics.removeCacheRefreshListener(diagnosticsRefresh));
     }
 
     /** Pre-fill format by name (from drag-drop sniff). No-op if unknown. */
@@ -119,14 +135,17 @@ public final class ImportDialog {
                         setText(null);
                         setTooltip(null);
                         setDisable(false);
-                    } else {
+                        return;
+                    }
+                    String reason = spec.unavailableReason();
+                    if (reason == null) {
                         setText(spec.name);
                         setTooltip(new Tooltip(spec.description));
-                        if (!spec.readerOnClasspath()) {
-                            setDisable(true);
-                            setText(spec.name + "  (missing: "
-                                + spec.readerClassFqn + ")");
-                        }
+                        setDisable(false);
+                    } else {
+                        setText(spec.name + "  (unavailable)");
+                        setTooltip(new Tooltip(reason));
+                        setDisable(true);
                     }
                 }
             });
