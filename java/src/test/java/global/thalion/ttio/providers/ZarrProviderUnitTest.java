@@ -44,7 +44,7 @@ public class ZarrProviderUnitTest {
     // ── URL routing ─────────────────────────────────────────────────────
 
     @Test
-    public void supportsUrlRecognisesZarrSchemeAndExtension(@TempDir Path tmp) {
+    public void supportsUrlRecognisesZarrSchemeAndExtension() {
         ZarrProvider p = new ZarrProvider();
         assertTrue(p.supportsUrl("zarr:///abs/path"));
         assertTrue(p.supportsUrl("/some/where/data.zarr"));
@@ -755,13 +755,9 @@ public class ZarrProviderUnitTest {
     }
 
     @Test
-    public void readZArrayThrowsOnMissingMeta(@TempDir Path tmp) {
+    public void readZArrayThrowsOnMissingMeta(@TempDir Path tmp) throws IOException {
         Path empty = tmp.resolve("empty");
-        try {
-            Files.createDirectories(empty);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        Files.createDirectories(empty);
         assertThrows(IOException.class, () -> ZarrProvider.readZArray(empty));
     }
 
@@ -782,9 +778,11 @@ public class ZarrProviderUnitTest {
     @Test
     public void writeZAttrsNoOpsWhenNoMeta(@TempDir Path tmp) throws IOException {
         // Directory with no zarr.json: writeZAttrs early-returns without
-        // throwing.
-        ZarrProvider.writeZAttrs(tmp.resolve("nope"),
-                Map.of("k", "v"));
+        // throwing AND without creating the metadata file it would otherwise
+        // write.
+        Path nope = tmp.resolve("nope");
+        ZarrProvider.writeZAttrs(nope, Map.of("k", "v"));
+        assertFalse(Files.exists(nope.resolve("zarr.json")));
     }
 
     @Test
