@@ -36,6 +36,15 @@ from pathlib import Path
 
 import pytest
 
+# Cross-language tests subprocess into the Java BamDump CLI via `mvn
+# exec:java`, which only works when the Java sibling is compiled in
+# the same checkout. The `python-test` GHA job compiles Python only,
+# so these tests fail there. The `python-validation` job builds Java
+# as a prereq and exercises them via `-m "not stress and ..."`. Mark
+# `integration` so the default `-m 'not integration'` filter excludes
+# them from python-test.
+pytestmark = pytest.mark.integration
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 FIXTURE = REPO_ROOT / "python" / "tests" / "fixtures" / "genomic" / "m88_test.bam"
 CRAM_FIXTURE = REPO_ROOT / "python" / "tests" / "fixtures" / "genomic" / "m88_test.cram"
