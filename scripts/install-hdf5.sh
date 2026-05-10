@@ -149,6 +149,17 @@ echo "Configuring HDF5 ${VERSION} (prefix=${PREFIX}, --enable-java --enable-thre
     --enable-hl \
     --with-ros3-vfd
 
+# After configure, on Windows MinGW UCRT only: HDF5 1.14.6 autoconf
+# detects FLT16_MAX as available but the actual compile fails with
+# 'FLT16_MAX undeclared'. Patch the generated H5pubconf.h to skip
+# the _Float16 code path. (--disable-float16 configure flag was added
+# in HDF5 1.14.7; not available in 1.14.6.)
+if [ "${OS}" = "windows" ]; then
+    echo "Patching src/H5pubconf.h to disable _Float16 (MinGW UCRT workaround)..."
+    sed -i 's|^#define H5_HAVE__FLOAT16 1|/* H5_HAVE__FLOAT16 disabled post-configure on MinGW UCRT */|' src/H5pubconf.h
+    grep "H5_HAVE__FLOAT16" src/H5pubconf.h || echo "(no remaining H5_HAVE__FLOAT16 mentions — good)"
+fi
+
 JOBS="$(nproc_portable)"
 echo "Building HDF5 (${JOBS} parallel jobs) ..."
 make -j"${JOBS}"
