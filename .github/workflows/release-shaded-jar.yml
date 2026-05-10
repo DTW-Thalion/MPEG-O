@@ -158,14 +158,20 @@ jobs:
         run: |
           mkdir -p tio-browser/src/main/resources/native/win-x64/hdf5
           cp native/_build/ttio_rans_jni.dll tio-browser/src/main/resources/native/win-x64/
-          # HDF5 from-source build (libtool) emits libhdf5*.dll into
-          # /ucrt64/bin (DLLs go to bin on Windows, not lib). Rename to
-          # drop the "lib" prefix to match Hdf5NativeLoader's WIN_LIBS.
-          cp /ucrt64/bin/libhdf5.dll       tio-browser/src/main/resources/native/win-x64/hdf5/hdf5.dll
-          cp /ucrt64/bin/libhdf5_hl.dll    tio-browser/src/main/resources/native/win-x64/hdf5/hdf5_hl.dll
-          cp /ucrt64/bin/libhdf5_java.dll  tio-browser/src/main/resources/native/win-x64/hdf5/hdf5_java.dll
-          cp /ucrt64/lib/libh5lz4.dll      tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll \
-              || cp /ucrt64/bin/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll
+          # HDF5 from-source build (libtool) emits versioned DLLs into
+          # /ucrt64/bin: libhdf5-310.dll, libhdf5_hl-310.dll, libhdf5_java.dll
+          # (the JNI shim has no version suffix). Rename to the
+          # unversioned, lib-prefix-stripped names Hdf5NativeLoader expects.
+          cp /ucrt64/bin/libhdf5-310.dll      tio-browser/src/main/resources/native/win-x64/hdf5/hdf5.dll
+          cp /ucrt64/bin/libhdf5_hl-310.dll   tio-browser/src/main/resources/native/win-x64/hdf5/hdf5_hl.dll
+          cp /ucrt64/bin/libhdf5_java.dll     tio-browser/src/main/resources/native/win-x64/hdf5/hdf5_java.dll
+          # h5lz4 plugin install path varies by upstream cmake version; try common spots.
+          (cp /ucrt64/lib/plugin/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
+              || (cp /ucrt64/lib/plugin/libh5lz4.so tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
+              || (cp /ucrt64/bin/plugin/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
+              || (cp /ucrt64/lib/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
+              || (cp /ucrt64/bin/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
+              || (echo "::error::libh5lz4.{dll,so} not found under /ucrt64" && find /ucrt64 -name 'libh5lz4*' && exit 1)
           ls -la tio-browser/src/main/resources/native/win-x64/
           ls -la tio-browser/src/main/resources/native/win-x64/hdf5/
 
