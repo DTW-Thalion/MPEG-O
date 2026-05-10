@@ -1,4 +1,4 @@
-name: Release shaded jar (cross-platform native bundle)
+name: Release shaded jar (per-platform)
 
 # Triggers:
 #   - tag push starting with v* (canonical release path)
@@ -8,35 +8,22 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
-# Build libttio_rans_jni on each target platform, upload as an
-# artifact, then a final job stages all four into
-# tio-browser/src/main/resources/native/<platform>/ and produces
-# the shaded fat-jar with all natives bundled.
+permissions:
+  contents: write   # softprops/action-gh-release needs this to create the Release
+
 jobs:
-  build-native:
-    name: Native build (${{ matrix.classifier }})
+  build-platform-jar:
+    name: Build per-platform shaded JAR (${{ matrix.classifier }})
     strategy:
       fail-fast: false
       matrix:
-        # macOS native is arm64-only for now. Universal2 (x86_64+arm64)
-        # would require source-level changes: native/src SIMD .c files
-        # use x86 intrinsics (<immintrin.h>) and don't self-guard for
-        # arm64; arm64-slice compilation in a universal binary fails.
-        # macos-13 (Intel) GHA runners are queue-blocked (60+ min waits)
-        # so we can't build the x86_64 slice on its own runner either.
-        # Apple Silicon is the bulk of post-2020 Macs; Intel-Mac users
-        # running the jar see graceful degradation in NativeLibraryLoader
-        # (placeholder in Read Inspector). Tracked as follow-up.
         include:
-          - os: ubuntu-22.04
-            classifier: linux-x64
-            artifact_name: libttio_rans_jni.so
-          - os: macos-14
-            classifier: mac-aarch64
-            artifact_name: libttio_rans_jni.dylib
-          - os: windows-2022
-            classifier: win-x64
-            artifact_name: ttio_rans_jni.dll
+          - classifier: linux-x64
+            os: ubuntu-22.04
+          - classifier: mac-aarch64
+            os: macos-14
+          - classifier: win-x64
+            os: windows-2022
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -45,179 +32,59 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 21
+          java-version: '21'
 
-      - name: Install zlib (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+      # Per-platform native build steps land in D.2/D.3/D.4. This task
+      # only sets up the shell — the per-platform `if: matrix.classifier == ...`
+      # gating goes here:
 
-      - name: Install zlib (macOS)
-        if: runner.os == 'macOS'
-        run: brew install zlib
+      # === LINUX X64 ===
+      # (D.2 will add: apt install + install-hdf5.sh + build-h5lz4.sh + libttio_rans_jni cmake build + staging)
 
-      # Windows: use MinGW-w64 via MSYS2. The C codebase is fundamentally
-      # POSIX (uses pthread.h directly in 3+ source files); MSVC needs a
-      # full pthread shim port that's a separate effort. MinGW-w64
-      # provides POSIX threads natively, plus the existing GCC-style
-      # warning + SIMD flags work as-is.
-      - name: Set up MSYS2 (Windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-gcc
-            mingw-w64-ucrt-x86_64-cmake
-            mingw-w64-ucrt-x86_64-ninja
-            mingw-w64-ucrt-x86_64-zlib
+      # === MAC AARCH64 ===
+      # (D.3 will add: brew install + install-hdf5.sh + build-h5lz4.sh + libttio_rans_jni cmake build + staging)
 
-      - name: Configure + build native rANS library (Linux)
-        if: runner.os == 'Linux'
-        run: bash scripts/build-native.sh --jni
+      # === WIN X64 ===
+      # (D.4 will add: msys2 setup + pacman install + build-h5lz4.sh + libttio_rans_jni MinGW build + staging)
 
-      - name: Configure CMake (macOS — arm64-only)
-        if: runner.os == 'macOS'
+      - name: Build shaded JAR
+        working-directory: tio-browser
+        shell: bash
+        run: mvn -B -P ${{ matrix.classifier }} -DskipTests package
+
+      - name: Verify shaded JAR contents
+        working-directory: tio-browser
         shell: bash
         run: |
-          cd native
-          cmake -B _build -DCMAKE_BUILD_TYPE=Release \
-            -DTTIO_RANS_BUILD_JNI=ON \
-            -DCMAKE_OSX_ARCHITECTURES="arm64"
-
-      - name: Configure + build CMake (Windows / MSYS2 UCRT64)
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        env:
-          # actions/setup-java exports JAVA_HOME as a Windows path
-          # (C:\hostedtoolcache\...). Convert to a UCRT64-native path
-          # so CMake's FindJNI module can locate jni.h on it.
-          JAVA_HOME_WIN: ${{ env.JAVA_HOME_17_X64 || env.JAVA_HOME }}
-        run: |
-          export JAVA_HOME=$(cygpath -u "$JAVA_HOME_WIN")
-          cd native
-          cmake -B _build -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DTTIO_RANS_BUILD_JNI=ON \
-            -DCMAKE_C_FLAGS="-static-libgcc"
-          cmake --build _build --target ttio_rans_jni
-
-      - name: Build ttio_rans_jni (Linux/macOS)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          cd native
-          cmake --build _build --config Release --target ttio_rans_jni
-          if [ "${{ runner.os }}" = "macOS" ]; then
-            echo "macOS dylib architecture (arm64-only):"
-            lipo -info _build/libttio_rans_jni.dylib
+          JAR=$(ls target/tio-browser-*-${{ matrix.classifier }}.jar | head -1)
+          echo "Inspecting $JAR (size: $(du -h "$JAR" | cut -f1))"
+          # Sanity: must include this platform's native tree, must NOT include the others
+          jar -tf "$JAR" | grep "^native/${{ matrix.classifier }}/" | head -5
+          if jar -tf "$JAR" | grep -E "^native/(linux-x64|mac-aarch64|win-x64)/" | grep -v "^native/${{ matrix.classifier }}/"; then
+              echo "::error::JAR contains other-platform native resources"
+              exit 1
           fi
 
-      - name: Locate native artifact
-        id: locate
-        shell: bash
-        run: |
-          # MSBuild on Windows places the .dll under Release/; CMake
-          # Makefile / Ninja on Unix puts it directly in _build/. Probe.
-          for candidate in \
-              "native/_build/${{ matrix.artifact_name }}" \
-              "native/_build/Release/${{ matrix.artifact_name }}"; do
-            if [ -f "$candidate" ]; then
-              echo "path=$candidate" >> "$GITHUB_OUTPUT"
-              echo "Found native at: $candidate"
-              exit 0
-            fi
-          done
-          echo "::error::Native artifact ${{ matrix.artifact_name }} not found under native/_build"
-          ls -la native/_build/
-          exit 1
-
-      - name: Upload native artifact
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: native-${{ matrix.classifier }}
-          path: ${{ steps.locate.outputs.path }}
+          name: tio-browser-${{ matrix.classifier }}
+          path: tio-browser/target/tio-browser-*-${{ matrix.classifier }}.jar
           if-no-files-found: error
 
-  build-shaded-jar:
-    name: Build shaded fat-jar with all natives bundled
-    needs: build-native
-    # Bundling does not produce native code (just maven shade staging),
-    # so runner glibc doesn't matter. Uses HDF5 1.14 from source
-    # (via scripts/install-hdf5.sh) so the build is not tied to apt packages.
-    runs-on: ubuntu-24.04
+  publish-release:
+    name: Publish GitHub Release
+    needs: build-platform-jar
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
+      - uses: actions/download-artifact@v4
         with:
-          distribution: temurin
-          java-version: 21
-
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
-        with:
-          path: /usr/local
-          key: hdf5-1.14.6-ubuntu-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
-
-      - name: Download all native artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: native-artifacts
-
-      - name: Stage natives into tio-browser resources
-        run: |
-          BASE=tio-browser/src/main/resources/native
-          mkdir -p $BASE/linux-x64 $BASE/mac-aarch64 $BASE/win-x64
-          cp native-artifacts/native-linux-x64/libttio_rans_jni.so       $BASE/linux-x64/
-          cp native-artifacts/native-mac-aarch64/libttio_rans_jni.dylib  $BASE/mac-aarch64/
-          cp native-artifacts/native-win-x64/ttio_rans_jni.dll           $BASE/win-x64/
-          ls -laR $BASE
-
-      - name: Install ttio jar to local M2
-        run: |
-          cd java
-          mvn -B install -DskipTests -Djacoco.skip=true \
-              -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
-
-      - name: Build tio-browser shaded jar
-        run: |
-          cd tio-browser
-          mvn -B package -DskipTests -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
-
-      - name: Verify natives are in shaded jar
-        run: |
-          cd tio-browser/target
-          JAR=$(ls tio-browser-*-shaded.jar | head -1)
-          echo "Inspecting $JAR"
-          for path in \
-              native/linux-x64/libttio_rans_jni.so \
-              native/mac-aarch64/libttio_rans_jni.dylib \
-              native/win-x64/ttio_rans_jni.dll; do
-            if unzip -l "$JAR" | grep -q "$path"; then
-              echo "  ✓ $path"
-            else
-              echo "::error::Missing $path in shaded jar"
-              exit 1
-            fi
-          done
-
-      - name: Upload shaded jar artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tio-browser-shaded-jar
-          path: tio-browser/target/tio-browser-*-shaded.jar
-          if-no-files-found: error
-
-      - name: Attach to GitHub Release (tag push only)
-        if: startsWith(github.ref, 'refs/tags/v')
+          path: artifacts
+      - name: List downloaded artifacts
+        run: ls -la artifacts/*/
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: tio-browser/target/tio-browser-*-shaded.jar
-          generate_release_notes: true
+          files: artifacts/**/tio-browser-*.jar
+          fail_on_unmatched_files: true
