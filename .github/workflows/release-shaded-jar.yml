@@ -64,7 +64,9 @@ jobs:
           cp /usr/local/lib/libhdf5.so.310 tio-browser/src/main/resources/native/linux-x64/hdf5/
           cp /usr/local/lib/libhdf5_hl.so.310 tio-browser/src/main/resources/native/linux-x64/hdf5/
           cp /usr/local/lib/libhdf5_java.so tio-browser/src/main/resources/native/linux-x64/hdf5/
-          cp /usr/local/lib/libh5lz4.so tio-browser/src/main/resources/native/linux-x64/hdf5/
+          # build-h5lz4.sh installs to ${PREFIX}/lib/plugin/ (HDF5 plugin convention).
+          cp /usr/local/lib/plugin/libh5lz4.so tio-browser/src/main/resources/native/linux-x64/hdf5/ \
+              || cp /usr/local/lib/libh5lz4.so tio-browser/src/main/resources/native/linux-x64/hdf5/
           ls -la tio-browser/src/main/resources/native/linux-x64/
           ls -la tio-browser/src/main/resources/native/linux-x64/hdf5/
 
@@ -96,7 +98,9 @@ jobs:
           cp /usr/local/lib/libhdf5.310.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
           cp /usr/local/lib/libhdf5_hl.310.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
           cp /usr/local/lib/libhdf5_java.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
-          cp /usr/local/lib/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
+          # build-h5lz4.sh installs to ${PREFIX}/lib/plugin/ (HDF5 plugin convention).
+          cp /usr/local/lib/plugin/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/ \
+              || cp /usr/local/lib/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
           ls -la tio-browser/src/main/resources/native/mac-aarch64/
           ls -la tio-browser/src/main/resources/native/mac-aarch64/hdf5/
 
