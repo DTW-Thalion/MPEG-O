@@ -9,6 +9,11 @@ option(TTIO_RANS_ENABLE_TSAN
     "Build a separate test_thread_safety_tsan target with -fsanitize=thread" OFF)
 option(TTIO_RANS_BUILD_JNI
     "Build the JNI wrapper library (libttio_rans_jni.so) for Java integration" OFF)
+# BUILD_TESTING gates the test executables. Defaults ON so local dev sees
+# the full suite. The release matrix and JNI-only builds set OFF because
+# some tests (e.g. test_fqzcomp_qual_threaded) use POSIX setenv/unsetenv
+# unavailable on MinGW UCRT.
+option(BUILD_TESTING "Build native test executables" ON)
 
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -142,6 +147,7 @@ if(TTIO_RANS_BUILD_JNI)
 endif()
 
 # Tests
+if(BUILD_TESTING)
 enable_testing()
 add_executable(test_roundtrip tests/test_roundtrip.c)
 target_link_libraries(test_roundtrip ttio_rans)
@@ -291,6 +297,7 @@ add_executable(test_name_tok_v2_stress tests/test_name_tok_v2_stress.c)
 target_link_libraries(test_name_tok_v2_stress PRIVATE ttio_rans)
 target_include_directories(test_name_tok_v2_stress PRIVATE src)
 add_test(NAME name_tok_v2_stress COMMAND test_name_tok_v2_stress)
+endif()  # BUILD_TESTING
 
 
 # Optional ThreadSanitizer build of the same test, gated by an option so
