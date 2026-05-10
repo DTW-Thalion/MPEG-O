@@ -794,7 +794,8 @@ jobs:
             clang cmake ninja-build make git ca-certificates \
             zlib1g-dev libssl-dev libxml2-dev \
             libgnutls28-dev libffi-dev libicu-dev \
-            libblocksruntime-dev libcurl4-openssl-dev tzdata
+            libblocksruntime-dev libcurl4-openssl-dev \
+            libwebsockets-dev tzdata samtools
 
       - name: Cache HDF5 1.14 (cross-compat)
         id: cache-hdf5-cc
@@ -878,12 +879,12 @@ jobs:
       - name: Refresh dynamic linker cache
         run: sudo ldconfig
 
-      # objc/build.sh's dependency check requires libttio_rans.so to be
-      # present (the ObjC genomic codecs link against it). Build the native
-      # library first — same pattern used by objc-build-test, java-test,
-      # python-test, and the perf job.
-      - name: Build native libttio_rans (required by ObjC genomic codecs)
-        run: ./scripts/build-native.sh
+      # objc/build.sh's dependency check requires libttio_rans.so; the
+      # Java full test suite below requires the JNI shim
+      # (libttio_rans_jni.so) for NAME_TOKENIZED_V2. --jni builds both,
+      # mirroring java-test's pattern at line 587.
+      - name: Build native libttio_rans (+ JNI for Java tests)
+        run: bash scripts/build-native.sh --jni
 
       - name: Build libTTIO + tools
         working-directory: objc
