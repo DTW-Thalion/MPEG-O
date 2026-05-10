@@ -111,7 +111,19 @@ public final class Hdf5NativeLoader {
             }
         }
         tempDir = dir;
-        // LZ4 plugin path registration lands in B.5.
+        // Register the LZ4 plugin search path with JHI5. We can't set
+        // HDF5_PLUGIN_PATH env var after JVM start (Java has no portable
+        // setenv), so use the JHI5 in-process API. Non-fatal on failure —
+        // the app still works for non-LZ4 datasets; opening LZ4-compressed
+        // data surfaces the existing "LZ4 filter (id 32004) is not
+        // available" error from Hdf5Group.java.
+        try {
+            hdf.hdf5lib.H5.H5PLappend(dir.toAbsolutePath().toString());
+        } catch (Throwable t) {
+            java.util.logging.Logger.getLogger(Hdf5NativeLoader.class.getName())
+                .warning("Could not register LZ4 plugin path: " + t.getMessage()
+                    + " (LZ4-compressed datasets won't open, but other features work)");
+        }
         loaded = true;
     }
 
