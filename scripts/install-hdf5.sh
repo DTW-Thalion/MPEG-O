@@ -100,7 +100,7 @@ case "${OS}" in
         # On macOS, callers are expected to: brew install cmake openjdk zlib
         ;;
     windows)
-        echo "install-hdf5: MSYS2/MINGW detected; assuming pacman packages (mingw-w64-ucrt-x86_64-{gcc,cmake,curl,zlib,jdk-openjdk}) are present."
+        echo "install-hdf5: MSYS2/MINGW detected; assuming pacman packages (mingw-w64-ucrt-x86_64-{gcc,cmake,curl,zlib} + autoconf/automake/libtool/make) are present, and JAVA_HOME points to a JDK in MSYS2 path form (use \`cygpath -u\`)."
         ;;
     *)
         echo "install-hdf5: unknown OS (${UNAME_S}); skipping dep install, build may fail."
@@ -180,5 +180,10 @@ case "${OS}" in
     *)       LIBEXT=so ;;
 esac
 echo "  C library:    ${PREFIX}/lib/libhdf5.${LIBEXT}"
-echo "  JNI library:  ${PREFIX}/lib/libhdf5_java.${LIBEXT}"
-echo "  Java jar:     ${PREFIX}/lib/jarhdf5.jar"
+echo "  HL library:   ${PREFIX}/lib/libhdf5_hl.${LIBEXT}"
+echo "  JNI library:  ${PREFIX}/lib/libhdf5_java.${LIBEXT}  (--enable-java)"
+echo "  Java jar:     ${PREFIX}/lib/jarhdf5.jar             (--enable-java)"
+# On MSYS2/MINGW, libtool installs DLLs under ${PREFIX}/bin (not lib).
+if [ "${OS}" = "windows" ]; then
+    echo "  Note (Windows): DLLs are under ${PREFIX}/bin/, import libs under ${PREFIX}/lib/."
+fi
