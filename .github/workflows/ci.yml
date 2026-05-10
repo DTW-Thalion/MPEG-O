@@ -642,8 +642,15 @@ jobs:
         id: cache-hdf5-perf
         uses: actions/cache@v4
         with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
+          # Narrow paths — see cross-compat job for rationale.
+          path: |
+            /usr/local/include/hdf5*
+            /usr/local/include/H5*
+            /usr/local/lib/libhdf5*
+            /usr/local/lib/libjarhdf5*
+            /usr/local/lib/jarhdf5.jar
+            /usr/local/share/hdf5_examples
+          key: hdf5-1.14.6-hl-${{ runner.os }}-narrow
       - name: Install HDF5 1.14 from source (perf job)
         if: steps.cache-hdf5-perf.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -792,8 +799,18 @@ jobs:
         id: cache-hdf5-cc
         uses: actions/cache@v4
         with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
+          # Narrow paths to just what install-hdf5.sh actually writes.
+          # The previous `path: /usr/local` swept Android SDK and other
+          # runner-image files into the cache, causing tar exit-code-2
+          # conflicts on restore (run 25616667918).
+          path: |
+            /usr/local/include/hdf5*
+            /usr/local/include/H5*
+            /usr/local/lib/libhdf5*
+            /usr/local/lib/libjarhdf5*
+            /usr/local/lib/jarhdf5.jar
+            /usr/local/share/hdf5_examples
+          key: hdf5-1.14.6-hl-${{ runner.os }}-narrow
       - name: Install HDF5 1.14 from source (cross-compat)
         if: steps.cache-hdf5-cc.outputs.cache-hit != 'true'
         run: bash scripts/install-hdf5.sh 1.14.6
@@ -859,6 +876,13 @@ jobs:
 
       - name: Refresh dynamic linker cache
         run: sudo ldconfig
+
+      # objc/build.sh's dependency check requires libttio_rans.so to be
+      # present (the ObjC genomic codecs link against it). Build the native
+      # library first — same pattern used by objc-build-test, java-test,
+      # python-test, and the perf job.
+      - name: Build native libttio_rans (required by ObjC genomic codecs)
+        run: ./scripts/build-native.sh
 
       - name: Build libTTIO + tools
         working-directory: objc
