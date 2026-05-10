@@ -635,7 +635,8 @@ jobs:
             clang cmake ninja-build make git ca-certificates \
             zlib1g-dev libssl-dev libxml2-dev \
             libgnutls28-dev libffi-dev libicu-dev \
-            libblocksruntime-dev libcurl4-openssl-dev tzdata \
+            libblocksruntime-dev libcurl4-openssl-dev \
+            libwebsockets-dev tzdata \
             python3 python3-pip
 
       - name: Cache HDF5 1.14 (perf job)
