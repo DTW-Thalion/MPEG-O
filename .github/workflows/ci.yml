@@ -795,7 +795,7 @@ jobs:
             zlib1g-dev libssl-dev libxml2-dev \
             libgnutls28-dev libffi-dev libicu-dev \
             libblocksruntime-dev libcurl4-openssl-dev \
-            libwebsockets-dev tzdata
+            libwebsockets-dev tzdata samtools
 
       - name: Cache HDF5 1.14 (cross-compat)
         id: cache-hdf5-cc
