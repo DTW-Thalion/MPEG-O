@@ -12,6 +12,26 @@ public class App extends Application {
 
     @Override
     public void start(Stage primaryStage) {
+        try {
+            Hdf5NativeLoader.ensureLoaded();
+        } catch (Hdf5NativeLoadException e) {
+            // Detect headless test mode via TestFX's marker system property
+            // (set in surefire argLine) or Monocle's glass.platform marker.
+            // Either signals "we're in a unit test, don't pop alerts or exit".
+            boolean headless = "true".equalsIgnoreCase(System.getProperty("testfx.headless", ""))
+                || "Monocle".equalsIgnoreCase(System.getProperty("glass.platform", ""));
+            if (headless) {
+                java.util.logging.Logger.getLogger(App.class.getName())
+                    .warning("Hdf5NativeLoader failed (headless test mode): " + e.getMessage());
+            } else {
+                new javafx.scene.control.Alert(
+                    javafx.scene.control.Alert.AlertType.ERROR,
+                    e.getMessage(),
+                    javafx.scene.control.ButtonType.CLOSE
+                ).showAndWait();
+                System.exit(1);
+            }
+        }
         mainWindow = new MainWindow();
         mainWindow.show(primaryStage);
         // getParameters() is null when App is constructed directly

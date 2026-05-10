@@ -6,50 +6,24 @@ transporting TTI-O `.tio` multi-omics datasets. Built on the
 
 ## Quick install (end users)
 
-Download the cross-platform shaded jar from the latest GitHub Release:
+Download the JAR for your operating system from the [latest GitHub Release](https://github.com/DTW-Thalion/TTI-O/releases/latest):
+
+| OS | Download |
+|---|---|
+| Linux x86_64 | `tio-browser-1.4.0-linux-x64.jar` |
+| macOS Apple Silicon (arm64) | `tio-browser-1.4.0-mac-aarch64.jar` |
+| Windows x86_64 | `tio-browser-1.4.0-win-x64.jar` |
+
+Run with a JDK 17+:
 
 ```bash
-java -jar tio-browser-<version>-shaded.jar
+java -jar tio-browser-1.4.0-<your-os>.jar
+java -jar tio-browser-1.4.0-<your-os>.jar --open path/to/dataset.tio
 ```
 
-The shaded jar bundles the JavaFX runtime, the `ttio` Java library,
-and the `libttio_rans` native library for **Linux x86_64**, **macOS
-Apple Silicon (arm64)**, and **Windows x86_64**. No additional
-toolchain is required beyond a JDK 17+ runtime.
+Each per-platform JAR bundles HDF5 1.14, the LZ4 filter plugin, and `libttio_rans_jni` for that platform — **no other prerequisites beyond a JDK 17+**.
 
-### Platform support matrix
-
-| Platform | Support | Native library |
-|---|---|---|
-| Linux x86_64 (glibc ≥ 2.35, Ubuntu 22.04+) | Full | bundled (`native/linux-x64/libttio_rans_jni.so`) |
-| macOS Apple Silicon (arm64, macOS 13+) | Full | bundled (`native/mac-aarch64/libttio_rans_jni.dylib`) |
-| Windows x86_64 (Windows 10+) | Full | bundled (`native/win-x64/ttio_rans_jni.dll`, MinGW UCRT64) |
-| macOS Intel (x86_64) | Graceful degradation | not bundled — non-genomic workflows work; Read Inspector falls back to a placeholder |
-| Other (linux-aarch64, win-aarch64) | Graceful degradation | not bundled — same fallback as Intel Mac |
-
-On Intel Mac and other unbundled platforms, the application starts
-normally and all non-genomic features (MS, NMR, Raman/IR/UV-Vis, plot
-tabs, headers tables, dataset tree, encryption, identifications,
-quantifications) work without the native library. Only the genomic
-**Read Inspector** tab — which decodes `NameTokenizerV2` /
-`RefDiffV2` codecs through JNI — surfaces a placeholder message.
-
-### Native-lib resolution order
-
-`NativeLibraryLoader` resolves `libttio_rans_jni` at first call (when
-the genomic Read Inspector mounts) using this fallback chain:
-
-1. `System.loadLibrary("ttio_rans_jni")` — picks up a system-installed
-   library via `java.library.path` (developer mode; set
-   `-Djava.library.path=/path/to/native_build`).
-2. Resource extraction from `/native/<platform>/...` bundled in the
-   shaded jar — copied to a temp file and loaded via
-   `System.load(...)` (end-user fat-jar mode).
-3. Records `NativeLibraryLoader.lastError()`; the genomic UI surfaces
-   this as a placeholder. The rest of the app keeps working.
-
-The loader is idempotent — repeated calls are no-ops once
-`isLoaded()` returns true or `lastError()` is set.
+If you download the wrong JAR for your OS, the app shows a modal error pointing you to the correct asset.
 
 ## Build from source
 
@@ -137,34 +111,23 @@ unchanged.
 
 ## Native installers (optional)
 
-`tio-browser/pom.xml` ships a `native-package` Maven profile that
-wraps `jpackage` to produce a platform-native installer:
+For users who prefer a platform-native installer instead of the JAR:
+
+| OS | Asset |
+|---|---|
+| Linux | `tio-browser_1.4.0_amd64.deb` |
+| macOS | `tio-browser-1.4.0-mac-aarch64.dmg` (arm64) |
+| Windows | `tio-browser-1.4.0-win-x64.msi` |
+
+Each installer bundles the platform's HDF5 + JRE — completely self-contained.
+
+To build locally:
 
 ```bash
-mvn -pl tio-browser package -P native-package \
-    -Dhdf5.jar=/usr/share/java/jarhdf5.jar
+mvn -pl tio-browser package -P <your-platform> -P native-package
 ```
 
-Output at `tio-browser/target/installer/`:
-
-- Linux: `.deb` (Debian/Ubuntu) or `.rpm` (Red Hat/Fedora) —
-  autodetected. Requires `apt install fakeroot dpkg-dev` for `.deb`
-  or `apt install rpm` for `.rpm`. `binutils` (for `objcopy`) must be
-  on PATH for any format.
-- macOS: `.dmg`. Build must run on macOS.
-- Windows: `.msi`. Build must run on Windows; `wix311` or newer
-  required on PATH.
-
-The installer bundles a JRE (~33 MB) so the resulting `.deb`/`.dmg`/
-`.msi` is around 66 MB. The installed app uses the icon at
-`tio-browser/src/main/resources/icons/app-icon.png` (the Thalion "T"
-mark).
-
-To run the bundled JAR with a `.tio` opened at launch:
-
-```bash
-java -jar tio-browser-1.3.0-shaded.jar --open path/to/dataset.tio
-```
+Where `<your-platform>` is one of `linux-x64`, `mac-aarch64`, `win-x64`.
 
 ## Diagnostics
 

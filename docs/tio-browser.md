@@ -13,7 +13,7 @@ For build/install instructions see
 - **File → Open** picks a `.tio` from a file dialog.
 - **Drag-and-drop** any `.tio` onto the window (drops on file types
   the importer recognizes route through the Import wizard instead).
-- **CLI**: `java -jar tio-browser-1.3.0-shaded.jar --open path/to/dataset.tio`
+- **CLI**: `java -jar tio-browser-1.4.0-<your-os>.jar --open path/to/dataset.tio`
   opens the dataset at launch.
 
 The status bar shows `path · vN.N.N · MS=N · Genomic=N · Refs=N · 🔓/🔒`
@@ -129,4 +129,4 @@ available without restarting the app.
 `tio-browser` issues, feature requests, and crash reports go to the
 TTI-O monorepo issue tracker. Please include the
 **Tools → Diagnostics** output and the full stderr from a terminal-
-launched `java -jar tio-browser-…-shaded.jar` invocation.
+launched `java -jar tio-browser-<version>-<your-os>.jar` invocation.
