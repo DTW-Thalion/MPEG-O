@@ -29,6 +29,13 @@
         <ttio.version>1.2.0</ttio.version>
     </properties>
 
+    <repositories>
+        <repository>
+            <id>local-jhi5</id>
+            <url>file://${project.basedir}/local-repo</url>
+        </repository>
+    </repositories>
+
     <dependencies>
         <dependency>
             <groupId>global.thalion</groupId>
@@ -45,10 +52,8 @@
 
         <dependency>
             <groupId>org.hdfgroup</groupId>
-            <artifactId>hdf5</artifactId>
-            <version>1.10.10</version>
-            <scope>system</scope>
-            <systemPath>${hdf5.jar}</systemPath>
+            <artifactId>jarhdf5</artifactId>
+            <version>1.14.6</version>
         </dependency>
 
         <dependency>
