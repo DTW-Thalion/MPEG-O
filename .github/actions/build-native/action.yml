@@ -1,0 +1,22 @@
+name: Build native libttio_rans
+description: >-
+  Build the libttio_rans C library (and optionally the libttio_rans_jni.so
+  JNI shim for Java). Wraps scripts/build-native.sh so the --jni convention
+  is centralised. Without --jni, NAME_TOKENIZED_V2 / FQZCOMP_NX16_Z Java
+  tests fail at runtime (incident: PR #65 run 25639020499).
+
+inputs:
+  jni:
+    description: >-
+      'true' to also build libttio_rans_jni.so (required for Java tests
+      that exercise the v2 genomic codecs). 'false' (default) builds
+      only the C library, sufficient for ObjC and Python.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Build native libttio_rans
+      shell: bash
+      run: bash scripts/build-native.sh ${{ inputs.jni == 'true' && '--jni' || '' }}
