@@ -236,26 +236,12 @@ jobs:
             ninja-build \
             samtools
 
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
-        with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
-
-      - name: Build native rANS library
+      - uses: ./.github/actions/setup-hdf5
+      - uses: ./.github/actions/build-native
         # Required for the v2 genomic codecs (MATE_INLINE_V2,
         # REF_DIFF_V2, NAME_TOKENIZED_V2, FQZCOMP_NX16_Z) and the
         # Phase 2c-T transport bulk-mode tests. Without this step,
         # ~90 tests silently skip or run in degraded paths.
-        run: |
-          cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
-          cmake --build native/_build --parallel
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
@@ -359,20 +345,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             zlib1g-dev cmake ninja-build
 
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup-hdf5
+      - uses: ./.github/actions/build-native
         with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
-
-      - name: Build native rANS library (JNI)
-        run: bash scripts/build-native.sh --jni
+          jni: 'true'
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -416,20 +392,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             zlib1g-dev cmake ninja-build samtools
 
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup-hdf5
+      - uses: ./.github/actions/build-native
         with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
-
-      - name: Build native rANS library (JNI)
-        run: bash scripts/build-native.sh --jni
+          jni: 'true'
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
@@ -486,20 +452,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             zlib1g-dev cmake ninja-build mono-complete
 
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup-hdf5
+      - uses: ./.github/actions/build-native
         with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
-
-      - name: Build native rANS library (JNI)
-        run: bash scripts/build-native.sh --jni
+          jni: 'true'
 
       - name: Install ThermoRawFileParser CLI (mono + v1.4.5 binary)
         # Wrapper script lets the test's shutil.which(...) resolve.
@@ -555,17 +511,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends samtools
 
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
-        with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
+      - uses: ./.github/actions/setup-hdf5
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -573,8 +519,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build native libttio_rans (+ JNI for Java tests)
-        run: bash scripts/build-native.sh --jni
+      - uses: ./.github/actions/build-native
+        with:
+          jni: 'true'
 
       - name: Build and test
         working-directory: java
