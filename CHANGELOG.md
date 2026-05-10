@@ -11,6 +11,36 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-05-09
+
+### Changed
+
+- **`tio-browser` distribution model: per-platform JARs.** Replaces the
+  prior universal shaded JAR with three platform-specific JARs
+  (`tio-browser-1.4.0-linux-x64.jar`, `tio-browser-1.4.0-mac-aarch64.jar`,
+  `tio-browser-1.4.0-win-x64.jar`). Each JAR is ~31 MB instead of the
+  universal-with-HDF5 alternative (~64 MB), carries only its own
+  platform's natives, and **bundles HDF5 1.14 + the LZ4 filter plugin**
+  so `java -jar tio-browser-1.4.0-<your-os>.jar` on a fresh machine
+  works out of the box with only a JDK 17+ — no system HDF5 install
+  required.
+- New `Hdf5NativeLoader` extracts the bundled HDF5 native libs to a
+  per-JVM temp dir at `App.start()`, calls `System.load` in dependency
+  order (hdf5 → hdf5_hl → hdf5_java), and registers the LZ4 plugin
+  search path via `H5.H5PLappend`. Idempotent; throws
+  `Hdf5NativeLoadException` on hard failures (modal Alert + exit, with
+  a headless detector that suppresses the exit during TestFX runs).
+- Wrong-JAR-for-OS detection: running `tio-browser-1.4.0-linux-x64.jar`
+  on a Mac shows a clear modal Alert with the correct download name.
+- `release-shaded-jar.yml` workflow restructured: each platform's
+  build job now produces its own complete shaded JAR end-to-end (no
+  separate assembly job). Workflow grants `contents: write`
+  permission so the auto-publish step works without the v1.3.0 manual
+  workaround.
+- `jarhdf5` switched from `<scope>system</scope>` to a vendored
+  `org.hdfgroup:jarhdf5:1.14.6` Maven dep at `tio-browser/local-repo/`,
+  so the JHI5 classes ship in each per-platform shaded JAR.
+
 ## [1.3.0] - 2026-05-09
 
 ### Added

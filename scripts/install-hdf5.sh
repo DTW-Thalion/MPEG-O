@@ -31,6 +31,40 @@ VERSION="${1:-1.14.6}"
 PREFIX="${HDF5_PREFIX:-/usr/local}"
 
 # ---------------------------------------------------------------------------
+# Portability helpers (Linux + macOS + MSYS2 UCRT64)
+# ---------------------------------------------------------------------------
+UNAME_S="$(uname -s)"
+case "${UNAME_S}" in
+    Linux*)     OS=linux ;;
+    Darwin*)    OS=macos ;;
+    MINGW*|MSYS*|CYGWIN*) OS=windows ;;
+    *)          OS=unknown ;;
+esac
+
+# Use sudo only when the prefix is not writable (skip on MSYS2/MINGW where
+# /ucrt64 is user-owned, and skip when running as root in CI).
+if [ -w "${PREFIX}" ] || [ ! -e "${PREFIX}" ] && [ -w "$(dirname "${PREFIX}")" ]; then
+    SUDO=""
+else
+    SUDO="sudo"
+fi
+# MSYS2 has no sudo; force empty there.
+if [ "${OS}" = "windows" ]; then
+    SUDO=""
+fi
+
+# Portable parallel-jobs count.
+nproc_portable() {
+    if command -v nproc >/dev/null 2>&1; then
+        nproc
+    elif [ "${OS}" = "macos" ]; then
+        sysctl -n hw.logicalcpu
+    else
+        echo 2
+    fi
+}
+
+# ---------------------------------------------------------------------------
 # Idempotency check
 # ---------------------------------------------------------------------------
 SETTINGS="${PREFIX}/lib/libhdf5.settings"
@@ -47,13 +81,31 @@ fi
 # ---------------------------------------------------------------------------
 # Build dependencies
 # ---------------------------------------------------------------------------
-sudo apt-get update -qq
-sudo apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    zlib1g-dev \
-    libcurl4-openssl-dev \
-    default-jdk
+case "${OS}" in
+    linux)
+        if command -v apt-get >/dev/null 2>&1; then
+            ${SUDO} apt-get update -qq
+            ${SUDO} apt-get install -y --no-install-recommends \
+                build-essential \
+                cmake \
+                zlib1g-dev \
+                libcurl4-openssl-dev \
+                default-jdk
+        else
+            echo "install-hdf5: non-apt Linux detected; assuming build deps (gcc/make/cmake/zlib/curl/jdk) are present."
+        fi
+        ;;
+    macos)
+        echo "install-hdf5: macOS detected; assuming Xcode CLT + brew-installed cmake, zlib, curl, openjdk are present."
+        # On macOS, callers are expected to: brew install cmake openjdk zlib
+        ;;
+    windows)
+        echo "install-hdf5: MSYS2/MINGW detected; assuming pacman packages (mingw-w64-ucrt-x86_64-{gcc,cmake,curl,zlib} + autoconf/automake/libtool/make) are present, and JAVA_HOME points to a JDK in MSYS2 path form (use \`cygpath -u\`)."
+        ;;
+    *)
+        echo "install-hdf5: unknown OS (${UNAME_S}); skipping dep install, build may fail."
+        ;;
+esac
 
 # ---------------------------------------------------------------------------
 # Download + extract
@@ -97,16 +149,20 @@ echo "Configuring HDF5 ${VERSION} (prefix=${PREFIX}, --enable-java --enable-thre
     --enable-hl \
     --with-ros3-vfd
 
-echo "Building HDF5 ($(nproc) parallel jobs) ..."
-make -j"$(nproc)"
+JOBS="$(nproc_portable)"
+echo "Building HDF5 (${JOBS} parallel jobs) ..."
+make -j"${JOBS}"
 
 echo "Installing HDF5 to ${PREFIX} ..."
-sudo make install
+${SUDO} make install
 # Create an unversioned jarhdf5.jar symlink for consistent path across versions
 if [ -f "${PREFIX}/lib/jarhdf5-${VERSION_DOTTED}.jar" ]; then
-    sudo ln -sf "${PREFIX}/lib/jarhdf5-${VERSION_DOTTED}.jar" "${PREFIX}/lib/jarhdf5.jar"
+    ${SUDO} ln -sf "${PREFIX}/lib/jarhdf5-${VERSION_DOTTED}.jar" "${PREFIX}/lib/jarhdf5.jar"
 fi
-sudo ldconfig
+# ldconfig is Linux-only (glibc dynamic linker cache refresh).
+if [ "${OS}" = "linux" ] && command -v ldconfig >/dev/null 2>&1; then
+    ${SUDO} ldconfig
+fi
 
 echo "Installed HDF5 ${VERSION} to ${PREFIX}."
 
@@ -116,7 +172,18 @@ if [ -f "${SETTINGS}" ]; then
     echo "Verification: installed HDF5 version = ${INSTALLED}"
 fi
 
-# Report key artefact locations
-echo "  C library:    ${PREFIX}/lib/libhdf5.so"
-echo "  JNI library:  ${PREFIX}/lib/libhdf5_java.so"
-echo "  Java jar:     ${PREFIX}/lib/jarhdf5.jar"
+# Report key artefact locations (extension differs per OS).
+case "${OS}" in
+    linux)   LIBEXT=so ;;
+    macos)   LIBEXT=dylib ;;
+    windows) LIBEXT=dll ;;
+    *)       LIBEXT=so ;;
+esac
+echo "  C library:    ${PREFIX}/lib/libhdf5.${LIBEXT}"
+echo "  HL library:   ${PREFIX}/lib/libhdf5_hl.${LIBEXT}"
+echo "  JNI library:  ${PREFIX}/lib/libhdf5_java.${LIBEXT}  (--enable-java)"
+echo "  Java jar:     ${PREFIX}/lib/jarhdf5.jar             (--enable-java)"
+# On MSYS2/MINGW, libtool installs DLLs under ${PREFIX}/bin (not lib).
+if [ "${OS}" = "windows" ]; then
+    echo "  Note (Windows): DLLs are under ${PREFIX}/bin/, import libs under ${PREFIX}/lib/."
+fi
