@@ -320,20 +320,10 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             zlib1g-dev cmake ninja-build
 
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup-hdf5
+      - uses: ./.github/actions/build-native
         with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
-
-      - name: Build native rANS library (JNI)
-        run: bash scripts/build-native.sh --jni
+          jni: 'true'
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
