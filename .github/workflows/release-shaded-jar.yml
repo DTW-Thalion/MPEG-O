@@ -34,18 +34,127 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      # Per-platform native build steps land in D.2/D.3/D.4. This task
-      # only sets up the shell — the per-platform `if: matrix.classifier == ...`
-      # gating goes here:
-
       # === LINUX X64 ===
-      # (D.2 will add: apt install + install-hdf5.sh + build-h5lz4.sh + libttio_rans_jni cmake build + staging)
+      - name: Install build deps (linux-x64)
+        if: matrix.classifier == 'linux-x64'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              clang cmake ninja-build zlib1g-dev libssl-dev git ca-certificates
+
+      - name: Build native libttio_rans_jni (linux-x64)
+        if: matrix.classifier == 'linux-x64'
+        run: |
+          cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
+          cmake --build native/_build --parallel
+
+      - name: Build HDF5 1.14 + LZ4 plugin (linux-x64)
+        if: matrix.classifier == 'linux-x64'
+        run: |
+          bash scripts/install-hdf5.sh 1.14.6
+          sudo bash scripts/build-h5lz4.sh master
+          sudo ldconfig
+
+      - name: Stage natives (linux-x64)
+        if: matrix.classifier == 'linux-x64'
+        run: |
+          mkdir -p tio-browser/src/main/resources/native/linux-x64/hdf5
+          cp native/_build/libttio_rans_jni.so tio-browser/src/main/resources/native/linux-x64/
+          cp /usr/local/lib/libhdf5.so.310 tio-browser/src/main/resources/native/linux-x64/hdf5/
+          cp /usr/local/lib/libhdf5_hl.so.310 tio-browser/src/main/resources/native/linux-x64/hdf5/
+          cp /usr/local/lib/libhdf5_java.so tio-browser/src/main/resources/native/linux-x64/hdf5/
+          cp /usr/local/lib/libh5lz4.so tio-browser/src/main/resources/native/linux-x64/hdf5/
+          ls -la tio-browser/src/main/resources/native/linux-x64/
+          ls -la tio-browser/src/main/resources/native/linux-x64/hdf5/
 
       # === MAC AARCH64 ===
-      # (D.3 will add: brew install + install-hdf5.sh + build-h5lz4.sh + libttio_rans_jni cmake build + staging)
+      - name: Install build deps (mac-aarch64)
+        if: matrix.classifier == 'mac-aarch64'
+        run: |
+          brew update || true
+          brew install cmake ninja || true
+
+      - name: Build native libttio_rans_jni (mac-aarch64)
+        if: matrix.classifier == 'mac-aarch64'
+        run: |
+          cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
+          cmake --build native/_build --parallel
+
+      - name: Build HDF5 1.14 + LZ4 plugin (mac-aarch64)
+        if: matrix.classifier == 'mac-aarch64'
+        run: |
+          bash scripts/install-hdf5.sh 1.14.6
+          sudo bash scripts/build-h5lz4.sh master
+
+      - name: Stage natives (mac-aarch64)
+        if: matrix.classifier == 'mac-aarch64'
+        run: |
+          mkdir -p tio-browser/src/main/resources/native/mac-aarch64/hdf5
+          cp native/_build/libttio_rans_jni.dylib tio-browser/src/main/resources/native/mac-aarch64/
+          cp /usr/local/lib/libhdf5.310.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
+          cp /usr/local/lib/libhdf5_hl.310.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
+          cp /usr/local/lib/libhdf5_java.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
+          cp /usr/local/lib/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
+          ls -la tio-browser/src/main/resources/native/mac-aarch64/
+          ls -la tio-browser/src/main/resources/native/mac-aarch64/hdf5/
 
       # === WIN X64 ===
-      # (D.4 will add: msys2 setup + pacman install + build-h5lz4.sh + libttio_rans_jni MinGW build + staging)
+      - name: Set up MSYS2 (win-x64)
+        if: matrix.classifier == 'win-x64'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: >-
+            mingw-w64-ucrt-x86_64-hdf5
+            mingw-w64-ucrt-x86_64-hdf5-tools
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-clang
+            mingw-w64-ucrt-x86_64-git
+
+      - name: Build native libttio_rans_jni (win-x64)
+        if: matrix.classifier == 'win-x64'
+        shell: msys2 {0}
+        run: |
+          cmake -B native/_build -G Ninja -DCMAKE_BUILD_TYPE=Release native
+          cmake --build native/_build --parallel
+
+      - name: Build LZ4 plugin (win-x64)
+        if: matrix.classifier == 'win-x64'
+        shell: msys2 {0}
+        run: |
+          PREFIX=/ucrt64 bash scripts/build-h5lz4.sh master
+
+      - name: Stage natives (win-x64)
+        if: matrix.classifier == 'win-x64'
+        shell: msys2 {0}
+        run: |
+          mkdir -p tio-browser/src/main/resources/native/win-x64/hdf5
+          cp native/_build/ttio_rans_jni.dll tio-browser/src/main/resources/native/win-x64/
+          # MSYS2 HDF5 ships libhdf5.dll etc.; rename to drop "lib" prefix
+          # to match the Hdf5NativeLoader's WIN_LIBS table.
+          cp /ucrt64/bin/libhdf5*.dll tio-browser/src/main/resources/native/win-x64/hdf5/
+          mv tio-browser/src/main/resources/native/win-x64/hdf5/libhdf5.dll \
+             tio-browser/src/main/resources/native/win-x64/hdf5/hdf5.dll
+          mv tio-browser/src/main/resources/native/win-x64/hdf5/libhdf5_hl.dll \
+             tio-browser/src/main/resources/native/win-x64/hdf5/hdf5_hl.dll
+          # The MSYS2 hdf5 package does NOT include the JNI shim hdf5_java.dll.
+          # As a follow-up, we'd need to build the shim from HDFGroup's tools-make
+          # tarball against the installed HDF5. For this initial implementation,
+          # if jhdf5_java.dll isn't present, the win-x64 JAR won't satisfy
+          # Hdf5NativeLoader on launch — this is the known limitation flagged
+          # in scripts/build-native-windows.md.
+          # Stage what we have:
+          if [ -f /ucrt64/bin/libhdf5_java.dll ]; then
+              mv tio-browser/src/main/resources/native/win-x64/hdf5/libhdf5_java.dll \
+                 tio-browser/src/main/resources/native/win-x64/hdf5/hdf5_java.dll
+          else
+              echo "::warning::libhdf5_java.dll not in MSYS2 ucrt64 — Hdf5NativeLoader will fail at launch on Windows"
+          fi
+          cp /ucrt64/lib/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll || \
+              cp /ucrt64/bin/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll
+          ls -la tio-browser/src/main/resources/native/win-x64/
+          ls -la tio-browser/src/main/resources/native/win-x64/hdf5/
 
       - name: Build shaded JAR
         working-directory: tio-browser
