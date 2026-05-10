@@ -877,6 +877,13 @@ jobs:
       - name: Refresh dynamic linker cache
         run: sudo ldconfig
 
+      # objc/build.sh's dependency check requires libttio_rans.so to be
+      # present (the ObjC genomic codecs link against it). Build the native
+      # library first — same pattern used by objc-build-test, java-test,
+      # python-test, and the perf job.
+      - name: Build native libttio_rans (required by ObjC genomic codecs)
+        run: ./scripts/build-native.sh
+
       - name: Build libTTIO + tools
         working-directory: objc
         run: ./build.sh
