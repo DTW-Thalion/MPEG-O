@@ -98,9 +98,12 @@ jobs:
           cp /usr/local/lib/libhdf5.310.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
           cp /usr/local/lib/libhdf5_hl.310.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
           cp /usr/local/lib/libhdf5_java.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
-          # build-h5lz4.sh installs to ${PREFIX}/lib/plugin/ (HDF5 plugin convention).
-          cp /usr/local/lib/plugin/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/ \
-              || cp /usr/local/lib/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
+          # The upstream hdf5_plugins cmake doesn't follow macOS module-naming
+          # conventions — it always installs `libh5lz4.so` regardless of
+          # platform. Stage it with the proper .dylib extension so
+          # Hdf5NativeLoader.MAC_LIBS finds it.
+          cp /usr/local/lib/plugin/libh5lz4.so tio-browser/src/main/resources/native/mac-aarch64/hdf5/libh5lz4.dylib \
+              || cp /usr/local/lib/plugin/libh5lz4.dylib tio-browser/src/main/resources/native/mac-aarch64/hdf5/
           ls -la tio-browser/src/main/resources/native/mac-aarch64/
           ls -la tio-browser/src/main/resources/native/mac-aarch64/hdf5/
 
@@ -141,16 +144,94 @@ jobs:
         if: matrix.classifier == 'win-x64'
         shell: msys2 {0}
         env:
-          # Install into /ucrt64 so the result sits alongside MSYS2's
-          # other libs (default /usr/local is not on the UCRT64 lib path).
           HDF5_PREFIX: /ucrt64
         run: |
-          # JAVA_HOME is set by actions/setup-java@v4 in Windows path form
-          # (e.g. C:\hostedtoolcache\...\jdk\x64). Translate to MSYS2 form
-          # (/c/hostedtoolcache/.../jdk/x64) so HDF5's configure can find
-          # javac/jni.h for the --enable-java JNI shim build.
-          export JAVA_HOME="$(cygpath -u "$JAVA_HOME")"
-          echo "JAVA_HOME (msys2 form) = $JAVA_HOME"
+          # Save the Temurin JAVA_HOME (Windows path form) before translating.
+          JAVA_HOME_WIN="$JAVA_HOME"
+
+          # Build wrapper scripts that translate POSIX CLASSPATH to Windows
+          # form before invoking the real Temurin tools. HDF5's --enable-java
+          # build emits CLASSPATH with POSIX colons, which Windows .exe tools
+          # parse as one giant invalid path entry.
+          mkdir -p /tmp/javac-wrap
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' '# Forward to Temurin javac.exe with CLASSPATH converted from POSIX (:)'
+            printf '%s\n' '# to Windows (;) form.'
+            printf '%s\n' 'if [ -n "$CLASSPATH" ]; then'
+            printf '%s\n' '    export CLASSPATH=$(cygpath -wp "$CLASSPATH")'
+            printf '%s\n' 'fi'
+            printf 'exec "%s/bin/javac.exe" "$@"\n' "$JAVA_HOME_WIN"
+          } > /tmp/javac-wrap/javac
+          chmod +x /tmp/javac-wrap/javac
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' '# Forward to Temurin java.exe with CLASSPATH converted from POSIX (:)'
+            printf '%s\n' 'if [ -n "$CLASSPATH" ]; then'
+            printf '%s\n' '    export CLASSPATH=$(cygpath -wp "$CLASSPATH")'
+            printf '%s\n' 'fi'
+            printf 'exec "%s/bin/java.exe" "$@"\n' "$JAVA_HOME_WIN"
+          } > /tmp/javac-wrap/java
+          chmod +x /tmp/javac-wrap/java
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' '# Forward to Temurin jar.exe (CLASSPATH translation kept for safety)'
+            printf '%s\n' 'if [ -n "$CLASSPATH" ]; then'
+            printf '%s\n' '    export CLASSPATH=$(cygpath -wp "$CLASSPATH")'
+            printf '%s\n' 'fi'
+            printf 'exec "%s/bin/jar.exe" "$@"\n' "$JAVA_HOME_WIN"
+          } > /tmp/javac-wrap/jar
+          chmod +x /tmp/javac-wrap/jar
+
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' '# Forward to Temurin javadoc.exe with CLASSPATH translated POSIX -> Windows.'
+            printf '%s\n' 'if [ -n "$CLASSPATH" ]; then'
+            printf '%s\n' '    export CLASSPATH=$(cygpath -wp "$CLASSPATH")'
+            printf '%s\n' 'fi'
+            printf 'exec "%s/bin/javadoc.exe" "$@"\n' "$JAVA_HOME_WIN"
+          } > /tmp/javac-wrap/javadoc
+          chmod +x /tmp/javac-wrap/javadoc
+
+          # javah is removed in JDK 10+; create as a no-op or symlink to javac
+          # for autoconf probes that check it. javac in JDK 16+ supports the
+          # -h flag for header generation, which is what HDF5 actually uses.
+          {
+            printf '%s\n' '#!/usr/bin/env bash'
+            printf '%s\n' '# javah is removed in JDK 10+; no-op for autoconf probes.'
+            printf '%s\n' 'echo "javah is removed in JDK 10+; use javac -h instead" >&2'
+            printf '%s\n' 'exit 1'
+          } > /tmp/javac-wrap/javah
+          chmod +x /tmp/javac-wrap/javah
+
+          # Construct the fake JAVA_HOME tree.
+          export JAVA_HOME=/tmp/javac-wrap-jdk
+          mkdir -p $JAVA_HOME/bin
+          ln -sf /tmp/javac-wrap/javac $JAVA_HOME/bin/javac
+          ln -sf /tmp/javac-wrap/java  $JAVA_HOME/bin/java
+          ln -sf /tmp/javac-wrap/jar   $JAVA_HOME/bin/jar
+          ln -sf /tmp/javac-wrap/javadoc $JAVA_HOME/bin/javadoc
+          ln -sf /tmp/javac-wrap/javah $JAVA_HOME/bin/javah
+
+          # JNI shim compile needs $JAVA_HOME/include/jni.h and
+          # $JAVA_HOME/include/win32/jni_md.h. Symlink Temurin's include/
+          # into our fake JAVA_HOME so HDF5's JNI source compiles.
+          ln -sf "$(cygpath -u "$JAVA_HOME_WIN")/include" $JAVA_HOME/include
+
+          # Add the fake JDK's bin to PATH (so all java tooling resolves to wrappers)
+          export PATH="$JAVA_HOME/bin:$PATH"
+
+          # Diagnostics
+          javac -version
+          java -version
+          which javac java jar javadoc
+          echo "JAVA_HOME=$JAVA_HOME"
+          echo "JAVA_HOME_WIN=$JAVA_HOME_WIN"
+          ls -la $JAVA_HOME/include/jni.h
+          ls -la $JAVA_HOME/include/win32/jni_md.h
+
           bash scripts/install-hdf5.sh 1.14.6
 
       - name: Build LZ4 plugin (win-x64)
@@ -181,6 +262,29 @@ jobs:
               || (echo "::error::libh5lz4.{dll,so} not found under /ucrt64" && find /ucrt64 -name 'libh5lz4*' && exit 1)
           ls -la tio-browser/src/main/resources/native/win-x64/
           ls -la tio-browser/src/main/resources/native/win-x64/hdf5/
+
+      # The tio-browser pom depends on global.thalion:ttio:1.2.0 (the
+      # underlying TTI-O Java library at java/). It's an internal monorepo
+      # dep, so we must `mvn install` it to local M2 before the tio-browser
+      # build can resolve it. -Djacoco.skip=true is required alongside
+      # -DskipTests because jacoco-check fails without coverage data.
+      # The -Dhdf5.jar= path differs per platform (from-source install
+      # locations: /usr/local/lib on Linux+Mac, /ucrt64/lib on MSYS2).
+      - name: Install ttio library to local M2 (linux-x64)
+        if: matrix.classifier == 'linux-x64'
+        working-directory: java
+        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
+
+      - name: Install ttio library to local M2 (mac-aarch64)
+        if: matrix.classifier == 'mac-aarch64'
+        working-directory: java
+        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
+
+      - name: Install ttio library to local M2 (win-x64)
+        if: matrix.classifier == 'win-x64'
+        shell: msys2 {0}
+        working-directory: java
+        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar=/ucrt64/lib/jarhdf5.jar
 
       - name: Build shaded JAR
         working-directory: tio-browser
