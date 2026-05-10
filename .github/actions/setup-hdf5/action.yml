@@ -1,0 +1,41 @@
+name: Setup HDF5
+description: >-
+  Install HDF5 (with --enable-threadsafe --enable-java --enable-hl
+  --with-ros3-vfd) from source on Ubuntu, with a narrow-path cache.
+  Replaces the Cache HDF5 + Install HDF5 + ldconfig step trio that
+  was duplicated across 9 jobs in ci.yml.
+
+inputs:
+  version:
+    description: HDF5 version to install (e.g. 1.14.6).
+    required: false
+    default: '1.14.6'
+
+runs:
+  using: composite
+  steps:
+    - name: Cache HDF5 ${{ inputs.version }}
+      id: cache-hdf5
+      uses: actions/cache@v4
+      with:
+        # Narrow paths to just what install-hdf5.sh actually writes.
+        # A broad `path: /usr/local` swept Android SDK and other
+        # runner-image files into the cache, causing tar exit-code-2
+        # collisions on restore (incident: PR #62, run 25616667918).
+        path: |
+          /usr/local/include/hdf5*
+          /usr/local/include/H5*
+          /usr/local/lib/libhdf5*
+          /usr/local/lib/libjarhdf5*
+          /usr/local/lib/jarhdf5.jar
+          /usr/local/share/hdf5_examples
+        key: hdf5-${{ inputs.version }}-hl-${{ runner.os }}-narrow
+
+    - name: Install HDF5 ${{ inputs.version }} from source
+      if: steps.cache-hdf5.outputs.cache-hit != 'true'
+      shell: bash
+      run: bash scripts/install-hdf5.sh ${{ inputs.version }}
+
+    - name: Update ldconfig for HDF5
+      shell: bash
+      run: sudo ldconfig /usr/local/lib
