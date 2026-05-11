@@ -116,6 +116,17 @@ public class BamReader {
         if (!Files.exists(path)) {
             throw new IOException("BAM/SAM file not found: " + path);
         }
+        // htsjdk treats a zero-byte file as a 0-record BAM rather than
+        // an error; reject explicitly for parity with samtools' "no BGZF
+        // header" rejection and with the V4 zero-byte regression test.
+        try {
+            if (Files.size(path) == 0) {
+                throw new IOException(
+                    "BAM/SAM file is empty (0 bytes): " + path);
+            }
+        } catch (IOException e) {
+            throw e;
+        }
 
         long fileMtime;
         try {
@@ -147,7 +158,17 @@ public class BamReader {
         long runningOffset = 0L;
 
         SamReaderFactory factory = makeReaderFactory();
-        try (SamReader reader = factory.open(SamInputResource.of(path.toFile()))) {
+        SamReader reader;
+        try {
+            reader = factory.open(SamInputResource.of(path.toFile()));
+        } catch (RuntimeException e) {
+            // htsjdk throws FileTruncatedException / SAMFormatException /
+            // RuntimeIOException as unchecked. Wrap so callers catching
+            // IOException (the documented contract) still see them.
+            throw new IOException(
+                "Failed to open BAM/SAM/CRAM: " + path + ": " + e.getMessage(), e);
+        }
+        try (reader) {
             SAMFileHeader header = reader.getFileHeader();
 
             // @SQ → reference sequence names (first wins for reference_uri).
@@ -181,10 +202,26 @@ public class BamReader {
             }
 
             // Iterate alignments — region filter applied if requested.
-            Iterator<SAMRecord> it = iteratorFor(reader, region);
+            // htsjdk may throw RuntimeException subclasses
+            // (SAMFormatException, FileTruncatedException, etc.) during
+            // record parsing; wrap as IOException for caller contract.
+            Iterator<SAMRecord> it;
             try {
-                while (it.hasNext()) {
-                    SAMRecord rec = it.next();
+                it = iteratorFor(reader, region);
+            } catch (RuntimeException e) {
+                throw new IOException(
+                    "Failed to iterate records in " + path + ": " + e.getMessage(), e);
+            }
+            try {
+                while (true) {
+                    SAMRecord rec;
+                    try {
+                        if (!it.hasNext()) break;
+                        rec = it.next();
+                    } catch (RuntimeException e) {
+                        throw new IOException(
+                            "Malformed record in " + path + ": " + e.getMessage(), e);
+                    }
 
                     String qname = rec.getReadName() != null ? rec.getReadName() : "*";
                     int flag = rec.getFlags();
