@@ -93,6 +93,18 @@
             <artifactId>Java-WebSocket</artifactId>
             <version>1.5.7</version>
         </dependency>
+
+        <!-- v1.5.0: htsjdk replaces the samtools subprocess in
+             importers/BamReader + exporters/BamWriter / CramWriter.
+             Pure-Java SAM/BAM/CRAM read+write so tio-browser works
+             on Windows without requiring a system samtools install
+             (incident: v1.4.0 launched but could not open .tio files
+             with genomic data on Windows). -->
+        <dependency>
+            <groupId>com.github.samtools</groupId>
+            <artifactId>htsjdk</artifactId>
+            <version>4.1.3</version>
+        </dependency>
     </dependencies>
 
     <profiles>
