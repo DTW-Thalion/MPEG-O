@@ -1,0 +1,131 @@
+name: Setup GNUstep (libobjc2 + tools-make + libs-base)
+description: >-
+  Install the canonical TTIO ObjC build environment on Ubuntu: apt
+  build deps (including libwebsockets-dev for the libTTIO Transport
+  layer), then libobjc2 + gnustep-make + gnustep-base built from
+  source with the gnustep-2.0 (non-fragile ABI) library combo.
+  Result is detected by TTIO's preamble runtime auto-detect as
+  gnustep-2.0 and enables -fblocks. Apt's gnustep-1.8 + GCC libobjc
+  combo is incompatible.
+
+  Cache key includes the three upstream tags so a tag bump
+  invalidates cleanly.
+
+inputs:
+  libobjc2-ref:
+    description: libobjc2 git ref/tag to clone.
+    required: false
+    default: 'v2.3'
+  tools-make-ref:
+    description: gnustep tools-make git ref/tag to clone.
+    required: false
+    default: 'make-2_9_3'
+  libs-base-ref:
+    description: gnustep libs-base git ref/tag to clone.
+    required: false
+    default: 'base-1_31_1'
+  install-prefix:
+    description: Install prefix passed to each component's cmake/configure.
+    required: false
+    default: '/usr/local'
+
+runs:
+  using: composite
+  steps:
+    - name: Install build dependencies (apt)
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          clang \
+          cmake \
+          ninja-build \
+          make \
+          git \
+          ca-certificates \
+          zlib1g-dev \
+          libssl-dev \
+          libxml2-dev \
+          libgnutls28-dev \
+          libffi-dev \
+          libicu-dev \
+          libblocksruntime-dev \
+          libcurl4-openssl-dev \
+          libwebsockets-dev \
+          tzdata
+
+    - name: Cache GNUstep stack (libobjc2 + tools-make + libs-base)
+      id: gnustep-cache
+      uses: actions/cache@v4
+      with:
+        path: |
+          /usr/local/include/objc
+          /usr/local/include/GNUstep
+          /usr/local/lib/libobjc.so*
+          /usr/local/lib/libgnustep-base*
+          /usr/local/lib/GNUstep
+          /usr/local/share/GNUstep
+          /usr/local/bin/gnustep-config
+          /usr/local/bin/gdomap
+        key: gnustep-${{ runner.os }}-${{ inputs.libobjc2-ref }}-${{ inputs.tools-make-ref }}-${{ inputs.libs-base-ref }}-v2
+
+    - name: Build libobjc2 from source
+      if: steps.gnustep-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        LIBOBJC2_REF: ${{ inputs.libobjc2-ref }}
+        INSTALL_PREFIX: ${{ inputs.install-prefix }}
+      run: |
+        set -exo pipefail
+        git clone --depth 1 --branch "${LIBOBJC2_REF}" \
+          https://github.com/gnustep/libobjc2.git /tmp/libobjc2
+        cd /tmp/libobjc2
+        git submodule update --init --recursive
+        mkdir build && cd build
+        cmake -G Ninja \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
+          -DCMAKE_C_COMPILER=clang \
+          -DCMAKE_CXX_COMPILER=clang++ \
+          ..
+        ninja
+        sudo ninja install
+
+    - name: Build gnustep-make from source
+      if: steps.gnustep-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        TOOLS_MAKE_REF: ${{ inputs.tools-make-ref }}
+        INSTALL_PREFIX: ${{ inputs.install-prefix }}
+      run: |
+        set -exo pipefail
+        git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
+          https://github.com/gnustep/tools-make.git /tmp/tools-make
+        cd /tmp/tools-make
+        ./configure \
+          --prefix="${INSTALL_PREFIX}" \
+          --with-library-combo=ng-gnu-gnu \
+          CC=clang
+        make
+        sudo make install
+
+    - name: Build gnustep-base from source
+      if: steps.gnustep-cache.outputs.cache-hit != 'true'
+      shell: bash
+      env:
+        LIBS_BASE_REF: ${{ inputs.libs-base-ref }}
+        INSTALL_PREFIX: ${{ inputs.install-prefix }}
+      run: |
+        set -exo pipefail
+        # shellcheck disable=SC1091
+        . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
+        git clone --depth 1 --branch "${LIBS_BASE_REF}" \
+          https://github.com/gnustep/libs-base.git /tmp/libs-base
+        cd /tmp/libs-base
+        ./configure CC=clang
+        make
+        sudo -E make install
+
+    - name: Refresh dynamic linker cache
+      shell: bash
+      run: sudo ldconfig
