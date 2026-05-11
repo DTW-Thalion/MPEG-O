@@ -32,7 +32,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '22'
 
       # === LINUX X64 ===
       - name: Install build deps (linux-x64)
