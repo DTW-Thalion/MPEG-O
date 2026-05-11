@@ -7,7 +7,7 @@
 
     <groupId>global.thalion</groupId>
     <artifactId>tio-browser</artifactId>
-    <version>1.4.2</version>
+    <version>1.4.1</version>
     <packaging>jar</packaging>
 
     <name>tio-browser</name>
