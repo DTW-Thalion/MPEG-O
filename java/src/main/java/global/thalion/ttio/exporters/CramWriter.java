@@ -124,10 +124,15 @@ public class CramWriter extends BamWriter {
         try {
             OutputStream out = new BufferedOutputStream(
                 new FileOutputStream(path().toFile()));
+            // CRAMFileWriter 6-arg ctor: (OutputStream out, OutputStream
+            // indexOS, boolean presorted, CRAMReferenceSource source,
+            // SAMFileHeader header, String fileName). We don't write a
+            // .crai sidecar — pass null for the index stream.
             return new CRAMFileWriter(
                 out,
-                new CramReader.InMemoryFastaReferenceSource(referenceFasta),
+                null,
                 presorted,
+                new CramReader.InMemoryFastaReferenceSource(referenceFasta),
                 header,
                 path().toFile().getName());
         } catch (IOException e) {
