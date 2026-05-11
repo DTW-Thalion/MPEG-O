@@ -85,10 +85,10 @@ public class CramReader extends BamReader {
      * IndexedFastaSequenceFile strictness (length/MD5 validation, .dict
      * sidecar requirement) so existing samtools-produced CRAMs decode.
      */
-    static final class InMemoryFastaReferenceSource implements CRAMReferenceSource {
+    public static final class InMemoryFastaReferenceSource implements CRAMReferenceSource {
         private final Map<String, byte[]> sequences = new HashMap<>();
 
-        InMemoryFastaReferenceSource(Path fastaPath) {
+        public InMemoryFastaReferenceSource(Path fastaPath) {
             try (FastaSequenceFile fasta = new FastaSequenceFile(
                     fastaPath.toFile(), true)) {
                 ReferenceSequence seq;
