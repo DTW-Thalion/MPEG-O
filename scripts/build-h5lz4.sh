@@ -24,6 +24,26 @@ rm -rf "$WORK"
 git clone --depth 1 --branch "$VERSION" \
     https://github.com/HDFGroup/hdf5_plugins.git "$WORK"
 
+# Upstream master's CMakeLists guards the LZ4 plugin with
+# `if (NOT MINGW)` and the inner WIN32 branch only enables LZ4 for
+# MSVC >= 19.30 (Visual Studio 2022). Every MinGW + clang/gcc path
+# hits `set (ENABLE_LZ4 OFF CACHE BOOL "" FORCE)`, which overrides
+# our `-DENABLE_LZ4=ON` flag silently. Linux + macOS take the
+# non-WIN32 branch (`FILTER_OPTION (LZ4)`) and build fine.
+#
+# Patch the FORCE-OFF lines to FILTER_OPTION(LZ4) so MSYS2 UCRT64
+# with system lz4 (mingw-w64-ucrt-x86_64-lz4) builds the plugin.
+# The H5Zlz4.c source compiles cleanly under MinGW; the guard was
+# upstream caution, not a real incompatibility.
+case "$(uname -s)" in
+    MINGW*|MSYS*|CYGWIN*)
+        echo "build-h5lz4: patching upstream CMakeLists to allow MinGW LZ4 build"
+        sed -i 's|set (ENABLE_LZ4 OFF CACHE BOOL "" FORCE)|FILTER_OPTION (LZ4)|g' \
+            "$WORK/CMakeLists.txt"
+        grep -n 'ENABLE_LZ4\|FILTER_OPTION (LZ4)' "$WORK/CMakeLists.txt" | head -5
+        ;;
+esac
+
 cmake -B "$WORK/_build" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$PREFIX" \
