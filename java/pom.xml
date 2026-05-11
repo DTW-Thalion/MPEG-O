@@ -133,11 +133,14 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <source>21</source>
-                    <target>21</target>
-                    <compilerArgs>
-                        <arg>--enable-preview</arg>
-                    </compilerArgs>
+                    <!-- JDK 22: FFM (Foreign Function & Memory) API became
+                         stable in 22 (was preview in 21). Drop
+                         --enable-preview so emitted class files have a
+                         release version of 66 (stable) rather than
+                         65.65535 (preview), which a JDK launcher refuses
+                         to load without --enable-preview at runtime. -->
+                    <source>22</source>
+                    <target>22</target>
                 </configuration>
             </plugin>
             <plugin>
@@ -148,7 +151,7 @@
                     <!-- ${argLine} expands to JaCoCo's prepare-agent
                          flags (V1, verification workplan) when JaCoCo
                          is active; expands to empty string otherwise. -->
-                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path} --enable-native-access=ALL-UNNAMED --enable-preview</argLine>
+                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path} --enable-native-access=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
             <plugin>
@@ -241,7 +244,7 @@
                 <artifactId>maven-javadoc-plugin</artifactId>
                 <version>3.6.3</version>
                 <configuration>
-                    <source>21</source>
+                    <source>22</source>
                     <doctitle>TTI-O Java API (v1.0.0)</doctitle>
                     <windowtitle>TTI-O Java API</windowtitle>
                     <show>protected</show>

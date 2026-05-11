@@ -11,6 +11,38 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-05-11
+
+### Fixed
+
+- **`tio-browser`: opens `.tio` files on a fresh JDK install.** v1.4.1
+  shipped class files compiled with `--enable-preview` (Java 21 preview
+  Foreign Function & Memory API). At runtime a stock JDK launcher
+  refused to load `Hdf5CompoundIO$FieldKind` and similar classes with:
+  > "Preview features are not enabled for ... (class file version
+  > 65.65535). Try running with '--enable-preview'"
+  Bumped the compile target from Java 21+preview to Java 22-stable
+  (FFM became a stable API in JDK 22). No source changes needed —
+  the FFM API surface is unchanged between preview-21 and stable-22.
+
+### Changed
+
+- **Minimum JDK bumped from 17 to 22.** The FFM API used by
+  `Hdf5CompoundIO` / `VlBytesFFM` is stable in JDK 22+; an older
+  JDK cannot load the compiled classes (class file version 66).
+  Adoptium/Temurin ships JDK 22 binaries for all 3 supported platforms.
+
+### Internal
+
+- `--enable-preview` removed from `maven-compiler-plugin` configuration
+  in `java/pom.xml`.
+- `--enable-preview` removed from `surefire-plugin` `<argLine>` in both
+  `java/pom.xml` and `tio-browser/pom.xml`.
+- CI workflows (`ci.yml`, `release-shaded-jar.yml`): `setup-java`
+  `java-version: '21'` → `'22'` (4 invocations).
+- `tio-browser/README.md` + `docs/tio-browser.md`: "JDK 17+" → "JDK 22+",
+  version refs `1.4.1` → `1.4.2`.
+
 ## [1.4.1] - 2026-05-11
 
 ### Fixed

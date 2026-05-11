@@ -10,18 +10,18 @@ Download the JAR for your operating system from the [latest GitHub Release](http
 
 | OS | Download |
 |---|---|
-| Linux x86_64 | `tio-browser-1.4.1-linux-x64.jar` |
-| macOS Apple Silicon (arm64) | `tio-browser-1.4.1-mac-aarch64.jar` |
-| Windows x86_64 | `tio-browser-1.4.1-win-x64.jar` |
+| Linux x86_64 | `tio-browser-1.4.2-linux-x64.jar` |
+| macOS Apple Silicon (arm64) | `tio-browser-1.4.2-mac-aarch64.jar` |
+| Windows x86_64 | `tio-browser-1.4.2-win-x64.jar` |
 
-Run with a JDK 17+:
+Run with a JDK 22+:
 
 ```bash
-java -jar tio-browser-1.4.1-<your-os>.jar
-java -jar tio-browser-1.4.1-<your-os>.jar --open path/to/dataset.tio
+java -jar tio-browser-1.4.2-<your-os>.jar
+java -jar tio-browser-1.4.2-<your-os>.jar --open path/to/dataset.tio
 ```
 
-Each per-platform JAR bundles HDF5 1.14, the LZ4 filter plugin, and `libttio_rans_jni` for that platform — **no other prerequisites beyond a JDK 17+**.
+Each per-platform JAR bundles HDF5 1.14, the LZ4 filter plugin, and `libttio_rans_jni` for that platform — **no other prerequisites beyond a JDK 22+**.
 
 If you download the wrong JAR for your OS, the app shows a modal error pointing you to the correct asset.
 
@@ -29,7 +29,7 @@ If you download the wrong JAR for your OS, the app shows a modal error pointing 
 
 ### Prerequisites
 
-- JDK 17+
+- JDK 22+
 - Maven 3.9+
 - libhdf5-java (provides `/usr/share/java/jarhdf5.jar`)
   - Ubuntu 24.04+: `apt install libhdf5-java libhdf5-jni libhdf5-dev`
@@ -115,9 +115,9 @@ For users who prefer a platform-native installer instead of the JAR:
 
 | OS | Asset |
 |---|---|
-| Linux | `tio-browser_1.4.1_amd64.deb` |
-| macOS | `tio-browser-1.4.1-mac-aarch64.dmg` (arm64) |
-| Windows | `tio-browser-1.4.1-win-x64.msi` |
+| Linux | `tio-browser_1.4.2_amd64.deb` |
+| macOS | `tio-browser-1.4.2-mac-aarch64.dmg` (arm64) |
+| Windows | `tio-browser-1.4.2-win-x64.msi` |
 
 Each installer bundles the platform's HDF5 + JRE — completely self-contained.
 
