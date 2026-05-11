@@ -5,11 +5,19 @@
  */
 package global.thalion.ttio.exporters;
 
+import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
+
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
 import htsjdk.samtools.SAMFileWriterFactory;
+import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.SAMSequenceRecord;
+import htsjdk.samtools.reference.ReferenceSequenceFile;
+import htsjdk.samtools.reference.ReferenceSequenceFileFactory;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -48,6 +56,50 @@ public class CramWriter extends BamWriter {
 
     /** @return the reference FASTA path passed at construction time. */
     public Path referenceFasta() { return referenceFasta; }
+
+    /**
+     * Override to substitute the parent BamWriter's INT32_MAX-placeholder
+     * sequence lengths with real lengths from the reference FASTA. htsjdk's
+     * CRAM writer validates that SAMSequenceRecord.length matches the
+     * reference FASTA at slice-encode time and refuses to write otherwise
+     * ("A reference must be supplied (reference sequence ... not found)").
+     */
+    @Override
+    SAMFileHeader buildHeader(WrittenGenomicRun run,
+                              List<ProvenanceRecord> provenance,
+                              boolean sort) {
+        SAMFileHeader header = super.buildHeader(run, provenance, sort);
+        try (ReferenceSequenceFile refSeq =
+                ReferenceSequenceFileFactory.getReferenceSequenceFile(
+                    referenceFasta.toFile())) {
+            SAMSequenceDictionary refDict = refSeq.getSequenceDictionary();
+            if (refDict == null) {
+                throw new IllegalStateException(
+                    "Reference FASTA " + referenceFasta + " has no .dict "
+                    + "sidecar; CRAM writing requires one. Generate via "
+                    + "`samtools dict <fasta>` or htsjdk's "
+                    + "CreateSequenceDictionary tool.");
+            }
+            SAMSequenceDictionary updated = new SAMSequenceDictionary();
+            for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
+                SAMSequenceRecord refRec = refDict.getSequence(seq.getSequenceName());
+                if (refRec == null) {
+                    throw new IllegalStateException(
+                        "Chromosome '" + seq.getSequenceName()
+                        + "' in run not found in reference FASTA "
+                        + referenceFasta + " (CRAM is reference-compressed;"
+                        + " every emitted @SQ must be in the reference).");
+                }
+                updated.addSequence(new SAMSequenceRecord(
+                    refRec.getSequenceName(), refRec.getSequenceLength()));
+            }
+            header.setSequenceDictionary(updated);
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(
+                "Failed to read reference FASTA dictionary: " + referenceFasta, e);
+        }
+        return header;
+    }
 
     @Override
     protected SAMFileWriter makeWriter(SAMFileHeader header, boolean sort) {
