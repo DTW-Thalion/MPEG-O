@@ -133,12 +133,13 @@
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
                 <configuration>
-                    <!-- JDK 22: FFM (Foreign Function & Memory) API became
-                         stable in 22 (was preview in 21). Drop
-                         --enable-preview so emitted class files have a
-                         release version of 66 (stable) rather than
-                         65.65535 (preview), which a JDK launcher refuses
-                         to load without --enable-preview at runtime. -->
+                    <!-- JDK 22: FFM (Foreign Function and Memory) API
+                         became stable in 22 (was preview in 21). Drop
+                         the enable-preview compiler flag so emitted
+                         class files have release version 66 (stable)
+                         rather than 65.65535 (preview), which a JDK
+                         launcher refuses to load without the
+                         enable-preview flag at runtime. -->
                     <source>22</source>
                     <target>22</target>
                 </configuration>
