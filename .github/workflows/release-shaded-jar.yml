@@ -118,6 +118,14 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
+          # path-type: inherit makes the GitHub Windows runner's
+          # pre-installed Maven (and other tools) reachable from inside
+          # the `shell: msys2 {0}` steps. MSYS2 packages are still
+          # prepended on PATH so MSYS2 tools (bash, cmake, gcc, etc.)
+          # take precedence over any Windows equivalents.
+          # (Default 'minimal' strips Windows tools; that's why
+          # `mvn: command not found` in the win-x64 mvn install step.)
+          path-type: inherit
           install: >-
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
@@ -127,7 +135,6 @@ jobs:
             mingw-w64-ucrt-x86_64-zlib
             mingw-w64-ucrt-x86_64-curl
             mingw-w64-ucrt-x86_64-make
-            mingw-w64-ucrt-x86_64-maven
             autoconf
             automake
             libtool
@@ -271,21 +278,37 @@ jobs:
       # -DskipTests because jacoco-check fails without coverage data.
       # The -Dhdf5.jar= path differs per platform (from-source install
       # locations: /usr/local/lib on Linux+Mac, /ucrt64/lib on MSYS2).
+      # The Java ttio pom uses `<systemPath>${hdf5.jar.path}</systemPath>`
+      # for the system-scope jarhdf5 dep. NOTE: property is `hdf5.jar.path`,
+      # not `hdf5.jar`. Earlier `-Dhdf5.jar=...` flags were silently ignored;
+      # Linux/macOS still succeeded because the unix-family `linux-system-hdf5`
+      # profile in java/pom.xml defaults the property to
+      # /usr/local/lib/jarhdf5.jar. Windows doesn't activate that profile,
+      # so the property MUST be set on the cmdline for win-x64 mvn install
+      # to find the jar.
       - name: Install ttio library to local M2 (linux-x64)
         if: matrix.classifier == 'linux-x64'
         working-directory: java
-        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
+        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
 
       - name: Install ttio library to local M2 (mac-aarch64)
         if: matrix.classifier == 'mac-aarch64'
         working-directory: java
-        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar=/usr/local/lib/jarhdf5.jar
+        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
 
       - name: Install ttio library to local M2 (win-x64)
         if: matrix.classifier == 'win-x64'
         shell: msys2 {0}
         working-directory: java
-        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar=/ucrt64/lib/jarhdf5.jar
+        run: |
+          # mvn here is the runner's pre-installed Windows Maven (reachable
+          # because the MSYS2 step uses path-type: inherit). Windows Maven
+          # doesn't understand POSIX paths, so convert the system-scope
+          # hdf5.jar.path arg from MSYS2 (/ucrt64/...) to Windows form
+          # (D:\a\_temp\msys64\ucrt64\...) before passing.
+          HDF5_JAR_WIN=$(cygpath -w /ucrt64/lib/jarhdf5.jar)
+          echo "Resolved hdf5.jar.path: $HDF5_JAR_WIN"
+          mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar.path="$HDF5_JAR_WIN"
 
       - name: Build shaded JAR
         working-directory: tio-browser
