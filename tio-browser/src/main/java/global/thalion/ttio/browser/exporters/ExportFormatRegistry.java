@@ -50,12 +50,15 @@ public final class ExportFormatRegistry {
             spec("ISA-Tab/JSON", "global.thalion.ttio.exporters.ISAExporter",
                 List.of(".zip", ".json"),
                 Eligibility.ALWAYS, ExtraField.NONE, props, null),
+            // v1.4.1: BAM/CRAM exporters no longer require samtools.
+            // PR #76 swapped the samtools subprocess for htsjdk (pure-Java
+            // SAM/BAM/CRAM), bundled directly in the shaded JAR.
             spec("BAM", "global.thalion.ttio.exporters.BamWriter",
                 List.of(".bam", ".sam"),
-                Eligibility.GENOMIC_RUNS_PRESENT, ExtraField.BAM_OUTPUT, props, "samtools"),
+                Eligibility.GENOMIC_RUNS_PRESENT, ExtraField.BAM_OUTPUT, props, null),
             spec("CRAM", "global.thalion.ttio.exporters.CramWriter",
                 List.of(".cram"),
-                Eligibility.GENOMIC_RUNS_PRESENT, ExtraField.CRAM_REFERENCE, props, "samtools"),
+                Eligibility.GENOMIC_RUNS_PRESENT, ExtraField.CRAM_REFERENCE, props, null),
             spec("FASTA (reference)", "global.thalion.ttio.exporters.FastaWriter",
                 List.of(".fa", ".fasta", ".fna", ".fa.gz", ".fasta.gz"),
                 Eligibility.REFERENCES_PRESENT, ExtraField.FASTA_LINE_WIDTH, props, null),
