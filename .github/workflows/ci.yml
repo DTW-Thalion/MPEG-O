@@ -568,104 +568,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build dependencies (apt)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build make git ca-certificates \
-            zlib1g-dev libssl-dev libxml2-dev \
-            libgnutls28-dev libffi-dev libicu-dev \
-            libblocksruntime-dev libcurl4-openssl-dev \
-            libwebsockets-dev tzdata samtools
-
-      - name: Cache HDF5 1.14 (cross-compat)
-        id: cache-hdf5-cc
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup-gnustep
         with:
-          # Narrow paths to just what install-hdf5.sh actually writes.
-          # The previous `path: /usr/local` swept Android SDK and other
-          # runner-image files into the cache, causing tar exit-code-2
-          # conflicts on restore (run 25616667918).
-          path: |
-            /usr/local/include/hdf5*
-            /usr/local/include/H5*
-            /usr/local/lib/libhdf5*
-            /usr/local/lib/libjarhdf5*
-            /usr/local/lib/jarhdf5.jar
-            /usr/local/share/hdf5_examples
-          key: hdf5-1.14.6-hl-${{ runner.os }}-narrow
-      - name: Install HDF5 1.14 from source (cross-compat)
-        if: steps.cache-hdf5-cc.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (cross-compat, always)
-        run: sudo ldconfig /usr/local/lib
+          libobjc2-ref: ${{ env.LIBOBJC2_REF }}
+          tools-make-ref: ${{ env.TOOLS_MAKE_REF }}
+          libs-base-ref: ${{ env.LIBS_BASE_REF }}
+          install-prefix: ${{ env.INSTALL_PREFIX }}
 
-      - name: Cache GNUstep stack
-        id: gnustep-cache
-        uses: actions/cache@v4
+      - name: Install cross-compat extras (samtools for V4EdgeCasesTest)
+        run: sudo apt-get install -y --no-install-recommends samtools
+
+      - uses: ./.github/actions/setup-hdf5
+
+      - uses: ./.github/actions/build-native
         with:
-          path: |
-            /usr/local/include/objc
-            /usr/local/include/GNUstep
-            /usr/local/lib/libobjc.so*
-            /usr/local/lib/libgnustep-base*
-            /usr/local/lib/GNUstep
-            /usr/local/share/GNUstep
-            /usr/local/bin/gnustep-config
-            /usr/local/bin/gdomap
-          key: gnustep-${{ runner.os }}-${{ env.LIBOBJC2_REF }}-${{ env.TOOLS_MAKE_REF }}-${{ env.LIBS_BASE_REF }}-v2
-
-      - name: Build libobjc2 from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          git clone --depth 1 --branch "${LIBOBJC2_REF}" \
-            https://github.com/gnustep/libobjc2.git /tmp/libobjc2
-          cd /tmp/libobjc2
-          git submodule update --init --recursive
-          mkdir build && cd build
-          cmake -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ ..
-          ninja
-          sudo ninja install
-
-      - name: Build gnustep-make from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
-            https://github.com/gnustep/tools-make.git /tmp/tools-make
-          cd /tmp/tools-make
-          ./configure --prefix="${INSTALL_PREFIX}" \
-            --with-library-combo=ng-gnu-gnu CC=clang
-          make
-          sudo make install
-
-      - name: Build gnustep-base from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          # shellcheck disable=SC1091
-          . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
-          git clone --depth 1 --branch "${LIBS_BASE_REF}" \
-            https://github.com/gnustep/libs-base.git /tmp/libs-base
-          cd /tmp/libs-base
-          ./configure CC=clang
-          make
-          sudo -E make install
-
-      - name: Refresh dynamic linker cache
-        run: sudo ldconfig
-
-      # objc/build.sh's dependency check requires libttio_rans.so; the
-      # Java full test suite below requires the JNI shim
-      # (libttio_rans_jni.so) for NAME_TOKENIZED_V2. --jni builds both,
-      # mirroring java-test's pattern at line 587.
-      - name: Build native libttio_rans (+ JNI for Java tests)
-        run: bash scripts/build-native.sh --jni
+          jni: 'true'
 
       - name: Build libTTIO + tools
         working-directory: objc
