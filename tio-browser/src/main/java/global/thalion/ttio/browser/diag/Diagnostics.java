@@ -34,12 +34,20 @@ public final class Diagnostics {
             hdf.hdf5lib.H5.H5get_libversion(v);
             return v[0] + "." + v[1] + "." + v[2];
         }),
-        new BinaryProbe("samtools", null, "samtools",
-            List.of("--version"),
-            line -> {
-                String[] parts = line.split(" ", 2);
-                return parts.length >= 2 ? parts[1] : line;
-            }),
+        // v1.4.1: samtools probe removed. The htsjdk swap (PR #76) means
+        // BAM/SAM/CRAM read and write happen entirely in-process via
+        // pure-Java htsjdk; no external samtools binary required.
+        new BinaryProbe("htsjdk (in-process BAM/CRAM)", () -> {
+            // Probe by loading a representative class reachable in the
+            // shaded JAR. Version string isn't easily exposed by htsjdk
+            // at runtime; we just confirm the API is on the classpath.
+            try {
+                Class.forName("htsjdk.samtools.SamReaderFactory");
+                return "4.x (bundled)";
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException("htsjdk not on classpath", e);
+            }
+        }),
         new BinaryProbe("ThermoRawFileParser", "THERMORAWFILEPARSER",
             "ThermoRawFileParser", List.of("--help"),
             line -> "(present)"),

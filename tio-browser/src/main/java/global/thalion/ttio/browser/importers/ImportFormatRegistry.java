@@ -52,15 +52,19 @@ public final class ImportFormatRegistry {
             spec("Thermo .raw", "global.thalion.ttio.importers.ThermoRawReader",
                 SourceKind.FILE, List.of(".raw"),
                 ExtraField.NONE, props, "ThermoRawFileParser"),
+            // v1.4.1: BAM/SAM/CRAM no longer require the samtools CLI on PATH.
+            // The htsjdk swap (PR #76) replaced the subprocess with the
+            // pure-Java SAM/BAM/CRAM library bundled in the JAR, so the
+            // formats are always available.
             spec("BAM", "global.thalion.ttio.importers.BamReader",
                 SourceKind.FILE, List.of(".bam"),
-                ExtraField.BAM_REFERENCE, props, "samtools"),
+                ExtraField.BAM_REFERENCE, props, null),
             spec("SAM", "global.thalion.ttio.importers.SamReader",
                 SourceKind.FILE, List.of(".sam"),
-                ExtraField.NONE, props, "samtools"),
+                ExtraField.NONE, props, null),
             spec("CRAM", "global.thalion.ttio.importers.CramReader",
                 SourceKind.FILE, List.of(".cram"),
-                ExtraField.CRAM_REFERENCE, props, "samtools"),
+                ExtraField.CRAM_REFERENCE, props, null),
             spec("FASTA", "global.thalion.ttio.importers.FastaReader",
                 SourceKind.FILE, List.of(".fa", ".fasta", ".fna", ".ffn", ".faa"),
                 ExtraField.FASTA_TREAT_AS, props, null),
