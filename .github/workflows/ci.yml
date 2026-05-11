@@ -429,7 +429,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '22'
 
       - uses: ./.github/actions/build-native
         with:
@@ -519,7 +519,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '22'
       - name: Compile Java + materialise runtime classpath
         working-directory: java
         run: |
@@ -616,7 +616,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '22'
 
       - name: Java reads ObjC fixtures
         working-directory: java
