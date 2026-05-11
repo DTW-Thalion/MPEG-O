@@ -5,6 +5,11 @@ description: >-
   is centralised. Without --jni, NAME_TOKENIZED_V2 / FQZCOMP_NX16_Z Java
   tests fail at runtime (incident: PR #65 run 25639020499).
 
+  Caches native/_build/ keyed on the native source tree + build script
+  + jni flag, so identical inputs short-circuit the rebuild across all
+  jobs in a workflow run (saves ~30s per job × ~7 jobs = ~3-5 CI-min
+  per workflow run in steady state).
+
 inputs:
   jni:
     description: >-
@@ -17,6 +22,22 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Cache native build
+      id: cache-native
+      uses: actions/cache@v4
+      with:
+        # The build script writes everything under native/_build/. The
+        # final artifact is libttio_rans.so and (with --jni) also
+        # libttio_rans_jni.so; intermediate cmake state is included
+        # so a cache hit is a complete restore (no relink needed).
+        path: native/_build
+        # Key invalidates when any native source / CMakeLists / build
+        # script changes. The jni flag is part of the key so --jni and
+        # non-jni builds don't clobber each other (they produce a
+        # different superset of artifacts).
+        key: native-${{ runner.os }}-jni-${{ inputs.jni }}-${{ hashFiles('native/**', 'scripts/build-native.sh') }}
+
     - name: Build native libttio_rans
+      if: steps.cache-native.outputs.cache-hit != 'true'
       shell: bash
       run: bash scripts/build-native.sh ${{ inputs.jni == 'true' && '--jni' || '' }}
