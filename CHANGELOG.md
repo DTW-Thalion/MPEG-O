@@ -11,39 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-## [1.4.2] - 2026-05-11
-
-### Fixed
-
-- **`tio-browser`: opens `.tio` files on a fresh JDK install.** v1.4.1
-  shipped class files compiled with `--enable-preview` (Java 21 preview
-  Foreign Function & Memory API). At runtime a stock JDK launcher
-  refused to load `Hdf5CompoundIO$FieldKind` and similar classes with:
-  > "Preview features are not enabled for ... (class file version
-  > 65.65535). Try running with '--enable-preview'"
-  Bumped the compile target from Java 21+preview to Java 22-stable
-  (FFM became a stable API in JDK 22). No source changes needed —
-  the FFM API surface is unchanged between preview-21 and stable-22.
-
-### Changed
-
-- **Minimum JDK bumped from 17 to 22.** The FFM API used by
-  `Hdf5CompoundIO` / `VlBytesFFM` is stable in JDK 22+; an older
-  JDK cannot load the compiled classes (class file version 66).
-  Adoptium/Temurin ships JDK 22 binaries for all 3 supported platforms.
-
-### Internal
-
-- `--enable-preview` removed from `maven-compiler-plugin` configuration
-  in `java/pom.xml`.
-- `--enable-preview` removed from `surefire-plugin` `<argLine>` in both
-  `java/pom.xml` and `tio-browser/pom.xml`.
-- CI workflows (`ci.yml`, `release-shaded-jar.yml`): `setup-java`
-  `java-version: '21'` → `'22'` (4 invocations).
-- `tio-browser/README.md` + `docs/tio-browser.md`: "JDK 17+" → "JDK 22+",
-  version refs `1.4.1` → `1.4.2`.
-
 ## [1.4.1] - 2026-05-11
+
+This release was re-tagged in flight: the initial v1.4.1 build shipped
+class files compiled with `--enable-preview` (Java 21 preview FFM API),
+which a stock JDK launcher refused to load with
+"Preview features are not enabled for `Hdf5CompoundIO$FieldKind`
+(class file version 65.65535)". The retag drops `--enable-preview`
+and targets Java 22 (where FFM is a stable API). Tag and release
+assets at https://github.com/DTW-Thalion/TTI-O/releases/tag/v1.4.1
+were replaced.
 
 ### Fixed
 
@@ -56,7 +33,21 @@ public API is stable from onward.
   `CramReader`, and `CramWriter` with [htsjdk](https://github.com/samtools/htsjdk)
   4.1.3 — the pure-Java SAM/BAM/CRAM library used by GATK, Picard, and
   IGV. No external binary required at runtime; tio-browser now works
-  end-to-end on Windows with only a JDK 17+ installed.
+  end-to-end on Windows with only a JDK 22+ installed.
+- **`tio-browser`: opens `.tio` files on a fresh JDK install.** The
+  first v1.4.1 build hit a class-loader rejection on
+  `Hdf5CompoundIO$FieldKind` because the compile used `--enable-preview`
+  (Java 21 preview FFM API). Bumped the compile target from Java
+  21+preview to Java 22-stable; FFM is a stable API in JDK 22 and the
+  API surface is identical, so no source changes were needed.
+
+### Changed
+
+- **Minimum JDK bumped from 17 to 22.** The FFM API used by
+  `Hdf5CompoundIO` / `VlBytesFFM` is stable in JDK 22+; an older JDK
+  cannot load the compiled classes (class file version 66).
+  Adoptium/Temurin ships JDK 22 binaries for all 3 supported
+  platforms.
 
 ### Internal
 
@@ -77,6 +68,13 @@ public API is stable from onward.
   byte arrays are converted with ±33 in the reader/writer.
 - 0-byte BAM/SAM rejection: explicit `Files.size(path) == 0` check
   before opening (htsjdk would otherwise treat as a 0-record BAM).
+- `enable-preview` compiler flag removed from `maven-compiler-plugin`
+  configuration in `java/pom.xml`.
+- `enable-preview` removed from `surefire-plugin` `<argLine>` in both
+  `java/pom.xml` and `tio-browser/pom.xml`.
+- CI workflows (`ci.yml`, `release-shaded-jar.yml`): `setup-java`
+  `java-version: '21'` → `'22'` (4 invocations).
+- `tio-browser/README.md` + `docs/tio-browser.md`: "JDK 17+" → "JDK 22+".
 
 ## [1.4.0] - 2026-05-09
 
