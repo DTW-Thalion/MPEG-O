@@ -5,25 +5,26 @@
  */
 package global.thalion.ttio.exporters;
 
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMFileWriter;
+import htsjdk.samtools.SAMFileWriterFactory;
+
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 /**
  * CRAM exporter — M88.
  *
- * <p>Subclass of {@link BamWriter} that overrides the samtools
- * subprocess invocation to emit CRAM (reference-compressed) output
- * instead of BAM. Per the reference FASTA is
- * a positional constructor argument; samtools needs it for both the
- * {@code view -CS} and the {@code sort -O cram} stages.</p>
+ * <p>v1.5.0 swapped the samtools subprocess for htsjdk's pure-Java CRAM
+ * writer. Reference FASTA is still required (CRAM is reference-
+ * compressed) — htsjdk's {@link ReferenceSource} reads the FASTA at
+ * write time to compute the per-base deltas.</p>
  *
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.exporters.cram.CramWriter},
  * Objective-C {@code TTIOCramWriter}.</p>
  *
- * (M88)
+ * (M88, v1.5.0 htsjdk swap)
  */
 public class CramWriter extends BamWriter {
 
@@ -32,54 +33,29 @@ public class CramWriter extends BamWriter {
     /**
      * Construct a {@code CramWriter}.
      *
-     * @param path           output CRAM file path. The {@code .cram}
-     *                       extension is honoured by samtools'
-     *                       file-format auto-detection (HANDOFF
-     *                       Gotcha §165).
+     * @param path           output CRAM file path.
      * @param referenceFasta filesystem path to the reference FASTA.
-     *                       CRAM is reference-compressed; samtools
-     *                       requires the reference both at write
-     *                       time (to compute the deltas) and at read
-     *                       time (to reconstitute the bases).
+     *                       CRAM is reference-compressed; the writer
+     *                       reads the FASTA at write time (to compute
+     *                       the deltas) and the reader needs the same
+     *                       FASTA available at decode time.
      */
     public CramWriter(Path path, Path referenceFasta) {
         super(path);
         this.referenceFasta = Objects.requireNonNull(referenceFasta,
-            "referenceFasta is required for CramWriter ()");
+            "referenceFasta is required for CramWriter");
     }
 
     /** @return the reference FASTA path passed at construction time. */
     public Path referenceFasta() { return referenceFasta; }
 
     @Override
-    protected List<String> buildViewCommand(boolean sort) {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("samtools");
-        cmd.add("view");
-        cmd.add("-CS");
-        cmd.add("--reference");
-        cmd.add(referenceFasta.toAbsolutePath().toString());
-        if (!sort) {
-            cmd.add("-o");
-            cmd.add(path().toAbsolutePath().toString());
-        }
-        cmd.add("-");
-        return cmd;
-    }
-
-    @Override
-    protected List<String> buildSortCommand(boolean sort) {
-        if (!sort) return null;
-        List<String> cmd = new ArrayList<>();
-        cmd.add("samtools");
-        cmd.add("sort");
-        cmd.add("-O");
-        cmd.add("cram");
-        cmd.add("--reference");
-        cmd.add(referenceFasta.toAbsolutePath().toString());
-        cmd.add("-o");
-        cmd.add(path().toAbsolutePath().toString());
-        cmd.add("-");
-        return cmd;
+    protected SAMFileWriter makeWriter(SAMFileHeader header, boolean sort) {
+        SAMFileWriterFactory factory = new SAMFileWriterFactory()
+            .setCreateIndex(false)
+            .setCreateMd5File(false);
+        boolean presorted = !sort;
+        return factory.makeCRAMWriter(header, presorted,
+            path().toFile(), referenceFasta.toFile());
     }
 }

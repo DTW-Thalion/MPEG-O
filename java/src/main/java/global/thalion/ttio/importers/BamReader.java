@@ -10,13 +10,23 @@ import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 
-import java.io.BufferedReader;
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMProgramRecord;
+import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMSequenceRecord;
+import htsjdk.samtools.SamInputResource;
+import htsjdk.samtools.SamReader;
+import htsjdk.samtools.SamReaderFactory;
+import htsjdk.samtools.ValidationStringency;
+
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,39 +34,36 @@ import java.util.Map;
 /**
  * SAM/BAM importer — M87.
  *
- * <p>Wraps the user-installed {@code samtools} binary as a subprocess to
- * read SAM and BAM (Sequence Alignment/Map) files into
- * {@link WrittenGenomicRun} instances. No htslib source is linked or
- * consulted; SAM/BAM format parsing is from the public SAMv1
- * specification (https://samtools.github.io/hts-specs).</p>
+ * <p>Reads SAM and BAM (Sequence Alignment/Map) files into
+ * {@link WrittenGenomicRun} instances using <a
+ * href="https://github.com/samtools/htsjdk">htsjdk</a> — the pure-Java
+ * SAM/BAM/CRAM library used by GATK, Picard, and IGV.</p>
  *
- * <p>The subprocess approach mirrors the M53 Bruker timsTOF importer
- * pattern. {@code samtools} is a runtime dependency only — the
- * {@code BamReader} class is loadable on systems without samtools; only
- * {@link #toGenomicRun(String, String, String)} requires the binary on
- * PATH ().</p>
+ * <p>v1.5.0 replaced the prior {@code samtools} subprocess implementation
+ * so tio-browser works on Windows without requiring a system samtools
+ * install. The public API is unchanged; the {@code SamtoolsNotFoundException}
+ * type is retained as a no-throw historical alias so callers and tests
+ * compile unchanged.</p>
  *
- * <p>samtools auto-detects SAM vs BAM format from magic bytes; one
- * parser handles both. The companion {@link SamReader} exists as a
- * discoverable convenience alias.</p>
+ * <p>Format auto-detection is provided by htsjdk based on magic bytes;
+ * one parser handles both SAM and BAM. The companion {@link SamReader}
+ * (note: name collides with htsjdk.samtools.SamReader — fully qualify if
+ * needed) exists as a discoverable convenience alias.</p>
  *
  * <p><b>Cross-language equivalents:</b> Python {@code ttio.importers.bam.BamReader},
- * Objective-C {@code TTIOBamReader}.</p>
+ * Objective-C {@code TTIOBamReader}. The byte-level output is verified
+ * by the {@code cross-compat} CI job.</p>
  *
- * (M87)
+ * (M87, v1.5.0 htsjdk swap)
  */
 public class BamReader {
 
-    private static final String INSTALL_HELP =
-        "samtools is required by global.thalion.ttio.importers.BamReader "
-        + "but was not found on PATH. Install it via your platform's "
-        + "package manager:\n"
-        + "  Debian/Ubuntu: apt install samtools\n"
-        + "  macOS:         brew install samtools\n"
-        + "  Conda:         conda install -c bioconda samtools\n"
-        + "Then re-run.";
-
-    /** Raised at first use when samtools is missing or unusable. */
+    /**
+     * Historical exception type from the samtools-subprocess era.
+     * v1.5.0 onwards never throws this — htsjdk is a Maven dep, always
+     * available. Retained as a no-throw alias so callers and tests that
+     * catch this type still compile.
+     */
     public static final class SamtoolsNotFoundException extends IOException {
         private static final long serialVersionUID = 1L;
         public SamtoolsNotFoundException(String msg) { super(msg); }
@@ -78,9 +85,6 @@ public class BamReader {
     /**
      * @return the {@code @PG}-derived provenance records from the most
      *         recent {@link #toGenomicRun} call (empty before any call).
-     *         {@link WrittenGenomicRun} does not carry provenance, so
-     *         this side channel exposes it for the cross-language
-     *         conformance dump and for callers that need it.
      */
     public List<ProvenanceRecord> lastProvenance() { return lastProvenance; }
 
@@ -99,23 +103,19 @@ public class BamReader {
      * Read the BAM/SAM and return a {@link WrittenGenomicRun}.
      *
      * @param name        run name (becomes {@code /study/genomic_runs/<name>}).
-     * @param region      optional region filter passed verbatim to
-     *                    {@code samtools view} ({@code "chr1:1000-2000"},
-     *                    {@code "*"}, etc.).
+     * @param region      optional region filter (e.g. {@code "chr1:1000-2000"},
+     *                    {@code "chr1"}, {@code "*"} for unmapped); {@code null}
+     *                    means no filter.
      * @param sampleName  optional override for {@code sample_name};
      *                    {@code null} means "use first @RG SM:".
-     * @throws SamtoolsNotFoundException if samtools is not on PATH at first call.
-     * @throws IOException                if the file is missing, samtools
-     *                                    exits non-zero, or a SAM line is malformed.
+     * @throws IOException if the file is missing, malformed, or a region
+     *                     filter is requested against an unindexed file.
      */
     public WrittenGenomicRun toGenomicRun(String name, String region,
                                           String sampleName) throws IOException {
-        checkSamtools();
         if (!Files.exists(path)) {
             throw new IOException("BAM/SAM file not found: " + path);
         }
-
-        List<String> cmd = buildSamtoolsViewCommand(region);
 
         long fileMtime;
         try {
@@ -124,16 +124,13 @@ public class BamReader {
             fileMtime = System.currentTimeMillis() / 1000L;
         }
 
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        Process proc = pb.start();
-
         // Header state
         List<String> sqNames = new ArrayList<>();
         String rgSample = "";
         String rgPlatform = "";
         List<ProvenanceRecord> provenance = new ArrayList<>();
 
-        // Per-read accumulators
+        // Per-read accumulators (boxed because final size is unknown).
         List<String> readNames = new ArrayList<>();
         List<String> chromosomes = new ArrayList<>();
         List<Long> positionsL = new ArrayList<>();
@@ -149,159 +146,134 @@ public class BamReader {
         List<byte[]> qualChunks = new ArrayList<>();
         long runningOffset = 0L;
 
-        try (BufferedReader br = new BufferedReader(
-                new InputStreamReader(proc.getInputStream(),
-                                      StandardCharsets.ISO_8859_1))) {
-            String line;
-            int lineNo = 0;
-            while ((line = br.readLine()) != null) {
-                lineNo++;
-                if (line.isEmpty()) continue;
-                if (line.charAt(0) == '@') {
-                    if (line.startsWith("@SQ")) {
-                        Map<String, String> fields = parseHeaderFields(line);
-                        String sn = fields.get("SN");
-                        if (sn != null && !sn.isEmpty()) {
-                            sqNames.add(sn);
-                        }
-                    } else if (line.startsWith("@RG")) {
-                        Map<String, String> fields = parseHeaderFields(line);
-                        String sm = fields.getOrDefault("SM", "");
-                        String pl = fields.getOrDefault("PL", "");
-                        if (rgSample.isEmpty() && !sm.isEmpty()) rgSample = sm;
-                        if (rgPlatform.isEmpty() && !pl.isEmpty()) rgPlatform = pl;
-                    } else if (line.startsWith("@PG")) {
-                        Map<String, String> fields = parseHeaderFields(line);
-                        String program = fields.getOrDefault("PN", "");
-                        Map<String, String> params = new LinkedHashMap<>();
-                        String cl = fields.get("CL");
-                        if (cl != null) params.put("CL", cl);
-                        for (String k : new String[]{"ID", "VN", "PP"}) {
-                            if (fields.containsKey(k)) {
-                                params.put(k, fields.get(k));
-                            }
-                        }
-                        provenance.add(new ProvenanceRecord(
-                            fileMtime, program, params,
-                            List.of(), List.of()));
-                    }
-                    continue;
+        SamReaderFactory factory = makeReaderFactory();
+        try (SamReader reader = factory.open(SamInputResource.of(path.toFile()))) {
+            SAMFileHeader header = reader.getFileHeader();
+
+            // @SQ → reference sequence names (first wins for reference_uri).
+            for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
+                sqNames.add(seq.getSequenceName());
+            }
+
+            // @RG → sample + platform (first wins).
+            for (SAMReadGroupRecord rg : header.getReadGroups()) {
+                if (rgSample.isEmpty() && rg.getSample() != null) {
+                    rgSample = rg.getSample();
                 }
-
-                // Alignment record. Parse columns 1-11 only (Gotcha §152).
-                String[] cols = line.split("\t", 12);
-                if (cols.length < 11) {
-                    throw new IOException(
-                        "Malformed SAM alignment at line " + lineNo
-                        + ": expected >=11 tab-separated fields, got "
-                        + cols.length + " — "
-                        + line.substring(0, Math.min(120, line.length())));
+                if (rgPlatform.isEmpty() && rg.getPlatform() != null) {
+                    rgPlatform = rg.getPlatform();
                 }
-                String qname  = cols[0];
-                String flagS  = cols[1];
-                String rname  = cols[2];
-                String posS   = cols[3];
-                String mapqS  = cols[4];
-                String cigar  = cols[5];
-                String rnext  = cols[6];
-                String pnextS = cols[7];
-                String tlenS  = cols[8];
-                String seq    = cols[9];
-                String qual   = cols[10];
+            }
 
-                int flag, mapq;
-                long pos, pnext;
-                int tlen;
-                try {
-                    flag  = Integer.parseInt(flagS);
-                    pos   = Long.parseLong(posS);
-                    mapq  = Integer.parseInt(mapqS);
-                    pnext = Long.parseLong(pnextS);
-                    tlen  = Integer.parseInt(tlenS);
-                } catch (NumberFormatException e) {
-                    throw new IOException(
-                        "Malformed SAM numeric field at line " + lineNo
-                        + ": " + e.getMessage() + " — "
-                        + line.substring(0, Math.min(120, line.length())), e);
+            // @PG → provenance records.
+            for (SAMProgramRecord pg : header.getProgramRecords()) {
+                String program = pg.getProgramName() != null ? pg.getProgramName() : "";
+                Map<String, String> params = new LinkedHashMap<>();
+                String cl = pg.getCommandLine();
+                if (cl != null) params.put("CL", cl);
+                if (pg.getId() != null) params.put("ID", pg.getId());
+                if (pg.getProgramVersion() != null) params.put("VN", pg.getProgramVersion());
+                if (pg.getPreviousProgramGroupId() != null) {
+                    params.put("PP", pg.getPreviousProgramGroupId());
                 }
+                provenance.add(new ProvenanceRecord(
+                    fileMtime, program, params, List.of(), List.of()));
+            }
 
-                // RNEXT '=' expansion ().
-                if ("=".equals(rnext)) rnext = rname;
+            // Iterate alignments — region filter applied if requested.
+            Iterator<SAMRecord> it = iteratorFor(reader, region);
+            try {
+                while (it.hasNext()) {
+                    SAMRecord rec = it.next();
 
-                readNames.add(qname);
-                flagsL.add(flag);
-                chromosomes.add(rname);
-                positionsL.add(pos);
-                mappingQualitiesL.add(mapq);
-                cigars.add(cigar);
-                mateChromosomes.add(rnext);
-                matePositionsL.add(pnext);
-                templateLengthsL.add(tlen);
+                    String qname = rec.getReadName() != null ? rec.getReadName() : "*";
+                    int flag = rec.getFlags();
+                    String rname = rec.getReferenceName() != null
+                        ? rec.getReferenceName() : "*";
+                    // SAM spec: 1-based pos; 0 means unmapped/no position.
+                    // htsjdk: getAlignmentStart() returns 1-based or 0 if NO_ALIGNMENT_START.
+                    long pos = rec.getAlignmentStart();
+                    int mapq = rec.getMappingQuality();
+                    String cigar = rec.getCigarString() != null
+                        ? rec.getCigarString() : "*";
+                    // RNEXT: htsjdk auto-expands "=" to the actual ref name —
+                    // same semantic as the prior samtools-text parser's manual
+                    // expansion (Gotcha §156).
+                    String rnext = rec.getMateReferenceName() != null
+                        ? rec.getMateReferenceName() : "*";
+                    long pnext = rec.getMateAlignmentStart();
+                    int tlen = rec.getInferredInsertSize();
 
-                // SEQ / QUAL handling — Python parity.
-                byte[] seqBytes;
-                if ("*".equals(seq)) {
-                    seqBytes = new byte[0];
-                } else {
-                    seqBytes = seq.getBytes(StandardCharsets.US_ASCII);
-                }
-                byte[] qualBytes;
-                if ("*".equals(qual)) {
-                    if ("*".equals(seq)) {
-                        qualBytes = new byte[0];
+                    readNames.add(qname);
+                    flagsL.add(flag);
+                    chromosomes.add(rname);
+                    positionsL.add(pos);
+                    mappingQualitiesL.add(mapq);
+                    cigars.add(cigar);
+                    mateChromosomes.add(rnext);
+                    matePositionsL.add(pnext);
+                    templateLengthsL.add(tlen);
+
+                    // SEQ: getReadString() returns "*" for missing or an ASCII
+                    // sequence string. Match the prior parser's "*" → empty bytes.
+                    String seqStr = rec.getReadString();
+                    byte[] seqBytes;
+                    if (seqStr == null || "*".equals(seqStr)) {
+                        seqBytes = new byte[0];
                     } else {
-                        qualBytes = new byte[seqBytes.length];
-                        java.util.Arrays.fill(qualBytes, (byte) 0xFF);
+                        seqBytes = seqStr.getBytes(StandardCharsets.US_ASCII);
                     }
-                } else {
-                    qualBytes = qual.getBytes(StandardCharsets.US_ASCII);
-                }
 
-                if (qualBytes.length != seqBytes.length) {
-                    if ("*".equals(seq)) {
-                        qualBytes = new byte[0];
-                    } else if (!"*".equals(qual)) {
-                        throw new IOException(
-                            "SEQ/QUAL length mismatch at line " + lineNo
-                            + ": SEQ=" + seqBytes.length
-                            + " QUAL=" + qualBytes.length);
+                    // QUAL: getBaseQualities() returns raw Phred bytes (0-93)
+                    // or SAMRecord.NULL_QUALS (a static empty array) for "*".
+                    // Prior parser stored Phred+33 ASCII bytes (verbatim from
+                    // SAM text). Convert raw -> ASCII by adding 33 to match.
+                    byte[] qualRaw = rec.getBaseQualities();
+                    byte[] qualBytes;
+                    if (qualRaw == null || qualRaw == SAMRecord.NULL_QUALS
+                            || qualRaw.length == 0) {
+                        if (seqBytes.length == 0) {
+                            qualBytes = new byte[0];
+                        } else {
+                            qualBytes = new byte[seqBytes.length];
+                            Arrays.fill(qualBytes, (byte) 0xFF);
+                        }
+                    } else {
+                        qualBytes = new byte[qualRaw.length];
+                        for (int i = 0; i < qualRaw.length; i++) {
+                            qualBytes[i] = (byte) ((qualRaw[i] & 0xFF) + 33);
+                        }
                     }
+
+                    if (qualBytes.length != seqBytes.length) {
+                        if (seqBytes.length == 0) {
+                            qualBytes = new byte[0];
+                        } else if (qualBytes.length != 0) {
+                            throw new IOException(
+                                "SEQ/QUAL length mismatch in record " + qname
+                                + ": SEQ=" + seqBytes.length
+                                + " QUAL=" + qualBytes.length);
+                        }
+                    }
+
+                    int length = seqBytes.length;
+                    offsetsL.add(runningOffset);
+                    lengthsL.add(length);
+                    seqChunks.add(seqBytes);
+                    qualChunks.add(qualBytes);
+                    runningOffset += length;
                 }
-
-                int length = seqBytes.length;
-                offsetsL.add(runningOffset);
-                lengthsL.add(length);
-                seqChunks.add(seqBytes);
-                qualChunks.add(qualBytes);
-                runningOffset += length;
+            } finally {
+                if (it instanceof htsjdk.samtools.util.CloseableIterator<?>) {
+                    ((htsjdk.samtools.util.CloseableIterator<?>) it).close();
+                }
             }
-        } catch (IOException e) {
-            String stderrText = readStderrSafely(proc);
-            try { proc.waitFor(); } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
-            throw new IOException(e.getMessage()
-                + (stderrText.isEmpty() ? "" : " (stderr: " + stderrText + ")"), e);
         }
 
-        int exitCode;
-        try {
-            exitCode = proc.waitFor();
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            proc.destroy();
-            throw new IOException("interrupted while waiting for samtools", ie);
-        }
-        if (exitCode != 0) {
-            String stderrText = readStderrSafely(proc);
-            throw new IOException("samtools view exited " + exitCode
-                + " for " + path + ": " + stderrText.trim());
-        }
-
-        // sample_name override ().
+        // sample_name override.
         String effectiveSample = sampleName != null ? sampleName : rgSample;
 
-        // reference_uri: first @SQ wins
+        // reference_uri: first @SQ wins.
         String referenceUri = sqNames.isEmpty() ? "" : sqNames.get(0);
 
         int n = readNames.size();
@@ -363,105 +335,73 @@ public class BamReader {
     }
 
     // ------------------------------------------------------------------
-    // Internals
+    // Factory + region filter (overridable by CramReader)
     // ------------------------------------------------------------------
 
     /**
-     * Build the {@code samtools view -h ...} command for this reader.
-     *
-     * <p>Subclasses ({@code CramReader} in M88) override to inject
-     * {@code --reference <fasta>} so reference-compressed CRAM bytes
-     * can be reconstituted. Default implementation emits the bare
-     * BAM/SAM read invocation with an optional region filter.</p>
-     *
-     * @param region optional region filter passed verbatim to
-     *               {@code samtools view} ({@code "chr1:1000-2000"},
-     *               {@code "*"}, etc.); {@code null} means no filter.
-     * @return mutable list of command tokens (caller may further
-     *         mutate before {@link ProcessBuilder} invocation).
+     * Build the htsjdk reader factory for this importer. Default is the
+     * lenient stringency factory suitable for SAM/BAM. {@link CramReader}
+     * overrides to inject a {@code ReferenceSource} so reference-
+     * compressed CRAM bytes can be reconstituted.
      */
-    protected List<String> buildSamtoolsViewCommand(String region) {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("samtools");
-        cmd.add("view");
-        cmd.add("-h");
-        cmd.add(path.toAbsolutePath().toString());
-        if (region != null) {
-            cmd.add(region);
-        }
-        return cmd;
+    protected SamReaderFactory makeReaderFactory() {
+        return SamReaderFactory.makeDefault()
+            .validationStringency(ValidationStringency.LENIENT);
     }
 
-    private static Map<String, String> parseHeaderFields(String line) {
-        Map<String, String> fields = new LinkedHashMap<>();
-        String[] tokens = line.split("\t");
-        for (int i = 1; i < tokens.length; i++) {
-            String token = tokens[i];
-            int colon = token.indexOf(':');
-            if (colon < 0) continue;
-            fields.put(token.substring(0, colon), token.substring(colon + 1));
-        }
-        return fields;
-    }
-
-    private static String readStderrSafely(Process proc) {
-        try {
-            byte[] data = proc.getErrorStream().readAllBytes();
-            return new String(data, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return "";
-        }
-    }
 
     /**
-     * First-call samtools availability probe ().
-     *
-     * <p>We deliberately do NOT memoise a "missing" result: if samtools
-     * was missing on a previous call but later installed, the next
-     * call should succeed. We only memoise the positive case.</p>
+     * Resolve a samtools-style region string ({@code null}, {@code "*"},
+     * {@code "chr1"}, {@code "chr1:1000"}, {@code "chr1:1000-2000"}) to
+     * an iterator over matching SAMRecords. Subclasses
+     * ({@code CramReader} in M88) can override to inject a reference for
+     * CRAM decode if needed; default implementation handles SAM/BAM.
      */
-    private static volatile boolean samtoolsConfirmedPresent = false;
-
-    private static void checkSamtools() throws SamtoolsNotFoundException {
-        if (samtoolsConfirmedPresent) return;
-        try {
-            ProcessBuilder pb = new ProcessBuilder("samtools", "--version");
-            pb.redirectErrorStream(true);
-            Process proc = pb.start();
-            try (var in = proc.getInputStream()) {
-                in.readAllBytes();
-            }
-            int exit;
+    protected Iterator<SAMRecord> iteratorFor(SamReader reader, String region) {
+        if (region == null) {
+            return reader.iterator();
+        }
+        if ("*".equals(region)) {
+            return reader.queryUnmapped();
+        }
+        // Parse "name[:start[-end]]" with optional thousands-separator commas.
+        String refName;
+        int start = 1;
+        int end = Integer.MAX_VALUE;
+        int colon = region.indexOf(':');
+        if (colon < 0) {
+            refName = region;
+        } else {
+            refName = region.substring(0, colon);
+            String range = region.substring(colon + 1).replace(",", "");
+            int dash = range.indexOf('-');
             try {
-                exit = proc.waitFor();
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                throw new SamtoolsNotFoundException(
-                    INSTALL_HELP + "\n(interrupted while invoking samtools --version)");
+                if (dash < 0) {
+                    start = Integer.parseInt(range);
+                } else {
+                    start = Integer.parseInt(range.substring(0, dash));
+                    end = Integer.parseInt(range.substring(dash + 1));
+                }
+            } catch (NumberFormatException nfe) {
+                throw new IllegalArgumentException(
+                    "Malformed region string: " + region
+                    + " (expected name[:start[-end]])", nfe);
             }
-            if (exit != 0) {
-                throw new SamtoolsNotFoundException(
-                    INSTALL_HELP + "\n(samtools --version exited " + exit + ")");
-            }
-            samtoolsConfirmedPresent = true;
-        } catch (IOException e) {
-            if (e instanceof SamtoolsNotFoundException) throw (SamtoolsNotFoundException) e;
-            throw new SamtoolsNotFoundException(
-                INSTALL_HELP + "\n(invocation failed: " + e.getMessage() + ")", e);
         }
+        return reader.queryOverlapping(refName, start, end);
     }
 
+    // ------------------------------------------------------------------
+    // Samtools-availability shims (always-true since v1.5.0)
+    // ------------------------------------------------------------------
+
     /**
-     * Public probe used by tests' {@code Assumptions.assumeTrue(...)}
-     * skip-when-missing pattern. Does not throw; returns {@code false}
-     * if samtools is not callable for any reason.
+     * Pre-v1.5.0 this probed for {@code samtools} on PATH. v1.5.0 onwards
+     * BamReader uses htsjdk (a Maven dep, always available), so this
+     * unconditionally returns {@code true}. Retained for source compat
+     * with tests using {@code Assumptions.assumeTrue(isSamtoolsAvailable())}.
      */
     public static boolean isSamtoolsAvailable() {
-        try {
-            checkSamtools();
-            return true;
-        } catch (IOException e) {
-            return false;
-        }
+        return true;
     }
 }
