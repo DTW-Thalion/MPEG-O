@@ -2,8 +2,20 @@ package global.thalion.ttio.browser;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.JarURLConnection;
+import java.net.URL;
+import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Extracts and links the bundled HDF5 native libraries at startup so
@@ -43,6 +55,16 @@ public final class Hdf5NativeLoader {
         return null;
     }
 
+    // Per-platform "core" HDF5 libs that MUST be loaded via System.load.
+    // On Windows, the JAR also contains bundled MinGW runtime DLL deps
+    // (libwinpthread-1.dll, libgcc_s_seh-1.dll, libcurl-4.dll, etc.)
+    // discovered at runtime via the JAR's resource directory listing —
+    // they're not enumerated here because the set varies with what the
+    // build runner's HDF5 + LZ4 plugin actually link against.
+    //
+    // The last entry in each array is the LZ4 plugin (h5lz4.*), which is
+    // NOT System.load'd directly: HDF5 lazy-loads it when reading LZ4-
+    // compressed data, via the plugin path registered with H5PLprepend.
     private static final String[] LINUX_LIBS = {
         "libhdf5.so.310", "libhdf5_hl.so.310", "libhdf5_java.so", "libh5lz4.so"
     };
@@ -57,9 +79,18 @@ public final class Hdf5NativeLoader {
      * Extract bundled HDF5 native libs to a per-JVM temp dir, System.load
      * them in dependency order, register the LZ4 plugin search path. Idempotent.
      *
+     * <p>On Windows, the JAR also contains the MinGW runtime DLL closure
+     * (libwinpthread-1.dll, libgcc_s_seh-1.dll, libcurl-4.dll, etc.) that
+     * the HDF5 DLLs link against. Windows' standard LoadLibrary search
+     * order does NOT include the loaded DLL's directory for dependencies,
+     * so every dep has to be System.load'd by full path BEFORE the DLL
+     * that needs it. A multi-pass loop handles unknown dep order —
+     * retrying failures until all loads succeed or no further progress
+     * is possible.
+     *
      * @throws Hdf5NativeLoadException on hard failures (unsupported platform,
-     *   temp-dir creation failure, missing resource, UnsatisfiedLinkError on
-     *   a core lib).
+     *   temp-dir creation failure, missing resource, or DLL load failures
+     *   that don't resolve across passes).
      */
     public static synchronized void ensureLoaded() {
         if (loaded) return;
@@ -71,7 +102,7 @@ public final class Hdf5NativeLoader {
                 + System.getProperty("os.arch") + ". Supported: linux-x64, "
                 + "mac-aarch64, win-x64.");
         }
-        String[] libs = libsFor(platform);
+        String[] coreLibs = libsFor(platform);
         Path dir;
         try {
             dir = Files.createTempDirectory("tio-browser-hdf5-");
@@ -82,7 +113,9 @@ public final class Hdf5NativeLoader {
         }
         Runtime.getRuntime().addShutdownHook(new Thread(() -> deleteRecursive(dir)));
         String resourcePrefix = "/native/" + platform + "/hdf5/";
-        for (String lib : libs) {
+
+        // Extract core libs (always present, named per-platform).
+        for (String lib : coreLibs) {
             Path target = dir.resolve(lib);
             try (InputStream in = Hdf5NativeLoader.class.getResourceAsStream(resourcePrefix + lib)) {
                 if (in == null) {
@@ -97,34 +130,123 @@ public final class Hdf5NativeLoader {
                     "Failed to extract " + lib + " to " + target, e);
             }
         }
-        // Load core libs in dependency order: hdf5 -> hdf5_hl -> hdf5_java.
-        // The LZ4 plugin (last entry in libs[]) is loaded by HDF5 itself
-        // when the plugin path is registered (B.5 wires that); we don't
-        // System.load it directly.
-        for (int i = 0; i < libs.length - 1; i++) {
-            Path lib = dir.resolve(libs[i]);
-            try {
-                System.load(lib.toAbsolutePath().toString());
-            } catch (UnsatisfiedLinkError e) {
-                throw new Hdf5NativeLoadException(
-                    "Failed to System.load " + lib + ": " + e.getMessage(), e);
-            }
+
+        // On Windows, also extract every additional bundled DLL (the MinGW
+        // runtime closure). Linux + macOS have proper rpath / @rpath
+        // baked into their HL libs so the dynamic linker finds them in
+        // the same directory; Windows doesn't, so we must extract and
+        // pre-load them.
+        if ("win-x64".equals(platform)) {
+            extractAllBundledWinDlls(dir, resourcePrefix, coreLibs);
         }
+
+        // Multi-pass System.load: try every extracted DLL; on
+        // UnsatisfiedLinkError (missing dep not yet loaded), skip and
+        // retry next pass. Once a dep is loaded by full path, Windows
+        // caches it by basename, so DLLs that import it by name will
+        // resolve on subsequent passes. Skip the LZ4 plugin (last entry
+        // in coreLibs) — HDF5 lazy-loads that via the plugin path.
+        String pluginLib = coreLibs[coreLibs.length - 1];
+        List<Path> toLoad;
+        try (Stream<Path> s = Files.list(dir)) {
+            toLoad = s.filter(p -> {
+                       String n = p.getFileName().toString();
+                       return n.endsWith(".dll") || n.endsWith(".so")
+                           || n.contains(".so.") || n.endsWith(".dylib");
+                   })
+                   .filter(p -> !p.getFileName().toString().equals(pluginLib))
+                   .collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new Hdf5NativeLoadException("Could not list temp dir " + dir, e);
+        }
+
+        Set<Path> loadedSet = new HashSet<>();
+        int maxPasses = toLoad.size() + 1;
+        UnsatisfiedLinkError lastError = null;
+        while (loadedSet.size() < toLoad.size() && maxPasses-- > 0) {
+            boolean progress = false;
+            for (Path p : toLoad) {
+                if (loadedSet.contains(p)) continue;
+                try {
+                    System.load(p.toAbsolutePath().toString());
+                    loadedSet.add(p);
+                    progress = true;
+                } catch (UnsatisfiedLinkError e) {
+                    lastError = e;
+                    // try again next pass
+                }
+            }
+            if (!progress) break;
+        }
+        if (loadedSet.size() < toLoad.size()) {
+            List<String> notLoaded = toLoad.stream()
+                .filter(p -> !loadedSet.contains(p))
+                .map(p -> p.getFileName().toString())
+                .collect(Collectors.toList());
+            throw new Hdf5NativeLoadException(
+                "Could not load all bundled HDF5 native libs after "
+                + (toLoad.size() + 1) + " passes. Still failing: " + notLoaded
+                + ". Last error: " + (lastError != null ? lastError.getMessage() : "n/a"),
+                lastError);
+        }
+
         tempDir = dir;
-        // Register the LZ4 plugin search path with JHI5. We can't set
-        // HDF5_PLUGIN_PATH env var after JVM start (Java has no portable
-        // setenv), so use the JHI5 in-process API. Non-fatal on failure —
-        // the app still works for non-LZ4 datasets; opening LZ4-compressed
-        // data surfaces the existing "LZ4 filter (id 32004) is not
-        // available" error from Hdf5Group.java.
+        // Register the LZ4 plugin search path with JHI5. H5PLprepend (not
+        // append) so our temp dir takes precedence over HDF5's compile-time
+        // default plugin path (which is the build runner's MSYS2 location
+        // and doesn't exist on user machines).
         try {
-            hdf.hdf5lib.H5.H5PLappend(dir.toAbsolutePath().toString());
+            hdf.hdf5lib.H5.H5PLprepend(dir.toAbsolutePath().toString());
         } catch (Throwable t) {
             java.util.logging.Logger.getLogger(Hdf5NativeLoader.class.getName())
                 .warning("Could not register LZ4 plugin path: " + t.getMessage()
                     + " (LZ4-compressed datasets won't open, but other features work)");
         }
         loaded = true;
+    }
+
+    /**
+     * Extract every {@code .dll} resource under the given prefix that
+     * isn't already accounted for by the core libs list. Used on Windows
+     * to extract the MinGW runtime DLL closure bundled by the release
+     * workflow's "Stage natives" step.
+     */
+    private static void extractAllBundledWinDlls(Path dir, String resourcePrefix,
+                                                 String[] coreLibs) {
+        Set<String> core = new HashSet<>(Arrays.asList(coreLibs));
+        URL prefixUrl = Hdf5NativeLoader.class.getResource(resourcePrefix);
+        if (prefixUrl == null) {
+            throw new Hdf5NativeLoadException(
+                "Resource prefix not found: " + resourcePrefix);
+        }
+        try {
+            URLConnection conn = prefixUrl.openConnection();
+            if (conn instanceof JarURLConnection) {
+                JarURLConnection jarConn = (JarURLConnection) conn;
+                String entryPrefix = resourcePrefix.startsWith("/")
+                    ? resourcePrefix.substring(1) : resourcePrefix;
+                JarFile jar = jarConn.getJarFile();
+                Enumeration<JarEntry> entries = jar.entries();
+                while (entries.hasMoreElements()) {
+                    JarEntry entry = entries.nextElement();
+                    String name = entry.getName();
+                    if (!name.startsWith(entryPrefix) || entry.isDirectory()) continue;
+                    String base = name.substring(entryPrefix.length());
+                    if (!base.endsWith(".dll")) continue;
+                    if (core.contains(base)) continue;  // already extracted
+                    Path target = dir.resolve(base);
+                    try (InputStream in = jar.getInputStream(entry)) {
+                        Files.copy(in, target);
+                    }
+                }
+            }
+            // (When running from an exploded classpath, e.g. unit tests,
+            // the resource prefix may be a file: URL with no JAR entries.
+            // Tests stub the loader differently — see Hdf5NativeLoaderTest.)
+        } catch (IOException e) {
+            throw new Hdf5NativeLoadException(
+                "Failed to enumerate bundled win-x64 DLLs from JAR", e);
+        }
     }
 
     private static String[] libsFor(String platform) {

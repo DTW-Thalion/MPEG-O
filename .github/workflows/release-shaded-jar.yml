@@ -268,8 +268,40 @@ jobs:
               || (cp /ucrt64/lib/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
               || (cp /ucrt64/bin/libh5lz4.dll tio-browser/src/main/resources/native/win-x64/hdf5/h5lz4.dll 2>/dev/null) \
               || (echo "::error::libh5lz4.{dll,so} not found under /ucrt64" && find /ucrt64 -name 'libh5lz4*' && exit 1)
+
+          # Bundle MinGW runtime DLL dependencies of the HDF5 + plugin DLLs.
+          # On a clean Windows machine without MSYS2, Windows' standard
+          # LoadLibrary search order does NOT include the directory of the
+          # loaded DLL when resolving dependencies, so hdf5*.dll's imports
+          # for libwinpthread-1.dll, libgcc_s_seh-1.dll, libcurl-4.dll,
+          # libssl-3-x64.dll, libcrypto-3-x64.dll, libz-1.dll, etc. all
+          # fail with "Can't find dependent libraries" (incident: v1.4.0
+          # first release was broken on user installs).
+          #
+          # Recursively walk dependencies via ldd and bundle every
+          # /ucrt64/bin/ DLL into the resources tree. Hdf5NativeLoader
+          # extracts and System.load's them in multi-pass order at runtime.
+          echo "::group::Bundle MinGW DLL dependency closure"
+          NATIVE_DIR=tio-browser/src/main/resources/native/win-x64/hdf5
+          while true; do
+              changed=0
+              for dll in "$NATIVE_DIR"/*.dll; do
+                  for dep in $(ldd "$dll" 2>/dev/null | awk '$3 ~ "^/ucrt64/bin/" { print $3 }'); do
+                      dep_name=$(basename "$dep")
+                      if [ ! -f "$NATIVE_DIR/$dep_name" ]; then
+                          echo "  bundling: $dep_name (dep of $(basename "$dll"))"
+                          cp "$dep" "$NATIVE_DIR/$dep_name"
+                          changed=1
+                      fi
+                  done
+              done
+              [ $changed -eq 0 ] && break
+          done
+          echo "::endgroup::"
+
           ls -la tio-browser/src/main/resources/native/win-x64/
           ls -la tio-browser/src/main/resources/native/win-x64/hdf5/
+          echo "Total bundled DLLs: $(ls -1 "$NATIVE_DIR" | wc -l)"
 
       # The tio-browser pom depends on global.thalion:ttio:1.2.0 (the
       # underlying TTI-O Java library at java/). It's an internal monorepo
