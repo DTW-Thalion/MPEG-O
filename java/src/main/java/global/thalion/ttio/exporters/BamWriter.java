@@ -9,12 +9,21 @@ import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.importers.BamReader;
 
+import htsjdk.samtools.SAMFileHeader;
+import htsjdk.samtools.SAMFileWriter;
+import htsjdk.samtools.SAMFileWriterFactory;
+import htsjdk.samtools.SAMProgramRecord;
+import htsjdk.samtools.SAMReadGroupRecord;
+import htsjdk.samtools.SAMRecord;
+import htsjdk.samtools.SAMSequenceDictionary;
+import htsjdk.samtools.SAMSequenceRecord;
+import htsjdk.samtools.cram.ref.ReferenceSource;
+
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
@@ -22,32 +31,30 @@ import java.util.Set;
 /**
  * BAM exporter — M88.
  *
- * <p>Writes a {@link WrittenGenomicRun} to BAM by formatting the in-
- * memory parallel-array representation as SAM text and piping that
- * text via stdin to the user-installed {@code samtools} binary
- * ({@code samtools view -bS -}, optionally piped through
- * {@code samtools sort -O bam}). Subprocess-only — no htslib
- * linkage; SAM line layout follows the public SAMv1 specification.</p>
+ * <p>v1.5.0 swapped the previous {@code samtools} subprocess approach for
+ * <a href="https://github.com/samtools/htsjdk">htsjdk</a>'s pure-Java
+ * SAM/BAM/CRAM writers (used by GATK, Picard, IGV). No external binary
+ * required; tio-browser works on Windows without a system samtools
+ * install. SAM line semantics still match the SAMv1 specification.</p>
  *
  * <h2>Quality byte encoding</h2>
  * <p>M87's {@link BamReader} stores SAM's QUAL field bytes verbatim
  * into {@link WrittenGenomicRun#qualities()} — i.e. the buffer holds
  * <b>ASCII Phred+33</b> characters (so a Phred-40 score is stored as
  * the byte value 73, the ASCII code for {@code 'I'}). This writer
- * mirrors that convention: each {@code qualities[i]} byte is written
- * directly as the SAM QUAL character with no arithmetic adjustment.
- * The pair is therefore lossless byte-for-byte across the M87 read /
- * M88 write round trip.</p>
- *
- * <p>Cross-language note: the Python and Objective-C implementations
- * adopt the same convention so cross-language conformance dumps
- * match.</p>
+ * mirrors that convention: each {@code qualities[i]} byte is
+ * interpreted as ASCII Phred+33 on write, then converted to raw Phred
+ * for htsjdk's {@code SAMRecord.setBaseQualities(byte[])} (which expects
+ * raw bytes). The all-{@code 0xFF} sentinel produced by the reader when
+ * source SAM had {@code QUAL '*'} maps back to "no qualities" via
+ * {@link SAMRecord#NULL_QUALS}.</p>
  *
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.exporters.bam.BamWriter},
- * Objective-C {@code TTIOBamWriter}.</p>
+ * Objective-C {@code TTIOBamWriter}. Cross-language byte-equality on
+ * BAM output is verified by the {@code cross-compat} CI job.</p>
  *
- * (M88)
+ * (M88, v1.5.0 htsjdk swap)
  */
 public class BamWriter {
 
@@ -57,21 +64,18 @@ public class BamWriter {
      * {@code @SQ}; we pick INT32_MAX so the emitted header is valid
      * for any plausible coordinate. Matches the Python reference's
      * {@code _DEFAULT_SQ_LENGTH} and the ObjC writer's constant for
-     * cross-language byte-equality on the unsorted code path.
+     * cross-language byte-equality.
      */
     protected static final long DEFAULT_SQ_LENGTH = 2147483647L;
-
-    /** Subprocess timeout for samtools invocations (seconds). */
-    private static final int SAMTOOLS_TIMEOUT_SECONDS = 120;
 
     private final Path path;
 
     /**
      * Construct a {@code BamWriter}.
      *
-     * @param path output BAM file path. The {@code .bam} extension is
-     *             honoured by samtools' file-format auto-detection
-     *             (HANDOFF Gotcha §165).
+     * @param path output BAM file path. htsjdk uses the file extension
+     *             ({@code .bam}, {@code .sam}, {@code .cram}) to pick
+     *             the output format.
      */
     public BamWriter(Path path) {
         this.path = Objects.requireNonNull(path);
@@ -90,49 +94,212 @@ public class BamWriter {
      * @param run        the genomic-run container to write.
      * @param provenance optional provenance records to inject as
      *                   {@code @PG} header lines. Pass an empty list
-     *                   for none; the M87/M88 cross-language
-     *                   convention is "writer accepts provenance
-     *                   explicitly because the Java/ObjC
-     *                   {@code WrittenGenomicRun} analogues don't
-     *                   carry it".
-     * @param sort       when {@code true} (
-     *                   default), pipe the SAM text through
-     *                   {@code samtools sort -O bam} so the output
-     *                   BAM is coordinate-sorted (precondition most
-     *                   downstream tools expect — IGV, GATK,
-     *                   {@code samtools index}). When {@code false},
-     *                   output is written in input read order and
-     *                   {@code @HD SO:} is set to {@code unsorted}.
-     * @throws IOException if samtools is missing, exits non-zero, or
-     *                     a piping I/O error occurs.
+     *                   for none.
+     * @param sort       when {@code true}, set {@code @HD SO:coordinate}
+     *                   so htsjdk's writer sorts records on close
+     *                   (precondition most downstream tools expect —
+     *                   IGV, GATK, {@code samtools index}). When
+     *                   {@code false}, output is unsorted.
+     * @throws IOException on write failures.
      */
     public void write(WrittenGenomicRun run, List<ProvenanceRecord> provenance,
                       boolean sort) throws IOException {
         Objects.requireNonNull(run, "run");
         if (provenance == null) provenance = List.of();
-        // First-use samtools probe (via BamReader's static).
-        if (!BamReader.isSamtoolsAvailable()) {
-            throw new BamReader.SamtoolsNotFoundException(
-                "samtools is required by global.thalion.ttio.exporters.BamWriter "
-                + "but was not found on PATH. Install via apt/brew/conda then re-run.");
+        SAMFileHeader header = buildHeader(run, provenance, sort);
+        try (SAMFileWriter writer = makeWriter(header, sort)) {
+            int n = run.readNames().size();
+            for (int i = 0; i < n; i++) {
+                SAMRecord rec = buildSamRecord(run, header, i);
+                writer.addAlignment(rec);
+            }
         }
-        String samText = buildSamText(run, provenance, sort);
-        invokeSamtools(samText, sort);
     }
 
     // ------------------------------------------------------------------
-    // SAM text assembly
+    // Header
+    // ------------------------------------------------------------------
+
+    /**
+     * Build a SAMFileHeader from {@code run} + provenance. Public-by-
+     * package-default so {@link CramWriter} can read it back if needed
+     * and so tests can introspect the generated header.
+     */
+    SAMFileHeader buildHeader(WrittenGenomicRun run,
+                              List<ProvenanceRecord> provenance,
+                              boolean sort) {
+        SAMFileHeader header = new SAMFileHeader();
+        header.setSortOrder(sort
+            ? SAMFileHeader.SortOrder.coordinate
+            : SAMFileHeader.SortOrder.unsorted);
+
+        // @SQ — one per unique chromosome in first-seen order
+        // (excluding "*" SAM unmapped sentinel).
+        SAMSequenceDictionary dict = new SAMSequenceDictionary();
+        Set<String> seen = new LinkedHashSet<>();
+        for (String chrom : run.chromosomes()) {
+            if (chrom == null || chrom.isEmpty() || "*".equals(chrom)) continue;
+            if (!seen.add(chrom)) continue;
+            dict.addSequence(new SAMSequenceRecord(chrom, (int) DEFAULT_SQ_LENGTH));
+        }
+        header.setSequenceDictionary(dict);
+
+        // @RG — single line if either sample or platform is set.
+        String sample = run.sampleName();
+        String platform = run.platform();
+        boolean hasSample = sample != null && !sample.isEmpty();
+        boolean hasPlatform = platform != null && !platform.isEmpty();
+        if (hasSample || hasPlatform) {
+            SAMReadGroupRecord rg = new SAMReadGroupRecord("rg1");
+            if (hasSample) rg.setSample(sample);
+            if (hasPlatform) rg.setPlatform(platform);
+            header.addReadGroup(rg);
+        }
+
+        // @PG — one per provenance record. SAM requires unique ID;
+        // synthesise "pg<idx>" if software is blank, suffix duplicates
+        // with .1/.2/... matching the cross-language convention.
+        Set<String> usedIds = new HashSet<>();
+        for (int idx = 0; idx < provenance.size(); idx++) {
+            ProvenanceRecord prov = provenance.get(idx);
+            String software = prov.software();
+            String baseId = (software == null || software.isEmpty())
+                ? ("pg" + idx) : software;
+            String pgId = baseId;
+            int n = 1;
+            while (usedIds.contains(pgId)) {
+                pgId = baseId + "." + n;
+                n++;
+            }
+            usedIds.add(pgId);
+            SAMProgramRecord pg = new SAMProgramRecord(pgId);
+            pg.setProgramName(software == null ? "" : software);
+            String cl = prov.parameters() != null
+                ? prov.parameters().get("CL") : null;
+            if (cl != null && !cl.isEmpty()) {
+                pg.setCommandLine(cl);
+            }
+            header.addProgramRecord(pg);
+        }
+
+        return header;
+    }
+
+    // ------------------------------------------------------------------
+    // Records
+    // ------------------------------------------------------------------
+
+    private SAMRecord buildSamRecord(WrittenGenomicRun run,
+                                     SAMFileHeader header, int i) {
+        SAMRecord rec = new SAMRecord(header);
+
+        String qnameRaw = run.readNames().get(i);
+        rec.setReadName((qnameRaw == null || qnameRaw.isEmpty()) ? "*" : qnameRaw);
+
+        rec.setFlags(run.flags()[i]);
+
+        String rname = run.chromosomes().get(i);
+        rec.setReferenceName((rname == null || rname.isEmpty()) ? "*" : rname);
+
+        long pos = run.positions()[i];
+        // htsjdk uses int alignment start; clamp out-of-range.
+        rec.setAlignmentStart(pos > Integer.MAX_VALUE ? 0 : (int) pos);
+
+        rec.setMappingQuality(run.mappingQualities()[i] & 0xFF);
+
+        String cigar = run.cigars().get(i);
+        rec.setCigarString((cigar == null || cigar.isEmpty()) ? "*" : cigar);
+
+        // RNEXT collapse: only when mate matches and chromosome is not "*".
+        String mateChromRaw = run.mateChromosomes().get(i);
+        String mateChrom = (mateChromRaw == null || mateChromRaw.isEmpty())
+            ? "*" : mateChromRaw;
+        rec.setMateReferenceName(mateChrom);
+
+        long matePos = run.matePositions()[i];
+        rec.setMateAlignmentStart(matePos < 0 ? 0 : (int) matePos);
+
+        rec.setInferredInsertSize(run.templateLengths()[i]);
+
+        long offset = run.offsets()[i];
+        int length = run.lengths()[i];
+        if (length == 0) {
+            rec.setReadBases(SAMRecord.NULL_SEQUENCE);
+            rec.setBaseQualities(SAMRecord.NULL_QUALS);
+        } else {
+            int from = (int) offset;
+            byte[] seqBytes = new byte[length];
+            System.arraycopy(run.sequences(), from, seqBytes, 0, length);
+            rec.setReadBases(seqBytes);
+
+            // QUAL bytes are stored as ASCII Phred+33. htsjdk wants raw
+            // Phred bytes; convert by subtracting 33. The all-0xFF
+            // sentinel (M87 reader produces this for source QUAL '*'
+            // with non-empty SEQ) maps back to NULL_QUALS so the round
+            // trip canonicalises.
+            byte[] qualBuf = run.qualities();
+            boolean allFF = true;
+            for (int k = from; k < from + length; k++) {
+                if ((qualBuf[k] & 0xFF) != 0xFF) { allFF = false; break; }
+            }
+            if (allFF) {
+                rec.setBaseQualities(SAMRecord.NULL_QUALS);
+            } else {
+                byte[] qualRaw = new byte[length];
+                for (int k = 0; k < length; k++) {
+                    int ascii = qualBuf[from + k] & 0xFF;
+                    qualRaw[k] = (byte) (ascii - 33);
+                }
+                rec.setBaseQualities(qualRaw);
+            }
+        }
+
+        return rec;
+    }
+
+    // ------------------------------------------------------------------
+    // Writer factory (overridable by CramWriter)
+    // ------------------------------------------------------------------
+
+    /**
+     * Build the SAMFileWriter for this output path + header. Default
+     * implementation produces BAM; {@link CramWriter} overrides to
+     * produce CRAM with a ReferenceSource.
+     *
+     * @param header   the header (sort order already set).
+     * @param sort     whether output should be sorted on close.
+     *                 (presorted=false + header SO=coordinate triggers
+     *                 htsjdk's in-memory sort on close.)
+     */
+    protected SAMFileWriter makeWriter(SAMFileHeader header, boolean sort) {
+        SAMFileWriterFactory factory = new SAMFileWriterFactory()
+            .setCreateIndex(false)
+            .setCreateMd5File(false);
+        // presorted=true tells htsjdk "input is already sorted, don't
+        // re-sort". When sort=false (output should be unsorted), we
+        // also pass presorted=true so no sorting happens. When
+        // sort=true, presorted=false so htsjdk sorts on close.
+        boolean presorted = !sort;
+        return factory.makeBAMWriter(header, presorted, path.toFile());
+    }
+
+    // ------------------------------------------------------------------
+    // Backwards-compat: SAM text generation (test seam)
     // ------------------------------------------------------------------
 
     /**
      * Build the full SAM text (header + alignment lines) for
-     * {@code run}. Exposed at package-private visibility for
-     * {@link CramWriter} reuse and for the
-     * {@code test_mate_collapse_to_equals} harness which inspects
-     * the pre-samtools SAM stream directly.
+     * {@code run}, without involving htsjdk. Retained as a test seam:
+     * the M88 cross-language conformance tests inspect the pre-write
+     * SAM stream directly, and the legacy
+     * {@code test_mate_collapse_to_equals} harness reads it through
+     * this method.
+     *
+     * <p>Package-private visibility so {@link CramWriter} can reuse.</p>
      */
     String buildSamText(WrittenGenomicRun run,
                         List<ProvenanceRecord> provenance, boolean sort) {
+        if (provenance == null) provenance = List.of();
         StringBuilder sb = new StringBuilder();
         appendHeader(sb, run, provenance, sort);
         appendAlignments(sb, run);
@@ -146,10 +313,7 @@ public class BamWriter {
         String so = sort ? "coordinate" : "unsorted";
         sb.append("@HD\tVN:1.6\tSO:").append(so).append('\n');
 
-        // @SQ — one per unique chromosome (excluding "*" SAM unmapped
-        // sentinel). First-seen order so writer output is
-        // deterministic.
-        Set<String> seen = new HashSet<>();
+        Set<String> seen = new LinkedHashSet<>();
         for (String chrom : run.chromosomes()) {
             if (chrom == null || chrom.isEmpty() || "*".equals(chrom)) continue;
             if (!seen.add(chrom)) continue;
@@ -157,7 +321,6 @@ public class BamWriter {
               .append("\tLN:").append(DEFAULT_SQ_LENGTH).append('\n');
         }
 
-        // @RG — single line if either sample_name or platform is set.
         String sample = run.sampleName();
         String platform = run.platform();
         boolean hasSample = sample != null && !sample.isEmpty();
@@ -169,9 +332,6 @@ public class BamWriter {
             sb.append('\n');
         }
 
-        // @PG — one line per provenance record. SAM requires ID;
-        // synthesise "pg<idx>" if the software field is blank, and
-        // suffix duplicates with .1/.2/...
         Set<String> usedIds = new HashSet<>();
         for (int idx = 0; idx < provenance.size(); idx++) {
             ProvenanceRecord prov = provenance.get(idx);
@@ -224,8 +384,6 @@ public class BamWriter {
             String cigarRaw = cigars.get(i);
             String cigar = (cigarRaw == null || cigarRaw.isEmpty()) ? "*" : cigarRaw;
 
-            // RNEXT collapse (§136): only when mate matches and
-            // chromosome is not "*".
             String mateChromRaw = mateChromosomes.get(i);
             String mateChrom = (mateChromRaw == null || mateChromRaw.isEmpty())
                 ? "*" : mateChromRaw;
@@ -236,10 +394,8 @@ public class BamWriter {
                 rnext = mateChrom;
             }
 
-            // PNEXT mapping (§138).
             long matePos = matePositions[i];
             long pnext = matePos < 0 ? 0L : matePos;
-
             int tlen = templateLengths[i];
             long offset = offsets[i];
             int length = lengths[i];
@@ -253,10 +409,6 @@ public class BamWriter {
                 int from = (int) offset;
                 int to = from + length;
                 seq = new String(seqBuf, from, length, StandardCharsets.US_ASCII);
-                // M87 reader produces an all-0xFF buffer when the
-                // source SAM had QUAL '*' but a non-empty SEQ — map
-                // back to '*' on write so the round trip
-                // canonicalises to the source convention.
                 boolean allFF = true;
                 for (int k = from; k < to; k++) {
                     if ((qualBuf[k] & 0xFF) != 0xFF) { allFF = false; break; }
@@ -264,10 +416,6 @@ public class BamWriter {
                 if (allFF) {
                     qual = "*";
                 } else {
-                    // qualities stored as ASCII Phred+33 already; use
-                    // ISO_8859_1 so any value > 127 round-trips
-                    // (samtools rejects QUAL > '~' = 0x7e but the
-                    // pass-through stays lossless).
                     qual = new String(qualBuf, from, length,
                         StandardCharsets.ISO_8859_1);
                 }
@@ -284,156 +432,6 @@ public class BamWriter {
               .append(tlen).append('\t')
               .append(seq).append('\t')
               .append(qual).append('\n');
-        }
-    }
-
-    // ------------------------------------------------------------------
-    // samtools subprocess invocation
-    // ------------------------------------------------------------------
-
-    /**
-     * Pipe {@code samText} through samtools to produce the output
-     * file. Subclasses ({@link CramWriter}) override
-     * {@link #buildViewCommand(boolean)} and
-     * {@link #buildSortCommand(boolean)} to inject reference and
-     * format flags.
-     */
-    void invokeSamtools(String samText, boolean sort) throws IOException {
-        List<String> viewCmd = buildViewCommand(sort);
-        List<String> sortCmd = buildSortCommand(sort);
-        if (sortCmd == null) {
-            runPipeline(List.of(viewCmd), samText);
-        } else {
-            runPipeline(List.of(viewCmd, sortCmd), samText);
-        }
-    }
-
-    /**
-     * Build the {@code samtools view} stage of the pipeline. When
-     * {@code sort} is {@code true}, the view stage emits to stdout
-     * (the sort stage consumes from stdin); when {@code false},
-     * the view stage writes directly to {@link #path}.
-     *
-     * <p>Subclasses override to swap in CRAM flags.</p>
-     */
-    protected List<String> buildViewCommand(boolean sort) {
-        List<String> cmd = new ArrayList<>();
-        cmd.add("samtools");
-        cmd.add("view");
-        cmd.add("-bS");
-        if (!sort) {
-            cmd.add("-o");
-            cmd.add(path.toAbsolutePath().toString());
-        }
-        cmd.add("-");
-        return cmd;
-    }
-
-    /**
-     * Build the {@code samtools sort} stage of the pipeline, or
-     * {@code null} for the unsorted single-stage path.
-     */
-    protected List<String> buildSortCommand(boolean sort) {
-        if (!sort) return null;
-        List<String> cmd = new ArrayList<>();
-        cmd.add("samtools");
-        cmd.add("sort");
-        cmd.add("-O");
-        cmd.add("bam");
-        cmd.add("-o");
-        cmd.add(path.toAbsolutePath().toString());
-        cmd.add("-");
-        return cmd;
-    }
-
-    private static void runPipeline(List<List<String>> commands,
-                                    String stdinText) throws IOException {
-        byte[] payload = stdinText.getBytes(StandardCharsets.US_ASCII);
-        if (commands.size() == 1) {
-            ProcessBuilder pb = new ProcessBuilder(commands.get(0));
-            pb.redirectErrorStream(false);
-            Process proc = pb.start();
-            try (OutputStream stdin = proc.getOutputStream()) {
-                stdin.write(payload);
-            }
-            proc.getInputStream().readAllBytes();
-            byte[] errBytes = proc.getErrorStream().readAllBytes();
-            int exit;
-            try {
-                exit = proc.waitFor();
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-                proc.destroy();
-                throw new IOException("interrupted while waiting for samtools", ie);
-            }
-            if (exit != 0) {
-                throw new IOException("samtools (" + commands.get(0)
-                    + ") exited " + exit + ": "
-                    + new String(errBytes, StandardCharsets.UTF_8).trim());
-            }
-            return;
-        }
-
-        // Two-stage pipeline: stage[0].stdout -> stage[1].stdin.
-        ProcessBuilder pb1 = new ProcessBuilder(commands.get(0));
-        ProcessBuilder pb2 = new ProcessBuilder(commands.get(1));
-        Process first = pb1.start();
-        Process second = pb2.start();
-
-        // Pump stage 1 stdout to stage 2 stdin in a background thread
-        // so the two processes can run concurrently. Closing the first
-        // process's input stream signals EOF to the sort stage's
-        // stdin once view is done.
-        Thread pump = new Thread(() -> {
-            try (OutputStream secondIn = second.getOutputStream()) {
-                first.getInputStream().transferTo(secondIn);
-            } catch (IOException ignored) {
-                // Best-effort; failures show up as non-zero exit.
-            }
-        }, "BamWriter-pipe-pump");
-        pump.setDaemon(true);
-        pump.start();
-
-        try (OutputStream stdin = first.getOutputStream()) {
-            stdin.write(payload);
-        }
-
-        // Drain stderr to avoid deadlock on platforms with small pipe
-        // buffers.
-        byte[] firstErr;
-        byte[] secondErr;
-        try {
-            firstErr = first.getErrorStream().readAllBytes();
-            // Discard stage-2 stdout (it goes to a file via -o); stderr
-            // we collect.
-            second.getInputStream().readAllBytes();
-            secondErr = second.getErrorStream().readAllBytes();
-        } catch (IOException e) {
-            first.destroy();
-            second.destroy();
-            throw e;
-        }
-
-        int firstExit, secondExit;
-        try {
-            firstExit = first.waitFor();
-            pump.join(SAMTOOLS_TIMEOUT_SECONDS * 1000L);
-            secondExit = second.waitFor();
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-            first.destroy();
-            second.destroy();
-            throw new IOException("interrupted while waiting for samtools", ie);
-        }
-        if (firstExit != 0) {
-            throw new IOException("samtools (stage 1, " + commands.get(0)
-                + ") exited " + firstExit + ": "
-                + new String(firstErr, StandardCharsets.UTF_8).trim());
-        }
-        if (secondExit != 0) {
-            throw new IOException("samtools (stage 2, " + commands.get(1)
-                + ") exited " + secondExit + ": "
-                + new String(secondErr, StandardCharsets.UTF_8).trim());
         }
     }
 }
