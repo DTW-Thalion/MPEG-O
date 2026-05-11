@@ -29,26 +29,36 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <!-- Default jarhdf5 systemPath. Project-level so the pom
-             validates for downstream consumers (e.g. tio-browser's
-             shade plugin) regardless of OS. Overridable on the CLI
-             via -Dhdf5.jar.path=... at compile time. Without this
-             default, Maven flagged the installed pom as invalid on
-             Windows (where the linux-system-hdf5 profile didn't
-             activate) and silently dropped htsjdk + bcprov +
-             sqlite-jdbc from tio-browser's shaded JAR. -->
-        <hdf5.jar.path>/usr/local/lib/jarhdf5.jar</hdf5.jar.path>
+        <!-- Runtime native-library search path for JHI5 / libttio_rans_jni.
+             The L3 V4 (CRAM 3.1 fqzcomp) tests need libttio_rans_jni.so on
+             java.library.path. The native build dir is appended so
+             `mvn test` works from any session without a per-invocation
+             -Dhdf5.native.path override. CI/devs without the native build
+             still pass — V4 tests are gated on TtioRansNative.isAvailable(). -->
         <hdf5.native.path>/usr/local/lib:${project.basedir}/../native/_build</hdf5.native.path>
     </properties>
 
+    <!-- jarhdf5 isn't on Maven Central; vendor the JNI binding jar in a
+         file-system repo shared with tio-browser. Using a regular compile-
+         scope dep (no <scope>system</scope>) avoids the systemPath pom-
+         validation gotcha that flagged ttio's installed pom as "invalid"
+         on Windows and silently dropped htsjdk + bcprov + sqlite-jdbc
+         from tio-browser's shaded JAR. -->
+    <repositories>
+        <repository>
+            <id>local-jhi5</id>
+            <url>file://${project.basedir}/../tio-browser/local-repo</url>
+        </repository>
+    </repositories>
+
     <dependencies>
-        <!-- HDF5 Java bindings (source-built HDF5 1.14.6 via scripts/install-hdf5.sh) -->
+        <!-- HDF5 Java bindings (source-built HDF5 1.14.6 via scripts/install-hdf5.sh).
+             Resolves from the local-repo above, which vendors the
+             jarhdf5-1.14.6.jar that HDF Group's autotools build emits. -->
         <dependency>
             <groupId>org.hdfgroup</groupId>
-            <artifactId>hdf5</artifactId>
+            <artifactId>jarhdf5</artifactId>
             <version>1.14.6</version>
-            <scope>system</scope>
-            <systemPath>${hdf5.jar.path}</systemPath>
         </dependency>
 
         <dependency>
