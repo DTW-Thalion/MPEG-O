@@ -13,11 +13,13 @@ import htsjdk.samtools.SAMFileWriter;
 import htsjdk.samtools.SAMFileWriterFactory;
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.SAMSequenceRecord;
-import htsjdk.samtools.reference.ReferenceSequenceFile;
-import htsjdk.samtools.reference.ReferenceSequenceFileFactory;
+import htsjdk.samtools.reference.FastaSequenceFile;
+import htsjdk.samtools.reference.ReferenceSequence;
 
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -69,36 +71,40 @@ public class CramWriter extends BamWriter {
                               List<ProvenanceRecord> provenance,
                               boolean sort) {
         SAMFileHeader header = super.buildHeader(run, provenance, sort);
-        try (ReferenceSequenceFile refSeq =
-                ReferenceSequenceFileFactory.getReferenceSequenceFile(
-                    referenceFasta.toFile())) {
-            SAMSequenceDictionary refDict = refSeq.getSequenceDictionary();
-            if (refDict == null) {
+        Map<String, Integer> refLengths = scanFastaLengths();
+        SAMSequenceDictionary updated = new SAMSequenceDictionary();
+        for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
+            Integer realLen = refLengths.get(seq.getSequenceName());
+            if (realLen == null) {
                 throw new IllegalStateException(
-                    "Reference FASTA " + referenceFasta + " has no .dict "
-                    + "sidecar; CRAM writing requires one. Generate via "
-                    + "`samtools dict <fasta>` or htsjdk's "
-                    + "CreateSequenceDictionary tool.");
+                    "Chromosome '" + seq.getSequenceName()
+                    + "' in run not found in reference FASTA "
+                    + referenceFasta + " (CRAM is reference-compressed;"
+                    + " every emitted @SQ must be in the reference).");
             }
-            SAMSequenceDictionary updated = new SAMSequenceDictionary();
-            for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
-                SAMSequenceRecord refRec = refDict.getSequence(seq.getSequenceName());
-                if (refRec == null) {
-                    throw new IllegalStateException(
-                        "Chromosome '" + seq.getSequenceName()
-                        + "' in run not found in reference FASTA "
-                        + referenceFasta + " (CRAM is reference-compressed;"
-                        + " every emitted @SQ must be in the reference).");
-                }
-                updated.addSequence(new SAMSequenceRecord(
-                    refRec.getSequenceName(), refRec.getSequenceLength()));
-            }
-            header.setSequenceDictionary(updated);
-        } catch (java.io.IOException e) {
-            throw new IllegalStateException(
-                "Failed to read reference FASTA dictionary: " + referenceFasta, e);
+            updated.addSequence(new SAMSequenceRecord(
+                seq.getSequenceName(), realLen));
         }
+        header.setSequenceDictionary(updated);
         return header;
+    }
+
+    /**
+     * Scan the reference FASTA and return a map of sequence name → length.
+     * Build the dictionary from the FASTA itself rather than requiring a
+     * {@code .dict} sidecar, so test fixtures and casual users with bare
+     * FASTAs aren't blocked.
+     */
+    private Map<String, Integer> scanFastaLengths() {
+        Map<String, Integer> lengths = new HashMap<>();
+        try (FastaSequenceFile fasta = new FastaSequenceFile(
+                referenceFasta.toFile(), true)) {
+            ReferenceSequence seq;
+            while ((seq = fasta.nextSequence()) != null) {
+                lengths.put(seq.getName(), seq.length());
+            }
+        }
+        return lengths;
     }
 
     @Override
