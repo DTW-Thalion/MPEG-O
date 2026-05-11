@@ -11,6 +11,41 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-05-11
+
+### Fixed
+
+- **`tio-browser` Windows: opens `.tio` files with genomic data.** v1.4.0
+  launched cleanly on Windows (after the MinGW DLL closure was bundled),
+  but it could not open `.tio` files containing BAM/CRAM-style genomic
+  data because the Java implementation shelled out to the
+  `samtools` CLI binary — not installed on a fresh Windows machine.
+  Replaced the samtools subprocess across `BamReader`, `BamWriter`,
+  `CramReader`, and `CramWriter` with [htsjdk](https://github.com/samtools/htsjdk)
+  4.1.3 — the pure-Java SAM/BAM/CRAM library used by GATK, Picard, and
+  IGV. No external binary required at runtime; tio-browser now works
+  end-to-end on Windows with only a JDK 17+ installed.
+
+### Internal
+
+- `htsjdk` added as a Maven runtime dependency (`com.github.samtools:htsjdk:4.1.3`).
+- `BamReader.SamtoolsNotFoundException` retained as a no-throw alias
+  for source compat with callers and tests that catch it.
+- `BamReader.isSamtoolsAvailable()` returns `true` unconditionally
+  (htsjdk is always available as a Maven dep).
+- CRAM reference handling: custom `InMemoryFastaReferenceSource`
+  bypasses htsjdk's stock `ReferenceSource` strict length/MD5
+  validation, matching samtools' lenient default behaviour. Existing
+  samtools-produced CRAMs (with placeholder `@SQ LN`) decode without
+  modification.
+- `BamReader` static initializer sets
+  `samjdk.cram.use_alignment_md5_check=false` for the same reason.
+- `WrittenGenomicRun.qualities` byte semantics preserved: ASCII Phred+33
+  on the cross-language wire (M87/M88 convention); htsjdk's raw-Phred
+  byte arrays are converted with ±33 in the reader/writer.
+- 0-byte BAM/SAM rejection: explicit `Files.size(path) == 0` check
+  before opening (htsjdk would otherwise treat as a 0-record BAM).
+
 ## [1.4.0] - 2026-05-09
 
 ### Changed
