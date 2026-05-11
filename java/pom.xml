@@ -29,6 +29,16 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
+        <!-- Default jarhdf5 systemPath. Project-level so the pom
+             validates for downstream consumers (e.g. tio-browser's
+             shade plugin) regardless of OS. Overridable on the CLI
+             via -Dhdf5.jar.path=... at compile time. Without this
+             default, Maven flagged the installed pom as invalid on
+             Windows (where the linux-system-hdf5 profile didn't
+             activate) and silently dropped htsjdk + bcprov +
+             sqlite-jdbc from tio-browser's shaded JAR. -->
+        <hdf5.jar.path>/usr/local/lib/jarhdf5.jar</hdf5.jar.path>
+        <hdf5.native.path>/usr/local/lib:${project.basedir}/../native/_build</hdf5.native.path>
     </properties>
 
     <dependencies>
@@ -107,24 +117,12 @@
         </dependency>
     </dependencies>
 
-    <profiles>
-        <profile>
-            <id>linux-system-hdf5</id>
-            <activation>
-                <os><family>unix</family></os>
-            </activation>
-            <properties>
-                <hdf5.jar.path>/usr/local/lib/jarhdf5.jar</hdf5.jar.path>
-                <!-- L3 V4 (CRAM 3.1 fqzcomp) tests need libttio_rans_jni.so on
-                     java.library.path. The native build dir is appended so
-                     `mvn test` works from any session without a per-invocation
-                     -Dhdf5.native.path override. CI/devs without the native
-                     build still pass — V4 tests are gated on
-                     TtioRansNative.isAvailable(). -->
-                <hdf5.native.path>/usr/local/lib:${project.basedir}/../native/_build</hdf5.native.path>
-            </properties>
-        </profile>
-    </profiles>
+    <!-- (Previously: linux-system-hdf5 profile set hdf5.jar.path +
+         hdf5.native.path with <os><family>unix</family></os> activation.
+         Moved to project-level <properties> above so the installed pom
+         validates on all OSes. The L3 V4 (CRAM 3.1 fqzcomp) test path
+         note about hdf5.native.path is preserved by the property
+         comment.) -->
 
     <build>
         <plugins>
