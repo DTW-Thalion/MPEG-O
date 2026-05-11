@@ -37,89 +37,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build dependencies (apt)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            clang \
-            cmake \
-            ninja-build \
-            make \
-            git \
-            ca-certificates \
-            zlib1g-dev \
-            libssl-dev \
-            libxml2-dev \
-            libgnutls28-dev \
-            libffi-dev \
-            libicu-dev \
-            libblocksruntime-dev \
-            libcurl4-openssl-dev \
-            libwebsockets-dev \
-            tzdata
-
-      - name: Cache GNUstep stack (libobjc2 + tools-make + libs-base)
-        id: gnustep-cache
-        uses: actions/cache@v4
+      - uses: ./.github/actions/setup-gnustep
         with:
-          path: |
-            /usr/local/include/objc
-            /usr/local/include/GNUstep
-            /usr/local/lib/libobjc.so*
-            /usr/local/lib/libgnustep-base*
-            /usr/local/lib/GNUstep
-            /usr/local/share/GNUstep
-            /usr/local/bin/gnustep-config
-            /usr/local/bin/gdomap
-          key: gnustep-${{ runner.os }}-${{ env.LIBOBJC2_REF }}-${{ env.TOOLS_MAKE_REF }}-${{ env.LIBS_BASE_REF }}-v2
+          libobjc2-ref: ${{ env.LIBOBJC2_REF }}
+          tools-make-ref: ${{ env.TOOLS_MAKE_REF }}
+          libs-base-ref: ${{ env.LIBS_BASE_REF }}
+          install-prefix: ${{ env.INSTALL_PREFIX }}
 
-      - name: Build libobjc2 from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          git clone --depth 1 --branch "${LIBOBJC2_REF}" \
-            https://github.com/gnustep/libobjc2.git /tmp/libobjc2
-          cd /tmp/libobjc2
-          git submodule update --init --recursive
-          mkdir build && cd build
-          cmake -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-            -DCMAKE_C_COMPILER=clang \
-            -DCMAKE_CXX_COMPILER=clang++ \
-            ..
-          ninja
-          sudo ninja install
-
-      - name: Build gnustep-make from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
-            https://github.com/gnustep/tools-make.git /tmp/tools-make
-          cd /tmp/tools-make
-          ./configure \
-            --prefix="${INSTALL_PREFIX}" \
-            --with-library-combo=ng-gnu-gnu \
-            CC=clang
-          make
-          sudo make install
-
-      - name: Build gnustep-base from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          # shellcheck disable=SC1091
-          . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
-          git clone --depth 1 --branch "${LIBS_BASE_REF}" \
-            https://github.com/gnustep/libs-base.git /tmp/libs-base
-          cd /tmp/libs-base
-          ./configure CC=clang
-          make
-          sudo -E make install
-
-      - name: Refresh dynamic linker cache
-        run: sudo ldconfig
+      - uses: ./.github/actions/setup-hdf5
 
       - name: Show toolchain versions
         run: |
@@ -130,18 +55,6 @@ jobs:
           ls -l ${INSTALL_PREFIX}/lib/libobjc.so* || true
           ls -l ${INSTALL_PREFIX}/lib/libgnustep-base.so* || true
 
-
-      - name: Cache HDF5 1.14
-        id: cache-hdf5
-        uses: actions/cache@v4
-        with:
-          path: /usr/local
-          key: hdf5-1.14.6-hl-${{ runner.os }}
-      - name: Install HDF5 1.14 from source
-        if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 (always)
-        run: sudo ldconfig /usr/local/lib
       # M23: probe H5is_library_threadsafe() and log the result. Source-built
       # HDF5 1.14.6 is serial (not threadsafe); TTIOHDF5File detects that at open
       # falls back to exclusive-only wrapper locking (see -isThreadSafe).
@@ -162,8 +75,7 @@ jobs:
           clang /tmp/h5ts.c -I/usr/local/include -L/usr/local/lib -lhdf5 -Wl,-rpath,/usr/local/lib -o /tmp/h5ts
           /tmp/h5ts
 
-      - name: Build native libttio_rans (required by ObjC genomic codecs)
-        run: ./scripts/build-native.sh
+      - uses: ./.github/actions/build-native
 
       - name: Dependency check
         working-directory: objc
@@ -565,93 +477,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install build dependencies (apt)
+      - uses: ./.github/actions/setup-gnustep
+        with:
+          libobjc2-ref: ${{ env.LIBOBJC2_REF }}
+          tools-make-ref: ${{ env.TOOLS_MAKE_REF }}
+          libs-base-ref: ${{ env.LIBS_BASE_REF }}
+          install-prefix: ${{ env.INSTALL_PREFIX }}
+
+      - name: Install perf job extras (python3 for harness scripts)
         run: |
-          sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang cmake ninja-build make git ca-certificates \
-            zlib1g-dev libssl-dev libxml2-dev \
-            libgnutls28-dev libffi-dev libicu-dev \
-            libblocksruntime-dev libcurl4-openssl-dev \
-            libwebsockets-dev tzdata \
             python3 python3-pip
 
-      - name: Cache HDF5 1.14 (perf job)
-        id: cache-hdf5-perf
-        uses: actions/cache@v4
-        with:
-          # Narrow paths — see cross-compat job for rationale.
-          path: |
-            /usr/local/include/hdf5*
-            /usr/local/include/H5*
-            /usr/local/lib/libhdf5*
-            /usr/local/lib/libjarhdf5*
-            /usr/local/lib/jarhdf5.jar
-            /usr/local/share/hdf5_examples
-          key: hdf5-1.14.6-hl-${{ runner.os }}-narrow
-      - name: Install HDF5 1.14 from source (perf job)
-        if: steps.cache-hdf5-perf.outputs.cache-hit != 'true'
-        run: bash scripts/install-hdf5.sh 1.14.6
-      - name: Update ldconfig for HDF5 perf (always)
-        run: sudo ldconfig /usr/local/lib
+      - uses: ./.github/actions/setup-hdf5
 
-      - name: Cache GNUstep stack
-        id: gnustep-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /usr/local/include/objc
-            /usr/local/include/GNUstep
-            /usr/local/lib/libobjc.so*
-            /usr/local/lib/libgnustep-base*
-            /usr/local/lib/GNUstep
-            /usr/local/share/GNUstep
-            /usr/local/bin/gnustep-config
-            /usr/local/bin/gdomap
-          key: gnustep-${{ runner.os }}-${{ env.LIBOBJC2_REF }}-${{ env.TOOLS_MAKE_REF }}-${{ env.LIBS_BASE_REF }}-v2
-
-      - name: Build libobjc2 from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          git clone --depth 1 --branch "${LIBOBJC2_REF}" \
-            https://github.com/gnustep/libobjc2.git /tmp/libobjc2
-          cd /tmp/libobjc2
-          git submodule update --init --recursive
-          mkdir build && cd build
-          cmake -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_INSTALL_PREFIX="${INSTALL_PREFIX}" \
-            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ ..
-          ninja
-          sudo ninja install
-
-      - name: Build gnustep-make from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          git clone --depth 1 --branch "${TOOLS_MAKE_REF}" \
-            https://github.com/gnustep/tools-make.git /tmp/tools-make
-          cd /tmp/tools-make
-          ./configure --prefix="${INSTALL_PREFIX}" \
-            --with-library-combo=ng-gnu-gnu CC=clang
-          make
-          sudo make install
-
-      - name: Build gnustep-base from source
-        if: steps.gnustep-cache.outputs.cache-hit != 'true'
-        run: |
-          set -exo pipefail
-          # shellcheck disable=SC1091
-          . "${INSTALL_PREFIX}/share/GNUstep/Makefiles/GNUstep.sh"
-          git clone --depth 1 --branch "${LIBS_BASE_REF}" \
-            https://github.com/gnustep/libs-base.git /tmp/libs-base
-          cd /tmp/libs-base
-          ./configure CC=clang
-          make
-          sudo -E make install
-
-      - name: Refresh dynamic linker cache
-        run: sudo ldconfig
+      # objc/build.sh's dep check requires libttio_rans.so. Previously
+      # missing — perf job was silently failing on main pushes with
+      # `[FAIL] libttio_rans.so not found`. Caught & fixed during the
+      # phase 3 consolidation (run 25642989728).
+      - uses: ./.github/actions/build-native
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
