@@ -33,14 +33,24 @@ git clone --depth 1 --branch "$VERSION" \
 #
 # Patch the FORCE-OFF lines to FILTER_OPTION(LZ4) so MSYS2 UCRT64
 # with system lz4 (mingw-w64-ucrt-x86_64-lz4) builds the plugin.
-# The H5Zlz4.c source compiles cleanly under MinGW; the guard was
-# upstream caution, not a real incompatibility.
+#
+# The H5Zlz4.c source ALSO needs a winsock2.h include on Windows —
+# it uses htonl/ntohl (POSIX byte-order functions) without including
+# <winsock2.h>. ws2_32.lib is linked (the per-target CMakeLists adds
+# it on WIN32) but the source's implicit-declaration error blocks
+# compilation under MinGW. Inject the include right after
+# lz4_config.h.
 case "$(uname -s)" in
     MINGW*|MSYS*|CYGWIN*)
         echo "build-h5lz4: patching upstream CMakeLists to allow MinGW LZ4 build"
         sed -i 's|set (ENABLE_LZ4 OFF CACHE BOOL "" FORCE)|FILTER_OPTION (LZ4)|g' \
             "$WORK/CMakeLists.txt"
         grep -n 'ENABLE_LZ4\|FILTER_OPTION (LZ4)' "$WORK/CMakeLists.txt" | head -5
+
+        echo "build-h5lz4: injecting <winsock2.h> include into H5Zlz4.c for MinGW"
+        sed -i 's|^#include "lz4_config.h"$|#include "lz4_config.h"\n#ifdef _WIN32\n#  include <winsock2.h>\n#endif|' \
+            "$WORK/LZ4/src/H5Zlz4.c"
+        head -12 "$WORK/LZ4/src/H5Zlz4.c"
         ;;
 esac
 
