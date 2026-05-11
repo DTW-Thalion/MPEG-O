@@ -127,6 +127,7 @@ jobs:
             mingw-w64-ucrt-x86_64-zlib
             mingw-w64-ucrt-x86_64-curl
             mingw-w64-ucrt-x86_64-make
+            mingw-w64-ucrt-x86_64-maven
             autoconf
             automake
             libtool
