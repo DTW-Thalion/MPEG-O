@@ -8,21 +8,21 @@ package global.thalion.ttio.exporters;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 
+import global.thalion.ttio.importers.CramReader;
+
+import htsjdk.samtools.CRAMFileWriter;
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
-import htsjdk.samtools.SAMFileWriterFactory;
 import htsjdk.samtools.SAMSequenceDictionary;
-import htsjdk.samtools.SAMSequenceDictionaryCodec;
 import htsjdk.samtools.SAMSequenceRecord;
 import htsjdk.samtools.reference.FastaSequenceFile;
 import htsjdk.samtools.reference.ReferenceSequence;
-import htsjdk.samtools.reference.ReferenceSequenceFileFactory;
 
-import java.io.BufferedWriter;
+import java.io.BufferedOutputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
@@ -78,12 +78,6 @@ public class CramWriter extends BamWriter {
                               List<ProvenanceRecord> provenance,
                               boolean sort) {
         SAMFileHeader header = super.buildHeader(run, provenance, sort);
-        // htsjdk's IndexedFastaSequenceFile needs BOTH .fai and .dict
-        // sidecars for ReferenceSource.getReferenceBases(name, ...) to
-        // succeed by name lookup. Auto-create the .dict if missing
-        // (computed from the FASTA itself) so users with bare FASTAs
-        // don't have to pre-run `samtools dict` or picard.
-        ensureFastaDict();
         Map<String, Integer> refLengths = scanFastaLengths();
         SAMSequenceDictionary updated = new SAMSequenceDictionary();
         for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
@@ -100,50 +94,6 @@ public class CramWriter extends BamWriter {
         }
         header.setSequenceDictionary(updated);
         return header;
-    }
-
-    /**
-     * Compute the FASTA {@code .dict} sidecar path
-     * ({@code refname.dict}, replacing {@code .fa}/{@code .fasta}
-     * extension). Per samtools/picard convention.
-     */
-    private Path dictPath() {
-        String fname = referenceFasta.getFileName().toString();
-        String stem = fname.replaceFirst("\\.(fa|fasta|fna)$", "");
-        if (stem.equals(fname)) {
-            // No recognised extension; append .dict directly
-            stem = fname;
-        }
-        return referenceFasta.resolveSibling(stem + ".dict");
-    }
-
-    /**
-     * Generate the {@code .dict} sidecar from the FASTA if it doesn't
-     * exist yet. Idempotent; subsequent calls find the existing dict
-     * and return immediately. Required so htsjdk's
-     * IndexedFastaSequenceFile can look up sequences by name for the
-     * CRAM writer's reference-bases path.
-     */
-    private void ensureFastaDict() {
-        Path dictFile = dictPath();
-        if (Files.exists(dictFile)) return;
-        // Build dictionary by scanning the FASTA, then write via htsjdk's
-        // SAMSequenceDictionaryCodec.
-        SAMSequenceDictionary dict = new SAMSequenceDictionary();
-        try (FastaSequenceFile fasta = new FastaSequenceFile(
-                referenceFasta.toFile(), true)) {
-            ReferenceSequence seq;
-            while ((seq = fasta.nextSequence()) != null) {
-                dict.addSequence(new SAMSequenceRecord(seq.getName(), seq.length()));
-            }
-        }
-        try (BufferedWriter w = Files.newBufferedWriter(
-                dictFile, StandardCharsets.UTF_8)) {
-            new SAMSequenceDictionaryCodec(w).encode(dict);
-        } catch (IOException e) {
-            throw new UncheckedIOException(
-                "Failed to write .dict sidecar at " + dictFile, e);
-        }
     }
 
     /**
@@ -166,11 +116,23 @@ public class CramWriter extends BamWriter {
 
     @Override
     protected SAMFileWriter makeWriter(SAMFileHeader header, boolean sort) {
-        SAMFileWriterFactory factory = new SAMFileWriterFactory()
-            .setCreateIndex(false)
-            .setCreateMd5File(false);
+        // Direct instantiation of CRAMFileWriter with an in-memory
+        // reference source so we bypass htsjdk's stock ReferenceSource
+        // (which needs .dict + strict length/MD5 validation). Mirrors
+        // CramReader's approach so write + read are symmetric.
         boolean presorted = !sort;
-        return factory.makeCRAMWriter(header, presorted,
-            path().toFile(), referenceFasta.toFile());
+        try {
+            OutputStream out = new BufferedOutputStream(
+                new FileOutputStream(path().toFile()));
+            return new CRAMFileWriter(
+                out,
+                new CramReader.InMemoryFastaReferenceSource(referenceFasta),
+                presorted,
+                header,
+                path().toFile().getName());
+        } catch (IOException e) {
+            throw new UncheckedIOException(
+                "Failed to open CRAM output: " + path(), e);
+        }
     }
 }
