@@ -7,7 +7,7 @@
 
     <groupId>global.thalion</groupId>
     <artifactId>tio-browser</artifactId>
-    <version>1.4.2</version>
+    <version>1.4.1</version>
     <packaging>jar</packaging>
 
     <name>tio-browser</name>
@@ -26,10 +26,10 @@
         <!-- JDK 22 required: the ttio dependency uses the FFM API
              (stable in 22) for compound-type HDF5 reads/writes. A JDK 17
              runtime can't load the resulting classes (class file version
-             66). v1.4.2 patch bumps the minimum from 17 → 22 to match
-             ttio's compile target and resolve the
-             "Hdf5CompoundIO$FieldKind preview features are not enabled"
-             load error users hit with v1.4.1. -->
+             66). Minimum bumped from 17 to 22 to match ttio's compile
+             target and resolve the "Hdf5CompoundIO$FieldKind preview
+             features are not enabled" load error from the initial
+             v1.4.1 build (re-tagged after this fix). -->
         <maven.compiler.source>22</maven.compiler.source>
         <maven.compiler.target>22</maven.compiler.target>
         <javafx.version>21.0.5</javafx.version>
