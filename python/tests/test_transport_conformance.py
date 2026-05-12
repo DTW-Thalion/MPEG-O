@@ -171,28 +171,75 @@ def _objc_tool_available(name: str) -> bool:
 
 # Java 21 preview-API + FFM flags. The library uses FFM for HDF5 1.14
 # VL_BYTES handling; classes compiled with --enable-preview cannot be
-# loaded without the same flag at runtime.
-# `-Djava.library.path=/usr/local/lib` forces loading the source-built
-# HDF5 1.14 libhdf5_java.so; without it Java's default search path picks
-# up the lingering apt-installed `libhdf5-jni` 1.10 first and the
-# version mismatch triggers UnsatisfiedLinkError on H5 native methods.
-_JAVA_FLAGS = [
-    "--enable-preview",
-    "--enable-native-access=ALL-UNNAMED",
-    "-Djava.library.path=/usr/local/lib",
-]
+# loaded without the same flag at runtime. The java.library.path entry
+# is platform-dependent: Linux source-builds land at /usr/local/lib;
+# Windows mingw-ucrt64 builds land under $HDF5_HOME/bin. The default
+# below covers the Linux CI path; non-Linux environments must set
+# TTIO_HDF5_NATIVE so the test loads the right libhdf5_java/{so,dll}.
+_HDF5_NATIVE_DEFAULT = "/usr/local/lib"
+_HDF5_JAR_DEFAULT = "/usr/local/lib/jarhdf5.jar"
+
+
+def _hdf5_native_dir() -> str:
+    return os.environ.get("TTIO_HDF5_NATIVE", _HDF5_NATIVE_DEFAULT)
+
+
+def _hdf5_jar_path() -> str:
+    return os.environ.get("TTIO_HDF5_JAR", _HDF5_JAR_DEFAULT)
+
+
+def _java_flags() -> list[str]:
+    return [
+        "--enable-preview",
+        "--enable-native-access=ALL-UNNAMED",
+        f"-Djava.library.path={_hdf5_native_dir()}",
+    ]
+
+
+def _build_java_classpath() -> str:
+    """Compose the runtime classpath for the Java CLIs.
+
+    Prefers a cached ``target/runtime-classpath.txt`` produced by
+    ``mvn dependency:build-classpath`` — that is the project's exact
+    transitive dep set, with no risk of pulling in stray jars from a
+    shared local Maven cache. Falls back to a deliberately narrow
+    glob of the jars actually declared in ``java/pom.xml`` if the
+    cache file is absent (e.g. fresh checkout where ``mvn`` has not
+    run yet on this machine).
+    """
+    classes = REPO_ROOT / "java" / "target" / "classes"
+    cp_file = REPO_ROOT / "java" / "target" / "runtime-classpath.txt"
+    if cp_file.is_file():
+        # Maven's resolved classpath already uses os.pathsep on the
+        # generating platform — re-emit as a single string with our
+        # ``classes`` dir and the HDF5 jar prepended.
+        resolved = cp_file.read_text().strip()
+        return os.pathsep.join([str(classes), _hdf5_jar_path(), resolved])
+    # Conservative fallback: glob only jars whose exact artifact name
+    # is in ``java/pom.xml``. Earlier versions of this helper used
+    # ``*slf4j*.jar`` which over-pulled ``log4j-slf4j-impl`` from
+    # transitive caches and caused ``NoClassDefFoundError: org/apache
+    # /log4j/Level`` at HDF5 init time. Keep this list in sync with
+    # the runtime-scope deps in ``java/pom.xml``.
+    m2 = Path.home() / ".m2" / "repository"
+    name_patterns = (
+        "Java-WebSocket-*.jar",
+        "slf4j-api-2.*.jar",
+        "slf4j-simple-2.*.jar",
+        "sqlite-jdbc-*.jar",
+        "bcprov-jdk18on-*.jar",
+        "htsjdk-*.jar",
+    )
+    jars: list[str] = []
+    for pat in name_patterns:
+        jars.extend(sorted(str(p) for p in m2.rglob(pat)))
+    return os.pathsep.join([str(classes), _hdf5_jar_path(), *jars])
 
 
 def _run_java(cli: str, *args: str) -> None:
-    classes = REPO_ROOT / "java" / "target" / "classes"
-    m2 = Path.home() / ".m2" / "repository"
-    jars = []
-    for pattern in ("*Java-WebSocket*.jar", "*slf4j*.jar",
-                     "*sqlite-jdbc*.jar", "*bcprov*.jar"):
-        jars.extend(str(p) for p in m2.rglob(pattern))
-    cp = ":".join([str(classes), "/usr/local/lib/jarhdf5.jar", *jars])  # source-built HDF5 1.14
+    cp = _build_java_classpath()
     subprocess.run(
-        ["java", *_JAVA_FLAGS, "-cp", cp,
+        ["java", *_java_flags(), "-cp", cp,
          f"global.thalion.ttio.tools.{cli}", *args],
         check=True, capture_output=True,
     )
@@ -202,7 +249,10 @@ def _run_objc(tool: str, *args: str) -> None:
     src_obj = REPO_ROOT / "objc" / "Source" / "obj"
     tool_path = REPO_ROOT / "objc" / "Tools" / "obj" / tool
     env = os.environ.copy()
-    env["LD_LIBRARY_PATH"] = f"{src_obj}:/usr/local/lib:{env.get('LD_LIBRARY_PATH', '')}"
+    env["LD_LIBRARY_PATH"] = (
+        f"{src_obj}{os.pathsep}{_hdf5_native_dir()}"
+        f"{os.pathsep}{env.get('LD_LIBRARY_PATH', '')}"
+    )
     subprocess.run(
         [str(tool_path), *args],
         check=True, capture_output=True, env=env,
