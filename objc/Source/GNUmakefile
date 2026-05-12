@@ -109,6 +109,7 @@ libTTIO_HEADER_FILES = \
 	Transport/TTIOAccessUnit.h \
 	Transport/TTIOTransportWriter.h \
 	Transport/TTIOTransportReader.h \
+	Transport/TTIOTransportIngest.h \
 	Transport/TTIOTransportClient.h \
 	Transport/TTIOAcquisitionSimulator.h \
 	Transport/TTIOAUFilter.h \
@@ -223,6 +224,7 @@ libTTIO_OBJC_FILES = \
 	Transport/TTIOAccessUnit.m \
 	Transport/TTIOTransportWriter.m \
 	Transport/TTIOTransportReader.m \
+	Transport/TTIOTransportIngest.m \
 	Transport/TTIOTransportClient.m \
 	Transport/TTIOAcquisitionSimulator.m \
 	Transport/TTIOAUFilter.m \
