@@ -5,6 +5,8 @@ Spec: docs/superpowers/specs/2026-05-04-name-tokenized-v2-design.md
 from __future__ import annotations
 
 import ctypes
+import ctypes.util
+import sys
 
 from .fqzcomp_nx16_z import _native_lib, _HAVE_NATIVE_LIB
 
@@ -63,9 +65,40 @@ _libc = None
 
 
 def _get_libc():
+    """Load libc and bind ``free`` for releasing buffers the native
+    decoder ``malloc``s. Picks the platform-appropriate library:
+    glibc on Linux, msvcrt on Windows, libSystem on macOS. Earlier
+    versions hard-coded ``libc.so.6`` which broke decode on every
+    non-Linux platform — Windows in particular, where the failure
+    surfaces as ``FileNotFoundError: Could not find module 'libc.so.6'``
+    on the first call into a NAME_TOKENIZED_V2 round-trip.
+    """
     global _libc
     if _libc is None:
-        _libc = ctypes.CDLL("libc.so.6")
+        if sys.platform == "win32":
+            # The decoder buffers we ``free`` here came from
+            # ``libttio_rans``'s ``malloc``, which is the UCRT
+            # ``malloc`` on every modern MinGW-w64 build (ucrt64
+            # subsystem). Pairing UCRT-allocated memory with the
+            # legacy ``msvcrt.dll`` ``free`` triggers an access
+            # violation, so resolve ``free`` through the UCRT
+            # forwarder DLL instead. ``ucrtbase`` is present on
+            # Windows 10+ as part of the OS; older Windows ships
+            # the Universal CRT redistributable.
+            _libc = ctypes.CDLL("ucrtbase")
+        elif sys.platform == "darwin":
+            _libc = ctypes.CDLL("libc.dylib")
+        else:
+            # Linux / BSD: prefer the explicit glibc soname, falling
+            # back to a generic ``find_library("c")`` lookup for
+            # musl-based distros where ``libc.so.6`` is not present.
+            try:
+                _libc = ctypes.CDLL("libc.so.6")
+            except OSError:
+                path = ctypes.util.find_library("c")
+                if path is None:
+                    raise
+                _libc = ctypes.CDLL(path)
         _libc.free.argtypes = [ctypes.c_void_p]
     return _libc
 
