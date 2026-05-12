@@ -191,6 +191,21 @@ public final class Hdf5NativeLoader {
         }
 
         tempDir = dir;
+
+        // Tell JHI5 (jarhdf5) the absolute path to hdf5_java so its class
+        // static initializer uses System.load(path) instead of
+        // System.loadLibrary("hdf5_java"). The JVM tracks loaded libraries
+        // by absolute path, NOT basename — so our earlier System.load of
+        // the extracted hdf5_java.dll is not seen by JHI5's
+        // System.loadLibrary call, and JHI5 fails with
+        // "no hdf5_java in java.library.path". Setting this property
+        // before any access to the H5 class bypasses the loadLibrary
+        // path entirely. Property name comes from JHI5's
+        // H5.H5PATH_PROPERTY_KEY ("hdf.hdf5lib.H5.hdf5lib").
+        String h5javaName = libsFor(platform)[2]; // hdf5_java.* per platform
+        Path h5javaPath = dir.resolve(h5javaName).toAbsolutePath();
+        System.setProperty("hdf.hdf5lib.H5.hdf5lib", h5javaPath.toString());
+
         // Register the LZ4 plugin search path with JHI5. H5PLprepend (not
         // append) so our temp dir takes precedence over HDF5's compile-time
         // default plugin path (which is the build runner's MSYS2 location
