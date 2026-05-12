@@ -36,6 +36,11 @@ from .codec import (
     transport_to_file,
 )
 from .filters import AUFilter
+from .ingest import (
+    PacketRecord,
+    TransportIngest,
+    TransportIngestError,
+)
 
 __all__ = [
     "AUFilter",
@@ -46,7 +51,10 @@ __all__ = [
     "ChannelData",
     "PacketFlag",
     "PacketHeader",
+    "PacketRecord",
     "PacketType",
+    "TransportIngest",
+    "TransportIngestError",
     "TransportReader",
     "TransportWriter",
     "crc32c",
