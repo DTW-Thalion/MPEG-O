@@ -84,6 +84,7 @@ class TransportIngest:
         "_on_error",
         "_buffer",
         "_last_au_sequence",
+        "_seen_first_au",
         "_saw_stream_header",
         "_packet_count",
         "_is_finished",
@@ -101,6 +102,7 @@ class TransportIngest:
         self._on_error = on_error
         self._buffer = bytearray()
         self._last_au_sequence = 0
+        self._seen_first_au = False
         self._saw_stream_header = False
         self._packet_count = 0
         self._is_finished = False
@@ -195,13 +197,20 @@ class TransportIngest:
                     )
 
             if header.packet_type == int(PacketType.ACCESS_UNIT):
-                if (self._packet_count > 0
+                # Use ``_seen_first_au`` rather than ``_packet_count > 0``
+                # so the first AccessUnit can have any ``au_sequence``
+                # value (including 0). The earlier check rejected
+                # writer-produced streams whose first AU had
+                # ``au_sequence=0`` because ``_last_au_sequence`` was also
+                # 0 at init.
+                if (self._seen_first_au
                         and header.au_sequence <= self._last_au_sequence):
                     raise self._fail(
                         f"AU sequence regressed: got {header.au_sequence}, "
                         f"last seen {self._last_au_sequence}"
                     )
                 self._last_au_sequence = header.au_sequence
+                self._seen_first_au = True
 
             if header.packet_type == int(PacketType.STREAM_HEADER):
                 self._saw_stream_header = True
