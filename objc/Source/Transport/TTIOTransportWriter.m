@@ -105,35 +105,69 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
 
 // ---------------------------------------------------------------- writer
 
+// Internal sink adapter for NSFileHandle. Keeps -initWithOutputPath:
+// behaviour unchanged while letting the writer hold a single
+// <TTIOTransportWriterSink> reference.
+@interface TTIOFileHandleSink : NSObject <TTIOTransportWriterSink>
+@property (nonatomic, strong, nullable) NSFileHandle *handle;
+@end
+@implementation TTIOFileHandleSink
+- (void)writeData:(NSData *)data {
+    if (_handle) [_handle writeData:data];
+}
+@end
+
+
+@implementation TTIOMutableDataSink {
+    NSMutableData *_data;
+}
++ (instancetype)sink { return [[self alloc] initWithData:[NSMutableData data]]; }
+- (instancetype)initWithData:(NSMutableData *)data {
+    if ((self = [super init])) { _data = data; }
+    return self;
+}
+- (NSMutableData *)data { return _data; }
+- (void)writeData:(NSData *)data { [_data appendData:data]; }
+@end
+
+
 @implementation TTIOTransportWriter
 {
-    NSFileHandle *_fileHandle;    // path-based sink
-    NSMutableData *_dataBuffer;   // in-memory sink
-    BOOL _streamHeaderWritten;
+    id<TTIOTransportWriterSink>  _sink;
+    TTIOFileHandleSink          *_fileHandleSink; // strong; for -close
+    BOOL                          _streamHeaderWritten;
 }
 
 - (instancetype)initWithOutputPath:(NSString *)path
 {
     if ((self = [super init])) {
         [[NSFileManager defaultManager] createFileAtPath:path contents:nil attributes:nil];
-        _fileHandle = [NSFileHandle fileHandleForWritingAtPath:path];
+        _fileHandleSink = [[TTIOFileHandleSink alloc] init];
+        _fileHandleSink.handle = [NSFileHandle fileHandleForWritingAtPath:path];
+        _sink = _fileHandleSink;
     }
     return self;
 }
 
 - (instancetype)initWithMutableData:(NSMutableData *)data
 {
+    return [self initWithSink:[[TTIOMutableDataSink alloc] initWithData:data]];
+}
+
+- (instancetype)initWithSink:(id<TTIOTransportWriterSink>)sink
+{
     if ((self = [super init])) {
-        _dataBuffer = data;
+        _sink = sink;
     }
     return self;
 }
 
 - (void)close
 {
-    if (_fileHandle) {
-        [_fileHandle closeFile];
-        _fileHandle = nil;
+    if (_fileHandleSink) {
+        [_fileHandleSink.handle closeFile];
+        _fileHandleSink.handle = nil;
+        _fileHandleSink = nil;
     }
 }
 
@@ -144,11 +178,7 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
 
 - (void)writeBytes:(NSData *)data
 {
-    if (_fileHandle) {
-        [_fileHandle writeData:data];
-    } else {
-        [_dataBuffer appendData:data];
-    }
+    [_sink writeData:data];
 }
 
 - (BOOL)emitPacketType:(TTIOTransportPacketType)type

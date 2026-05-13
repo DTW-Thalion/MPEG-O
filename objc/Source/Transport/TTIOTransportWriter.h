@@ -15,6 +15,44 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /**
+ * <p><em>Inherits From:</em> NSObject (informal)</p>
+ * <p><em>Declared In:</em> Transport/TTIOTransportWriter.h</p>
+ *
+ * <p>Sink protocol for <code>TTIOTransportWriter</code>. Abstracts
+ * the byte destination so callers can plug in arbitrary streaming
+ * consumers (e.g. a WebSocket send queue) without intermediate
+ * buffering. Symmetric with Python's
+ * <code>BinaryIO</code> sink and Java's
+ * <code>OutputStream</code>.</p>
+ *
+ * <p>The writer calls <code>-writeData:</code> once per encoded
+ * packet (one StreamHeader, one DatasetHeader, one AccessUnit, one
+ * EndOfDataset, one EndOfStream, etc.). Implementations should
+ * forward synchronously — the writer does not buffer or coalesce
+ * between calls.</p>
+ */
+@protocol TTIOTransportWriterSink <NSObject>
+- (void)writeData:(NSData *)data;
+@end
+
+/**
+ * <p><em>Inherits From:</em> NSObject</p>
+ * <p><em>Conforms To:</em> NSObject (NSObject),
+ *    <code>TTIOTransportWriterSink</code></p>
+ *
+ * <p>Default in-memory sink — accumulates every emitted packet onto
+ * an <code>NSMutableData</code> buffer. Used internally by
+ * <code>-[TTIOTransportWriter initWithMutableData:]</code> and
+ * exposed as a public class so callers can pass it directly to the
+ * sink-based initialiser without writing their own wrapper.</p>
+ */
+@interface TTIOMutableDataSink : NSObject <TTIOTransportWriterSink>
+@property (nonatomic, readonly) NSMutableData *data;
++ (instancetype)sink;
+- (instancetype)initWithData:(NSMutableData *)data;
+@end
+
+/**
  * <p><em>Inherits From:</em> NSObject</p>
  * <p><em>Conforms To:</em> NSObject (NSObject)</p>
  * <p><em>Declared In:</em> Transport/TTIOTransportWriter.h</p>
@@ -26,6 +64,18 @@ NS_ASSUME_NONNULL_BEGIN
  * synthesise streams packet-by-packet
  * (<code>TTIOAcquisitionSimulator</code>,
  * <code>TTIOEncryptedTransport</code>).</p>
+ *
+ * <p>Three sink modes:</p>
+ * <ul>
+ *  <li><code>-initWithOutputPath:</code> &#8594; writes to a file.</li>
+ *  <li><code>-initWithMutableData:</code> &#8594; appends to a
+ *      caller-owned <code>NSMutableData</code> (back-compat alias
+ *      for <code>-initWithSink:[TTIOMutableDataSink sink]</code>).</li>
+ *  <li><code>-initWithSink:</code> &#8594; arbitrary
+ *      <code>TTIOTransportWriterSink</code> implementation; the
+ *      writer calls <code>-writeData:</code> once per packet. Use
+ *      for streaming consumers (WebSocket send queue, pipe, etc.).</li>
+ * </ul>
  *
  * <p><strong>Cross-language equivalents:</strong><br/>
  * Python: <code>ttio.transport.codec.TransportWriter</code><br/>
@@ -52,6 +102,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 - (instancetype)initWithOutputPath:(NSString *)path;
 - (instancetype)initWithMutableData:(NSMutableData *)data;
+
+/** Designated streaming initialiser. The writer calls
+ *  <code>-[sink writeData:]</code> once per encoded packet — use
+ *  this for WebSocket / pipe / custom sinks where intermediate
+ *  buffering is undesirable. */
+- (instancetype)initWithSink:(id<TTIOTransportWriterSink>)sink;
 
 /** Full-dataset convenience. Emits the entire packet sequence. */
 - (BOOL)writeDataset:(TTIOSpectralDataset *)dataset

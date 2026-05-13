@@ -54,6 +54,7 @@ extern void testCanonicalBytesCrossBackend(void);
 extern void testCipherSuite(void);
 extern void testNdDatasetCrossBackend(void);
 extern void testTransportCodec(void);
+extern void testTransportWriterSink(void);
 extern void testTransportIngest(void);
 extern void testTransportClient(void);
 extern void testAcquisitionSimulator(void);
@@ -326,6 +327,10 @@ int main(int argc, const char *argv[])
         START_SET("M67: transport codec (v0.10)")
             testTransportCodec();
         END_SET("M67: transport codec (v0.10)")
+
+        START_SET("S3: transport writer streaming sink protocol")
+            testTransportWriterSink();
+        END_SET("S3: transport writer streaming sink protocol")
 
         START_SET("M67.5: transport ingest (incremental parser)")
             testTransportIngest();
