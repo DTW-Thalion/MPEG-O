@@ -52,6 +52,7 @@ TTIOTests_OBJC_FILES = \
 	TestNdDatasetCrossBackend.m \
 	TestTransportCodec.m \
 	TestTransportWriterSink.m \
+	TestDatasetWalker.m \
 	TestTransportIngest.m \
 	TestTransportClient.m \
 	TestAcquisitionSimulator.m \

@@ -162,72 +162,70 @@ async def _emit_stream(
     dataset: SpectralDataset,
     query: AUFilter,
 ) -> None:
-    runs = list(dataset.all_runs.items())
-    features = list(dataset.feature_flags.features)
-
-    # StreamHeader
-    await _send_packet(
-        websocket,
-        PacketType.STREAM_HEADER,
-        _stream_header_payload(
-            format_version="1.2",
-            title=dataset.title or "",
-            isa_investigation=dataset.isa_investigation_id or "",
-            features=features,
-            n_datasets=len(runs),
-        ),
+    """Walks the dataset via :func:`walk_dataset` and pushes each
+    event onto the WebSocket as a transport packet. Iteration logic
+    is owned by the walker; this function is just the
+    event-to-packet adapter."""
+    from .walker import (
+        AccessUnitEvent,
+        DatasetHeaderEvent,
+        EndOfDatasetEvent,
+        EndOfStreamEvent,
+        StreamHeaderEvent,
+        walk_dataset,
     )
 
-    # DatasetHeaders
-    for i, (name, run) in enumerate(runs, start=1):
-        if query.dataset_id is not None and i != query.dataset_id:
-            continue
-        payload = _dataset_header_payload(
-            dataset_id=i,
-            name=name,
-            acquisition_mode=int(run.acquisition_mode),
-            spectrum_class=run.spectrum_class,
-            channel_names=list(run.channel_names),
-            instrument_json=_instrument_config_json(run),
-            expected_au_count=len(run),
-        )
-        await _send_packet(
-            websocket, PacketType.DATASET_HEADER, payload, dataset_id=i
-        )
-
-    # AccessUnits (with filtering + max_au cap)
-    emitted = 0
-    for i, (_name, run) in enumerate(runs, start=1):
-        if query.dataset_id is not None and i != query.dataset_id:
-            continue
-        for j, spectrum in enumerate(run):
-            au = _spectrum_to_access_unit(spectrum, run)
-            if not query.matches(au, i):
-                continue
-            if query.max_au is not None and emitted >= query.max_au:
-                break
+    for event in walk_dataset(dataset, query):
+        if isinstance(event, StreamHeaderEvent):
+            await _send_packet(
+                websocket,
+                PacketType.STREAM_HEADER,
+                _stream_header_payload(
+                    format_version=event.format_version,
+                    title=event.title,
+                    isa_investigation=event.isa_investigation,
+                    features=event.features,
+                    n_datasets=event.n_datasets,
+                ),
+            )
+        elif isinstance(event, DatasetHeaderEvent):
+            payload = _dataset_header_payload(
+                dataset_id=event.dataset_id,
+                name=event.name,
+                acquisition_mode=event.acquisition_mode,
+                spectrum_class=event.spectrum_class,
+                channel_names=event.channel_names,
+                instrument_json=event.instrument_json,
+                expected_au_count=event.expected_au_count,
+            )
+            await _send_packet(
+                websocket,
+                PacketType.DATASET_HEADER,
+                payload,
+                dataset_id=event.dataset_id,
+            )
+        elif isinstance(event, AccessUnitEvent):
             await _send_packet(
                 websocket,
                 PacketType.ACCESS_UNIT,
-                au.to_bytes(),
-                dataset_id=i,
-                au_sequence=j,
+                event.au.to_bytes(),
+                dataset_id=event.dataset_id,
+                au_sequence=event.au_sequence,
             )
-            emitted += 1
-        if query.max_au is not None and emitted >= query.max_au:
-            break
-
-    # EndOfDataset per run
-    for i, (_name, run) in enumerate(runs, start=1):
-        if query.dataset_id is not None and i != query.dataset_id:
-            continue
-        eod_payload = struct.pack("<HI", i & 0xFFFF, len(run) & 0xFFFFFFFF)
-        await _send_packet(
-            websocket, PacketType.END_OF_DATASET, eod_payload, dataset_id=i
-        )
-
-    # EndOfStream
-    await _send_packet(websocket, PacketType.END_OF_STREAM, b"")
+        elif isinstance(event, EndOfDatasetEvent):
+            eod_payload = struct.pack(
+                "<HI",
+                event.dataset_id & 0xFFFF,
+                event.final_au_sequence & 0xFFFFFFFF,
+            )
+            await _send_packet(
+                websocket,
+                PacketType.END_OF_DATASET,
+                eod_payload,
+                dataset_id=event.dataset_id,
+            )
+        elif isinstance(event, EndOfStreamEvent):
+            await _send_packet(websocket, PacketType.END_OF_STREAM, b"")
 
 
 async def _send_packet(
