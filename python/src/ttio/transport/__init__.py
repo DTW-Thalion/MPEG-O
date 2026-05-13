@@ -36,6 +36,7 @@ from .codec import (
     transport_to_file,
 )
 from .filters import AUFilter
+from .stats import AUStats
 from .ingest import (
     PacketRecord,
     TransportIngest,
@@ -44,6 +45,7 @@ from .ingest import (
 
 __all__ = [
     "AUFilter",
+    "AUStats",
     "HEADER_MAGIC",
     "HEADER_SIZE",
     "VERSION",
