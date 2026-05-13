@@ -258,3 +258,34 @@ def test_au_sequence_regression_fails():
     with pytest.raises(TransportIngestError, match="regressed"):
         ingest.feed(bytes(out))
     assert rec.failure is not None
+
+
+def test_first_au_at_sequence_zero_is_accepted():
+    """The first AccessUnit may carry ``au_sequence=0`` — that's what
+    :class:`ttio.transport.codec.TransportWriter` emits via
+    :meth:`write_dataset`. Earlier the ingest used
+    ``self._packet_count > 0`` as the "have we seen any AU yet?" check,
+    which collided with the default ``_last_au_sequence = 0`` and
+    incorrectly rejected the writer's output. Now we track first-AU-
+    seen explicitly.
+    """
+    flags = int(PacketFlag.HAS_CHECKSUM)
+    out = bytearray()
+    out += _craft_packet(
+        packet_type=PacketType.STREAM_HEADER,
+        flags=flags, dataset_id=0, au_sequence=0, payload=b"v0",
+    )
+    out += _craft_packet(
+        packet_type=PacketType.ACCESS_UNIT,
+        flags=flags, dataset_id=1, au_sequence=0, payload=b"a",
+    )
+    out += _craft_packet(
+        packet_type=PacketType.ACCESS_UNIT,
+        flags=flags, dataset_id=1, au_sequence=1, payload=b"b",
+    )
+
+    ingest, rec = _new_ingest()
+    ingest.feed(bytes(out))
+    assert rec.failure is None
+    assert len([p for p in rec.packets
+                if p.header.packet_type == int(PacketType.ACCESS_UNIT)]) == 2

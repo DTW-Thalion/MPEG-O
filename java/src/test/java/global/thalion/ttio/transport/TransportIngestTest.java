@@ -247,6 +247,35 @@ class TransportIngestTest {
         assertNotNull(rec.failure);
     }
 
+    /**
+     * The first AccessUnit may carry {@code auSequence == 0} — that is
+     * what {@link TransportWriter#writeDataset} emits. The earlier
+     * ingest gated its monotonicity check on {@code packetCount > 0},
+     * which collided with the default {@code lastAuSequence == 0} and
+     * incorrectly rejected the writer's output. Now we track first-AU-
+     * seen explicitly.
+     */
+    @Test
+    void firstAuAtSequenceZeroIsAccepted() throws IOException {
+        int flags = PacketHeader.FLAG_HAS_CHECKSUM;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(craftPacket(PacketType.STREAM_HEADER, flags, 0, 0,
+                              "v0".getBytes(StandardCharsets.UTF_8)));
+        out.write(craftPacket(PacketType.ACCESS_UNIT, flags, 1, 0,
+                              "a".getBytes(StandardCharsets.UTF_8)));
+        out.write(craftPacket(PacketType.ACCESS_UNIT, flags, 1, 1,
+                              "b".getBytes(StandardCharsets.UTF_8)));
+
+        Recorder rec = new Recorder();
+        TransportIngest ingest = new TransportIngest(rec);
+        ingest.feed(out.toByteArray());
+        assertNull(rec.failure);
+        long auCount = rec.packets.stream()
+            .filter(p -> p.header.packetType == PacketType.ACCESS_UNIT)
+            .count();
+        assertEquals(2L, auCount);
+    }
+
     @Test
     void emptyFeedIsNoOp() {
         Recorder rec = new Recorder();
