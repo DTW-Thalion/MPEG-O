@@ -94,6 +94,7 @@ public final class TransportIngest {
     private byte[] buffer = new byte[0];
     private int bufferLen = 0;
     private long lastAuSequence = 0L;
+    private boolean seenFirstAU = false;
     private boolean sawStreamHeader = false;
     private long packetCount = 0L;
     private boolean isFinished = false;
@@ -219,13 +220,19 @@ public final class TransportIngest {
             }
 
             if (header.packetType == PacketType.ACCESS_UNIT) {
-                if (packetCount > 0
+                // Use ``seenFirstAU`` rather than ``packetCount > 0`` so
+                // the first AccessUnit can have any ``auSequence`` value
+                // (including 0). The earlier check rejected writer-
+                // produced streams whose first AU had ``auSequence=0``
+                // because ``lastAuSequence`` was also 0 at init.
+                if (seenFirstAU
                         && header.auSequence <= lastAuSequence) {
                     throw fail("AU sequence regressed: got "
                         + header.auSequence
                         + ", last seen " + lastAuSequence);
                 }
                 lastAuSequence = header.auSequence;
+                seenFirstAU = true;
             }
 
             if (header.packetType == PacketType.STREAM_HEADER) {

@@ -18,6 +18,7 @@
 @interface TTIOTransportIngest ()
 @property (nonatomic, strong) NSMutableData *buffer;
 @property (nonatomic, assign) uint32_t lastAUSequence;
+@property (nonatomic, assign) BOOL seenFirstAU;
 @property (nonatomic, assign) BOOL sawStreamHeader;
 @end
 
@@ -32,6 +33,7 @@
         _bufferedBytes = 0;
         _isFinished = NO;
         _lastAUSequence = 0;
+        _seenFirstAU = NO;
         _sawStreamHeader = NO;
     }
     return self;
@@ -156,8 +158,12 @@ static inline uint32_t readU32LE(const uint8_t *b)
         }
 
         // AU-sequence monotonicity check (only on AccessUnit packets).
+        // Use _seenFirstAU rather than _packetCount > 0 so the first
+        // AccessUnit can have any auSequence value (including 0). The
+        // earlier check rejected writer-produced streams whose first AU
+        // had auSequence=0 because _lastAUSequence was also 0 at init.
         if (hdr.packetType == TTIOTransportPacketAccessUnit) {
-            if (_packetCount > 0 && hdr.auSequence <= _lastAUSequence) {
+            if (_seenFirstAU && hdr.auSequence <= _lastAUSequence) {
                 NSError *err = [self errorWithCode:TTIOTransportErrorNonMonotonicAU
                                            message:[NSString stringWithFormat:
                                                @"AU sequence regressed: got %u, "
@@ -168,6 +174,7 @@ static inline uint32_t readU32LE(const uint8_t *b)
                 return NO;
             }
             _lastAUSequence = hdr.auSequence;
+            _seenFirstAU = YES;
         }
 
         if (hdr.packetType == TTIOTransportPacketStreamHeader) {
