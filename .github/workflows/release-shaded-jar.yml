@@ -28,11 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK 21
+      - name: Set up JDK 25
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '22'
+          java-version: '25'
 
       # === LINUX X64 ===
       - name: Install build deps (linux-x64)
