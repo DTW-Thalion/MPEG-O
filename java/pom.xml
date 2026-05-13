@@ -27,8 +27,14 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <!-- Minimum JDK: 22. FFM (Foreign Function and Memory) APIs in
+             java.lang.foreign.* are stable since 22 (preview in 21);
+             VlBytesFFM.java uses them directly. Source/target = 22 means
+             emitted class files have major version 66 (stable, no
+             enable-preview flag at runtime). Compile- and run-time JDKs
+             of any version >= 22 (incl. 25) all work. -->
+        <maven.compiler.source>22</maven.compiler.source>
+        <maven.compiler.target>22</maven.compiler.target>
         <!-- Runtime native-library search path for JHI5 / libttio_rans_jni.
              The L3 V4 (CRAM 3.1 fqzcomp) tests need libttio_rans_jni.so on
              java.library.path. The native build dir is appended so
@@ -140,17 +146,9 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.13.0</version>
-                <configuration>
-                    <!-- JDK 22: FFM (Foreign Function and Memory) API
-                         became stable in 22 (was preview in 21). Drop
-                         the enable-preview compiler flag so emitted
-                         class files have release version 66 (stable)
-                         rather than 65.65535 (preview), which a JDK
-                         launcher refuses to load without the
-                         enable-preview flag at runtime. -->
-                    <source>22</source>
-                    <target>22</target>
-                </configuration>
+                <!-- source/target come from the
+                     maven.compiler.source / target properties at the
+                     top of this pom (set to 22 for stable FFM). -->
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
