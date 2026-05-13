@@ -272,6 +272,60 @@ static void test_missing_stream_header_fails(void)
          "error code is TTIOTransportErrorMissingStreamHeader");
 }
 
+static void test_au_sequence_regression_fails(void)
+{
+    // Two AccessUnits with non-monotonic auSequence (5 then 3) must
+    // be rejected when the second one parses.
+    uint16_t flags = TTIOTransportPacketFlagHasChecksum;
+    NSMutableData *stream = [NSMutableData data];
+    [stream appendData:craftPacket(TTIOTransportPacketStreamHeader, flags, 0, 0,
+                                    [@"v0" dataUsingEncoding:NSUTF8StringEncoding])];
+    [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 1, 5,
+                                    [@"a" dataUsingEncoding:NSUTF8StringEncoding])];
+    [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 1, 3,
+                                    [@"b" dataUsingEncoding:NSUTF8StringEncoding])];
+
+    TTIOTransportIngest *ingest = [TTIOTransportIngest new];
+    IngestRecorder *rec = [IngestRecorder new];
+    ingest.delegate = rec;
+    NSError *err = nil;
+    PASS(![ingest feedData:stream error:&err],
+         "non-monotonic auSequence rejected");
+    PASS(err.code == TTIOTransportErrorNonMonotonicAU,
+         "error code is TTIOTransportErrorNonMonotonicAU");
+}
+
+static void test_first_au_at_sequence_zero_is_accepted(void)
+{
+    // The first AccessUnit may carry auSequence=0 — that's what
+    // `TTIOTransportWriter writeDataset:` emits. The earlier check
+    // gated monotonicity on `_packetCount > 0`, which collided with
+    // the default `_lastAUSequence = 0` and rejected the writer's
+    // output. Now we track first-AU-seen explicitly via
+    // `_seenFirstAU`.
+    uint16_t flags = TTIOTransportPacketFlagHasChecksum;
+    NSMutableData *stream = [NSMutableData data];
+    [stream appendData:craftPacket(TTIOTransportPacketStreamHeader, flags, 0, 0,
+                                    [@"v0" dataUsingEncoding:NSUTF8StringEncoding])];
+    [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 1, 0,
+                                    [@"a" dataUsingEncoding:NSUTF8StringEncoding])];
+    [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 1, 1,
+                                    [@"b" dataUsingEncoding:NSUTF8StringEncoding])];
+
+    TTIOTransportIngest *ingest = [TTIOTransportIngest new];
+    IngestRecorder *rec = [IngestRecorder new];
+    ingest.delegate = rec;
+    NSError *err = nil;
+    BOOL ok = [ingest feedData:stream error:&err];
+    PASS(ok, "first AU at auSequence=0 accepted");
+    PASS(err == nil, "no parse error");
+    NSUInteger auCount = 0;
+    for (TTIOTransportPacketRecord *r in rec.packets) {
+        if (r.header.packetType == TTIOTransportPacketAccessUnit) auCount++;
+    }
+    PASS(auCount == 2, "both AccessUnits delivered to the recorder");
+}
+
 #pragma mark - Entry point
 
 void testTransportIngest(void)
@@ -282,4 +336,6 @@ void testTransportIngest(void)
     test_bad_magic_fails();
     test_truncated_finish_fails();
     test_missing_stream_header_fails();
+    test_au_sequence_regression_fails();
+    test_first_au_at_sequence_zero_is_accepted();
 }
