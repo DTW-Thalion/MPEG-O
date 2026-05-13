@@ -114,6 +114,7 @@ libTTIO_HEADER_FILES = \
 	Transport/TTIOAcquisitionSimulator.h \
 	Transport/TTIOAUFilter.h \
 	Transport/TTIOAUStats.h \
+	Transport/TTIODatasetWalker.h \
 	Transport/TTIOTransportServer.h \
 	Transport/TTIOProtectionMetadata.h \
 	Transport/TTIOEncryptedTransport.h \
@@ -230,6 +231,7 @@ libTTIO_OBJC_FILES = \
 	Transport/TTIOAcquisitionSimulator.m \
 	Transport/TTIOAUFilter.m \
 	Transport/TTIOAUStats.m \
+	Transport/TTIODatasetWalker.m \
 	Transport/TTIOTransportServer.m \
 	Transport/TTIOProtectionMetadata.m \
 	Transport/TTIOEncryptedTransport.m \

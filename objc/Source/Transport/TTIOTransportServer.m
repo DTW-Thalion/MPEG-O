@@ -21,6 +21,7 @@
 #import "TTIOAccessUnit.h"
 #import "TTIOTransportWriter.h"
 #import "TTIOAUFilter.h"
+#import "TTIODatasetWalker.h"
 #import "Core/TTIOPortability.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Run/TTIOAcquisitionRun.h"
@@ -121,6 +122,90 @@ static NSString *instrumentJSON(TTIOInstrumentConfig *cfg)
 
 // ---------------------------------------------------------------- build stream
 
+// Visitor that turns walker events into transport-packet frames in
+// the existing inline wire format used by this server. Each
+// `-walker:visit…` call appends one packet to `outFrames`. Wire-
+// format identical to the pre-walker buildStreamFrames so existing
+// clients see no change.
+@interface TTIOServerFrameBuildingVisitor : NSObject <TTIOTransportEventVisitor>
+@property (nonatomic, weak) NSMutableArray<NSData *> *outFrames;
+@end
+@implementation TTIOServerFrameBuildingVisitor
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitStreamHeaderWithFormatVersion:(NSString *)formatVersion
+                              title:(NSString *)title
+                   isaInvestigation:(NSString *)isaInvestigation
+                           features:(NSArray<NSString *> *)features
+                         nDatasets:(uint16_t)nDatasets
+{
+    (void)walker;
+    NSMutableData *p = [NSMutableData data];
+    appendLEString(p, formatVersion, 2);
+    appendLEString(p, title, 2);
+    appendLEString(p, isaInvestigation, 2);
+    appendU16LE(p, (uint16_t)features.count);
+    appendU16LE(p, nDatasets);
+    [_outFrames addObject:frameForPacket(TTIOTransportPacketStreamHeader,
+                                          0, 0, p)];
+}
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitDatasetHeaderWithDatasetId:(uint16_t)datasetId
+                            name:(NSString *)name
+                 acquisitionMode:(uint8_t)acquisitionMode
+                   spectrumClass:(NSString *)spectrumClass
+                    channelNames:(NSArray<NSString *> *)channelNames
+                  instrumentJSON:(NSString *)instrumentJSON
+                expectedAUCount:(uint32_t)expectedAUCount
+{
+    (void)walker;
+    NSMutableData *p = [NSMutableData data];
+    appendU16LE(p, datasetId);
+    appendLEString(p, name, 2);
+    [p appendBytes:&acquisitionMode length:1];
+    appendLEString(p, spectrumClass, 2);
+    uint8_t nch = (uint8_t)channelNames.count;
+    [p appendBytes:&nch length:1];
+    for (NSString *c in channelNames) appendLEString(p, c, 2);
+    appendLEString(p, instrumentJSON, 4);
+    appendU32LE(p, expectedAUCount);
+    [_outFrames addObject:frameForPacket(TTIOTransportPacketDatasetHeader,
+                                          datasetId, 0, p)];
+}
+
+- (void)walker:(TTIODatasetWalker *)walker
+ visitAccessUnit:(TTIOAccessUnit *)au
+       datasetId:(uint16_t)datasetId
+      auSequence:(uint32_t)auSequence
+{
+    (void)walker;
+    [_outFrames addObject:frameForPacket(TTIOTransportPacketAccessUnit,
+                                          datasetId, auSequence,
+                                          [au encode])];
+}
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitEndOfDatasetWithDatasetId:(uint16_t)datasetId
+                finalAUSequence:(uint32_t)finalAUSequence
+{
+    (void)walker;
+    NSMutableData *p = [NSMutableData data];
+    appendU16LE(p, datasetId);
+    appendU32LE(p, finalAUSequence);
+    [_outFrames addObject:frameForPacket(TTIOTransportPacketEndOfDataset,
+                                          datasetId, 0, p)];
+}
+
+- (void)walkerVisitEndOfStream:(TTIODatasetWalker *)walker
+{
+    (void)walker;
+    [_outFrames addObject:frameForPacket(TTIOTransportPacketEndOfStream,
+                                          0, 0, [NSData data])];
+}
+
+@end
+
 static void buildStreamFrames(TTIOTransportServer *server,
                                 TTIOAUFilter *filter,
                                 NSMutableArray<NSData *> *outFrames)
@@ -129,122 +214,12 @@ static void buildStreamFrames(TTIOTransportServer *server,
     TTIOSpectralDataset *dataset = [server _openDataset:&err];
     if (!dataset) return;
 
-    NSArray<NSString *> *runNames = [dataset.msRuns.allKeys
-                                      sortedArrayUsingSelector:@selector(compare:)];
+    TTIOServerFrameBuildingVisitor *visitor =
+        [[TTIOServerFrameBuildingVisitor alloc] init];
+    visitor.outFrames = outFrames;
 
-    // StreamHeader
-    {
-        NSMutableData *p = [NSMutableData data];
-        appendLEString(p, @"1.2", 2);
-        appendLEString(p, dataset.title ?: @"", 2);
-        appendLEString(p, dataset.isaInvestigationId ?: @"", 2);
-        appendU16LE(p, 0);  // no features
-        appendU16LE(p, (uint16_t)runNames.count);
-        [outFrames addObject:frameForPacket(TTIOTransportPacketStreamHeader, 0, 0, p)];
-    }
-
-    // DatasetHeaders
-    uint16_t did = 1;
-    for (NSString *name in runNames) {
-        if (filter.datasetId && did != filter.datasetId.unsignedIntValue) {
-            did++; continue;
-        }
-        TTIOAcquisitionRun *run = dataset.msRuns[name];
-        NSArray<NSString *> *channelNames =
-            [run valueForKey:@"channelNames"] ?: @[@"mz", @"intensity"];
-        NSMutableData *p = [NSMutableData data];
-        appendU16LE(p, did);
-        appendLEString(p, name, 2);
-        uint8_t acqMode = (uint8_t)run.acquisitionMode;
-        [p appendBytes:&acqMode length:1];
-        appendLEString(p, run.spectrumClassName ?: @"TTIOMassSpectrum", 2);
-        uint8_t nch = (uint8_t)channelNames.count;
-        [p appendBytes:&nch length:1];
-        for (NSString *c in channelNames) appendLEString(p, c, 2);
-        appendLEString(p, instrumentJSON(run.instrumentConfig), 4);
-        appendU32LE(p, (uint32_t)[run count]);
-        [outFrames addObject:frameForPacket(TTIOTransportPacketDatasetHeader, did, 0, p)];
-        did++;
-    }
-
-    // AccessUnits
-    uint32_t emitted = 0;
-    uint32_t maxAu = filter.maxAU ? filter.maxAU.unsignedIntValue : UINT32_MAX;
-    did = 1;
-    for (NSString *name in runNames) {
-        if (filter.datasetId && did != filter.datasetId.unsignedIntValue) {
-            did++; continue;
-        }
-        TTIOAcquisitionRun *run = dataset.msRuns[name];
-        NSArray<NSString *> *channelNames =
-            [run valueForKey:@"channelNames"] ?: @[@"mz", @"intensity"];
-        NSUInteger count = [run count];
-        for (NSUInteger i = 0; i < count; i++) {
-            if (emitted >= maxAu) goto done;
-            TTIOSpectrum *sp = [run objectAtIndex:i];
-            uint8_t wireClass = [server _wireFromSpectrumClass:run.spectrumClassName];
-            uint8_t msLevel = 0;
-            uint8_t polarityWire = 2;
-            if ([sp isKindOfClass:[TTIOMassSpectrum class]]) {
-                TTIOMassSpectrum *ms = (TTIOMassSpectrum *)sp;
-                msLevel = (uint8_t)MIN((NSUInteger)255, ms.msLevel);
-                polarityWire = (uint8_t)[server _wireFromPolarity:ms.polarity];
-            }
-            double bpi = 0.0;
-            if (run.spectrumIndex && sp.indexPosition < run.spectrumIndex.count) {
-                bpi = [run.spectrumIndex basePeakIntensityAt:sp.indexPosition];
-            }
-            NSMutableArray *chs = [NSMutableArray array];
-            for (NSString *cname in channelNames) {
-                TTIOSignalArray *sa = sp.signalArrays[cname];
-                if (!sa) continue;
-                TTIOTransportChannelData *ch =
-                    [[TTIOTransportChannelData alloc]
-                        initWithName:cname
-                           precision:TTIOPrecisionFloat64
-                         compression:TTIOCompressionNone
-                           nElements:(uint32_t)(sa.buffer.length / 8)
-                                data:sa.buffer];
-                [chs addObject:ch];
-            }
-            TTIOAccessUnit *au =
-                [[TTIOAccessUnit alloc]
-                    initWithSpectrumClass:wireClass
-                           acquisitionMode:(uint8_t)run.acquisitionMode
-                                   msLevel:msLevel
-                                  polarity:polarityWire
-                             retentionTime:sp.scanTimeSeconds
-                               precursorMz:sp.precursorMz
-                           precursorCharge:(uint8_t)MIN((NSUInteger)255, sp.precursorCharge)
-                               ionMobility:0.0
-                         basePeakIntensity:bpi
-                                  channels:chs
-                                    pixelX:0 pixelY:0 pixelZ:0];
-            if (![filter matches:au datasetId:did]) continue;
-            [outFrames addObject:frameForPacket(
-                TTIOTransportPacketAccessUnit, did, (uint32_t)i, [au encode])];
-            emitted++;
-        }
-        did++;
-    }
-done:
-
-    // EndOfDataset per dataset
-    did = 1;
-    for (NSString *name in runNames) {
-        if (filter.datasetId && did != filter.datasetId.unsignedIntValue) {
-            did++; continue;
-        }
-        TTIOAcquisitionRun *run = dataset.msRuns[name];
-        NSMutableData *p = [NSMutableData data];
-        appendU16LE(p, did);
-        appendU32LE(p, (uint32_t)[run count]);
-        [outFrames addObject:frameForPacket(TTIOTransportPacketEndOfDataset, did, 0, p)];
-        did++;
-    }
-
-    // EndOfStream
-    [outFrames addObject:frameForPacket(TTIOTransportPacketEndOfStream, 0, 0, [NSData data])];
+    TTIODatasetWalker *walker = [[TTIODatasetWalker alloc] init];
+    [walker walkDataset:dataset filter:filter visitor:visitor error:NULL];
 }
 
 
