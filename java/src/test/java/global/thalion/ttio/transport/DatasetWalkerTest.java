@@ -130,8 +130,12 @@ class DatasetWalkerTest {
         try (SpectralDataset src = buildFixture(dir, "src.tio")) { /* close */ }
         try (SpectralDataset ds = SpectralDataset.open(
                 dir.resolve("src.tio").toString())) {
-            AUFilter f = new AUFilter();
-            f.msLevel = 1;
+            AUFilter f = new AUFilter(
+                /*rtMin*/ null, /*rtMax*/ null,
+                /*msLevel*/ 1,
+                /*precursorMzMin*/ null, /*precursorMzMax*/ null,
+                /*polarity*/ null, /*datasetId*/ null,
+                /*maxAu*/ null);
             Recording v = new Recording();
             new DatasetWalker().walk(ds, f, v);
             assertEquals(3, v.aus.size(),
@@ -144,8 +148,9 @@ class DatasetWalkerTest {
         try (SpectralDataset src = buildFixture(dir, "src.tio")) { /* close */ }
         try (SpectralDataset ds = SpectralDataset.open(
                 dir.resolve("src.tio").toString())) {
-            AUFilter f = new AUFilter();
-            f.maxAu = 2;
+            AUFilter f = new AUFilter(
+                null, null, null, null, null, null, null,
+                /*maxAu*/ 2);
             Recording v = new Recording();
             new DatasetWalker().walk(ds, f, v);
             assertEquals(2, v.aus.size(),
