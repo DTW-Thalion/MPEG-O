@@ -37,6 +37,15 @@ from .codec import (
 )
 from .filters import AUFilter
 from .stats import AUStats
+from .walker import (
+    AccessUnitEvent,
+    DatasetHeaderEvent,
+    EndOfDatasetEvent,
+    EndOfStreamEvent,
+    StreamHeaderEvent,
+    WalkerEvent,
+    walk_dataset,
+)
 from .ingest import (
     PacketRecord,
     TransportIngest,
@@ -46,6 +55,13 @@ from .ingest import (
 __all__ = [
     "AUFilter",
     "AUStats",
+    "AccessUnitEvent",
+    "DatasetHeaderEvent",
+    "EndOfDatasetEvent",
+    "EndOfStreamEvent",
+    "StreamHeaderEvent",
+    "WalkerEvent",
+    "walk_dataset",
     "HEADER_MAGIC",
     "HEADER_SIZE",
     "VERSION",
