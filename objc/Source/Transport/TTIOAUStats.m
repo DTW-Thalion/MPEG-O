@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOAUStats.h"
+#import "Core/TTIOPortability.h"
 
 #define TTIO_SPECTRUM_CLASS_MS_IMAGE_PIXEL 4
 #define TTIO_SPECTRUM_CLASS_GENOMIC_READ   5
@@ -101,7 +102,7 @@
     TTIOAUStats *s = [self statsForAccessUnit:au auSequence:auSequence];
     NSData *data = [NSJSONSerialization
         dataWithJSONObject:[s JSONDictionary]
-                   options:NSJSONWritingSortedKeys
+                   options:TTIO_JSON_SORTED_KEYS
                      error:NULL];
     if (!data) return @"{}";
     return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
