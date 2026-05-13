@@ -51,6 +51,7 @@ TTIOTests_OBJC_FILES = \
 	TestCipherSuite.m \
 	TestNdDatasetCrossBackend.m \
 	TestTransportCodec.m \
+	TestAUStats.m \
 	TestTransportIngest.m \
 	TestTransportClient.m \
 	TestAcquisitionSimulator.m \
