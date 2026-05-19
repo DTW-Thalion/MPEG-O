@@ -11,6 +11,77 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.3: Transfer Manager + Selective Access Panel + filter builder (2026-05-19)
+
+Third W5 sub-phase. Wires the W1 `WorkbenchTransportClient`
+into a JavaFX queue UI, adds a visual filter form for selective
+downloads, and pins a typed-builder filter API on both SDKs.
+
+No new server wire surface; W5.3 builds on top of the existing
+W1 `/transport` WS handshake. The download-filter allowlist
+(`ms_level`, `polarity`, `retention_time_{min,max}`,
+`precursor_mz_{min,max}`, `precursor_charge`, `max_au`) is
+unchanged.
+
+Java SDK new file `workbench/transport/SelectiveAccessFilter.java`:
+- Fluent typed setters per allowed filter key.
+- Per-key range checks throw `IllegalArgumentException`.
+- Cross-key `validate()` checks `rt_max >= rt_min` and
+  `mz_max >= mz_min`, throws `IllegalStateException`.
+- `build()` returns a `LinkedHashMap<String, Object>` ready
+  for `WorkbenchTransportClient.download`.
+
+Python SDK new file `workbench/transport/selective_access.py`:
+- Single-class mirror of the Java builder. Same method names
+  (snake_case), same exception semantics (`ValueError` per-key,
+  `RuntimeError` cross-key).
+
+tio-browser new package `browser/workbench/`:
+- `TransferKind` / `TransferState` enums + `Transfer` mutable
+  entry with JavaFX properties.
+- `TransferManager` -- process-wide singleton; daemon-thread
+  executor; FX-thread-safe state mutation; `enqueueUpload`,
+  `enqueueDownload`.
+- `SelectiveAccessPanel` -- GridPane filter form with one
+  input per allowed filter key; `buildFilter()` delegates to
+  the SDK `SelectiveAccessFilter` and runs `validate()`.
+- `UploadStartDialog` -- modal source file + project + URI
+  picker; container-URI validator.
+- `DownloadStartDialog` -- modal URI + destination + embedded
+  selective-access panel.
+- `TransferQueueView` -- non-modal TableView<Transfer> with
+  indeterminate ProgressBar while RUNNING; bound to the
+  manager's observable list.
+
+`MainWindow` gains three new menu items under `Workbench`:
+`Upload to workbench...`, `Download from workbench...`,
+`Transfers...`.
+
+Tests:
+- Java `SelectiveAccessFilterTest` (18 tests) covers accept /
+  reject / cross-key validation + cross-language anchor.
+- Python `test_selective_access.py` (20 tests) mirrors the
+  Java suite.
+- tio-browser: `SelectiveAccessPanelTest`, `TransferStateTest`,
+  `TransferTest`, `UploadDownloadDialogTest` (17 pure-unit
+  tests total) cover parsers, state-machine predicates, queue
+  defensive copy, and URI/project validators.
+
+Cross-language byte-equivalence: canonical filter dict pinned
+in both test suites is the fifth independent cross-language
+anchor (after W1 handshake, W3 cohort predicate, W4 attach
+handshake, W5.2 container list-page).
+
+Coverage: no new excludes; `SelectiveAccessFilter` /
+`selective_access.py` are pure data and stay measured.
+
+Deferred follow-ups: live-daemon round-trip smoke (shared with
+W1/W3/W4/W5.1/W5.2); true progress percentage (needs a
+progress-callback API on `WorkbenchTransportClient`); pause /
+cancel (needs a cancellation primitive on the W1 client);
+chromosome / position genomic filters (not in v1.0 server
+allowlist).
+
 ### Added -- W5.2: Container Browser + /v1/containers SDK (Python + Java) (2026-05-19)
 
 Second W5 sub-phase. Adds the `/v1/containers` REST surface to
