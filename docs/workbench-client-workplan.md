@@ -50,7 +50,7 @@ tti-workbench-server for contract clarifications.
 | W# | Title | Estimated LOC | Touches | Spec UCs covered |
 |---|---|---|---|---|
 | **W1** | Workbench-aware transport client (Python + Java) | ~1,200 | TTI-O python + java | UC-01, UC-02, UC-04 (upload + download + filtered stream against v1.0 server) |
-| **W2** | `ttio` CLI umbrella + Python SDK foundation | ~900 | TTI-O python | UC-01 → UC-05 CLI surface; SDK §8.3 base shape (`ttio.connect`, `.query`, `.stream`, `.materialize`) |
+| **W2** | `ttio` CLI umbrella (Python only) + SDK foundation (Python + Java) | ~1,400 | TTI-O python + java | UC-01 → UC-05 CLI surface; SDK §8.3 base shape (`ttio.connect`, `.query`, `.stream`, `.materialize`); Java mirror under `global.thalion.ttio.workbench.WorkbenchClient` |
 | **W3** | Cohort + pipeline + job client surface | ~1,100 | TTI-O python + java | UC-06, UC-07, UC-09, UC-10, UC-14 (cohort query → pipeline submit → job poll → result download) |
 | **W4** | Interactive sessions client | ~700 | TTI-O python + java | UC-11 (session create → WS proxy attach → bytes round-trip → terminate) |
 | **W5** | tio-browser → WC Desktop GUI evolution | ~3,000 | tio-browser + TTI-O java SDK | UC-01 → UC-14 GUI surface per spec §8.1 component list |
@@ -75,10 +75,25 @@ in parallel with W5 once W3 ships.
    discoverable front-door. The `ttio` command dispatches subcommands
    to the existing implementations to avoid reshipping format logic.
 
-2. **Primary SDK language: Python.** Java SDK ships as a sibling for
-   tio-browser to consume, but the spec's §8.3 example is Python and
-   that's the audience asking loudest. Rust SDK is explicitly v1.1+
-   (spec §8.3 says "Python and/or Rust" — Rust deferred).
+2. **Python + Java SDK ship in lockstep at every milestone.**
+   *Amended 2026-05-19 after the W2 PR shipped Python-only.* Each
+   W has both a Python (`ttio.workbench.*`) and Java
+   (`global.thalion.ttio.workbench.*`) deliverable; cross-language
+   byte-equivalence anchored via identical literal assertions in
+   both test suites. The spec §8.3 sample is Python, but tio-browser
+   (W5) and any non-tio-browser Java consumer needs the same
+   ergonomic surface (`WorkbenchClient.connect()`, `*Auth` providers,
+   placeholder methods for future Ws). ObjC stays server-runtime
+   (`tti-workbench-server`'s HDF5 worker library) -- the workplan
+   does NOT extend ObjC for client purposes. Rust SDK explicitly
+   v1.2+ (spec §8.3 says "Python and/or Rust"; Rust deferred).
+
+   *CLI exception*: the `ttio` umbrella console-script is
+   Python-only (Decision 1). Java consumers drive the SDK directly
+   from JVM code (tio-browser for v1.0; arbitrary Java callers for
+   v1.1+). A Java CLI doesn't fit the v1.0 deployment model and
+   would duplicate the Python `ttio`'s subcommand grammar without
+   any new consumer.
 
 3. **`ttio.workbench` is the new namespace.** Existing
    `ttio.transport.{client,server}` stay reference-protocol; new
