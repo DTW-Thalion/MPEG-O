@@ -8,6 +8,7 @@ import global.thalion.ttio.workbench.auth.AuthProvider;
 import global.thalion.ttio.workbench.auth.Session;
 import global.thalion.ttio.workbench.cohort.CohortQuery;
 import global.thalion.ttio.workbench.cohort.CohortResult;
+import global.thalion.ttio.workbench.containers.ContainersClient;
 import global.thalion.ttio.workbench.jobs.JobsClient;
 import global.thalion.ttio.workbench.pipeline.PipelinesClient;
 import global.thalion.ttio.workbench.sessions.SessionProxyAttach;
@@ -148,6 +149,13 @@ public final class WorkbenchClient implements AutoCloseable {
         }
         Object count = ((Map<String, Object>) resp.body()).get("count");
         return count instanceof Number n ? n.longValue() : 0L;
+    }
+
+    /** Build a {@link ContainersClient} bound to this session. */
+    public ContainersClient containers() {
+        return new ContainersClient(
+            endpoint.host, endpoint.port,
+            endpoint.httpScheme, session.token());
     }
 
     /** Build a {@link PipelinesClient} bound to this session. */
