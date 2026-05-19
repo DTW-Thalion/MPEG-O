@@ -43,6 +43,7 @@ public class MainWindow {
     private MenuItem openItem, closeItem, saveAsItem, exitItem;
     private MenuItem importItem, exportItem, downloadItem, uploadItem, diagnosticsItem;
     private MenuItem workbenchConnectItem, workbenchDisconnectItem, workbenchStatusItem;
+    private MenuItem workbenchContainersItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
@@ -141,8 +142,11 @@ public class MainWindow {
         workbenchConnectItem = new MenuItem("Connect…");
         workbenchDisconnectItem = new MenuItem("Disconnect");
         workbenchStatusItem = new MenuItem("Status…");
+        workbenchContainersItem = new MenuItem("Browse containers…");
         workbenchMenu.getItems().addAll(workbenchConnectItem,
-            workbenchDisconnectItem, new SeparatorMenuItem(), workbenchStatusItem);
+            workbenchDisconnectItem, new SeparatorMenuItem(),
+            workbenchContainersItem,
+            new SeparatorMenuItem(), workbenchStatusItem);
 
         Menu toolsMenu = new Menu("Tools");
         diagnosticsItem = new MenuItem("Diagnostics…");
@@ -273,6 +277,14 @@ public class MainWindow {
         workbenchConnectItem.setOnAction(e -> openLoginDialog());
         workbenchDisconnectItem.setOnAction(e -> disconnectWorkbench());
         workbenchStatusItem.setOnAction(e -> showWorkbenchStatus());
+        workbenchContainersItem.setOnAction(e -> openContainerBrowser());
+    }
+
+    /** Open the workbench container browser window. */
+    private void openContainerBrowser() {
+        var browser = new global.thalion.ttio.browser.workbench
+            .ContainerBrowser(stage);
+        browser.show();
     }
 
     /** Open the workbench login dialog. */

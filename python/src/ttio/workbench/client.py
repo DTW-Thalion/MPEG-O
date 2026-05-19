@@ -244,6 +244,13 @@ class WorkbenchClient:
                 status=status, body=resp)
         return int(resp.get("count", 0))
 
+    def containers(self):
+        """Return a `ContainersClient` bound to this session."""
+        from ttio.workbench.containers import ContainersClient
+        return ContainersClient(
+            self._endpoint.host, self._endpoint.port,
+            scheme=self._endpoint.http_scheme, token=self._session.token)
+
     def pipelines(self):
         """Return a `PipelinesClient` bound to this session."""
         from ttio.workbench.pipeline import PipelinesClient

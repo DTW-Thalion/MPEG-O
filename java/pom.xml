@@ -241,6 +241,11 @@
                                      measured. -->
                                 <exclude>**/workbench/sessions/SessionsClient*</exclude>
                                 <exclude>**/workbench/sessions/SessionProxyAttach*</exclude>
+                                <!-- W5.2: containers REST. Pure-data
+                                     records (Container, ContainerDetail,
+                                     ContainerListPage, ContainerLayer,
+                                     ContainerManifest) stay measured. -->
+                                <exclude>**/workbench/containers/ContainersClient*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -271,6 +276,11 @@
                                      measured. -->
                                 <exclude>**/workbench/sessions/SessionsClient*</exclude>
                                 <exclude>**/workbench/sessions/SessionProxyAttach*</exclude>
+                                <!-- W5.2: containers REST. Pure-data
+                                     records (Container, ContainerDetail,
+                                     ContainerListPage, ContainerLayer,
+                                     ContainerManifest) stay measured. -->
+                                <exclude>**/workbench/containers/ContainersClient*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -301,6 +311,11 @@
                                      measured. -->
                                 <exclude>**/workbench/sessions/SessionsClient*</exclude>
                                 <exclude>**/workbench/sessions/SessionProxyAttach*</exclude>
+                                <!-- W5.2: containers REST. Pure-data
+                                     records (Container, ContainerDetail,
+                                     ContainerListPage, ContainerLayer,
+                                     ContainerManifest) stay measured. -->
+                                <exclude>**/workbench/containers/ContainersClient*</exclude>
                             </excludes>
                             <rules>
                                 <rule>

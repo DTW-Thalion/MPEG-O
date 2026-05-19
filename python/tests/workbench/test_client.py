@@ -165,15 +165,16 @@ def test_connect_calls_provider_authenticate(monkeypatch):
     assert client.http_scheme == "https"
 
 
-# ---------------------------------------------------- W3/W4 stubs
+# ---------------------------------------------------- W3/W4/W5 sub-clients
 
-def test_w3_w4_sub_clients_are_live(monkeypatch):
+def test_w3_w4_w5_sub_clients_are_live(monkeypatch):
     # W3 promoted client.query / pipelines / jobs; W4 promoted
-    # sessions / session_proxy. All four sub-client factories
-    # are now live -- constructing them is pure (no network).
-    # Calling .query() / .submit() / .terminate() would hit the
-    # network and raise WorkbenchHttpError on a closed port; out
-    # of scope for this unit test.
+    # sessions / session_proxy; W5.2 added containers. All five
+    # sub-client factories are now live -- constructing them is
+    # pure (no network). Calling .list() / .submit() /
+    # .terminate() would hit the network and raise
+    # WorkbenchHttpError on a closed port; out of scope for this
+    # unit test.
     class _StubAuth:
         @property
         def username(self): return "alice"
@@ -184,6 +185,7 @@ def test_w3_w4_sub_clients_are_live(monkeypatch):
                 expires_at=0, provider="stub", session_id="S")
 
     client = connect("ws://localhost:8443", auth=_StubAuth())
+    assert client.containers() is not None
     assert client.jobs() is not None
     assert client.pipelines() is not None
     assert client.sessions() is not None

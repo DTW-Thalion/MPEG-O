@@ -201,14 +201,16 @@ class WorkbenchClientTest {
     // ---------------- W3 + W4 surfaces (live)
 
     @Test
-    void w3AndW4SubClientsAreLive() {
+    void w3W4W5SubClientsAreLive() {
         // W3 promoted client.pipelines / jobs; W4 promoted
-        // sessions / sessionProxy. All four sub-client factories
-        // are now live -- constructing them is pure (no network).
-        // Actually calling list()/submit()/terminate() would hit
-        // the network -- out of scope for this unit test.
+        // sessions / sessionProxy; W5.2 added containers(). All
+        // five sub-client factories are now live -- constructing
+        // them is pure (no network). Actually calling .list() /
+        // .submit() / .terminate() would hit the network, out of
+        // scope for this unit test.
         WorkbenchClient client = WorkbenchClient.connect(
             "ws://localhost:8443", new StubAuth());
+        assertNotNull(client.containers());
         assertNotNull(client.pipelines());
         assertNotNull(client.jobs());
         assertNotNull(client.sessions());
