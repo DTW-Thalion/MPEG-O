@@ -42,10 +42,12 @@ public class MainWindow {
 
     private MenuItem openItem, closeItem, saveAsItem, exitItem;
     private MenuItem importItem, exportItem, downloadItem, uploadItem, diagnosticsItem;
+    private MenuItem workbenchConnectItem, workbenchDisconnectItem, workbenchStatusItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
     private OpenDataset currentDataset;
+    private global.thalion.ttio.browser.workbench.StatusIndicator workbenchStatusIndicator;
 
     public void show(Stage primaryStage) {
         this.stage = primaryStage;
@@ -135,6 +137,13 @@ public class MainWindow {
         uploadItem = new MenuItem("Upload to server…");
         transportMenu.getItems().addAll(downloadItem, uploadItem);
 
+        Menu workbenchMenu = new Menu("Workbench");
+        workbenchConnectItem = new MenuItem("Connect…");
+        workbenchDisconnectItem = new MenuItem("Disconnect");
+        workbenchStatusItem = new MenuItem("Status…");
+        workbenchMenu.getItems().addAll(workbenchConnectItem,
+            workbenchDisconnectItem, new SeparatorMenuItem(), workbenchStatusItem);
+
         Menu toolsMenu = new Menu("Tools");
         diagnosticsItem = new MenuItem("Diagnostics…");
         toolsMenu.getItems().add(diagnosticsItem);
@@ -143,7 +152,7 @@ public class MainWindow {
         helpMenu.getItems().add(new MenuItem("About"));
 
         return new MenuBar(fileMenu, importMenu, exportMenu, transportMenu,
-                          toolsMenu, helpMenu);
+                          workbenchMenu, toolsMenu, helpMenu);
     }
 
     private ToolBar buildToolBar() {
@@ -224,7 +233,12 @@ public class MainWindow {
 
     private HBox buildStatusBar() {
         statusBarLabel = new Label("(no file)");
-        HBox bar = new HBox(statusBarLabel);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+        workbenchStatusIndicator =
+            new global.thalion.ttio.browser.workbench.StatusIndicator();
+        HBox bar = new HBox(8, statusBarLabel, spacer,
+                            workbenchStatusIndicator.node());
         bar.getStyleClass().add("status-bar");
         bar.setStyle("-fx-padding: 4 8 4 8; -fx-border-color: #888;"
                    + " -fx-border-width: 1 0 0 0;");
@@ -256,6 +270,65 @@ public class MainWindow {
         uploadItem.setOnAction(e -> openUploadDialog());
         diagnosticsItem.setOnAction(e ->
             global.thalion.ttio.browser.diag.DiagnosticsDialog.show(stage));
+        workbenchConnectItem.setOnAction(e -> openLoginDialog());
+        workbenchDisconnectItem.setOnAction(e -> disconnectWorkbench());
+        workbenchStatusItem.setOnAction(e -> showWorkbenchStatus());
+    }
+
+    /** Open the workbench login dialog. */
+    private void openLoginDialog() {
+        var manager = global.thalion.ttio.browser.workbench.ConnectionManager.instance();
+        if (manager.isConnected()) {
+            var existing = manager.session();
+            new Alert(Alert.AlertType.INFORMATION,
+                "Already connected as " + existing.username()
+                + " @ " + manager.client().host()
+                + ". Disconnect first to switch accounts.",
+                ButtonType.OK).showAndWait();
+            return;
+        }
+        var dlg = new global.thalion.ttio.browser.workbench.LoginDialog(stage);
+        dlg.showAndConnect(session -> {
+            // No additional UI hookup yet -- W5.2+ panels listen on
+            // ConnectionManager themselves. The status indicator already
+            // reflects the new state via its listener.
+        });
+    }
+
+    /** Disconnect from the workbench server (idempotent). */
+    private void disconnectWorkbench() {
+        global.thalion.ttio.browser.workbench.ConnectionManager.instance().disconnect();
+    }
+
+    /** Show a modal info dialog with the current workbench connection. */
+    private void showWorkbenchStatus() {
+        var manager = global.thalion.ttio.browser.workbench.ConnectionManager.instance();
+        String body;
+        if (!manager.isConnected()) {
+            body = "Not connected.\n\nLast status: "
+                + manager.state()
+                + (manager.lastMessage().isEmpty()
+                    ? "" : "\n" + manager.lastMessage());
+        } else {
+            var s = manager.session();
+            var c = manager.client();
+            body = String.format(
+                "Endpoint: %s://%s:%d%n"
+                + "User:     %s%n"
+                + "Provider: %s%n"
+                + "Projects: %s%n"
+                + "Capabilities: %d granted%n"
+                + "Session id: %s",
+                c.httpScheme(), c.host(), c.port(),
+                s.username(), s.provider(),
+                s.projects() == null ? "(none)" : s.projects().toString(),
+                s.capabilities() == null ? 0 : s.capabilities().size(),
+                s.sessionId());
+        }
+        Alert info = new Alert(Alert.AlertType.INFORMATION, body, ButtonType.OK);
+        info.setHeaderText("Workbench status");
+        info.initOwner(stage);
+        info.showAndWait();
     }
 
     /** Open the transport download wizard. */
@@ -390,6 +463,7 @@ public class MainWindow {
     public DetailPane detail() { return detailPane; }
 
     public void dispose() {
+        if (workbenchStatusIndicator != null) workbenchStatusIndicator.dispose();
         if (stage != null) stage.close();
     }
 }

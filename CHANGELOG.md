@@ -11,6 +11,62 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.1: tio-browser Connection Manager (2026-05-19)
+
+First substantive W5 sub-phase. Adds the JavaFX foundation that
+every other W5 panel will hang off: an observable workbench
+connection holder, a modal login dialog, and a status-bar
+indicator. Wires the W1+W3+W4 `global.thalion.ttio.workbench.
+WorkbenchClient` SDK into the GUI for the first time.
+
+New package `tio-browser/src/main/java/global/thalion/ttio/
+browser/workbench/`:
+- `ConnectionState` enum (DISCONNECTED / CONNECTING / CONNECTED
+  / FAILED).
+- `ConnectionListener` functional interface.
+- `ConnectionManager` -- process-wide singleton holding the
+  `WorkbenchClient` instance + state machine. Thread-safe
+  listeners; `connect(url, auth)` and `disconnect()` drive
+  state transitions; throwing listeners do not block siblings.
+- `LoginDialog` -- modal `Stage`-based form with server URL +
+  username + password + TOTP. Static validators
+  (`isValidUrl`, `isValidTotp`, `isValidUsername`,
+  `isValidPassword`). `Bindings.createBooleanBinding`
+  disables the Connect button until valid; worker `Task<Session>`
+  calls `ConnectionManager.connect()` off the FX thread.
+- `StatusIndicator` -- small HBox (coloured Circle + Label +
+  Tooltip) for the status bar; subscribes to `ConnectionManager`
+  and renders the four colour states.
+
+`MainWindow` integration:
+- New `Workbench` menu between `Transport` and `Tools` with
+  `Connect...`, `Disconnect`, `Status...` items.
+- Status bar gains the right-aligned indicator.
+- `showWorkbenchStatus()` modal Alert summarises endpoint /
+  user / provider / projects / capability count / session id;
+  surfaces the last failure message when disconnected.
+- `dispose()` detaches the indicator listener.
+
+Tests:
+- `ConnectionManagerTest` (8 tests, pure unit) covers state
+  transitions, listener dispatch, idempotent disconnect,
+  throwing-listener tolerance, post-failure reconnect.
+- `LoginDialogTest` (9 tests) covers the static validators
+  (URL forms, TOTP 6-digit rule, blank-rejection).
+- `StatusIndicatorSmokeTest` (3 TestFX tests) verifies the
+  three colour transitions render correctly and the tooltip
+  carries the failure message.
+
+CI: new `tio-browser-test` job in `ci.yml` mirrors the
+release-shaded-jar workflow's linux-x64 leg (JDK 25 + HDF5 +
+native libttio_rans build + `mvn install` of `java/` to local
+M2 + `mvn -P linux-x64 test` of `tio-browser/`). Every PR is
+now compile- and TestFX-verified at PR time, not just on tag
+push.
+
+Deferred to W5.1 follow-up: live-daemon round-trip (shared
+deferral with W1/W3/W4).
+
 ### Changed -- W5.0: TTI-O Java SDK 1.3.0 (kickoff) (2026-05-19)
 
 Fifth workbench-client milestone kickoff. Bumps `java/pom.xml`
