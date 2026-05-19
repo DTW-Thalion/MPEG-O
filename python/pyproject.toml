@@ -97,6 +97,11 @@ zarr = "ttio.providers.zarr:ZarrProvider"
 ttio-sign = "ttio.tools.ttio_sign_cli:main"
 ttio-verify = "ttio.tools.ttio_verify_cli:main"
 ttio-pqc = "ttio.tools.ttio_pqc_cli:main"
+# W2: spec section 8.2 `ttio` umbrella. Subcommands for login,
+# upload, download, stream, inspect, encode, export; W3/W4
+# surfaces (query/submit/jobs/sessions) registered as placeholders
+# that surface a clear "available in <milestone>" message.
+ttio = "ttio.tools.workbench_cli:main"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

@@ -11,6 +11,76 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W2: `ttio` CLI umbrella + Python SDK foundation (2026-05-19)
+
+Second milestone of the
+[Workbench Client workplan](docs/workbench-client-workplan.md).
+Lands the spec section 8.2 CLI surface verbatim and the section
+8.3 SDK shape (`ttio.connect(...)`, auth providers,
+`WorkbenchClient`). All Python; the Java equivalent for W2 lives
+inside W5 when tio-browser bumps its TTI-O dep.
+
+SDK foundation (`python/src/ttio/workbench/`):
+- `auth_providers.py` -- `AuthProvider` ABC plus four concrete
+  providers: `PasswordTotpAuth` (interactive creds via W1
+  `login_password`), `BearerAuth` (caller already holds a
+  bearer; synthesises a `Session` without round-trip),
+  `BootstrapAdminAuth` (reads `<staging_root>/bootstrap-
+  credentials.json`; smoke / dev path), and `OIDCAuth` (v1.1
+  stub that raises a clear NotImplementedError).
+- `client.py` -- `connect(url, auth=...)` factory + the
+  `WorkbenchClient` class. Resolves WSS/WS/HTTPS/HTTP URLs,
+  authenticates through the provider, exposes
+  `upload_client(...)` / `download_client(...)` builders + the
+  `upload_bytes(...)` / `download_bytes(...)` async
+  convenience methods. W3 surfaces (`query`, `submit_pipeline`,
+  `jobs`) and W4 surfaces (`session_create`) registered as
+  methods that raise NotImplementedError pointing to the
+  milestone.
+- `cohort.py`, `pipeline.py`, `jobs.py`, `sessions.py` --
+  namespace stubs so the eventual W3/W4 implementations have
+  the import path reserved and IDE-completion works today.
+- Top-level `ttio` re-exports `connect`, `WorkbenchClient`,
+  `Session`, and all four `*Auth` providers so the spec section
+  8.3 sample (`ttio.connect(..., auth=ttio.OIDCAuth())`) works
+  without operators digging into sub-modules.
+- `parse_filter_kv()` helper turns repeated `--filter k=v`
+  arguments into a dict with numeric coercion.
+
+CLI (`python/src/ttio/tools/workbench_cli.py`):
+- `ttio` umbrella console-script with subcommands matching
+  spec section 8.2:
+    - `login` -- resolve credentials, print the auth JSON.
+    - `upload` -- WS upload of a local `.tio`.
+    - `download` -- WS download to a local `.tio` with optional
+      selective-access filters (`--filter k=v`, repeatable).
+    - `stream` -- WS download saved as raw `.tis`.
+    - `inspect` -- stats-only WS read; prints the per-AU
+      summary frames.
+    - `encode` / `export` -- dispatch into the existing
+      `ttio.tools.{fastq,fasta}_{import,export}_cli`.
+    - `query`, `submit`, `jobs`, `cohorts` -- W3 placeholders
+      (exit 2 with milestone deferral message).
+    - `sessions` -- W4 placeholder.
+- Auth-mode resolver enforces exactly one of `--token+--owner`,
+  `--staging-root`, or `--username+--password+--totp`.
+- `pyproject.toml`: `[project.scripts] ttio = ...` so
+  `pip install -e .` exposes `ttio` on PATH.
+
+Tests (`python/tests/workbench/`):
+- `test_client.py` -- 21 tests covering top-level re-exports,
+  URL parsing, all four auth providers, the `connect()`
+  factory, W3/W4 placeholder method dispatch, and the
+  filter-key parser.
+- `test_cli.py` -- 21 tests covering every spec section 8.2
+  verb's `--help`, the auth-mode resolver's three failure
+  modes, the W3/W4 placeholder exit codes, the encode-format
+  pointer to W6.
+
+Coverage now: 79 Python workbench tests (37 W1 + 42 W2), all
+pass locally. Java surface unchanged in W2; the existing W1
+Java suite continues to be the cross-language anchor.
+
 ### Added -- W1: Workbench client (Python + Java) (2026-05-19)
 
 First milestone of the
