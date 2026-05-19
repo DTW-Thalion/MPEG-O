@@ -19,8 +19,11 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ImportFormatRegistryDiagnosticsTest {
 
+    // v1.4.1 (PR #76): BAM/SAM/CRAM moved to the bundled htsjdk
+    // library, so they are no longer binary-gated. The remaining
+    // gated formats are vendor-specific binary parsers without a
+    // pure-Java alternative.
     private static final Set<String> BINARY_GATED_FORMATS = Set.of(
-        "BAM", "SAM", "CRAM",
         "Thermo .raw",
         "Waters MassLynx",
         "Bruker timsTOF"
@@ -40,11 +43,14 @@ class ImportFormatRegistryDiagnosticsTest {
     }
 
     @Test
-    void bamSamCramAllRequireSamtools() {
+    void bamSamCramHaveNoBinaryRequirement() {
+        // Post-PR-#76 (htsjdk swap): the bundled SAM/BAM/CRAM reader
+        // has no external binary dependency.
         for (String name : List.of("BAM", "SAM", "CRAM")) {
             ImportFormatSpec spec = lookup(name);
-            assertEquals("samtools", spec.requiredBinary,
-                name + " must depend on samtools");
+            assertNull(spec.requiredBinary,
+                name + " must not declare a required binary "
+                + "(post-PR-#76 htsjdk swap removed the samtools dep)");
         }
     }
 
