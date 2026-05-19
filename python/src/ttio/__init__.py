@@ -96,3 +96,31 @@ __all__ = [
     "RamanImage",
     "IRImage",
 ]
+
+
+# ----------------------------------------------------------------
+# Workbench client SDK (W2). Top-level re-exports so the spec
+# section 8.3 sample (`ttio.connect(..., auth=ttio.OIDCAuth())`)
+# works without the operator hunting through sub-modules. Lazy
+# import so `ttio` itself stays cheap to import for callers who
+# only use the at-rest reader/writer.
+# ----------------------------------------------------------------
+from ttio.workbench import (  # noqa: E402
+    BearerAuth,
+    BootstrapAdminAuth,
+    OIDCAuth,
+    PasswordTotpAuth,
+    Session,
+    WorkbenchClient,
+    connect,
+)
+
+__all__ += [
+    "BearerAuth",
+    "BootstrapAdminAuth",
+    "OIDCAuth",
+    "PasswordTotpAuth",
+    "Session",
+    "WorkbenchClient",
+    "connect",
+]
