@@ -77,9 +77,31 @@ Tests (`python/tests/workbench/`):
   modes, the W3/W4 placeholder exit codes, the encode-format
   pointer to W6.
 
-Coverage now: 79 Python workbench tests (37 W1 + 42 W2), all
-pass locally. Java surface unchanged in W2; the existing W1
-Java suite continues to be the cross-language anchor.
+Java (`java/src/main/java/global/thalion/ttio/workbench/`) --
+**added in the same PR after a cross-language parity review:**
+- `auth/AuthProvider.java` interface + four concrete providers
+  (`PasswordTotpAuth`, `BearerAuth`, `BootstrapAdminAuth`,
+  `OIDCAuth` stub).
+- `WorkbenchClient.java` top-level entry: `connect(url, auth)`
+  factory, `transportClient()` builder, `upload()` / `download()`
+  convenience methods, W3 / W4 placeholder methods, and
+  `parseUrl()` byte-matching the Python URL parser.
+- JaCoCo excludes extended to the new daemon-required classes
+  (`BootstrapAdminAuth`, `PasswordTotpAuth`).
+- 23 new Java tests covering URL parser, all four auth
+  providers, `connect()`, `reauth()`, `close()`, W3 / W4
+  placeholders.
+
+Workplan amendment in this PR
+(`docs/workbench-client-workplan.md` Decision 2): **Python +
+Java SDK ship in lockstep at every milestone.** The `ttio` CLI
+stays Python-only by design (Decision 1: console-script). ObjC
+stays server-runtime (not extended for client purposes).
+
+Coverage: 79 Python workbench tests (37 W1 + 42 W2) plus 83
+Java workbench tests (60 W1 + 23 W2), all pass locally. The W1
+cross-language byte-equivalence anchor (handshake JSON literals
+in both test suites) carries forward into W2.
 
 ### Added -- W1: Workbench client (Python + Java) (2026-05-19)
 
