@@ -167,15 +167,13 @@ def test_connect_calls_provider_authenticate(monkeypatch):
 
 # ---------------------------------------------------- W3/W4 stubs
 
-def test_w3_methods_are_live_w4_still_stubbed(monkeypatch):
-    # W3 promoted client.query / submit_pipeline / jobs() /
-    # pipelines() from W2-era NotImplementedError stubs to live
-    # methods. Constructing the sub-clients is pure (no network);
-    # actually calling query() or submit() would hit the network
-    # and raise WorkbenchHttpError on a closed port -- not in
-    # scope for this unit test.
-    #
-    # client.session_create() stays a W4 stub.
+def test_w3_w4_sub_clients_are_live(monkeypatch):
+    # W3 promoted client.query / pipelines / jobs; W4 promoted
+    # sessions / session_proxy. All four sub-client factories
+    # are now live -- constructing them is pure (no network).
+    # Calling .query() / .submit() / .terminate() would hit the
+    # network and raise WorkbenchHttpError on a closed port; out
+    # of scope for this unit test.
     class _StubAuth:
         @property
         def username(self): return "alice"
@@ -186,15 +184,12 @@ def test_w3_methods_are_live_w4_still_stubbed(monkeypatch):
                 expires_at=0, provider="stub", session_id="S")
 
     client = connect("ws://localhost:8443", auth=_StubAuth())
-    # session_create is still W4: NotImplementedError.
-    with pytest.raises(NotImplementedError, match="W4"):
-        client.session_create()
-    # jobs() / pipelines() build sub-clients without touching the
-    # network. They're live as of W3.
-    jobs_client = client.jobs()
-    pipelines_client = client.pipelines()
-    assert jobs_client is not None
-    assert pipelines_client is not None
+    assert client.jobs() is not None
+    assert client.pipelines() is not None
+    assert client.sessions() is not None
+    # session_proxy builder is pure (no WS open until __aenter__).
+    proxy = client.session_proxy("01HSESS")
+    assert proxy is not None
 
 
 # ---------------------------------------------------- filter parsing

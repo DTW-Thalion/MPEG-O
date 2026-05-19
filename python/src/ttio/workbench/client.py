@@ -268,10 +268,35 @@ class WorkbenchClient:
             self._endpoint.host, self._endpoint.port,
             scheme=self._endpoint.http_scheme, token=self._session.token)
 
-    def session_create(self, *args, **kwargs):
-        """Create an interactive session. **W4 surface** -- raises today."""
-        from ttio.workbench.sessions import _not_yet_implemented
-        _not_yet_implemented("client.session_create()", "W4")
+    def sessions(self):
+        """Return a `SessionsClient` bound to this session."""
+        from ttio.workbench.sessions import SessionsClient
+        return SessionsClient(
+            self._endpoint.host, self._endpoint.port,
+            scheme=self._endpoint.http_scheme, token=self._session.token)
+
+    def session_create(self, *, project: str, engine_pin: str,
+                         image=None, command=None, env=None,
+                         bind_mounts=None,
+                         container_storage_root=None):
+        """Convenience: POST /v1/sessions. Returns a `Session`
+        handle in `starting` state."""
+        return self.sessions().create(
+            project=project, engine_pin=engine_pin,
+            image=image, command=command, env=env,
+            bind_mounts=bind_mounts,
+            container_storage_root=container_storage_root,
+        )
+
+    def session_proxy(self, session_id: str, *, path: str = "/"):
+        """Return an unopened `SessionProxyAttach` bound to this
+        session + endpoint. Caller drives the async context manager.
+        """
+        from ttio.workbench.session_proxy import SessionProxyAttach
+        return SessionProxyAttach(
+            host=self._endpoint.host, port=self._endpoint.port,
+            session_id=session_id, token=self._session.token,
+            path=path, scheme=self._endpoint.ws_scheme)
 
 
 def connect(url: str, *, auth: AuthProvider) -> WorkbenchClient:

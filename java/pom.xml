@@ -235,6 +235,12 @@
                                 <exclude>**/workbench/WorkbenchHttp*</exclude>
                                 <exclude>**/workbench/pipeline/PipelinesClient*</exclude>
                                 <exclude>**/workbench/jobs/JobsClient*</exclude>
+                                <!-- W4: sessions REST + WS proxy. The
+                                     pure-data Session record, SessionProxy
+                                     builders, and BindMountValidator stay
+                                     measured. -->
+                                <exclude>**/workbench/sessions/SessionsClient*</exclude>
+                                <exclude>**/workbench/sessions/SessionProxyAttach*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -259,6 +265,12 @@
                                 <exclude>**/workbench/WorkbenchHttp*</exclude>
                                 <exclude>**/workbench/pipeline/PipelinesClient*</exclude>
                                 <exclude>**/workbench/jobs/JobsClient*</exclude>
+                                <!-- W4: sessions REST + WS proxy. The
+                                     pure-data Session record, SessionProxy
+                                     builders, and BindMountValidator stay
+                                     measured. -->
+                                <exclude>**/workbench/sessions/SessionsClient*</exclude>
+                                <exclude>**/workbench/sessions/SessionProxyAttach*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -283,6 +295,12 @@
                                 <exclude>**/workbench/WorkbenchHttp*</exclude>
                                 <exclude>**/workbench/pipeline/PipelinesClient*</exclude>
                                 <exclude>**/workbench/jobs/JobsClient*</exclude>
+                                <!-- W4: sessions REST + WS proxy. The
+                                     pure-data Session record, SessionProxy
+                                     builders, and BindMountValidator stay
+                                     measured. -->
+                                <exclude>**/workbench/sessions/SessionsClient*</exclude>
+                                <exclude>**/workbench/sessions/SessionProxyAttach*</exclude>
                             </excludes>
                             <rules>
                                 <rule>
