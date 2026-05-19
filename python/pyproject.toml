@@ -143,6 +143,12 @@ omit = [
     "*/workbench/transport/upload.py",
     "*/workbench/transport/download.py",
     "*/tools/workbench_cli.py",
+    # W3: REST clients whose meaningful coverage needs a live
+    # daemon round-trip. The pure-data dataclasses + cohort
+    # predicate AST stay measured.
+    "*/workbench/_http.py",
+    "*/workbench/jobs.py",
+    "*/workbench/pipeline.py",
 ]
 
 [tool.coverage.report]

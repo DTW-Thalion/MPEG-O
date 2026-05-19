@@ -6,6 +6,10 @@ package global.thalion.ttio.workbench;
 
 import global.thalion.ttio.workbench.auth.AuthProvider;
 import global.thalion.ttio.workbench.auth.Session;
+import global.thalion.ttio.workbench.cohort.CohortQuery;
+import global.thalion.ttio.workbench.cohort.CohortResult;
+import global.thalion.ttio.workbench.jobs.JobsClient;
+import global.thalion.ttio.workbench.pipeline.PipelinesClient;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
 
@@ -111,22 +115,54 @@ public final class WorkbenchClient implements AutoCloseable {
                                             outputMode, maxAu);
     }
 
-    // ----------------------------------------------- W3 / W4 placeholders
+    // ----------------------------------------------- W3 surfaces
 
-    /** Run a cohort query. <strong>W3 surface</strong> -- throws today. */
-    public Object query(Object... args) {
-        throw notYetImplemented("WorkbenchClient.query()", "W3");
+    /** {@code POST /v1/cohorts/query}. */
+    @SuppressWarnings("unchecked")
+    public CohortResult query(CohortQuery query) {
+        WorkbenchHttp.Response resp = WorkbenchHttp.jsonRequest(
+            "POST", endpoint.host, endpoint.port,
+            "/v1/cohorts/query",
+            endpoint.httpScheme, session.token(), query.toJson());
+        if (resp.status() != 200) {
+            throw new WorkbenchHttp.WorkbenchHttpException(
+                "POST /v1/cohorts/query failed: " + resp.status(),
+                resp.status(), resp.body());
+        }
+        return CohortResult.fromJson((Map<String, Object>) resp.body());
     }
 
-    /** Submit a pipeline. <strong>W3 surface</strong> -- throws today. */
-    public Object submitPipeline(Object... args) {
-        throw notYetImplemented("WorkbenchClient.submitPipeline()", "W3");
+    /** {@code POST /v1/cohorts/preview-count}. */
+    @SuppressWarnings("unchecked")
+    public long previewCount(CohortQuery query) {
+        WorkbenchHttp.Response resp = WorkbenchHttp.jsonRequest(
+            "POST", endpoint.host, endpoint.port,
+            "/v1/cohorts/preview-count",
+            endpoint.httpScheme, session.token(), query.toJson());
+        if (resp.status() != 200) {
+            throw new WorkbenchHttp.WorkbenchHttpException(
+                "POST /v1/cohorts/preview-count failed: " + resp.status(),
+                resp.status(), resp.body());
+        }
+        Object count = ((Map<String, Object>) resp.body()).get("count");
+        return count instanceof Number n ? n.longValue() : 0L;
     }
 
-    /** List / inspect jobs. <strong>W3 surface</strong> -- throws today. */
-    public Object jobs(Object... args) {
-        throw notYetImplemented("WorkbenchClient.jobs()", "W3");
+    /** Build a {@link PipelinesClient} bound to this session. */
+    public PipelinesClient pipelines() {
+        return new PipelinesClient(
+            endpoint.host, endpoint.port,
+            endpoint.httpScheme, session.token());
     }
+
+    /** Build a {@link JobsClient} bound to this session. */
+    public JobsClient jobs() {
+        return new JobsClient(
+            endpoint.host, endpoint.port,
+            endpoint.httpScheme, session.token());
+    }
+
+    // ----------------------------------------------- W4 placeholder
 
     /** Create an interactive session. <strong>W4 surface</strong> -- throws today. */
     public Object sessionCreate(Object... args) {

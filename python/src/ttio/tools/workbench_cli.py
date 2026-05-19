@@ -340,15 +340,208 @@ def _delegate_to(module, argv: list[str]) -> int:
 
 
 # ----------------------------------------------------------------
-# W3 / W4 placeholder subcommands
+# W3 subcommands: query / submit / jobs / pipelines / provenance
 # ----------------------------------------------------------------
 
-def cmd_w3_placeholder(args) -> int:
+def _load_predicate_json(args) -> dict | None:
+    """Load the predicate JSON from --predicate-json (inline) or
+    --predicate-file (path)."""
+    if args.predicate_json and args.predicate_file:
+        print(f"{PROG}: pass --predicate-json OR --predicate-file, not both",
+              file=sys.stderr)
+        return None
+    if args.predicate_file:
+        with open(args.predicate_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    if args.predicate_json:
+        return json.loads(args.predicate_json)
+    return None
+
+
+def cmd_query(args) -> int:
+    auth = _resolve_auth(args)
+    client = ttio.connect(args.server, auth=auth)
+    try:
+        predicate_json = _load_predicate_json(args)
+    except (OSError, ValueError) as e:
+        print(f"{PROG}: bad predicate: {e}", file=sys.stderr)
+        return 2
+    if predicate_json is None and not args.no_predicate:
+        print(f"{PROG}: --predicate-json or --predicate-file required "
+              f"(use --no-predicate to query without one)", file=sys.stderr)
+        return 2
+
+    body: dict = {"select": args.select, "limit": args.limit}
+    if predicate_json is not None:
+        body["predicate"] = predicate_json
+    if args.cursor:
+        body["cursor"] = args.cursor
+
+    from ttio.workbench._http import WorkbenchHttpError, http_json
+    try:
+        endpoint_args = {
+            "host": client.host, "port": client.port,
+            "scheme": client.http_scheme,
+            "token": client.session.token,
+        }
+        path = "/v1/cohorts/preview-count" if args.count_only else "/v1/cohorts/query"
+        status, resp = http_json("POST", path=path, body=body, **endpoint_args)
+        if status != 200:
+            raise WorkbenchHttpError(
+                f"POST {path} failed: {status}", status=status, body=resp)
+    except WorkbenchHttpError as e:
+        print(f"{PROG}: query failed: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps(resp, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_submit(args) -> int:
+    auth = _resolve_auth(args)
+    client = ttio.connect(args.server, auth=auth)
+    try:
+        with open(args.inputs_file, "r", encoding="utf-8") as f:
+            inputs = json.load(f)
+        params = {}
+        if args.params_file:
+            with open(args.params_file, "r", encoding="utf-8") as f:
+                params = json.load(f)
+    except (OSError, ValueError) as e:
+        print(f"{PROG}: bad inputs/params file: {e}", file=sys.stderr)
+        return 2
+
+    try:
+        job = client.jobs().submit(
+            pipeline_id=args.pipeline,
+            inputs=inputs,
+            params=params or None,
+        )
+    except Exception as e:  # surface server-side errors verbatim
+        print(f"{PROG}: submit failed: {e}", file=sys.stderr)
+        return 1
+    print(json.dumps({
+        "job_id":      job.job_id,
+        "pipeline_id": job.pipeline_id,
+        "status":      job.status,
+        "queued_at":   job.queued_at,
+    }, indent=2, sort_keys=True))
+    return 0
+
+
+def cmd_jobs(args) -> int:
+    auth = _resolve_auth(args)
+    client = ttio.connect(args.server, auth=auth)
+    jobs = client.jobs()
+    try:
+        if args.action == "ls":
+            rows = jobs.list(status_filter=args.status, limit=args.limit)
+            print(json.dumps(
+                [_job_to_dict(j) for j in rows],
+                indent=2, sort_keys=True))
+            return 0
+        if args.action == "status":
+            job = jobs.get(args.job_id)
+            print(json.dumps(_job_to_dict(job), indent=2, sort_keys=True))
+            return 0
+        if args.action == "cancel":
+            jobs.cancel(args.job_id)
+            print(json.dumps({"job_id": args.job_id, "cancelled": True},
+                             indent=2, sort_keys=True))
+            return 0
+        if args.action == "events":
+            import asyncio
+            async def _stream():
+                async for ev in jobs.events(args.job_id):
+                    print(json.dumps({
+                        "event": ev.event, "data": dict(ev.data)},
+                        sort_keys=True))
+                    if (ev.event == "job.state"
+                            and ev.data.get("status") in
+                            ("completed", "failed", "cancelled")):
+                        break
+            asyncio.run(_stream())
+            return 0
+    except Exception as e:
+        print(f"{PROG}: jobs {args.action} failed: {e}", file=sys.stderr)
+        return 1
+    print(f"{PROG}: unknown jobs action {args.action!r}", file=sys.stderr)
+    return 2
+
+
+def _job_to_dict(job) -> dict:
+    return {
+        "job_id":            job.job_id,
+        "pipeline_id":       job.pipeline_id,
+        "status":            job.status,
+        "project":           job.project,
+        "owner":             job.owner,
+        "queued_at":         job.queued_at,
+        "started_at":        job.started_at,
+        "completed_at":      job.completed_at,
+        "engine_identifier": job.engine_identifier,
+        "exit_code":         job.exit_code,
+        "error_message":     job.error_message,
+    }
+
+
+def cmd_pipelines(args) -> int:
+    auth = _resolve_auth(args)
+    client = ttio.connect(args.server, auth=auth)
+    pipelines = client.pipelines()
+    try:
+        if args.action == "ls":
+            rows = pipelines.list()
+            print(json.dumps(
+                [_pipeline_to_dict(p) for p in rows],
+                indent=2, sort_keys=True))
+            return 0
+        if args.action == "get":
+            pipeline = pipelines.get(args.pipeline_id)
+            print(json.dumps(_pipeline_to_dict(pipeline),
+                             indent=2, sort_keys=True))
+            return 0
+        if args.action == "register":
+            with open(args.definition_file, "r", encoding="utf-8") as f:
+                definition = f.read()
+            pipeline = pipelines.register(
+                identifier=args.identifier,
+                version=args.version,
+                project=args.project,
+                definition=definition,
+                engine_pin=args.engine_pin,
+            )
+            print(json.dumps(_pipeline_to_dict(pipeline),
+                             indent=2, sort_keys=True))
+            return 0
+    except Exception as e:
+        print(f"{PROG}: pipelines {args.action} failed: {e}",
+              file=sys.stderr)
+        return 1
+    print(f"{PROG}: unknown pipelines action {args.action!r}", file=sys.stderr)
+    return 2
+
+
+def _pipeline_to_dict(p) -> dict:
+    return {
+        "pipeline_id":    p.pipeline_id,
+        "identifier":     p.identifier,
+        "version":        p.version,
+        "project":        p.project,
+        "owner":          p.owner,
+        "engine_pin":     p.engine_pin,
+        "definition":     p.definition,
+        "inputs_schema":  dict(p.inputs_schema),
+        "outputs_schema": dict(p.outputs_schema),
+    }
+
+
+def cmd_provenance(args) -> int:
     print(
-        f"{PROG}: `{args.subcommand}` is a W3 surface (cohort + "
-        f"pipeline + jobs). The v1.0 client ships W1 + W2 (auth + "
-        f"transport + CLI umbrella + SDK foundation). See "
-        f"docs/workbench-client-workplan.md.",
+        f"{PROG}: `provenance` requires a server-side endpoint "
+        f"(`GET /v1/containers/{{uri}}/provenance`) that v1.0 does "
+        f"not expose. Workaround: query the `provenance_edges` "
+        f"table directly, OR wait for the v1.x server release that "
+        f"adds the endpoint. Tracked as a v1.0.x follow-up.",
         file=sys.stderr)
     return 2
 
@@ -356,7 +549,7 @@ def cmd_w3_placeholder(args) -> int:
 def cmd_w4_placeholder(args) -> int:
     print(
         f"{PROG}: `{args.subcommand}` is a W4 surface (interactive "
-        f"sessions). The v1.0 client ships W1 + W2. See "
+        f"sessions). The v1.0 client ships W1 + W2 + W3. See "
         f"docs/workbench-client-workplan.md.",
         file=sys.stderr)
     return 2
@@ -476,14 +669,104 @@ def build_parser() -> argparse.ArgumentParser:
     px.add_argument("--extra", nargs=argparse.REMAINDER)
     px.set_defaults(func=cmd_export)
 
-    # W3 / W4 placeholders (registered so help renders them, but
-    # each surfaces the milestone deferral on invocation).
-    for name in ("query", "submit", "jobs", "cohorts"):
-        sp = sub.add_parser(name, help=f"(W3) -- not yet implemented.")
-        sp.set_defaults(func=cmd_w3_placeholder)
-    for name in ("sessions",):
-        sp = sub.add_parser(name, help=f"(W4) -- not yet implemented.")
-        sp.set_defaults(func=cmd_w4_placeholder)
+    # query
+    pq = sub.add_parser(
+        "query",
+        help="POST /v1/cohorts/query (or preview-count).")
+    _add_server_args(pq)
+    _add_auth_args(pq)
+    pq.add_argument("--select", default="containers",
+                     choices=["containers", "subjects", "samples"])
+    pq.add_argument("--predicate-json",
+                     help="Predicate AST as a JSON string.")
+    pq.add_argument("--predicate-file",
+                     help="Path to a file with the predicate AST.")
+    pq.add_argument("--no-predicate", action="store_true",
+                     help="Allow a query with no predicate "
+                          "(returns everything in scope).")
+    pq.add_argument("--limit", type=int, default=100)
+    pq.add_argument("--cursor",
+                     help="Opaque cursor from a prior response.")
+    pq.add_argument("--count-only", action="store_true",
+                     help="Hit /v1/cohorts/preview-count instead.")
+    pq.set_defaults(func=cmd_query)
+
+    # submit
+    ps = sub.add_parser(
+        "submit",
+        help="POST /v1/jobs against a registered pipeline.")
+    _add_server_args(ps)
+    _add_auth_args(ps)
+    ps.add_argument("--pipeline", required=True,
+                     help="pipeline_id to submit against.")
+    ps.add_argument("--inputs-file", required=True,
+                     help="JSON file with the inputs slot map. Slot "
+                          "values may be container URIs or "
+                          "{\"cohort_query\": ...} envelopes.")
+    ps.add_argument("--params-file",
+                     help="Optional JSON file with the params map.")
+    ps.set_defaults(func=cmd_submit)
+
+    # jobs (verb subcommand: ls / status / cancel / events)
+    pj = sub.add_parser(
+        "jobs",
+        help="Job tracking: ls / status / cancel / events.")
+    _add_server_args(pj)
+    _add_auth_args(pj)
+    pj.add_argument("action", choices=["ls", "status", "cancel", "events"])
+    pj.add_argument("job_id", nargs="?",
+                     help="Job ID (required for status / cancel / events).")
+    pj.add_argument("--status", help="Filter by status (ls only).")
+    pj.add_argument("--limit", type=int, help="Row cap (ls only).")
+    pj.set_defaults(func=cmd_jobs)
+
+    # pipelines (verb subcommand: ls / get / register)
+    pp = sub.add_parser(
+        "pipelines",
+        help="Pipeline registry: ls / get / register.")
+    _add_server_args(pp)
+    _add_auth_args(pp)
+    pp.add_argument("action", choices=["ls", "get", "register"])
+    pp.add_argument("pipeline_id", nargs="?",
+                     help="pipeline_id (required for get).")
+    pp.add_argument("--identifier")
+    pp.add_argument("--version", dest="version")
+    pp.add_argument("--project")
+    pp.add_argument("--definition-file",
+                     help="Path to the engine-native pipeline definition.")
+    pp.add_argument("--engine-pin",
+                     help="Engine identifier override.")
+    pp.set_defaults(func=cmd_pipelines)
+
+    # cohorts: alias for `query` (matches spec section 8.2's mention
+    # of "saved cohort" terminology; v1.0 server has no saved
+    # cohorts so this is just `query` under another name).
+    pc = sub.add_parser(
+        "cohorts",
+        help="Alias for `query` (saved-cohort API not in v1).")
+    _add_server_args(pc)
+    _add_auth_args(pc)
+    pc.add_argument("--select", default="containers",
+                     choices=["containers", "subjects", "samples"])
+    pc.add_argument("--predicate-json")
+    pc.add_argument("--predicate-file")
+    pc.add_argument("--no-predicate", action="store_true")
+    pc.add_argument("--limit", type=int, default=100)
+    pc.add_argument("--cursor")
+    pc.add_argument("--count-only", action="store_true")
+    pc.set_defaults(func=cmd_query)
+
+    # provenance: not exposed by v1.0 server -- surfaces a clear
+    # deferral message rather than a confusing 404.
+    pr = sub.add_parser(
+        "provenance",
+        help="(deferred) -- v1.0 server doesn't expose this endpoint.")
+    pr.add_argument("container", nargs="?")
+    pr.set_defaults(func=cmd_provenance)
+
+    # W4 placeholder.
+    pss = sub.add_parser("sessions", help="(W4) -- not yet implemented.")
+    pss.set_defaults(func=cmd_w4_placeholder)
 
     return p
 
