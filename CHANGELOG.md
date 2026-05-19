@@ -57,10 +57,15 @@ Tests:
   three colour transitions render correctly and the tooltip
   carries the failure message.
 
+CI: new `tio-browser-test` job in `ci.yml` mirrors the
+release-shaded-jar workflow's linux-x64 leg (JDK 25 + HDF5 +
+native libttio_rans build + `mvn install` of `java/` to local
+M2 + `mvn -P linux-x64 test` of `tio-browser/`). Every PR is
+now compile- and TestFX-verified at PR time, not just on tag
+push.
+
 Deferred to W5.1 follow-up: live-daemon round-trip (shared
-deferral with W1/W3/W4); tio-browser CI build (existing
-`ci.yml` does not build tio-browser; W5.7 will fold the
-tio-browser job into the regular pipeline).
+deferral with W1/W3/W4).
 
 ### Changed -- W5.0: TTI-O Java SDK 1.3.0 (kickoff) (2026-05-19)
 

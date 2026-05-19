@@ -455,6 +455,59 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  tio-browser-test:
+    # V1 (W5.1, 2026-05-19): tio-browser's PR build was previously
+    # only exercised by the release-shaded-jar.yml matrix on tag
+    # push, which meant every W5.x panel PR shipped without a
+    # CI-verified compile of the JavaFX surface. This job adds a
+    # PR-level compile + test gate that mirrors the release
+    # workflow's linux-x64 leg minus the shading / packaging
+    # steps. JDK 25 matches the java-test job; linux-x64 profile
+    # activation pulls in the right JavaFX classifier deps.
+    name: tio-browser — build & test (Maven + JDK 25)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup-hdf5
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: ./.github/actions/build-native
+        with:
+          jni: 'true'
+
+      # tio-browser depends on global.thalion:ttio:${ttio.version}
+      # which is an internal monorepo dep (the java/ module).
+      # Install it to local M2 before tio-browser can resolve it.
+      # -Djacoco.skip=true is required alongside -DskipTests because
+      # jacoco-check fails without coverage data.
+      - name: Install ttio library to local M2
+        working-directory: java
+        run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
+
+      # TestFX runs headless via the openjfx-monocle dep already
+      # in tio-browser/pom.xml. -P linux-x64 activates the platform
+      # classifier profile (JavaFX 21 needs per-OS classifier deps).
+      - name: Build and test tio-browser
+        working-directory: tio-browser
+        run: mvn -B -P linux-x64 test -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
+
+      - name: Upload surefire reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tio-browser-surefire
+          path: tio-browser/target/surefire-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
   perf-regression:
     name: Performance regression check (Python + ObjC, push-to-main only)
     runs-on: ubuntu-latest
