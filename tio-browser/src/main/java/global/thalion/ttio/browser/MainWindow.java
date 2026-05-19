@@ -44,6 +44,7 @@ public class MainWindow {
     private MenuItem importItem, exportItem, downloadItem, uploadItem, diagnosticsItem;
     private MenuItem workbenchConnectItem, workbenchDisconnectItem, workbenchStatusItem;
     private MenuItem workbenchContainersItem;
+    private MenuItem workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
@@ -143,9 +144,13 @@ public class MainWindow {
         workbenchDisconnectItem = new MenuItem("Disconnect");
         workbenchStatusItem = new MenuItem("Status…");
         workbenchContainersItem = new MenuItem("Browse containers…");
+        workbenchUploadItem = new MenuItem("Upload to workbench…");
+        workbenchDownloadItem = new MenuItem("Download from workbench…");
+        workbenchTransfersItem = new MenuItem("Transfers…");
         workbenchMenu.getItems().addAll(workbenchConnectItem,
             workbenchDisconnectItem, new SeparatorMenuItem(),
             workbenchContainersItem,
+            workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem,
             new SeparatorMenuItem(), workbenchStatusItem);
 
         Menu toolsMenu = new Menu("Tools");
@@ -278,6 +283,9 @@ public class MainWindow {
         workbenchDisconnectItem.setOnAction(e -> disconnectWorkbench());
         workbenchStatusItem.setOnAction(e -> showWorkbenchStatus());
         workbenchContainersItem.setOnAction(e -> openContainerBrowser());
+        workbenchUploadItem.setOnAction(e -> openWorkbenchUploadDialog());
+        workbenchDownloadItem.setOnAction(e -> openWorkbenchDownloadDialog());
+        workbenchTransfersItem.setOnAction(e -> openTransferQueueView());
     }
 
     /** Open the workbench container browser window. */
@@ -285,6 +293,24 @@ public class MainWindow {
         var browser = new global.thalion.ttio.browser.workbench
             .ContainerBrowser(stage);
         browser.show();
+    }
+
+    /** Open the workbench upload dialog. */
+    private void openWorkbenchUploadDialog() {
+        new global.thalion.ttio.browser.workbench
+            .UploadStartDialog(stage).show();
+    }
+
+    /** Open the workbench download dialog. */
+    private void openWorkbenchDownloadDialog() {
+        new global.thalion.ttio.browser.workbench
+            .DownloadStartDialog(stage).show();
+    }
+
+    /** Open the workbench transfer queue view. */
+    private void openTransferQueueView() {
+        new global.thalion.ttio.browser.workbench
+            .TransferQueueView(stage).show();
     }
 
     /** Open the workbench login dialog. */
