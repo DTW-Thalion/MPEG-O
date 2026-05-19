@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed -- W5.0: TTI-O Java SDK 1.3.0 (kickoff) (2026-05-19)
+
+Fifth workbench-client milestone kickoff. Bumps `java/pom.xml`
+1.2.0 -> 1.3.0 (line marker for the workbench-client Java
+surface added in W1+W3+W4) and `tio-browser/pom.xml`'s
+`<ttio.version>` in lockstep so the JavaFX GUI can consume the
+new `global.thalion.ttio.workbench.*` classes. Corrects the
+workplan's W5 cross-repo language: tio-browser is a sibling
+subdirectory of `java/`, not a separate GitHub repository.
+
+W5 phasing recorded in `docs/workbench-client/W5-plan.md` --
+eight sub-phases (W5.0 kickoff -> W5.7 encoding+export+smoke)
+delivering spec section 8.1's nine GUI components into
+tio-browser. Subsequent W5.x PRs add the panels themselves;
+this PR is admin-only (version bumps + plan + workplan
+correction).
+
+Library SemVer bump: minor. No breaking changes to existing
+TTI-O format APIs; the workbench-client surface is purely
+additive on top of v1.2.0.
+
 ### Added -- W4: interactive sessions client (Python + Java) (2026-05-19)
 
 Fourth workbench-client milestone. Wraps the workbench server's
