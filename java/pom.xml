@@ -224,6 +224,8 @@
                             <excludes>
                                 <exclude>**/workbench/transport/WorkbenchTransportClient*</exclude>
                                 <exclude>**/workbench/auth/Login*</exclude>
+                                <exclude>**/workbench/auth/BootstrapAdminAuth*</exclude>
+                                <exclude>**/workbench/auth/PasswordTotpAuth*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -237,6 +239,8 @@
                             <excludes>
                                 <exclude>**/workbench/transport/WorkbenchTransportClient*</exclude>
                                 <exclude>**/workbench/auth/Login*</exclude>
+                                <exclude>**/workbench/auth/BootstrapAdminAuth*</exclude>
+                                <exclude>**/workbench/auth/PasswordTotpAuth*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -250,6 +254,8 @@
                             <excludes>
                                 <exclude>**/workbench/transport/WorkbenchTransportClient*</exclude>
                                 <exclude>**/workbench/auth/Login*</exclude>
+                                <exclude>**/workbench/auth/BootstrapAdminAuth*</exclude>
+                                <exclude>**/workbench/auth/PasswordTotpAuth*</exclude>
                             </excludes>
                             <rules>
                                 <rule>
