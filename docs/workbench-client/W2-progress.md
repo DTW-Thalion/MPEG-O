@@ -1,13 +1,22 @@
 # W2 progress
 
-Status snapshot for the **`ttio` CLI umbrella + Python SDK
+Status snapshot for the **`ttio` CLI umbrella + cross-language SDK
 foundation** milestone per
 [`docs/workbench-client-workplan.md`](../workbench-client-workplan.md).
 
 ## Status (2026-05-19): COMPLETE -- in review
 
-PR is open against `main`. 79 Python workbench tests
-(37 W1 + 42 W2 new) pass locally.
+PR is open against `main`. **Both Python and Java ship in this
+PR** -- the cross-language parity rule (workplan Decision 2,
+amended in this same PR) applies retroactively to W2.
+
+  - Python: 79 workbench tests pass locally (37 W1 + 42 W2 new).
+  - Java: 23 workbench tests pass locally (W1's 60 + W2's 23 new
+    for WorkbenchClient + auth providers + URL parser).
+
+The `ttio` CLI umbrella stays Python-only (Decision 1: CLI is a
+Python console-script; Java consumers drive the SDK directly --
+tio-browser for v1.0, arbitrary JVM callers for v1.1+).
 
 ## Deliverables shipped
 
@@ -27,6 +36,29 @@ Top-level `ttio` (`python/src/ttio/__init__.py`) re-exports
 `BearerAuth`, `BootstrapAdminAuth`, `OIDCAuth`. The spec
 section 8.3 sample literally runs (modulo `client.query()`
 which raises a clear "W3" error).
+
+### Java SDK foundation (`java/src/main/java/global/thalion/ttio/workbench/`)
+
+Mirror of the Python SDK for JVM consumers (tio-browser at W5;
+arbitrary Java callers thereafter).
+
+| File | Purpose |
+|---|---|
+| `auth/AuthProvider.java` | Interface; `authenticate(host,port,scheme) -> Session` + `username()`. |
+| `auth/PasswordTotpAuth.java` | Wraps W1 `Login.loginPassword` with the interactive credentials. |
+| `auth/BearerAuth.java` | Synthesises a `Session` from a pre-acquired token. |
+| `auth/BootstrapAdminAuth.java` | Reads `<staging_root>/bootstrap-credentials.json` (mode 0600) -> Login. Smoke / dev path. |
+| `auth/OIDCAuth.java` | v1.1 stub; `authenticate()` throws `UnsupportedOperationException` with a clear v1.1 deferral. |
+| `WorkbenchClient.java` | Top-level entry. `connect(url, auth)` factory, `transportClient()` builder, `upload(...)` / `download(...)` convenience methods, W3 / W4 placeholder methods. `parseUrl()` mirrors the Python URL parser byte-for-byte. |
+
+JaCoCo excludes (`java/pom.xml`) extended to the
+daemon-required classes: `BootstrapAdminAuth`,
+`PasswordTotpAuth`, plus W1's existing
+`WorkbenchTransportClient` and `Login`. The unit-testable
+pieces (`Session`, `Totp`, `WorkbenchHandshake`, `ResumeState`,
+`WorkbenchClient`'s constructor + URL parser + placeholder
+methods, `BearerAuth`, `OIDCAuth`, all exception classes) stay
+measured under the 0.84 BUNDLE line floor.
 
 ### CLI (`python/src/ttio/tools/workbench_cli.py`)
 
@@ -54,12 +86,20 @@ a clear "pick exactly one auth mode" error otherwise.
 `pyproject.toml` gains `[project.scripts] ttio = ...` so
 `pip install -e python/` exposes the `ttio` binary.
 
-### Tests (`python/tests/workbench/`)
+### Tests
+
+**Python (`python/tests/workbench/`):**
 
 | File | Tests | Coverage |
 |---|---|---|
 | `test_client.py` | 21 | top-level re-exports, URL parser (5 schemes + 2 error paths), four auth providers, connect() factory, W3/W4 placeholder method dispatch, `parse_filter_kv` (7 paths). |
 | `test_cli.py`    | 21 | every subcommand `--help`, auth-mode resolver (3 failure modes), W3/W4 placeholder exits, encode unsupported-format pointer to W6, repeatable `--filter` flag plumbing. |
+
+**Java (`java/src/test/java/global/thalion/ttio/workbench/`):**
+
+| File | Tests | Coverage |
+|---|---|---|
+| `WorkbenchClientTest.java` | 23 | URL parser (6 cases), four auth providers (construction + validation + authenticate behaviour), `connect()` factory + `reauth()` round-trip, `close()` idempotency, W3/W4 placeholder methods. |
 
 All structural / pure-data; no daemon needed.
 
