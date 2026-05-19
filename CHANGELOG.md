@@ -11,6 +11,78 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W4: interactive sessions client (Python + Java) (2026-05-19)
+
+Fourth workbench-client milestone. Wraps the workbench server's
+`/v1/sessions` REST surface + the `ttio-session-proxy` WS attach
+helper (spec UC-11). Python + Java in lockstep per Decision-2.
+
+Pre-implementation: deep-surveyed the v1.0.0 server contract --
+`Documentation/session-protocol.md` cross-referenced with
+`Source/HTTP/handlers/TTIOWBSessionsHandler.m`,
+`Source/Sessions/{TTIOWBSessionRegistry,TTIOWBSessionLifecycle,
+TTIOWBSessionProxy}.m`. Survey findings recorded in
+`docs/workbench-client/W4-progress.md`. v1.0 deferrals
+respected: idle-timeout sweep, host-port allocator, ring-buffer
+backpressure are all server-side -- client just observes.
+
+Python (`python/src/ttio/workbench/`):
+- `sessions.py` -- `Session` dataclass (5 status enum, runtime
+  fields, `is_terminal` / `is_attachable` properties),
+  `SessionsClient` (create / list / get / terminate),
+  `validate_bind_mounts()` client-side validator mirroring the
+  server's rules (absolute, no `..`, project-scope check when
+  `container_storage_root` is known).
+- `session_proxy.py` -- `build_attach_handshake()` and
+  `session_proxy_url()` pure helpers, `SessionProxyAttach` async
+  context manager that opens the `ttio-session-proxy` WS, sends
+  the JSON attach frame, pumps bytes bidirectionally between
+  caller-supplied byte streams (stdin/stdout or in-memory).
+- `client.py` -- `WorkbenchClient.sessions()` /
+  `.session_create()` / `.session_proxy()` promoted from W2-era
+  stub to live methods. No remaining `NotImplementedError`
+  paths -- the v1.0 client SDK is feature-complete for the
+  spec section 8.3 sample.
+
+Java (`java/src/main/java/global/thalion/ttio/workbench/`):
+- `sessions/Session.java` -- mirror record.
+- `sessions/BindMountValidator.java` -- same validation rules.
+- `sessions/SessionsClient.java` -- REST surface with
+  fluent `CreateRequest` builder.
+- `sessions/SessionProxy.java` -- pure builders + URL constructor.
+- `sessions/SessionProxyAttach.java` -- callback-driven WS
+  attach (built on `org.java_websocket`), pumps `InputStream`
+  <-> `OutputStream` until close.
+- `WorkbenchClient.sessions()` / `.sessionProxy()` live.
+
+CLI (`python/src/ttio/tools/workbench_cli.py`): `ttio sessions`
+promoted from W3-era stub to live verb subcommand:
+  - `ttio sessions create --engine X --project Y [--image Z]
+                         [--command CMD...] [--env K=V]
+                         [--bind-mount HOST:CONT]`
+  - `ttio sessions ls [--status X] [--limit N]`
+  - `ttio sessions status <id>`
+  - `ttio sessions attach <id> [--path /]` -- proxies stdin /
+    stdout against the engine subprocess.
+  - `ttio sessions terminate <id>` -- DELETE /v1/sessions/{id}.
+
+Tests:
+- **Python:** 156 workbench tests pass locally (+25 over W3):
+  `test_sessions.py` (25 tests) covering Session parsing across
+  all statuses, bind-mount validator (5 failure paths + happy +
+  noop), attach handshake builder, URL constructor, status-set
+  pinning, cross-language anchor literal.
+- **Java:** `SessionsTest` mirrors the Python suite including
+  the cross-language attach-handshake JSON literal.
+
+Cross-language anchor: identical attach-handshake JSON literal
+pinned in both Python + Java session test suites.
+
+JaCoCo + Python coverage excludes extended to the new
+daemon-required classes (`SessionsClient`, `SessionProxyAttach`
+on Java; `session_proxy.py` on Python). The pure-data `Session`
+record + `BindMountValidator` + attach builders stay measured.
+
 ### Added -- W3: cohort + pipeline + job client (Python + Java) (2026-05-19)
 
 Third workbench-client milestone. Wraps the workbench server's

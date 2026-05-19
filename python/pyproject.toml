@@ -149,6 +149,12 @@ omit = [
     "*/workbench/_http.py",
     "*/workbench/jobs.py",
     "*/workbench/pipeline.py",
+    # W4: sessions WS proxy. The session_proxy module owns the
+    # async WS lifecycle; the pure-data attach handshake builder
+    # and the SessionsClient REST methods that need a daemon
+    # round-trip are excluded. The Session record + bind-mount
+    # validator in sessions.py stay measured.
+    "*/workbench/session_proxy.py",
 ]
 
 [tool.coverage.report]
