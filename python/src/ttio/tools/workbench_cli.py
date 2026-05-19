@@ -546,13 +546,117 @@ def cmd_provenance(args) -> int:
     return 2
 
 
-def cmd_w4_placeholder(args) -> int:
-    print(
-        f"{PROG}: `{args.subcommand}` is a W4 surface (interactive "
-        f"sessions). The v1.0 client ships W1 + W2 + W3. See "
-        f"docs/workbench-client-workplan.md.",
-        file=sys.stderr)
+def cmd_sessions(args) -> int:
+    auth = _resolve_auth(args)
+    client = ttio.connect(args.server, auth=auth)
+    sessions = client.sessions()
+    try:
+        if args.action == "ls":
+            rows = sessions.list(status_filter=args.status, limit=args.limit)
+            print(json.dumps([_session_to_dict(s) for s in rows],
+                             indent=2, sort_keys=True))
+            return 0
+        if args.action == "status":
+            session = sessions.get(args.session_id)
+            print(json.dumps(_session_to_dict(session),
+                             indent=2, sort_keys=True))
+            return 0
+        if args.action == "terminate":
+            sessions.terminate(args.session_id)
+            print(json.dumps({
+                "session_id": args.session_id, "terminated": True},
+                indent=2, sort_keys=True))
+            return 0
+        if args.action == "create":
+            return _cmd_session_create(client, sessions, args)
+        if args.action == "attach":
+            return _cmd_session_attach(client, args)
+    except Exception as e:
+        print(f"{PROG}: sessions {args.action} failed: {e}",
+              file=sys.stderr)
+        return 1
+    print(f"{PROG}: unknown sessions action {args.action!r}",
+          file=sys.stderr)
     return 2
+
+
+def _cmd_session_create(client, sessions, args) -> int:
+    bind_mounts = None
+    if args.bind_mount:
+        bind_mounts = {}
+        for spec in args.bind_mount:
+            if ":" not in spec:
+                print(f"{PROG}: --bind-mount expects host:container, got {spec!r}",
+                      file=sys.stderr)
+                return 2
+            host, container = spec.split(":", 1)
+            bind_mounts[host] = container
+    env = None
+    if args.env:
+        env = {}
+        for spec in args.env:
+            if "=" not in spec:
+                print(f"{PROG}: --env expects KEY=VALUE, got {spec!r}",
+                      file=sys.stderr)
+                return 2
+            k, v = spec.split("=", 1)
+            env[k] = v
+    command = args.command if args.command else None
+
+    session = sessions.create(
+        project=args.project,
+        engine_pin=args.engine,
+        image=args.image,
+        command=command,
+        env=env,
+        bind_mounts=bind_mounts,
+    )
+    print(json.dumps(_session_to_dict(session), indent=2, sort_keys=True))
+    return 0
+
+
+def _cmd_session_attach(client, args) -> int:
+    import asyncio
+    import sys as _sys
+
+    proxy = client.session_proxy(args.session_id, path=args.path or "/")
+
+    async def _run():
+        async with proxy as p:
+            result = await p.run(
+                stdin_reader=_sys.stdin.buffer,
+                stdout_writer=_sys.stdout.buffer,
+            )
+            print(
+                f"\n{PROG}: session attach closed code={result.close_code} "
+                f"reason={result.close_reason!r} "
+                f"bytes_to_backend={result.bytes_to_backend} "
+                f"bytes_from_backend={result.bytes_from_backend}",
+                file=_sys.stderr)
+    asyncio.run(_run())
+    return 0
+
+
+def _session_to_dict(s) -> dict:
+    return {
+        "session_id":        s.session_id,
+        "status":            s.status,
+        "project":           s.project,
+        "owner":             s.owner,
+        "engine_identifier": s.engine_identifier,
+        "host_port":         s.host_port,
+        "pid":               s.pid,
+        "started_at":        s.started_at,
+        "ready_at":          s.ready_at,
+        "last_seen_at":      s.last_seen_at,
+        "terminated_at":     s.terminated_at,
+        "exit_code":         s.exit_code,
+        "error_message":     s.error_message,
+        "image":             s.image,
+        "command":           list(s.command),
+        "env":               dict(s.env),
+        "bind_mounts":       dict(s.bind_mounts),
+    }
 
 
 # ----------------------------------------------------------------
@@ -764,9 +868,29 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("container", nargs="?")
     pr.set_defaults(func=cmd_provenance)
 
-    # W4 placeholder.
-    pss = sub.add_parser("sessions", help="(W4) -- not yet implemented.")
-    pss.set_defaults(func=cmd_w4_placeholder)
+    # sessions (W4 live: create / ls / status / attach / terminate)
+    pss = sub.add_parser(
+        "sessions",
+        help="Interactive sessions: create / ls / status / attach / terminate.")
+    _add_server_args(pss)
+    _add_auth_args(pss)
+    pss.add_argument("action",
+                       choices=["create", "ls", "status", "attach", "terminate"])
+    pss.add_argument("session_id", nargs="?",
+                       help="session_id (required for status / attach / terminate).")
+    pss.add_argument("--engine", help="engine_pin (create).")
+    pss.add_argument("--project", help="project (create).")
+    pss.add_argument("--image", help="container image (create).")
+    pss.add_argument("--command", nargs="+",
+                       help="command + args to execute (create).")
+    pss.add_argument("--env", action="append",
+                       help="K=V env var (repeatable; create).")
+    pss.add_argument("--bind-mount", action="append",
+                       help="host:container bind mount (repeatable; create).")
+    pss.add_argument("--status", help="status filter (ls).")
+    pss.add_argument("--limit", type=int, help="row cap (ls).")
+    pss.add_argument("--path", help="attach path inside the engine (attach); default /.")
+    pss.set_defaults(func=cmd_sessions)
 
     return p
 

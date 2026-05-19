@@ -10,6 +10,8 @@ import global.thalion.ttio.workbench.cohort.CohortQuery;
 import global.thalion.ttio.workbench.cohort.CohortResult;
 import global.thalion.ttio.workbench.jobs.JobsClient;
 import global.thalion.ttio.workbench.pipeline.PipelinesClient;
+import global.thalion.ttio.workbench.sessions.SessionProxyAttach;
+import global.thalion.ttio.workbench.sessions.SessionsClient;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
 
@@ -162,11 +164,25 @@ public final class WorkbenchClient implements AutoCloseable {
             endpoint.httpScheme, session.token());
     }
 
-    // ----------------------------------------------- W4 placeholder
+    // ----------------------------------------------- W4 surfaces
 
-    /** Create an interactive session. <strong>W4 surface</strong> -- throws today. */
-    public Object sessionCreate(Object... args) {
-        throw notYetImplemented("WorkbenchClient.sessionCreate()", "W4");
+    /** Build a {@link SessionsClient} bound to this session. */
+    public SessionsClient sessions() {
+        return new SessionsClient(
+            endpoint.host, endpoint.port,
+            endpoint.httpScheme, session.token());
+    }
+
+    /** Build a {@link SessionProxyAttach} bound to this session +
+     *  endpoint. Caller drives the WS lifecycle. */
+    public SessionProxyAttach sessionProxy(String sessionId, String path) {
+        return SessionProxyAttach.builder()
+            .host(endpoint.host).port(endpoint.port)
+            .scheme(endpoint.wsScheme)
+            .sessionId(sessionId)
+            .token(session.token())
+            .path(path == null ? "/" : path)
+            .build();
     }
 
     private static UnsupportedOperationException notYetImplemented(

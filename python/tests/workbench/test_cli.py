@@ -93,11 +93,16 @@ def test_provenance_surfaces_v1_deferral(capsys):
     assert "v1.0" in err
 
 
-def test_w4_placeholder_sessions_exit_2(capsys):
-    rc = main(["sessions"])
-    assert rc == 2
-    err = capsys.readouterr().err
-    assert "W4" in err
+def test_w4_sessions_subcommand_registered(capsys):
+    # W4 promoted `sessions` from W3-era placeholder to live
+    # implementation. `--help` returns 0 and lists the action
+    # positional + the create/ls/attach flags.
+    with pytest.raises(SystemExit):
+        main(["sessions", "--help"])
+    out = capsys.readouterr().out
+    assert "sessions" in out
+    assert "--server" in out
+    assert "create" in out and "attach" in out and "terminate" in out
 
 
 # ---------------------------------------------------- auth-mode resolver
