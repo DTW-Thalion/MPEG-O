@@ -11,6 +11,66 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W1: Workbench client (Python + Java) (2026-05-19)
+
+First milestone of the
+[Workbench Client workplan](docs/workbench-client-workplan.md).
+Ships the workbench-aware transport client (Python + Java) that
+speaks `tti-workbench-server` v1.0.0's auth-bearing handshake.
+Replaces the existing reference-protocol-only clients
+(`ttio.transport.client` / `global.thalion.ttio.transport.TransportClient`)
+which target the Python reference server.
+
+Python (`python/src/ttio/workbench/`):
+- `auth` -- RFC 6238 TOTP (HMAC-SHA1, 30s, 6 digits), `Session`
+  dataclass, `login_password(host, port, user, pass, totp)` POSTing
+  to `/v1/auth/login`. Typed exceptions for 401 / 423 / 429 paths;
+  `Retry-After` surfaced on rate-limit.
+- `transport.handshake` -- pure JSON builders for upload + download
+  first-frames. Client-side filter-key validation matching the
+  daemon's accept list.
+- `transport.upload.UploadClient` -- async context manager that
+  drives one upload over `ws://host:port/transport` with the
+  `ttio-transport` subprotocol. Per-AU acks, EndOfStream
+  acknowledgment, resumable-upload support via `ResumeState`.
+- `transport.download.DownloadClient` -- analogous async download
+  with selective-access filtering, three output modes (binary /
+  stats-only / stats-with-payload), stats-frame collection.
+
+Java (`java/src/main/java/global/thalion/ttio/workbench/`):
+- `WorkbenchJson` -- minimal compact JSON encoder + parser scoped
+  to the handshake / ack frames. No Jackson / Gson dependency
+  (matches the existing hand-rolled pattern in `BamDump` +
+  `ProvenanceJsonParse`).
+- `auth.Totp`, `auth.Session`, `auth.Login` -- Java mirror of the
+  Python auth module, using `java.net.http.HttpClient` for the
+  REST POST.
+- `transport.WorkbenchHandshake` -- pure JSON builders + parser.
+- `transport.WorkbenchTransportClient` -- end-to-end upload +
+  download built on `org.java_websocket.WebSocketClient` (the
+  existing TTI-O Java WS dep), with builder construction
+  (`WorkbenchTransportClient.forSession(host, port, session)`).
+- `transport.ResumeState` -- resume bookkeeping record.
+- `transport.WorkbenchTransportException` -- base + Handshake +
+  Upload + Download subclasses carrying WS close code + reason.
+
+Tests:
+- Python (`python/tests/workbench/`): 37 tests across `test_auth.py`,
+  `test_handshake.py`, `test_cross_language.py`. All pass.
+- Java (`java/src/test/java/global/thalion/ttio/workbench/`):
+  `TotpTest`, `WorkbenchHandshakeTest`. Both suites pin against
+  the same RFC 6238 TOTP vectors + the same handshake JSON
+  literals as the Python tests -- this is the cross-language
+  byte-equivalence anchor (a Python or Java drift will fail both
+  sides).
+- Daemon round-trip integration tests deferred to a W1 follow-up:
+  they need a running `tti-workbench-server` binary in CI, which
+  requires building the binary on the runner or vendoring a
+  prebuilt -- out of scope for this PR.
+
+Per the [W1 progress doc](docs/workbench-client/W1-progress.md),
+W2 (`ttio` CLI umbrella + Python SDK foundation) follows.
+
 ## [1.4.1] - 2026-05-11
 
 This release was re-tagged in flight: the initial v1.4.1 build shipped
