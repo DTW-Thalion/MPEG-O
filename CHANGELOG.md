@@ -11,6 +11,76 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.2: Container Browser + /v1/containers SDK (Python + Java) (2026-05-19)
+
+Second W5 sub-phase. Adds the `/v1/containers` REST surface to
+both SDKs (Decision-2 lockstep) and a JavaFX Container Browser
+window to tio-browser.
+
+Pre-implementation: surveyed `tti-workbench-server/Source/HTTP/
+handlers/TTIOWBContainersHandler.{h,m}` for the wire contract.
+Five endpoints: list / get / layers / manifest / delete; opaque
+base64url cursor pagination; container shape
+`{uri, project, owner, encrypted, storage_path, created_at,
+updated_at}`; gates via `containers.read.any_project` /
+`containers.delete.{any,own_uploads}` server-side; existence
+never leaked (404 vs 403).
+
+Java SDK (new package `global.thalion.ttio.workbench.containers`):
+- `Container` / `ContainerDetail` records (list + detail shapes).
+- `ContainerListPage` with `nextCursor` + `hasMore()`.
+- `ContainerLayer` record.
+- `ContainerManifest` outer record + nested `MsRunSummary` /
+  `NmrRunSummary` / `GenomicRunSummary` records.
+- `ContainersClient`: `list`, `get`, `layers`, `manifest`,
+  `delete`.
+- `WorkbenchClient.containers()` factory.
+
+Python SDK (`ttio/workbench/containers.py`):
+- Frozen-dataclass mirrors of every Java record.
+- `ContainersClient` with identical method shape.
+- `WorkbenchClient.containers()` factory.
+
+tio-browser (`workbench/ContainerBrowser.java`):
+- Modal-but-non-modal window. TableView<Container> with
+  sortable URI / project / owner / encrypted / created /
+  updated columns.
+- Filter row (project / owner / limit) + Refresh button +
+  Load-more button driving cursor pagination.
+- Manifest pane in a SplitPane; selecting a row fetches and
+  renders the manifest as plain-text summary.
+- Opened via new `MainWindow` menu item `Workbench -> Browse
+  containers...`; gated on `ConnectionManager.isConnected()`.
+
+Tests:
+- `ContainersTest` (Java, 13 tests) covers all records +
+  parsing edge cases + the cross-language anchor.
+- `test_containers.py` (Python, 14 tests) mirrors the Java
+  suite.
+- `ContainerBrowserTest` (tio-browser, 11 pure-unit tests)
+  covers static helpers (`parseLimit`, `formatTimestamp`,
+  `renderManifest`).
+- `WorkbenchClientTest.w3W4W5SubClientsAreLive` /
+  `test_client.test_w3_w4_w5_sub_clients_are_live` extended
+  to assert `containers()` returns non-null.
+
+Cross-language byte-equivalence: the GET /v1/containers
+list-page parser is the fourth independent cross-language anchor
+(after W1 handshake, W3 cohort predicate, W4 attach handshake).
+Same literal JSON pinned in both test suites.
+
+Coverage adjustments:
+- `java/pom.xml` JaCoCo excludes extended to
+  `ContainersClient*` (HTTP-method wrappers need a live daemon).
+  Records stay measured.
+- `python/pyproject.toml` `[tool.coverage.run].omit` extended to
+  `*/workbench/containers.py` (matches jobs.py / pipeline.py).
+
+Deferred follow-ups: live-daemon round-trip smoke (shared with
+W1/W3/W4/W5.1); unified DataSourceTree merging local + remote
+sources (per W5-plan); GUI surface for the layer breakdown
+(client method present, no UI yet).
+
 ### Added -- W5.1: tio-browser Connection Manager (2026-05-19)
 
 First substantive W5 sub-phase. Adds the JavaFX foundation that
