@@ -226,6 +226,15 @@
                                 <exclude>**/workbench/auth/Login*</exclude>
                                 <exclude>**/workbench/auth/BootstrapAdminAuth*</exclude>
                                 <exclude>**/workbench/auth/PasswordTotpAuth*</exclude>
+                                <!-- W3: REST clients whose meaningful
+                                     coverage needs a live daemon. The
+                                     pure-data records (Job, Pipeline,
+                                     JobEvent, CohortPredicate /
+                                     CohortQuery / CohortResult) stay
+                                     measured. -->
+                                <exclude>**/workbench/WorkbenchHttp*</exclude>
+                                <exclude>**/workbench/pipeline/PipelinesClient*</exclude>
+                                <exclude>**/workbench/jobs/JobsClient*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -241,6 +250,15 @@
                                 <exclude>**/workbench/auth/Login*</exclude>
                                 <exclude>**/workbench/auth/BootstrapAdminAuth*</exclude>
                                 <exclude>**/workbench/auth/PasswordTotpAuth*</exclude>
+                                <!-- W3: REST clients whose meaningful
+                                     coverage needs a live daemon. The
+                                     pure-data records (Job, Pipeline,
+                                     JobEvent, CohortPredicate /
+                                     CohortQuery / CohortResult) stay
+                                     measured. -->
+                                <exclude>**/workbench/WorkbenchHttp*</exclude>
+                                <exclude>**/workbench/pipeline/PipelinesClient*</exclude>
+                                <exclude>**/workbench/jobs/JobsClient*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -256,6 +274,15 @@
                                 <exclude>**/workbench/auth/Login*</exclude>
                                 <exclude>**/workbench/auth/BootstrapAdminAuth*</exclude>
                                 <exclude>**/workbench/auth/PasswordTotpAuth*</exclude>
+                                <!-- W3: REST clients whose meaningful
+                                     coverage needs a live daemon. The
+                                     pure-data records (Job, Pipeline,
+                                     JobEvent, CohortPredicate /
+                                     CohortQuery / CohortResult) stay
+                                     measured. -->
+                                <exclude>**/workbench/WorkbenchHttp*</exclude>
+                                <exclude>**/workbench/pipeline/PipelinesClient*</exclude>
+                                <exclude>**/workbench/jobs/JobsClient*</exclude>
                             </excludes>
                             <rules>
                                 <rule>

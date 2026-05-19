@@ -62,15 +62,35 @@ def test_subcommand_help(capsys, subcommand):
     assert subcommand in out
 
 
-# ---------------------------------------------------- W3/W4 placeholders
+# ---------------------------------------------------- W3 / W4 dispatch
 
 @pytest.mark.parametrize("subcommand", ["query", "submit", "jobs", "cohorts"])
-def test_w3_placeholder_subcommands_exit_2(capsys, subcommand):
-    rc = main([subcommand])
+def test_w3_subcommands_are_registered(capsys, subcommand):
+    # W3 promotes these from W2-era placeholders to live
+    # implementations. `--help` returns 0 and lists the
+    # subcommand-specific flags (including --server, since they
+    # all need auth + REST endpoint config).
+    with pytest.raises(SystemExit):
+        main([subcommand, "--help"])
+    out = capsys.readouterr().out
+    assert subcommand in out
+    assert "--server" in out
+
+
+def test_pipelines_subcommand_registered(capsys):
+    with pytest.raises(SystemExit):
+        main(["pipelines", "--help"])
+    out = capsys.readouterr().out
+    assert "ls" in out and "register" in out and "get" in out
+
+
+def test_provenance_surfaces_v1_deferral(capsys):
+    # Provenance HTTP endpoint isn't exposed by the v1.0 server;
+    # CLI surfaces a clear deferral message + exit 2.
+    rc = main(["provenance"])
     assert rc == 2
     err = capsys.readouterr().err
-    assert "W3" in err
-    assert "workbench-client-workplan.md" in err
+    assert "v1.0" in err
 
 
 def test_w4_placeholder_sessions_exit_2(capsys):

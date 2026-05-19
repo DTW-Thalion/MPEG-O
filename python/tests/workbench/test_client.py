@@ -167,7 +167,15 @@ def test_connect_calls_provider_authenticate(monkeypatch):
 
 # ---------------------------------------------------- W3/W4 stubs
 
-def test_query_raises_not_implemented(monkeypatch):
+def test_w3_methods_are_live_w4_still_stubbed(monkeypatch):
+    # W3 promoted client.query / submit_pipeline / jobs() /
+    # pipelines() from W2-era NotImplementedError stubs to live
+    # methods. Constructing the sub-clients is pure (no network);
+    # actually calling query() or submit() would hit the network
+    # and raise WorkbenchHttpError on a closed port -- not in
+    # scope for this unit test.
+    #
+    # client.session_create() stays a W4 stub.
     class _StubAuth:
         @property
         def username(self): return "alice"
@@ -178,14 +186,15 @@ def test_query_raises_not_implemented(monkeypatch):
                 expires_at=0, provider="stub", session_id="S")
 
     client = connect("ws://localhost:8443", auth=_StubAuth())
-    with pytest.raises(NotImplementedError, match="W3"):
-        client.query()
-    with pytest.raises(NotImplementedError, match="W3"):
-        client.submit_pipeline()
-    with pytest.raises(NotImplementedError, match="W3"):
-        client.jobs()
+    # session_create is still W4: NotImplementedError.
     with pytest.raises(NotImplementedError, match="W4"):
         client.session_create()
+    # jobs() / pipelines() build sub-clients without touching the
+    # network. They're live as of W3.
+    jobs_client = client.jobs()
+    pipelines_client = client.pipelines()
+    assert jobs_client is not None
+    assert pipelines_client is not None
 
 
 # ---------------------------------------------------- filter parsing
