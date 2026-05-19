@@ -16,7 +16,12 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ExportFormatRegistryDiagnosticsTest {
 
-    private static final Set<String> BINARY_GATED_FORMATS = Set.of("BAM", "CRAM");
+    // v1.4.1 (PR #76): BAM/CRAM exporters moved to the bundled
+    // htsjdk library, so they are no longer binary-gated. The
+    // export registry currently has no binary-gated formats; the
+    // set is kept for forward-compat with a future vendor-specific
+    // export.
+    private static final Set<String> BINARY_GATED_FORMATS = Set.of();
 
     @Test
     void binaryGatedFormatsCarryRequiredBinary() {
@@ -34,11 +39,14 @@ class ExportFormatRegistryDiagnosticsTest {
     }
 
     @Test
-    void bamCramRequireSamtools() {
+    void bamCramHaveNoBinaryRequirement() {
+        // Post-PR-#76 (htsjdk swap): the bundled SAM/BAM/CRAM writer
+        // has no external binary dependency.
         for (String name : List.of("BAM", "CRAM")) {
             ExportFormatSpec spec = lookup(name);
-            assertEquals("samtools", spec.requiredBinary,
-                name + " must depend on samtools");
+            assertNull(spec.requiredBinary,
+                name + " must not declare a required binary "
+                + "(post-PR-#76 htsjdk swap removed the samtools dep)");
         }
     }
 
