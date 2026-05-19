@@ -198,29 +198,19 @@ class WorkbenchClientTest {
         client.close();  // no-op on re-close
     }
 
-    // ---------------- W3 / W4 placeholders
+    // ---------------- W3 surfaces (live) + W4 placeholder
 
     @Test
-    void queryThrowsForW3() {
+    void w3JobsAndPipelinesAreLive() {
+        // W3 promoted client.query / pipelines / jobs from W2-era
+        // UnsupportedOperationException stubs to live methods.
+        // Constructing the sub-clients is pure (no network);
+        // actually calling .query() / .submit() would hit the
+        // network -- out of scope for this unit test.
         WorkbenchClient client = WorkbenchClient.connect(
             "ws://localhost:8443", new StubAuth());
-        UnsupportedOperationException ex = assertThrows(
-            UnsupportedOperationException.class, client::query);
-        assertTrue(ex.getMessage().contains("W3"));
-    }
-
-    @Test
-    void submitPipelineThrowsForW3() {
-        WorkbenchClient client = WorkbenchClient.connect(
-            "ws://localhost:8443", new StubAuth());
-        assertThrows(UnsupportedOperationException.class, client::submitPipeline);
-    }
-
-    @Test
-    void jobsThrowsForW3() {
-        WorkbenchClient client = WorkbenchClient.connect(
-            "ws://localhost:8443", new StubAuth());
-        assertThrows(UnsupportedOperationException.class, client::jobs);
+        assertNotNull(client.pipelines());
+        assertNotNull(client.jobs());
     }
 
     @Test
