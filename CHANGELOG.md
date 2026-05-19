@@ -11,6 +11,79 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W3: cohort + pipeline + job client (Python + Java) (2026-05-19)
+
+Third workbench-client milestone. Wraps the workbench server's
+REST + SSE surface for the cohort / pipeline / job plane (spec
+UCs 6, 7, 9, 10). Python + Java in lockstep per the workplan
+Decision-2 parity rule.
+
+Pre-implementation: deep-surveyed the v1.0.0 server wire
+contract for the W3 endpoints (`/v1/cohorts/{query,preview-count}`,
+`/v1/pipelines{,/{id}}`, `/v1/jobs{,/{id},/{id}/events}`).
+Survey findings recorded in
+`docs/workbench-client/W3-progress.md`. v1.0 deferrals
+documented:
+  - No `GET /v1/cohorts` / `POST /v1/cohorts` (saved cohorts);
+    queries are ephemeral.
+  - No `has_layer(...)` assay-availability filters in the cohort
+    AST.
+  - No `Last-Event-Id` SSE resumption; reconnect for full replay.
+  - No `GET /v1/containers/{uri}/provenance`; `provenance_edges`
+    lives in the DB but isn't surfaced over HTTP.
+
+Python (`python/src/ttio/workbench/`):
+- `cohort.py` -- predicate AST (4 leaf kinds + 3 composites).
+  `OR` / `NOT` reject nested phenotype leaves per the server's
+  column-join semantics. Operator overloading (`&`, `|`, `~`)
+  for fluent composition. `CohortQuery` builder, `CohortResult`
+  parser.
+- `pipeline.py` -- `Pipeline` dataclass + `PipelinesClient`.
+- `jobs.py` -- `Job` dataclass with `is_terminal`; `JobsClient`
+  (submit / list / get / cancel); `JobEvent` + async-iterator
+  `events(job_id)` SSE parser. `build_cohort_input()` builds
+  the Decision-4 envelope.
+- `_http.py` -- internal REST helper (urllib-based; zero new
+  runtime deps).
+- `client.py` -- `WorkbenchClient.query()` /
+  `.preview_count()` / `.pipelines()` / `.submit_pipeline()` /
+  `.jobs()` promoted from W2-era stubs to live implementations.
+  Only `session_create()` remains a W4 stub.
+
+Java (`java/src/main/java/global/thalion/ttio/workbench/`):
+- `cohort/` -- `CohortPredicate` abstract + 7 subclasses with the
+  same validation rules as Python. `CohortQuery` builder,
+  `CohortResult` record.
+- `pipeline/` -- `Pipeline` record + `PipelinesClient`.
+- `jobs/` -- `Job` + `JobEvent` records + `JobsClient` with
+  callback-driven SSE (`events(jobId, Consumer<JobEvent>)`).
+- `WorkbenchHttp` -- internal REST helper over
+  `java.net.http.HttpClient`; emits compact JSON byte-matching
+  Python.
+- `WorkbenchClient.query()` / `.previewCount()` / `.pipelines()` /
+  `.jobs()` live.
+
+CLI: W2-era placeholder subcommands promoted to live impls --
+`ttio query` / `submit` / `jobs {ls,status,cancel,events}` /
+`pipelines {ls,get,register}` / `cohorts` (alias for `query`).
+`ttio provenance` surfaces the v1.0 "endpoint not exposed"
+deferral. `ttio sessions` still W4-stubbed.
+
+Tests:
+- **Python:** 131 workbench tests pass locally (+52 over W2):
+  `test_cohort.py` (33), `test_jobs.py` (13), `test_pipelines.py`
+  (4), plus updates to W2 tests for W3-promoted methods.
+- **Java:** `CohortPredicateTest` (predicate AST + CohortQuery),
+  `JobAndPipelineTest` (Job / Pipeline / JobEvent / clients).
+- Cross-language anchor: identical predicate JSON literal pinned
+  in both suites.
+
+JaCoCo + Python coverage excludes extended to the new
+daemon-required classes (`WorkbenchHttp`, `PipelinesClient`,
+`JobsClient` in Java; `_http.py`, `pipeline.py`, `jobs.py` in
+Python). Pure-data records + predicate AST + parsers stay
+measured.
+
 ### Added -- W2: `ttio` CLI umbrella + Python SDK foundation (2026-05-19)
 
 Second milestone of the

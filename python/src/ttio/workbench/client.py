@@ -200,27 +200,73 @@ class WorkbenchClient:
                 max_au=max_au,
             )
 
-    # ----------------------------------------------- control plane (W3+)
+    # ----------------------------------------------- control plane (W3)
 
-    def query(self, *args, **kwargs):
-        """Run a cohort query. **W3 surface** -- raises today."""
-        from ttio.workbench.cohort import _not_yet_implemented
-        _not_yet_implemented("client.query()", "W3")
+    def query(self, query) -> "CohortResult":  # noqa: F821 -- forward ref
+        """Run a cohort query. POSTs `/v1/cohorts/query`; returns
+        a `CohortResult`.
 
-    def save_cohort(self, *args, **kwargs):
-        """Persist a cohort. **W3 surface** -- raises today."""
-        from ttio.workbench.cohort import _not_yet_implemented
-        _not_yet_implemented("client.save_cohort()", "W3")
+        Args:
+            query: a `CohortQuery` instance, or a dict in the
+                server's JSON shape.
+        """
+        from ttio.workbench.cohort import CohortQuery, CohortResult
+        from ttio.workbench._http import WorkbenchHttpError, http_json
 
-    def submit_pipeline(self, *args, **kwargs):
-        """Submit a pipeline run. **W3 surface** -- raises today."""
-        from ttio.workbench.pipeline import _not_yet_implemented
-        _not_yet_implemented("client.submit_pipeline()", "W3")
+        body = query.to_json() if isinstance(query, CohortQuery) else dict(query)
+        status, resp = http_json(
+            "POST", self._endpoint.host, self._endpoint.port,
+            "/v1/cohorts/query",
+            scheme=self._endpoint.http_scheme,
+            token=self._session.token, body=body)
+        if status != 200:
+            raise WorkbenchHttpError(
+                f"POST /v1/cohorts/query failed: {status}",
+                status=status, body=resp)
+        return CohortResult.from_json(resp)
 
-    def jobs(self, *args, **kwargs):
-        """List / inspect jobs. **W3 surface** -- raises today."""
-        from ttio.workbench.jobs import _not_yet_implemented
-        _not_yet_implemented("client.jobs()", "W3")
+    def preview_count(self, query) -> int:
+        """POST `/v1/cohorts/preview-count`; return the predicted row
+        count. Lets the GUI / CLI show "this will return N rows" before
+        a full query."""
+        from ttio.workbench.cohort import CohortQuery
+        from ttio.workbench._http import WorkbenchHttpError, http_json
+
+        body = query.to_json() if isinstance(query, CohortQuery) else dict(query)
+        status, resp = http_json(
+            "POST", self._endpoint.host, self._endpoint.port,
+            "/v1/cohorts/preview-count",
+            scheme=self._endpoint.http_scheme,
+            token=self._session.token, body=body)
+        if status != 200:
+            raise WorkbenchHttpError(
+                f"POST /v1/cohorts/preview-count failed: {status}",
+                status=status, body=resp)
+        return int(resp.get("count", 0))
+
+    def pipelines(self):
+        """Return a `PipelinesClient` bound to this session."""
+        from ttio.workbench.pipeline import PipelinesClient
+        return PipelinesClient(
+            self._endpoint.host, self._endpoint.port,
+            scheme=self._endpoint.http_scheme, token=self._session.token)
+
+    def submit_pipeline(self, *, pipeline_id: str,
+                          inputs, params=None):
+        """Convenience: submit a job. Returns a `Job` handle.
+
+        For more control (status filter on list, SSE long-poll),
+        use `client.jobs()` directly.
+        """
+        return self.jobs().submit(
+            pipeline_id=pipeline_id, inputs=inputs, params=params)
+
+    def jobs(self):
+        """Return a `JobsClient` bound to this session."""
+        from ttio.workbench.jobs import JobsClient
+        return JobsClient(
+            self._endpoint.host, self._endpoint.port,
+            scheme=self._endpoint.http_scheme, token=self._session.token)
 
     def session_create(self, *args, **kwargs):
         """Create an interactive session. **W4 surface** -- raises today."""
