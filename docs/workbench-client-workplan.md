@@ -368,12 +368,20 @@ WS-proxy library calls; in W5 the GUI embeds the proxy directly).
 
 **Goal:** spec §8.1's complete component list, evolving the
 existing tio-browser into the workbench GUI. Lives in the
-[`DTW-Thalion/tio-browser`](https://github.com/DTW-Thalion/tio-browser)
-repo, NOT TTI-O. TTI-O ships the Java SDK that tio-browser
-depends on (W1 + W3 + W4 Java deliverables).
+[`tio-browser/`](../tio-browser) subdirectory of TTI-O — *not* a
+separate repo. The TTI-O Java module (`java/`) ships the SDK that
+tio-browser depends on (W1 + W3 + W4 Java deliverables); the
+W5.0 kickoff bumps `java/pom.xml` to v1.3.0 and
+`tio-browser/pom.xml`'s `<ttio.version>` in lockstep so the new
+panels can `import global.thalion.ttio.workbench.*`.
 
-**Touches:** tio-browser primarily; TTI-O Java SDK for any
-gaps surfaced during integration.
+**Touches:** `tio-browser/` and `java/` (for any SDK gaps surfaced
+during integration); single-repo, no cross-repo coordination.
+
+**Phasing:** spelt out in [`docs/workbench-client/W5-plan.md`](workbench-client/W5-plan.md)
+— W5.0 kickoff (this PR: version bumps + plan), W5.1–W5.7 each
+deliver one or two of the spec §8.1 components plus a smoke
+test at W5.7.
 
 **New tio-browser components:**
 
@@ -421,10 +429,14 @@ gaps surfaced during integration.
       UC-04 (encode → upload → query → submit → download result)
       entirely in the GUI.
 
-**Cross-repo dependency note:** tio-browser bumps its TTI-O
-dependency to whichever TTI-O release contains W1 + W3 + W4
-Java SDK. Likely a `v1.3.0` of the TTI-O Java artifact since the
-current v1.2.x is consumed by the v1.0 tio-browser.
+**Dependency note (single-repo):** `tio-browser/pom.xml`'s
+`<ttio.version>` property tracks the `java/` module's version. The
+W5.0 kickoff bumps both 1.2.0 → 1.3.0; the new
+`global.thalion.ttio.workbench.*` classes ship in the same artifact
+(workplan Decision 4). Local builds require
+`cd java && mvn install -DskipTests -Djacoco.skip=true` so the new
+1.3.0 artifact is in `~/.m2` before `cd tio-browser && mvn test`
+runs.
 
 ## W6 deliverable detail — SDK polish + remaining formats + PQC
 
