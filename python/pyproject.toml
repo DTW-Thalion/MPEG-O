@@ -155,6 +155,12 @@ omit = [
     # round-trip are excluded. The Session record + bind-mount
     # validator in sessions.py stay measured.
     "*/workbench/session_proxy.py",
+    # W5.2: containers REST client. The pure-data dataclasses
+    # (Container, ContainerDetail, ContainerListPage,
+    # ContainerLayer, ContainerManifest) stay measured under
+    # tests/workbench/test_containers.py; the HTTP-method
+    # wrappers need a live daemon.
+    "*/workbench/containers.py",
 ]
 
 [tool.coverage.report]
