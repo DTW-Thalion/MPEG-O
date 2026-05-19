@@ -38,8 +38,21 @@ from ttio.workbench.auth import (
     current_totp,
     login_password,
 )
+from ttio.workbench.auth_providers import (
+    AuthProvider,
+    BearerAuth,
+    BootstrapAdminAuth,
+    OIDCAuth,
+    PasswordTotpAuth,
+)
+from ttio.workbench.client import (
+    WorkbenchClient,
+    connect,
+    parse_filter_kv,
+)
 
 __all__ = [
+    # auth
     "AccountDisabled",
     "InvalidCredentials",
     "RateLimitExceeded",
@@ -47,4 +60,14 @@ __all__ = [
     "WorkbenchAuthError",
     "current_totp",
     "login_password",
+    # auth providers
+    "AuthProvider",
+    "BearerAuth",
+    "BootstrapAdminAuth",
+    "OIDCAuth",
+    "PasswordTotpAuth",
+    # client / SDK
+    "WorkbenchClient",
+    "connect",
+    "parse_filter_kv",
 ]
