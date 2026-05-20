@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.1b: tio-browser determinate transfer progress (2026-05-20)
+
+Second slice of W6.1: wires the W6.1a `TransferProgress` callback
+through the GUI so a running upload shows a real percentage
+instead of an indeterminate spinner (the gap that made the
+`whale_sequences` upload look hung).
+
+- `WorkbenchClient` gains progress-bearing `upload` / `download`
+  facade overloads delegating to the transport client.
+- `TransferManager` passes a coalesced progress callback (at most
+  one pending FX update, so a fast transfer can't flood the event
+  loop) that drives each `Transfer`'s byte count + a
+  `"Uploading... NN%"` / bytes-so-far message.
+- `TransferQueueView` progress column is now a determinate
+  fraction (`bytesTransferred / sizeBytes`) for uploads; downloads
+  stream without a known total and stay indeterminate.
+- `EncodingPanel` shows a progress bar bound to the encode task's
+  message during the local encode phase (indeterminate -- the
+  importer doesn't yet report granular progress, see #114), then
+  hands off to the determinate Transfers queue for the upload.
+
 ### Added -- W6.1a: transport progress callback (Python + Java) (2026-05-20)
 
 First slice of W6.1 (progress feedback). Adds a progress

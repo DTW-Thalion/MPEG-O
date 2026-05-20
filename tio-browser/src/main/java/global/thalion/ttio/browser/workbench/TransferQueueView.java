@@ -23,11 +23,13 @@ import javafx.stage.Window;
  *
  * <p>Columns: kind / URI / state / progress / message.</p>
  *
- * <p>Progress is shown as an indeterminate bar while
- * {@link TransferState#RUNNING}; full bar on COMPLETED; empty on
- * PENDING / FAILED. The W1 transport client doesn't expose
- * intermediate byte-count callbacks, so a true percentage is a
- * v1.1 enhancement (tracked as a W5.3 follow-up).</p>
+ * <p>Progress is a determinate fraction
+ * ({@code bytesTransferred / sizeBytes}) while
+ * {@link TransferState#RUNNING} when the total size is known
+ * (uploads); full bar on COMPLETED; empty on PENDING / FAILED.
+ * Downloads stream without a known total, so they fall back to an
+ * indeterminate bar. Byte-progress is driven by the W6.1
+ * {@code TransferProgress} callback in {@link TransferManager}.</p>
  */
 public final class TransferQueueView {
 
@@ -48,6 +50,16 @@ public final class TransferQueueView {
     }
 
     public void show() { stage.show(); }
+
+    /** Determinate fraction for a RUNNING transfer when the total
+     *  size is known, else {@link ProgressBar#INDETERMINATE_PROGRESS}.
+     *  Visible for tests. */
+    static double runningFraction(Transfer t) {
+        long size = t.sizeBytes();
+        if (size <= 0) return ProgressBar.INDETERMINATE_PROGRESS;
+        double frac = (double) t.bytesTransferred() / size;
+        return Math.max(0.0, Math.min(1.0, frac));
+    }
 
     // ---- TestFX accessors ----
 
@@ -91,10 +103,10 @@ public final class TransferQueueView {
                 bar.progressProperty().bind(Bindings.createDoubleBinding(() ->
                     switch (t.state()) {
                         case PENDING   -> 0.0;
-                        case RUNNING   -> ProgressBar.INDETERMINATE_PROGRESS;
+                        case RUNNING   -> runningFraction(t);
                         case COMPLETED -> 1.0;
                         case FAILED    -> 0.0;
-                    }, t.stateProperty()));
+                    }, t.stateProperty(), t.bytesTransferredProperty()));
                 setGraphic(bar);
             }
         });

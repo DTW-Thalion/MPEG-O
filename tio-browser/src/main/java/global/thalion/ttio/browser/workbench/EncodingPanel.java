@@ -16,6 +16,7 @@ import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -59,6 +60,7 @@ public final class EncodingPanel {
     private final Button submitBtn = new Button("Encode + upload");
     private final Button cancelBtn = new Button("Cancel");
     private final Label statusLabel = new Label("");
+    private final ProgressBar progressBar = new ProgressBar(0);
 
     public EncodingPanel(Window owner) {
         this(owner, ConnectionManager.instance(), TransferManager.instance());
@@ -95,6 +97,7 @@ public final class EncodingPanel {
     Button submitButton()           { return submitBtn; }
     Button cancelButton()           { return cancelBtn; }
     Label statusLabel()             { return statusLabel; }
+    ProgressBar progressBar()       { return progressBar; }
 
     // ---- static helpers (pure -- testable without FX) ----
 
@@ -150,9 +153,17 @@ public final class EncodingPanel {
         grid.add(new Label("Container URI:"), 0, row);
         grid.add(uriField, 1, row, 2, 1); row++;
 
+        // Hidden until a run starts; indeterminate during encode (the
+        // local import doesn't report granular progress -- see #114),
+        // then handed off to the determinate Transfers queue on upload.
+        progressBar.setVisible(false);
+        progressBar.setManaged(false);
+        progressBar.setPrefWidth(140);
+
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox buttons = new HBox(8, statusLabel, spacer, submitBtn, cancelBtn);
+        HBox buttons = new HBox(8, progressBar, statusLabel, spacer,
+                                submitBtn, cancelBtn);
         buttons.setPadding(new Insets(0, 12, 12, 12));
 
         VBox root = new VBox(grid, buttons);
@@ -224,9 +235,18 @@ public final class EncodingPanel {
             src, targetTio, "hdf5", runName, runName);
 
         submitBtn.setDisable(true);
-        statusLabel.setText("Encoding...");
         ImportTask task = new ImportTask(spec, config);
+        // Encode phase: indeterminate bar + live task message. The
+        // upload phase gets a determinate % in the Transfers queue.
+        progressBar.setVisible(true);
+        progressBar.setManaged(true);
+        progressBar.progressProperty().bind(task.progressProperty());
+        statusLabel.textProperty().bind(task.messageProperty());
         task.setOnSucceeded(ev -> {
+            statusLabel.textProperty().unbind();
+            progressBar.progressProperty().unbind();
+            progressBar.setVisible(false);
+            progressBar.setManaged(false);
             statusLabel.setText("Encoded; enqueuing upload...");
             transfers.enqueueUpload(manager.client(), project, uri, targetTio);
             new Alert(AlertType.INFORMATION,
@@ -236,6 +256,10 @@ public final class EncodingPanel {
             stage.close();
         });
         task.setOnFailed(ev -> {
+            statusLabel.textProperty().unbind();
+            progressBar.progressProperty().unbind();
+            progressBar.setVisible(false);
+            progressBar.setManaged(false);
             submitBtn.setDisable(false);
             statusLabel.setText("");
             Throwable t = task.getException();

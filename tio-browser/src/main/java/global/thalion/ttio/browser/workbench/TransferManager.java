@@ -5,6 +5,7 @@
 package global.thalion.ttio.browser.workbench;
 
 import global.thalion.ttio.workbench.WorkbenchClient;
+import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
 import javafx.application.Platform;
@@ -16,7 +17,9 @@ import java.nio.file.Path;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Observable in-memory queue of upload / download transfers.
@@ -114,7 +117,8 @@ public final class TransferManager {
             setState(t, TransferState.RUNNING, "Uploading...");
             byte[] payload = Files.readAllBytes(source);
             WorkbenchTransportClient.UploadResult result =
-                client.upload(project, containerUri, payload);
+                client.upload(project, containerUri, payload,
+                              progressFor(t, "Uploading"));
             setBytes(t, payload.length);
             setState(t, TransferState.COMPLETED,
                 "Uploaded " + result.containerUri()
@@ -133,12 +137,13 @@ public final class TransferManager {
                               Transfer t) {
         try {
             setState(t, TransferState.RUNNING, "Downloading...");
+            TransferProgress progress = progressFor(t, "Downloading");
             WorkbenchTransportClient.DownloadResult result;
             if (filter == null || filter.isEmpty()) {
-                result = client.download(containerUri);
+                result = client.download(containerUri, progress);
             } else {
                 result = client.download(containerUri, filter,
-                    OutputMode.BINARY, 0);
+                    OutputMode.BINARY, 0, progress);
             }
             Files.write(destination, result.payload());
             setBytes(t, result.payload().length);
@@ -150,6 +155,39 @@ public final class TransferManager {
                 ex.getMessage() == null ? ex.getClass().getSimpleName()
                                           : ex.getMessage());
         }
+    }
+
+    /** Build a progress callback that drives {@code t}'s byte count
+     *  + message. The transport thread fires this per chunk; we
+     *  coalesce onto the FX thread (at most one pending update) so a
+     *  fast transfer can't flood the event loop. */
+    private static TransferProgress progressFor(Transfer t, String verb) {
+        AtomicLong latest = new AtomicLong(0);
+        AtomicBoolean scheduled = new AtomicBoolean(false);
+        return (done, total) -> {
+            latest.set(done);
+            if (scheduled.compareAndSet(false, true)) {
+                Platform.runLater(() -> {
+                    scheduled.set(false);
+                    long n = latest.get();
+                    t.setBytesTransferred(n);
+                    long size = t.sizeBytes();
+                    if (size > 0) {
+                        long pct = Math.min(100, n * 100 / size);
+                        t.setMessage(verb + "... " + pct + "%");
+                    } else {
+                        t.setMessage(verb + "... " + humanBytes(n));
+                    }
+                });
+            }
+        };
+    }
+
+    private static String humanBytes(long n) {
+        if (n < 1024) return n + " B";
+        if (n < 1024 * 1024) return (n / 1024) + " KB";
+        if (n < 1024L * 1024 * 1024) return (n / (1024 * 1024)) + " MB";
+        return (n / (1024L * 1024 * 1024)) + " GB";
     }
 
     private static void setState(Transfer t, TransferState s, String msg) {
