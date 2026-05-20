@@ -1,0 +1,213 @@
+name: workbench-live
+
+# Live-daemon end-to-end smoke for the workbench client SDK.
+#
+# Builds the full GNUstep/ObjC toolchain + libTTIO (from THIS
+# checkout) + tti-workbench-server (pinned), boots a real daemon,
+# and runs python/tests/integration/test_workbench_live.py against
+# it via the actual ttio.workbench.* client. This is the live half
+# of the W1-W5 acceptance gates.
+#
+# Heavy (~10-15 min cold, ~2-3 min warm cache), so it only runs:
+#   - on PRs that touch the workbench client / this workflow
+#   - on manual dispatch
+# It is NOT a blanket per-PR gate.
+#
+# Cross-repo checkout of the (private) sibling repos needs a PAT in
+# the TTI-O repo secret TTIO_LIBRARY_CHECKOUT_TOKEN (repo scope).
+# Falls back to GITHUB_TOKEN, which works only if those repos are
+# readable by the default token.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'python/src/ttio/workbench/**'
+      - 'python/tests/integration/test_workbench_live.py'
+      - 'scripts/workbench-live-smoke.sh'
+      - '.github/workflows/workbench-live.yml'
+
+jobs:
+  live-smoke:
+    name: workbench client live smoke (daemon + SDK)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout TTI-O (this PR)
+        uses: actions/checkout@v4
+        with:
+          path: TTI-O
+
+      - name: Checkout tti-workbench-server
+        uses: actions/checkout@v4
+        with:
+          repository: DTW-Thalion/tti-workbench-server
+          path: server
+          token: ${{ secrets.TTIO_LIBRARY_CHECKOUT_TOKEN || secrets.GITHUB_TOKEN }}
+          ref: main
+
+      - name: Checkout DTW-Thalion/libobjc2
+        uses: actions/checkout@v4
+        with:
+          repository: DTW-Thalion/libobjc2
+          path: libobjc2
+          token: ${{ secrets.TTIO_LIBRARY_CHECKOUT_TOKEN || secrets.GITHUB_TOKEN }}
+          ref: master
+
+      - name: Checkout DTW-Thalion/libs-base
+        uses: actions/checkout@v4
+        with:
+          repository: DTW-Thalion/libs-base
+          path: libs-base
+          token: ${{ secrets.TTIO_LIBRARY_CHECKOUT_TOKEN || secrets.GITHUB_TOKEN }}
+          ref: master
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+              gnustep-make clang gobjc \
+              cmake ninja-build \
+              zlib1g-dev libssl-dev libsqlite3-dev \
+              libwebsockets-dev libpq-dev libuuid1 uuid-dev \
+              libargon2-dev python3-websockets python3-pip \
+              libffi-dev libxml2-dev libgmp-dev libxslt1-dev \
+              libgnutls28-dev libavahi-client-dev libicu-dev \
+              libcurl4-openssl-dev make git bc
+
+      - name: libobjc2 cache
+        id: cache-libobjc2
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/include/objc
+            /usr/local/lib/libobjc.so*
+            /usr/local/lib/libBlocksRuntime.so*
+            /usr/local/lib/libdispatch.so*
+            /usr/local/lib/cmake/libobjc
+          key: libobjc2-${{ runner.os }}-${{ hashFiles('libobjc2/Makefile', 'libobjc2/CMakeLists.txt') }}
+
+      - name: Build libobjc2
+        if: steps.cache-libobjc2.outputs.cache-hit != 'true'
+        working-directory: libobjc2
+        run: |
+          mkdir -p _build && cd _build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+          ninja && sudo ninja install && sudo ldconfig
+
+      - name: ldconfig refresh
+        run: sudo ldconfig
+
+      - name: gnustep-base cache
+        id: cache-gnustep-base
+        uses: actions/cache@v4
+        with:
+          path: /usr/GNUstep/Local
+          key: gnustep-base-${{ runner.os }}-${{ hashFiles('libs-base/Source/NSObject.m', 'libs-base/configure.ac') }}
+
+      - name: Build gnustep-base
+        if: steps.cache-gnustep-base.outputs.cache-hit != 'true'
+        working-directory: libs-base
+        run: |
+          if [ -f /usr/share/GNUstep/Makefiles/GNUstep.sh ]; then
+            set +u; . /usr/share/GNUstep/Makefiles/GNUstep.sh; set -u
+          fi
+          export CC=clang OBJC=clang CXX=clang++
+          export CPPFLAGS="-I/usr/local/include"
+          export LDFLAGS="-L/usr/local/lib -Wl,-rpath,/usr/local/lib"
+          export LIBRARY_COMBO=ng-gnu-gnu
+          export RUNTIME_VERSION=gnustep-2.2
+          ./configure --with-installation-domain=LOCAL
+          make -j$(nproc) && sudo make install
+
+      - name: libdispatch cache
+        id: cache-libdispatch
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/include/dispatch
+            /usr/local/include/os/object.h
+            /usr/local/include/os/linux_base.h
+            /usr/local/lib/libdispatch.so*
+            /usr/local/lib/libBlocksRuntime.so*
+            /usr/local/lib/pkgconfig/libdispatch.pc
+          key: libdispatch-swift-5.10.1-${{ runner.os }}
+
+      - name: Build libdispatch
+        if: steps.cache-libdispatch.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp
+          git clone --depth 1 --branch swift-5.10.1-RELEASE \
+            https://github.com/apple/swift-corelibs-libdispatch.git
+          cd swift-corelibs-libdispatch && mkdir _build && cd _build
+          cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ \
+            -DBUILD_TESTING=OFF
+          ninja && sudo ninja install && sudo ldconfig
+
+      - name: HDF5 cache
+        id: cache-hdf5
+        uses: actions/cache@v4
+        with:
+          path: |
+            /usr/local/include/hdf5.h
+            /usr/local/include/hdf5_hl.h
+            /usr/local/include/H5*public.h
+            /usr/local/include/H5*Develop.h
+            /usr/local/include/H5*Module.h
+            /usr/local/include/H5pubconf.h
+            /usr/local/include/H5version.h
+            /usr/local/include/H5overflow.h
+            /usr/local/lib/libhdf5*
+            /usr/local/lib/pkgconfig/hdf5*
+            /usr/local/lib/libhdf5.settings
+          key: hdf5-1.14.6-${{ runner.os }}
+
+      - name: Build HDF5 1.14.6
+        if: steps.cache-hdf5.outputs.cache-hit != 'true'
+        run: |
+          cd /tmp
+          curl -sSL -o hdf5.tar.gz \
+            https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6.tar.gz
+          tar xzf hdf5.tar.gz && cd hdf5-1.14.6
+          ./configure --prefix=/usr/local --enable-build-mode=production \
+            --enable-hl --disable-fortran --disable-cxx \
+            --disable-tests --disable-tools CC=gcc
+          make -j$(nproc) && sudo make install && sudo ldconfig
+
+      - name: ldconfig refresh after HDF5
+        run: sudo ldconfig
+
+      - name: Build libttio_rans (TTI-O native)
+        working-directory: TTI-O
+        run: |
+          bash scripts/build-native.sh
+          ls -la native/_build/libttio_rans.so
+
+      - name: Build libTTIO (sibling library)
+        working-directory: TTI-O/objc
+        env:
+          GNUSTEP_MAKEFILES: /usr/GNUstep/Local/Library/Makefiles
+          TTIO_OBJC_RUNTIME: gnustep-2.0
+        run: bash build.sh 2>&1 | tail -30
+
+      - name: Build tti-workbench-server
+        working-directory: server
+        env:
+          TTIO_REPO_PATH: ${{ github.workspace }}/TTI-O
+          TTIO_OBJC_RUNTIME: gnustep-2.0
+          TTIOWB_OBJC_RUNTIME: gnustep-2.0
+        run: bash scripts/build.sh
+
+      - name: Install ttio Python package + pytest
+        run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python"
+
+      - name: Run client-SDK live smoke
+        env:
+          TTIO_REPO_PATH: ${{ github.workspace }}/TTI-O
+          TTIOWB_SERVER_DIR: ${{ github.workspace }}/server
+        run: bash "${{ github.workspace }}/TTI-O/scripts/workbench-live-smoke.sh"
