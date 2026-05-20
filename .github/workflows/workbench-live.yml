@@ -203,8 +203,8 @@ jobs:
           TTIOWB_OBJC_RUNTIME: gnustep-2.0
         run: bash scripts/build.sh
 
-      - name: Install ttio Python package
-        run: python3 -m pip install --break-system-packages -e "${{ github.workspace }}/TTI-O/python"
+      - name: Install ttio Python package + pytest
+        run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python"
 
       - name: Run client-SDK live smoke
         env:
