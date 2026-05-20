@@ -40,12 +40,21 @@ class HeadersIntegrationTest extends ApplicationTest {
 
         Platform.runLater(() -> selectFirstNodeOfKind(TreeNodeKind.MS_RUN));
 
+        // Wait for BOTH the MS Headers tab AND the Provenance tab to
+        // register. Earlier this loop only polled for MS Headers, but
+        // DetailPane.onSelection registers matching tabs sequentially
+        // via Platform.runLater; on slower CI runners the Provenance
+        // tab may not be present yet when MS Headers appears, causing
+        // an intermittent failure on the trailing assertion. Polling
+        // for both fixes the race.
         long sel_deadline = System.nanoTime() + (long) 5e9;
         while (System.nanoTime() < sel_deadline) {
             var tabs = win.detail().control().getTabs();
             boolean hasMsHeaders = tabs.stream()
                 .anyMatch(t -> "MS Headers".equals(t.getText()));
-            if (hasMsHeaders) break;
+            boolean hasProvenance = tabs.stream()
+                .anyMatch(t -> "Provenance".equals(t.getText()));
+            if (hasMsHeaders && hasProvenance) break;
             Thread.sleep(20);
         }
         var tabs = win.detail().control().getTabs();
@@ -53,7 +62,8 @@ class HeadersIntegrationTest extends ApplicationTest {
             "MS_RUN selection should produce an MS Headers tab; got: "
                 + tabs.stream().map(t -> t.getText()).toList());
         assertTrue(tabs.stream().anyMatch(t -> "Provenance".equals(t.getText())),
-            "MS_RUN selection should also produce a Provenance tab");
+            "MS_RUN selection should also produce a Provenance tab; got: "
+                + tabs.stream().map(t -> t.getText()).toList());
     }
 
     private void selectFirstNodeOfKind(TreeNodeKind kind) {
