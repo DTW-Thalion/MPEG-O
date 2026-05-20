@@ -280,29 +280,45 @@ def cmd_inspect(args) -> int:
 # ----------------------------------------------------------------
 
 def cmd_encode(args) -> int:
-    # The encode path stays a thin dispatch into the existing
-    # format-specific CLIs. We detect the format from --format
-    # (required by the spec section 8.2 sample) and delegate
-    # argument handling to that CLI's existing argparse, passing
-    # the remaining args through.
-    fmt = args.format.lower()
+    # fasta / fastq keep their richer dedicated CLIs (reference vs.
+    # unaligned modes, PHRED options); everything else dispatches
+    # through the format registry (W6.4), which mirrors the GUI's
+    # ImportFormatRegistry. The format set is the registry + the two
+    # CLI-delegated formats.
+    from ttio.importers import registry
+    fmt = registry.normalize(args.format)
     if fmt == "fastq":
         from ttio.tools import fastq_import_cli as backend
-    elif fmt == "fasta":
+        return _delegate_to(backend, ["--input"] + args.input +
+                              ["--output", args.output] + (args.extra or []))
+    if fmt == "fasta":
         from ttio.tools import fasta_import_cli as backend
-    else:
-        print(
-            f"{PROG}: unsupported --format {fmt!r}; v1.0 supports "
-            f"fastq | fasta. Additional formats (BAM/CRAM, VCF, "
-            f"mzML, IDAT, OME-TIFF, etc.) land in W6.",
-            file=sys.stderr)
-        return 3
-    # Pass the spec-shaped flags through to the backend CLI. The
-    # backends have their own argparse so we hand off via sys.argv
-    # substitution (cleaner than building a positional argv).
-    return _delegate_to(backend, ["--input"] + args.input +
-                          ["--output", args.output] +
-                          (args.extra or []))
+        return _delegate_to(backend, ["--input"] + args.input +
+                              ["--output", args.output] + (args.extra or []))
+    if registry.is_registry_format(fmt):
+        try:
+            registry.encode(fmt, args.input, args.output)
+        except registry.UnknownFormatError:
+            return _encode_unsupported(args.format)
+        except Exception as e:  # importer/runtime-tool failure
+            print(f"{PROG}: encode failed ({args.format}): {e}",
+                  file=sys.stderr)
+            return 2
+        print(f"encoded {', '.join(args.input)} -> {args.output} "
+              f"(format {args.format})")
+        return 0
+    return _encode_unsupported(args.format)
+
+
+def _encode_unsupported(fmt: str) -> int:
+    from ttio.importers import registry
+    supported = ", ".join(registry.supported_encode_formats())
+    print(
+        f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}. "
+        f"(JCAMP-DX import to .tio is GUI-only today; the Python CLI "
+        f"reads JDX but has no .tio bridge yet.)",
+        file=sys.stderr)
+    return 3
 
 
 def cmd_export(args) -> int:
@@ -748,9 +764,10 @@ def build_parser() -> argparse.ArgumentParser:
     pe.add_argument("--input", nargs="+", required=True,
                      help="Source file(s).")
     pe.add_argument("--format", required=True,
-                     help="Source-file format. v1.0 supports "
-                          "fastq | fasta; W6 adds the spec section "
-                          "4.2-4.7 entries.")
+                     help="Source-file format: fastq | fasta | mzml | "
+                          "mztab | imzml | nmrml | bam | sam | cram | "
+                          "thermo-raw | waters-masslynx | bruker-timstof "
+                          "(aliases: thermo, waters, bruker, timstof).")
     pe.add_argument("--output", required=True,
                      help="Target .tio path.")
     pe.add_argument("--extra", nargs=argparse.REMAINDER,
