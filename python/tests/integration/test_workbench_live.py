@@ -71,18 +71,12 @@ def test_containers_list_round_trips(client):
 
 # ---------------------------------------------------- W3 cohort
 
-@pytest.mark.xfail(
-    reason="tti-workbench-server v1.0 implements TTIOWBCohortsHandler but "
-           "never registers it in Source/Core/TTIOWBServer.m (only "
-           "Containers/Auth/Pipelines/Jobs/Sessions/Metrics are wired), so "
-           "/v1/cohorts/{query,preview-count} return 404. The cohort plane "
-           "is exercised only by the server's parity binary, never over "
-           "HTTP. Server-repo follow-up: register the handler. This test "
-           "flips to XPASS once that lands. The client SDK request is "
-           "correct -- it raises a clean WorkbenchHttpError(404).",
-    strict=False,
-)
 def test_cohort_preview_count_round_trips(client):
+    # The cohort REST plane (POST /v1/cohorts/preview-count) was
+    # 404 in workbench-server v1.0 -- TTIOWBCohortsHandler was
+    # implemented but never registered on the router. Fixed in
+    # tti-workbench-server PR #29 (handler registered at
+    # shared-service init); this test exercises it normally now.
     from ttio.workbench.cohort import CohortQuery, container
     query = CohortQuery(
         select="containers",

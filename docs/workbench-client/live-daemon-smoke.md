@@ -21,7 +21,7 @@ the daemon* end-to-end:
 | `jobs().events()` SSE to terminal | W3 | `test_job_events_stream_reaches_terminal` |
 | `jobs().cancel()` | W3 | `test_job_cancel` |
 | `sessions().create/list/terminate` | W4 | `test_session_create_list_terminate` |
-| cohort `preview_count()` | W3 | `test_cohort_preview_count_round_trips` (**xfail**, see below) |
+| cohort `preview_count()` | W3 | `test_cohort_preview_count_round_trips` |
 
 ## Pieces
 
@@ -42,7 +42,7 @@ TTIO_REPO_PATH=$PWD PYTHONPATH=python/src \
   bash scripts/workbench-live-smoke.sh
 ```
 
-Expected: `7 passed, 1 xfailed`.
+Expected: `8 passed`.
 
 ## CI
 
@@ -77,19 +77,22 @@ the same secret the server repo's own CI uses.
    `layers` / `manifest` / `delete`) are fixed to use keyword
    args.
 
-2. **Server-side: cohort HTTP handler not registered** (server
-   repo follow-up). `TTIOWBCohortsHandler` is implemented in
-   `tti-workbench-server` but never registered in
-   `Source/Core/TTIOWBServer.m` (the daemon wires
+2. **Server-side: cohort HTTP handler not registered** (FIXED in
+   tti-workbench-server PR #29). `TTIOWBCohortsHandler` was
+   implemented in `tti-workbench-server` but never registered in
+   `Source/Core/TTIOWBServer.m` (the daemon wired
    Containers / Auth / Pipelines / Jobs / Sessions / Metrics, but
-   not Cohorts). So `/v1/cohorts/query` and
-   `/v1/cohorts/preview-count` return 404 on the v1.0 daemon --
-   the cohort plane is exercised only by the server's parity
-   binary, never over HTTP. The client SDK request is correct (it
-   raises a clean `WorkbenchHttpError(404)`); the cohort live test
-   is marked `xfail(strict=False)` and will flip to XPASS once the
-   server registers the handler. **Tracked as a tti-workbench-server
-   repo issue, not a TTI-O client gap.**
+   not Cohorts), so `/v1/cohorts/query` and
+   `/v1/cohorts/preview-count` returned 404 on the v1.0 daemon --
+   the cohort plane was exercised only by the server's parity
+   binary, never over HTTP. The client SDK request was already
+   correct (it raised a clean `WorkbenchHttpError(404)`). PR #29
+   constructs a shared `TTIOWBCohortService` + registers the
+   handler (and wires the same service into `TTIOWBJobsHandler`,
+   previously `cohortService:nil`); the server CI now guards it
+   with `scripts/smoke_cohort.sh`. The cohort live test
+   (`test_cohort_preview_count_round_trips`) runs normally as of
+   that merge.
 
 ## Still deferred (genuine v1.1 / server-dependent)
 
