@@ -11,6 +11,52 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.6: tio-browser Interactive Session Launcher (2026-05-19)
+
+Sixth W5 sub-phase. JavaFX surfaces wrap the W4 SessionsClient
+SDK -- no new wire surface, no new SDK code.
+
+Decision (W5-plan open-question 2): interactive attach happens
+through the operator's own WS-capable client (CLI
+`ttio sessions attach` or a terminal), not an embedded JavaFX
+WebView. The session list copies the `wss://` attach URL to the
+clipboard and shows it in a copyable dialog. Embedded Jupyter
+WebView (spec 7.4 step 3 option a) is a v1.1 enhancement.
+
+tio-browser new files in workbench/:
+- SessionLauncher: modal create form (project / engine pin /
+  image / command / bind-mounts / env). Builds a
+  SessionsClient.CreateRequest and calls create. Static parsers
+  parseCommand, parseBindMounts, parseEnv are the testable
+  boundary.
+- SessionList: non-modal TableView Session with session id,
+  status, project, engine, host-port columns; refresh,
+  copy-attach-URL, terminate controls. Static attachUrl Session,
+  WorkbenchClient returns the wss URL for running sessions, null
+  otherwise.
+
+MainWindow gains two new menu items under Workbench: Launch
+session and Sessions after Jobs.
+
+Tests:
+- SessionLauncherTest 15 tests: parseCommand whitespace split +
+  blank/null empty; parseBindMounts basic host:container, drops
+  :mode suffix, skips blank lines, rejects missing/leading/
+  trailing colon; parseEnv KEY=VALUE, value-with-equals
+  preserved, skips blanks, rejects no-equals/leading-equals;
+  isValidProject blank rejection.
+- SessionListTest 4 tests: attachUrl builds the WS proxy URL for
+  running sessions (wss + ws scheme variants); null for
+  non-running / null args.
+
+Cross-language scope: GUI-only Java; no new SDK code. The W4
+Session record + SessionProxy URL builder already have
+cross-language byte-equivalence pinned in W4 tests.
+
+Deferred follow-ups: live-daemon round-trip smoke (shared);
+embedded Jupyter WebView (spec 7.4 step 3 option a); auto-refresh
+/ live session status.
+
 ### Added -- W5.5: tio-browser Pipeline Launcher + Job Monitor (2026-05-19)
 
 Fifth W5 sub-phase. JavaFX surfaces wrap the W3 PipelinesClient
