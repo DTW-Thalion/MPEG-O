@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed -- Un-xfail cohort live test after server fix (2026-05-19)
+
+tti-workbench-server PR #29 registered TTIOWBCohortsHandler (the
+cohort REST plane was 404 in v1.0 -- the gap the live smoke
+exposed). With the server fix on main, the live smoke's cohort
+test (test_cohort_preview_count_round_trips) is un-xfailed and
+now passes normally: the workbench-live workflow checks out the
+server at main. Live smoke is now 8 passed (was 7 passed, 1
+xfailed). Doc updated in docs/workbench-client/live-daemon-smoke.md.
+
 ### Added -- Live-daemon end-to-end smoke (closes the W1-W5 live-acceptance deferral) (2026-05-19)
 
 Wires a real tti-workbench-server daemon into CI and drives the
