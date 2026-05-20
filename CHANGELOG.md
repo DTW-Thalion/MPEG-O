@@ -11,31 +11,14 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-### Added -- W6.4a: ttio encode --format expansion (2026-05-20)
+### Added -- ExportPanel progress bar (2026-05-20)
 
-`ttio encode --format` graduates from the `fastq | fasta` stub to
-the full spec §4 set the tio-browser GUI already covers, so CLI and
-GUI offer the same import formats.
-
-- New `ttio.importers.registry` -- the single source of truth for
-  the CLI's encode formats, mirroring the GUI `ImportFormatRegistry`.
-  Each format wraps its existing importer in a uniform
-  `adapter(inputs, output, **opts)`:
-  - mzML / mzTab / imzML / nmrML (pure-Python parsers),
-  - BAM / SAM / CRAM (samtools at runtime),
-  - Thermo .raw / Waters MassLynx / Bruker timsTOF (vendor
-    converters at runtime).
-  Aliases: `thermo`, `raw`, `waters`, `masslynx`, `bruker`, `timstof`.
-- `fasta` / `fastq` keep their richer dedicated CLIs (reference vs.
-  unaligned, PHRED) -- `ttio encode` still delegates to those.
-- Unknown formats fail with rc 3 and a clear message listing the
-  supported set.
-
-Parity: a test pins the GUI format list against the CLI's, with
-**JCAMP-DX** the one documented Python-side gap -- `ttio.importers.
-jcamp_dx` reads JDX into vibrational `Spectrum` objects but has no
-`.tio` bridge yet (that conversion is GUI/Java-only). The matching
-export-side expansion is W6.4b.
+The tio-browser "Export container" dialog now shows a progress bar
+during the open→export run instead of only a static status label,
+mirroring the W6.1b EncodingPanel. The bar is indeterminate (the
+open/export tasks don't report granular progress) but distinguishes
+working from hung. Closes the last surface noted in #113 (a local
+`.tio`→file export, not a client-server interaction).
 
 ### Added -- W6.3: PQC client (ML-KEM-1024 + ML-DSA-87, opt_pqc_preview) (2026-05-20)
 
