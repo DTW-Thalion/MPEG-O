@@ -13,6 +13,7 @@ import global.thalion.ttio.workbench.jobs.JobsClient;
 import global.thalion.ttio.workbench.pipeline.PipelinesClient;
 import global.thalion.ttio.workbench.sessions.SessionProxyAttach;
 import global.thalion.ttio.workbench.sessions.SessionsClient;
+import global.thalion.ttio.workbench.federation.FederationClient;
 import global.thalion.ttio.workbench.encryption.ProtectionMetadata;
 import global.thalion.ttio.workbench.encryption.ProtectionMode;
 import global.thalion.ttio.workbench.encryption.WorkbenchEncryptor;
@@ -234,6 +235,16 @@ public final class WorkbenchClient implements AutoCloseable {
     /** Build a {@link JobsClient} bound to this session. */
     public JobsClient jobs() {
         return new JobsClient(
+            endpoint.host, endpoint.port,
+            endpoint.httpScheme, session.token());
+    }
+
+    /** Build a {@link FederationClient} bound to this session.
+     *  Federation is a v1.1+ server feature; the client degrades
+     *  gracefully against a v1.0 single-node server (an empty peer
+     *  list rather than an error). */
+    public FederationClient federation() {
+        return new FederationClient(
             endpoint.host, endpoint.port,
             endpoint.httpScheme, session.token());
     }
