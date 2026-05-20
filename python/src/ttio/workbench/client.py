@@ -45,6 +45,12 @@ from ttio.workbench.transport.download import (
     FilterDict,
     OutputMode,
 )
+from ttio.workbench.encryption import (
+    ProtectionMetadata,
+    ProtectionMode,
+    open_sealed,
+    seal,
+)
 from ttio.workbench.transport.handshake import OutputModeLiteral
 from ttio.workbench.transport.resume import ResumeState
 from ttio.workbench.transport.upload import UploadClient, UploadResult
@@ -199,6 +205,48 @@ class WorkbenchClient:
                 output_mode=output_mode,
                 max_au=max_au,
             )
+
+    async def upload_protected(
+        self,
+        *,
+        project: str,
+        container_uri: str,
+        data: bytes,
+        mode: ProtectionMode,
+        dek: Optional[bytes] = None,
+        kek: Optional[bytes] = None,
+        kek_algorithm: str = "aes-256-gcm",
+        resume: Optional[ResumeState] = None,
+    ) -> tuple[UploadResult, ProtectionMetadata]:
+        """Seal `data` (BYOK or envelope) and upload the ciphertext.
+
+        Returns the `UploadResult` plus the `ProtectionMetadata` the
+        caller must retain to decrypt later (for ENVELOPE this carries
+        the wrapped DEK; for BYOK it carries no key material -- the
+        researcher holds the DEK out of band).
+        """
+        sealed = seal(data, mode=mode, dek=dek, kek=kek,
+                      kek_algorithm=kek_algorithm)
+        result = await self.upload_bytes(
+            project=project, container_uri=container_uri,
+            data=sealed.ciphertext, resume=resume)
+        return result, sealed.protection
+
+    async def download_and_open(
+        self,
+        *,
+        container_uri: str,
+        protection: ProtectionMetadata,
+        dek: Optional[bytes] = None,
+        kek: Optional[bytes] = None,
+        filters: Optional[FilterDict] = None,
+        max_au: int = 0,
+    ) -> bytes:
+        """Download a sealed payload and decrypt it. BYOK: pass `dek`.
+        ENVELOPE: pass the `kek` that unwraps `protection.wrapped_dek`."""
+        result = await self.download_bytes(
+            container_uri=container_uri, filters=filters, max_au=max_au)
+        return open_sealed(result.payload, protection, dek=dek, kek=kek)
 
     # ----------------------------------------------- control plane (W3)
 
