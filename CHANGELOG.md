@@ -11,6 +11,60 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.4: tio-browser Cohort Query Builder (2026-05-19)
+
+Fourth W5 sub-phase. Adds a visual predicate-composition window
+to tio-browser that drives the W3 `CohortQuery` SDK; no new
+wire surface (the v1.0 server's POST /v1/cohorts/query +
+/v1/cohorts/preview-count endpoints already cover the
+GUI-supported flows).
+
+tio-browser new files in workbench/:
+- CohortLeafRow -- mutable row for the leaf-predicate table
+  with JavaFX-property-backed fields (kind / field / op /
+  rawValue). toPredicate builds the matching CohortPredicate
+  leaf; coerceValue raw, op converts the raw text input to a
+  typed value (int / double / bool / string / comma-separated
+  list for in).
+- CohortQueryBuilder -- window with composite-root choice (AND
+  / OR / NOT), select-kind choice (containers / subjects /
+  samples), TableView CohortLeafRow with editable cells, Run
+  and Preview Count buttons, result TableView. Static
+  buildPredicate(composite, rows) is the testable boundary
+  between form and SDK.
+
+MainWindow integration: new Workbench menu item Cohort query
+after Transfers.
+
+Client-side rule enforcement (mirrors v1.0 server rules):
+- phenotype rejected under OR / NOT (server enforces this
+  too; client-side catch gives a clearer error than a 400).
+- NOT requires exactly one leaf.
+
+v1.0 scope: flat leaf list under a single composite root.
+Nested composite trees + drag-drop reorder are a v1.1
+enhancement. The W3 SDK already supports nested composites;
+the GUI just does not surface them in v1.0.
+
+Tests:
+- tio-browser CohortLeafRowTest 13 tests: coerceValue parsers
+  (int / double / bool / string / list for in / blank for
+  exists), toPredicate builds the right leaf subclass per
+  kind, blank field rejection, Kind.fromLabel round-trip.
+- tio-browser CohortQueryBuilderTest 11 tests: AND with one
+  leaf collapses to leaf, AND/OR composite construction,
+  phenotype rejected under OR/NOT, NOT with non-1 leaves
+  rejected, empty leaf list rejected, unknown composite
+  rejected.
+
+Cross-language scope: GUI-only; no new SDK code. The W3
+cohort-predicate AST is already cross-language byte-equivalent.
+
+Deferred follow-ups: live-daemon round-trip smoke (shared);
+save-as-cohort needs server v1.1 POST /v1/cohorts; tree-style
+editor with nested composites + drag-drop; field-level
+autocomplete.
+
 ### Added -- W5.3: Transfer Manager + Selective Access Panel + filter builder (2026-05-19)
 
 Third W5 sub-phase. Wires the W1 `WorkbenchTransportClient`

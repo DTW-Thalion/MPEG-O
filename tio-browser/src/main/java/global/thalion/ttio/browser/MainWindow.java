@@ -45,6 +45,7 @@ public class MainWindow {
     private MenuItem workbenchConnectItem, workbenchDisconnectItem, workbenchStatusItem;
     private MenuItem workbenchContainersItem;
     private MenuItem workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem;
+    private MenuItem workbenchCohortItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
@@ -147,10 +148,13 @@ public class MainWindow {
         workbenchUploadItem = new MenuItem("Upload to workbench…");
         workbenchDownloadItem = new MenuItem("Download from workbench…");
         workbenchTransfersItem = new MenuItem("Transfers…");
+        workbenchCohortItem = new MenuItem("Cohort query…");
         workbenchMenu.getItems().addAll(workbenchConnectItem,
             workbenchDisconnectItem, new SeparatorMenuItem(),
             workbenchContainersItem,
             workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem,
+            new SeparatorMenuItem(),
+            workbenchCohortItem,
             new SeparatorMenuItem(), workbenchStatusItem);
 
         Menu toolsMenu = new Menu("Tools");
@@ -286,6 +290,13 @@ public class MainWindow {
         workbenchUploadItem.setOnAction(e -> openWorkbenchUploadDialog());
         workbenchDownloadItem.setOnAction(e -> openWorkbenchDownloadDialog());
         workbenchTransfersItem.setOnAction(e -> openTransferQueueView());
+        workbenchCohortItem.setOnAction(e -> openCohortQueryBuilder());
+    }
+
+    /** Open the cohort query builder window. */
+    private void openCohortQueryBuilder() {
+        new global.thalion.ttio.browser.workbench
+            .CohortQueryBuilder(stage).show();
     }
 
     /** Open the workbench container browser window. */
