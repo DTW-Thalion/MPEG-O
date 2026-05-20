@@ -206,8 +206,12 @@ jobs:
       - name: Install ttio Python package + pytest
         run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python"
 
-      - name: Run client-SDK live smoke
+      - name: Run client-SDK live smoke (Python + Java)
         env:
           TTIO_REPO_PATH: ${{ github.workspace }}/TTI-O
           TTIOWB_SERVER_DIR: ${{ github.workspace }}/server
+          # Run the Java live test against the same daemon (parity
+          # with the Python smoke). Needs Maven + the JDK 25 set up
+          # above; the runner skips it locally unless this is 1.
+          TTIOWB_JAVA_TEST: '1'
         run: bash "${{ github.workspace }}/TTI-O/scripts/workbench-live-smoke.sh"

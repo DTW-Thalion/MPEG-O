@@ -94,13 +94,29 @@ the same secret the server repo's own CI uses.
    (`test_cohort_preview_count_round_trips`) runs normally as of
    that merge.
 
+## Java client live coverage (added)
+
+`java/src/test/java/global/thalion/ttio/workbench/WorkbenchLiveTest.java`
+is the parity counterpart to the Python smoke -- same flow
+(connect -> containers -> cohort -> pipelines -> jobs
+submit/poll/events/cancel -> sessions), gated by the same
+`TTIO_WORKBENCH_URL` env var (`@EnabledIfEnvironmentVariable`, so
+normal `mvn verify` skips it). The `workbench-live` workflow runs
+it against the same daemon as the Python smoke
+(`TTIOWB_JAVA_TEST=1`); the runner combines both exit codes.
+
+This closed a real gap: the Java REST surface had only ever been
+byte-equivalence tested, which hid two Java-side bugs until the
+win-x64 GUI was run by hand --
+(1) `java.net.http.HttpClient` defaulting to HTTP/2 (the daemon
+is libwebsockets HTTP/1.1-only; the h2c upgrade made it close the
+connection -> "EOF reached while reading"), and
+(2) the `LoginDialog` bound-button crash. Both fixed; the Java
+live test now exercises the path that would have caught them.
+
 ## Still deferred (genuine v1.1 / server-dependent)
 
 - **Upload + download live round-trip.** Needs a synthesised
   `.tis` payload + a writable project; the transport WS path is
   unit-tested + cross-language-anchored (W1), but a live
   byte-round-trip is a natural next addition to this smoke.
-- **Java live smoke.** The Python smoke exercises the same wire
-  contract the Java SDK targets (cross-language anchors guarantee
-  byte-identical requests). A Java/Testcontainers live run is
-  incremental coverage, not a new contract.
