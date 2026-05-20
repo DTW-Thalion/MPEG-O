@@ -42,8 +42,19 @@ class EncodingPanelTest {
 
     @Test
     void deriveUriFallsBackForEmptyBase() {
-        // A name that reduces to empty after stripping yields "container".
+        // A name whose base reduces to empty after stripping
+        // non-alphanumerics yields the "container" fallback. The
+        // ".tio" extension is stripped (dot index > 0), leaving
+        // "@@@", which sanitises to empty.
         assertEquals("uri:tio:alpha-container",
+            EncodingPanel.deriveContainerUri("alpha", "@@@.tio"));
+    }
+
+    @Test
+    void deriveUriKeepsBaseForDotPrefixedName() {
+        // A leading dot at index 0 is NOT an extension separator,
+        // so ".bam" keeps "bam" as its base rather than emptying.
+        assertEquals("uri:tio:alpha-bam",
             EncodingPanel.deriveContainerUri("alpha", ".bam"));
     }
 
