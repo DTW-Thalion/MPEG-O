@@ -46,6 +46,7 @@ public class MainWindow {
     private MenuItem workbenchContainersItem;
     private MenuItem workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem;
     private MenuItem workbenchCohortItem;
+    private MenuItem workbenchPipelinesItem, workbenchJobsItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
@@ -149,12 +150,15 @@ public class MainWindow {
         workbenchDownloadItem = new MenuItem("Download from workbench…");
         workbenchTransfersItem = new MenuItem("Transfers…");
         workbenchCohortItem = new MenuItem("Cohort query…");
+        workbenchPipelinesItem = new MenuItem("Launch pipeline…");
+        workbenchJobsItem = new MenuItem("Jobs…");
         workbenchMenu.getItems().addAll(workbenchConnectItem,
             workbenchDisconnectItem, new SeparatorMenuItem(),
             workbenchContainersItem,
             workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem,
             new SeparatorMenuItem(),
             workbenchCohortItem,
+            workbenchPipelinesItem, workbenchJobsItem,
             new SeparatorMenuItem(), workbenchStatusItem);
 
         Menu toolsMenu = new Menu("Tools");
@@ -291,12 +295,26 @@ public class MainWindow {
         workbenchDownloadItem.setOnAction(e -> openWorkbenchDownloadDialog());
         workbenchTransfersItem.setOnAction(e -> openTransferQueueView());
         workbenchCohortItem.setOnAction(e -> openCohortQueryBuilder());
+        workbenchPipelinesItem.setOnAction(e -> openPipelineLauncher());
+        workbenchJobsItem.setOnAction(e -> openJobMonitor());
     }
 
     /** Open the cohort query builder window. */
     private void openCohortQueryBuilder() {
         new global.thalion.ttio.browser.workbench
             .CohortQueryBuilder(stage).show();
+    }
+
+    /** Open the pipeline launcher dialog. */
+    private void openPipelineLauncher() {
+        new global.thalion.ttio.browser.workbench
+            .PipelineLauncher(stage).show();
+    }
+
+    /** Open the job monitor window. */
+    private void openJobMonitor() {
+        new global.thalion.ttio.browser.workbench
+            .JobMonitor(stage).show();
     }
 
     /** Open the workbench container browser window. */
