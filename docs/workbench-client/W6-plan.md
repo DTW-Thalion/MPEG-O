@@ -21,8 +21,12 @@ per-AU stream modes (ENCRYPTED / ENCRYPTED_HEADER) stay in the core
 envelope path, `opt_pqc_preview`-gated. **W6.4 in progress** —
 split into W6.4a (encode/import: `ttio.importers.registry` wiring
 mzML/mzTab/imzML/nmrML/BAM/SAM/CRAM/Thermo/Waters/Bruker into `ttio
-encode --format`) and W6.4b (export side). JCAMP-DX→`.tio` is a
-documented Python-only gap (JDX readable, no `.tio` bridge yet).
+encode --format`) and W6.4b (export side: `ttio.exporters.registry`
+wiring mzML/mzTab/ISA/BAM/CRAM into `ttio export --format`).
+Documented Python-only gaps: JCAMP-DX→`.tio` import (JDX readable,
+no `.tio` bridge), and nmrML/JCAMP-DX/imzML *export* (per-spectrum/
+pixel writers with no `.tio`-layer extraction helper yet). Next:
+W6.5 (federation), W6.6 (docs).
 
 ## What already exists (grounding)
 

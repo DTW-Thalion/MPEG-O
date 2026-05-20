@@ -322,21 +322,57 @@ def _encode_unsupported(fmt: str) -> int:
 
 
 def cmd_export(args) -> int:
-    fmt = args.format.lower()
+    # fasta / fastq keep their richer dedicated CLIs (reference vs.
+    # run modes, line-width / PHRED options); everything else
+    # dispatches through the export registry (W6.4b).
+    from ttio.exporters import registry
+    fmt = registry.normalize(args.format)
     if fmt == "fastq":
         from ttio.tools import fastq_export_cli as backend
-    elif fmt == "fasta":
+        return _delegate_to(backend, ["--input", args.input,
+                                       "--output", args.output,
+                                       "--layer", args.layer] + (args.extra or []))
+    if fmt == "fasta":
         from ttio.tools import fasta_export_cli as backend
-    else:
-        print(
-            f"{PROG}: unsupported --format {fmt!r}; v1.0 supports "
-            f"fastq | fasta. Additional formats land in W6.",
-            file=sys.stderr)
-        return 3
-    return _delegate_to(backend, ["--input", args.input,
-                                     "--output", args.output,
-                                     "--layer", args.layer] +
-                          (args.extra or []))
+        return _delegate_to(backend, ["--input", args.input,
+                                       "--output", args.output,
+                                       "--layer", args.layer] + (args.extra or []))
+    if registry.is_registry_format(fmt):
+        try:
+            registry.export(fmt, args.input, args.layer, args.output,
+                            **_parse_export_opts(args.extra))
+        except registry.UnknownFormatError:
+            return _export_unsupported(args.format)
+        except Exception as e:  # exporter / runtime-tool / missing-layer failure
+            print(f"{PROG}: export failed ({args.format}): {e}", file=sys.stderr)
+            return 2
+        print(f"exported {args.input} -> {args.output} (format {args.format})")
+        return 0
+    return _export_unsupported(args.format)
+
+
+def _parse_export_opts(extra) -> dict:
+    """Pull recognised key/value options out of `--extra` (e.g.
+    `--reference <fasta>` for CRAM)."""
+    opts: dict = {}
+    if not extra:
+        return opts
+    it = iter(extra)
+    for tok in it:
+        if tok == "--reference":
+            opts["reference"] = next(it, None)
+    return opts
+
+
+def _export_unsupported(fmt: str) -> int:
+    from ttio.exporters import registry
+    supported = ", ".join(registry.supported_export_formats())
+    print(
+        f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}. "
+        f"(nmrML / JCAMP-DX / imzML export is GUI-only today; the Python "
+        f"CLI has no .tio-layer->spectrum extraction for them yet.)",
+        file=sys.stderr)
+    return 3
 
 
 def _delegate_to(module, argv: list[str]) -> int:
@@ -783,9 +819,9 @@ def build_parser() -> argparse.ArgumentParser:
     px.add_argument("--layer", required=True,
                      help="Layer name to export.")
     px.add_argument("--format", required=True,
-                     help="Target export format; v1.0 supports "
-                          "fastq | fasta. W6 adds the spec section "
-                          "4.2-4.7 entries.")
+                     help="Target export format: fastq | fasta | mzml | "
+                          "mztab | isa | bam | cram. (CRAM needs "
+                          "--extra --reference <fasta>.)")
     px.add_argument("--output", required=True)
     px.add_argument("--extra", nargs=argparse.REMAINDER)
     px.set_defaults(func=cmd_export)

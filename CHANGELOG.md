@@ -11,6 +11,25 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.4b: ttio export --format expansion (2026-05-20)
+
+Export-side mirror of W6.4a: `ttio export --format` graduates from
+the `fastq | fasta` stub to the dataset-level exporters.
+
+- New `ttio.exporters.registry` (mirrors `ttio.importers.registry`).
+  Each format wraps its exporter in a uniform
+  `adapter(tio_path, layer, output, **opts)`:
+  - mzML / mzTab / ISA-Tab/JSON (whole-dataset writers),
+  - BAM / CRAM (genomic-run writers; samtools at runtime; CRAM needs
+    `--extra --reference <fasta>`).
+- `fasta` / `fastq` keep their dedicated CLIs.
+- Unknown formats fail with rc 3 and a clear message.
+
+Parity: a test pins the GUI export writers against the CLI's. The
+documented gaps are **nmrML / JCAMP-DX / imzML** -- those export
+from per-spectrum / per-pixel objects and the Python side has no
+`.tio`-layer→object extraction helper yet (GUI/Java only).
+
 ### Added -- ExportPanel progress bar (2026-05-20)
 
 The tio-browser "Export container" dialog now shows a progress bar
