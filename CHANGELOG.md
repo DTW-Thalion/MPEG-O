@@ -11,6 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.5: federation client (graceful no-op vs v1.0) (2026-05-20)
+
+Client surface for the v1.1+ federation endpoint (spec §12.3) that
+degrades gracefully against a v1.0 single-node server.
+
+- New `ttio.workbench.federation.FederationClient` (Python) /
+  `global.thalion.ttio.workbench.federation.FederationClient` (Java),
+  reached via `client.federation()`.
+- `peers()` hits `GET /v1/federation/peers`; on **404** (the v1.0
+  server doesn't expose it) it returns an **empty list** instead of
+  raising, so callers never special-case version detection. Other
+  non-2xx statuses still raise. `is_federated()` / `isFederated()`
+  is a convenience over an empty peer list.
+
+Tested both languages incl. the 404→empty contract (Java via a
+local `HttpServer` stub).
+
 ### Added -- W6.4b: ttio export --format expansion (2026-05-20)
 
 Export-side mirror of W6.4a: `ttio export --format` graduates from
