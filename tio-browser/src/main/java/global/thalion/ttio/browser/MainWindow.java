@@ -48,6 +48,7 @@ public class MainWindow {
     private MenuItem workbenchCohortItem;
     private MenuItem workbenchPipelinesItem, workbenchJobsItem;
     private MenuItem workbenchSessionLaunchItem, workbenchSessionListItem;
+    private MenuItem workbenchEncodeItem, workbenchExportItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
@@ -155,10 +156,14 @@ public class MainWindow {
         workbenchJobsItem = new MenuItem("Jobs…");
         workbenchSessionLaunchItem = new MenuItem("Launch session…");
         workbenchSessionListItem = new MenuItem("Sessions…");
+        workbenchEncodeItem = new MenuItem("Encode + upload…");
+        workbenchExportItem = new MenuItem("Export container…");
         workbenchMenu.getItems().addAll(workbenchConnectItem,
             workbenchDisconnectItem, new SeparatorMenuItem(),
             workbenchContainersItem,
-            workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem,
+            workbenchEncodeItem,
+            workbenchUploadItem, workbenchDownloadItem, workbenchExportItem,
+            workbenchTransfersItem,
             new SeparatorMenuItem(),
             workbenchCohortItem,
             workbenchPipelinesItem, workbenchJobsItem,
@@ -303,6 +308,20 @@ public class MainWindow {
         workbenchJobsItem.setOnAction(e -> openJobMonitor());
         workbenchSessionLaunchItem.setOnAction(e -> openSessionLauncher());
         workbenchSessionListItem.setOnAction(e -> openSessionList());
+        workbenchEncodeItem.setOnAction(e -> openEncodingPanel());
+        workbenchExportItem.setOnAction(e -> openExportPanel());
+    }
+
+    /** Open the workbench encode + upload dialog. */
+    private void openEncodingPanel() {
+        new global.thalion.ttio.browser.workbench
+            .EncodingPanel(stage).show();
+    }
+
+    /** Open the workbench export dialog. */
+    private void openExportPanel() {
+        new global.thalion.ttio.browser.workbench
+            .ExportPanel(stage).show();
     }
 
     /** Open the interactive-session launcher dialog. */

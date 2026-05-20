@@ -11,6 +11,67 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.7: tio-browser Encoding + Export panels + 1.5.0 (closes W5) (2026-05-19)
+
+Seventh and final W5 sub-phase. Adds the last two spec section
+8.1 GUI components, bumps tio-browser to 1.5.0, and lands the
+GUI-assembly end-to-end smoke. Completes the WC Desktop GUI
+track: all nine spec section 8.1 components now have a working
+tio-browser panel.
+
+tio-browser new files in workbench/:
+- EncodingPanel: modal encode + upload coordinator. Picks a
+  source file, detects format via FormatSniffer, encodes to a
+  temp .tio via the existing Phase-8 ImportTask, then enqueues
+  an upload through the W5.3 TransferManager under a derived
+  container URI. Static helpers deriveContainerUri (project +
+  filename to uri:tio:...), deriveTempTio, isValidProject.
+- ExportPanel: modal client-side export. Opens a local .tio
+  (typically just downloaded via the W5.3 download dialog) and
+  runs the existing Phase-9 ExportTask to a target format.
+  Static helpers extensionFor (format to conventional
+  extension), deriveExportTarget, isValidTioPath. v1.0 is
+  client-side export; server-side export (export pipeline on the
+  daemon) is a follow-up.
+
+MainWindow gains two new menu items under Workbench: Encode +
+upload and Export container.
+
+Version: tio-browser 1.4.1 -> 1.5.0 (workbench-aware GUI). The
+java/python ttio library stays at 1.3.0 (the W5.0 SDK bump);
+tio-browser versions independently per the carry-forward rule.
+
+Tests:
+- EncodingPanelTest 10 tests: deriveContainerUri (simple name,
+  path + extension strip, lowercase + hyphenate, no-project,
+  empty-base fallback, dot-prefixed name, Windows backslash
+  path); deriveTempTio (.tio suffix + name); isValidProject.
+- ExportPanelTest 7 tests: extensionFor (known formats +
+  unknown fallback); deriveExportTarget (extension swap,
+  directory preserved, no-directory, null-source fallback);
+  isValidTioPath.
+- WorkbenchMenuSmokeTest 2 TestFX tests (end-to-end GUI
+  assembly): the Workbench menu exposes every W5.1-W5.7 action;
+  every Workbench action has an onAction handler. This is the
+  GUI-assembly half of the W5 acceptance gate; the live-daemon
+  round-trip (login to browse to upload to submit to download)
+  remains a shared cross-W follow-up needing the workbench-server
+  Docker image in CI.
+
+W5 COMPLETE. Spec section 8.1 component coverage:
+- Connection Manager (W5.1)
+- Container Browser (W5.2)
+- Upload/Download Manager + Selective Access Panel (W5.3)
+- Cohort Query Builder (W5.4)
+- Pipeline Launcher + Job Monitor (W5.5)
+- Interactive Session Launcher (W5.6)
+- Encoding Panel + Export Panel (W5.7)
+
+Deferred across W5 (tracked in docs/workbench-client/W5.7-progress.md):
+live-daemon round-trip smoke; schema-driven pipeline form;
+save-as-cohort (needs server v1.1); embedded Jupyter WebView;
+server-side export pipeline; tree-style cohort editor.
+
 ### Added -- W5.6: tio-browser Interactive Session Launcher (2026-05-19)
 
 Sixth W5 sub-phase. JavaFX surfaces wrap the W4 SessionsClient
