@@ -28,7 +28,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -169,6 +169,7 @@ class DownloadClient:
         filter: Optional[FilterDict] = None,
         output_mode: OutputMode = OutputModeLiteral.BINARY.value,
         max_au: int = 0,
+        progress: Optional[Callable[[int, int], None]] = None,
     ) -> DownloadResult:
         """Drive one download to completion.
 
@@ -211,6 +212,7 @@ class DownloadClient:
         chunks: list[bytes] = []
         stats_frames: list[dict] = []
         binary_count = 0
+        bytes_received = 0
         terminal: Optional[dict] = None
 
         while True:
@@ -229,6 +231,14 @@ class DownloadClient:
             if isinstance(raw, (bytes, bytearray)):
                 chunks.append(bytes(raw))
                 binary_count += 1
+                bytes_received += len(raw)
+                if progress is not None:
+                    # Server streams with no known length; report
+                    # bytes-so-far with total -1 (unknown).
+                    try:
+                        progress(bytes_received, -1)
+                    except Exception:  # noqa: BLE001
+                        pass
                 continue
 
             kind, body = parse_server_frame(raw)

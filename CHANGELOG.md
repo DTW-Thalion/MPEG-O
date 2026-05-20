@@ -11,6 +11,36 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.1a: transport progress callback (Python + Java) (2026-05-20)
+
+First slice of W6.1 (progress feedback). Adds a progress
+callback to the workbench transport client so uploads/downloads
+can drive a determinate progress bar instead of an indeterminate
+spinner -- the root SDK gap behind issue #113.
+
+Java (`global.thalion.ttio.workbench.transport`):
+- New `TransferProgress` functional interface --
+  `onProgress(bytesDone, bytesTotal)`, with an `UNKNOWN_TOTAL`
+  (-1) sentinel for streamed downloads. Throwing callbacks are
+  swallowed so they can't abort a transfer.
+- `WorkbenchTransportClient.upload(..., TransferProgress)` and
+  `.download(..., TransferProgress)` overloads. Upload reports
+  `(bytesSent, payload.length)` per chunk (determinate); download
+  reports `(bytesReceived, UNKNOWN_TOTAL)` per binary frame.
+
+Python (`ttio.workbench.transport`):
+- `UploadClient.upload_bytes(..., progress=)` and
+  `DownloadClient.download(..., progress=)` accept a
+  `Callable[[int, int], None]` with the same `(done, total)`
+  contract; `_report_progress` helper swallows callback
+  exceptions. Cross-language equivalent of the Java interface.
+
+Tests: `TransferProgressTest` (Java, 3) pins the sentinel +
+contract + that the overloads exist; `test_transport_progress.py`
+(Python, 6) pins `_report_progress` + the `progress=` kwargs.
+The end-to-end "callback fires with rising bytes" assertion lands
+with W6.1b (GUI wiring) / a live-upload test.
+
 ### Changed -- W6 plan: progress feedback promoted to W6.1 (2026-05-20)
 
 Reprioritised docs/workbench-client/W6-plan.md so **progress

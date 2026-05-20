@@ -103,17 +103,27 @@ public final class WorkbenchTransportClient {
 
     /** Upload a fully-buffered {@code .tis} byte payload. */
     public UploadResult upload(String project, String containerUri, byte[] payload) {
-        return upload(project, containerUri, payload, null);
+        return upload(project, containerUri, payload, null, null);
     }
 
     /** Upload with optional resume state. */
     public UploadResult upload(String project, String containerUri,
                                  byte[] payload, ResumeState resume) {
+        return upload(project, containerUri, payload, resume, null);
+    }
+
+    /** Upload with optional resume state + a progress callback.
+     *  {@code progress} (nullable) is invoked with
+     *  {@code (bytesSent, payload.length)} as chunks are enqueued,
+     *  plus a final {@code (length, length)} once fully sent. */
+    public UploadResult upload(String project, String containerUri,
+                                 byte[] payload, ResumeState resume,
+                                 TransferProgress progress) {
         URI uri = wsUri();
         UploadDriver driver = new UploadDriver(
             uri, token, owner, project, containerUri,
             resume == null ? null : resume.resumeHandle(),
-            payload, chunkSize);
+            payload, chunkSize, progress);
 
         if (!driver.connectBlockingWith(defaultTimeoutMs)) {
             throw new WorkbenchTransportException.Handshake(
@@ -159,10 +169,22 @@ public final class WorkbenchTransportClient {
                                      Map<String, Object> filter,
                                      OutputMode outputMode,
                                      int maxAu) {
+        return download(containerUri, filter, outputMode, maxAu, null);
+    }
+
+    /** Download with a progress callback. The server streams without
+     *  a known content length, so {@code progress} is invoked with
+     *  {@code (bytesReceived, TransferProgress.UNKNOWN_TOTAL)} as
+     *  binary frames arrive — consumers show bytes-so-far. */
+    public DownloadResult download(String containerUri,
+                                     Map<String, Object> filter,
+                                     OutputMode outputMode,
+                                     int maxAu,
+                                     TransferProgress progress) {
         URI uri = wsUri();
         DownloadDriver driver = new DownloadDriver(
             uri, token, owner, containerUri,
-            outputMode, filter, maxAu);
+            outputMode, filter, maxAu, progress);
 
         if (!driver.connectBlockingWith(defaultTimeoutMs)) {
             throw new WorkbenchTransportException.Handshake(
@@ -246,6 +268,7 @@ public final class WorkbenchTransportClient {
         private final String resumeHandle;
         private final byte[] payload;
         private final int chunkSize;
+        private final TransferProgress progress;
 
         private final CompletableFuture<UploadResult> future = new CompletableFuture<>();
         private final AtomicLong lastAck = new AtomicLong(-1L);
@@ -254,7 +277,8 @@ public final class WorkbenchTransportClient {
 
         UploadDriver(URI uri, String token, String owner, String project,
                        String containerUri, String resumeHandle,
-                       byte[] payload, int chunkSize) {
+                       byte[] payload, int chunkSize,
+                       TransferProgress progress) {
             super(uri, draftWithSubprotocol());
             this.token = token;
             this.owner = owner;
@@ -263,6 +287,7 @@ public final class WorkbenchTransportClient {
             this.resumeHandle = resumeHandle;
             this.payload = payload;
             this.chunkSize = chunkSize;
+            this.progress = progress;
         }
 
         long lastAck()    { return lastAck.get(); }
@@ -335,10 +360,12 @@ public final class WorkbenchTransportClient {
         private void pumpPayload() {
             try {
                 int off = 0;
+                reportProgress(0, payload.length);
                 while (off < payload.length && !future.isDone()) {
                     int end = Math.min(off + chunkSize, payload.length);
                     send(ByteBuffer.wrap(payload, off, end - off));
                     off = end;
+                    reportProgress(off, payload.length);
                 }
             } catch (Exception e) {
                 future.completeExceptionally(
@@ -346,6 +373,15 @@ public final class WorkbenchTransportClient {
                         "send failure: " + e,
                         OptionalInt.empty(), null,
                         lastAck.get(), handle));
+            }
+        }
+
+        private void reportProgress(long done, long total) {
+            if (progress == null) return;
+            try { progress.onProgress(done, total); }
+            catch (RuntimeException ignored) {
+                // A throwing progress callback must not abort the
+                // upload (TransferProgress contract).
             }
         }
 
@@ -390,6 +426,7 @@ public final class WorkbenchTransportClient {
         private final OutputMode outputMode;
         private final Map<String, Object> filter;
         private final int maxAu;
+        private final TransferProgress progress;
 
         private final CompletableFuture<DownloadResult> future = new CompletableFuture<>();
         private final ByteArrayOutputStream payloadBuf = new ByteArrayOutputStream();
@@ -400,7 +437,8 @@ public final class WorkbenchTransportClient {
 
         DownloadDriver(URI uri, String token, String owner,
                          String containerUri, OutputMode mode,
-                         Map<String, Object> filter, int maxAu) {
+                         Map<String, Object> filter, int maxAu,
+                         TransferProgress progress) {
             super(uri, draftWithSubprotocol());
             this.token = token;
             this.owner = owner;
@@ -408,6 +446,7 @@ public final class WorkbenchTransportClient {
             this.outputMode = mode == null ? OutputMode.BINARY : mode;
             this.filter = filter;
             this.maxAu = maxAu;
+            this.progress = progress;
         }
 
         CompletableFuture<DownloadResult> future() { return future; }
@@ -470,6 +509,16 @@ public final class WorkbenchTransportClient {
                 return;
             }
             binaryFrameCount++;
+            if (progress != null) {
+                // Server streams without a known content length;
+                // report bytes-so-far with an unknown total.
+                try {
+                    progress.onProgress(payloadBuf.size(),
+                                        TransferProgress.UNKNOWN_TOTAL);
+                } catch (RuntimeException ignored) {
+                    // Throwing callback must not abort the download.
+                }
+            }
         }
 
         @Override
