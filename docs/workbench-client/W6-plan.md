@@ -8,7 +8,7 @@ wires BYOK / envelope / PQC encryption through the workbench
 client path, adds a graceful federation client, and ships SDK
 reference docs.
 
-## Status (2026-05-20): W6.3 in progress
+## Status (2026-05-20): W6.4 in progress
 
 W1–W5 are merged (client SDK + tio-browser GUI, all nine spec
 §8.1 components) and the live-daemon end-to-end smoke is green
@@ -17,9 +17,12 @@ W1–W5 are merged (client SDK + tio-browser GUI, all nine spec
 Progress: **W6.1 done** (#117 + #118). **W6.2 done** (#119) — BYOK
 + envelope blob protection + ProtectionMetadata JSON anchor;
 per-AU stream modes (ENCRYPTED / ENCRYPTED_HEADER) stay in the core
-`encrypt_per_au` path, carried opaquely by upload. **W6.3 in
-progress** — PQC client (ML-KEM-1024 + ML-DSA-87) on the envelope
-path, `opt_pqc_preview`-gated.
+`encrypt_per_au` path, carried opaquely by upload. **W6.3 done** (#120) — PQC client (ML-KEM-1024 + ML-DSA-87) on the
+envelope path, `opt_pqc_preview`-gated. **W6.4 in progress** —
+split into W6.4a (encode/import: `ttio.importers.registry` wiring
+mzML/mzTab/imzML/nmrML/BAM/SAM/CRAM/Thermo/Waters/Bruker into `ttio
+encode --format`) and W6.4b (export side). JCAMP-DX→`.tio` is a
+documented Python-only gap (JDX readable, no `.tio` bridge yet).
 
 ## What already exists (grounding)
 
