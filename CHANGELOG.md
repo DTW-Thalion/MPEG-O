@@ -11,6 +11,36 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.3: PQC client (ML-KEM-1024 + ML-DSA-87, opt_pqc_preview) (2026-05-20)
+
+Post-quantum payload protection on the workbench client, gated
+behind the `opt_pqc_preview` flag (spec Decision 9), built on the
+W6.2 envelope path + core `ttio.pqc` / `PostQuantumCrypto`.
+
+- New `ttio.workbench.pqc` (Python) /
+  `global.thalion.ttio.workbench.pqc` (Java):
+  - `seal_pqc` / `open_pqc` -- envelope whose DEK is wrapped under an
+    **ML-KEM-1024** encapsulation key; the recipient decapsulates
+    with the matching private key.
+  - Optional **ML-DSA-87** signing of the sealed ciphertext; the
+    signer key + algorithm land in `ProtectionMetadata`, the
+    detached signature rides alongside. `verify_pqc` checks it.
+  - `kem_keygen` / `sig_keygen` passthroughs.
+  - Every entry point refuses unless `preview=True`
+    (`PQCPreviewDisabledError` / `PqcPreviewDisabledException`),
+    mirroring the server's `opt_pqc_preview` gating.
+- Fix: the W6.2 Java `WorkbenchEncryptor.openSealed` now dispatches
+  unwrap on `kekAlgorithm` (the 2-arg `unwrapKey` only handled
+  AES-256-GCM), so ML-KEM envelopes unwrap. Mirrors the Python
+  `open_sealed`, which already passed the algorithm through.
+
+Cross-language: the PQC-envelope `ProtectionMetadata` shape
+(`kek_algorithm="ml-kem-1024"` / `signature_algorithm="ml-dsa-87"`)
+is byte-identical across languages (matching anchor literals).
+Round-trips are unit-level; live-daemon variant deferred. Tests:
+`test_pqc.py` (6, crypto cases skip without liboqs),
+`WorkbenchPqcTest` (6).
+
 ### Added -- W6.2: BYOK + envelope encryption client (Python + Java) (2026-05-20)
 
 Client-side payload protection for encrypted workbench uploads
