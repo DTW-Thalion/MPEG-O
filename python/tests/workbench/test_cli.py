@@ -169,13 +169,15 @@ def test_download_no_filter_is_fine():
 # ---------------------------------------------------- encode dispatch
 
 def test_encode_unsupported_format_exits_3(capsys):
+    # W6.4: bam/cram/mzml/... are now supported; only a genuinely
+    # unknown format is rejected. (Format coverage is exercised in
+    # test_encode_formats.py.)
     rc = main([
         "encode",
-        "--input", "in.bam",
-        "--format", "bam",
+        "--input", "in.xyz",
+        "--format", "ome-tiff",
         "--output", "out.tio",
     ])
     assert rc == 3
     err = capsys.readouterr().err
     assert "unsupported --format" in err
-    assert "W6" in err  # points to the format-expansion milestone
