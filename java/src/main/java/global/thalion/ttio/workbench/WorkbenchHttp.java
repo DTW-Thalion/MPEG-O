@@ -81,7 +81,12 @@ public final class WorkbenchHttp {
             b.method(method, HttpRequest.BodyPublishers.noBody());
         }
 
+        // Force HTTP/1.1: the workbench server is libwebsockets
+        // HTTP/1.1-only. java.net.http.HttpClient defaults to
+        // HTTP/2, whose cleartext h2c-upgrade attempt makes the
+        // daemon close the connection ("EOF reached while reading").
         HttpClient client = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(timeout == null ? DEFAULT_TIMEOUT : timeout)
             .build();
         HttpResponse<String> resp;

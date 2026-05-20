@@ -65,7 +65,12 @@ public final class Login {
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();
 
+        // Force HTTP/1.1: the workbench server is libwebsockets
+        // HTTP/1.1-only. The HttpClient default (HTTP/2) makes the
+        // cleartext h2c-upgrade attempt fail with the daemon closing
+        // the connection ("EOF reached while reading").
         HttpClient client = HttpClient.newBuilder()
+            .version(HttpClient.Version.HTTP_1_1)
             .connectTimeout(timeout)
             .build();
         HttpResponse<String> resp;
