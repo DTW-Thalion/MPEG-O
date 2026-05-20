@@ -8,19 +8,18 @@ wires BYOK / envelope / PQC encryption through the workbench
 client path, adds a graceful federation client, and ships SDK
 reference docs.
 
-## Status (2026-05-20): W6.2 in progress
+## Status (2026-05-20): W6.3 in progress
 
 W1–W5 are merged (client SDK + tio-browser GUI, all nine spec
 §8.1 components) and the live-daemon end-to-end smoke is green
 (8/8 against a real daemon). W6 is the last milestone.
 
-Progress: **W6.1 done** — W6.1a (transport progress callback,
-#117) + W6.1b (tio-browser determinate progress, #118) merged.
-**W6.2 in progress** — BYOK + envelope blob protection +
-ProtectionMetadata JSON anchor; per-AU stream modes
-(ENCRYPTED / ENCRYPTED_HEADER) stay in the core `encrypt_per_au`
-path and are carried opaquely by upload, not re-implemented in the
-client blob wrapper.
+Progress: **W6.1 done** (#117 + #118). **W6.2 done** (#119) — BYOK
++ envelope blob protection + ProtectionMetadata JSON anchor;
+per-AU stream modes (ENCRYPTED / ENCRYPTED_HEADER) stay in the core
+`encrypt_per_au` path, carried opaquely by upload. **W6.3 in
+progress** — PQC client (ML-KEM-1024 + ML-DSA-87) on the envelope
+path, `opt_pqc_preview`-gated.
 
 ## What already exists (grounding)
 

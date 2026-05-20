@@ -103,7 +103,11 @@ public final class WorkbenchEncryptor {
             if (kek == null) {
                 throw new IllegalArgumentException("envelope payload requires a kek to unwrap");
             }
-            key = EncryptionManager.unwrapKey(protection.wrappedDek, kek);
+            // Dispatch on kekAlgorithm so ML-KEM-1024 envelopes unwrap too;
+            // the 2-arg unwrapKey only handles AES-256-GCM. Mirrors the
+            // Python open_sealed (algorithm=protection.kek_algorithm).
+            key = EncryptionManager.unwrapKey(
+                protection.wrappedDek, kek, protection.kekAlgorithm);
         } else {
             if (dek == null) {
                 throw new IllegalArgumentException("BYOK payload requires the dek");
