@@ -8,7 +8,7 @@ wires BYOK / envelope / PQC encryption through the workbench
 client path, adds a graceful federation client, and ships SDK
 reference docs.
 
-## Status (2026-05-20): W6.5 in progress
+## Status (2026-05-20): W6.6 in progress — W6 finalisation
 
 W1–W5 are merged (client SDK + tio-browser GUI, all nine spec
 §8.1 components) and the live-daemon end-to-end smoke is green
