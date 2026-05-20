@@ -11,6 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.0: kickoff plan (SDK polish + formats + PQC/BYOK + federation) (2026-05-20)
+
+Kickoff for the final workplan milestone. docs/workbench-client/
+W6-plan.md lays out six sub-phases: W6.0 kickoff (this), W6.1
+BYOK + envelope encryption client, W6.2 PQC client
+(opt_pqc_preview), W6.3 format expansion (wire the spec §4 codecs
+into `ttio encode --format` for CLI/SDK/GUI parity), W6.4
+federation client (graceful no-op vs v1.0), W6.5 SDK reference
+docs + tutorial + finalisation. Plan-only PR; sub-phases follow.
+
+Grounding: the core crypto (ttio/pqc.py, ttio/encryption.py,
+ttio/transport/encrypted.py) and the 13-format codec set already
+exist at the library level; W6 exposes them through the workbench
+client surface (no ttio/workbench/{encryption,pqc}.py yet) and
+finalises docs. Python + Java lockstep per Decision 2; Rust SDK
+deferred to v1.2.
+
 ### Changed -- Un-xfail cohort live test after server fix (2026-05-19)
 
 tti-workbench-server PR #29 registered TTIOWBCohortsHandler (the
