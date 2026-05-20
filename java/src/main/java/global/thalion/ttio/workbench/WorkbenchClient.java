@@ -13,6 +13,7 @@ import global.thalion.ttio.workbench.jobs.JobsClient;
 import global.thalion.ttio.workbench.pipeline.PipelinesClient;
 import global.thalion.ttio.workbench.sessions.SessionProxyAttach;
 import global.thalion.ttio.workbench.sessions.SessionsClient;
+import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
 
@@ -102,10 +103,29 @@ public final class WorkbenchClient implements AutoCloseable {
         return transportClient().upload(project, containerUri, payload);
     }
 
+    /** Convenience: one-shot upload reporting byte progress.
+     *  {@code progress} receives {@code (bytesSent, payload.length)}
+     *  per chunk — a determinate fraction. */
+    public WorkbenchTransportClient.UploadResult upload(
+            String project, String containerUri, byte[] payload,
+            TransferProgress progress) {
+        return transportClient().upload(project, containerUri, payload,
+                                          null, progress);
+    }
+
     /** Convenience: one-shot download via the transport client. */
     public WorkbenchTransportClient.DownloadResult download(
             String containerUri) {
         return transportClient().download(containerUri);
+    }
+
+    /** Convenience: one-shot download reporting byte progress. The
+     *  server streams without a known total, so {@code progress}
+     *  receives {@code (bytesReceived, TransferProgress.UNKNOWN_TOTAL)}. */
+    public WorkbenchTransportClient.DownloadResult download(
+            String containerUri, TransferProgress progress) {
+        return transportClient().download(containerUri, null,
+                                            OutputMode.BINARY, 0, progress);
     }
 
     /** Convenience: filtered download. */
@@ -116,6 +136,17 @@ public final class WorkbenchClient implements AutoCloseable {
             int maxAu) {
         return transportClient().download(containerUri, filter,
                                             outputMode, maxAu);
+    }
+
+    /** Convenience: filtered download reporting byte progress. */
+    public WorkbenchTransportClient.DownloadResult download(
+            String containerUri,
+            Map<String, Object> filter,
+            OutputMode outputMode,
+            int maxAu,
+            TransferProgress progress) {
+        return transportClient().download(containerUri, filter,
+                                            outputMode, maxAu, progress);
     }
 
     // ----------------------------------------------- W3 surfaces
