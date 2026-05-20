@@ -330,6 +330,17 @@ class WorkbenchClient:
             self._endpoint.host, self._endpoint.port,
             scheme=self._endpoint.http_scheme, token=self._session.token)
 
+    def federation(self):
+        """Return a `FederationClient` bound to this session.
+
+        Federation is a v1.1+ server feature; the client degrades
+        gracefully against a v1.0 single-node server (an empty peer
+        list rather than an error)."""
+        from ttio.workbench.federation import FederationClient
+        return FederationClient(
+            self._endpoint.host, self._endpoint.port,
+            scheme=self._endpoint.http_scheme, token=self._session.token)
+
     def session_create(self, *, project: str, engine_pin: str,
                          image=None, command=None, env=None,
                          bind_mounts=None,
