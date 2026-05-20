@@ -11,6 +11,21 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed -- W6 plan: progress feedback promoted to W6.1 (2026-05-20)
+
+Reprioritised docs/workbench-client/W6-plan.md so **progress
+feedback for all client-server interactions** leads the milestone
+(was unscheduled; now W6.1, ahead of encryption/PQC). Encryption
+-> W6.2, PQC -> W6.3, formats -> W6.4, federation -> W6.5, docs
+-> W6.6. Driven by a live cross-environment test where a
+multi-contig FASTA encode+upload showed no feedback for minutes
+(working, not hung). Requirement: every client-server op (and the
+encode/decode bracketing it) shows phase (reading/writing,
+encoding/decoding, uploading/downloading) + % by source size;
+no bare spinners. Tracked in issues #113 (requirement) and #114
+(the ReferenceImport per-attribute H5Acreate slowness that
+exposed it).
+
 ### Added -- W6.0: kickoff plan (SDK polish + formats + PQC/BYOK + federation) (2026-05-20)
 
 Kickoff for the final workplan milestone. docs/workbench-client/
