@@ -42,11 +42,11 @@ java/python ttio library stays at 1.3.0 (the W5.0 SDK bump);
 tio-browser versions independently per the carry-forward rule.
 
 Tests:
-- EncodingPanelTest 9 tests: deriveContainerUri (simple name,
+- EncodingPanelTest 10 tests: deriveContainerUri (simple name,
   path + extension strip, lowercase + hyphenate, no-project,
-  empty-base fallback, Windows backslash path); deriveTempTio
-  (.tio suffix + name); isValidProject.
-- ExportPanelTest 11 tests: extensionFor (known formats +
+  empty-base fallback, dot-prefixed name, Windows backslash
+  path); deriveTempTio (.tio suffix + name); isValidProject.
+- ExportPanelTest 7 tests: extensionFor (known formats +
   unknown fallback); deriveExportTarget (extension swap,
   directory preserved, no-directory, null-source fallback);
   isValidTioPath.
