@@ -206,8 +206,22 @@ jobs:
       - name: Install ttio Python package + pytest
         run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python"
 
-      - name: Run client-SDK live smoke
+      # JDK 25 for the Java live test (mvn -Dtest=WorkbenchLiveTest).
+      # The runner's default JAVA_HOME is < 22; the java/ pom targets
+      # 22 (FFM), so without this mvn fails "invalid target release: 22".
+      # The daemon build above is GNUstep/clang and doesn't need Java.
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Run client-SDK live smoke (Python + Java)
         env:
           TTIO_REPO_PATH: ${{ github.workspace }}/TTI-O
           TTIOWB_SERVER_DIR: ${{ github.workspace }}/server
+          # Run the Java live test against the same daemon (parity
+          # with the Python smoke). Needs Maven + the JDK 25 set up
+          # above; the runner skips it locally unless this is 1.
+          TTIOWB_JAVA_TEST: '1'
         run: bash "${{ github.workspace }}/TTI-O/scripts/workbench-live-smoke.sh"
