@@ -11,6 +11,48 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- Live-daemon end-to-end smoke (closes the W1-W5 live-acceptance deferral) (2026-05-19)
+
+Wires a real tti-workbench-server daemon into CI and drives the
+actual ttio.workbench.* client SDK against it -- the live half
+of the W1-W5 acceptance gates that every prior sub-phase
+deferred.
+
+Pieces:
+- python/tests/integration/test_workbench_live.py -- env-gated
+  (TTIO_WORKBENCH_URL + TTIO_WORKBENCH_STAGING) test driving
+  connect (BootstrapAdminAuth) -> containers.list ->
+  pipelines.register/list/get -> jobs.submit + poll + events
+  (SSE) + cancel -> sessions.create/list/terminate. SKIPS when
+  the env vars are unset, so the normal unit CI is untouched.
+- scripts/workbench-live-smoke.sh -- local runner; boots the
+  daemon with a temp SQLite config, seeds the admin project,
+  runs pytest, tears down. Validated locally: 7 passed, 1
+  xfailed.
+- .github/workflows/workbench-live.yml -- CI that builds the
+  GNUstep/ObjC toolchain + libTTIO (from the PR checkout) + the
+  pinned tti-workbench-server, boots the daemon, runs the smoke.
+  Runs on workbench-client-path PRs + manual dispatch (not a
+  blanket per-PR gate; cold GNUstep build is ~10-15 min). Needs
+  the TTIO_LIBRARY_CHECKOUT_TOKEN secret for cross-repo checkout.
+
+Bugs the smoke caught:
+- W5.2 containers.py keyword-arg bug (FIXED in this change).
+  ContainersClient called http_json() and WorkbenchHttpError()
+  with positional args for keyword-only params (scheme / token /
+  body / status). The W5.2 unit tests only covered the pure
+  dataclasses (HTTP methods are coverage-excluded), so this was
+  invisible until the live round-trip. All five methods fixed.
+- Server-side gap (tti-workbench-server repo follow-up):
+  TTIOWBCohortsHandler is implemented but never registered in
+  Source/Core/TTIOWBServer.m, so /v1/cohorts/{query,preview-count}
+  return 404 on the v1.0 daemon. The cohort live test is marked
+  xfail(strict=False) and flips to XPASS once the server wires
+  the handler. The client SDK request is correct (raises a clean
+  WorkbenchHttpError(404)).
+
+Full detail in docs/workbench-client/live-daemon-smoke.md.
+
 ### Added -- W5.7: tio-browser Encoding + Export panels + 1.5.0 (closes W5) (2026-05-19)
 
 Seventh and final W5 sub-phase. Adds the last two spec section
