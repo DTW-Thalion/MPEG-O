@@ -31,7 +31,7 @@ or codecs from scratch.
   imzML, nmrML, JCAMP-DX, Bruker timsTOF, Waters MassLynx,
   Thermo .raw, BAM, SAM, CRAM, FASTA, FASTQ). But the `ttio
   encode` CLI front-door only accepts `fastq | fasta` today
-  (W2 stub). W6.3 wires the existing codecs into the CLI
+  (W2 stub). W6.4 wires the existing codecs into the CLI
   front-door so all three surfaces (CLI / SDK / GUI) cover the
   same set.
 - **Federation**: the v1.0 server is single-node; spec §12.3
@@ -60,15 +60,65 @@ involved), gated by the `tio-browser` + (where touched) the
 
 | W#   | Title | Touches | Est. LOC |
 |------|-------|---------|----------|
-| W6.0 | Kickoff: this plan (**this PR**) | docs | ~20 |
-| W6.1 | BYOK + envelope encryption client (`workbench/encryption`) | python + java | ~700 |
-| W6.2 | PQC client (`workbench/pqc`, `opt_pqc_preview`) | python + java | ~500 |
-| W6.3 | Format expansion: wire spec §4 codecs into `ttio encode --format` + GUI parity | python + java + tio-browser | ~600 |
-| W6.4 | Federation client (graceful no-op vs v1.0) | python + java | ~350 |
-| W6.5 | SDK reference docs (Sphinx + Javadoc) + tutorial notebook + finalisation | python + java + docs | ~400 |
-| **Total** | | | ~2,950 |
+| W6.0 | Kickoff: this plan | docs | ~20 |
+| W6.1 | **Progress feedback for ALL client-server interactions** (% by source size + per-phase) | python + java + tio-browser | ~900 |
+| W6.2 | BYOK + envelope encryption client (`workbench/encryption`) | python + java | ~700 |
+| W6.3 | PQC client (`workbench/pqc`, `opt_pqc_preview`) | python + java | ~500 |
+| W6.4 | Format expansion: wire spec §4 codecs into `ttio encode --format` + GUI parity | python + java + tio-browser | ~600 |
+| W6.5 | Federation client (graceful no-op vs v1.0) | python + java | ~350 |
+| W6.6 | SDK reference docs (Sphinx + Javadoc) + tutorial notebook + finalisation | python + java + docs | ~400 |
+| **Total** | | | ~3,470 |
 
-## W6.1 — BYOK + envelope encryption client
+**Priority note (2026-05-20):** W6.1 was promoted to the front of
+the milestone after a live cross-environment test — a multi-contig
+FASTA `Encode + upload` showed *no feedback* for minutes (it was
+working, not hung; see issue #113 / #114). Progress feedback is a
+**gating requirement** for every client-server interaction, so it
+leads W6 ahead of the encryption/PQC work.
+
+## W6.1 — Progress feedback for ALL client-server interactions
+
+**Goal:** every client↔server operation (and the local
+encode/decode that brackets it) shows its current **phase** and a
+**% by source size** — never a bare spinner or static label. A
+user can always tell *working* from *hung*. Tracked in issue #113;
+the `ReferenceImport` slowness that exposed it is issue #114.
+
+**Phase model** — each op reports `(phase, bytesDone, bytesTotal)`:
+
+| Operation | Phases |
+|---|---|
+| Encode + upload | reading(source) → encoding → uploading |
+| Download + export | downloading → decoding → writing(target) |
+| Plain upload (.tio) | reading → uploading |
+| Plain download | downloading → writing |
+
+**Deliverables:**
+- **SDK (the root gap):** `WorkbenchTransportClient.upload/download`
+  (Python + Java, lockstep) gain a progress callback
+  (`bytesSent/bytesReceived`, total when known). Today both block
+  with no callback — that's why W5.3's bars are indeterminate.
+- `ImportTask` / `ExportTask` already extend `javafx.concurrent.Task`;
+  thread `updateProgress(done,total)` + `updateMessage(phase)` from
+  the underlying codec / import path (incl. `ReferenceImport`).
+- **GUI:** `EncodingPanel`, `TransferQueueView`,
+  `DownloadStartDialog`, `ExportPanel` show a **determinate**
+  `ProgressBar` + phase label + `% / bytes`. Indeterminate only
+  when a total is genuinely unknowable (streaming
+  `expected_au_count = 0`), and even then show bytes-so-far +
+  elapsed.
+
+**Acceptance:**
+- [ ] No client↔server op (or its bracketing encode/decode)
+      presents only an indeterminate/static state.
+- [ ] Encode / upload / download / export each show phase + %
+      (bytes-based) wherever a total is known.
+- [ ] `WorkbenchTransportClient` progress callback shipped in
+      both languages; cross-language parity verified.
+- [ ] Re-running the `whale_sequences` encode+upload shows live
+      phase + % the whole way through.
+
+## W6.2 — BYOK + envelope encryption client
 
 **Goal:** spec UC-03.2/3 on the client side. A researcher
 supplies a public key; the client builds `ProtectionMetadata` and
@@ -92,7 +142,7 @@ runs full ENCRYPTED / ENCRYPTED_HEADER mode.
 match (deferred live-daemon variant; unit-level byte-equivalence
 in this PR).
 
-## W6.2 — PQC client
+## W6.3 — PQC client
 
 **Goal:** ML-KEM-1024 + ML-DSA-87 via the core `ttio.pqc`
 (pyoqs), gated by the `opt_pqc_preview` StreamHeader flag.
@@ -106,7 +156,7 @@ in this PR).
 **Acceptance:** PQC round-trip with `opt_pqc_preview` enabled
 (unit-level; live variant deferred).
 
-## W6.3 — Format expansion
+## W6.4 — Format expansion
 
 **Goal:** every format in spec §4 reachable via `ttio encode
 --format <fmt>`, matching the GUI's existing 13-format coverage.
@@ -124,7 +174,7 @@ in this PR).
 spec §4 entry that has a codec; unknown formats fail with a
 clear message.
 
-## W6.4 — Federation client
+## W6.5 — Federation client
 
 **Goal:** spec §12.3 client surface that gracefully degrades
 against a single-node v1.0 server.
@@ -140,7 +190,7 @@ against a single-node v1.0 server.
 **Acceptance:** federation client treats a v1.0 server as
 single-node (no error).
 
-## W6.5 — SDK docs + finalisation
+## W6.6 — SDK docs + finalisation
 
 **Goal:** release-quality reference docs + a runnable tutorial.
 
