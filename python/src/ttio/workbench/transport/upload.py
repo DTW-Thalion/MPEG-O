@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
-from typing import AsyncIterator, Iterable, Optional
+from typing import AsyncIterator, Callable, Iterable, Optional
 
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -40,6 +40,19 @@ from ttio.workbench.transport.handshake import (
     parse_server_frame,
 )
 from ttio.workbench.transport.resume import ResumeState
+
+
+def _report_progress(cb: Optional[Callable[[int, int], None]],
+                     done: int, total: int) -> None:
+    """Invoke a progress callback, swallowing exceptions so a
+    throwing callback can't abort the transfer (matches the Java
+    TransferProgress contract). ``total`` may be -1 when unknown."""
+    if cb is None:
+        return
+    try:
+        cb(done, total)
+    except Exception:  # noqa: BLE001 -- progress must never break transfer
+        pass
 
 
 # Default WebSocket chunk size. The daemon doesn't care about frame
@@ -204,6 +217,7 @@ class UploadClient:
         data: bytes | bytearray | memoryview,
         *,
         resume: Optional[ResumeState] = None,
+        progress: Optional[Callable[[int, int], None]] = None,
     ) -> UploadResult:
         """Upload a fully-buffered `.tis` byte string.
 
@@ -216,6 +230,12 @@ class UploadClient:
                 map client-side, so resume is most useful with
                 `upload_iter` where the caller controls AU
                 boundaries.
+            progress: optional callback invoked `(bytes_sent,
+                bytes_total)` as chunks are sent, plus a final
+                `(total, total)`. Cross-language equivalent of the
+                Java `TransferProgress` callback. A throwing
+                callback is swallowed so it cannot abort the
+                upload.
 
         Returns:
             `UploadResult` on success.
@@ -230,11 +250,14 @@ class UploadClient:
         # writer doesn't care about frame boundaries; chunking is
         # purely for ack cadence and ergonomic recovery.
         view = memoryview(data)
+        total = len(view)
         offset = 0
-        while offset < len(view):
-            end = min(offset + self._chunk_size, len(view))
+        _report_progress(progress, 0, total)
+        while offset < total:
+            end = min(offset + self._chunk_size, total)
             await self._ws.send(bytes(view[offset:end]))
             offset = end
+            _report_progress(progress, offset, total)
             await self._drain_acks(non_blocking=True)
 
         return await self._wait_for_done()
