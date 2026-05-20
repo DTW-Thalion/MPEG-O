@@ -11,6 +11,64 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W5.5: tio-browser Pipeline Launcher + Job Monitor (2026-05-19)
+
+Fifth W5 sub-phase. JavaFX surfaces wrap the W3 PipelinesClient
+and JobsClient SDKs -- no new wire surface, no new SDK code.
+
+tio-browser new files in workbench/:
+- PipelineLauncher: modal pipeline picker. ChoiceBox loaded from
+  PipelinesClient.list; pipeline metadata + schema preview pane;
+  raw JSON textareas for inputs and params (v1.0 -- schema-driven
+  form generation is v1.1); submit button calls
+  JobsClient.submit and shows an info Alert with the resulting
+  job id. Static isValidJsonObject(String) is the testable
+  JSON-object validator.
+- JobMonitor: non-modal job dashboard. TableView Job with job
+  id, pipeline, status, project, queued, started, completed
+  columns; status-filter ChoiceBox driving JobsClient.list;
+  refresh, cancel-selected, tail-events controls. Static helpers
+  formatTimestamp Long (ISO-8601 UTC) and filterValue String
+  (resolves "(all)" to null) testable without FX.
+- JobEventsView: non-modal SSE tail viewer for a single job.
+  Worker thread calls JobsClient.events jobId, consumer; the
+  consumer marshals each frame to the FX thread via
+  Platform.runLater. Auto-closes the stream on terminal-state
+  event (Completed / Failed / Cancelled). Static formatFrame
+  JobEvent and isTerminalEvent JobEvent testable without FX.
+
+MainWindow gains two new menu items under Workbench:
+Launch pipeline and Jobs after Cohort query.
+
+v1.0 scope: raw JSON textareas for pipeline inputs / params.
+Schema-driven form rendering is a v1.1 enhancement; the SDK
+already accepts Map String, Object so only the form pair
+changes.
+
+Tests:
+- PipelineLauncherTest 9 tests: isValidJsonObject accepts
+  populated objects, rejects blank / null / array / scalar /
+  malformed; renderSchemaPreview surfaces identifier, version,
+  project, owner, engine-pin, schemas; empty schemas render as
+  none; engine-pin omitted when null/empty; stable output.
+- JobMonitorTest 6 tests: formatTimestamp UTC ISO-8601 for
+  positive seconds, blank for null / 0 / negative; filterValue
+  resolves "(all)" / "" / null to null, passes through known
+  statuses.
+- JobEventsViewTest 7 tests: formatFrame event-name and
+  key=value pairs, empty data map, null event name; isTerminalEvent
+  detects completed / failed / cancelled, false for queued /
+  starting / running, false for non-state events, missing
+  status, null.
+
+Cross-language scope: GUI-only Java; no new SDK code. The W3
+Pipeline / Job / JobEvent records already have cross-language
+byte-equivalence pinned in W3 tests.
+
+Deferred follow-ups: live-daemon round-trip smoke (shared);
+schema-driven inputs form; richer job filters (project, owner,
+since); re-submit job.
+
 ### Added -- W5.4: tio-browser Cohort Query Builder (2026-05-19)
 
 Fourth W5 sub-phase. Adds a visual predicate-composition window
