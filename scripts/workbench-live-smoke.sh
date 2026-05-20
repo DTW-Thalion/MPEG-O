@@ -95,15 +95,35 @@ con.commit()
 con.close()
 PY
 
-echo "==> running client-SDK live integration test"
+echo "==> running client-SDK live integration tests"
 export TTIO_WORKBENCH_URL="ws://127.0.0.1:$PORT/transport"
 export TTIO_WORKBENCH_STAGING="$WORK/staging"
 export TTIO_WORKBENCH_PROJECT="$PROJECT"
 export TTIO_RANS_LIB_PATH="${TTIO_RANS_LIB_PATH:-$TTIO_REPO_PATH/native/_build/libttio_rans.so}"
 
-cd "$TTIO_REPO_PATH/python"
-python3 -m pytest tests/integration/test_workbench_live.py -v --no-header "$@"
-RC=$?
+# Capture test exit codes rather than aborting on first failure.
+set +e
+
+# --- Python client live test ---
+echo "==> [python] pytest test_workbench_live.py"
+( cd "$TTIO_REPO_PATH/python" \
+  && python3 -m pytest tests/integration/test_workbench_live.py -v --no-header "$@" )
+PY_RC=$?
+
+# --- Java client live test (parity; opt-in via TTIOWB_JAVA_TEST=1
+#     since it needs Maven + JDK 22+; the workbench-live workflow
+#     sets it, local runs default to Python-only) ---
+JAVA_RC=0
+if [ "${TTIOWB_JAVA_TEST:-0}" = "1" ]; then
+    echo "==> [java] mvn -Dtest=WorkbenchLiveTest"
+    ( cd "$TTIO_REPO_PATH/java" \
+      && mvn -q -Djacoco.skip=true \
+             -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar \
+             -Dsurefire.failIfNoSpecifiedTests=false \
+             -Dtest=WorkbenchLiveTest test )
+    JAVA_RC=$?
+fi
 
 echo "==> server.log tail:"; tail -8 "$WORK/server.log" 2>/dev/null || true
-exit $RC
+echo "==> results: python=$PY_RC java=$JAVA_RC"
+[ "$PY_RC" = 0 ] && [ "$JAVA_RC" = 0 ]
