@@ -56,6 +56,13 @@ public final class LoginDialog {
     private final Button connectBtn = new Button("Connect");
     private final Button cancelBtn = new Button("Cancel");
 
+    // Drives the Connect button's disabled state during an in-flight
+    // login. The button's disableProperty is BOUND (see
+    // wireValidation), so setBusy cannot setDisable() it directly --
+    // it flips this property and the binding recomputes.
+    private final javafx.beans.property.BooleanProperty busy =
+        new javafx.beans.property.SimpleBooleanProperty(false);
+
     private Consumer<Session> onConnected;
 
     public LoginDialog(Window owner) {
@@ -125,6 +132,12 @@ public final class LoginDialog {
     Button cancelButton() { return cancelBtn; }
     Label statusLabel() { return statusLabel; }
 
+    /** Test seam: drive the busy state through the exact path the
+     *  Connect handler uses. Regression guard for the bound-value
+     *  crash (setDisable on a bound disableProperty). */
+    void setBusyForTest(boolean busyState) { setBusy(busyState, busyState ? "..." : ""); }
+    boolean isBusyForTest() { return busy.get(); }
+
     // ---- internals ----
 
     private void buildUi() {
@@ -166,10 +179,12 @@ public final class LoginDialog {
 
     private void wireValidation() {
         connectBtn.disableProperty().bind(Bindings.createBooleanBinding(() ->
-                !isValidUrl(urlField.getText())
+                busy.get()
+                || !isValidUrl(urlField.getText())
                 || !isValidUsername(usernameField.getText())
                 || !isValidPassword(passwordField.getText())
                 || !isValidTotp(totpField.getText()),
+            busy,
             urlField.textProperty(),
             usernameField.textProperty(),
             passwordField.textProperty(),
@@ -227,11 +242,11 @@ public final class LoginDialog {
     private void setBusy(boolean busy, String message) {
         progress.setVisible(busy);
         statusLabel.setText(message);
-        connectBtn.setDisable(busy
-            || !isValidUrl(urlField.getText())
-            || !isValidUsername(usernameField.getText())
-            || !isValidPassword(passwordField.getText())
-            || !isValidTotp(totpField.getText()));
+        // connectBtn.disableProperty() is bound to the validation
+        // binding (which includes `this.busy`); flip the property
+        // rather than setDisable() it, or JavaFX throws
+        // "A bound value cannot be set."
+        this.busy.set(busy);
         cancelBtn.setDisable(busy);
         urlField.setDisable(busy);
         usernameField.setDisable(busy);
