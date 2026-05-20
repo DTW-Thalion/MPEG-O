@@ -47,6 +47,7 @@ public class MainWindow {
     private MenuItem workbenchUploadItem, workbenchDownloadItem, workbenchTransfersItem;
     private MenuItem workbenchCohortItem;
     private MenuItem workbenchPipelinesItem, workbenchJobsItem;
+    private MenuItem workbenchSessionLaunchItem, workbenchSessionListItem;
 
     private DatasetTreeView treeView;
     private DetailPane detailPane;
@@ -152,6 +153,8 @@ public class MainWindow {
         workbenchCohortItem = new MenuItem("Cohort query…");
         workbenchPipelinesItem = new MenuItem("Launch pipeline…");
         workbenchJobsItem = new MenuItem("Jobs…");
+        workbenchSessionLaunchItem = new MenuItem("Launch session…");
+        workbenchSessionListItem = new MenuItem("Sessions…");
         workbenchMenu.getItems().addAll(workbenchConnectItem,
             workbenchDisconnectItem, new SeparatorMenuItem(),
             workbenchContainersItem,
@@ -159,6 +162,7 @@ public class MainWindow {
             new SeparatorMenuItem(),
             workbenchCohortItem,
             workbenchPipelinesItem, workbenchJobsItem,
+            workbenchSessionLaunchItem, workbenchSessionListItem,
             new SeparatorMenuItem(), workbenchStatusItem);
 
         Menu toolsMenu = new Menu("Tools");
@@ -297,6 +301,20 @@ public class MainWindow {
         workbenchCohortItem.setOnAction(e -> openCohortQueryBuilder());
         workbenchPipelinesItem.setOnAction(e -> openPipelineLauncher());
         workbenchJobsItem.setOnAction(e -> openJobMonitor());
+        workbenchSessionLaunchItem.setOnAction(e -> openSessionLauncher());
+        workbenchSessionListItem.setOnAction(e -> openSessionList());
+    }
+
+    /** Open the interactive-session launcher dialog. */
+    private void openSessionLauncher() {
+        new global.thalion.ttio.browser.workbench
+            .SessionLauncher(stage).show();
+    }
+
+    /** Open the interactive-session list window. */
+    private void openSessionList() {
+        new global.thalion.ttio.browser.workbench
+            .SessionList(stage).show();
     }
 
     /** Open the cohort query builder window. */
