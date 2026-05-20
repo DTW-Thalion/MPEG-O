@@ -13,6 +13,9 @@ import global.thalion.ttio.workbench.jobs.JobsClient;
 import global.thalion.ttio.workbench.pipeline.PipelinesClient;
 import global.thalion.ttio.workbench.sessions.SessionProxyAttach;
 import global.thalion.ttio.workbench.sessions.SessionsClient;
+import global.thalion.ttio.workbench.encryption.ProtectionMetadata;
+import global.thalion.ttio.workbench.encryption.ProtectionMode;
+import global.thalion.ttio.workbench.encryption.WorkbenchEncryptor;
 import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
@@ -147,6 +150,38 @@ public final class WorkbenchClient implements AutoCloseable {
             TransferProgress progress) {
         return transportClient().download(containerUri, filter,
                                             outputMode, maxAu, progress);
+    }
+
+    // ------------------------------------------- W6.2 protected transfer
+
+    /** Result of {@link #uploadProtected}: the upload result plus the
+     *  {@link ProtectionMetadata} the caller must retain to decrypt
+     *  later (ENVELOPE carries the wrapped DEK; BYOK carries none). */
+    public record ProtectedUpload(
+        WorkbenchTransportClient.UploadResult result,
+        ProtectionMetadata protection) {}
+
+    /** Seal {@code payload} (BYOK or envelope) and upload the
+     *  ciphertext. BYOK: pass {@code dek}, {@code kek} null. ENVELOPE:
+     *  pass {@code kek}, {@code dek} null. */
+    public ProtectedUpload uploadProtected(
+            String project, String containerUri, byte[] payload,
+            ProtectionMode mode, byte[] dek, byte[] kek, String kekAlgorithm) {
+        WorkbenchEncryptor.SealedPayload sealed =
+            WorkbenchEncryptor.seal(payload, mode, dek, kek, kekAlgorithm);
+        WorkbenchTransportClient.UploadResult result =
+            upload(project, containerUri, sealed.ciphertext());
+        return new ProtectedUpload(result, sealed.protection());
+    }
+
+    /** Download a sealed payload and decrypt it. BYOK: pass {@code dek}.
+     *  ENVELOPE: pass the {@code kek} that unwraps the wrapped DEK. */
+    public byte[] downloadAndOpen(
+            String containerUri, ProtectionMetadata protection,
+            byte[] dek, byte[] kek) {
+        WorkbenchTransportClient.DownloadResult result = download(containerUri);
+        return WorkbenchEncryptor.openSealed(
+            result.payload(), protection, dek, kek);
     }
 
     // ----------------------------------------------- W3 surfaces
