@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- ExportPanel progress bar (2026-05-20)
+
+The tio-browser "Export container" dialog now shows a progress bar
+during the open→export run instead of only a static status label,
+mirroring the W6.1b EncodingPanel. The bar is indeterminate (the
+open/export tasks don't report granular progress) but distinguishes
+working from hung. Closes the last surface noted in #113 (a local
+`.tio`→file export, not a client-server interaction).
+
 ### Added -- W6.3: PQC client (ML-KEM-1024 + ML-DSA-87, opt_pqc_preview) (2026-05-20)
 
 Post-quantum payload protection on the workbench client, gated
