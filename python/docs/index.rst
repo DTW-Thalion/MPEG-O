@@ -7,6 +7,12 @@ The API is documented below, generated from NumPy-style docstrings in the
 source tree via ``sphinx-autoapi``.
 
 .. toctree::
+   :maxdepth: 1
+   :caption: Tutorials
+
+   tutorials/workbench_quickstart
+
+.. toctree::
    :maxdepth: 2
    :caption: Contents
 
@@ -15,6 +21,7 @@ source tree via ``sphinx-autoapi``.
 See also
 --------
 
+* :doc:`/autoapi/ttio/workbench/index` — Workbench client SDK (connect, upload/download, cohorts, jobs, sessions, encryption, PQC, federation).
 * :doc:`/autoapi/ttio/providers/index` — Storage provider abstraction (HDF5, Memory, SQLite).
 * :doc:`/autoapi/ttio/importers/index` — mzML / nmrML / Thermo importers.
 * :doc:`/autoapi/ttio/exporters/index` — mzML / nmrML / ISA exporters.

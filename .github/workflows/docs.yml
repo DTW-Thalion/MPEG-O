@@ -1,0 +1,68 @@
+name: TTIO Docs
+
+# Build the SDK reference docs (W6.6): Python Sphinx (autoapi over the
+# whole ttio package, incl. the workbench client + the quickstart
+# notebook) and the Java Javadoc. Gates on a clean build, so doc-
+# breaking changes are caught at PR time.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'python/src/**'
+      - 'python/docs/**'
+      - 'java/src/main/**'
+      - 'java/pom.xml'
+      - '.github/workflows/docs.yml'
+  pull_request:
+    paths:
+      - 'python/src/**'
+      - 'python/docs/**'
+      - 'java/src/main/**'
+      - 'java/pom.xml'
+      - '.github/workflows/docs.yml'
+
+jobs:
+  python-docs:
+    name: Python — Sphinx reference docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install doc tools
+        # autoapi parses the source statically, so the ttio package
+        # itself need not be installed (and the editable install builds
+        # Cython, which we avoid here). Install the doc tools directly.
+        run: pip install sphinx sphinx-autoapi furo myst-nb
+      - name: Build HTML
+        run: python -m sphinx -b html python/docs python/docs/_build/html
+      - name: Upload HTML
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-docs-html
+          path: python/docs/_build/html
+
+  java-docs:
+    name: Java — Javadoc
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-hdf5
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Generate Javadoc
+        working-directory: java
+        run: mvn -B -q javadoc:javadoc
+      - name: Upload Javadoc
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-docs-html
+          path: docs/api/java
