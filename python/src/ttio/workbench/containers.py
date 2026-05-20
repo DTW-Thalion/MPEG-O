@@ -240,10 +240,11 @@ class ContainersClient:
         qs = "?" + urllib.parse.urlencode(params) if params else ""
         status, body = http_json(
             "GET", self.host, self.port, "/v1/containers" + qs,
-            self.scheme, self.token, None)
+            scheme=self.scheme, token=self.token)
         if status != 200:
             raise WorkbenchHttpError(
-                f"GET /v1/containers failed: {status}", status, body)
+                f"GET /v1/containers failed: {status}",
+                status=status, body=body)
         return ContainerListPage.from_json(body)
 
     def get(self, uri: str) -> ContainerDetail:
@@ -251,13 +252,14 @@ class ContainersClient:
         path = "/v1/containers/" + _encode_path(uri)
         status, body = http_json(
             "GET", self.host, self.port, path,
-            self.scheme, self.token, None)
+            scheme=self.scheme, token=self.token)
         if status == 404:
             raise WorkbenchHttpError(
-                f"container not found: {uri}", 404, body)
+                f"container not found: {uri}", status=404, body=body)
         if status != 200:
             raise WorkbenchHttpError(
-                f"GET /v1/containers/{uri} failed: {status}", status, body)
+                f"GET /v1/containers/{uri} failed: {status}",
+                status=status, body=body)
         return ContainerDetail.from_json(body)
 
     def layers(self, uri: str) -> List[ContainerLayer]:
@@ -265,11 +267,11 @@ class ContainersClient:
         path = "/v1/containers/" + _encode_path(uri) + "/layers"
         status, body = http_json(
             "GET", self.host, self.port, path,
-            self.scheme, self.token, None)
+            scheme=self.scheme, token=self.token)
         if status != 200:
             raise WorkbenchHttpError(
                 f"GET /v1/containers/{uri}/layers failed: {status}",
-                status, body)
+                status=status, body=body)
         return [ContainerLayer.from_json(r) for r in body.get("layers") or []]
 
     def manifest(self, uri: str) -> ContainerManifest:
@@ -277,11 +279,11 @@ class ContainersClient:
         path = "/v1/containers/" + _encode_path(uri) + "/manifest"
         status, body = http_json(
             "GET", self.host, self.port, path,
-            self.scheme, self.token, None)
+            scheme=self.scheme, token=self.token)
         if status != 200:
             raise WorkbenchHttpError(
                 f"GET /v1/containers/{uri}/manifest failed: {status}",
-                status, body)
+                status=status, body=body)
         return ContainerManifest.from_json(body)
 
     def delete(self, uri: str) -> None:
@@ -289,11 +291,11 @@ class ContainersClient:
         path = "/v1/containers/" + _encode_path(uri)
         status, body = http_json(
             "DELETE", self.host, self.port, path,
-            self.scheme, self.token, None)
+            scheme=self.scheme, token=self.token)
         if status not in (200, 204):
             raise WorkbenchHttpError(
                 f"DELETE /v1/containers/{uri} failed: {status}",
-                status, body)
+                status=status, body=body)
 
 
 def _encode_path(s: str) -> str:
