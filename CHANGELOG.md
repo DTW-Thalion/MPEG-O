@@ -11,6 +11,34 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.2: BYOK + envelope encryption client (Python + Java) (2026-05-20)
+
+Client-side payload protection for encrypted workbench uploads
+(spec UC-03.2/3), a thin wrapper over the existing core crypto
+(`ttio.encryption` / `EncryptionManager` + the v1.2 DEK wrap).
+
+- New `ttio.workbench.encryption` (Python) /
+  `global.thalion.ttio.workbench.encryption` (Java):
+  - `ProtectionMode` (BYOK / ENVELOPE).
+  - `seal(payload, ...)` / `open_sealed(...)` -- **BYOK** seals under
+    a researcher-supplied 32-byte DEK (key never leaves the client;
+    empty `wrapped_dek`); **ENVELOPE** generates a fresh DEK, seals,
+    and wraps the DEK under a KEK via the shared v1.2 wrap. Framing
+    is `iv(12) || tag(16) || ciphertext` in both languages.
+  - `ProtectionMetadata` with a canonical `to_json` / `from_json`
+    (sorted keys, compact separators, standard base64) -- the
+    cross-language anchor.
+- `WorkbenchClient.upload_protected` / `download_and_open` (Python)
+  and `uploadProtected` / `downloadAndOpen` (Java) seal-then-upload
+  and download-then-decrypt, returning/consuming the
+  `ProtectionMetadata`.
+
+Cross-language: the BYOK `ProtectionMetadata` JSON is byte-identical
+across Python and Java (anchored by matching test literals).
+Round-trips are unit-level (BYOK + envelope); the live-daemon
+variant is deferred. Tests: `test_encryption.py` (9),
+`WorkbenchEncryptionTest` (8).
+
 ### Added -- W6.1b: tio-browser determinate transfer progress (2026-05-20)
 
 Second slice of W6.1: wires the W6.1a `TransferProgress` callback
