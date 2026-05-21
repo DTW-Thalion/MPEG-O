@@ -72,19 +72,21 @@ not core-codec, gaps.
 
 ### 3.1 Python CLI format coverage (dataset↔spectrum glue)
 
-The Python `ttio` CLI format registries (added in W6.4) cover the
-formats with a clean dataset-level path but **omit**:
+**Partially resolved.** `ttio export --format nmrml` and
+`--format imzml` are now wired — the extraction reads
+`AcquisitionRun.spectra()` → `NMRSpectrum` and
+`MSImage.to_pixel_spectra()` → `ImzMLPixelSpectrum`.
 
-- `ttio encode --format jcamp-dx` (JDX → `.tio` import)
-- `ttio export --format {nmrml, jcamp-dx, imzml}` (`.tio` → format)
-
-The **codecs exist in Python** — what's missing is the
-`.tio`-layer → `Spectrum`/pixel extraction helper that the Java
-tio-browser `ExportTask` / import path already has. A small Python
-extraction helper (dataset run → `NMRSpectrum` / `IR`/`Raman`/`UVVis`
-spectrum / `ImzMLPixelSpectrum`) would close the CLI gap and let the
-registries wire these three formats. Tracked informally in the W6.4
-CHANGELOG entries.
+**Residual gap — JCAMP-DX (both directions).** This is *not* mere CLI
+glue: Python's `AcquisitionRun._materialize_spectrum` only reconstructs
+`MassSpectrum` / `NMRSpectrum` from a `.tio`, not the vibrational types
+(`IRSpectrum` / `RamanSpectrum` / `UVVisSpectrum`). So there is no
+`.tio` → vibrational-`Spectrum` read path, and no vibrational-`Spectrum`
+→ `.tio` write path either. Closing it requires a **core** change
+(extend `_materialize_spectrum` + the write side to handle the
+vibrational spectrum classes), after which `ttio encode --format
+jcamp-dx` and `ttio export --format jcamp-dx` can be wired. The JCAMP
+reader/writer codecs themselves already exist in all three languages.
 
 ### 3.2 Live-daemon round-trips for workbench encryption / PQC
 
