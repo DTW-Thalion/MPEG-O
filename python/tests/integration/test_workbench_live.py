@@ -390,3 +390,59 @@ def test_per_au_encrypted_pqc_upload_round_trip(client, tmp_path):
             container_uri=result.container_uri,
             recipient_private_key=wrong.private_key,
             out_tio_path=str(bad_out), preview=True))
+
+
+def test_per_au_encrypted_envelope_upload_round_trip(client, tmp_path):
+    """Phase 4: envelope (symmetric KEK) per-AU upload/download round-trip.
+
+    Like the PQC test, but the per-run DEK is wrapped under a 32-byte
+    symmetric AES-256-GCM KEK (not an ML-KEM public key) and carried in
+    the ProtectionMetadata. Not preview-gated. The wrong KEK must fail to
+    decrypt."""
+    import os
+
+    import numpy as np
+    from ttio import SpectralDataset, WrittenRun
+    from ttio.enums import AcquisitionMode
+    from ttio.transport.encrypted import is_per_au_encrypted
+
+    kek = bytes([0x3C] * 32)
+    mz = np.linspace(100.0, 105.0, 12)
+    intensity = np.linspace(1.0, 120.0, 12)
+    src = tmp_path / "env_src.tio"
+    SpectralDataset.write_minimal(
+        str(src), title="env", isa_investigation_id="TTIO:env",
+        runs={"run_0001": WrittenRun(
+            spectrum_class="TTIOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={"mz": mz, "intensity": intensity},
+            offsets=np.array([0, 6], dtype=np.uint64),
+            lengths=np.array([6, 6], dtype=np.uint32),
+            retention_times=np.array([0.0, 1.0]),
+            ms_levels=np.ones(2, dtype=np.int32),
+            polarities=np.ones(2, dtype=np.int32),
+            precursor_mzs=np.zeros(2),
+            precursor_charges=np.zeros(2, dtype=np.int32),
+            base_peak_intensities=np.array([60.0, 120.0]),
+        )})
+
+    uri = f"uri:tio:{PROJECT}-env-{uuid.uuid4().hex[:8]}"
+    result = asyncio.run(client.upload_encrypted_envelope(
+        project=PROJECT, container_uri=uri, tio_path=str(src), kek=kek))
+
+    out = tmp_path / "env_rt.tio"
+    channels = asyncio.run(client.download_decrypted_envelope(
+        container_uri=result.container_uri, kek=kek, out_tio_path=str(out)))
+
+    rt = channels["run_0001"]
+    np.testing.assert_allclose(rt["mz"], mz)
+    np.testing.assert_allclose(rt["intensity"], intensity)
+    assert is_per_au_encrypted(str(out))
+
+    # Wrong KEK cannot recover the DEK.
+    wrong_kek = os.urandom(32)
+    bad_out = tmp_path / "env_bad.tio"
+    with pytest.raises(Exception):
+        asyncio.run(client.download_decrypted_envelope(
+            container_uri=result.container_uri, kek=wrong_kek,
+            out_tio_path=str(bad_out)))
