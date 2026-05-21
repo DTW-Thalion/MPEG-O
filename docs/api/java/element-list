@@ -14,7 +14,6 @@ global.thalion.ttio.workbench
 global.thalion.ttio.workbench.auth
 global.thalion.ttio.workbench.cohort
 global.thalion.ttio.workbench.containers
-global.thalion.ttio.workbench.encryption
 global.thalion.ttio.workbench.federation
 global.thalion.ttio.workbench.jobs
 global.thalion.ttio.workbench.pipeline
