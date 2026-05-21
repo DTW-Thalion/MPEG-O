@@ -111,11 +111,17 @@ reader/writer codecs themselves already exist in all three languages.
    suite passed only because it never touched the daemon. **Correct
    model:** encrypted upload must use **per-AU encryption** that yields
    a *valid* `.tis` (the core `encrypt_per_au` → `write_encrypted_dataset`
-   path, whose encrypted AU payloads + `ProtectionMetadata` packet
-   survive ingest/re-emit). Wiring that through the workbench client is
-   the real W6.2 follow-up; the live BYOK round-trip is intentionally
-   not added until then. PQC live round-trips sit on the same envelope
-   path and wait on the same rework.
+   path). Tracked in
+   [`workbench-client/per-au-encrypted-upload-plan.md`](workbench-client/per-au-encrypted-upload-plan.md).
+
+   **Update (Phase 0 of that plan, run against a real daemon):** even a
+   *valid* per-AU-encrypted `.tis` does **not** survive — the daemon
+   accepts it but its ingest → re-emit **drops the `ProtectionMetadata`
+   packet and the per-AU `ENCRYPTED` flags**, so the re-download reads as
+   plaintext. The encode/read path works locally, so the gap is
+   **daemon-side**: the rework needs a `tti-workbench-server` change
+   (encryption-aware ingest/re-emit) before the client wiring. PQC live
+   round-trips sit on the same path and wait on the same fix.
 
 ### 3.3 Flaky WebSocket test
 
