@@ -23,14 +23,15 @@ GUI_EXPORT_WRITERS = {
     "mzML", "mzTab", "imzML", "nmrML", "JCAMP-DX", "ISA-Tab/JSON",
     "BAM", "CRAM", "FASTA", "FASTQ",
 }
-# Python-side gap: these export from per-spectrum/pixel objects with no
-# .tio-layer extraction helper yet.
-PYTHON_DEFERRED = {"imzML", "nmrML", "JCAMP-DX"}
+# Python-side gap: JCAMP-DX export needs IR/Raman/UVVis spectra
+# reconstructed from a .tio, which Python's AcquisitionRun cannot yet do.
+PYTHON_DEFERRED = {"JCAMP-DX"}
 
 
 def test_supported_formats_set():
     assert set(registry.supported_export_formats()) == {
-        "mzml", "mztab", "isa", "bam", "cram", "fasta", "fastq",
+        "mzml", "mztab", "nmrml", "imzml", "isa", "bam", "cram",
+        "fasta", "fastq",
     }
 
 
@@ -61,7 +62,7 @@ def test_cli_unknown_format_exits_3(capsys):
     assert rc == 3
     err = capsys.readouterr().err
     assert "unsupported --format" in err
-    assert "nmrML" in err  # documents the gap
+    assert "JCAMP-DX" in err  # documents the remaining gap
 
 
 def test_cram_requires_reference(tmp_path):
@@ -121,3 +122,59 @@ def test_registry_isa_export(tmp_path):
     registry.export("isa", src, None, str(out_dir))
     assert out_dir.is_dir()
     assert any(out_dir.iterdir())  # bundle wrote at least one file
+
+
+def _write_nmr_tio(tmp_path: Path) -> str:
+    src = tmp_path / "nmr.tio"
+    run = WrittenRun(
+        spectrum_class="TTIONMRSpectrum",
+        acquisition_mode=int(AcquisitionMode.NMR_1D),
+        channel_data={
+            "chemical_shift": np.linspace(0.0, 10.0, 8),
+            "intensity": np.linspace(1.0, 8.0, 8),
+        },
+        offsets=np.array([0], dtype=np.uint64),
+        lengths=np.array([8], dtype=np.uint32),
+        retention_times=np.array([0.0]),
+        ms_levels=np.zeros(1, dtype=np.int32),
+        polarities=np.zeros(1, dtype=np.int32),
+        precursor_mzs=np.zeros(1),
+        precursor_charges=np.zeros(1, dtype=np.int32),
+        base_peak_intensities=np.array([10.0]),
+        nucleus_type="1H",
+    )
+    SpectralDataset.write_minimal(
+        src, title="nmr", isa_investigation_id="TTIO:nmr",
+        runs={"nmr_run": run})
+    return str(src)
+
+
+def test_registry_nmrml_export(tmp_path):
+    src = _write_nmr_tio(tmp_path)
+    out = tmp_path / "out.nmrML"
+    registry.export("nmrml", src, "nmr_run", str(out))
+    assert out.exists() and out.stat().st_size > 0
+    from ttio.importers import nmrml as nmrml_reader
+    assert nmrml_reader.read(out) is not None  # round-trips through the reader
+
+
+def _write_image_tio(tmp_path: Path) -> str:
+    from ttio.ms_image import MSImage
+    src = tmp_path / "img.tio"
+    h, w, p = 2, 3, 4
+    intensity = np.arange(h * w * p, dtype=np.float64).reshape(h, w, p)
+    mz_axis = np.linspace(100.0, 110.0, p)
+    img = MSImage(width=w, height=h, spectral_points=p,
+                  intensity=intensity, mz_axis=mz_axis)
+    SpectralDataset.write_minimal(
+        src, title="img", isa_investigation_id="TTIO:img",
+        runs={}, image=img)
+    return str(src)
+
+
+def test_registry_imzml_export(tmp_path):
+    src = _write_image_tio(tmp_path)
+    out = tmp_path / "out.imzML"
+    registry.export("imzml", src, None, str(out))
+    assert out.exists() and out.stat().st_size > 0
+    assert out.with_suffix(".ibd").exists()  # imzML + .ibd pair
