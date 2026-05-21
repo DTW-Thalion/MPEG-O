@@ -64,6 +64,7 @@ TTIOTests_OBJC_FILES = \
 	TestEncryptedTransport.m \
 	TestMilestone73.m \
 	TestMilestone73_1.m \
+	TestJcampVibrationalRoundTrip.m \
 	TestM76JcampConformance.m \
 	TestMilestone77.m \
 	TestMilestone78.m \

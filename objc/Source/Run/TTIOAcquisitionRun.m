@@ -22,6 +22,9 @@
 #import "Spectra/TTIOSpectrum.h"
 #import "Spectra/TTIOMassSpectrum.h"
 #import "Spectra/TTIONMRSpectrum.h"
+#import "Spectra/TTIOIRSpectrum.h"
+#import "Spectra/TTIORamanSpectrum.h"
+#import "Spectra/TTIOUVVisSpectrum.h"
 #import "Spectra/TTIOChromatogram.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
@@ -82,6 +85,19 @@
 
     // chromatogram traces carried with this run.
     NSArray<TTIOChromatogram *> *_chromatograms;
+
+    // Vibrational-spectrum run metadata (IR / Raman / UV-Vis), parity
+    // with Python/Java. Captured from the first spectrum on the
+    // in-memory path and from run attributes by the readers; consumed by
+    // spectrumAtIndex: to rebuild the right subclass. UV-Vis solvent
+    // reuses _solvent.
+    TTIOIRMode  _irMode;
+    double      _irResolutionCmInv;
+    NSUInteger  _irNumberOfScans;
+    double      _ramanExcitationWavelengthNm;
+    double      _ramanLaserPowerMw;
+    double      _ramanIntegrationTimeSec;
+    double      _uvvisPathLengthCm;
 }
 
 @synthesize chromatograms = _chromatograms;
@@ -113,6 +129,20 @@
                 TTIONMRSpectrum *n = (TTIONMRSpectrum *)first;
                 _nucleusType = [n.nucleusType copy];
                 _spectrometerFrequencyMHz = n.spectrometerFrequencyMHz;
+            } else if ([first isKindOfClass:[TTIOIRSpectrum class]]) {
+                TTIOIRSpectrum *ir = (TTIOIRSpectrum *)first;
+                _irMode = ir.mode;
+                _irResolutionCmInv = ir.resolutionCmInv;
+                _irNumberOfScans = ir.numberOfScans;
+            } else if ([first isKindOfClass:[TTIORamanSpectrum class]]) {
+                TTIORamanSpectrum *r = (TTIORamanSpectrum *)first;
+                _ramanExcitationWavelengthNm = r.excitationWavelengthNm;
+                _ramanLaserPowerMw = r.laserPowerMw;
+                _ramanIntegrationTimeSec = r.integrationTimeSec;
+            } else if ([first isKindOfClass:[TTIOUVVisSpectrum class]]) {
+                TTIOUVVisSpectrum *u = (TTIOUVVisSpectrum *)first;
+                _uvvisPathLengthCm = u.pathLengthCm;
+                _solvent = [u.solvent copy];
             }
         } else {
             _spectrumClassName = @"TTIOMassSpectrum";
@@ -122,7 +152,8 @@
         _spectrumIndex = [self buildIndexFromSpectra:spectra];
         _chromatograms = @[];
         _modality = @"mass_spectrometry";
-        _solvent = @"";
+        // Default solvent to empty unless a UV-Vis first spectrum set it.
+        if (!_solvent) _solvent = @"";
     }
     return self;
 }
@@ -300,6 +331,35 @@
     if (_solvent && _solvent.length > 0) {
         if (![runGroup setAttributeValue:_solvent
                                  forName:@"solvent" error:error]) return NO;
+    }
+
+    // Vibrational-spectrum run metadata (parity with Python/Java
+    // _write_run). Emitted only for the matching class so MS/NMR runs
+    // stay byte-identical; ir_mode is always written for IR (0 =
+    // transmittance is meaningful), the float/scan fields only when set.
+    if ([_spectrumClassName isEqualToString:@"TTIOIRSpectrum"]) {
+        if (![runGroup setAttributeValue:@((int64_t)_irMode)
+                                 forName:@"ir_mode" error:error]) return NO;
+        if (_irResolutionCmInv != 0.0 &&
+            ![runGroup setAttributeValue:@(_irResolutionCmInv)
+                                 forName:@"ir_resolution_cm_inv" error:error]) return NO;
+        if (_irNumberOfScans != 0 &&
+            ![runGroup setAttributeValue:@((int64_t)_irNumberOfScans)
+                                 forName:@"ir_number_of_scans" error:error]) return NO;
+    } else if ([_spectrumClassName isEqualToString:@"TTIORamanSpectrum"]) {
+        if (_ramanExcitationWavelengthNm != 0.0 &&
+            ![runGroup setAttributeValue:@(_ramanExcitationWavelengthNm)
+                                 forName:@"raman_excitation_wavelength_nm" error:error]) return NO;
+        if (_ramanLaserPowerMw != 0.0 &&
+            ![runGroup setAttributeValue:@(_ramanLaserPowerMw)
+                                 forName:@"raman_laser_power_mw" error:error]) return NO;
+        if (_ramanIntegrationTimeSec != 0.0 &&
+            ![runGroup setAttributeValue:@(_ramanIntegrationTimeSec)
+                                 forName:@"raman_integration_time_sec" error:error]) return NO;
+    } else if ([_spectrumClassName isEqualToString:@"TTIOUVVisSpectrum"]) {
+        if (_uvvisPathLengthCm != 0.0 &&
+            ![runGroup setAttributeValue:@(_uvvisPathLengthCm)
+                                 forName:@"uvvis_path_length_cm" error:error]) return NO;
     }
 
     // Per-run provenance.
@@ -519,6 +579,39 @@
 
 #pragma mark - HDF5 read
 
+/** Restore vibrational-spectrum run metadata (IR / Raman / UV-Vis) from
+ *  run-group attributes into the ivars, keyed by the spectrum_class.
+ *  Shared by both readers; parity with Python AcquisitionRun.open and
+ *  Java AcquisitionRun.readFrom. No-op for MS / NMR runs. */
++ (void)loadVibrationalMetadataInto:(TTIOAcquisitionRun *)run
+                               from:(id<TTIOStorageGroup>)runGroup
+                          className:(NSString *)className
+{
+    if ([className isEqualToString:@"TTIOIRSpectrum"]) {
+        id m = [runGroup attributeValueForName:@"ir_mode" error:NULL];
+        run->_irMode = (TTIOIRMode)
+            ([m respondsToSelector:@selector(longLongValue)] ? [m longLongValue] : 0);
+        run->_irResolutionCmInv = [self doubleAttr:runGroup name:@"ir_resolution_cm_inv"];
+        id sc = [runGroup attributeValueForName:@"ir_number_of_scans" error:NULL];
+        run->_irNumberOfScans = (NSUInteger)
+            ([sc respondsToSelector:@selector(longLongValue)] ? [sc longLongValue] : 0);
+    } else if ([className isEqualToString:@"TTIORamanSpectrum"]) {
+        run->_ramanExcitationWavelengthNm =
+            [self doubleAttr:runGroup name:@"raman_excitation_wavelength_nm"];
+        run->_ramanLaserPowerMw = [self doubleAttr:runGroup name:@"raman_laser_power_mw"];
+        run->_ramanIntegrationTimeSec =
+            [self doubleAttr:runGroup name:@"raman_integration_time_sec"];
+    } else if ([className isEqualToString:@"TTIOUVVisSpectrum"]) {
+        run->_uvvisPathLengthCm = [self doubleAttr:runGroup name:@"uvvis_path_length_cm"];
+    }
+}
+
++ (double)doubleAttr:(id<TTIOStorageGroup>)runGroup name:(NSString *)name
+{
+    id v = [runGroup attributeValueForName:name error:NULL];
+    return [v respondsToSelector:@selector(doubleValue)] ? [v doubleValue] : 0.0;
+}
+
 + (instancetype)readFromStorageGroup:(id)parent
                                  name:(NSString *)name
                                 error:(NSError **)error
@@ -596,7 +689,13 @@
     run->_signalCompression    = TTIOCompressionNone;
     run->_chromatograms        = @[];
     run->_modality             = [modality copy];
-    run->_solvent              = @"";
+    // solvent (UV-Vis / NMR label) — read it so UV-Vis runs round-trip
+    // through this lighter protocol reader too.
+    id solvObj = [runGroup attributeValueForName:@"solvent" error:NULL];
+    run->_solvent = ([solvObj isKindOfClass:[NSString class]]
+                     && [(NSString *)solvObj length] > 0)
+        ? [(NSString *)solvObj copy] : @"";
+    [self loadVibrationalMetadataInto:run from:runGroup className:className];
     return run;
 }
 
@@ -757,6 +856,7 @@
 
     // read chromatograms if present. Absence means v0.3 file → empty list.
     run->_chromatograms = [self readChromatogramsFromRunGroup:runGroup];
+    [self loadVibrationalMetadataInto:run from:runGroup className:className];
     return run;
 }
 
@@ -925,6 +1025,44 @@
                              indexPosition:index
                            scanTimeSeconds:[_spectrumIndex retentionTimeAt:index]
                                      error:error];
+    }
+
+    // Vibrational types dispatch on the stored spectrum_class (parity
+    // with Python / Java); channels are wavenumber/intensity (IR/Raman)
+    // or wavelength/absorbance (UV-Vis).
+    if ([_spectrumClassName isEqualToString:@"TTIOIRSpectrum"]) {
+        return [[TTIOIRSpectrum alloc]
+                initWithWavenumberArray:channels[@"wavenumber"]
+                         intensityArray:channels[@"intensity"]
+                                   mode:_irMode
+                        resolutionCmInv:_irResolutionCmInv
+                          numberOfScans:_irNumberOfScans
+                          indexPosition:index
+                        scanTimeSeconds:[_spectrumIndex retentionTimeAt:index]
+                                  error:error];
+    }
+
+    if ([_spectrumClassName isEqualToString:@"TTIORamanSpectrum"]) {
+        return [[TTIORamanSpectrum alloc]
+                initWithWavenumberArray:channels[@"wavenumber"]
+                         intensityArray:channels[@"intensity"]
+                 excitationWavelengthNm:_ramanExcitationWavelengthNm
+                           laserPowerMw:_ramanLaserPowerMw
+                     integrationTimeSec:_ramanIntegrationTimeSec
+                          indexPosition:index
+                        scanTimeSeconds:[_spectrumIndex retentionTimeAt:index]
+                                  error:error];
+    }
+
+    if ([_spectrumClassName isEqualToString:@"TTIOUVVisSpectrum"]) {
+        return [[TTIOUVVisSpectrum alloc]
+                initWithWavelengthArray:channels[@"wavelength"]
+                        absorbanceArray:channels[@"absorbance"]
+                           pathLengthCm:_uvvisPathLengthCm
+                                solvent:_solvent
+                          indexPosition:index
+                        scanTimeSeconds:[_spectrumIndex retentionTimeAt:index]
+                                  error:error];
     }
 
     if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
