@@ -128,11 +128,11 @@ connection wait / bump the timeout.
 
 - The `api-review-v0.7.md` parity notes are stale relative to the v1.x
   surface; this document is the current snapshot.
-- The repo commits generated Javadoc HTML under `docs/api/java`
-  (DOC-AUDIT convention) while the new `docs.yml` CI also builds it as
-  an artifact. Decide whether to keep committing generated HTML or move
-  fully to CI artifacts (the committed copy currently lags the W6
-  workbench classes).
+- **Resolved:** keep committing the generated Javadoc HTML under
+  `docs/api/java` (Javadoc remains the Java reference-doc solution);
+  the committed copy was refreshed to include the W6 workbench classes
+  (`workbench.encryption` / `pqc` / `federation`, etc.). The `docs.yml`
+  CI continues to build Javadoc as a PR gate.
 
 ## 4. Method
 
