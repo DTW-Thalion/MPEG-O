@@ -11,6 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- ttio export --format nmrml / imzml (2026-05-20)
+
+Closes part of parity-audit follow-on §3.1. The export registry now
+wires **nmrML** and **imzML**:
+
+- nmrML: pick the NMR run (`ds.ms_runs`/`nmr_runs` by `--layer` or the
+  sole NMR-class run), export its first `NMRSpectrum`.
+- imzML: project `ds.image` (`MSImage.to_pixel_spectra()`) to the
+  `.imzML` + `.ibd` pair.
+
+JCAMP-DX export/import stays deferred — Python's
+`AcquisitionRun._materialize_spectrum` can't yet reconstruct
+IR/Raman/UVVis spectra from a `.tio` (a core gap, not CLI glue; see
+`docs/parity-audit-v1.0.md` §3.1). Tests: `test_export_formats.py`
+nmrML + imzML round-trips; the GUI-parity test now records only
+JCAMP-DX as the documented gap.
+
 ### Added -- W6.6: SDK reference docs + quickstart + finalisation (2026-05-20)
 
 Closes **W6** (the final workbench-client milestone) — W1–W6 ship a
