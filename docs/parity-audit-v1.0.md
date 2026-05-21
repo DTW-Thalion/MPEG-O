@@ -114,14 +114,15 @@ reader/writer codecs themselves already exist in all three languages.
    path). Tracked in
    [`workbench-client/per-au-encrypted-upload-plan.md`](workbench-client/per-au-encrypted-upload-plan.md).
 
-   **Update (Phase 0 of that plan, run against a real daemon):** even a
-   *valid* per-AU-encrypted `.tis` does **not** survive — the daemon
-   accepts it but its ingest → re-emit **drops the `ProtectionMetadata`
-   packet and the per-AU `ENCRYPTED` flags**, so the re-download reads as
-   plaintext. The encode/read path works locally, so the gap is
-   **daemon-side**: the rework needs a `tti-workbench-server` change
-   (encryption-aware ingest/re-emit) before the client wiring. PQC live
-   round-trips sit on the same path and wait on the same fix.
+   **Phase 0 — resolved.** A first run against a real daemon found the
+   daemon's ingest → re-emit dropped the `ProtectionMetadata` packet and
+   per-AU `ENCRYPTED` flags (re-download read as plaintext). Fixed in
+   `tti-workbench-server` #31 (encryption-aware passthrough: encrypted
+   containers are stored + served as opaque `.tis` verbatim). The live
+   round-trip (`test_per_au_encrypted_upload_round_trip`: encrypt →
+   upload → download → decrypt → channels match) now **passes**. The
+   per-AU client wiring (`upload_encrypted` / `download_decrypted`, +
+   the PQC variant) is unblocked — Phases 1-4 of the plan.
 
 ### 3.3 Flaky WebSocket test
 

@@ -270,15 +270,6 @@ def test_tis_upload_download_round_trip(client, tmp_path):
 
 # ---------------------------------------------------- per-AU encrypted upload
 
-@pytest.mark.xfail(
-    reason="Phase 0 (per-au-encrypted-upload-plan): the daemon strips "
-           "per-AU encryption on ingest->re-emit -- the re-emitted stream "
-           "has no ProtectionMetadata packet and AUs lack the ENCRYPTED "
-           "flag ('encrypted-transport reader saw plaintext AU'). Blocked "
-           "on a tti-workbench-server change to preserve encrypted streams. "
-           "Flips to xpass once the daemon is encryption-aware.",
-    strict=False,
-)
 def test_per_au_encrypted_upload_round_trip(client, tmp_path):
     """Phase 0 of the per-AU encrypted-upload rework
     (docs/workbench-client/per-au-encrypted-upload-plan.md): an
@@ -287,9 +278,8 @@ def test_per_au_encrypted_upload_round_trip(client, tmp_path):
     same key. This is the correct encryption model after blob-BYOK was
     found daemon-incompatible (§3.2).
 
-    Currently xfail: the daemon does not yet preserve the encryption
-    (see the marker). The local encode/read path works (proven by
-    tests/test_encrypted_transport.py), so the gap is daemon-side."""
+    Passes since tti-workbench-server #31 (encryption-aware passthrough:
+    encrypted containers are stored + served as opaque .tis verbatim)."""
     import io
 
     import numpy as np
