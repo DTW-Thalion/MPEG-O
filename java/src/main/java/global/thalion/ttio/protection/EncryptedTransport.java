@@ -21,6 +21,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,7 +127,7 @@ public final class EncryptedTransport {
                                     firstCh + "_algorithm", "aes-256-gcm");
                                 String kek = attrStr(sig,
                                     firstCh + "_kek_algorithm", "");
-                                byte[] wrapped = attrBytes(sig,
+                                byte[] wrapped = readWrappedDekAttr(sig,
                                     firstCh + "_wrapped_dek");
 
                                 writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
@@ -195,7 +196,7 @@ public final class EncryptedTransport {
             String cipherSuite = attrStr(sig,
                 firstCh + "_algorithm", "aes-256-gcm");
             String kek = attrStr(sig, firstCh + "_kek_algorithm", "");
-            byte[] wrapped = attrBytes(sig, firstCh + "_wrapped_dek");
+            byte[] wrapped = readWrappedDekAttr(sig, firstCh + "_wrapped_dek");
             writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
                 datasetId, 0, encodeProtection(cipherSuite, kek, wrapped));
 
@@ -465,6 +466,109 @@ public final class EncryptedTransport {
 
         writeEncryptedFile(outputPath, providerName, title, isa,
                             new ArrayList<>(featureSet), protection, datasets);
+    }
+
+    // ──────────────────────────────────── wrapped-DEK stamp / read (PQC)
+
+    /** Stamp a wrapped DEK + KEK algorithm onto every run's
+     *  {@code signal_channels} so {@link #writeEncryptedDataset} emits it
+     *  in the ProtectionMetadata packet.
+     *
+     *  <p>Used for envelope / PQC per-AU upload, where the per-run DEK is
+     *  wrapped under the recipient's KEK ({@code aes-256-gcm}) or KEM
+     *  public key ({@code ml-kem-1024}). All channels in a run share the
+     *  DEK (v1.0 design), so the wrapper is stamped on each run's first
+     *  channel -- the same attribute the writer reads.</p>
+     *
+     *  <p>Cross-language equivalent: Python
+     *  {@code transport.encrypted.stamp_transport_wrapped_dek}.</p> */
+    public static void stampTransportWrappedDek(String ttioPath,
+                                                  byte[] wrappedDek,
+                                                  String kekAlgorithm,
+                                                  String providerName)
+            throws IOException {
+        StorageProvider sp = ProviderRegistry.open(ttioPath,
+            StorageProvider.Mode.READ_WRITE, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            if (!root.hasChild("study")) return;
+            try (StorageGroup study = root.openGroup("study")) {
+                for (String parent : new String[]{"ms_runs", "genomic_runs"}) {
+                    if (!study.hasChild(parent)) continue;
+                    try (StorageGroup g = study.openGroup(parent)) {
+                        for (String n : g.childNames()) {
+                            if (n.startsWith("_") || !g.hasChild(n)) continue;
+                            try (StorageGroup run = g.openGroup(n)) {
+                                if (!run.hasChild("signal_channels")) continue;
+                                try (StorageGroup sig =
+                                         run.openGroup("signal_channels")) {
+                                    List<String> names = splitNames(
+                                        attrStr(sig, "channel_names", ""));
+                                    if (names.isEmpty()) continue;
+                                    String fc = names.get(0);
+                                    setWrappedDekAttr(sig, fc + "_wrapped_dek",
+                                                       wrappedDek);
+                                    sig.setAttribute(fc + "_kek_algorithm",
+                                                      kekAlgorithm);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } finally {
+            sp.close();
+        }
+    }
+
+    /** A wrapped DEK + the KEK algorithm that unwraps it. */
+    public record WrappedDek(byte[] wrappedDek, String kekAlgorithm) {}
+
+    /** Return the wrapped DEK + KEK algorithm stamped on the first run's
+     *  {@code signal_channels}, or an empty {@code WrappedDek} if none.
+     *  The receiver unwraps the DEK with its KEK / KEM private key, then
+     *  calls {@link PerAUFile#decryptFile}.
+     *
+     *  <p>Cross-language equivalent: Python
+     *  {@code transport.encrypted.read_transport_wrapped_dek}.</p> */
+    public static WrappedDek readTransportWrappedDek(String ttioPath,
+                                                       String providerName)
+            throws IOException {
+        StorageProvider sp = ProviderRegistry.open(ttioPath,
+            StorageProvider.Mode.READ, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            if (!root.hasChild("study")) return new WrappedDek(new byte[0], "");
+            try (StorageGroup study = root.openGroup("study")) {
+                for (String parent : new String[]{"ms_runs", "genomic_runs"}) {
+                    if (!study.hasChild(parent)) continue;
+                    try (StorageGroup g = study.openGroup(parent)) {
+                        for (String n : g.childNames()) {
+                            if (n.startsWith("_") || !g.hasChild(n)) continue;
+                            try (StorageGroup run = g.openGroup(n)) {
+                                if (!run.hasChild("signal_channels")) continue;
+                                try (StorageGroup sig =
+                                         run.openGroup("signal_channels")) {
+                                    List<String> names = splitNames(
+                                        attrStr(sig, "channel_names", ""));
+                                    if (names.isEmpty()) continue;
+                                    String fc = names.get(0);
+                                    if (!sig.hasAttribute(fc + "_wrapped_dek")) {
+                                        continue;
+                                    }
+                                    return new WrappedDek(
+                                        readWrappedDekAttr(sig, fc + "_wrapped_dek"),
+                                        attrStr(sig, fc + "_kek_algorithm", ""));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return new WrappedDek(new byte[0], "");
+        } finally {
+            sp.close();
+        }
     }
 
     // ────────────────────────────────────────────── payload encoders
@@ -781,7 +885,7 @@ public final class EncryptedTransport {
                 pm != null && pm.cipherSuite != null
                     ? pm.cipherSuite : "aes-256-gcm");
             if (pm != null && pm.wrappedDek != null && pm.wrappedDek.length > 0) {
-                sig.setAttribute(cname + "_wrapped_dek", pm.wrappedDek);
+                setWrappedDekAttr(sig, cname + "_wrapped_dek", pm.wrappedDek);
                 sig.setAttribute(cname + "_kek_algorithm",
                                   pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
             }
@@ -851,7 +955,7 @@ public final class EncryptedTransport {
                         pm != null && pm.cipherSuite != null
                             ? pm.cipherSuite : "aes-256-gcm");
                     if (pm != null && pm.wrappedDek != null && pm.wrappedDek.length > 0) {
-                        sig.setAttribute(cname + "_wrapped_dek", pm.wrappedDek);
+                        setWrappedDekAttr(sig, cname + "_wrapped_dek", pm.wrappedDek);
                         sig.setAttribute(cname + "_kek_algorithm",
                                           pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
                     }
@@ -996,6 +1100,29 @@ public final class EncryptedTransport {
         Object v = g.getAttribute(name);
         if (v instanceof byte[] b) return b;
         if (v instanceof String s) return s.getBytes(StandardCharsets.UTF_8);
+        return new byte[0];
+    }
+
+    // The wrapped DEK is binary (v1.2 / ML-KEM blob with embedded NULs).
+    // Storage providers only support String / Number attributes (no
+    // byte[]), so it is base64-encoded at the attribute boundary. The
+    // byte[] flows through the rest of the code unchanged; this is the
+    // Java analogue of the Python uint8-array attribute (each language
+    // round-trips its own .tio, so the on-disk encodings need not match
+    // — the cross-language interchange is the transport packet bytes).
+    private static void setWrappedDekAttr(StorageGroup g, String name,
+                                            byte[] wrapped) {
+        if (wrapped == null || wrapped.length == 0) return;
+        g.setAttribute(name, Base64.getEncoder().encodeToString(wrapped));
+    }
+
+    private static byte[] readWrappedDekAttr(StorageGroup g, String name) {
+        if (!g.hasAttribute(name)) return new byte[0];
+        Object v = g.getAttribute(name);
+        if (v instanceof String s && !s.isEmpty()) {
+            return Base64.getDecoder().decode(s);
+        }
+        if (v instanceof byte[] b) return b;  // legacy / direct byte[]
         return new byte[0];
     }
 

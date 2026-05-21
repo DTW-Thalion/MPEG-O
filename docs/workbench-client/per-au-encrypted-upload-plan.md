@@ -101,8 +101,20 @@ encrypted-`.tis` encode already work; the daemon preserves the stream.
    (lockstep, Decision 2). Blob `uploadProtected` / `downloadAndOpen`
    throw `UnsupportedOperationException`. Validated e2e by
    `WorkbenchLiveTest.perAuEncryptedUploadRoundTrip`.
-3. **PQC variant** (`opt_pqc_preview`): the same path with an ML-KEM
-   wrapped DEK in the `ProtectionMetadata`, gated as in W6.3.
+3. **PQC variant — DONE.** The same daemon-faithful path with an
+   ML-KEM-1024-wrapped DEK in the `ProtectionMetadata`, gated by
+   `opt_pqc_preview`. The per-run DEK is randomly generated (not
+   caller-held), wrapped under the recipient's ML-KEM public key, and
+   stamped onto `signal_channels` so `write_encrypted_dataset` carries it;
+   the receiver unwraps it with the ML-KEM private key. New helpers
+   `stamp_transport_wrapped_dek`/`read_transport_wrapped_dek` (Python) and
+   `stampTransportWrappedDek`/`readTransportWrappedDek` (Java) — the
+   wrapped DEK is stored as a `uint8` attribute array, not a VLEN string,
+   so the ML-KEM blob's embedded NULs survive. Client methods
+   `upload_encrypted_pqc`/`download_decrypted_pqc` (Python) and
+   `uploadEncryptedPqc`/`downloadDecryptedPqc` (Java), all preview-gated.
+   Validated e2e by `test_per_au_encrypted_pqc_upload_round_trip` (live
+   smoke) and `WorkbenchLiveTest.perAuEncryptedPqcUploadRoundTrip`.
 4. **Live round-trips** added to `workbench-live` (the deferred §3.2
    tests): BYOK + envelope + PQC encrypt → upload → download → decrypt.
 

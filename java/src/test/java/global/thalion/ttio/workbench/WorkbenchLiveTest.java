@@ -10,7 +10,9 @@ import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.protection.PerAUFile;
+import global.thalion.ttio.protection.PostQuantumCrypto;
 import global.thalion.ttio.workbench.auth.BootstrapAdminAuth;
+import global.thalion.ttio.workbench.pqc.WorkbenchPqc;
 import global.thalion.ttio.workbench.cohort.CohortPredicate;
 import global.thalion.ttio.workbench.cohort.CohortQuery;
 import global.thalion.ttio.workbench.containers.ContainerListPage;
@@ -259,6 +261,68 @@ class WorkbenchLiveTest {
             rt.get("run_0001").channels().get("mz"));
         assertArrayEquals(leBytes(intensity),
             rt.get("run_0001").channels().get("intensity"));
+    }
+
+    @Test
+    void perAuEncryptedPqcUploadRoundTrip(@TempDir Path tmp) throws Exception {
+        // Java parity of the Python Phase 3 PQC round-trip: a fresh per-run
+        // DEK is ML-KEM-1024-wrapped into the ProtectionMetadata (no
+        // caller-held key). Only the ML-KEM private key recovers it.
+        // Preview-gated like the server's opt_pqc_preview; the wrong
+        // private key must fail to decrypt.
+        int nSpectra = 3, perSpectrum = 4, total = nSpectra * perSpectrum;
+        double[] mz = new double[total];
+        double[] intensity = new double[total];
+        for (int i = 0; i < total; i++) {
+            mz[i] = 100.0 + i;
+            intensity[i] = (i + 1) * 10.0;
+        }
+        SpectrumIndex idx = new SpectrumIndex(nSpectra,
+            new long[]{0, 4, 8}, new int[]{4, 4, 4},
+            new double[]{1.0, 2.0, 3.0}, new int[]{1, 2, 1}, new int[]{1, 1, 1},
+            new double[]{0.0, 500.0, 0.0}, new int[]{0, 2, 0},
+            new double[]{40.0, 80.0, 120.0});
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+            Enums.AcquisitionMode.MS1_DDA, idx,
+            new InstrumentConfig("", "", "", "", "", ""),
+            channels, List.of(), List.of(), null, 0.0);
+
+        String src = tmp.resolve("pqc_src.tio").toString();
+        try (SpectralDataset ds = SpectralDataset.create(src,
+                "live pqc", "ISA-LIVE-PQC",
+                List.of(run), List.of(), List.of(), List.of())) { }
+
+        PostQuantumCrypto.KeyPair kp = WorkbenchPqc.kemKeygen();
+        String uri = "uri:tio:" + project + "-pqc-"
+            + UUID.randomUUID().toString().substring(0, 8);
+
+        // opt_pqc_preview gating: refuses without preview=true.
+        assertThrows(WorkbenchPqc.PqcPreviewDisabledException.class,
+            () -> client.uploadEncryptedPqc(
+                project, uri, src, kp.publicKey(), false, false));
+
+        var result = client.uploadEncryptedPqc(
+            project, uri, src, kp.publicKey(), true, false);
+
+        String out = tmp.resolve("pqc_rt.tio").toString();
+        Map<String, PerAUFile.DecryptedRun> rt =
+            client.downloadDecryptedPqc(result.containerUri(),
+                                         kp.privateKey(), out, true);
+
+        assertArrayEquals(leBytes(mz),
+            rt.get("run_0001").channels().get("mz"));
+        assertArrayEquals(leBytes(intensity),
+            rt.get("run_0001").channels().get("intensity"));
+
+        // Wrong ML-KEM private key cannot recover the DEK.
+        PostQuantumCrypto.KeyPair wrong = WorkbenchPqc.kemKeygen();
+        String badOut = tmp.resolve("pqc_bad.tio").toString();
+        assertThrows(Exception.class,
+            () -> client.downloadDecryptedPqc(
+                result.containerUri(), wrong.privateKey(), badOut, true));
     }
 
     private static byte[] leBytes(double[] a) {
