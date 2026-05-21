@@ -8,8 +8,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
@@ -41,6 +43,33 @@ class TisWsUploaderTest {
         wsServer.start();
         assertTrue(wsServer.serverStarted.await(15, TimeUnit.SECONDS),
             "WS server did not start");
+        // onStart() fires when the server thread begins, but on a loaded
+        // CI runner the listening socket may not be accepting connections
+        // for a brief window after that -- a race the client's single
+        // connect attempt could lose, surfacing as a flaky timeout. Probe
+        // the port until it actually accepts before any test connects.
+        awaitPortAccepting(port, 15_000);
+    }
+
+    /** Block until {@code 127.0.0.1:port} accepts a TCP connection, so the
+     *  embedded WS server is provably listening before the client dials.
+     *  A bare connect+close needs no WebSocket handshake; java-websocket
+     *  discards the half-open probe without recording a frame. */
+    private static void awaitPortAccepting(int port, long timeoutMs) throws Exception {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (true) {
+            try (Socket s = new Socket()) {
+                s.connect(new InetSocketAddress("127.0.0.1", port), 250);
+                return;
+            } catch (IOException notReadyYet) {
+                if (System.currentTimeMillis() >= deadline) {
+                    throw new IllegalStateException(
+                        "WS server port " + port + " not accepting within "
+                        + timeoutMs + "ms");
+                }
+                Thread.sleep(50);
+            }
+        }
     }
 
     @AfterEach
