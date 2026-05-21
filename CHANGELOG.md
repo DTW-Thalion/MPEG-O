@@ -11,6 +11,24 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- W6.6: SDK reference docs + quickstart + finalisation (2026-05-20)
+
+Closes **W6** (the final workbench-client milestone) — W1–W6 ship a
+complete client SDK (Python + Java), the tio-browser GUI, the CLI,
+and now reference docs.
+
+- **Sphinx** (Python) already autoapi-covers the whole `ttio`
+  package; added a `workbench` landing link + a **quickstart
+  notebook** (`python/docs/tutorials/workbench_quickstart.ipynb`)
+  rendered via `myst-nb` (execution off — the live flow is verified
+  by the `workbench-live` smoke, not the docs build). The notebook
+  walks the spec §8.3 path: connect → encode → upload → query →
+  submit a pipeline → download, plus the federation no-op.
+- **Javadoc** for the Java SDK (the `maven-javadoc-plugin` was
+  configured but never run in CI).
+- New **`docs` CI workflow** builds both (Sphinx + Javadoc) on PRs
+  touching the SDK or docs, so doc-breaking changes are caught.
+
 ### Added -- W6.5: federation client (graceful no-op vs v1.0) (2026-05-20)
 
 Client surface for the v1.1+ federation endpoint (spec §12.3) that
