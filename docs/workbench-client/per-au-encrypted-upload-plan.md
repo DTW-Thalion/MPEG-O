@@ -95,8 +95,12 @@ encrypted-`.tis` encode already work; the daemon preserves the stream.
    The daemon-incompatible blob `upload_protected` / `download_and_open`
    now raise `NotImplementedError` pointing here. Validated e2e by
    `test_per_au_encrypted_upload_round_trip` (live smoke, 10/10).
-2. **Java mirror** (lockstep, Decision 2): `WorkbenchClient.uploadEncrypted`
-   / `downloadDecrypted` over `PerAUFile` + `EncryptedTransport`.
+2. **Java mirror — DONE.** `WorkbenchClient.uploadEncrypted` /
+   `downloadDecrypted` over `PerAUFile.encryptFile`/`decryptFile` +
+   `EncryptedTransport.writeEncryptedDataset`/`readEncryptedToPath`
+   (lockstep, Decision 2). Blob `uploadProtected` / `downloadAndOpen`
+   throw `UnsupportedOperationException`. Validated e2e by
+   `WorkbenchLiveTest.perAuEncryptedUploadRoundTrip`.
 3. **PQC variant** (`opt_pqc_preview`): the same path with an ML-KEM
    wrapped DEK in the `ProtectionMetadata`, gated as in W6.3.
 4. **Live round-trips** added to `workbench-live` (the deferred §3.2

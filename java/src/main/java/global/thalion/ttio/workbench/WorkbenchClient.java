@@ -16,12 +16,20 @@ import global.thalion.ttio.workbench.sessions.SessionsClient;
 import global.thalion.ttio.workbench.federation.FederationClient;
 import global.thalion.ttio.workbench.encryption.ProtectionMetadata;
 import global.thalion.ttio.workbench.encryption.ProtectionMode;
-import global.thalion.ttio.workbench.encryption.WorkbenchEncryptor;
 import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
+import global.thalion.ttio.protection.EncryptedTransport;
+import global.thalion.ttio.protection.PerAUFile;
+import global.thalion.ttio.transport.TransportWriter;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -153,36 +161,76 @@ public final class WorkbenchClient implements AutoCloseable {
                                             outputMode, maxAu, progress);
     }
 
-    // ------------------------------------------- W6.2 protected transfer
+    // ------------------------------------------- per-AU encrypted transfer
 
-    /** Result of {@link #uploadProtected}: the upload result plus the
-     *  {@link ProtectionMetadata} the caller must retain to decrypt
-     *  later (ENVELOPE carries the wrapped DEK; BYOK carries none). */
-    public record ProtectedUpload(
-        WorkbenchTransportClient.UploadResult result,
-        ProtectionMetadata protection) {}
-
-    /** Seal {@code payload} (BYOK or envelope) and upload the
-     *  ciphertext. BYOK: pass {@code dek}, {@code kek} null. ENVELOPE:
-     *  pass {@code kek}, {@code dek} null. */
-    public ProtectedUpload uploadProtected(
-            String project, String containerUri, byte[] payload,
-            ProtectionMode mode, byte[] dek, byte[] kek, String kekAlgorithm) {
-        WorkbenchEncryptor.SealedPayload sealed =
-            WorkbenchEncryptor.seal(payload, mode, dek, kek, kekAlgorithm);
-        WorkbenchTransportClient.UploadResult result =
-            upload(project, containerUri, sealed.ciphertext());
-        return new ProtectedUpload(result, sealed.protection());
+    /** Encrypt a plaintext {@code .tio} per-AU and upload it.
+     *
+     * <p>Channel payloads (and AU headers when {@code encryptHeaders})
+     * are AES-256-GCM-encrypted inside a valid {@code .tis} that also
+     * carries a ProtectionMetadata packet, so the daemon ingests and
+     * re-emits it like any stream (it never sees plaintext, holds no
+     * key). Recover the data with {@link #downloadDecrypted} using the
+     * same {@code key}. The source file is not mutated -- a temp copy is
+     * encrypted.</p>
+     *
+     * <p>Cross-language equivalent: Python
+     * {@code WorkbenchClient.upload_encrypted}.</p> */
+    public WorkbenchTransportClient.UploadResult uploadEncrypted(
+            String project, String containerUri, String tioPath,
+            byte[] key, boolean encryptHeaders) throws IOException {
+        Path enc = Files.createTempFile("ttio-enc", ".tio");
+        try {
+            Files.copy(Paths.get(tioPath), enc,
+                       StandardCopyOption.REPLACE_EXISTING);
+            PerAUFile.encryptFile(enc.toString(), key, encryptHeaders, "hdf5");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (TransportWriter writer = new TransportWriter(bos)) {
+                EncryptedTransport.writeEncryptedDataset(
+                    enc.toString(), writer, "hdf5");
+            }
+            return upload(project, containerUri, bos.toByteArray());
+        } finally {
+            Files.deleteIfExists(enc);
+        }
     }
 
-    /** Download a sealed payload and decrypt it. BYOK: pass {@code dek}.
-     *  ENVELOPE: pass the {@code kek} that unwraps the wrapped DEK. */
+    /** Download a per-AU-encrypted container and decrypt it.
+     *
+     * <p>Materialises the still-encrypted {@code .tio} to
+     * {@code outTioPath} (ciphertext preserved) and returns the
+     * decrypted channels per run. Same {@code key} as
+     * {@link #uploadEncrypted}.</p> */
+    public Map<String, PerAUFile.DecryptedRun> downloadDecrypted(
+            String containerUri, byte[] key, String outTioPath)
+            throws IOException {
+        WorkbenchTransportClient.DownloadResult result = download(containerUri);
+        EncryptedTransport.readEncryptedToPath(outTioPath, result.payload(), "hdf5");
+        return PerAUFile.decryptFile(outTioPath, key, "hdf5");
+    }
+
+    // -- deprecated W6.2 blob encryption (daemon-incompatible) --
+
+    /** @deprecated Blob-level BYOK is not daemon-compatible (the daemon
+     *  validates uploads as transport streams). Use
+     *  {@link #uploadEncrypted}. Always throws. */
+    @Deprecated
+    public WorkbenchTransportClient.UploadResult uploadProtected(
+            String project, String containerUri, byte[] payload,
+            ProtectionMode mode, byte[] dek, byte[] kek, String kekAlgorithm) {
+        throw new UnsupportedOperationException(
+            "uploadProtected (blob-level BYOK) is daemon-incompatible; "
+            + "use uploadEncrypted (per-AU) instead.");
+    }
+
+    /** @deprecated Counterpart of the blob {@link #uploadProtected}. Use
+     *  {@link #downloadDecrypted}. Always throws. */
+    @Deprecated
     public byte[] downloadAndOpen(
             String containerUri, ProtectionMetadata protection,
             byte[] dek, byte[] kek) {
-        WorkbenchTransportClient.DownloadResult result = download(containerUri);
-        return WorkbenchEncryptor.openSealed(
-            result.payload(), protection, dek, kek);
+        throw new UnsupportedOperationException(
+            "downloadAndOpen (blob-level) is daemon-incompatible; "
+            + "use downloadDecrypted (per-AU) instead.");
     }
 
     // ----------------------------------------------- W3 surfaces
