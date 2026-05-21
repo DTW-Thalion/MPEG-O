@@ -11,6 +11,21 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed -- workbench encrypted-upload follow-ups: docs + live coverage (2026-05-21)
+
+Post-rework cleanup of the per-AU encrypted-upload feature:
+
+- Fixed the `workbench_quickstart.ipynb` tutorial, which still pointed
+  at the removed `upload_protected` / `download_and_open`; it now shows
+  `upload_encrypted` / `download_decrypted` (+ envelope / PQC variants).
+- Added live round-trips closing coverage gaps: `encrypt_headers=True`
+  (BYOK, Python + Java — exercises the encrypted-AU-headers path) and a
+  genomic-runs container (Python; the client path is content-agnostic
+  and the daemon stores the `.tis` opaquely).
+- Hardened the flaky `WorkbenchLiveTest.sessionCreateListTerminate`:
+  wait out the `starting` state before terminating and tolerate a 409
+  (already terminal/terminating) on DELETE.
+
 ### Added -- workbench client per-AU encrypted upload/download, envelope variant (2026-05-21)
 
 Phase 4 (final) of the per-AU encrypted-upload rework: the **envelope**
