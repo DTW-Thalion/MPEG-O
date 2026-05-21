@@ -21,7 +21,9 @@ Future Ws add:
     `.materialize`).
   - W3: `ttio.workbench.cohort`, `.pipeline`, `.jobs`, `.provenance`.
   - W4: `ttio.workbench.sessions`, `.session_proxy`.
-  - W6: `ttio.workbench.encryption` (BYOK / envelope / PQC).
+  - W6: per-AU encrypted upload on `WorkbenchClient`
+    (`upload_encrypted` / `_envelope` / `_pqc`); `ttio.workbench.pqc`
+    supplies the ML-KEM keypair generator + preview gate.
 
 The workbench wire contract is documented in
 `tti-workbench-server/Documentation/{auth, upload-protocol,
