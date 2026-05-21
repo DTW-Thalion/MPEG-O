@@ -24,6 +24,11 @@ on:
     paths:
       - 'python/src/ttio/workbench/**'
       - 'python/tests/integration/test_workbench_live.py'
+      # Java workbench client + its live test, so Java-only client
+      # changes also get live-daemon coverage (Phase 2 / PR #136 edited
+      # only java/** and never triggered this workflow).
+      - 'java/src/main/java/global/thalion/ttio/workbench/**'
+      - 'java/src/test/java/global/thalion/ttio/workbench/WorkbenchLiveTest.java'
       - 'scripts/workbench-live-smoke.sh'
       - '.github/workflows/workbench-live.yml'
 
@@ -149,38 +154,36 @@ jobs:
             -DBUILD_TESTING=OFF
           ninja && sudo ninja install && sudo ldconfig
 
-      - name: HDF5 cache
+      # HDF5 built with --enable-java (C + HL + Java bindings + threadsafe),
+      # matching scripts/install-hdf5.sh — the same build ci.yml's
+      # setup-hdf5 composite action uses (we can't reuse the action here
+      # because TTI-O is checked out to a subdir and the action runs its
+      # script relative to the workspace root). This provisions
+      # /usr/local/lib/libhdf5_java.so + jarhdf5.jar, which the Java live
+      # test (WorkbenchLiveTest) needs at runtime; the previous
+      # hand-rolled build omitted --enable-java, so the Java test failed
+      # with UnsatisfiedLinkError on H5dont_atexit. Cache key matches the
+      # composite action so the build is shared across workflows.
+      - name: Cache HDF5 1.14.6
         id: cache-hdf5
         uses: actions/cache@v4
         with:
           path: |
-            /usr/local/include/hdf5.h
-            /usr/local/include/hdf5_hl.h
-            /usr/local/include/H5*public.h
-            /usr/local/include/H5*Develop.h
-            /usr/local/include/H5*Module.h
-            /usr/local/include/H5pubconf.h
-            /usr/local/include/H5version.h
-            /usr/local/include/H5overflow.h
+            /usr/local/include/hdf5*
+            /usr/local/include/H5*
             /usr/local/lib/libhdf5*
-            /usr/local/lib/pkgconfig/hdf5*
-            /usr/local/lib/libhdf5.settings
-          key: hdf5-1.14.6-${{ runner.os }}
+            /usr/local/lib/libjarhdf5*
+            /usr/local/lib/jarhdf5.jar
+            /usr/local/share/hdf5_examples
+          key: hdf5-1.14.6-hl-${{ runner.os }}-narrow
 
-      - name: Build HDF5 1.14.6
+      - name: Install HDF5 1.14.6 from source (with Java bindings)
         if: steps.cache-hdf5.outputs.cache-hit != 'true'
-        run: |
-          cd /tmp
-          curl -sSL -o hdf5.tar.gz \
-            https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6.tar.gz
-          tar xzf hdf5.tar.gz && cd hdf5-1.14.6
-          ./configure --prefix=/usr/local --enable-build-mode=production \
-            --enable-hl --disable-fortran --disable-cxx \
-            --disable-tests --disable-tools CC=gcc
-          make -j$(nproc) && sudo make install && sudo ldconfig
+        working-directory: TTI-O
+        run: bash scripts/install-hdf5.sh 1.14.6
 
       - name: ldconfig refresh after HDF5
-        run: sudo ldconfig
+        run: sudo ldconfig /usr/local/lib
 
       - name: Build libttio_rans (TTI-O native)
         working-directory: TTI-O
@@ -204,7 +207,10 @@ jobs:
         run: bash scripts/build.sh
 
       - name: Install ttio Python package + pytest
-        run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python"
+        # [pqc] pulls in liboqs-python for the PQC per-AU live test
+        # (test_per_au_encrypted_pqc_upload_round_trip); without it the
+        # test errors with PQCUnavailableError instead of running.
+        run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python[pqc]"
 
       # JDK 25 for the Java live test (mvn -Dtest=WorkbenchLiveTest).
       # The runner's default JAVA_HOME is < 22; the java/ pom targets

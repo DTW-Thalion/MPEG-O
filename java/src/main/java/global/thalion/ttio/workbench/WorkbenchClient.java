@@ -20,8 +20,10 @@ import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
 import global.thalion.ttio.protection.EncryptedTransport;
+import global.thalion.ttio.protection.EncryptionManager;
 import global.thalion.ttio.protection.PerAUFile;
 import global.thalion.ttio.transport.TransportWriter;
+import global.thalion.ttio.workbench.pqc.WorkbenchPqc;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -30,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.security.SecureRandom;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -206,6 +209,78 @@ public final class WorkbenchClient implements AutoCloseable {
         WorkbenchTransportClient.DownloadResult result = download(containerUri);
         EncryptedTransport.readEncryptedToPath(outTioPath, result.payload(), "hdf5");
         return PerAUFile.decryptFile(outTioPath, key, "hdf5");
+    }
+
+    // ----------------------------------------- PQC variant (opt_pqc_preview)
+
+    private static final SecureRandom RNG = new SecureRandom();
+
+    /** Per-AU encrypt a {@code .tio} with a fresh DEK, wrap that DEK under
+     *  the recipient's ML-KEM-1024 public key, and upload it.
+     *
+     *  <p>Same daemon-faithful path as {@link #uploadEncrypted} (per-AU
+     *  AES-256-GCM inside a valid {@code .tis}), but the per-run DEK is not
+     *  caller-held: it is randomly generated, ML-KEM-wrapped, and carried
+     *  in the ProtectionMetadata packet. Only the holder of the matching
+     *  ML-KEM private key recovers it via {@link #downloadDecryptedPqc}.
+     *  The daemon never holds a key.</p>
+     *
+     *  <p>Preview-gated to mirror the server's {@code opt_pqc_preview}:
+     *  throws {@link WorkbenchPqc.PqcPreviewDisabledException} unless
+     *  {@code preview} is true. Cross-language equivalent: Python
+     *  {@code WorkbenchClient.upload_encrypted_pqc}.</p> */
+    public WorkbenchTransportClient.UploadResult uploadEncryptedPqc(
+            String project, String containerUri, String tioPath,
+            byte[] recipientPublicKey, boolean preview, boolean encryptHeaders)
+            throws IOException {
+        WorkbenchPqc.requirePreviewPublic(preview);
+        byte[] dek = new byte[32];
+        RNG.nextBytes(dek);
+        Path enc = Files.createTempFile("ttio-pqc", ".tio");
+        try {
+            Files.copy(Paths.get(tioPath), enc,
+                       StandardCopyOption.REPLACE_EXISTING);
+            PerAUFile.encryptFile(enc.toString(), dek, encryptHeaders, "hdf5");
+            byte[] wrapped = EncryptionManager.wrapKey(
+                dek, recipientPublicKey, false, WorkbenchPqc.ML_KEM_1024);
+            EncryptedTransport.stampTransportWrappedDek(
+                enc.toString(), wrapped, WorkbenchPqc.ML_KEM_1024, "hdf5");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (TransportWriter writer = new TransportWriter(bos)) {
+                EncryptedTransport.writeEncryptedDataset(
+                    enc.toString(), writer, "hdf5");
+            }
+            return upload(project, containerUri, bos.toByteArray());
+        } finally {
+            Files.deleteIfExists(enc);
+        }
+    }
+
+    /** Download a PQC per-AU-encrypted container and decrypt it.
+     *
+     *  <p>Materialises the still-encrypted {@code .tio}, unwraps the
+     *  per-run DEK from the ProtectionMetadata with the recipient's
+     *  ML-KEM-1024 private key, then returns the decrypted channels per
+     *  run. Counterpart to {@link #uploadEncryptedPqc}; preview-gated the
+     *  same way.</p> */
+    public Map<String, PerAUFile.DecryptedRun> downloadDecryptedPqc(
+            String containerUri, byte[] recipientPrivateKey,
+            String outTioPath, boolean preview) throws IOException {
+        WorkbenchPqc.requirePreviewPublic(preview);
+        WorkbenchTransportClient.DownloadResult result = download(containerUri);
+        EncryptedTransport.readEncryptedToPath(outTioPath, result.payload(), "hdf5");
+        EncryptedTransport.WrappedDek wd =
+            EncryptedTransport.readTransportWrappedDek(outTioPath, "hdf5");
+        if (wd.wrappedDek() == null || wd.wrappedDek().length == 0) {
+            throw new IllegalStateException(
+                "container carries no wrapped DEK; not a PQC/envelope "
+                + "upload (use downloadDecrypted with the BYOK key instead)");
+        }
+        String alg = wd.kekAlgorithm() == null || wd.kekAlgorithm().isEmpty()
+            ? WorkbenchPqc.ML_KEM_1024 : wd.kekAlgorithm();
+        byte[] dek = EncryptionManager.unwrapKey(
+            wd.wrappedDek(), recipientPrivateKey, alg);
+        return PerAUFile.decryptFile(outTioPath, dek, "hdf5");
     }
 
     // -- deprecated W6.2 blob encryption (daemon-incompatible) --
