@@ -11,6 +11,24 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed -- workbench upload ack-drain on websockets >= 14 (2026-05-20)
+
+`UploadClient._drain_acks` read `self._ws.messages`, a deque the
+`websockets` >= 14 asyncio `ClientConnection` no longer exposes, so
+**every** live upload crashed with `AttributeError`. No live test had
+exercised `upload_bytes` against a real daemon, so this went uncaught.
+Rewritten to a cancel-safe non-blocking `recv()` drain (acks are still
+fully processed by `_wait_for_done`).
+
+Added a valid-`.tis` upload -> ingest -> download -> decode round-trip
+to the `workbench-live` smoke (the first upload/download e2e there;
+9/9 against a local daemon). This also documents -- via
+`docs/parity-audit-v1.0.md` 3.2 -- that **W6.2 blob-level BYOK is not
+daemon-compatible**: the daemon validates uploads as transport streams
+(rejects opaque ciphertext) and re-encodes on download, so encrypted
+upload must use per-AU encryption yielding a valid `.tis`. That rework
+is the real W6.2 follow-up.
+
 ### Added -- W6.6: SDK reference docs + quickstart + finalisation (2026-05-20)
 
 Closes **W6** (the final workbench-client milestone) — W1–W6 ship a
