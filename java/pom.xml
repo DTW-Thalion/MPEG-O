@@ -352,6 +352,10 @@
                     <doctitle>TTI-O Java API (v1.0.0)</doctitle>
                     <windowtitle>TTI-O Java API</windowtitle>
                     <show>protected</show>
+                    <!-- Reproducible output: drop the per-page dc.created
+                         date so regenerating the committed docs/api/java
+                         only diffs on real API changes, not the build day. -->
+                    <notimestamp>true</notimestamp>
                     <failOnWarnings>false</failOnWarnings>
                     <doclint>none</doclint>
                     <additionalOptions>

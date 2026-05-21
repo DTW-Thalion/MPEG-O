@@ -58,6 +58,13 @@ jobs:
         with:
           distribution: temurin
           java-version: '25'
+      # Prune first: the javadoc plugin writes into the committed
+      # docs/api/java (reportOutputDirectory) but never deletes pages for
+      # removed classes, so orphaned HTML accumulated across refactors.
+      # Clean the dir so the generated tree (and the uploaded artifact)
+      # matches the current source exactly.
+      - name: Clean stale Javadoc
+        run: rm -rf docs/api/java
       - name: Generate Javadoc
         working-directory: java
         run: mvn -B -q javadoc:javadoc
