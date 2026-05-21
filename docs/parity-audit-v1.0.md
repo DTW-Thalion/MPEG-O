@@ -124,12 +124,16 @@ reader/writer codecs themselves already exist in all three languages.
    per-AU client wiring (`upload_encrypted` / `download_decrypted`, +
    the PQC variant) is unblocked — Phases 1-4 of the plan.
 
-### 3.3 Flaky WebSocket test
+### 3.3 Flaky WebSocket test — RESOLVED
 
-`tio-browser` `TisWsUploaderTest.uploadSendsCorrectFrameSequence` uses a
-10 s `CountDownLatch.await` against an embedded WS server and flakes on
-loaded CI runners (its large-file sibling already uses 15 s). Harden the
-connection wait / bump the timeout.
+`tio-browser` `TisWsUploaderTest.uploadSendsCorrectFrameSequence` used a
+10 s `CountDownLatch.await` against an embedded WS server and flaked on
+loaded CI runners. Fixed in two parts: PR #128 bumped the await budgets
+(`done.await` 10 s/15 s → 30 s, `serverStarted` 5 s → 15 s); the
+follow-up added a deterministic TCP-readiness probe in `@BeforeEach`
+(`awaitPortAccepting`) so the client never dials before the embedded
+server is actually accepting — closing the connection-wait race that a
+larger timeout alone does not remove.
 
 ### 3.4 Documentation hygiene
 
