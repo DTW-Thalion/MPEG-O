@@ -21,6 +21,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -126,7 +127,7 @@ public final class EncryptedTransport {
                                     firstCh + "_algorithm", "aes-256-gcm");
                                 String kek = attrStr(sig,
                                     firstCh + "_kek_algorithm", "");
-                                byte[] wrapped = attrBytes(sig,
+                                byte[] wrapped = readWrappedDekAttr(sig,
                                     firstCh + "_wrapped_dek");
 
                                 writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
@@ -195,7 +196,7 @@ public final class EncryptedTransport {
             String cipherSuite = attrStr(sig,
                 firstCh + "_algorithm", "aes-256-gcm");
             String kek = attrStr(sig, firstCh + "_kek_algorithm", "");
-            byte[] wrapped = attrBytes(sig, firstCh + "_wrapped_dek");
+            byte[] wrapped = readWrappedDekAttr(sig, firstCh + "_wrapped_dek");
             writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
                 datasetId, 0, encodeProtection(cipherSuite, kek, wrapped));
 
@@ -505,7 +506,8 @@ public final class EncryptedTransport {
                                         attrStr(sig, "channel_names", ""));
                                     if (names.isEmpty()) continue;
                                     String fc = names.get(0);
-                                    sig.setAttribute(fc + "_wrapped_dek", wrappedDek);
+                                    setWrappedDekAttr(sig, fc + "_wrapped_dek",
+                                                       wrappedDek);
                                     sig.setAttribute(fc + "_kek_algorithm",
                                                       kekAlgorithm);
                                 }
@@ -555,7 +557,7 @@ public final class EncryptedTransport {
                                         continue;
                                     }
                                     return new WrappedDek(
-                                        attrBytes(sig, fc + "_wrapped_dek"),
+                                        readWrappedDekAttr(sig, fc + "_wrapped_dek"),
                                         attrStr(sig, fc + "_kek_algorithm", ""));
                                 }
                             }
@@ -883,7 +885,7 @@ public final class EncryptedTransport {
                 pm != null && pm.cipherSuite != null
                     ? pm.cipherSuite : "aes-256-gcm");
             if (pm != null && pm.wrappedDek != null && pm.wrappedDek.length > 0) {
-                sig.setAttribute(cname + "_wrapped_dek", pm.wrappedDek);
+                setWrappedDekAttr(sig, cname + "_wrapped_dek", pm.wrappedDek);
                 sig.setAttribute(cname + "_kek_algorithm",
                                   pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
             }
@@ -953,7 +955,7 @@ public final class EncryptedTransport {
                         pm != null && pm.cipherSuite != null
                             ? pm.cipherSuite : "aes-256-gcm");
                     if (pm != null && pm.wrappedDek != null && pm.wrappedDek.length > 0) {
-                        sig.setAttribute(cname + "_wrapped_dek", pm.wrappedDek);
+                        setWrappedDekAttr(sig, cname + "_wrapped_dek", pm.wrappedDek);
                         sig.setAttribute(cname + "_kek_algorithm",
                                           pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
                     }
@@ -1098,6 +1100,29 @@ public final class EncryptedTransport {
         Object v = g.getAttribute(name);
         if (v instanceof byte[] b) return b;
         if (v instanceof String s) return s.getBytes(StandardCharsets.UTF_8);
+        return new byte[0];
+    }
+
+    // The wrapped DEK is binary (v1.2 / ML-KEM blob with embedded NULs).
+    // Storage providers only support String / Number attributes (no
+    // byte[]), so it is base64-encoded at the attribute boundary. The
+    // byte[] flows through the rest of the code unchanged; this is the
+    // Java analogue of the Python uint8-array attribute (each language
+    // round-trips its own .tio, so the on-disk encodings need not match
+    // — the cross-language interchange is the transport packet bytes).
+    private static void setWrappedDekAttr(StorageGroup g, String name,
+                                            byte[] wrapped) {
+        if (wrapped == null || wrapped.length == 0) return;
+        g.setAttribute(name, Base64.getEncoder().encodeToString(wrapped));
+    }
+
+    private static byte[] readWrappedDekAttr(StorageGroup g, String name) {
+        if (!g.hasAttribute(name)) return new byte[0];
+        Object v = g.getAttribute(name);
+        if (v instanceof String s && !s.isEmpty()) {
+            return Base64.getDecoder().decode(s);
+        }
+        if (v instanceof byte[] b) return b;  // legacy / direct byte[]
         return new byte[0];
     }
 
