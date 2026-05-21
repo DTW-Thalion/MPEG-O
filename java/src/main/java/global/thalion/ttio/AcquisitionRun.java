@@ -87,6 +87,50 @@ public class AcquisitionRun implements
     private final Map<String, double[]> decryptedChannels =
             new java.util.LinkedHashMap<>();
 
+    // Vibrational-spectrum run metadata (IR / Raman / UV-Vis), parity
+    // with Python's WrittenRun fields. When spectrumClassOverride is one
+    // of the vibrational class names it drives both the @spectrum_class
+    // attribute on write and the subclass produced by objectAtIndex;
+    // otherwise the run behaves as MS / NMR as before. Set via
+    // setIRMetadata / setRamanMetadata / setUVVisMetadata (used by
+    // readFrom and by callers authoring vibrational runs).
+    private String spectrumClassOverride = null;
+    private Enums.IRMode irMode = Enums.IRMode.TRANSMITTANCE;
+    private double irResolutionCmInv = 0.0;
+    private long irNumberOfScans = 0;
+    private double ramanExcitationWavelengthNm = 0.0;
+    private double ramanLaserPowerMw = 0.0;
+    private double ramanIntegrationTimeSec = 0.0;
+    private double uvvisPathLengthCm = 0.0;
+
+    /** Mark this run as IR and attach its metadata. The wavenumber +
+     *  intensity channels supply the spectrum payload; UV-Vis solvent is
+     *  carried by the {@code solvent} constructor arg. */
+    public void setIRMetadata(Enums.IRMode mode, double resolutionCmInv,
+                              long numberOfScans) {
+        this.spectrumClassOverride = "TTIOIRSpectrum";
+        this.irMode = mode != null ? mode : Enums.IRMode.TRANSMITTANCE;
+        this.irResolutionCmInv = resolutionCmInv;
+        this.irNumberOfScans = numberOfScans;
+    }
+
+    /** Mark this run as Raman and attach its metadata. */
+    public void setRamanMetadata(double excitationWavelengthNm,
+                                 double laserPowerMw,
+                                 double integrationTimeSec) {
+        this.spectrumClassOverride = "TTIORamanSpectrum";
+        this.ramanExcitationWavelengthNm = excitationWavelengthNm;
+        this.ramanLaserPowerMw = laserPowerMw;
+        this.ramanIntegrationTimeSec = integrationTimeSec;
+    }
+
+    /** Mark this run as UV-Vis and attach its metadata (the solvent label
+     *  reuses the {@code solvent} field / {@code @solvent} attribute). */
+    public void setUVVisMetadata(double pathLengthCm) {
+        this.spectrumClassOverride = "TTIOUVVisSpectrum";
+        this.uvvisPathLengthCm = pathLengthCm;
+    }
+
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
                           InstrumentConfig instrumentConfig,
@@ -175,8 +219,18 @@ public class AcquisitionRun implements
         return overlay != null ? overlay : channels.getOrDefault(name, new double[0]);
     }
 
+    /** Hyperslab a concatenated channel buffer; empty when the channel
+     *  is absent or too short (e.g. an encrypted channel not yet
+     *  decrypted). */
+    private static double[] slice(double[] arr, long offset, int length) {
+        int o = (int) offset;
+        if (arr == null || arr.length < o + length) return new double[0];
+        return Arrays.copyOfRange(arr, o, o + length);
+    }
+
     /** Get the spectrum class name for HDF5 @spectrum_class attribute. */
     public String spectrumClassName() {
+        if (spectrumClassOverride != null) return spectrumClassOverride;
         return switch (acquisitionMode) {
             case NMR_1D -> "TTIONMRSpectrum";
             case NMR_2D -> "TTIONMR2DSpectrum";
@@ -200,6 +254,36 @@ public class AcquisitionRun implements
         double scanTime = spectrumIndex.retentionTimeAt(index);
         double precursorMz = spectrumIndex.precursorMzAt(index);
         int precursorCharge = spectrumIndex.precursorChargeAt(index);
+
+        // Vibrational types dispatch on the stored @spectrum_class
+        // (parity with Python's _materialize_spectrum); their channels
+        // are wavenumber/intensity (IR/Raman) or wavelength/absorbance
+        // (UV-Vis), not mz/chemical_shift.
+        if (spectrumClassOverride != null) {
+            switch (spectrumClassOverride) {
+                case "TTIOIRSpectrum" -> {
+                    return new IRSpectrum(
+                        slice(effectiveChannel("wavenumber"), offset, length),
+                        slice(effectiveChannel("intensity"), offset, length),
+                        index, scanTime, irMode, irResolutionCmInv,
+                        irNumberOfScans);
+                }
+                case "TTIORamanSpectrum" -> {
+                    return new RamanSpectrum(
+                        slice(effectiveChannel("wavenumber"), offset, length),
+                        slice(effectiveChannel("intensity"), offset, length),
+                        index, scanTime, ramanExcitationWavelengthNm,
+                        ramanLaserPowerMw, ramanIntegrationTimeSec);
+                }
+                case "TTIOUVVisSpectrum" -> {
+                    return new UVVisSpectrum(
+                        slice(effectiveChannel("wavelength"), offset, length),
+                        slice(effectiveChannel("absorbance"), offset, length),
+                        index, scanTime, uvvisPathLengthCm, solvent);
+                }
+                default -> { /* fall through to NMR / MS */ }
+            }
+        }
 
         if (chemShift.length > 0) {
             double[] cs = java.util.Arrays.copyOfRange(chemShift, (int) offset, (int) offset + length);
@@ -386,6 +470,36 @@ public class AcquisitionRun implements
             if (solvent != null && !solvent.isEmpty()) {
                 runGroup.setAttribute("solvent", solvent);
             }
+            // Vibrational-spectrum run metadata (parity with Python's
+            // _write_run). Emitted only for the matching class so MS/NMR
+            // runs stay byte-identical. ir_mode is always written for IR
+            // (0 = TRANSMITTANCE is meaningful); the float/scan fields are
+            // written only when non-zero, matching the Python writer.
+            if ("TTIOIRSpectrum".equals(spectrumClassOverride)) {
+                runGroup.setAttribute("ir_mode", (long) irMode.ordinal());
+                if (irResolutionCmInv != 0.0) {
+                    runGroup.setAttribute("ir_resolution_cm_inv", irResolutionCmInv);
+                }
+                if (irNumberOfScans != 0) {
+                    runGroup.setAttribute("ir_number_of_scans", irNumberOfScans);
+                }
+            } else if ("TTIORamanSpectrum".equals(spectrumClassOverride)) {
+                if (ramanExcitationWavelengthNm != 0.0) {
+                    runGroup.setAttribute("raman_excitation_wavelength_nm",
+                                          ramanExcitationWavelengthNm);
+                }
+                if (ramanLaserPowerMw != 0.0) {
+                    runGroup.setAttribute("raman_laser_power_mw", ramanLaserPowerMw);
+                }
+                if (ramanIntegrationTimeSec != 0.0) {
+                    runGroup.setAttribute("raman_integration_time_sec",
+                                          ramanIntegrationTimeSec);
+                }
+            } else if ("TTIOUVVisSpectrum".equals(spectrumClassOverride)) {
+                if (uvvisPathLengthCm != 0.0) {
+                    runGroup.setAttribute("uvvis_path_length_cm", uvvisPathLengthCm);
+                }
+            }
             if (spectrometerFrequencyMHz > 0) {
                 try (StorageDataset ds = runGroup.createDataset(
                         "_spectrometer_freq_mhz", Precision.FLOAT64, 1, 0,
@@ -450,9 +564,44 @@ public class AcquisitionRun implements
             List<Chromatogram> chroms = readChromatograms(runGroup);
             List<ProvenanceRecord> provenance = readProvenance(runGroup);
 
-            return new AcquisitionRun(runName, mode, index, config, channels,
-                    chroms, provenance, nucleusType, freqMHz, modality, solvent);
+            AcquisitionRun run = new AcquisitionRun(runName, mode, index, config,
+                    channels, chroms, provenance, nucleusType, freqMHz,
+                    modality, solvent);
+
+            // Vibrational runs (IR / Raman / UV-Vis) carry a
+            // @spectrum_class that the acquisition-mode switch can't
+            // derive; restore it + the per-class metadata so
+            // objectAtIndex produces the right subclass (parity with
+            // Python's AcquisitionRun.open).
+            String spectrumClass = runGroup.hasAttribute("spectrum_class")
+                    ? (String) runGroup.getAttribute("spectrum_class") : null;
+            if ("TTIOIRSpectrum".equals(spectrumClass)) {
+                int ord = runGroup.hasAttribute("ir_mode")
+                        ? ((Number) runGroup.getAttribute("ir_mode")).intValue() : 0;
+                Enums.IRMode[] vals = Enums.IRMode.values();
+                run.setIRMetadata(
+                        vals[ord >= 0 && ord < vals.length ? ord : 0],
+                        attrDouble(runGroup, "ir_resolution_cm_inv"),
+                        (long) attrDouble(runGroup, "ir_number_of_scans"));
+            } else if ("TTIORamanSpectrum".equals(spectrumClass)) {
+                run.setRamanMetadata(
+                        attrDouble(runGroup, "raman_excitation_wavelength_nm"),
+                        attrDouble(runGroup, "raman_laser_power_mw"),
+                        attrDouble(runGroup, "raman_integration_time_sec"));
+            } else if ("TTIOUVVisSpectrum".equals(spectrumClass)) {
+                run.setUVVisMetadata(attrDouble(runGroup, "uvvis_path_length_cm"));
+            }
+            return run;
         }
+    }
+
+    /** Read a numeric run attribute as a double, defaulting to 0.0 when
+     *  absent (vibrational metadata is sparse — only non-default fields
+     *  are written). */
+    private static double attrDouble(StorageGroup g, String name) {
+        if (!g.hasAttribute(name)) return 0.0;
+        Object v = g.getAttribute(name);
+        return v instanceof Number n ? n.doubleValue() : 0.0;
     }
 
     private void writeSignalChannels(StorageGroup runGroup) {

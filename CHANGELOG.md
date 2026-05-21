@@ -11,6 +11,26 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- vibrational .tio materialization, Java parity (2026-05-21)
+
+Java mirror of the §3.1 vibrational round-trip (PR after the Python
+landing): `AcquisitionRun` now materializes `IRSpectrum` /
+`RamanSpectrum` / `UVVisSpectrum` and persists/reads their metadata as
+run-group attributes, matching the Python attribute contract so a
+Python-written vibrational `.tio` reads in Java (and vice versa).
+
+- `AcquisitionRun.setIRMetadata` / `setRamanMetadata` / `setUVVisMetadata`
+  tag a run with a vibrational `@spectrum_class` + its scalar metadata;
+  `objectAtIndex` dispatches on that class to build the right subclass
+  (channels `wavenumber`/`intensity` or `wavelength`/`absorbance`).
+- `writeTo` emits the same attributes Python writes (`ir_mode` /
+  `ir_resolution_cm_inv` / `ir_number_of_scans`, `raman_*`,
+  `uvvis_path_length_cm`; UV-Vis solvent via the existing `@solvent`),
+  and `readFrom` restores them from `@spectrum_class` + the attrs.
+  MS/NMR runs are unaffected (override unset).
+- `JcampVibrationalRoundTripTest`: write → read → materialize for each
+  type plus an MS-unaffected guard. ObjC parity follows.
+
 ### Added -- JCAMP-DX vibrational .tio round-trip (Python) (2026-05-21)
 
 Closes parity-audit v1.0 §3.1 on the Python side: the `.tio` container
