@@ -314,9 +314,7 @@ def _encode_unsupported(fmt: str) -> int:
     from ttio.importers import registry
     supported = ", ".join(registry.supported_encode_formats())
     print(
-        f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}. "
-        f"(JCAMP-DX import to .tio is GUI-only today; the Python CLI "
-        f"reads JDX but has no .tio bridge yet.)",
+        f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}.",
         file=sys.stderr)
     return 3
 
@@ -368,9 +366,7 @@ def _export_unsupported(fmt: str) -> int:
     from ttio.exporters import registry
     supported = ", ".join(registry.supported_export_formats())
     print(
-        f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}. "
-        f"(JCAMP-DX export is GUI-only today; Python can't yet reconstruct "
-        f"IR/Raman/UVVis spectra from a .tio.)",
+        f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}.",
         file=sys.stderr)
     return 3
 

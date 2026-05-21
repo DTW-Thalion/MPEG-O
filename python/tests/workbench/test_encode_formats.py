@@ -24,24 +24,21 @@ GUI_FORMATS = {
     "Waters MassLynx", "Thermo .raw", "BAM", "SAM", "CRAM", "FASTA", "FASTQ",
 }
 
-# Python-side documented gap: JDX is readable but has no `.tio` bridge.
-PYTHON_DEFERRED = {"JCAMP-DX"}
-
 
 def test_supported_formats_set():
     assert set(registry.supported_encode_formats()) == {
-        "mzml", "mztab", "imzml", "nmrml", "bam", "sam", "cram",
+        "mzml", "mztab", "imzml", "nmrml", "jcamp-dx", "bam", "sam", "cram",
         "thermo-raw", "waters-masslynx", "bruker-timstof",
         "fasta", "fastq",
     }
 
 
-def test_gui_cli_parity_modulo_documented_gap():
+def test_gui_cli_parity():
     cli_display = {registry.spec_for(k).display_name
                    for k in registry.registry_keys()} | {"FASTA", "FASTQ"}
-    # Every GUI format is reachable from the CLI except the documented
-    # Python gap (JCAMP-DX).
-    assert GUI_FORMATS - cli_display == PYTHON_DEFERRED
+    # Every GUI format is now reachable from the CLI (JCAMP-DX gap closed
+    # by the vibrational .tio round-trip).
+    assert GUI_FORMATS - cli_display == set()
 
 
 @pytest.mark.parametrize("token,expected", [
@@ -69,7 +66,6 @@ def test_cli_unknown_format_exits_3(capsys):
     assert rc == 3
     err = capsys.readouterr().err
     assert "unsupported --format" in err
-    assert "JCAMP-DX" in err  # documents the Python gap
 
 
 def test_cli_bam_is_recognised_not_unsupported(capsys, tmp_path):
