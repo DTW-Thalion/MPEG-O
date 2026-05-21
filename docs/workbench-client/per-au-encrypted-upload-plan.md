@@ -85,13 +85,16 @@ encrypted-`.tis` encode already work; the daemon preserves the stream.
 
 ## Phases
 
-1. **Python client path.** Replace the blob `seal`/`open` upload with a
-   per-AU path: `WorkbenchClient.upload_encrypted(tio, key, *,
-   encrypt_headers=False)` → `encrypt_per_au` + `write_encrypted_dataset`
-   → `upload_bytes`; `download_decrypted(uri, key, out)` →
-   `download_bytes` → `read_encrypted_to_file` → `decrypt_per_au`.
-   Keep the `ProtectionMetadata` surface. Deprecate `upload_protected`
-   blob mode (raise with a pointer, or remove if unused).
+1. **Python client path — DONE.** `WorkbenchClient.upload_encrypted(*,
+   project, container_uri, tio_path, key, encrypt_headers=False)`
+   encrypts a *copy* of the `.tio` per-AU (`encrypt_per_au`) →
+   `write_encrypted_dataset` → `upload_bytes`.
+   `download_decrypted(*, container_uri, key, out_tio_path)` →
+   `download_bytes` → `read_encrypted_to_file` (materialises the
+   still-encrypted `.tio`) → returns `decrypt_per_au(...)` channels.
+   The daemon-incompatible blob `upload_protected` / `download_and_open`
+   now raise `NotImplementedError` pointing here. Validated e2e by
+   `test_per_au_encrypted_upload_round_trip` (live smoke, 10/10).
 2. **Java mirror** (lockstep, Decision 2): `WorkbenchClient.uploadEncrypted`
    / `downloadDecrypted` over `PerAUFile` + `EncryptedTransport`.
 3. **PQC variant** (`opt_pqc_preview`): the same path with an ML-KEM

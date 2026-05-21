@@ -271,37 +271,28 @@ def test_tis_upload_download_round_trip(client, tmp_path):
 # ---------------------------------------------------- per-AU encrypted upload
 
 def test_per_au_encrypted_upload_round_trip(client, tmp_path):
-    """Phase 0 of the per-AU encrypted-upload rework
-    (docs/workbench-client/per-au-encrypted-upload-plan.md): an
-    encrypted .tis (per-AU AES-GCM + ProtectionMetadata) must survive
-    the daemon's ingest -> re-emit so the receiver can decrypt with the
-    same key. This is the correct encryption model after blob-BYOK was
-    found daemon-incompatible (§3.2).
+    """Phase 1: the client per-AU encrypted upload/download round-trip.
 
-    Passes since tti-workbench-server #31 (encryption-aware passthrough:
-    encrypted containers are stored + served as opaque .tis verbatim)."""
-    import io
-
+    `upload_encrypted` (encrypt a copy of the .tio per-AU + emit a valid
+    .tis) -> daemon stores it opaque (server #31) -> `download_decrypted`
+    (materialise + decrypt) -> channel values match the plaintext source.
+    This is the correct encryption model after blob-BYOK was found
+    daemon-incompatible (parity-audit §3.2; per-au-encrypted-upload-plan)."""
     import numpy as np
     from ttio import SpectralDataset, WrittenRun
     from ttio.enums import AcquisitionMode
-    from ttio.encryption_per_au import decrypt_per_au_file, encrypt_per_au_file
-    from ttio.transport.codec import TransportWriter
-    from ttio.transport.encrypted import (
-        is_per_au_encrypted,
-        read_encrypted_to_file,
-        write_encrypted_dataset,
-    )
+    from ttio.transport.encrypted import is_per_au_encrypted
 
     key = bytes([0x5A] * 32)
+    mz = np.linspace(100.0, 105.0, 12)
+    intensity = np.linspace(1.0, 120.0, 12)
     src = tmp_path / "enc_src.tio"
     SpectralDataset.write_minimal(
         str(src), title="enc", isa_investigation_id="TTIO:enc",
         runs={"run_0001": WrittenRun(
             spectrum_class="TTIOMassSpectrum",
             acquisition_mode=int(AcquisitionMode.MS1_DDA),
-            channel_data={"mz": np.linspace(100.0, 105.0, 12),
-                          "intensity": np.linspace(1.0, 120.0, 12)},
+            channel_data={"mz": mz, "intensity": intensity},
             offsets=np.array([0, 6], dtype=np.uint64),
             lengths=np.array([6, 6], dtype=np.uint32),
             retention_times=np.array([0.0, 1.0]),
@@ -312,26 +303,17 @@ def test_per_au_encrypted_upload_round_trip(client, tmp_path):
             base_peak_intensities=np.array([60.0, 120.0]),
         )})
 
-    # Encrypt per-AU in place, then emit a valid encrypted .tis.
-    encrypt_per_au_file(str(src), key)
-    stream = io.BytesIO()
-    with TransportWriter(stream) as tw:
-        write_encrypted_dataset(tw, str(src))
-    tis_bytes = stream.getvalue()
-
     uri = f"uri:tio:{PROJECT}-enc-{uuid.uuid4().hex[:8]}"
-    result = asyncio.run(client.upload_bytes(
-        project=PROJECT, container_uri=uri, data=tis_bytes))
-    dl = asyncio.run(client.download_bytes(container_uri=result.container_uri))
-    assert dl.payload, "download returned no bytes"
+    result = asyncio.run(client.upload_encrypted(
+        project=PROJECT, container_uri=uri, tio_path=str(src), key=key))
 
-    # Reconstruct the (still-encrypted) .tio from the re-emitted stream,
-    # then decrypt both ends and compare signal values.
-    rt = tmp_path / "rt.tio"
-    read_encrypted_to_file(io.BytesIO(dl.payload), rt)
-    assert is_per_au_encrypted(str(rt)), \
-        "re-emitted stream lost its per-AU encryption"
-    originals = decrypt_per_au_file(str(src), key)["run_0001"]
-    rt_values = decrypt_per_au_file(str(rt), key)["run_0001"]
-    for cname in ("mz", "intensity"):
-        np.testing.assert_allclose(rt_values[cname], originals[cname])
+    out = tmp_path / "rt.tio"
+    channels = asyncio.run(client.download_decrypted(
+        container_uri=result.container_uri, key=key, out_tio_path=str(out)))
+
+    rt = channels["run_0001"]
+    np.testing.assert_allclose(rt["mz"], mz)
+    np.testing.assert_allclose(rt["intensity"], intensity)
+    # The materialised container on disk is still encrypted: the daemon
+    # never held the key, and download_decrypted decrypts client-side.
+    assert is_per_au_encrypted(str(out))
