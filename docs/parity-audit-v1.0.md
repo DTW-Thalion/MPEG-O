@@ -88,11 +88,32 @@ CHANGELOG entries.
 
 ### 3.2 Live-daemon round-trips for workbench encryption / PQC
 
-W6.2 (BYOK / envelope) and W6.3 (PQC) shipped **unit-level**
-byte-equivalence + cross-language JSON anchors; the **live-daemon**
-"encrypt → upload → re-download → decrypt against a real daemon"
-variant was deferred. The W5 `workbench-live` smoke harness exists and
-could host these.
+**Investigated against a real daemon — surfaced two findings.**
+
+1. **Bug fixed.** The `workbench-live` smoke had *no* upload/download
+   e2e at all, so a real bug in the upload client went uncaught:
+   `UploadClient._drain_acks` read `self._ws.messages`, a deque the
+   `websockets` ≥ 14 asyncio `ClientConnection` no longer exposes — so
+   *any* live upload crashed with `AttributeError`. Rewritten to a
+   cancel-safe non-blocking `recv()` drain. A valid-`.tis`
+   upload → ingest → download → decode round-trip is now in the smoke
+   (9/9 against a local daemon).
+
+2. **W6.2 blob-level BYOK is NOT daemon-compatible (design gap).** The
+   daemon parses every upload as a transport stream and rejects
+   anything without valid packet magic (`transport stream error:
+   invalid packet magic`), and on download it **re-encodes** a fresh
+   `.tis` from storage (uploads are *not* byte-preserved — only the
+   data round-trips). W6.2 BYOK seals the whole payload into an opaque
+   ciphertext blob, which therefore cannot survive an upload. The unit
+   suite passed only because it never touched the daemon. **Correct
+   model:** encrypted upload must use **per-AU encryption** that yields
+   a *valid* `.tis` (the core `encrypt_per_au` → `write_encrypted_dataset`
+   path, whose encrypted AU payloads + `ProtectionMetadata` packet
+   survive ingest/re-emit). Wiring that through the workbench client is
+   the real W6.2 follow-up; the live BYOK round-trip is intentionally
+   not added until then. PQC live round-trips sit on the same envelope
+   path and wait on the same rework.
 
 ### 3.3 Flaky WebSocket test
 
