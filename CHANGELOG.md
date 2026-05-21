@@ -11,6 +11,31 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- JCAMP-DX vibrational .tio round-trip (Python) (2026-05-21)
+
+Closes parity-audit v1.0 §3.1 on the Python side: the `.tio` container
+now round-trips the vibrational spectrum types (IR / Raman / UV-Vis),
+unblocking `ttio encode --format jcamp-dx` and `ttio export --format
+jcamp-dx`.
+
+- `AcquisitionRun._materialize_spectrum` reconstructs `IRSpectrum`,
+  `RamanSpectrum`, and `UVVisSpectrum` (previously only `MassSpectrum` /
+  `NMRSpectrum`).
+- Per-class metadata persists as scalar run-group attributes
+  (`ir_mode` / `ir_resolution_cm_inv` / `ir_number_of_scans`,
+  `raman_excitation_wavelength_nm` / `_laser_power_mw` /
+  `_integration_time_sec`, `uvvis_path_length_cm`; UV-Vis solvent reuses
+  the existing `solvent` attribute), via new `WrittenRun` fields written
+  in `_write_run` and read in `AcquisitionRun.open`. MS/NMR files stay
+  byte-identical (attributes emitted only when set). Added
+  `_hdf5_io.write_float_attr` / `read_float_attr`.
+- `jcamp-dx` removed from `DEFERRED_PYTHON` in both the importer and
+  exporter registries; `importers.jcamp_dx.build_written_run` bridges a
+  parsed vibrational `Spectrum` to a one-spectrum `WrittenRun`. CLI
+  unsupported-format messages no longer special-case JCAMP-DX.
+- Cross-language Java + ObjC parity for the vibrational `.tio`
+  materialization follows in separate PRs.
+
 ### Removed -- workbench blob-level encryption path (2026-05-21)
 
 Removed the daemon-incompatible W6.2/W6.3 blob upload path, superseded by
