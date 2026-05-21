@@ -446,3 +446,104 @@ def test_per_au_encrypted_envelope_upload_round_trip(client, tmp_path):
         asyncio.run(client.download_decrypted_envelope(
             container_uri=result.container_uri, kek=wrong_kek,
             out_tio_path=str(bad_out)))
+
+
+def test_per_au_encrypted_upload_round_trip_encrypted_headers(client, tmp_path):
+    """BYOK round-trip with `encrypt_headers=True`.
+
+    The other encrypted live tests all use encrypt_headers=False; this
+    exercises the distinct encrypted-AU-headers transport path (the AU
+    header bytes are encrypted too, not just channel payloads), which is
+    a different code path in encrypt_per_au / write_encrypted_dataset."""
+    import numpy as np
+    from ttio import SpectralDataset, WrittenRun
+    from ttio.enums import AcquisitionMode
+
+    key = bytes([0x77] * 32)
+    mz = np.linspace(100.0, 105.0, 12)
+    intensity = np.linspace(1.0, 120.0, 12)
+    src = tmp_path / "hdr_src.tio"
+    SpectralDataset.write_minimal(
+        str(src), title="hdr", isa_investigation_id="TTIO:hdr",
+        runs={"run_0001": WrittenRun(
+            spectrum_class="TTIOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={"mz": mz, "intensity": intensity},
+            offsets=np.array([0, 6], dtype=np.uint64),
+            lengths=np.array([6, 6], dtype=np.uint32),
+            retention_times=np.array([0.0, 1.0]),
+            ms_levels=np.ones(2, dtype=np.int32),
+            polarities=np.ones(2, dtype=np.int32),
+            precursor_mzs=np.zeros(2),
+            precursor_charges=np.zeros(2, dtype=np.int32),
+            base_peak_intensities=np.array([60.0, 120.0]),
+        )})
+
+    uri = f"uri:tio:{PROJECT}-hdr-{uuid.uuid4().hex[:8]}"
+    result = asyncio.run(client.upload_encrypted(
+        project=PROJECT, container_uri=uri, tio_path=str(src), key=key,
+        encrypt_headers=True))
+
+    out = tmp_path / "hdr_rt.tio"
+    channels = asyncio.run(client.download_decrypted(
+        container_uri=result.container_uri, key=key, out_tio_path=str(out)))
+
+    rt = channels["run_0001"]
+    np.testing.assert_allclose(rt["mz"], mz)
+    np.testing.assert_allclose(rt["intensity"], intensity)
+
+
+def test_per_au_encrypted_genomic_upload_round_trip(client, tmp_path):
+    """BYOK round-trip for a genomic_runs container.
+
+    All other encrypted live tests use ms_runs; the per-AU helpers also
+    walk /study/genomic_runs/. The client encrypt/upload/decrypt code is
+    content-agnostic and the daemon stores the encrypted .tis opaquely
+    (server #31), so one language's genomic live test covers the
+    daemon-passthrough risk (the genomic per-AU transport itself is
+    unit-tested in both languages: test_m90_8 / its Java peer)."""
+    import numpy as np
+    from ttio import SpectralDataset
+    from ttio.transport.encrypted import is_per_au_encrypted
+    from ttio.written_genomic_run import WrittenGenomicRun
+
+    key = bytes([0x2B] * 32)
+    n, L = 4, 8
+    sequences = np.frombuffer(b"ACGTACGT" * n, dtype=np.uint8)
+    qualities = np.frombuffer(bytes([30] * (n * L)), dtype=np.uint8)
+    run = WrittenGenomicRun(
+        acquisition_mode=7,
+        reference_uri="GRCh38.p14",
+        platform="ILLUMINA",
+        sample_name="NA12878",
+        positions=np.array([100, 200, 300, 400], dtype=np.int64),
+        mapping_qualities=np.full(n, 60, dtype=np.uint8),
+        flags=np.full(n, 0x0003, dtype=np.uint32),
+        sequences=sequences,
+        qualities=qualities,
+        offsets=np.arange(n, dtype=np.uint64) * L,
+        lengths=np.full(n, L, dtype=np.uint32),
+        cigars=[f"{L}M"] * n,
+        read_names=[f"read_{i:03d}" for i in range(n)],
+        mate_chromosomes=[""] * n,
+        mate_positions=np.full(n, -1, dtype=np.int64),
+        template_lengths=np.zeros(n, dtype=np.int32),
+        chromosomes=["chr1", "chr1", "chr2", "chr2"],
+    )
+    src = tmp_path / "gen_src.tio"
+    SpectralDataset.write_minimal(
+        str(src), title="gen", isa_investigation_id="TTIO:gen",
+        runs={}, genomic_runs={"genomic_0001": run})
+
+    uri = f"uri:tio:{PROJECT}-gen-{uuid.uuid4().hex[:8]}"
+    result = asyncio.run(client.upload_encrypted(
+        project=PROJECT, container_uri=uri, tio_path=str(src), key=key))
+
+    out = tmp_path / "gen_rt.tio"
+    channels = asyncio.run(client.download_decrypted(
+        container_uri=result.container_uri, key=key, out_tio_path=str(out)))
+
+    rt = channels["genomic_0001"]
+    np.testing.assert_array_equal(rt["sequences"], sequences)
+    np.testing.assert_array_equal(rt["qualities"], qualities)
+    assert is_per_au_encrypted(str(out))

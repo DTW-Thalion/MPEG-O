@@ -11,6 +11,7 @@ import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.protection.PerAUFile;
 import global.thalion.ttio.protection.PostQuantumCrypto;
+import global.thalion.ttio.workbench.WorkbenchHttp;
 import global.thalion.ttio.workbench.auth.BootstrapAdminAuth;
 import global.thalion.ttio.workbench.pqc.WorkbenchPqc;
 import global.thalion.ttio.workbench.cohort.CohortPredicate;
@@ -194,12 +195,27 @@ class WorkbenchLiveTest {
             .enginePin("shell")
             .command(List.of("/bin/sh", "-c", "sleep 60")));
         assertNotNull(created.sessionId());
+        // Wait until the session leaves "starting" before terminating:
+        // a DELETE on a not-yet-running session can race to a 409, which
+        // made this test flake intermittently. Bounded so a stuck spawn
+        // still fails the assertions below rather than hanging.
+        long startDeadline = System.nanoTime() + (long) 15e9;
+        while (System.nanoTime() < startDeadline) {
+            if (!"starting".equals(sessions.get(created.sessionId()).status())) break;
+            Thread.sleep(200);
+        }
         try {
             boolean listed = sessions.list(null, 100).stream()
                 .anyMatch(s -> created.sessionId().equals(s.sessionId()));
             assertTrue(listed, "created session should appear in list()");
         } finally {
-            sessions.terminate(created.sessionId());
+            try {
+                sessions.terminate(created.sessionId());
+            } catch (WorkbenchHttp.WorkbenchHttpException e) {
+                // 409 = already terminal/terminating; the poll below still
+                // asserts the session reaches a terminal state.
+                if (e.status() != 409) throw e;
+            }
         }
         Session last = null;
         long deadline = System.nanoTime() + (long) 15e9;
@@ -379,6 +395,54 @@ class WorkbenchLiveTest {
         assertThrows(Exception.class,
             () -> client.downloadDecryptedEnvelope(
                 result.containerUri(), wrongKek, badOut));
+    }
+
+    @Test
+    void perAuEncryptedHeadersUploadRoundTrip(@TempDir Path tmp) throws Exception {
+        // BYOK round-trip with encryptHeaders=true: the other encrypted
+        // live tests pass false, so this exercises the distinct
+        // encrypted-AU-headers transport path (AU header bytes encrypted,
+        // not just channel payloads).
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 0x77);
+
+        int nSpectra = 3, perSpectrum = 4, total = nSpectra * perSpectrum;
+        double[] mz = new double[total];
+        double[] intensity = new double[total];
+        for (int i = 0; i < total; i++) {
+            mz[i] = 100.0 + i;
+            intensity[i] = (i + 1) * 10.0;
+        }
+        SpectrumIndex idx = new SpectrumIndex(nSpectra,
+            new long[]{0, 4, 8}, new int[]{4, 4, 4},
+            new double[]{1.0, 2.0, 3.0}, new int[]{1, 2, 1}, new int[]{1, 1, 1},
+            new double[]{0.0, 500.0, 0.0}, new int[]{0, 2, 0},
+            new double[]{40.0, 80.0, 120.0});
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+            Enums.AcquisitionMode.MS1_DDA, idx,
+            new InstrumentConfig("", "", "", "", "", ""),
+            channels, List.of(), List.of(), null, 0.0);
+
+        String src = tmp.resolve("hdr_src.tio").toString();
+        try (SpectralDataset ds = SpectralDataset.create(src,
+                "live hdr", "ISA-LIVE-HDR",
+                List.of(run), List.of(), List.of(), List.of())) { }
+
+        String uri = "uri:tio:" + project + "-hdr-"
+            + UUID.randomUUID().toString().substring(0, 8);
+        var result = client.uploadEncrypted(project, uri, src, key, true);
+
+        String out = tmp.resolve("hdr_rt.tio").toString();
+        Map<String, PerAUFile.DecryptedRun> rt =
+            client.downloadDecrypted(result.containerUri(), key, out);
+
+        assertArrayEquals(leBytes(mz),
+            rt.get("run_0001").channels().get("mz"));
+        assertArrayEquals(leBytes(intensity),
+            rt.get("run_0001").channels().get("intensity"));
     }
 
     private static byte[] leBytes(double[] a) {
