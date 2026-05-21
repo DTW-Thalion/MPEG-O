@@ -16,7 +16,13 @@ extensions = [
     "sphinx.ext.viewcode",       # show source next to every entry
     "sphinx.ext.intersphinx",    # cross-ref to numpy / h5py
     "autoapi.extension",
+    "myst_nb",                   # render the tutorial notebook(s)
 ]
+
+# myst-nb: render notebooks as docs but do NOT execute them at build
+# time -- the workbench tutorial talks to a live daemon, so execution
+# belongs to the workbench-live smoke, not the docs build.
+nb_execution_mode = "off"
 
 # Napoleon
 napoleon_numpy_docstring = True
