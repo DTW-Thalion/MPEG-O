@@ -40,12 +40,12 @@ jobs:
 
     steps:
       - name: Checkout TTI-O (this PR)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           path: TTI-O
 
       - name: Checkout tti-workbench-server
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: DTW-Thalion/tti-workbench-server
           path: server
@@ -53,7 +53,7 @@ jobs:
           ref: main
 
       - name: Checkout DTW-Thalion/libobjc2
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: DTW-Thalion/libobjc2
           path: libobjc2
@@ -61,7 +61,7 @@ jobs:
           ref: master
 
       - name: Checkout DTW-Thalion/libs-base
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: DTW-Thalion/libs-base
           path: libs-base
@@ -83,7 +83,7 @@ jobs:
 
       - name: libobjc2 cache
         id: cache-libobjc2
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /usr/local/include/objc
@@ -108,7 +108,7 @@ jobs:
 
       - name: gnustep-base cache
         id: cache-gnustep-base
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /usr/GNUstep/Local
           key: gnustep-base-${{ runner.os }}-${{ hashFiles('libs-base/Source/NSObject.m', 'libs-base/configure.ac') }}
@@ -130,7 +130,7 @@ jobs:
 
       - name: libdispatch cache
         id: cache-libdispatch
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /usr/local/include/dispatch
@@ -166,7 +166,7 @@ jobs:
       # composite action so the build is shared across workflows.
       - name: Cache HDF5 1.14.6
         id: cache-hdf5
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             /usr/local/include/hdf5*
@@ -217,7 +217,7 @@ jobs:
       # 22 (FFM), so without this mvn fails "invalid target release: 22".
       # The daemon build above is GNUstep/clang and doesn't need Java.
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
