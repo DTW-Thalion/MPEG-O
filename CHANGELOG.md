@@ -11,6 +11,30 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- workbench client per-AU encrypted upload/download (Python) (2026-05-21)
+
+Phase 1 of the per-AU encrypted-upload rework (replaces the
+daemon-incompatible W6.2 blob BYOK).
+
+- `WorkbenchClient.upload_encrypted(*, project, container_uri,
+  tio_path, key, encrypt_headers=False)` — encrypts a *copy* of the
+  plaintext `.tio` per-AU (AES-256-GCM, channel payloads + optional AU
+  headers) into a valid `.tis` carrying a `ProtectionMetadata` packet,
+  and uploads it. The daemon stores/serves it opaque (server #31); it
+  never sees plaintext or holds a key.
+- `WorkbenchClient.download_decrypted(*, container_uri, key,
+  out_tio_path)` — downloads the encrypted container, materialises the
+  still-encrypted `.tio`, and returns the decrypted channels
+  (`{run: {channel: ndarray}}`).
+- The blob-level `upload_protected` / `download_and_open` (W6.2) now
+  raise `NotImplementedError` with a pointer to the per-AU methods:
+  sealing a whole payload into one opaque ciphertext blob is rejected
+  by the daemon (it validates uploads as transport streams).
+
+Validated end-to-end against a live daemon
+(`test_per_au_encrypted_upload_round_trip`: encrypt → upload → download
+→ decrypt → channel values match). Java mirror + PQC variant follow.
+
 ### Fixed -- workbench upload ack-drain on websockets >= 14 (2026-05-20)
 
 `UploadClient._drain_acks` read `self._ws.messages`, a deque the
