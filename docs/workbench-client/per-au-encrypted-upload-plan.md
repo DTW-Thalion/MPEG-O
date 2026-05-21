@@ -58,32 +58,32 @@ assert the plaintext channels match the original. If this passes, the
 rework is pure client wiring (Phases 1-3). If it fails, file a
 `tti-workbench-server` issue first.
 
-### Phase 0 RESULT (2026-05-20): RED — daemon-side blocker
+### Phase 0 RESULT: GREEN (resolved 2026-05-21)
 
-Run against a real daemon
-(`test_workbench_live.py::test_per_au_encrypted_upload_round_trip`, now
-`xfail`):
+**Initial finding (2026-05-20): RED.** Run against a real daemon, the
+encrypted `.tis` was accepted (valid packet magic — per-AU encryption
+produces a valid stream, unlike opaque-blob BYOK), but the **re-emitted**
+stream on download had **no `ProtectionMetadata` packet and its AUs
+lacked the `ENCRYPTED` flag** (`read_encrypted_to_file` →
+"encrypted-transport reader saw plaintext AU"). The encode/read path
+round-tripped perfectly **locally** (`tests/test_encrypted_transport.py`),
+so the gap was **daemon-side**: ingest + the download re-encode dropped
+the protection packet and per-AU flags. Filed as `tti-workbench-server`
+issue #30.
 
-- The encrypted `.tis` **is accepted** (valid packet magic — per-AU
-  encryption produces a valid stream, unlike opaque-blob BYOK).
-- But the **re-emitted** stream on download has **no
-  `ProtectionMetadata` packet and its AUs lack the `ENCRYPTED` flag**
-  (`read_encrypted_to_file` → "encrypted-transport reader saw plaintext
-  AU"). The same encode/read path round-trips perfectly **locally**
-  (`tests/test_encrypted_transport.py`), so the gap is **daemon-side**:
-  `TransportIngest` + the download re-encode drop the protection packet
-  and per-AU flags (and store the ciphertext as if it were plaintext).
+**Resolved by `tti-workbench-server` #31** (encryption-aware passthrough:
+the daemon now detects an encrypted stream on ingest, stores the raw
+`.tis` verbatim as an opaque blob — `encrypted:YES` — instead of
+materialising to `.tio`, and streams it back unchanged on download).
+Re-validated against a daemon built from merged server `main`:
+`test_workbench_live.py::test_per_au_encrypted_upload_round_trip` now
+**passes** (encrypt → upload → download → decrypt → channel values
+match); full live suite 10/10.
 
-**Conclusion:** the rework is **not** pure client wiring. The daemon
-must become encryption-aware on the ingest → storage → re-emit path
-(preserve the `ProtectionMetadata` packet + per-AU `ENCRYPTED` /
-`ENCRYPTED_HEADER` flags, and treat encrypted AU payloads as opaque).
-**Phases 1-4 below are blocked on that `tti-workbench-server` change**
-(tracked as a server issue). Client-side per-AU encrypt/decrypt + the
-encrypted-`.tis` encode already work locally and are ready to wire once
-the daemon preserves the stream.
+**Phases 1-4 are now unblocked.** Client-side per-AU encrypt/decrypt +
+encrypted-`.tis` encode already work; the daemon preserves the stream.
 
-## Phases (blocked on Phase 0 daemon work)
+## Phases
 
 1. **Python client path.** Replace the blob `seal`/`open` upload with a
    per-AU path: `WorkbenchClient.upload_encrypted(tio, key, *,
