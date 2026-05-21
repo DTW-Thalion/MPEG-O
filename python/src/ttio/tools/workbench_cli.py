@@ -369,8 +369,8 @@ def _export_unsupported(fmt: str) -> int:
     supported = ", ".join(registry.supported_export_formats())
     print(
         f"{PROG}: unsupported --format {fmt!r}. Supported: {supported}. "
-        f"(nmrML / JCAMP-DX / imzML export is GUI-only today; the Python "
-        f"CLI has no .tio-layer->spectrum extraction for them yet.)",
+        f"(JCAMP-DX export is GUI-only today; Python can't yet reconstruct "
+        f"IR/Raman/UVVis spectra from a .tio.)",
         file=sys.stderr)
     return 3
 
