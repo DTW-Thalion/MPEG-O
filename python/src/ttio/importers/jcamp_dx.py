@@ -200,4 +200,66 @@ def read_spectrum(path: str | Path) -> Spectrum1D:
     raise ValueError(f"JCAMP-DX: unsupported DATA TYPE={ldrs.get('DATA TYPE', '')!r}")
 
 
+def build_written_run(spectrum: Spectrum1D):
+    """Convert a single vibrational :class:`Spectrum` (the output of
+    :func:`read_spectrum`) into a one-spectrum ``WrittenRun`` for
+    :meth:`SpectralDataset.write_minimal`.
+
+    This is the ``.tio`` bridge that lets ``ttio encode --format
+    jcamp-dx`` persist IR / Raman / UV-Vis spectra; the per-class
+    metadata is carried on the run as scalar attributes and recovered by
+    :meth:`AcquisitionRun._materialize_spectrum`.
+    """
+    from ..spectral_dataset import WrittenRun
+
+    if isinstance(spectrum, UVVisSpectrum):
+        x = np.asarray(spectrum.wavelength_array.data, dtype=np.float64)
+        y = np.asarray(spectrum.absorbance_array.data, dtype=np.float64)
+        channels = {UVVisSpectrum.WAVELENGTH: x, UVVisSpectrum.ABSORBANCE: y}
+        extra = dict(
+            spectrum_class="TTIOUVVisSpectrum",
+            uvvis_path_length_cm=spectrum.path_length_cm,
+            solvent=spectrum.solvent,
+        )
+    elif isinstance(spectrum, RamanSpectrum):
+        x = np.asarray(spectrum.wavenumber_array.data, dtype=np.float64)
+        y = np.asarray(spectrum.intensity_array.data, dtype=np.float64)
+        channels = {RamanSpectrum.WAVENUMBER: x, RamanSpectrum.INTENSITY: y}
+        extra = dict(
+            spectrum_class="TTIORamanSpectrum",
+            raman_excitation_wavelength_nm=spectrum.excitation_wavelength_nm,
+            raman_laser_power_mw=spectrum.laser_power_mw,
+            raman_integration_time_sec=spectrum.integration_time_sec,
+        )
+    elif isinstance(spectrum, IRSpectrum):
+        x = np.asarray(spectrum.wavenumber_array.data, dtype=np.float64)
+        y = np.asarray(spectrum.intensity_array.data, dtype=np.float64)
+        channels = {IRSpectrum.WAVENUMBER: x, IRSpectrum.INTENSITY: y}
+        extra = dict(
+            spectrum_class="TTIOIRSpectrum",
+            ir_mode=int(spectrum.mode),
+            ir_resolution_cm_inv=spectrum.resolution_cm_inv,
+            ir_number_of_scans=spectrum.number_of_scans,
+        )
+    else:
+        raise TypeError(
+            f"unsupported spectrum type: {type(spectrum).__name__}")
+
+    n = int(x.shape[0])
+    return WrittenRun(
+        acquisition_mode=0,
+        channel_data=channels,
+        offsets=np.array([0], dtype=np.uint64),
+        lengths=np.array([n], dtype=np.uint32),
+        retention_times=np.zeros(1, dtype=np.float64),
+        ms_levels=np.zeros(1, dtype=np.int32),
+        polarities=np.zeros(1, dtype=np.int32),
+        precursor_mzs=np.zeros(1, dtype=np.float64),
+        precursor_charges=np.zeros(1, dtype=np.int32),
+        base_peak_intensities=np.array(
+            [float(y.max()) if n else 0.0], dtype=np.float64),
+        **extra,
+    )
+
+
 __all__ = ["read_spectrum"]

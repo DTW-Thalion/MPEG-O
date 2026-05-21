@@ -982,8 +982,20 @@ class WrittenRun:
     nucleus_type: str = ""
     # Optional NMR solvent label (e.g. "CDCl3", "DMSO-d6"). Empty when
     # not specified or when the run is not NMR. Written as the
-    # ``@solvent`` string attribute on the run group.
+    # ``@solvent`` string attribute on the run group. Also reused as the
+    # UV-Vis solvent label.
     solvent: str = ""
+    # Optional vibrational-spectrum run metadata (IR / Raman / UV-Vis).
+    # Written as scalar run-group attributes only when set, so MS/NMR
+    # files stay byte-identical. Read back in AcquisitionRun.open and
+    # used by _materialize_spectrum to reconstruct the subclass.
+    ir_mode: int | None = None              # IRMode value (0/1)
+    ir_resolution_cm_inv: float = 0.0
+    ir_number_of_scans: int = 0
+    raman_excitation_wavelength_nm: float = 0.0
+    raman_laser_power_mw: float = 0.0
+    raman_integration_time_sec: float = 0.0
+    uvvis_path_length_cm: float = 0.0
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     # signal compression codec. Valid values are the strings
     # recognised by :func:`ttio._hdf5_io.write_signal_channel` plus
@@ -1007,6 +1019,25 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
 
     if getattr(run, "solvent", ""):
         io.write_fixed_string_attr(g, "solvent", run.solvent)
+
+    # Vibrational-spectrum run metadata (only emitted when set, so MS/NMR
+    # files keep byte parity). Mirrored in Java/ObjC readers.
+    if run.ir_mode is not None:
+        io.write_int_attr(g, "ir_mode", int(run.ir_mode))
+    if run.ir_resolution_cm_inv:
+        io.write_float_attr(g, "ir_resolution_cm_inv", run.ir_resolution_cm_inv)
+    if run.ir_number_of_scans:
+        io.write_int_attr(g, "ir_number_of_scans", int(run.ir_number_of_scans))
+    if run.raman_excitation_wavelength_nm:
+        io.write_float_attr(g, "raman_excitation_wavelength_nm",
+                            run.raman_excitation_wavelength_nm)
+    if run.raman_laser_power_mw:
+        io.write_float_attr(g, "raman_laser_power_mw", run.raman_laser_power_mw)
+    if run.raman_integration_time_sec:
+        io.write_float_attr(g, "raman_integration_time_sec",
+                            run.raman_integration_time_sec)
+    if run.uvvis_path_length_cm:
+        io.write_float_attr(g, "uvvis_path_length_cm", run.uvvis_path_length_cm)
 
     if run.provenance_records:
         prov = g.create_group("provenance")

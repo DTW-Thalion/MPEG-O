@@ -23,22 +23,20 @@ GUI_EXPORT_WRITERS = {
     "mzML", "mzTab", "imzML", "nmrML", "JCAMP-DX", "ISA-Tab/JSON",
     "BAM", "CRAM", "FASTA", "FASTQ",
 }
-# Python-side gap: JCAMP-DX export needs IR/Raman/UVVis spectra
-# reconstructed from a .tio, which Python's AcquisitionRun cannot yet do.
-PYTHON_DEFERRED = {"JCAMP-DX"}
 
 
 def test_supported_formats_set():
     assert set(registry.supported_export_formats()) == {
-        "mzml", "mztab", "nmrml", "imzml", "isa", "bam", "cram",
+        "mzml", "mztab", "nmrml", "imzml", "jcamp-dx", "isa", "bam", "cram",
         "fasta", "fastq",
     }
 
 
-def test_gui_cli_parity_modulo_documented_gaps():
+def test_gui_cli_parity():
     cli_display = {registry.spec_for(k).display_name
                    for k in registry.registry_keys()} | {"FASTA", "FASTQ"}
-    assert GUI_EXPORT_WRITERS - cli_display == PYTHON_DEFERRED
+    # JCAMP-DX export gap closed by the vibrational .tio round-trip.
+    assert GUI_EXPORT_WRITERS - cli_display == set()
 
 
 @pytest.mark.parametrize("token,expected", [
@@ -62,7 +60,6 @@ def test_cli_unknown_format_exits_3(capsys):
     assert rc == 3
     err = capsys.readouterr().err
     assert "unsupported --format" in err
-    assert "JCAMP-DX" in err  # documents the remaining gap
 
 
 def test_cram_requires_reference(tmp_path):
