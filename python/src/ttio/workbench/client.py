@@ -370,6 +370,95 @@ class WorkbenchClient:
                           algorithm=kek_algorithm or ML_KEM_1024)
         return decrypt_per_au(out_tio_path, dek)
 
+    # ------------------------------------------- envelope variant (KEK-wrap)
+
+    async def upload_encrypted_envelope(
+        self,
+        *,
+        project: str,
+        container_uri: str,
+        tio_path: str,
+        kek: bytes,
+        encrypt_headers: bool = False,
+        resume: Optional[ResumeState] = None,
+    ) -> UploadResult:
+        """Per-AU encrypt a `.tio` with a fresh DEK, wrap that DEK under a
+        symmetric AES-256-GCM key-encryption key (KEK), and upload.
+
+        Same daemon-faithful path as :meth:`upload_encrypted_pqc`, but the
+        per-run DEK is wrapped with a 32-byte symmetric KEK
+        (``aes-256-gcm``) instead of an ML-KEM public key. The wrapped DEK
+        travels in the `ProtectionMetadata` packet; the daemon never holds
+        the KEK. Recover the data with :meth:`download_decrypted_envelope`
+        using the same `kek`. Not preview-gated (unlike the PQC variant).
+        """
+        import io as _io
+        import os
+        import shutil
+        import tempfile
+
+        from ttio.encryption_per_au import encrypt_per_au
+        from ttio.key_rotation import _wrap_dek
+        from ttio.transport.codec import TransportWriter
+        from ttio.transport.encrypted import (
+            stamp_transport_wrapped_dek,
+            write_encrypted_dataset,
+        )
+
+        dek = os.urandom(32)
+        with tempfile.TemporaryDirectory() as d:
+            enc_tio = os.path.join(d, "enc.tio")
+            shutil.copyfile(tio_path, enc_tio)
+            encrypt_per_au(enc_tio, dek, encrypt_headers=encrypt_headers)
+            wrapped = _wrap_dek(dek, kek, algorithm="aes-256-gcm")
+            stamp_transport_wrapped_dek(enc_tio, wrapped, "aes-256-gcm")
+            stream = _io.BytesIO()
+            with TransportWriter(stream) as tw:
+                write_encrypted_dataset(tw, enc_tio)
+            tis = stream.getvalue()
+
+        return await self.upload_bytes(
+            project=project, container_uri=container_uri,
+            data=tis, resume=resume)
+
+    async def download_decrypted_envelope(
+        self,
+        *,
+        container_uri: str,
+        kek: bytes,
+        out_tio_path: str,
+        filters: Optional[FilterDict] = None,
+        max_au: int = 0,
+    ):
+        """Download an envelope per-AU-encrypted container and decrypt it.
+
+        Materialises the still-encrypted `.tio`, unwraps the per-run DEK
+        from the `ProtectionMetadata` with the symmetric AES-256-GCM `kek`,
+        then returns the decrypted channel values as
+        `{run_name: {channel_name: ndarray}}`. Counterpart to
+        :meth:`upload_encrypted_envelope`.
+        """
+        import io as _io
+
+        from ttio.encryption_per_au import decrypt_per_au
+        from ttio.key_rotation import _unwrap_dek
+        from ttio.transport.encrypted import (
+            read_encrypted_to_file,
+            read_transport_wrapped_dek,
+        )
+
+        dl = await self.download_bytes(
+            container_uri=container_uri, filters=filters, max_au=max_au)
+        read_encrypted_to_file(_io.BytesIO(dl.payload), out_tio_path)
+        wrapped, kek_algorithm = read_transport_wrapped_dek(out_tio_path)
+        if not wrapped:
+            raise ValueError(
+                "container carries no wrapped DEK; not an envelope/PQC "
+                "upload (use download_decrypted with the BYOK key instead)")
+        dek = _unwrap_dek(wrapped, kek,
+                          algorithm=kek_algorithm or "aes-256-gcm")
+        return decrypt_per_au(out_tio_path, dek)
+
     # -- deprecated W6.2 blob encryption (daemon-incompatible) --
 
     async def upload_protected(self, *args, **kwargs):

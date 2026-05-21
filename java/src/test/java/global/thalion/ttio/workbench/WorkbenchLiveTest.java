@@ -325,6 +325,62 @@ class WorkbenchLiveTest {
                 result.containerUri(), wrong.privateKey(), badOut, true));
     }
 
+    @Test
+    void perAuEncryptedEnvelopeUploadRoundTrip(@TempDir Path tmp) throws Exception {
+        // Java parity of the Python Phase 4 envelope round-trip: the
+        // per-run DEK is wrapped under a 32-byte symmetric AES-256-GCM KEK
+        // (not an ML-KEM key) into the ProtectionMetadata. Not preview-
+        // gated; the wrong KEK must fail to decrypt.
+        byte[] kek = new byte[32];
+        java.util.Arrays.fill(kek, (byte) 0x3C);
+
+        int nSpectra = 3, perSpectrum = 4, total = nSpectra * perSpectrum;
+        double[] mz = new double[total];
+        double[] intensity = new double[total];
+        for (int i = 0; i < total; i++) {
+            mz[i] = 100.0 + i;
+            intensity[i] = (i + 1) * 10.0;
+        }
+        SpectrumIndex idx = new SpectrumIndex(nSpectra,
+            new long[]{0, 4, 8}, new int[]{4, 4, 4},
+            new double[]{1.0, 2.0, 3.0}, new int[]{1, 2, 1}, new int[]{1, 1, 1},
+            new double[]{0.0, 500.0, 0.0}, new int[]{0, 2, 0},
+            new double[]{40.0, 80.0, 120.0});
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+            Enums.AcquisitionMode.MS1_DDA, idx,
+            new InstrumentConfig("", "", "", "", "", ""),
+            channels, List.of(), List.of(), null, 0.0);
+
+        String src = tmp.resolve("env_src.tio").toString();
+        try (SpectralDataset ds = SpectralDataset.create(src,
+                "live env", "ISA-LIVE-ENV",
+                List.of(run), List.of(), List.of(), List.of())) { }
+
+        String uri = "uri:tio:" + project + "-env-"
+            + UUID.randomUUID().toString().substring(0, 8);
+        var result = client.uploadEncryptedEnvelope(project, uri, src, kek, false);
+
+        String out = tmp.resolve("env_rt.tio").toString();
+        Map<String, PerAUFile.DecryptedRun> rt =
+            client.downloadDecryptedEnvelope(result.containerUri(), kek, out);
+
+        assertArrayEquals(leBytes(mz),
+            rt.get("run_0001").channels().get("mz"));
+        assertArrayEquals(leBytes(intensity),
+            rt.get("run_0001").channels().get("intensity"));
+
+        // Wrong KEK cannot recover the DEK.
+        byte[] wrongKek = new byte[32];
+        java.util.Arrays.fill(wrongKek, (byte) 0x11);
+        String badOut = tmp.resolve("env_bad.tio").toString();
+        assertThrows(Exception.class,
+            () -> client.downloadDecryptedEnvelope(
+                result.containerUri(), wrongKek, badOut));
+    }
+
     private static byte[] leBytes(double[] a) {
         ByteBuffer b = ByteBuffer.allocate(a.length * 8)
             .order(ByteOrder.LITTLE_ENDIAN);
