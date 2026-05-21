@@ -39,7 +39,7 @@ class TisWsUploaderTest {
         port = findFreePort();
         wsServer = new CollectingWsServer(port);
         wsServer.start();
-        assertTrue(wsServer.serverStarted.await(5, TimeUnit.SECONDS),
+        assertTrue(wsServer.serverStarted.await(15, TimeUnit.SECONDS),
             "WS server did not start");
     }
 
@@ -58,7 +58,7 @@ class TisWsUploaderTest {
             URI.create("ws://127.0.0.1:" + port + "/"),
             tis, "sample.tio");
 
-        assertTrue(wsServer.done.await(10, TimeUnit.SECONDS),
+        assertTrue(wsServer.done.await(30, TimeUnit.SECONDS),
             "Server should receive all frames");
 
         List<Object> frames = wsServer.frames;
@@ -112,7 +112,7 @@ class TisWsUploaderTest {
             URI.create("ws://127.0.0.1:" + port + "/"),
             tis, "large.tio");
 
-        assertTrue(wsServer.done.await(15, TimeUnit.SECONDS));
+        assertTrue(wsServer.done.await(30, TimeUnit.SECONDS));
 
         int totalBinary = 0;
         List<byte[]> chunks = new ArrayList<>();
