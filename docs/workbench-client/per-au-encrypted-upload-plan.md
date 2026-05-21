@@ -1,7 +1,8 @@
 # Plan — per-AU encrypted upload (W6.2 rework)
 
-**Status:** scheduled (2026-05-20). Supersedes the blob-level BYOK
-approach shipped in W6.2.
+**Status:** COMPLETE (2026-05-21). All phases (0 daemon faithfulness,
+1 Python BYOK, 2 Java BYOK, 3 PQC, 4 envelope + live round-trips)
+shipped. Supersedes the blob-level BYOK approach shipped in W6.2.
 
 ## Why
 
@@ -115,8 +116,18 @@ encrypted-`.tis` encode already work; the daemon preserves the stream.
    `uploadEncryptedPqc`/`downloadDecryptedPqc` (Java), all preview-gated.
    Validated e2e by `test_per_au_encrypted_pqc_upload_round_trip` (live
    smoke) and `WorkbenchLiveTest.perAuEncryptedPqcUploadRoundTrip`.
-4. **Live round-trips** added to `workbench-live` (the deferred §3.2
-   tests): BYOK + envelope + PQC encrypt → upload → download → decrypt.
+4. **Live round-trips — DONE.** The **envelope** variant (the per-run DEK
+   wrapped under a 32-byte symmetric AES-256-GCM KEK — the GA,
+   non-preview analogue of the PQC ML-KEM path) completes the trio.
+   Client methods `upload_encrypted_envelope`/`download_decrypted_envelope`
+   (Python) and `uploadEncryptedEnvelope`/`downloadDecryptedEnvelope`
+   (Java). All three variants (BYOK + envelope + PQC) now have live
+   `workbench-live` round-trips (encrypt → upload → download → decrypt →
+   data matches; wrong key/KEK fails): `test_per_au_encrypted_*` and
+   `WorkbenchLiveTest.perAuEncrypted*UploadRoundTrip`. The workflow's
+   path filter was widened to the Java workbench client + its live test,
+   and the HDF5 build switched to `--enable-java` (Java bindings) with
+   the `[pqc]` extra installed so the PQC live test runs in CI.
 
 ## Acceptance
 
