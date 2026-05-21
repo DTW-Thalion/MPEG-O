@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- workbench client per-AU encrypted upload/download (Java) (2026-05-21)
+
+Phase 2 of the per-AU encrypted-upload rework: the Java mirror of the
+Python Phase 1 client (lockstep, Decision 2).
+
+- `WorkbenchClient.uploadEncrypted(project, containerUri, tioPath, key,
+  encryptHeaders)` — encrypts a *copy* of the plaintext `.tio` per-AU
+  (`PerAUFile.encryptFile`) into a valid `.tis`
+  (`EncryptedTransport.writeEncryptedDataset` via a
+  `ByteArrayOutputStream` `TransportWriter`) and uploads it. The source
+  is not mutated; the daemon stores/serves it opaque (server #31).
+- `WorkbenchClient.downloadDecrypted(containerUri, key, outTioPath)` —
+  downloads, `readEncryptedToPath` materialises the still-encrypted
+  `.tio`, and returns `PerAUFile.decryptFile(...)` channels per run.
+- The blob `uploadProtected` / `downloadAndOpen` (W6.2) now throw
+  `UnsupportedOperationException` pointing to the per-AU methods.
+
+Validated end-to-end against a live daemon
+(`WorkbenchLiveTest.perAuEncryptedUploadRoundTrip`: encrypt → upload →
+download → decrypt → channel bytes match the plaintext source).
+
 ### Added -- workbench client per-AU encrypted upload/download (Python) (2026-05-21)
 
 Phase 1 of the per-AU encrypted-upload rework (replaces the
