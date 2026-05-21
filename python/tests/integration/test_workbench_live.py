@@ -329,10 +329,15 @@ def test_per_au_encrypted_pqc_upload_round_trip(client, tmp_path):
     opt_pqc_preview: the un-previewed call must refuse, and the wrong
     private key must fail to decrypt."""
     import numpy as np
+    import ttio.pqc as core_pqc
     from ttio import SpectralDataset, WrittenRun
     from ttio.enums import AcquisitionMode
     from ttio.transport.encrypted import is_per_au_encrypted
     from ttio.workbench import pqc
+
+    if not core_pqc.is_available():
+        pytest.skip("liboqs-python not installed (ttio[pqc]); "
+                    "PQC preview unavailable")
 
     mz = np.linspace(100.0, 105.0, 12)
     intensity = np.linspace(1.0, 120.0, 12)
