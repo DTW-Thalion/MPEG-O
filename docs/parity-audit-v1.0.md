@@ -88,11 +88,14 @@ written by `WrittenRun` / `_write_run` and read in `AcquisitionRun.open`.
 wired (no longer `DEFERRED_PYTHON`); covered by
 `tests/test_jcamp_tio_roundtrip.py`.
 
-**Cross-language parity:** Java done — `AcquisitionRun` materializes
-IR/Raman/UV-Vis and reads/writes the same run-attribute contract
-(`JcampVibrationalRoundTripTest`). ObjC parity is the remaining
-follow-up so a Python- or Java-written vibrational `.tio` reads
-everywhere.
+**Cross-language parity — COMPLETE.** All three languages materialize
+IR/Raman/UV-Vis from a `.tio` and read/write the same run-attribute
+contract (`ir_mode` / `ir_resolution_cm_inv` / `ir_number_of_scans`,
+`raman_*`, `uvvis_path_length_cm`, `@solvent`): Python
+(`AcquisitionRun._materialize_spectrum` / `WrittenRun`), Java
+(`AcquisitionRun` + `JcampVibrationalRoundTripTest`), and ObjC
+(`TTIOAcquisitionRun` + `TestJcampVibrationalRoundTrip`). A vibrational
+`.tio` written by any language reads in the others. §3.1 fully resolved.
 
 ### 3.2 Live-daemon round-trips for workbench encryption / PQC
 
