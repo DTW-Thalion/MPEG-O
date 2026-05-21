@@ -45,12 +45,6 @@ from ttio.workbench.transport.download import (
     FilterDict,
     OutputMode,
 )
-from ttio.workbench.encryption import (
-    ProtectionMetadata,
-    ProtectionMode,
-    open_sealed,
-    seal,
-)
 from ttio.workbench.transport.handshake import OutputModeLiteral
 from ttio.workbench.transport.resume import ResumeState
 from ttio.workbench.transport.upload import UploadClient, UploadResult
@@ -206,47 +200,96 @@ class WorkbenchClient:
                 max_au=max_au,
             )
 
-    async def upload_protected(
+    async def upload_encrypted(
         self,
         *,
         project: str,
         container_uri: str,
-        data: bytes,
-        mode: ProtectionMode,
-        dek: Optional[bytes] = None,
-        kek: Optional[bytes] = None,
-        kek_algorithm: str = "aes-256-gcm",
+        tio_path: str,
+        key: bytes,
+        encrypt_headers: bool = False,
         resume: Optional[ResumeState] = None,
-    ) -> tuple[UploadResult, ProtectionMetadata]:
-        """Seal `data` (BYOK or envelope) and upload the ciphertext.
+    ) -> UploadResult:
+        """Encrypt a plaintext `.tio` per-AU and upload it.
 
-        Returns the `UploadResult` plus the `ProtectionMetadata` the
-        caller must retain to decrypt later (for ENVELOPE this carries
-        the wrapped DEK; for BYOK it carries no key material -- the
-        researcher holds the DEK out of band).
+        The channel payloads (and AU headers when `encrypt_headers`) are
+        AES-256-GCM-encrypted *inside* a valid `.tis` transport stream
+        that also carries a `ProtectionMetadata` packet, so the daemon
+        ingests and re-emits it like any stream (it never sees plaintext
+        and holds no key). Recover the data with `download_decrypted`
+        using the same `key`.
+
+        The source `.tio` is never mutated -- a temp copy is encrypted.
         """
-        sealed = seal(data, mode=mode, dek=dek, kek=kek,
-                      kek_algorithm=kek_algorithm)
-        result = await self.upload_bytes(
-            project=project, container_uri=container_uri,
-            data=sealed.ciphertext, resume=resume)
-        return result, sealed.protection
+        import io as _io
+        import os
+        import shutil
+        import tempfile
 
-    async def download_and_open(
+        from ttio.encryption_per_au import encrypt_per_au
+        from ttio.transport.codec import TransportWriter
+        from ttio.transport.encrypted import write_encrypted_dataset
+
+        with tempfile.TemporaryDirectory() as d:
+            enc_tio = os.path.join(d, "enc.tio")
+            shutil.copyfile(tio_path, enc_tio)
+            encrypt_per_au(enc_tio, key, encrypt_headers=encrypt_headers)
+            stream = _io.BytesIO()
+            with TransportWriter(stream) as tw:
+                write_encrypted_dataset(tw, enc_tio)
+            tis = stream.getvalue()
+
+        return await self.upload_bytes(
+            project=project, container_uri=container_uri,
+            data=tis, resume=resume)
+
+    async def download_decrypted(
         self,
         *,
         container_uri: str,
-        protection: ProtectionMetadata,
-        dek: Optional[bytes] = None,
-        kek: Optional[bytes] = None,
+        key: bytes,
+        out_tio_path: str,
         filters: Optional[FilterDict] = None,
         max_au: int = 0,
-    ) -> bytes:
-        """Download a sealed payload and decrypt it. BYOK: pass `dek`.
-        ENVELOPE: pass the `kek` that unwraps `protection.wrapped_dek`."""
-        result = await self.download_bytes(
+    ):
+        """Download a per-AU-encrypted container and decrypt it.
+
+        Materialises the still-encrypted `.tio` to `out_tio_path`
+        (ciphertext preserved, `opt_per_au_encryption` set) and returns
+        the decrypted channel values as
+        `{run_name: {channel_name: ndarray}}`. The same `key` used by
+        `upload_encrypted` is required.
+        """
+        import io as _io
+
+        from ttio.encryption_per_au import decrypt_per_au
+        from ttio.transport.encrypted import read_encrypted_to_file
+
+        dl = await self.download_bytes(
             container_uri=container_uri, filters=filters, max_au=max_au)
-        return open_sealed(result.payload, protection, dek=dek, kek=kek)
+        read_encrypted_to_file(_io.BytesIO(dl.payload), out_tio_path)
+        return decrypt_per_au(out_tio_path, key)
+
+    # -- deprecated W6.2 blob encryption (daemon-incompatible) --
+
+    async def upload_protected(self, *args, **kwargs):
+        """Removed: blob-level BYOK is not daemon-compatible.
+
+        Sealing a whole payload into one opaque ciphertext blob fails at
+        the daemon (it validates uploads as transport streams). Use
+        :meth:`upload_encrypted`, which encrypts per-AU inside a valid
+        `.tis`. See docs/workbench-client/per-au-encrypted-upload-plan.md.
+        """
+        raise NotImplementedError(
+            "upload_protected (blob-level BYOK) is daemon-incompatible; "
+            "use upload_encrypted (per-AU) instead.")
+
+    async def download_and_open(self, *args, **kwargs):
+        """Removed: counterpart of the blob :meth:`upload_protected`.
+        Use :meth:`download_decrypted`."""
+        raise NotImplementedError(
+            "download_and_open (blob-level) is daemon-incompatible; "
+            "use download_decrypted (per-AU) instead.")
 
     # ----------------------------------------------- control plane (W3)
 
