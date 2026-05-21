@@ -140,6 +140,26 @@ def read_int_attr(obj: _IOTarget, name: str, default: int | None = None) -> int 
     return int(native.attrs[name])
 
 
+def write_float_attr(obj: _IOTarget, name: str, value: float) -> None:
+    native = _unwrap_to_h5py(obj)
+    if native is None:
+        obj.set_attribute(name, float(value))
+        return
+    native.attrs.create(name, np.array(value, dtype="<f8"))
+
+
+def read_float_attr(obj: _IOTarget, name: str,
+                     default: float | None = None) -> float | None:
+    native = _unwrap_to_h5py(obj)
+    if native is None:
+        if not obj.has_attribute(name):
+            return default
+        return float(obj.get_attribute(name))
+    if name not in native.attrs:
+        return default
+    return float(native.attrs[name])
+
+
 # ------------------------------------------------------ signal channels ---
 
 DEFAULT_SIGNAL_CHUNK = 65536

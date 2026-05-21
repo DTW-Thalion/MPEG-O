@@ -29,12 +29,10 @@ from typing import Callable
 from ..spectral_dataset import SpectralDataset
 
 CLI_DELEGATED = ("fasta", "fastq")
-# JCAMP-DX export needs IR/Raman/UVVis spectra reconstructed from a
-# .tio, but Python's AcquisitionRun._materialize_spectrum only yields
-# MassSpectrum / NMRSpectrum (not vibrational types), so there's no
-# .tio-layer -> vibrational-Spectrum path yet. Tracked as a deeper core
-# gap, not mere CLI glue (see docs/parity-audit-v1.0.md §3.1).
-DEFERRED_PYTHON = ("jcamp-dx",)
+# jcamp-dx export was deferred until AcquisitionRun._materialize_spectrum
+# could reconstruct the vibrational types (IR/Raman/UV-Vis); that landed
+# with the §3.1 round-trip, so jcamp-dx is now a registered exporter.
+DEFERRED_PYTHON: tuple[str, ...] = ()
 
 
 class UnknownFormatError(ValueError):
@@ -115,6 +113,47 @@ def _adapt_imzml(tio_path, layer, output, **opts):
         imzml.write(img.to_pixel_spectra(), output, ibd)
 
 
+def _adapt_jcamp(tio_path, layer, output, **opts):
+    from ..exporters import jcamp_dx
+    from ..ir_spectrum import IRSpectrum
+    from ..raman_spectrum import RamanSpectrum
+    from ..uv_vis_spectrum import UVVisSpectrum
+    encoding = opts.get("encoding", "affn")
+    with SpectralDataset.open(tio_path) as ds:
+        run = _analytical_run(ds, layer)
+        spectra = run.spectra()
+        if not spectra:
+            raise ValueError(f"run {layer or '(only)'!r} has no spectra")
+        spectrum = spectra[0]
+        if isinstance(spectrum, IRSpectrum):
+            jcamp_dx.write_ir_spectrum(spectrum, output, encoding=encoding)
+        elif isinstance(spectrum, RamanSpectrum):
+            jcamp_dx.write_raman_spectrum(spectrum, output, encoding=encoding)
+        elif isinstance(spectrum, UVVisSpectrum):
+            jcamp_dx.write_uv_vis_spectrum(spectrum, output, encoding=encoding)
+        else:
+            raise ValueError(
+                f"run {layer or '(only)'!r} is {type(spectrum).__name__}, "
+                "not a vibrational (IR/Raman/UV-Vis) spectrum")
+
+
+def _analytical_run(ds, layer):
+    """Select an analytical run (any spectrum_class) by layer, or the
+    single run when unambiguous. Used by the JCAMP exporter, which
+    accepts any of the vibrational subclasses."""
+    runs = {**ds.ms_runs, **ds.nmr_runs}
+    if not runs:
+        raise KeyError("no analytical runs in dataset")
+    if layer:
+        if layer not in runs:
+            raise KeyError(
+                f"run {layer!r} not found; have: " + ", ".join(sorted(runs)))
+        return runs[layer]
+    if len(runs) == 1:
+        return next(iter(runs.values()))
+    raise KeyError("multiple runs present; pass --layer <name>")
+
+
 def _nmr_run(ds, layer):
     # Analytical runs (MS / NMR / vibrational) live in /study/ms_runs;
     # /study/nmr_runs is a separate group some writers use. Search both
@@ -160,6 +199,8 @@ _SPECS: tuple[ExportSpec, ...] = (
     ExportSpec("mztab", "mzTab", (".mzTab", ".mztab"), None, _adapt_mztab),
     ExportSpec("nmrml", "nmrML", (".nmrML",), None, _adapt_nmrml),
     ExportSpec("imzml", "imzML", (".imzML",), None, _adapt_imzml),
+    ExportSpec("jcamp-dx", "JCAMP-DX", (".jdx", ".dx", ".jcm"), None,
+               _adapt_jcamp),
     ExportSpec("isa", "ISA-Tab/JSON", (".zip", ".json"), None, _adapt_isa),
     ExportSpec("bam", "BAM", (".bam", ".sam"), "samtools", _adapt_bam),
     ExportSpec("cram", "CRAM", (".cram",), "samtools", _adapt_cram),
@@ -170,6 +211,10 @@ _BY_KEY: dict[str, ExportSpec] = {s.key: s for s in _SPECS}
 _ALIASES: dict[str, str] = {
     "isa-tab": "isa",
     "isatab": "isa",
+    "jcamp": "jcamp-dx",
+    "jdx": "jcamp-dx",
+    "dx": "jcamp-dx",
+    "jcm": "jcamp-dx",
 }
 
 

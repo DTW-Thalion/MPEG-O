@@ -77,16 +77,21 @@ not core-codec, gaps.
 `AcquisitionRun.spectra()` → `NMRSpectrum` and
 `MSImage.to_pixel_spectra()` → `ImzMLPixelSpectrum`.
 
-**Residual gap — JCAMP-DX (both directions).** This is *not* mere CLI
-glue: Python's `AcquisitionRun._materialize_spectrum` only reconstructs
-`MassSpectrum` / `NMRSpectrum` from a `.tio`, not the vibrational types
-(`IRSpectrum` / `RamanSpectrum` / `UVVisSpectrum`). So there is no
-`.tio` → vibrational-`Spectrum` read path, and no vibrational-`Spectrum`
-→ `.tio` write path either. Closing it requires a **core** change
-(extend `_materialize_spectrum` + the write side to handle the
-vibrational spectrum classes), after which `ttio encode --format
-jcamp-dx` and `ttio export --format jcamp-dx` can be wired. The JCAMP
-reader/writer codecs themselves already exist in all three languages.
+**JCAMP-DX vibrational round-trip — RESOLVED (Python).** The core gap
+is closed in Python: `AcquisitionRun._materialize_spectrum` now
+reconstructs `IRSpectrum` / `RamanSpectrum` / `UVVisSpectrum` (alongside
+`MassSpectrum` / `NMRSpectrum`), and the per-class metadata (IR mode /
+resolution / scans, Raman excitation / power / integration, UV-Vis
+path-length / solvent) round-trips via scalar run-group attributes
+written by `WrittenRun` / `_write_run` and read in `AcquisitionRun.open`.
+`ttio encode --format jcamp-dx` and `ttio export --format jcamp-dx` are
+wired (no longer `DEFERRED_PYTHON`); covered by
+`tests/test_jcamp_tio_roundtrip.py`.
+
+**Cross-language parity (Java + ObjC):** the same `.tio` materialization
++ write of vibrational runs is being mirrored in Java and ObjC so a
+Python-written vibrational `.tio` reads everywhere (the run-attribute
+contract above is the shared anchor). Tracked as follow-up PRs.
 
 ### 3.2 Live-daemon round-trips for workbench encryption / PQC
 

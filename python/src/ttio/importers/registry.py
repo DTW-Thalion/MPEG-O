@@ -11,11 +11,6 @@ Two formats stand apart and are intentionally NOT in this registry:
 * ``fasta`` / ``fastq`` keep their richer dedicated CLIs
   (``ttio.tools.{fasta,fastq}_import_cli`` -- reference vs. unaligned
   modes, PHRED options); ``ttio encode`` delegates to those directly.
-* ``JCAMP-DX`` -- the Python ``ttio.importers.jcamp_dx`` module reads
-  JDX into vibrational ``Spectrum`` objects but has no `.tio` bridge
-  (that conversion is GUI/Java-only today). Tracked as a Python-side
-  parity gap; not yet reachable from the CLI.
-
 Runtime tool availability (samtools for BAM/SAM/CRAM, the vendor
 converters for Thermo / Waters / Bruker) is the importer's concern: the
 adapter dispatches and the importer raises its own clear error when the
@@ -30,8 +25,9 @@ from typing import Callable
 # Importers delegated to the dedicated CLIs rather than this registry.
 CLI_DELEGATED = ("fasta", "fastq")
 
-# Python reads the format but has no `.tio` importer yet (GUI/Java only).
-DEFERRED_PYTHON = ("jcamp-dx",)
+# Formats read into Spectrum objects but not yet bridged to `.tio`.
+# (jcamp-dx was here until the vibrational `.tio` round-trip landed.)
+DEFERRED_PYTHON: tuple[str, ...] = ()
 
 
 class UnknownFormatError(ValueError):
@@ -73,6 +69,18 @@ def _adapt_bruker(inputs, output, **opts):
     bruker_tdf.read(inputs[0], output, ms2=bool(opts.get("ms2", False)))
 
 
+def _adapt_jcamp(inputs, output, **opts):
+    from pathlib import Path
+
+    from ttio.importers import jcamp_dx
+    from ttio.spectral_dataset import SpectralDataset
+    spectrum = jcamp_dx.read_spectrum(inputs[0])
+    run = jcamp_dx.build_written_run(spectrum)
+    SpectralDataset.write_minimal(
+        output, title=Path(inputs[0]).stem, isa_investigation_id="",
+        runs={"run_0001": run})
+
+
 def _adapt_genomic(reader_attr: str):
     """Adapter for BAM/SAM/CRAM: read into a genomic run, write minimal."""
     def _adapter(inputs, output, **opts):
@@ -102,6 +110,8 @@ _SPECS: tuple[FormatSpec, ...] = (
     FormatSpec("imzml", "imzML", (".imzML",), None, _adapt_imzml),
     FormatSpec("nmrml", "nmrML", (".nmrML",), None,
                _adapt_import_result("nmrml")),
+    FormatSpec("jcamp-dx", "JCAMP-DX", (".jdx", ".dx", ".jcm"), None,
+               _adapt_jcamp),
     FormatSpec("bruker-timstof", "Bruker timsTOF", (".d",),
                "Bruker Python helper", _adapt_bruker),
     FormatSpec("waters-masslynx", "Waters MassLynx", (".raw",),
@@ -126,6 +136,10 @@ _ALIASES: dict[str, str] = {
     "bruker": "bruker-timstof",
     "timstof": "bruker-timstof",
     "tdf": "bruker-timstof",
+    "jcamp": "jcamp-dx",
+    "jdx": "jcamp-dx",
+    "dx": "jcamp-dx",
+    "jcm": "jcamp-dx",
 }
 
 

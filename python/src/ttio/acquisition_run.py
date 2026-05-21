@@ -18,12 +18,16 @@ from .enums import (
     ActivationMethod,
     ChromatogramType,
     EncryptionLevel,
+    IRMode,
     Polarity,
 )
 from .instrument_config import InstrumentConfig
+from .ir_spectrum import IRSpectrum
 from .isolation_window import IsolationWindow
 from .mass_spectrum import MassSpectrum
 from .nmr_spectrum import NMRSpectrum
+from .raman_spectrum import RamanSpectrum
+from .uv_vis_spectrum import UVVisSpectrum
 from .protocols import Indexable, Streamable, Provenanceable
 from .provenance import ProvenanceRecord
 from .providers.base import StorageDataset, StorageGroup
@@ -343,8 +347,20 @@ class AcquisitionRun:
     modality: str = "mass_spectrometry"
     # Optional NMR solvent label (e.g. "CDCl3", "DMSO-d6"). Empty when
     # not specified or when the run is not NMR. Stored as the
-    # ``@solvent`` string attribute on the run group.
+    # ``@solvent`` string attribute on the run group. Reused as the
+    # UV-Vis solvent label.
     solvent: str = ""
+    # Vibrational-spectrum run metadata (IR / Raman / UV-Vis), read from
+    # scalar run-group attributes and consumed by _materialize_spectrum.
+    # Defaults match the spectrum subclasses for files that don't carry
+    # the attributes (i.e. all MS/NMR files).
+    ir_mode: int = int(IRMode.TRANSMITTANCE)
+    ir_resolution_cm_inv: float = 0.0
+    ir_number_of_scans: int = 0
+    raman_excitation_wavelength_nm: float = 0.0
+    raman_laser_power_mw: float = 0.0
+    raman_integration_time_sec: float = 0.0
+    uvvis_path_length_cm: float = 0.0
     # chromatogram traces. Empty list on v0.3 files (group absent).
     chromatograms: list[Chromatogram] = field(default_factory=list)
     # signal cache holds protocol datasets, not h5py.Dataset.
@@ -392,6 +408,23 @@ class AcquisitionRun:
             sgroup, "modality", default="mass_spectrometry"
         ) or "mass_spectrometry"
         solvent = io.read_string_attr(sgroup, "solvent", default="") or ""
+
+        # Vibrational run metadata (absent on MS/NMR files -> defaults).
+        ir_mode = io.read_int_attr(
+            sgroup, "ir_mode", default=int(IRMode.TRANSMITTANCE)
+        )
+        ir_resolution_cm_inv = io.read_float_attr(
+            sgroup, "ir_resolution_cm_inv", default=0.0) or 0.0
+        ir_number_of_scans = io.read_int_attr(
+            sgroup, "ir_number_of_scans", default=0) or 0
+        raman_excitation_wavelength_nm = io.read_float_attr(
+            sgroup, "raman_excitation_wavelength_nm", default=0.0) or 0.0
+        raman_laser_power_mw = io.read_float_attr(
+            sgroup, "raman_laser_power_mw", default=0.0) or 0.0
+        raman_integration_time_sec = io.read_float_attr(
+            sgroup, "raman_integration_time_sec", default=0.0) or 0.0
+        uvvis_path_length_cm = io.read_float_attr(
+            sgroup, "uvvis_path_length_cm", default=0.0) or 0.0
 
         idx = SpectrumIndex.read(sgroup.open_group("spectrum_index"))
 
@@ -442,6 +475,13 @@ class AcquisitionRun:
             provenance_json=prov,
             modality=modality,
             solvent=solvent,
+            ir_mode=int(ir_mode if ir_mode is not None else IRMode.TRANSMITTANCE),
+            ir_resolution_cm_inv=ir_resolution_cm_inv,
+            ir_number_of_scans=ir_number_of_scans,
+            raman_excitation_wavelength_nm=raman_excitation_wavelength_nm,
+            raman_laser_power_mw=raman_laser_power_mw,
+            raman_integration_time_sec=raman_integration_time_sec,
+            uvvis_path_length_cm=uvvis_path_length_cm,
             chromatograms=_read_chromatograms(sgroup),
             _numpress_channels=numpress_channels,
         )
@@ -692,6 +732,26 @@ class AcquisitionRun:
 
         if self.spectrum_class == "TTIONMRSpectrum":
             return NMRSpectrum(nucleus_type=self.nucleus_type, **base_kwargs)
+        if self.spectrum_class == "TTIOIRSpectrum":
+            return IRSpectrum(
+                mode=IRMode(self.ir_mode),
+                resolution_cm_inv=self.ir_resolution_cm_inv,
+                number_of_scans=self.ir_number_of_scans,
+                **base_kwargs,
+            )
+        if self.spectrum_class == "TTIORamanSpectrum":
+            return RamanSpectrum(
+                excitation_wavelength_nm=self.raman_excitation_wavelength_nm,
+                laser_power_mw=self.raman_laser_power_mw,
+                integration_time_sec=self.raman_integration_time_sec,
+                **base_kwargs,
+            )
+        if self.spectrum_class == "TTIOUVVisSpectrum":
+            return UVVisSpectrum(
+                path_length_cm=self.uvvis_path_length_cm,
+                solvent=self.solvent,
+                **base_kwargs,
+            )
         return MassSpectrum(
             ms_level=int(self.index.ms_levels[i]),
             polarity=polarity,
