@@ -1,1 +1,1 @@
-tagSearchIndex = [{"l":"Constant Field Values","h":"","u":"constant-values.html"},{"l":"Serialized Form","h":"","u":"serialized-form.html"}];updateSearchResults();
+tagSearchIndex = [{"l":"Constant Field Values","h":"","k":"18","u":"constant-values.html"},{"l":"Quality byte encoding","h":"class global.thalion.ttio.exporters.BamWriter","k":"16","u":"global/thalion/ttio/exporters/BamWriter.html#quality-byte-encoding-heading"},{"l":"Serialized Form","h":"","k":"18","u":"serialized-form.html"}];updateSearchResults();
