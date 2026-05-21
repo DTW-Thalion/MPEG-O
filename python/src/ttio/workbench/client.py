@@ -459,27 +459,6 @@ class WorkbenchClient:
                           algorithm=kek_algorithm or "aes-256-gcm")
         return decrypt_per_au(out_tio_path, dek)
 
-    # -- deprecated W6.2 blob encryption (daemon-incompatible) --
-
-    async def upload_protected(self, *args, **kwargs):
-        """Removed: blob-level BYOK is not daemon-compatible.
-
-        Sealing a whole payload into one opaque ciphertext blob fails at
-        the daemon (it validates uploads as transport streams). Use
-        :meth:`upload_encrypted`, which encrypts per-AU inside a valid
-        `.tis`. See docs/workbench-client/per-au-encrypted-upload-plan.md.
-        """
-        raise NotImplementedError(
-            "upload_protected (blob-level BYOK) is daemon-incompatible; "
-            "use upload_encrypted (per-AU) instead.")
-
-    async def download_and_open(self, *args, **kwargs):
-        """Removed: counterpart of the blob :meth:`upload_protected`.
-        Use :meth:`download_decrypted`."""
-        raise NotImplementedError(
-            "download_and_open (blob-level) is daemon-incompatible; "
-            "use download_decrypted (per-AU) instead.")
-
     # ----------------------------------------------- control plane (W3)
 
     def query(self, query) -> "CohortResult":  # noqa: F821 -- forward ref

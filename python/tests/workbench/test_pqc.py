@@ -1,19 +1,20 @@
-"""W6.3 -- workbench PQC client (ML-KEM-1024 + ML-DSA-87).
+"""W6.3 -- workbench PQC client surface (ML-KEM-1024).
 
-The gating tests run everywhere (they raise before touching liboqs);
-the crypto round-trips skip when liboqs is unavailable.
+The blob ``seal_pqc`` / ``open_pqc`` envelope path was removed with the
+per-AU encrypted-upload rework (it was never daemon-compatible). What
+remains is the preview gate + keypair generator that the per-AU PQC
+upload path (``WorkbenchClient.upload_encrypted_pqc``) uses; the gate's
+end-to-end behaviour is covered by the live smoke
+(``test_per_au_encrypted_pqc_upload_round_trip``).
 """
 import pytest
 
 from ttio import pqc as core_pqc
-from ttio.workbench.encryption import ProtectionMetadata
 from ttio.workbench.pqc import (
+    ML_KEM_1024,
     PQCPreviewDisabledError,
-    open_pqc,
-    seal_pqc,
-    verify_pqc,
+    _require_preview,
     kem_keygen,
-    sig_keygen,
 )
 
 requires_pqc = pytest.mark.skipif(
@@ -21,73 +22,23 @@ requires_pqc = pytest.mark.skipif(
     reason="liboqs-python not available",
 )
 
-# Cross-language anchor: the PQC-envelope ProtectionMetadata shape
-# (deterministic with empty blobs). Mirrored in WorkbenchPqcTest.
-PQC_ANCHOR_JSON = (
-    '{"cipher_suite":"aes-256-gcm","kek_algorithm":"ml-kem-1024",'
-    '"public_key":"","signature_algorithm":"ml-dsa-87","wrapped_dek":""}'
-)
 
-
-def test_seal_refuses_without_preview():
+def test_require_preview_refuses_without_optin():
     with pytest.raises(PQCPreviewDisabledError):
-        seal_pqc(b"x", b"\x00" * 1568)
+        _require_preview(False)
 
 
-def test_open_refuses_without_preview():
-    meta = ProtectionMetadata("aes-256-gcm", "ml-kem-1024", b"x",
-                              "none", b"")
-    with pytest.raises(PQCPreviewDisabledError):
-        open_pqc(b"x", meta, b"\x00" * 3168)
-
-
-def test_pqc_envelope_json_anchor():
-    meta = ProtectionMetadata(
-        cipher_suite="aes-256-gcm", kek_algorithm="ml-kem-1024",
-        wrapped_dek=b"", signature_algorithm="ml-dsa-87", public_key=b"")
-    assert meta.to_json() == PQC_ANCHOR_JSON
+def test_require_preview_passes_when_optin():
+    _require_preview(True)  # no raise
 
 
 @requires_pqc
-def test_pqc_envelope_round_trip():
+def test_kem_keygen_shapes():
     kp = kem_keygen()
-    payload = b"post-quantum sealed payload" * 32
-    sealed = seal_pqc(payload, kp.public_key, preview=True)
-    assert sealed.protection.kek_algorithm == "ml-kem-1024"
-    assert sealed.protection.wrapped_dek  # non-empty ML-KEM wrap
-    assert sealed.signature == b""  # unsigned
-    restored = open_pqc(sealed.ciphertext, sealed.protection,
-                        kp.private_key, preview=True)
-    assert restored == payload
+    # ML-KEM-1024: 1568-byte public key, 3168-byte private key.
+    assert len(kp.public_key) == 1568
+    assert len(kp.private_key) == 3168
 
 
-@requires_pqc
-def test_pqc_signed_round_trip():
-    kem = kem_keygen()
-    sig = sig_keygen()
-    payload = b"signed + sealed"
-    sealed = seal_pqc(payload, kem.public_key, preview=True,
-                      signer_private_key=sig.private_key,
-                      signer_public_key=sig.public_key)
-    assert sealed.protection.signature_algorithm == "ml-dsa-87"
-    assert sealed.protection.public_key == sig.public_key
-    assert sealed.signature  # detached signature present
-    assert verify_pqc(sealed.ciphertext, sealed.signature, sig.public_key)
-    # tamper -> verification fails
-    bad = bytearray(sealed.ciphertext)
-    bad[-1] ^= 0xFF
-    assert not verify_pqc(bytes(bad), sealed.signature, sig.public_key)
-    # decapsulation still recovers the payload
-    restored = open_pqc(sealed.ciphertext, sealed.protection,
-                        kem.private_key, preview=True)
-    assert restored == payload
-
-
-@requires_pqc
-def test_pqc_wrong_recipient_key_fails():
-    a = kem_keygen()
-    b = kem_keygen()
-    sealed = seal_pqc(b"secret", a.public_key, preview=True)
-    with pytest.raises(Exception):
-        open_pqc(sealed.ciphertext, sealed.protection, b.private_key,
-                 preview=True)
+def test_ml_kem_1024_constant():
+    assert ML_KEM_1024 == "ml-kem-1024"

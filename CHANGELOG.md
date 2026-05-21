@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Removed -- workbench blob-level encryption path (2026-05-21)
+
+Removed the daemon-incompatible W6.2/W6.3 blob upload path, superseded by
+the per-AU encrypted upload (BYOK / envelope / PQC). It had no remaining
+caller after the rework.
+
+- Python: deleted `ttio/workbench/encryption.py` (`seal` / `open_sealed`
+  / `ProtectionMode` / `ProtectionMetadata`) and the blob helpers in
+  `ttio/workbench/pqc.py` (`seal_pqc` / `open_pqc` / `verify_pqc` /
+  `PqcSealed` / `sig_keygen`); dropped the `WorkbenchClient.upload_protected`
+  / `download_and_open` stubs. `ttio.workbench.pqc` keeps `kem_keygen`,
+  `ML_KEM_1024`, and the `opt_pqc_preview` gate used by the per-AU path.
+- Java: deleted the `global.thalion.ttio.workbench.encryption` package
+  (`WorkbenchEncryptor` / `ProtectionMode` / `ProtectionMetadata`) and the
+  blob methods on `WorkbenchPqc` (`sealPqc` / `openPqc` / `verifyPqc` /
+  `PqcSealed` / `sigKeygen`); dropped `WorkbenchClient.uploadProtected`
+  / `downloadAndOpen`. The transport-layer `ProtectionMetadata` (the real
+  cross-language wire anchor) is unaffected.
+- Trimmed the blob unit tests; the preview gate + keypair generator are
+  still covered (unit + live).
+
 ### Changed -- workbench encrypted-upload follow-ups: docs + live coverage (2026-05-21)
 
 Post-rework cleanup of the per-AU encrypted-upload feature:

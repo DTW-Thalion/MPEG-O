@@ -14,8 +14,6 @@ import global.thalion.ttio.workbench.pipeline.PipelinesClient;
 import global.thalion.ttio.workbench.sessions.SessionProxyAttach;
 import global.thalion.ttio.workbench.sessions.SessionsClient;
 import global.thalion.ttio.workbench.federation.FederationClient;
-import global.thalion.ttio.workbench.encryption.ProtectionMetadata;
-import global.thalion.ttio.workbench.encryption.ProtectionMode;
 import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
@@ -344,31 +342,6 @@ public final class WorkbenchClient implements AutoCloseable {
             ? AES_256_GCM : wd.kekAlgorithm();
         byte[] dek = EncryptionManager.unwrapKey(wd.wrappedDek(), kek, alg);
         return PerAUFile.decryptFile(outTioPath, dek, "hdf5");
-    }
-
-    // -- deprecated W6.2 blob encryption (daemon-incompatible) --
-
-    /** @deprecated Blob-level BYOK is not daemon-compatible (the daemon
-     *  validates uploads as transport streams). Use
-     *  {@link #uploadEncrypted}. Always throws. */
-    @Deprecated
-    public WorkbenchTransportClient.UploadResult uploadProtected(
-            String project, String containerUri, byte[] payload,
-            ProtectionMode mode, byte[] dek, byte[] kek, String kekAlgorithm) {
-        throw new UnsupportedOperationException(
-            "uploadProtected (blob-level BYOK) is daemon-incompatible; "
-            + "use uploadEncrypted (per-AU) instead.");
-    }
-
-    /** @deprecated Counterpart of the blob {@link #uploadProtected}. Use
-     *  {@link #downloadDecrypted}. Always throws. */
-    @Deprecated
-    public byte[] downloadAndOpen(
-            String containerUri, ProtectionMetadata protection,
-            byte[] dek, byte[] kek) {
-        throw new UnsupportedOperationException(
-            "downloadAndOpen (blob-level) is daemon-incompatible; "
-            + "use downloadDecrypted (per-AU) instead.");
     }
 
     // ----------------------------------------------- W3 surfaces

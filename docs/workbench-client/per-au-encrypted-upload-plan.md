@@ -39,9 +39,12 @@ core libraries — only the *workbench-client wiring* is missing.
 | Encrypted `.tis` → `.tio` | `transport.encrypted.read_encrypted_to_file` | `EncryptedTransport.readEncryptedToPath` | `TTIOEncryptedTransport` |
 | Detect encrypted file | `is_per_au_encrypted` | `isPerAUEncrypted` | — |
 
-The W6.2/W6.3 client wrappers (`workbench/encryption.py`,
-`workbench/pqc.py`) and the `ProtectionMetadata` JSON anchor are kept;
-only the blob `seal`/`open` upload path is replaced.
+The blob `seal`/`open` upload path has been **removed** (2026-05-21,
+post-rework cleanup): `workbench/encryption.py` and the Java
+`workbench.encryption` package are gone, and `workbench/pqc.py` /
+`WorkbenchPqc` keep only the ML-KEM keypair generator + preview gate
+that the per-AU path uses. The core per-AU crypto + encrypted transport
+listed above are unchanged.
 
 ## Phase 0 — daemon faithfulness (GATING; do this first)
 
