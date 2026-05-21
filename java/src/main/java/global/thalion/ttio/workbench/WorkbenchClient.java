@@ -283,6 +283,69 @@ public final class WorkbenchClient implements AutoCloseable {
         return PerAUFile.decryptFile(outTioPath, dek, "hdf5");
     }
 
+    // ------------------------------------------- envelope variant (KEK-wrap)
+
+    private static final String AES_256_GCM = "aes-256-gcm";
+
+    /** Per-AU encrypt a {@code .tio} with a fresh DEK, wrap that DEK under
+     *  a symmetric AES-256-GCM key-encryption key (KEK), and upload it.
+     *
+     *  <p>Same daemon-faithful path as {@link #uploadEncryptedPqc}, but the
+     *  per-run DEK is wrapped with a 32-byte symmetric KEK instead of an
+     *  ML-KEM public key. The wrapped DEK travels in the ProtectionMetadata
+     *  packet; the daemon never holds the KEK. Recover the data with
+     *  {@link #downloadDecryptedEnvelope} using the same {@code kek}. Not
+     *  preview-gated (unlike the PQC variant). Cross-language equivalent:
+     *  Python {@code WorkbenchClient.upload_encrypted_envelope}.</p> */
+    public WorkbenchTransportClient.UploadResult uploadEncryptedEnvelope(
+            String project, String containerUri, String tioPath,
+            byte[] kek, boolean encryptHeaders) throws IOException {
+        byte[] dek = new byte[32];
+        RNG.nextBytes(dek);
+        Path enc = Files.createTempFile("ttio-env", ".tio");
+        try {
+            Files.copy(Paths.get(tioPath), enc,
+                       StandardCopyOption.REPLACE_EXISTING);
+            PerAUFile.encryptFile(enc.toString(), dek, encryptHeaders, "hdf5");
+            byte[] wrapped = EncryptionManager.wrapKey(
+                dek, kek, false, AES_256_GCM);
+            EncryptedTransport.stampTransportWrappedDek(
+                enc.toString(), wrapped, AES_256_GCM, "hdf5");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (TransportWriter writer = new TransportWriter(bos)) {
+                EncryptedTransport.writeEncryptedDataset(
+                    enc.toString(), writer, "hdf5");
+            }
+            return upload(project, containerUri, bos.toByteArray());
+        } finally {
+            Files.deleteIfExists(enc);
+        }
+    }
+
+    /** Download an envelope per-AU-encrypted container and decrypt it.
+     *
+     *  <p>Materialises the still-encrypted {@code .tio}, unwraps the
+     *  per-run DEK from the ProtectionMetadata with the symmetric
+     *  AES-256-GCM {@code kek}, then returns the decrypted channels per
+     *  run. Counterpart to {@link #uploadEncryptedEnvelope}.</p> */
+    public Map<String, PerAUFile.DecryptedRun> downloadDecryptedEnvelope(
+            String containerUri, byte[] kek, String outTioPath)
+            throws IOException {
+        WorkbenchTransportClient.DownloadResult result = download(containerUri);
+        EncryptedTransport.readEncryptedToPath(outTioPath, result.payload(), "hdf5");
+        EncryptedTransport.WrappedDek wd =
+            EncryptedTransport.readTransportWrappedDek(outTioPath, "hdf5");
+        if (wd.wrappedDek() == null || wd.wrappedDek().length == 0) {
+            throw new IllegalStateException(
+                "container carries no wrapped DEK; not an envelope/PQC "
+                + "upload (use downloadDecrypted with the BYOK key instead)");
+        }
+        String alg = wd.kekAlgorithm() == null || wd.kekAlgorithm().isEmpty()
+            ? AES_256_GCM : wd.kekAlgorithm();
+        byte[] dek = EncryptionManager.unwrapKey(wd.wrappedDek(), kek, alg);
+        return PerAUFile.decryptFile(outTioPath, dek, "hdf5");
+    }
+
     // -- deprecated W6.2 blob encryption (daemon-incompatible) --
 
     /** @deprecated Blob-level BYOK is not daemon-compatible (the daemon

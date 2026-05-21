@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- workbench client per-AU encrypted upload/download, envelope variant (2026-05-21)
+
+Phase 4 (final) of the per-AU encrypted-upload rework: the **envelope**
+variant, which wraps the per-run DEK under a symmetric AES-256-GCM
+key-encryption key (KEK) — the GA, non-preview analogue of the PQC
+ML-KEM path (Python + Java lockstep). This completes the BYOK + envelope
++ PQC trio, each with a live-daemon round-trip.
+
+- Python `WorkbenchClient.upload_encrypted_envelope(*, project,
+  container_uri, tio_path, kek, encrypt_headers=False)` /
+  `download_decrypted_envelope(*, container_uri, kek, out_tio_path)`.
+  Java `WorkbenchClient.uploadEncryptedEnvelope(...)` /
+  `downloadDecryptedEnvelope(...)`. The fresh per-run DEK is wrapped with
+  a 32-byte symmetric KEK (`aes-256-gcm`) and carried in the
+  `ProtectionMetadata`; the daemon never holds the KEK. Recover with the
+  same KEK; not preview-gated (unlike the PQC variant).
+- Live round-trips added for all three variants in `workbench-live`
+  (`test_per_au_encrypted_envelope_upload_round_trip` /
+  `perAuEncryptedEnvelopeUploadRoundTrip`): encrypt → upload → download →
+  decrypt → channel data matches; the wrong KEK fails to decrypt.
+
 ### Added -- workbench client per-AU encrypted upload/download, PQC variant (2026-05-21)
 
 Phase 3 of the per-AU encrypted-upload rework: the post-quantum
