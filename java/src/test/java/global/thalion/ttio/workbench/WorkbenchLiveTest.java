@@ -4,6 +4,12 @@
  */
 package global.thalion.ttio.workbench;
 
+import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.Enums;
+import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.SpectrumIndex;
+import global.thalion.ttio.protection.PerAUFile;
 import global.thalion.ttio.workbench.auth.BootstrapAdminAuth;
 import global.thalion.ttio.workbench.cohort.CohortPredicate;
 import global.thalion.ttio.workbench.cohort.CohortQuery;
@@ -16,7 +22,12 @@ import global.thalion.ttio.workbench.sessions.SessionsClient;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -198,5 +209,62 @@ class WorkbenchLiveTest {
         assertNotNull(last);
         assertTrue(last.isTerminal(),
             "session never terminated; status=" + last.status());
+    }
+
+    // ---------------------------------------------- per-AU encrypted upload
+
+    @Test
+    void perAuEncryptedUploadRoundTrip(@TempDir Path tmp) throws Exception {
+        // Java parity of the Python Phase 1 client round-trip:
+        // uploadEncrypted (encrypt a copy per-AU + emit a valid .tis) ->
+        // daemon stores it opaque (server #31) -> downloadDecrypted
+        // (materialise + decrypt) -> channel bytes match the plaintext.
+        byte[] key = new byte[32];
+        java.util.Arrays.fill(key, (byte) 0x5A);
+
+        int nSpectra = 3, perSpectrum = 4, total = nSpectra * perSpectrum;
+        double[] mz = new double[total];
+        double[] intensity = new double[total];
+        for (int i = 0; i < total; i++) {
+            mz[i] = 100.0 + i;
+            intensity[i] = (i + 1) * 10.0;
+        }
+        SpectrumIndex idx = new SpectrumIndex(nSpectra,
+            new long[]{0, 4, 8}, new int[]{4, 4, 4},
+            new double[]{1.0, 2.0, 3.0}, new int[]{1, 2, 1}, new int[]{1, 1, 1},
+            new double[]{0.0, 500.0, 0.0}, new int[]{0, 2, 0},
+            new double[]{40.0, 80.0, 120.0});
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+            Enums.AcquisitionMode.MS1_DDA, idx,
+            new InstrumentConfig("", "", "", "", "", ""),
+            channels, List.of(), List.of(), null, 0.0);
+
+        String src = tmp.resolve("enc_src.tio").toString();
+        try (SpectralDataset ds = SpectralDataset.create(src,
+                "live enc", "ISA-LIVE-ENC",
+                List.of(run), List.of(), List.of(), List.of())) { }
+
+        String uri = "uri:tio:" + project + "-enc-"
+            + UUID.randomUUID().toString().substring(0, 8);
+        var result = client.uploadEncrypted(project, uri, src, key, false);
+
+        String out = tmp.resolve("rt.tio").toString();
+        Map<String, PerAUFile.DecryptedRun> rt =
+            client.downloadDecrypted(result.containerUri(), key, out);
+
+        assertArrayEquals(leBytes(mz),
+            rt.get("run_0001").channels().get("mz"));
+        assertArrayEquals(leBytes(intensity),
+            rt.get("run_0001").channels().get("intensity"));
+    }
+
+    private static byte[] leBytes(double[] a) {
+        ByteBuffer b = ByteBuffer.allocate(a.length * 8)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        for (double d : a) b.putDouble(d);
+        return b.array();
     }
 }
