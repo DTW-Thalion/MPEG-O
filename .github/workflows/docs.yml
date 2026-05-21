@@ -28,9 +28,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install doc tools
@@ -41,7 +41,7 @@ jobs:
       - name: Build HTML
         run: python -m sphinx -b html python/docs python/docs/_build/html
       - name: Upload HTML
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: python-docs-html
           path: python/docs/_build/html
@@ -51,10 +51,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - uses: ./.github/actions/setup-hdf5
       - name: Set up JDK 25
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '25'
@@ -69,7 +69,7 @@ jobs:
         working-directory: java
         run: mvn -B -q javadoc:javadoc
       - name: Upload Javadoc
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: java-docs-html
           path: docs/api/java
