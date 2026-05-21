@@ -48,6 +48,13 @@ public final class WorkbenchPqc {
         }
     }
 
+    /** Public {@code opt_pqc_preview} gate for callers outside this package
+     *  (e.g. the per-AU PQC upload path on {@code WorkbenchClient}). Throws
+     *  {@link PqcPreviewDisabledException} unless {@code preview} is true. */
+    public static void requirePreviewPublic(boolean preview) {
+        requirePreview(preview);
+    }
+
     /** Generate an ML-KEM-1024 encapsulation keypair. */
     public static PostQuantumCrypto.KeyPair kemKeygen() {
         return PostQuantumCrypto.kemKeygen();

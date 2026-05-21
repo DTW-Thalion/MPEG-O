@@ -11,6 +11,39 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- workbench client per-AU encrypted upload/download, PQC variant (2026-05-21)
+
+Phase 3 of the per-AU encrypted-upload rework: the post-quantum
+(ML-KEM-1024) variant, gated behind `opt_pqc_preview` (Python + Java
+lockstep, Decision 2). Unlike BYOK (Phases 1-2, caller-held key), the
+per-run DEK is randomly generated, ML-KEM-wrapped into the
+`ProtectionMetadata` packet, and recoverable only with the recipient's
+ML-KEM private key — the daemon never holds a key.
+
+- Python `WorkbenchClient.upload_encrypted_pqc(*, project,
+  container_uri, tio_path, recipient_public_key, preview,
+  encrypt_headers=False)` / `download_decrypted_pqc(*, container_uri,
+  recipient_private_key, out_tio_path, preview)`. Java
+  `WorkbenchClient.uploadEncryptedPqc(...)` /
+  `downloadDecryptedPqc(...)`. All four refuse unless `preview` is set
+  (`PQCPreviewDisabledError` / `PqcPreviewDisabledException`), mirroring
+  the server's `opt_pqc_preview`.
+- New transport helpers stamp/read the wrapped DEK on a run's
+  `signal_channels` so `write_encrypted_dataset` carries it and the
+  receiver can unwrap it: Python
+  `transport.encrypted.stamp_transport_wrapped_dek` /
+  `read_transport_wrapped_dek`; Java
+  `EncryptedTransport.stampTransportWrappedDek` /
+  `readTransportWrappedDek`. The wrapped DEK is stored as a `uint8`
+  attribute array (not a VLEN string) so the v1.2 / ML-KEM blob's
+  embedded NULs survive the round-trip.
+
+Validated end-to-end against a live daemon (Python
+`test_per_au_encrypted_pqc_upload_round_trip`, Java
+`perAuEncryptedPqcUploadRoundTrip`: ML-KEM-wrapped encrypt → upload →
+download → unwrap → decrypt → channel data matches; the un-previewed
+call refuses and the wrong private key fails to decrypt).
+
 ### Added -- workbench client per-AU encrypted upload/download (Java) (2026-05-21)
 
 Phase 2 of the per-AU encrypted-upload rework: the Java mirror of the
