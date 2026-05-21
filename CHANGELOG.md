@@ -11,22 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-### Added -- ttio export --format nmrml / imzml (2026-05-20)
+### Fixed -- workbench upload ack-drain on websockets >= 14 (2026-05-20)
 
-Closes part of parity-audit follow-on §3.1. The export registry now
-wires **nmrML** and **imzML**:
+`UploadClient._drain_acks` read `self._ws.messages`, a deque the
+`websockets` >= 14 asyncio `ClientConnection` no longer exposes, so
+**every** live upload crashed with `AttributeError`. No live test had
+exercised `upload_bytes` against a real daemon, so this went uncaught.
+Rewritten to a cancel-safe non-blocking `recv()` drain (acks are still
+fully processed by `_wait_for_done`).
 
-- nmrML: pick the NMR run (`ds.ms_runs`/`nmr_runs` by `--layer` or the
-  sole NMR-class run), export its first `NMRSpectrum`.
-- imzML: project `ds.image` (`MSImage.to_pixel_spectra()`) to the
-  `.imzML` + `.ibd` pair.
-
-JCAMP-DX export/import stays deferred — Python's
-`AcquisitionRun._materialize_spectrum` can't yet reconstruct
-IR/Raman/UVVis spectra from a `.tio` (a core gap, not CLI glue; see
-`docs/parity-audit-v1.0.md` §3.1). Tests: `test_export_formats.py`
-nmrML + imzML round-trips; the GUI-parity test now records only
-JCAMP-DX as the documented gap.
+Added a valid-`.tis` upload -> ingest -> download -> decode round-trip
+to the `workbench-live` smoke (the first upload/download e2e there;
+9/9 against a local daemon). This also documents -- via
+`docs/parity-audit-v1.0.md` 3.2 -- that **W6.2 blob-level BYOK is not
+daemon-compatible**: the daemon validates uploads as transport streams
+(rejects opaque ciphertext) and re-encodes on download, so encrypted
+upload must use per-AU encryption yielding a valid `.tis`. That rework
+is the real W6.2 follow-up.
 
 ### Added -- W6.6: SDK reference docs + quickstart + finalisation (2026-05-20)
 

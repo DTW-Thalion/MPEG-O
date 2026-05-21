@@ -353,21 +353,25 @@ class UploadClient:
             self._last_ack = int(seq)
 
     async def _drain_acks(self, *, non_blocking: bool) -> None:
-        """Drain any pending TEXT ack frames without blocking on send."""
+        """Best-effort drain of pending TEXT ack frames; never blocks the
+        send loop. Any acks not seen here are processed by
+        :meth:`_wait_for_done`, so this is purely a progress optimization.
+
+        Uses ``recv()`` with a short timeout: the ``websockets`` >= 14
+        asyncio ``ClientConnection`` exposes no ``.messages`` deque, and
+        ``recv()`` is cancellation-safe, so a timed-out (cancelled)
+        receive simply leaves any in-flight frame for the next call.
+        """
         import asyncio
-        while self._ws.messages:  # type: ignore[attr-defined]
+        timeout = 0.0 if non_blocking else 0.05
+        while True:
             try:
-                raw = self._ws.messages.popleft()  # type: ignore[attr-defined]
-            except (AttributeError, IndexError):
-                break
+                raw = await asyncio.wait_for(self._ws.recv(), timeout=timeout)
+            except (asyncio.TimeoutError, ConnectionClosed):
+                return
+            except Exception:
+                return
             await self._handle_text_frame(raw)
-        if non_blocking:
-            return
-        try:
-            raw = await asyncio.wait_for(self._ws.recv(), timeout=0.0)
-        except (asyncio.TimeoutError, Exception):
-            return
-        await self._handle_text_frame(raw)
 
     async def _wait_for_done(self) -> UploadResult:
         while True:
