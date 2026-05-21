@@ -11,6 +11,25 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- vibrational .tio materialization, ObjC parity (2026-05-21)
+
+ObjC mirror completing the §3.1 cross-language trio. `TTIOAcquisitionRun`
+now materializes `TTIOIRSpectrum` / `TTIORamanSpectrum` /
+`TTIOUVVisSpectrum` and reads/writes the per-class run-group attributes
+matching the Python and Java contract, so a vibrational `.tio` written
+by any language reads everywhere.
+
+- `spectrumAtIndex:` dispatches on `spectrum_class` to build the right
+  vibrational subclass; the in-memory initializer captures the metadata
+  from the first spectrum; `writeToGroup:name:error:` emits `ir_mode` /
+  `ir_resolution_cm_inv` / `ir_number_of_scans`, `raman_*`,
+  `uvvis_path_length_cm` (UV-Vis solvent via `@solvent`); both readers
+  restore them. The lighter `readFromStorageGroup:` reader also now reads
+  `@solvent` so UV-Vis round-trips through it too.
+- `TestJcampVibrationalRoundTrip`: write → read → materialize for each
+  vibrational type. §3.1 (JCAMP-DX vibrational round-trip) is now fully
+  resolved across Python + Java + ObjC.
+
 ### Added -- vibrational .tio materialization, Java parity (2026-05-21)
 
 Java mirror of the §3.1 vibrational round-trip (PR after the Python

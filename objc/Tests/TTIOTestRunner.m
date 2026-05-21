@@ -116,6 +116,7 @@ extern void testMSImageMzAxis(void);
 extern void testMSImageLegacyMzAxisAbsent(void);
 extern void testSpectralDatasetMsImageAccessor(void);
 extern void testPixelSpectraRaisesWhenMzAxisAbsent(void);
+extern void testJcampVibrationalRoundTrip(void);
 
 int main(int argc, const char *argv[])
 {
@@ -380,6 +381,10 @@ int main(int argc, const char *argv[])
         START_SET("M73.1: JCAMP-DX compression + UV-Vis + 2D-COS (v0.11.1)")
             testMilestone73_1();
         END_SET("M73.1: JCAMP-DX compression + UV-Vis + 2D-COS (v0.11.1)")
+
+        START_SET("vibrational .tio round-trip (IR/Raman/UV-Vis materialize)")
+            testJcampVibrationalRoundTrip();
+        END_SET("vibrational .tio round-trip (IR/Raman/UV-Vis materialize)")
 
         START_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
             testM76JcampConformance();
