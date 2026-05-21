@@ -317,3 +317,71 @@ def test_per_au_encrypted_upload_round_trip(client, tmp_path):
     # The materialised container on disk is still encrypted: the daemon
     # never held the key, and download_decrypted decrypts client-side.
     assert is_per_au_encrypted(str(out))
+
+
+def test_per_au_encrypted_pqc_upload_round_trip(client, tmp_path):
+    """Phase 3: PQC per-AU encrypted upload/download round-trip.
+
+    Same daemon-faithful path as the BYOK test, but the per-run DEK is
+    randomly generated, ML-KEM-1024-wrapped, and carried in the
+    ProtectionMetadata packet (no caller-held key). Only the holder of
+    the ML-KEM private key recovers it. Preview-gated like the server's
+    opt_pqc_preview: the un-previewed call must refuse, and the wrong
+    private key must fail to decrypt."""
+    import numpy as np
+    from ttio import SpectralDataset, WrittenRun
+    from ttio.enums import AcquisitionMode
+    from ttio.transport.encrypted import is_per_au_encrypted
+    from ttio.workbench import pqc
+
+    mz = np.linspace(100.0, 105.0, 12)
+    intensity = np.linspace(1.0, 120.0, 12)
+    src = tmp_path / "pqc_src.tio"
+    SpectralDataset.write_minimal(
+        str(src), title="pqc", isa_investigation_id="TTIO:pqc",
+        runs={"run_0001": WrittenRun(
+            spectrum_class="TTIOMassSpectrum",
+            acquisition_mode=int(AcquisitionMode.MS1_DDA),
+            channel_data={"mz": mz, "intensity": intensity},
+            offsets=np.array([0, 6], dtype=np.uint64),
+            lengths=np.array([6, 6], dtype=np.uint32),
+            retention_times=np.array([0.0, 1.0]),
+            ms_levels=np.ones(2, dtype=np.int32),
+            polarities=np.ones(2, dtype=np.int32),
+            precursor_mzs=np.zeros(2),
+            precursor_charges=np.zeros(2, dtype=np.int32),
+            base_peak_intensities=np.array([60.0, 120.0]),
+        )})
+
+    kp = pqc.kem_keygen()
+    uri = f"uri:tio:{PROJECT}-pqc-{uuid.uuid4().hex[:8]}"
+
+    # opt_pqc_preview gating: refuses without preview=True.
+    with pytest.raises(pqc.PQCPreviewDisabledError):
+        asyncio.run(client.upload_encrypted_pqc(
+            project=PROJECT, container_uri=uri, tio_path=str(src),
+            recipient_public_key=kp.public_key))
+
+    result = asyncio.run(client.upload_encrypted_pqc(
+        project=PROJECT, container_uri=uri, tio_path=str(src),
+        recipient_public_key=kp.public_key, preview=True))
+
+    out = tmp_path / "pqc_rt.tio"
+    channels = asyncio.run(client.download_decrypted_pqc(
+        container_uri=result.container_uri,
+        recipient_private_key=kp.private_key,
+        out_tio_path=str(out), preview=True))
+
+    rt = channels["run_0001"]
+    np.testing.assert_allclose(rt["mz"], mz)
+    np.testing.assert_allclose(rt["intensity"], intensity)
+    assert is_per_au_encrypted(str(out))
+
+    # Wrong ML-KEM private key cannot recover the DEK.
+    wrong = pqc.kem_keygen()
+    bad_out = tmp_path / "pqc_bad.tio"
+    with pytest.raises(Exception):
+        asyncio.run(client.download_decrypted_pqc(
+            container_uri=result.container_uri,
+            recipient_private_key=wrong.private_key,
+            out_tio_path=str(bad_out), preview=True))

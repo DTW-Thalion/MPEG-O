@@ -467,6 +467,108 @@ public final class EncryptedTransport {
                             new ArrayList<>(featureSet), protection, datasets);
     }
 
+    // ──────────────────────────────────── wrapped-DEK stamp / read (PQC)
+
+    /** Stamp a wrapped DEK + KEK algorithm onto every run's
+     *  {@code signal_channels} so {@link #writeEncryptedDataset} emits it
+     *  in the ProtectionMetadata packet.
+     *
+     *  <p>Used for envelope / PQC per-AU upload, where the per-run DEK is
+     *  wrapped under the recipient's KEK ({@code aes-256-gcm}) or KEM
+     *  public key ({@code ml-kem-1024}). All channels in a run share the
+     *  DEK (v1.0 design), so the wrapper is stamped on each run's first
+     *  channel -- the same attribute the writer reads.</p>
+     *
+     *  <p>Cross-language equivalent: Python
+     *  {@code transport.encrypted.stamp_transport_wrapped_dek}.</p> */
+    public static void stampTransportWrappedDek(String ttioPath,
+                                                  byte[] wrappedDek,
+                                                  String kekAlgorithm,
+                                                  String providerName)
+            throws IOException {
+        StorageProvider sp = ProviderRegistry.open(ttioPath,
+            StorageProvider.Mode.READ_WRITE, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            if (!root.hasChild("study")) return;
+            try (StorageGroup study = root.openGroup("study")) {
+                for (String parent : new String[]{"ms_runs", "genomic_runs"}) {
+                    if (!study.hasChild(parent)) continue;
+                    try (StorageGroup g = study.openGroup(parent)) {
+                        for (String n : g.childNames()) {
+                            if (n.startsWith("_") || !g.hasChild(n)) continue;
+                            try (StorageGroup run = g.openGroup(n)) {
+                                if (!run.hasChild("signal_channels")) continue;
+                                try (StorageGroup sig =
+                                         run.openGroup("signal_channels")) {
+                                    List<String> names = splitNames(
+                                        attrStr(sig, "channel_names", ""));
+                                    if (names.isEmpty()) continue;
+                                    String fc = names.get(0);
+                                    sig.setAttribute(fc + "_wrapped_dek", wrappedDek);
+                                    sig.setAttribute(fc + "_kek_algorithm",
+                                                      kekAlgorithm);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } finally {
+            sp.close();
+        }
+    }
+
+    /** A wrapped DEK + the KEK algorithm that unwraps it. */
+    public record WrappedDek(byte[] wrappedDek, String kekAlgorithm) {}
+
+    /** Return the wrapped DEK + KEK algorithm stamped on the first run's
+     *  {@code signal_channels}, or an empty {@code WrappedDek} if none.
+     *  The receiver unwraps the DEK with its KEK / KEM private key, then
+     *  calls {@link PerAUFile#decryptFile}.
+     *
+     *  <p>Cross-language equivalent: Python
+     *  {@code transport.encrypted.read_transport_wrapped_dek}.</p> */
+    public static WrappedDek readTransportWrappedDek(String ttioPath,
+                                                       String providerName)
+            throws IOException {
+        StorageProvider sp = ProviderRegistry.open(ttioPath,
+            StorageProvider.Mode.READ, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            if (!root.hasChild("study")) return new WrappedDek(new byte[0], "");
+            try (StorageGroup study = root.openGroup("study")) {
+                for (String parent : new String[]{"ms_runs", "genomic_runs"}) {
+                    if (!study.hasChild(parent)) continue;
+                    try (StorageGroup g = study.openGroup(parent)) {
+                        for (String n : g.childNames()) {
+                            if (n.startsWith("_") || !g.hasChild(n)) continue;
+                            try (StorageGroup run = g.openGroup(n)) {
+                                if (!run.hasChild("signal_channels")) continue;
+                                try (StorageGroup sig =
+                                         run.openGroup("signal_channels")) {
+                                    List<String> names = splitNames(
+                                        attrStr(sig, "channel_names", ""));
+                                    if (names.isEmpty()) continue;
+                                    String fc = names.get(0);
+                                    if (!sig.hasAttribute(fc + "_wrapped_dek")) {
+                                        continue;
+                                    }
+                                    return new WrappedDek(
+                                        attrBytes(sig, fc + "_wrapped_dek"),
+                                        attrStr(sig, fc + "_kek_algorithm", ""));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return new WrappedDek(new byte[0], "");
+        } finally {
+            sp.close();
+        }
+    }
+
     // ────────────────────────────────────────────── payload encoders
 
     private static byte[] encodeProtection(String cipherSuite, String kek,

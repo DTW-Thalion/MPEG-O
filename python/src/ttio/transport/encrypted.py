@@ -571,9 +571,13 @@ def read_encrypted_to_file(
                 io.write_channel_segments(sig, f"{cname}_segments", segs)
                 sig.set_attribute(f"{cname}_algorithm", "aes-256-gcm")
                 pm = protection.get(did)
-                if pm:
-                    sig.set_attribute(f"{cname}_wrapped_dek",
-                                         pm["wrapped_dek"])
+                if pm and pm.get("wrapped_dek"):
+                    # Store the wrapped DEK as a byte array, not a string:
+                    # the v1.2 / ML-KEM blob contains embedded NULs that a
+                    # VLEN-string attribute rejects.
+                    sig.set_attribute(
+                        f"{cname}_wrapped_dek",
+                        np.frombuffer(pm["wrapped_dek"], dtype=np.uint8))
                     sig.set_attribute(f"{cname}_kek_algorithm",
                                          pm["kek_algorithm"])
 
@@ -624,9 +628,10 @@ def read_encrypted_to_file(
                     io.write_channel_segments(g_sig, f"{cname}_segments", segs)
                     g_sig.set_attribute(f"{cname}_algorithm", "aes-256-gcm")
                     pm = protection.get(did)
-                    if pm:
-                        g_sig.set_attribute(f"{cname}_wrapped_dek",
-                                             pm["wrapped_dek"])
+                    if pm and pm.get("wrapped_dek"):
+                        g_sig.set_attribute(
+                            f"{cname}_wrapped_dek",
+                            np.frombuffer(pm["wrapped_dek"], dtype=np.uint8))
                         g_sig.set_attribute(f"{cname}_kek_algorithm",
                                              pm["kek_algorithm"])
 
@@ -804,3 +809,83 @@ def _ingest_encrypted_au(d: dict, *, header, payload: bytes,
             length=n_elements,
             iv=iv, tag=tag, ciphertext=ciphertext,
         ))
+
+
+def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
+                                  provider=None):
+    """Stamp a wrapped DEK + KEK algorithm onto every run's
+    ``signal_channels`` so :func:`write_encrypted_dataset` emits it in the
+    ProtectionMetadata packet.
+
+    Used for envelope / PQC per-AU upload, where the DEK is wrapped under
+    the recipient's KEK (``aes-256-gcm``) or KEM public key
+    (``ml-kem-1024``). The DEK itself is shared across all channels in a
+    run (v1.0 design), so the wrapper is stamped on each run's first
+    channel -- the same attribute :func:`write_encrypted_dataset` reads.
+    """
+    from ..providers.registry import open_provider
+
+    wd = np.frombuffer(wrapped_dek, dtype=np.uint8)
+    sp = open_provider(path, provider=provider, mode="a")
+    try:
+        root = sp.root_group()
+        if not root.has_child("study"):
+            return
+        study = root.open_group("study")
+        for parent in ("ms_runs", "genomic_runs"):
+            if not study.has_child(parent):
+                continue
+            g = study.open_group(parent)
+            for n in g.child_names():
+                if n.startswith("_") or not g.has_child(n):
+                    continue
+                run = g.open_group(n)
+                if not run.has_child("signal_channels"):
+                    continue
+                sig = run.open_group("signal_channels")
+                names = [c for c in (io.read_string_attr(sig, "channel_names")
+                                     or "").split(",") if c]
+                if not names:
+                    continue
+                sig.set_attribute(f"{names[0]}_wrapped_dek", wd)
+                sig.set_attribute(f"{names[0]}_kek_algorithm", kek_algorithm)
+    finally:
+        sp.close()
+
+
+def read_transport_wrapped_dek(path, *, provider=None):
+    """Return ``(wrapped_dek_bytes, kek_algorithm)`` stamped on the first
+    run's ``signal_channels``, or ``(b"", "")`` if none. The receiver
+    unwraps the DEK with its KEK / KEM private key, then calls
+    :func:`ttio.encryption_per_au.decrypt_per_au`."""
+    from ..providers.registry import open_provider
+
+    sp = open_provider(path, provider=provider, mode="r")
+    try:
+        root = sp.root_group()
+        if not root.has_child("study"):
+            return b"", ""
+        study = root.open_group("study")
+        for parent in ("ms_runs", "genomic_runs"):
+            if not study.has_child(parent):
+                continue
+            g = study.open_group(parent)
+            for n in g.child_names():
+                if n.startswith("_") or not g.has_child(n):
+                    continue
+                run = g.open_group(n)
+                if not run.has_child("signal_channels"):
+                    continue
+                sig = run.open_group("signal_channels")
+                names = [c for c in (io.read_string_attr(sig, "channel_names")
+                                     or "").split(",") if c]
+                if not names:
+                    continue
+                attr = f"{names[0]}_wrapped_dek"
+                if sig.has_attribute(attr):
+                    return (bytes(sig.get_attribute(attr)),
+                            io.read_string_attr(sig, f"{names[0]}_kek_algorithm")
+                            or "")
+        return b"", ""
+    finally:
+        sp.close()
