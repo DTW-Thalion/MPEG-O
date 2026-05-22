@@ -648,7 +648,9 @@ public final class EncryptedTransport {
 
     // ────────────────────────────────────────────── payload encoders
 
-    private static byte[] encodeProtection(String cipherSuite, String kek,
+    // Package-private (not private) so the FD-1 Phase A-4 conformance test
+    // can pin its output against the shared golden vectors.
+    static byte[] encodeProtection(String cipherSuite, String kek,
                                              byte[] wrapped,
                                              List<Recipient> additional) {
         byte[] cs = cipherSuite.getBytes(StandardCharsets.UTF_8);
@@ -671,8 +673,9 @@ public final class EncryptedTransport {
      *  {@code {recipient_id, kek_algorithm, wrapped_dek}}. Empty bytes for
      *  no additional recipients, so single-recipient packets stay
      *  byte-identical to transport-spec §4.4. Byte-for-byte identical to
-     *  the Python `_encode_recipient_block` (the cross-language contract).*/
-    private static byte[] encodeRecipientBlock(List<Recipient> additional) {
+     *  the Python `_encode_recipient_block` (the cross-language contract).
+     *  Package-private for the FD-1 Phase A-4 conformance test. */
+    static byte[] encodeRecipientBlock(List<Recipient> additional) {
         if (additional == null || additional.isEmpty()) return new byte[0];
         int len = 2;
         for (Recipient r : additional) {
@@ -708,7 +711,7 @@ public final class EncryptedTransport {
         return out;
     }
 
-    private static List<Recipient> decodeRecipientBlockBytes(byte[] block) {
+    static List<Recipient> decodeRecipientBlockBytes(byte[] block) {
         if (block == null || block.length == 0) return new ArrayList<>();
         return decodeRecipientBlock(
             ByteBuffer.wrap(block).order(ByteOrder.LITTLE_ENDIAN));
@@ -814,7 +817,7 @@ public final class EncryptedTransport {
         return out;
     }
 
-    private static ProtectionMeta parseProtection(byte[] payload) {
+    static ProtectionMeta parseProtection(byte[] payload) {
         ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
         String cs = readLEString(bb, 2);
         String kek = readLEString(bb, 2);
