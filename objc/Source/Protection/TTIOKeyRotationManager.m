@@ -421,6 +421,45 @@ static NSString *iso8601Now(void)
                                          error:error];
 }
 
+// FD-1 Phase C: standalone key-wrap primitives (no HDF5 file), dispatching
+// on algorithm. They reuse the same self-independent blob logic the
+// file-bound paths use, so the output is byte-identical to -wrapDEK: and
+// to the Java/Python wrap primitives. The server key-custody software-KMS
+// stub calls these to (un)wrap a DEK under a tenant KEK.
++ (NSData *)wrapKey:(NSData *)dek
+            withKEK:(NSData *)kek
+          algorithm:(NSString *)algorithm
+              error:(NSError **)error
+{
+    TTIOKeyRotationManager *m = [[self alloc] init];
+    if ([algorithm isEqualToString:kKEKAlgorithmAES]) {
+        return [m wrapDEK:dek withKEK:kek error:error];
+    }
+    if ([algorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        return [m wrapDEKWithMLKEMPublicKey:kek dek:dek error:error];
+    }
+    if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+        @"wrapKey: unsupported algorithm %@", algorithm);
+    return nil;
+}
+
++ (NSData *)unwrapKey:(NSData *)wrapped
+              withKEK:(NSData *)kek
+            algorithm:(NSString *)algorithm
+                error:(NSError **)error
+{
+    TTIOKeyRotationManager *m = [[self alloc] init];
+    if ([algorithm isEqualToString:kKEKAlgorithmAES]) {
+        return [m unwrapBlob:wrapped withKEK:kek error:error];
+    }
+    if ([algorithm isEqualToString:kKEKAlgorithmMLKEM]) {
+        return [m unwrapMLKEMBlob:wrapped withPrivateKey:kek error:error];
+    }
+    if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+        @"unwrapKey: unsupported algorithm %@", algorithm);
+    return nil;
+}
+
 // Read the wrapped blob from /protection/key_info/dek_wrapped.
 - (NSData *)readWrappedBlob:(TTIOHDF5Group *)keyInfo error:(NSError **)error
 {
