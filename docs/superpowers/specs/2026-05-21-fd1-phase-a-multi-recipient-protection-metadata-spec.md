@@ -158,10 +158,15 @@ recover the primary (the P2 guarantee), pinned as a frozen byte vector.
   full list (`read_transport_wrapped_dek` stays the single-recipient
   accessor). Single-recipient stays byte-identical. Covered by
   `tests/test_fd1_multi_recipient_protection.py`.
-- **A-2 (Java).** Mirror in `EncryptedTransport` (`encodeProtection` /
-  `parseProtection` → recipient list; `ProtectionMeta` grows a
-  `List<Recipient>`). `parseProtection` already tolerates trailing bytes,
-  so the change is additive.
+- **A-2 (Java) — DONE.** `EncryptedTransport` gains a public `Recipient`
+  record; `encodeProtection` appends the trailing block,
+  `parseProtection` consumes signature/public-key then decodes it into
+  `ProtectionMeta.additionalRecipients`; the write/materialize paths
+  carry a base64 `<channel>_wrapped_dek_recipients` storage attribute;
+  `stampTransportWrappedDek` gains a multi-recipient overload and
+  `readTransportRecipients` returns the full list. Covered by
+  `MultiRecipientProtectionTest`. The block encoder is byte-identical to
+  Python's (the A-4 conformance contract).
 - **A-3 (ObjC).** Mirror in `TTIOEncryptedTransport`.
 - **A-4 (cross-language).** The §6 conformance vectors wired into the
   parity harness; assert byte-parity + the pre-Phase-A primary-recovery

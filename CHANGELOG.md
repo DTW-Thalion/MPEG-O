@@ -11,6 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase A-2: multi-recipient ProtectionMetadata (Java) (2026-05-21)
+
+Java mirror of the A-1 multi-recipient `ProtectionMetadata` wire format,
+using the same append-only layout (single-recipient byte-identical).
+
+- `EncryptedTransport`: public `Recipient` record; `encodeProtection`
+  appends the trailing recipient block; `parseProtection` decodes it into
+  `ProtectionMeta.additionalRecipients`; the write + materialize paths
+  carry a base64 `<channel>_wrapped_dek_recipients` storage attribute
+  (per-language on-disk encoding need not match across languages — only
+  the transport packet bytes do).
+- `stampTransportWrappedDek` gains a multi-recipient overload;
+  `readTransportRecipients` returns the full list (primary + additional);
+  `readTransportWrappedDek` stays the single-recipient accessor.
+- Covered by `MultiRecipientProtectionTest`. ObjC (A-3) and cross-language
+  conformance vectors (A-4) follow.
+
 ### Added -- FD-1 Phase A-1: multi-recipient ProtectionMetadata (Python) (2026-05-21)
 
 First implementation step of the FD-1 server-side-compute groundwork (per
