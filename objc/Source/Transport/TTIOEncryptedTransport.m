@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOEncryptedTransport.h"
+#import "TTIOEncryptedTransport+Conformance.h"
 #import "TTIOTransportPacket.h"
 #import "TTIOTransportReader.h"
 #import "TTIOAccessUnit.h"
@@ -1651,6 +1652,23 @@ static BOOL writeEncryptedFile(NSString *path,
 
     return writeEncryptedFile(outputPath, providerName, title, isa,
                                 featureList, protection, datasets, error);
+}
+
+@end
+
+// FD-1 Phase A-4: expose the recipient-block codec to the cross-language
+// conformance test (see TTIOEncryptedTransport+Conformance.h).
+@implementation TTIOEncryptedTransport (Conformance)
+
++ (NSData *)ttioConformanceEncodeRecipientBlock:(NSArray<NSDictionary *> *)additional
+{
+    return encodeRecipientBlock(additional);
+}
+
++ (NSArray<NSDictionary *> *)ttioConformanceDecodeRecipientBlock:(NSData *)block
+{
+    NSUInteger off = 0;
+    return decodeRecipientBlock((const uint8_t *)block.bytes, block.length, &off);
 }
 
 @end
