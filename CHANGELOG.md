@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase B-2: multi-recipient envelope client API (Java) (2026-05-22)
+
+Java mirror of the B-1 client API on `WorkbenchClient`, byte-compatible
+with the Python side (both stamp the Phase A multi-recipient packet).
+
+- `WorkbenchClient.EnvelopeRecipient(recipientId, key, algorithm)` — one
+  recipient's wrapping key (`aes-256-gcm` symmetric KEK or `ml-kem-1024`
+  public key); a 2-arg constructor defaults to `aes-256-gcm`.
+- `WorkbenchClient.uploadEncryptedMulti(project, containerUri, tioPath,
+  recipients, preview, encryptHeaders)` — one DEK wrapped once per
+  recipient via `EncryptionManager.wrapKey`; `recipients.get(0)` is the
+  packet primary (wire id `""`), the rest go in the Phase A trailing
+  block. Preview-gated iff any recipient uses `ml-kem-1024`.
+- `WorkbenchClient.downloadDecryptedMulti(containerUri, key, outTioPath,
+  recipientId, preview)` — selects the recipient entry the caller holds a
+  key for (`""` = primary) and unwraps it.
+- Covered by `MultiRecipientClientTest` (daemon-free wrap → stamp → read →
+  unwrap-per-recipient → decrypt) and the live smoke
+  `WorkbenchLiveTest.multiRecipientUploadRoundTrip` (server-KEK +
+  researcher-ML-KEM end-to-end through the actual client methods).
+
 ### Added -- FD-1 Phase B-1: multi-recipient envelope client API (Python) (2026-05-22)
 
 Client-side API to encrypt a `.tio` for **multiple recipients** — the FD-1
