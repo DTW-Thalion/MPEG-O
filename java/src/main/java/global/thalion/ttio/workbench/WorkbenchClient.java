@@ -391,6 +391,17 @@ public final class WorkbenchClient implements AutoCloseable {
             String project, String containerUri, String tioPath,
             List<EnvelopeRecipient> recipients, boolean preview,
             boolean encryptHeaders) throws IOException {
+        return uploadEncryptedMulti(project, containerUri, tioPath, recipients,
+            null, preview, encryptHeaders);
+    }
+
+    /** FD-1 C-2a overload: declares the container server-processable under
+     *  {@code serverKekId} (stamped into the ProtectionMetadata packet so
+     *  the daemon can resolve it). null ⇒ BYOK / not server-processable. */
+    public WorkbenchTransportClient.UploadResult uploadEncryptedMulti(
+            String project, String containerUri, String tioPath,
+            List<EnvelopeRecipient> recipients, String serverKekId,
+            boolean preview, boolean encryptHeaders) throws IOException {
         if (recipients == null || recipients.isEmpty()) {
             throw new IllegalArgumentException(
                 "uploadEncryptedMulti requires >= 1 recipient");
@@ -429,7 +440,7 @@ public final class WorkbenchClient implements AutoCloseable {
             }
             EncryptedTransport.stampTransportWrappedDek(
                 enc.toString(), primaryWrapped, primary.algorithm(),
-                additional, "hdf5");
+                additional, serverKekId, "hdf5");
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
             try (TransportWriter writer = new TransportWriter(bos)) {
                 EncryptedTransport.writeEncryptedDataset(

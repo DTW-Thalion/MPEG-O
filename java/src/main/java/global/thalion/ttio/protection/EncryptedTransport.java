@@ -134,7 +134,8 @@ public final class EncryptedTransport {
                                         firstCh + "_wrapped_dek_recipients"));
 
                                 writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
-                                    did, 0, encodeProtection(cipherSuite, kek, wrapped, extra));
+                                    did, 0, encodeProtection(cipherSuite, kek, wrapped, extra,
+                                        attrStr(sig, firstCh + "_server_kek_id", "")));
 
                                 long expectedAUs = firstChannelSegmentCount(sig, firstCh);
                                 int acqMode = intAttr(run, "acquisition_mode", 0);
@@ -203,7 +204,8 @@ public final class EncryptedTransport {
             List<Recipient> extra = decodeRecipientBlockBytes(
                 readWrappedDekAttr(sig, firstCh + "_wrapped_dek_recipients"));
             writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
-                datasetId, 0, encodeProtection(cipherSuite, kek, wrapped, extra));
+                datasetId, 0, encodeProtection(cipherSuite, kek, wrapped, extra,
+                    attrStr(sig, firstCh + "_server_kek_id", "")));
 
             int acqMode = intAttr(run, "acquisition_mode", 0);
             String metadataJson = genomicRunMetadataJson(
@@ -507,6 +509,22 @@ public final class EncryptedTransport {
                                                   List<Recipient> additionalRecipients,
                                                   String providerName)
             throws IOException {
+        stampTransportWrappedDek(ttioPath, wrappedDek, kekAlgorithm,
+            additionalRecipients, null, providerName);
+    }
+
+    /** FD-1 C-2a overload: also stamps {@code <channel>_server_kek_id} (the
+     *  opaque label naming the KEK under which the primary wrapped_dek is
+     *  wrapped), so {@code writeEncryptedDataset} emits it in the packet and
+     *  the daemon can decide server-processability. {@code serverKekId} null
+     *  marks the container BYOK / not server-processable. */
+    public static void stampTransportWrappedDek(String ttioPath,
+                                                  byte[] wrappedDek,
+                                                  String kekAlgorithm,
+                                                  List<Recipient> additionalRecipients,
+                                                  String serverKekId,
+                                                  String providerName)
+            throws IOException {
         byte[] recipientBlock = encodeRecipientBlock(additionalRecipients);
         StorageProvider sp = ProviderRegistry.open(ttioPath,
             StorageProvider.Mode.READ_WRITE, providerName);
@@ -534,12 +552,55 @@ public final class EncryptedTransport {
                                     setWrappedDekAttr(sig,
                                         fc + "_wrapped_dek_recipients",
                                         recipientBlock);
+                                    if (serverKekId != null && !serverKekId.isEmpty()) {
+                                        sig.setAttribute(fc + "_server_kek_id",
+                                                          serverKekId);
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+        } finally {
+            sp.close();
+        }
+    }
+
+    /** FD-1 C-2a: read the {@code server_kek_id} stamped on the first run's
+     *  signal_channels (the KEK the daemon resolves to process the container
+     *  server-side), or null if absent (BYOK / not server-processable). */
+    public static String readTransportServerKekId(String ttioPath,
+                                                  String providerName)
+            throws IOException {
+        StorageProvider sp = ProviderRegistry.open(ttioPath,
+            StorageProvider.Mode.READ, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            if (!root.hasChild("study")) return null;
+            try (StorageGroup study = root.openGroup("study")) {
+                for (String parent : new String[]{"ms_runs", "genomic_runs"}) {
+                    if (!study.hasChild(parent)) continue;
+                    try (StorageGroup g = study.openGroup(parent)) {
+                        for (String n : g.childNames()) {
+                            if (n.startsWith("_") || !g.hasChild(n)) continue;
+                            try (StorageGroup run = g.openGroup(n)) {
+                                if (!run.hasChild("signal_channels")) continue;
+                                try (StorageGroup sig =
+                                         run.openGroup("signal_channels")) {
+                                    List<String> names = splitNames(
+                                        attrStr(sig, "channel_names", ""));
+                                    if (names.isEmpty()) continue;
+                                    String v = attrStr(sig,
+                                        names.get(0) + "_server_kek_id", "");
+                                    return v.isEmpty() ? null : v;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return null;
         } finally {
             sp.close();
         }
@@ -653,18 +714,46 @@ public final class EncryptedTransport {
     static byte[] encodeProtection(String cipherSuite, String kek,
                                              byte[] wrapped,
                                              List<Recipient> additional) {
+        return encodeProtection(cipherSuite, kek, wrapped, additional, null);
+    }
+
+    static byte[] encodeProtection(String cipherSuite, String kek,
+                                             byte[] wrapped,
+                                             List<Recipient> additional,
+                                             String serverKekId) {
         byte[] cs = cipherSuite.getBytes(StandardCharsets.UTF_8);
         byte[] kk = kek.getBytes(StandardCharsets.UTF_8);
-        byte[] block = encodeRecipientBlock(additional);
+        byte[] trailing = encodeProtectionTrailing(additional, serverKekId);
         int len = 2 + cs.length + 2 + kk.length + 4 + wrapped.length
-                + 2 + 4 + block.length;
+                + 2 + 4 + trailing.length;
         ByteBuffer buf = ByteBuffer.allocate(len).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) cs.length); buf.put(cs);
         buf.putShort((short) kk.length); buf.put(kk);
         buf.putInt(wrapped.length); buf.put(wrapped);
         buf.putShort((short) 0); // signature_algorithm
         buf.putInt(0);            // public_key length
-        buf.put(block);           // FD-1 Phase A: additional recipients (empty when single)
+        buf.put(trailing);
+        return buf.array();
+    }
+
+    /** FD-1 C-2a trailing section after the five §4.4 fields. Emitted ONLY
+     *  when there are additional recipients OR a {@code serverKekId}, so
+     *  pure BYOK / single-recipient packets stay byte-identical to §4.4. A
+     *  single-recipient server-processable container emits
+     *  {@code additional_recipient_count = 0} followed by server_kek_id. */
+    private static byte[] encodeProtectionTrailing(List<Recipient> additional,
+                                                   String serverKekId) {
+        boolean haveAdd = additional != null && !additional.isEmpty();
+        boolean haveKid = serverKekId != null && !serverKekId.isEmpty();
+        if (!haveAdd && !haveKid) return new byte[0];
+        byte[] block = haveAdd ? encodeRecipientBlock(additional)
+                               : new byte[]{0, 0};   // additional_recipient_count = 0 (LE u16)
+        byte[] kid = haveKid ? serverKekId.getBytes(StandardCharsets.UTF_8)
+                             : new byte[0];
+        int len = block.length + (haveKid ? 2 + kid.length : 0);
+        ByteBuffer buf = ByteBuffer.allocate(len).order(ByteOrder.LITTLE_ENDIAN);
+        buf.put(block);
+        if (haveKid) { buf.putShort((short) kid.length); buf.put(kid); }
         return buf.array();
     }
 
@@ -828,13 +917,18 @@ public final class EncryptedTransport {
         // trailing recipient block (both empty on pre-Phase-A packets, in
         // which case no bytes remain -> no additional recipients).
         List<Recipient> additional = new ArrayList<>();
+        String serverKekId = null;
         if (bb.remaining() > 0) {
             readLEString(bb, 2);                     // signature_algorithm
             int pkLen = bb.getInt();
             bb.position(bb.position() + pkLen);      // public_key
             additional = decodeRecipientBlock(bb);
+            // FD-1 C-2a: anything after the recipient block is server_kek_id.
+            if (bb.remaining() > 0) {
+                serverKekId = readLEString(bb, 2);
+            }
         }
-        return new ProtectionMeta(cs, kek, wrapped, additional);
+        return new ProtectionMeta(cs, kek, wrapped, additional, serverKekId);
     }
 
     private static void ingestAU(int flags, byte[] payload,
@@ -1031,6 +1125,10 @@ public final class EncryptedTransport {
                 // FD-1 Phase A: persist additional recipients (no-op when single).
                 setWrappedDekAttr(sig, cname + "_wrapped_dek_recipients",
                                   encodeRecipientBlock(pm.additionalRecipients));
+                // FD-1 C-2a: persist server_kek_id (no-op for BYOK).
+                if (pm.serverKekId != null && !pm.serverKekId.isEmpty()) {
+                    sig.setAttribute(cname + "_server_kek_id", pm.serverKekId);
+                }
             }
         }
 
@@ -1103,6 +1201,9 @@ public final class EncryptedTransport {
                                           pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
                         setWrappedDekAttr(sig, cname + "_wrapped_dek_recipients",
                                           encodeRecipientBlock(pm.additionalRecipients));
+                        if (pm.serverKekId != null && !pm.serverKekId.isEmpty()) {
+                            sig.setAttribute(cname + "_server_kek_id", pm.serverKekId);
+                        }
                     }
                 }
             }
@@ -1374,5 +1475,6 @@ public final class EncryptedTransport {
 
     record ProtectionMeta(String cipherSuite, String kekAlgorithm,
                             byte[] wrappedDek,
-                            List<Recipient> additionalRecipients) {}
+                            List<Recipient> additionalRecipients,
+                            String serverKekId) {}
 }

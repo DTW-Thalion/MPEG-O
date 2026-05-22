@@ -11,6 +11,24 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase C-2a: server_kek_id in ProtectionMetadata (Java) (2026-05-22)
+
+Java mirror of the C-2a Python `server_kek_id` field (byte-compatible).
+
+- `EncryptedTransport.encodeProtection` gains a `serverKekId` overload that
+  appends the field after the Phase A recipient block (trailing section
+  emitted iff additional recipients OR server_kek_id; single-recipient
+  server-processable emits `count=0 + server_kek_id`); the 4-arg overload
+  delegates with null. `parseProtection` / `ProtectionMeta` expose
+  `serverKekId`.
+- `stampTransportWrappedDek` gains a 6-arg overload that stamps
+  `<channel>_server_kek_id`; the materialize paths re-stamp it;
+  `readTransportServerKekId` reads it back. `WorkbenchClient.uploadEncryptedMulti`
+  grows a `serverKekId` overload.
+- Covered by `ServerKekIdProtectionTest` (byte-identity when absent,
+  round-trip with/without additional recipients, storage carriage, BYOK →
+  null); existing multi-recipient + conformance tests unaffected.
+
 ### Added -- FD-1 Phase C-2a: server_kek_id in ProtectionMetadata (Python) (2026-05-22)
 
 Append-only `server_kek_id` field in the `ProtectionMetadata` packet, so the
