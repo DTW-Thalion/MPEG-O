@@ -186,7 +186,9 @@ void testFD1MultiRecipient(void)
         NSString *dfc = firstChannel(dsig);
         NSData *gotPrimary = [dsig attributeValueForName:[NSString stringWithFormat:@"%@_wrapped_dek", dfc] error:NULL];
         PASS([gotPrimary isEqualToData:SERVER], "single primary wrapped DEK round-trips");
-        PASS(![dsig hasAttributeNamed:[NSString stringWithFormat:@"%@_wrapped_dek_recipients", dfc]],
+        NSString *recipientsAttr = [NSString stringWithFormat:@"%@_wrapped_dek_recipients", dfc];
+        BOOL hasRecipientsAttr = [dsig hasAttributeNamed:recipientsAttr];
+        PASS(!hasRecipientsAttr,
              "no _wrapped_dek_recipients attr emitted for single recipient");
         [fr close];
         fdRm(src); fdRm(dst);
