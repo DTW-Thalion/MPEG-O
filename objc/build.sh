@@ -178,4 +178,36 @@ if [ "$COVERAGE" = "1" ]; then
     exit 0
 fi
 
-exec make CC=clang OBJC=clang "${PASSTHROUGH[@]}"
+# gnustep's `make check` exits 0 even when individual tests fail, so a
+# bare `exec make check` lets real failures pass as a green build (this
+# masked a broken encrypted-transport write path for a long time). When
+# the `check` target is requested, capture the run and fail the build if
+# the gnustep Testing framework reported any failed test/set.
+runs_tests=0
+for t in "${PASSTHROUGH[@]}"; do
+    [ "$t" = "check" ] && runs_tests=1
+done
+
+if [ "$runs_tests" = "0" ]; then
+    exec make CC=clang OBJC=clang "${PASSTHROUGH[@]}"
+fi
+
+check_log="$here/build-check.log"
+set +e
+make CC=clang OBJC=clang "${PASSTHROUGH[@]}" 2>&1 | tee "$check_log"
+make_status=${PIPESTATUS[0]}
+set -e
+
+if [ "$make_status" -ne 0 ]; then
+    echo "build.sh: make exited $make_status" >&2
+    exit "$make_status"
+fi
+
+if grep -qE "^[[:space:]]*Failed (test|set):" "$check_log"; then
+    n=$(grep -cE "^[[:space:]]*Failed test:" "$check_log")
+    echo "build.sh: $n test(s) FAILED -- gnustep 'make check' does not gate on this" >&2
+    grep -E "^[[:space:]]*Failed (test|set):" "$check_log" >&2
+    exit 1
+fi
+
+echo "build.sh: all tests passed"

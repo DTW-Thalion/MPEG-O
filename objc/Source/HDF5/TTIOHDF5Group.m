@@ -511,9 +511,145 @@ static herr_t collect_link(hid_t loc, const char *name,
         if (exists) return @(v);
         return nil;
     }
+    if (klass == H5T_FLOAT) {
+        BOOL exists = NO;
+        double v = [self doubleAttributeNamed:name exists:&exists error:error];
+        if (exists) return @(v);
+        return nil;
+    }
+    if (klass == H5T_OPAQUE) {
+        return [self dataAttributeNamed:name error:error];
+    }
     if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
         @"attribute '%@' has unsupported HDF5 class %d", name, (int)klass);
     return nil;
+}
+
+// Store binary (NSData) attributes as an HDF5 OPAQUE scalar. Opaque is
+// unambiguous on read-back (a uint8 array would be indistinguishable from
+// a scalar integer). The on-disk encoding of binary attributes is
+// per-language by the format spec (Python uses a uint8 array, Java
+// base64); only the transport packet bytes are the cross-language
+// contract -- so an ObjC-local opaque representation is fine. This is what
+// the encrypted-transport `<channel>_wrapped_dek` / `_wrapped_dek_recipients`
+// attributes need; without it `setAttributeValue:` rejected NSData and the
+// DEK was silently never persisted.
+- (BOOL)setDataAttribute:(NSString *)name value:(NSData *)value error:(NSError **)error
+{
+    size_t len = value.length;
+    [_file lockForWriting];
+    hid_t htype = H5Tcreate(H5T_OPAQUE, len > 0 ? len : 1);
+    H5Tset_tag(htype, "TTIO_BYTES");
+    hid_t space = H5Screate(H5S_SCALAR);
+    if (H5Aexists(_gid, [name UTF8String]) > 0) {
+        H5Adelete(_gid, [name UTF8String]);
+    }
+    hid_t aid = H5Acreate2(_gid, [name UTF8String], htype, space,
+                           H5P_DEFAULT, H5P_DEFAULT);
+    if (aid < 0) {
+        H5Sclose(space); H5Tclose(htype);
+        [_file unlockForWriting];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeCreate,
+            @"H5Acreate2 (opaque) failed for '%@'", name);
+        return NO;
+    }
+    uint8_t zero = 0;
+    herr_t s = H5Awrite(aid, htype, len > 0 ? value.bytes : &zero);
+    H5Aclose(aid); H5Sclose(space); H5Tclose(htype);
+    [_file unlockForWriting];
+    if (s < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
+            @"H5Awrite (opaque) failed for '%@'", name);
+        return NO;
+    }
+    return YES;
+}
+
+- (NSData *)dataAttributeNamed:(NSString *)name error:(NSError **)error
+{
+    [_file lockForReading];
+    if (H5Aexists(_gid, [name UTF8String]) <= 0) {
+        [_file unlockForReading];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"attribute '%@' does not exist", name);
+        return nil;
+    }
+    hid_t aid = H5Aopen(_gid, [name UTF8String], H5P_DEFAULT);
+    if (aid < 0) {
+        [_file unlockForReading];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"H5Aopen failed for '%@'", name);
+        return nil;
+    }
+    hid_t htype = H5Aget_type(aid);
+    size_t size = H5Tget_size(htype);
+    void *buf = malloc(size > 0 ? size : 1);
+    NSData *result = nil;
+    if (H5Aread(aid, htype, buf) >= 0) {
+        result = [NSData dataWithBytes:buf length:size];
+    }
+    free(buf);
+    H5Tclose(htype); H5Aclose(aid);
+    [_file unlockForReading];
+    return result;
+}
+
+- (BOOL)setDoubleAttribute:(NSString *)name value:(double)value error:(NSError **)error
+{
+    [_file lockForWriting];
+    hid_t space = H5Screate(H5S_SCALAR);
+    if (H5Aexists(_gid, [name UTF8String]) > 0) {
+        H5Adelete(_gid, [name UTF8String]);
+    }
+    hid_t aid = H5Acreate2(_gid, [name UTF8String], H5T_NATIVE_DOUBLE, space,
+                           H5P_DEFAULT, H5P_DEFAULT);
+    if (aid < 0) {
+        H5Sclose(space);
+        [_file unlockForWriting];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeCreate,
+            @"H5Acreate2 (double) failed for '%@'", name);
+        return NO;
+    }
+    herr_t s = H5Awrite(aid, H5T_NATIVE_DOUBLE, &value);
+    H5Aclose(aid); H5Sclose(space);
+    [_file unlockForWriting];
+    if (s < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
+            @"H5Awrite (double) failed for '%@'", name);
+        return NO;
+    }
+    return YES;
+}
+
+- (double)doubleAttributeNamed:(NSString *)name exists:(BOOL *)outExists error:(NSError **)error
+{
+    [_file lockForReading];
+    if (H5Aexists(_gid, [name UTF8String]) <= 0) {
+        [_file unlockForReading];
+        if (outExists) *outExists = NO;
+        return 0.0;
+    }
+    if (outExists) *outExists = YES;
+    hid_t aid = H5Aopen(_gid, [name UTF8String], H5P_DEFAULT);
+    if (aid < 0) {
+        [_file unlockForReading];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"H5Aopen failed for '%@'", name);
+        return 0.0;
+    }
+    double value = 0.0;
+    H5Aread(aid, H5T_NATIVE_DOUBLE, &value);
+    H5Aclose(aid);
+    [_file unlockForReading];
+    return value;
+}
+
+// True for an NSNumber that wraps a floating-point value (so it round-trips
+// as an HDF5 float rather than being truncated through longLongValue).
+static BOOL ttioNumberIsFloatingPoint(NSNumber *n)
+{
+    const char *t = [n objCType];
+    return t && (strcmp(t, @encode(double)) == 0 || strcmp(t, @encode(float)) == 0);
 }
 
 - (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
@@ -522,9 +658,17 @@ static herr_t collect_link(hid_t loc, const char *name,
         return [self setStringAttribute:name value:(NSString *)value error:error];
     }
     if ([value isKindOfClass:[NSNumber class]]) {
+        if (ttioNumberIsFloatingPoint((NSNumber *)value)) {
+            return [self setDoubleAttribute:name
+                                      value:[(NSNumber *)value doubleValue]
+                                      error:error];
+        }
         return [self setIntegerAttribute:name
                                    value:[(NSNumber *)value longLongValue]
                                    error:error];
+    }
+    if ([value isKindOfClass:[NSData class]]) {
+        return [self setDataAttribute:name value:(NSData *)value error:error];
     }
     if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
             @"attribute '%@' value type %@ not supported",
