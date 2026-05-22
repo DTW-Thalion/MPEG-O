@@ -62,7 +62,8 @@ def _emit_body(vector: dict) -> bytes:
         wrapped_dek=_fill(vector["wrapped_dek"]),
         signature_algorithm=vector["signature_algorithm"],
         public_key=_fill(vector["public_key"]),
-        additional_recipients=_additional(vector))
+        additional_recipients=_additional(vector),
+        server_kek_id=vector.get("server_kek_id"))
     return w.payload
 
 
@@ -111,6 +112,8 @@ def test_full_body_decodes_to_recipient_list(vector):
     assert recipients[0][2] == _fill(vector["wrapped_dek"])
     # additional
     assert recipients[1:] == _additional(vector)
+    # FD-1 C-2a: server_kek_id round-trips through the body.
+    assert pm["server_kek_id"] == vector.get("server_kek_id")
 
 
 def test_single_recipient_emits_no_trailing_block(vector):
