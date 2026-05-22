@@ -489,6 +489,7 @@ class WorkbenchClient:
         container_uri: str,
         tio_path: str,
         recipients: "list[EnvelopeRecipient]",
+        server_kek_id: Optional[str] = None,
         encrypt_headers: bool = False,
         resume: Optional[ResumeState] = None,
         preview: bool = False,
@@ -549,7 +550,7 @@ class WorkbenchClient:
             ]
             stamp_transport_wrapped_dek(
                 enc_tio, primary_wrapped, primary.algorithm,
-                additional_recipients=additional)
+                additional_recipients=additional, server_kek_id=server_kek_id)
             stream = _io.BytesIO()
             with TransportWriter(stream) as tw:
                 write_encrypted_dataset(tw, enc_tio)
