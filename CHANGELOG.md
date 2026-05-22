@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase C-2a: server_kek_id in ProtectionMetadata (ObjC) (2026-05-22)
+
+ObjC mirror of the C-2a `server_kek_id` field, completing the three-language
+trio (byte-compatible with Python/Java).
+
+- `TTIOEncryptedTransport`: a shared `appendProtectionTrailing` helper at
+  both (MS + genomic) emit sites appends the stored recipient block + the
+  optional `<channel>_server_kek_id` (count=0 + kid for single-recipient
+  server-processable; nothing for BYOK → byte-identical). `parseProtection`
+  reads `server_kek_id` after the recipient block into
+  `ProtectionMeta.serverKekId`; both materialize paths re-stamp it.
+- Covered by `TestC2aServerKekId` (round-trip through write→read, and BYOK →
+  no attribute).
+
 ### Added -- FD-1 Phase C-2a: server_kek_id in ProtectionMetadata (Java) (2026-05-22)
 
 Java mirror of the C-2a Python `server_kek_id` field (byte-compatible).
