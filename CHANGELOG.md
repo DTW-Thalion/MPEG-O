@@ -38,6 +38,11 @@ the runner gate, then fixed the real defects it exposed:
 - Fixes `TestFD1MultiRecipient` (incl. a `stream:`→`fromStream:` selector
   typo) and `TestJcampVibrationalRoundTrip` (Raman); the full ObjC suite is
   green under the new gate.
+- Environment-dependent tests now skip instead of failing the gate:
+  `TestTransportClient` skips (not fails) when no Python transport server
+  is available (the standalone ObjC CI job has no venv), and the
+  `TestM94ZFqzcompPerf` throughput floor is advisory unless
+  `TTIO_PERF_STRICT` is set (it flaked on shared CI runners ~16 MB/s).
 
 ### Added -- FD-1 Phase C-0: standalone ObjC key-wrap primitive (2026-05-22)
 
