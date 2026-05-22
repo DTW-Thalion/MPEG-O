@@ -398,6 +398,81 @@ class WorkbenchLiveTest {
     }
 
     @Test
+    void multiRecipientUploadRoundTrip(@TempDir Path tmp) throws Exception {
+        // FD-1 Phase B-2: one DEK wrapped for TWO recipients -- primary =
+        // server symmetric KEK, additional = researcher ML-KEM-1024 (the
+        // FD-1 output shape). Each party independently recovers the same
+        // plaintext with its own key; the daemon holds neither.
+        byte[] serverKek = new byte[32];
+        java.util.Arrays.fill(serverKek, (byte) 0x2A);
+
+        int nSpectra = 3, perSpectrum = 4, total = nSpectra * perSpectrum;
+        double[] mz = new double[total];
+        double[] intensity = new double[total];
+        for (int i = 0; i < total; i++) {
+            mz[i] = 100.0 + i;
+            intensity[i] = (i + 1) * 10.0;
+        }
+        SpectrumIndex idx = new SpectrumIndex(nSpectra,
+            new long[]{0, 4, 8}, new int[]{4, 4, 4},
+            new double[]{1.0, 2.0, 3.0}, new int[]{1, 2, 1}, new int[]{1, 1, 1},
+            new double[]{0.0, 500.0, 0.0}, new int[]{0, 2, 0},
+            new double[]{40.0, 80.0, 120.0});
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        AcquisitionRun run = new AcquisitionRun("run_0001",
+            Enums.AcquisitionMode.MS1_DDA, idx,
+            new InstrumentConfig("", "", "", "", "", ""),
+            channels, List.of(), List.of(), null, 0.0);
+
+        String src = tmp.resolve("multi_src.tio").toString();
+        try (SpectralDataset ds = SpectralDataset.create(src,
+                "live multi", "ISA-LIVE-MULTI",
+                List.of(run), List.of(), List.of(), List.of())) { }
+
+        PostQuantumCrypto.KeyPair kp = WorkbenchPqc.kemKeygen();
+        List<WorkbenchClient.EnvelopeRecipient> recipients = List.of(
+            new WorkbenchClient.EnvelopeRecipient("server", serverKek, "aes-256-gcm"),
+            new WorkbenchClient.EnvelopeRecipient(
+                "researcher", kp.publicKey(), WorkbenchPqc.ML_KEM_1024));
+        String uri = "uri:tio:" + project + "-multi-"
+            + UUID.randomUUID().toString().substring(0, 8);
+
+        // An ML-KEM recipient makes the upload preview-gated.
+        assertThrows(WorkbenchPqc.PqcPreviewDisabledException.class,
+            () -> client.uploadEncryptedMulti(
+                project, uri, src, recipients, false, false));
+
+        var result = client.uploadEncryptedMulti(
+            project, uri, src, recipients, true, false);
+
+        // The server unwraps the primary (recipientId "") with its KEK.
+        String outS = tmp.resolve("multi_server.tio").toString();
+        Map<String, PerAUFile.DecryptedRun> viaServer =
+            client.downloadDecryptedMulti(
+                result.containerUri(), serverKek, outS, "", false);
+        // The researcher unwraps its entry with the ML-KEM private key.
+        String outR = tmp.resolve("multi_researcher.tio").toString();
+        Map<String, PerAUFile.DecryptedRun> viaResearcher =
+            client.downloadDecryptedMulti(
+                result.containerUri(), kp.privateKey(), outR, "researcher", true);
+
+        assertArrayEquals(leBytes(mz),
+            viaServer.get("run_0001").channels().get("mz"));
+        assertArrayEquals(viaServer.get("run_0001").channels().get("mz"),
+            viaResearcher.get("run_0001").channels().get("mz"));
+        assertArrayEquals(viaServer.get("run_0001").channels().get("intensity"),
+            viaResearcher.get("run_0001").channels().get("intensity"));
+
+        // Selecting a recipient id that isn't present is rejected.
+        String outX = tmp.resolve("multi_x.tio").toString();
+        assertThrows(IllegalArgumentException.class,
+            () -> client.downloadDecryptedMulti(
+                result.containerUri(), serverKek, outX, "nobody", false));
+    }
+
+    @Test
     void perAuEncryptedHeadersUploadRoundTrip(@TempDir Path tmp) throws Exception {
         // BYOK round-trip with encryptHeaders=true: the other encrypted
         // live tests pass false, so this exercises the distinct
