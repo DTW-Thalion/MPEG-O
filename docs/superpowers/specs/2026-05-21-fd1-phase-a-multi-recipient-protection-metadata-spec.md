@@ -175,9 +175,17 @@ recover the primary (the P2 guarantee), pinned as a frozen byte vector.
   persist it as `<channel>_wrapped_dek_recipients`. Covered by
   `TestFD1MultiRecipient`. ObjC is server-runtime (no workbench client),
   so there is no stamp/read client helper here.
-- **A-4 (cross-language).** The §6 conformance vectors wired into the
-  parity harness; assert byte-parity + the pre-Phase-A primary-recovery
-  vector.
+- **A-4 (cross-language) — DONE.** The §6 golden vectors are checked into
+  `conformance/multi_recipient/vectors.json` (generated from the Python
+  reference by `gen_vectors.py`) and asserted byte-equal by all three
+  suites: Python `tests/conformance/test_multi_recipient_xlang.py` (full
+  coverage incl. full `body_hex` + the pre-Phase-A primary-recovery vector),
+  Java `MultiRecipientXLangTest` (recipient block + full body), ObjC
+  `TestMultiRecipientXLang` (recipient block, data-driven via
+  `NSJSONSerialization`). Because every language asserts against the same
+  committed hex, byte-parity is transitive. The recipient-block codec was
+  exposed package-private (Java) / via an internal `(Conformance)` category
+  (ObjC) for the tests; no public API change.
 
 The storage-attribute representation of multiple wrapped DEKs (the
 `<channel>_wrapped_dek` run attribute, which today holds one blob) is
