@@ -149,11 +149,15 @@ recover the primary (the P2 guarantee), pinned as a frozen byte vector.
 
 ## 7. Implementation plan (Phase A sub-steps)
 
-- **A-1 (Python).** Extend the encode/decode in `transport/encrypted.py`
-  (`_emit_protection_metadata` / `_decode_protection_metadata`) and the
-  `stamp_/read_transport_wrapped_dek` helpers to carry a recipient list;
-  keep the single-recipient fast path byte-identical. Unit tests + the
-  conformance vectors.
+- **A-1 (Python) — DONE.** `_emit_protection_metadata` /
+  `_decode_protection_metadata` carry the append-only recipient block;
+  `write_encrypted_dataset` / `read_encrypted_to_file` carry the
+  additional recipients via a `<channel>_wrapped_dek_recipients` storage
+  attribute; `stamp_transport_wrapped_dek` grows an
+  `additional_recipients` arg and `read_transport_recipients` returns the
+  full list (`read_transport_wrapped_dek` stays the single-recipient
+  accessor). Single-recipient stays byte-identical. Covered by
+  `tests/test_fd1_multi_recipient_protection.py`.
 - **A-2 (Java).** Mirror in `EncryptedTransport` (`encodeProtection` /
   `parseProtection` → recipient list; `ProtectionMeta` grows a
   `List<Recipient>`). `parseProtection` already tolerates trailing bytes,
