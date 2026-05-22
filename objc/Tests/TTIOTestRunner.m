@@ -118,6 +118,7 @@ extern void testSpectralDatasetMsImageAccessor(void);
 extern void testPixelSpectraRaisesWhenMzAxisAbsent(void);
 extern void testJcampVibrationalRoundTrip(void);
 extern void testFD1MultiRecipient(void);
+extern void testMultiRecipientXLang(void);
 
 int main(int argc, const char *argv[])
 {
@@ -390,6 +391,10 @@ int main(int argc, const char *argv[])
         START_SET("FD-1 Phase A: multi-recipient ProtectionMetadata carriage")
             testFD1MultiRecipient();
         END_SET("FD-1 Phase A: multi-recipient ProtectionMetadata carriage")
+
+        START_SET("FD-1 Phase A-4: multi-recipient cross-language conformance")
+            testMultiRecipientXLang();
+        END_SET("FD-1 Phase A-4: multi-recipient cross-language conformance")
 
         START_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
             testM76JcampConformance();

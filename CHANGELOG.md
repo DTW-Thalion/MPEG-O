@@ -32,6 +32,25 @@ primitives.
 - Covered by `tests/workbench/test_multi_recipient_client.py` (daemon-free
   in-memory data plane), incl. the server-KEK + researcher-ML-KEM shape.
 
+### Added -- FD-1 Phase A-4: multi-recipient cross-language conformance (2026-05-22)
+
+Completes Phase A: golden byte vectors pin the multi-recipient
+`ProtectionMetadata` wire format byte-identically across Python / Java /
+ObjC.
+
+- `conformance/multi_recipient/vectors.json` — five `prot_*` golden vectors
+  (spec §6) generated from the Python reference encoder by `gen_vectors.py`;
+  each carries the full protection-metadata `body_hex`, the trailing
+  `recipient_block_hex`, and a frozen pre-Phase-A primary-recovery
+  expectation.
+- All three suites assert against the *same* committed hex, so byte-parity
+  is transitive (Python == golden ∧ Java == golden ∧ ObjC == golden ⇒ all
+  equal): Python `tests/conformance/test_multi_recipient_xlang.py`, Java
+  `MultiRecipientXLangTest`, ObjC `TestMultiRecipientXLang`.
+- The recipient-block codec was exposed for testing without a public API
+  change: package-private in Java; an internal `(Conformance)` category in
+  ObjC. Single-recipient vectors confirm no trailing block is emitted.
+
 ### Added -- FD-1 Phase A-3: multi-recipient ProtectionMetadata (ObjC) (2026-05-21)
 
 ObjC mirror completing the Phase A wire-format trio across Python / Java /
