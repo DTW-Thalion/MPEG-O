@@ -19,6 +19,7 @@
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "HDF5/TTIOHDF5File.h"
+#import "Providers/TTIOStorageProtocols.h"
 #import "ValueClasses/TTIOEnums.h"
 
 static NSString *fdPath(NSString *n) {
