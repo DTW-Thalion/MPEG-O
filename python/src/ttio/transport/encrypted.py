@@ -146,6 +146,7 @@ def write_encrypted_dataset(
                 public_key=b"",
                 additional_recipients=_read_additional_recipients(
                     sig, first_channel),
+                server_kek_id=_read_server_kek_id(sig, first_channel),
             )
 
             spectrum_class = (io.read_string_attr(run_group, "spectrum_class")
@@ -287,6 +288,7 @@ def write_encrypted_dataset(
                 public_key=b"",
                 additional_recipients=_read_additional_recipients(
                     g_sig, g_first),
+                server_kek_id=_read_server_kek_id(g_sig, g_first),
             )
             g_acquisition_mode = io.read_int_attr(g_run_group,
                                                     "acquisition_mode",
@@ -452,18 +454,28 @@ def _read_additional_recipients(sig, first_channel: str):
     return recips
 
 
+def _read_server_kek_id(sig, first_channel: str):
+    """Read the FD-1 C-2a server kek_id stamped as
+    ``<channel>_server_kek_id``. Returns ``None`` when absent (BYOK /
+    not server-processable)."""
+    return io.read_string_attr(sig, f"{first_channel}_server_kek_id") or None
+
+
 def _stamp_additional_recipients_attr(sig, channel: str, pm: dict) -> None:
     """Persist a decoded packet's *additional* recipients (everything past
-    the primary) onto ``<channel>_wrapped_dek_recipients`` as a uint8
-    array. No-op for single-recipient packets, so MS/NMR/BYOK files keep
-    only the existing ``<channel>_wrapped_dek`` attribute."""
+    the primary) onto ``<channel>_wrapped_dek_recipients`` as a uint8 array,
+    and the C-2a ``server_kek_id`` onto ``<channel>_server_kek_id``. No-op
+    for single-recipient BYOK packets, so MS/NMR/BYOK files keep only the
+    existing ``<channel>_wrapped_dek`` attribute."""
     recipients = pm.get("recipients") or []
     additional = recipients[1:]
-    if not additional:
-        return
-    sig.set_attribute(
-        f"{channel}_wrapped_dek_recipients",
-        np.frombuffer(_encode_recipient_block(additional), dtype=np.uint8))
+    if additional:
+        sig.set_attribute(
+            f"{channel}_wrapped_dek_recipients",
+            np.frombuffer(_encode_recipient_block(additional), dtype=np.uint8))
+    server_kek_id = pm.get("server_kek_id")
+    if server_kek_id:
+        sig.set_attribute(f"{channel}_server_kek_id", server_kek_id)
 
 
 def _emit_protection_metadata(
@@ -476,6 +488,7 @@ def _emit_protection_metadata(
     signature_algorithm: str,
     public_key: bytes,
     additional_recipients: "list[tuple[str, str, bytes]]" = (),
+    server_kek_id: "str | None" = None,
 ) -> None:
     payload = (
         pack_string(cipher_suite, width=2)
@@ -485,10 +498,35 @@ def _emit_protection_metadata(
         + pack_string(signature_algorithm, width=2)
         + struct.pack("<I", len(public_key))
         + public_key
-        + _encode_recipient_block(additional_recipients)
+        + _encode_protection_trailing(additional_recipients, server_kek_id)
     )
     writer._emit(PacketType.PROTECTION_METADATA, payload,
                   dataset_id=dataset_id)
+
+
+def _encode_protection_trailing(
+    additional_recipients: "list[tuple[str, str, bytes]]",
+    server_kek_id: "str | None",
+) -> bytes:
+    """FD-1 C-2a trailing section after the five transport-spec §4.4 fields.
+    Emitted ONLY when there are additional recipients OR a ``server_kek_id``
+    (so pure BYOK / single-recipient packets stay byte-identical to §4.4):
+
+        additional_recipient_count u16
+        <count> recipient entries
+        [ server_kek_id  u16 len + UTF-8 ]   # iff present
+
+    A single-recipient server-processable container emits ``count = 0``
+    followed by ``server_kek_id`` (Phase A readers tolerate ``count = 0``)."""
+    if not additional_recipients and not server_kek_id:
+        return b""
+    if additional_recipients:
+        out = _encode_recipient_block(list(additional_recipients))
+    else:
+        out = struct.pack("<H", 0)
+    if server_kek_id:
+        out += pack_string(server_kek_id, width=2)
+    return out
 
 
 def _emit_raw_au(
@@ -792,9 +830,14 @@ def _decode_protection_metadata(payload: bytes) -> dict:
     # additional recipients (if any) follow in the trailing block. Older
     # single-recipient packets have no trailing bytes -> one recipient.
     recipients = [("", kek_algorithm, wrapped_dek)]
+    server_kek_id = None
     if off < len(payload):
         extra, off = _decode_recipient_block(payload, off)
         recipients.extend(extra)
+        # FD-1 C-2a: anything after the recipient block is the optional
+        # server_kek_id (names the primary recipient's KEK).
+        if off < len(payload):
+            server_kek_id, off = unpack_string(payload, off, width=2)
     return {
         "cipher_suite": cipher_suite,
         "kek_algorithm": kek_algorithm,
@@ -802,6 +845,7 @@ def _decode_protection_metadata(payload: bytes) -> dict:
         "signature_algorithm": signature_algorithm,
         "public_key": public_key,
         "recipients": recipients,
+        "server_kek_id": server_kek_id,
     }
 
 
@@ -892,7 +936,8 @@ def _ingest_encrypted_au(d: dict, *, header, payload: bytes,
 
 
 def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
-                                  additional_recipients=(), provider=None):
+                                  additional_recipients=(),
+                                  server_kek_id=None, provider=None):
     """Stamp a wrapped DEK + KEK algorithm onto every run's
     ``signal_channels`` so :func:`write_encrypted_dataset` emits it in the
     ProtectionMetadata packet.
@@ -909,6 +954,12 @@ def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
     ``<channel>_wrapped_dek_recipients`` attribute and emitted as the
     packet's trailing block. Empty (the default) keeps single-recipient
     runs byte-identical to pre-Phase-A.
+
+    ``server_kek_id`` (FD-1 C-2a) is an optional opaque label naming the KEK
+    under which the primary ``wrapped_dek`` is wrapped; it is stamped as
+    ``<channel>_server_kek_id`` and emitted in the packet so the daemon can
+    decide server-processability. ``None`` (the default) marks the container
+    BYOK / not server-processable.
     """
     from ..providers.registry import open_provider
 
@@ -942,6 +993,9 @@ def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
                 if extra_blob is not None:
                     sig.set_attribute(
                         f"{names[0]}_wrapped_dek_recipients", extra_blob)
+                if server_kek_id:
+                    sig.set_attribute(
+                        f"{names[0]}_server_kek_id", server_kek_id)
     finally:
         sp.close()
 
@@ -1023,5 +1077,39 @@ def read_transport_recipients(path, *, provider=None):
                 )
                 return [primary] + _read_additional_recipients(sig, names[0])
         return []
+    finally:
+        sp.close()
+
+
+def read_transport_server_kek_id(path, *, provider=None):
+    """Return the FD-1 C-2a ``server_kek_id`` stamped on the first run's
+    ``signal_channels`` (the KEK the daemon resolves to process the
+    container server-side), or ``None`` if absent (BYOK / not
+    server-processable)."""
+    from ..providers.registry import open_provider
+
+    sp = open_provider(path, provider=provider, mode="r")
+    try:
+        root = sp.root_group()
+        if not root.has_child("study"):
+            return None
+        study = root.open_group("study")
+        for parent in ("ms_runs", "genomic_runs"):
+            if not study.has_child(parent):
+                continue
+            g = study.open_group(parent)
+            for n in g.child_names():
+                if n.startswith("_") or not g.has_child(n):
+                    continue
+                run = g.open_group(n)
+                if not run.has_child("signal_channels"):
+                    continue
+                sig = run.open_group("signal_channels")
+                names = [c for c in (io.read_string_attr(sig, "channel_names")
+                                     or "").split(",") if c]
+                if not names:
+                    continue
+                return _read_server_kek_id(sig, names[0])
+        return None
     finally:
         sp.close()
