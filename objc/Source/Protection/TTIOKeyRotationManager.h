@@ -107,6 +107,31 @@
               error:(NSError **)error;
 
 /**
+ * Standalone key-wrap primitive (no HDF5 file). Wraps a 32-byte DEK under
+ * ``kek`` and returns the canonical v1.2 wrapped-key blob. For
+ * ``algorithm="aes-256-gcm"``, ``kek`` is a 32-byte symmetric KEK; for
+ * ``algorithm="ml-kem-1024"``, ``kek`` is the 1568-byte ML-KEM
+ * encapsulation public key. Byte-compatible with the file-bound
+ * ``-wrapDEK:`` path and with Java ``EncryptionManager.wrapKey`` / Python
+ * ``key_rotation._wrap_dek`` (FD-1 Phase C: the server key-custody seam).
+ */
++ (NSData *)wrapKey:(NSData *)dek
+            withKEK:(NSData *)kek
+          algorithm:(NSString *)algorithm
+              error:(NSError **)error;
+
+/**
+ * Inverse of ``+wrapKey:withKEK:algorithm:error:``: unwrap a standalone
+ * v1.2 wrapped-key blob (no HDF5 file). For ``algorithm="ml-kem-1024"``,
+ * ``kek`` is the 3168-byte ML-KEM decapsulation private key. Returns nil
+ * on auth failure / malformed input / unsupported algorithm.
+ */
++ (NSData *)unwrapKey:(NSData *)wrapped
+              withKEK:(NSData *)kek
+            algorithm:(NSString *)algorithm
+                error:(NSError **)error;
+
+/**
  * Envelope encryption with an algorithm selector.
  *
  * For ``algorithm="aes-256-gcm"`` (default), ``kek`` is a 32-byte
