@@ -11,6 +11,21 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase A-3: multi-recipient ProtectionMetadata (ObjC) (2026-05-21)
+
+ObjC mirror completing the Phase A wire-format trio across Python / Java /
+ObjC.
+
+- `TTIOEncryptedTransport`: `encodeRecipientBlock` / `decodeRecipientBlock`
+  (byte-identical to the Python/Java block); `parseProtection` consumes
+  `signature_algorithm` + `public_key` then decodes the trailing block
+  into `ProtectionMeta.additionalRecipients`; the MS + genomic write paths
+  append the stored block to the packet, and both materialize paths
+  persist it as `<channel>_wrapped_dek_recipients`. Single-recipient
+  packets stay byte-identical.
+- Covered by `TestFD1MultiRecipient`. Cross-language conformance vectors
+  (A-4) follow to pin byte-parity across all three.
+
 ### Added -- FD-1 Phase A-2: multi-recipient ProtectionMetadata (Java) (2026-05-21)
 
 Java mirror of the A-1 multi-recipient `ProtectionMetadata` wire format,

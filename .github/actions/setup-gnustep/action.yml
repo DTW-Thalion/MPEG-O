@@ -54,6 +54,21 @@ runs:
           libwebsockets-dev \
           tzdata
 
+    # actions/cache restores (tar -x) as the non-root runner, but the
+    # cached tree lives under root-owned /usr/local. Without write access
+    # the restore fails with "tar: Cannot mkdir: Permission denied",
+    # leaving a PARTIAL restore (objc/*.h missing) while still reporting a
+    # cache hit -- so the rebuild is skipped and `Build libTTIO` fails to
+    # find the runtime headers. Hand the cache-target parents to the
+    # runner first so the restore can extract without sudo.
+    - name: Prepare /usr/local for cache restore
+      shell: bash
+      run: |
+        sudo mkdir -p /usr/local/include /usr/local/lib/GNUstep \
+          /usr/local/share /usr/local/bin
+        sudo chown "$(id -u):$(id -g)" \
+          /usr/local/include /usr/local/lib /usr/local/share /usr/local/bin
+
     - name: Cache GNUstep stack (libobjc2 + tools-make + libs-base)
       id: gnustep-cache
       uses: actions/cache@v4

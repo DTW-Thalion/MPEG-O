@@ -167,7 +167,14 @@ recover the primary (the P2 guarantee), pinned as a frozen byte vector.
   `readTransportRecipients` returns the full list. Covered by
   `MultiRecipientProtectionTest`. The block encoder is byte-identical to
   Python's (the A-4 conformance contract).
-- **A-3 (ObjC).** Mirror in `TTIOEncryptedTransport`.
+- **A-3 (ObjC) — DONE.** `TTIOEncryptedTransport` gains
+  `encodeRecipientBlock` / `decodeRecipientBlock` (byte-identical to
+  Python/Java); `parseProtection` consumes signature/public-key then the
+  trailing block into `ProtectionMeta.additionalRecipients`; the MS +
+  genomic write paths append the stored block, and both materialize paths
+  persist it as `<channel>_wrapped_dek_recipients`. Covered by
+  `TestFD1MultiRecipient`. ObjC is server-runtime (no workbench client),
+  so there is no stamp/read client helper here.
 - **A-4 (cross-language).** The §6 conformance vectors wired into the
   parity harness; assert byte-parity + the pre-Phase-A primary-recovery
   vector.

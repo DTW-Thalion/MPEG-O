@@ -69,6 +69,58 @@ static uint32_t readU32LE(const uint8_t *b) {
          | ((uint32_t)b[2] << 16) | ((uint32_t)b[3] << 24);
 }
 
+// FD-1 Phase A append-only trailing block: count(u16) + per recipient
+// {recipientId, kekAlgorithm, wrappedDek}. Byte-for-byte identical to the
+// Python `_encode_recipient_block` / Java `encodeRecipientBlock` (the
+// cross-language contract). nil/empty input -> empty data, so
+// single-recipient packets stay byte-identical to transport-spec §4.4.
+static NSData *encodeRecipientBlock(NSArray<NSDictionary *> *additional) {
+    if (additional.count == 0) return [NSData data];
+    NSMutableData *buf = [NSMutableData data];
+    appendU16LE(buf, (uint16_t)additional.count);
+    for (NSDictionary *r in additional) {
+        appendLEString(buf, r[@"recipientId"] ?: @"", 2);
+        appendLEString(buf, r[@"kekAlgorithm"] ?: @"", 2);
+        NSData *wd = r[@"wrappedDek"] ?: [NSData data];
+        appendU32LE(buf, (uint32_t)wd.length);
+        [buf appendData:wd];
+    }
+    return buf;
+}
+
+// Decode the trailing block from a cursor; advances *offp. Returns []
+// when fewer than 2 bytes remain.
+static NSArray<NSDictionary *> *decodeRecipientBlock(const uint8_t *b,
+                                                     NSUInteger len,
+                                                     NSUInteger *offp) {
+    NSMutableArray<NSDictionary *> *out = [NSMutableArray array];
+    NSUInteger off = *offp;
+    if (off + 2 > len) { *offp = off; return out; }
+    uint16_t n = readU16LE(&b[off]); off += 2;
+    for (uint16_t i = 0; i < n; i++) {
+        if (off + 2 > len) break;
+        uint16_t ridLen = readU16LE(&b[off]); off += 2;
+        if (off + ridLen > len) break;
+        NSString *rid = [[NSString alloc] initWithBytes:&b[off] length:ridLen
+                                               encoding:NSUTF8StringEncoding];
+        off += ridLen;
+        if (off + 2 > len) break;
+        uint16_t kaLen = readU16LE(&b[off]); off += 2;
+        if (off + kaLen > len) break;
+        NSString *ka = [[NSString alloc] initWithBytes:&b[off] length:kaLen
+                                              encoding:NSUTF8StringEncoding];
+        off += kaLen;
+        if (off + 4 > len) break;
+        uint32_t wl = readU32LE(&b[off]); off += 4;
+        if (off + wl > len) break;
+        NSData *wd = [NSData dataWithBytes:&b[off] length:wl]; off += wl;
+        [out addObject:@{@"recipientId": rid, @"kekAlgorithm": ka,
+                         @"wrappedDek": wd}];
+    }
+    *offp = off;
+    return out;
+}
+
 static NSString *readStringAttr(id<TTIOStorageGroup> g, NSString *name)
 {
     if (!g || ![g hasAttributeNamed:name]) return nil;
@@ -232,6 +284,10 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
 @property (nonatomic, copy) NSString *cipherSuite;
 @property (nonatomic, copy) NSString *kekAlgorithm;
 @property (nonatomic, strong) NSData *wrappedDek;
+// FD-1 Phase A: additional DEK recipients (same DEK wrapped under other
+// keys). Each element is a dict {recipientId:NSString, kekAlgorithm:
+// NSString, wrappedDek:NSData}. Empty/nil for single-recipient runs.
+@property (nonatomic, strong) NSArray<NSDictionary *> *additionalRecipients;
 @end
 @implementation ProtectionMeta
 @end
@@ -356,6 +412,14 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             [pm appendData:wrapped];
             appendLEString(pm, @"", 2);   // signature_algorithm
             appendU32LE(pm, 0);            // public_key length
+            // FD-1 Phase A: append the stored additional-recipients block
+            // verbatim (the attribute holds the exact trailing-block bytes).
+            NSString *recipAttr = [NSString stringWithFormat:
+                @"%@_wrapped_dek_recipients", firstChannel];
+            if ([sig hasAttributeNamed:recipAttr]) {
+                id rv = [sig attributeValueForName:recipAttr error:NULL];
+                if ([rv isKindOfClass:[NSData class]]) [pm appendData:(NSData *)rv];
+            }
             [writer _writeRawPacketHeader:TTIOTransportPacketProtectionMetadata
                                      flags:0
                                  datasetId:did
@@ -426,6 +490,12 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
             [gPm appendData:gWrapped];
             appendLEString(gPm, @"", 2);
             appendU32LE(gPm, 0);
+            NSString *gRecipAttr = [NSString stringWithFormat:
+                @"%@_wrapped_dek_recipients", gFirst];
+            if ([gSig hasAttributeNamed:gRecipAttr]) {
+                id rv = [gSig attributeValueForName:gRecipAttr error:NULL];
+                if ([rv isKindOfClass:[NSData class]]) [gPm appendData:(NSData *)rv];
+            }
             [writer _writeRawPacketHeader:TTIOTransportPacketProtectionMetadata
                                      flags:0
                                  datasetId:did
@@ -827,7 +897,19 @@ static ProtectionMeta *parseProtection(NSData *payload)
     uint32_t wLen = readU32LE(&b[off]); off += 4;
     pm.wrappedDek = [NSData dataWithBytes:&b[off] length:wLen];
     off += wLen;
-    // signature_algorithm + public_key ignored at v1.0 (reserved).
+    // FD-1 Phase A: consume signature_algorithm + public_key, then decode
+    // the trailing recipient block (absent on pre-Phase-A packets, where
+    // sig/pk are empty and no bytes remain -> no additional recipients).
+    pm.additionalRecipients = @[];
+    if (off + 2 <= len) {
+        uint16_t sigLen = readU16LE(&b[off]); off += 2;
+        off += sigLen;                              // signature_algorithm
+        if (off + 4 <= len) {
+            uint32_t pkLen = readU32LE(&b[off]); off += 4;
+            off += pkLen;                           // public_key
+            pm.additionalRecipients = decodeRecipientBlock(b, len, &off);
+        }
+    }
     return pm;
 }
 
@@ -1122,6 +1204,12 @@ static BOOL writeEncryptedFile(NSString *path,
                     [sig setAttributeValue:(pm.kekAlgorithm ?: @"")
                                      forName:[NSString stringWithFormat:@"%@_kek_algorithm", cname]
                                        error:NULL];
+                    NSData *recipBlock = encodeRecipientBlock(pm.additionalRecipients);
+                    if (recipBlock.length > 0) {
+                        [sig setAttributeValue:recipBlock
+                                       forName:[NSString stringWithFormat:@"%@_wrapped_dek_recipients", cname]
+                                         error:NULL];
+                    }
                 }
             }
 
@@ -1301,6 +1389,12 @@ static BOOL writeEncryptedFile(NSString *path,
                         [gSig setAttributeValue:(pm.kekAlgorithm ?: @"")
                                           forName:[NSString stringWithFormat:@"%@_kek_algorithm", cname]
                                             error:NULL];
+                        NSData *recipBlock = encodeRecipientBlock(pm.additionalRecipients);
+                        if (recipBlock.length > 0) {
+                            [gSig setAttributeValue:recipBlock
+                                            forName:[NSString stringWithFormat:@"%@_wrapped_dek_recipients", cname]
+                                              error:NULL];
+                        }
                     }
                 }
 
