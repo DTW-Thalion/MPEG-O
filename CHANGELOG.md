@@ -11,6 +11,39 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed -- ObjC encrypted-transport round-trip + CI test gating (2026-05-22)
+
+The ObjC `make check` runner exited 0 even when tests failed, so CI was
+green while several encrypted-transport tests were actually broken. Made
+the runner gate, then fixed the real defects it exposed:
+
+- **Test gating:** `objc/build.sh check` now fails the build if the
+  gnustep Testing framework reports any failed test/set, so local runs and
+  CI catch failures instead of passing silently.
+- **Raw packet write:** `TTIOEncryptedTransport._writeRawPacketHeader:`
+  reached `TTIOTransportWriter`'s removed `fileHandle`/`dataBuffer` ivars
+  via KVC (a casualty of the sink refactor), throwing on every encrypted
+  write. Now writes through the writer's `_sink` (works for all sink
+  types).
+- **Binary attributes:** the HDF5 provider rejected `NSData` attributes, so
+  `<channel>_wrapped_dek` / `_wrapped_dek_recipients` were never persisted.
+  `TTIOHDF5Group` now stores binary attributes as HDF5 `OPAQUE`
+  (`setDataAttribute:` / `dataAttributeNamed:`), and the provider adapter
+  delegates reads/writes to the group's type-dispatching path.
+- **Double attributes:** the provider truncated every `NSNumber` through
+  `longLongValue`, so floating-point attributes (e.g. Raman
+  `integration_time_sec`) lost their fractional part. Double/float
+  `NSNumber`s are now stored as `H5T_NATIVE_DOUBLE` and read back as
+  doubles.
+- Fixes `TestFD1MultiRecipient` (incl. a `stream:`→`fromStream:` selector
+  typo) and `TestJcampVibrationalRoundTrip` (Raman); the full ObjC suite is
+  green under the new gate.
+- Environment-dependent tests now skip instead of failing the gate:
+  `TestTransportClient` skips (not fails) when no Python transport server
+  is available (the standalone ObjC CI job has no venv), and the
+  `TestM94ZFqzcompPerf` throughput floor is advisory unless
+  `TTIO_PERF_STRICT` is set (it flaked on shared CI runners ~16 MB/s).
+
 ### Added -- FD-1 Phase C-0: standalone ObjC key-wrap primitive (2026-05-22)
 
 Precursor for the server key-custody seam (FD-1 Phase C). ObjC lacked a

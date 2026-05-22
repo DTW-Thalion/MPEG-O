@@ -234,23 +234,20 @@ static NSData *encodeHeader(TTIOTransportPacketType type, uint16_t flags,
                     auSequence:(uint32_t)auSeq
                        payload:(NSData *)payload
 {
-    // Synthesise a 24-byte header with arbitrary flags.
+    // Synthesise a 24-byte header with arbitrary flags, then inject the
+    // raw packet (header + payload) through the writer's sink. The public
+    // writer API has no flags argument, so we reach the private `_sink`
+    // ivar via KVC and use its public -writeData:. This works for every
+    // sink type (in-memory, file, custom). The previous code fished out
+    // `fileHandle` / `dataBuffer` ivars, which were removed when the
+    // writer moved to a sink model -- silently breaking every encrypted
+    // write (the gnustep test runner didn't gate failures, so CI stayed
+    // green).
     NSData *headerBytes = encodeHeader(type, flags, datasetId, auSeq,
                                           (uint32_t)payload.length);
-    // TTIOTransportWriter has a private writeBytes: helper. We know from
-    // its implementation that it either appends to a NSFileHandle or to
-    // an NSMutableData held in _dataBuffer. Use KVC to fish out the
-    // buffer if present; otherwise fall back to performSelector on the
-    // handle.
-    NSFileHandle *fh = [self valueForKey:@"fileHandle"];
-    NSMutableData *buf = [self valueForKey:@"dataBuffer"];
-    if (fh) {
-        [fh writeData:headerBytes];
-        [fh writeData:payload];
-    } else if (buf) {
-        [buf appendData:headerBytes];
-        [buf appendData:payload];
-    }
+    id<TTIOTransportWriterSink> sink = [self valueForKey:@"sink"];
+    [sink writeData:headerBytes];
+    [sink writeData:payload];
 }
 @end
 

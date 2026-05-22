@@ -153,6 +153,29 @@
                      error:(NSError **)error;
 
 /**
+ * Writes a binary (NSData) attribute as an HDF5 OPAQUE scalar. Used for
+ * the encrypted-transport `<channel>_wrapped_dek` / `_wrapped_dek_recipients`
+ * attributes. Read it back via -attributeValueForName: (returns NSData).
+ */
+- (BOOL)setDataAttribute:(NSString *)name
+                   value:(NSData *)value
+                   error:(NSError **)error;
+
+/** Reads a binary (NSData) attribute written by -setDataAttribute:. */
+- (NSData *)dataAttributeNamed:(NSString *)name error:(NSError **)error;
+
+/** Writes a floating-point scalar attribute (H5T_NATIVE_DOUBLE). */
+- (BOOL)setDoubleAttribute:(NSString *)name
+                     value:(double)value
+                     error:(NSError **)error;
+
+/** Reads a floating-point scalar attribute. `outExists` distinguishes
+ *  absent (NO) from a stored 0.0. */
+- (double)doubleAttributeNamed:(NSString *)name
+                        exists:(BOOL *)outExists
+                         error:(NSError **)error;
+
+/**
  * Reads a string attribute from this group.
  *
  * @param name  Attribute name.
