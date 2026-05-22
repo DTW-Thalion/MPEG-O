@@ -309,32 +309,19 @@
 
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
 {
-    // Try string first, then integer.
-    NSError *inner = nil;
-    NSString *s = [_group stringAttributeNamed:name error:&inner];
-    if (s) return s;
-    BOOL exists = NO;
-    int64_t v = [_group integerAttributeNamed:name exists:&exists error:NULL];
-    if (exists) return @(v);
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
-            @"attribute '%@' not found", name);
-    return nil;
+    // Delegate to the group's type-dispatching reader (string / integer /
+    // opaque-NSData). The previous "string first" probe here mis-read
+    // binary OPAQUE attributes (e.g. `_wrapped_dek`) as empty strings.
+    return [(id<TTIOStorageGroup>)_group attributeValueForName:name error:error];
 }
 
 - (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
 {
-    if ([value isKindOfClass:[NSString class]]) {
-        return [_group setStringAttribute:name value:(NSString *)value error:error];
-    }
-    if ([value isKindOfClass:[NSNumber class]]) {
-        return [_group setIntegerAttribute:name
-                                      value:[(NSNumber *)value longLongValue]
-                                      error:error];
-    }
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
-            @"attribute '%@' value type %@ not supported",
-            name, [value class]);
-    return NO;
+    // Delegate to the group's single type-dispatching writer (string /
+    // integer / double / opaque-NSData) so the adapter and the direct
+    // group path agree -- in particular, double NSNumbers round-trip as
+    // floats instead of being truncated through longLongValue.
+    return [(id<TTIOStorageGroup>)_group setAttributeValue:value forName:name error:error];
 }
 
 - (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error

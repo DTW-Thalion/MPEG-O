@@ -144,7 +144,7 @@ void testFD1MultiRecipient(void)
         [writer close];
 
         NSString *dst = fdPath(@"multi_dst.tio"); fdRm(dst);
-        PASS([TTIOEncryptedTransport readEncryptedToPath:dst stream:streamBuf providerName:nil error:&err],
+        PASS([TTIOEncryptedTransport readEncryptedToPath:dst fromStream:streamBuf providerName:nil error:&err],
              "readEncryptedToPath (multi-recipient) succeeds");
 
         TTIOHDF5File *fr = [TTIOHDF5File openReadOnlyAtPath:dst error:&err];
@@ -178,7 +178,7 @@ void testFD1MultiRecipient(void)
         [writer close];
 
         NSString *dst = fdPath(@"single_dst.tio"); fdRm(dst);
-        PASS([TTIOEncryptedTransport readEncryptedToPath:dst stream:streamBuf providerName:nil error:&err],
+        PASS([TTIOEncryptedTransport readEncryptedToPath:dst fromStream:streamBuf providerName:nil error:&err],
              "readEncryptedToPath (single) succeeds");
 
         TTIOHDF5File *fr = [TTIOHDF5File openReadOnlyAtPath:dst error:&err];
