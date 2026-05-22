@@ -16,7 +16,11 @@ Each test reads this file, reconstructs each vector's inputs, and asserts:
 1. **encode** — its `encodeRecipientBlock(additional_recipients)` equals
    `recipient_block_hex`;
 2. **decode** — decoding `recipient_block_hex` yields the same recipient
-   list (round-trip `encode∘decode = id`).
+   list (round-trip `encode∘decode = id`);
+3. **trailing (FD-1 C-2a)** — the full trailing section after the five §4.4
+   fields (recipient block + optional `server_kek_id`) equals
+   `trailing_hex`. ObjC pins this via `ttioConformanceEncodeTrailing`;
+   Python/Java pin the same bytes inside `body_hex`.
 
 Because every language asserts against the *same* committed hex,
 `python == golden ∧ java == golden ∧ objc == golden ⟹ python == java == objc`
@@ -39,6 +43,8 @@ fixtures, and the trailing block is pinned here.
 | `prot_single_pqc` | 1 | ml-kem-1024 wrapped DEK |
 | `prot_multi_server_researcher` | 2 | primary server aes-256-gcm + researcher ml-kem-1024 (the FD-1 output shape) |
 | `prot_multi_three` | 3 | mixed algorithms, exercises the loop |
+| `prot_server_kek_id_single` | 1 | FD-1 C-2a server-processable: no additional recipients, so trailing = `count=0 + server_kek_id` |
+| `prot_server_kek_id_multi` | 2 | FD-1 C-2a: researcher recipient + `server_kek_id` |
 
 ## Regenerating
 
