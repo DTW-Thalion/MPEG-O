@@ -66,6 +66,7 @@ TTIOTests_OBJC_FILES = \
 	TestMilestone73_1.m \
 	TestJcampVibrationalRoundTrip.m \
 	TestFD1MultiRecipient.m \
+	TestMultiRecipientXLang.m \
 	TestM76JcampConformance.m \
 	TestMilestone77.m \
 	TestMilestone78.m \
