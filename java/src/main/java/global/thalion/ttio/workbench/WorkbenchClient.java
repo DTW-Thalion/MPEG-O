@@ -31,9 +31,13 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Top-level SDK entry for the workbench client.
@@ -341,6 +345,148 @@ public final class WorkbenchClient implements AutoCloseable {
         String alg = wd.kekAlgorithm() == null || wd.kekAlgorithm().isEmpty()
             ? AES_256_GCM : wd.kekAlgorithm();
         byte[] dek = EncryptionManager.unwrapKey(wd.wrappedDek(), kek, alg);
+        return PerAUFile.decryptFile(outTioPath, dek, "hdf5");
+    }
+
+    // ------------------------------------- multi-recipient (FD-1 Phase B)
+
+    /** One recipient of a multi-recipient encrypted upload (FD-1 Phase B).
+     *
+     *  <p>The same per-run DEK is wrapped once per recipient under
+     *  {@code key}: a 32-byte symmetric KEK for {@code aes-256-gcm}, or a
+     *  1568-byte ML-KEM-1024 public key for {@code ml-kem-1024}.
+     *  {@code recipientId} is an opaque label the downloader uses to select
+     *  its entry; ids must be unique within an upload. The first recipient
+     *  passed to {@link #uploadEncryptedMulti} becomes the packet's primary
+     *  (its id is normalised to {@code ""} on the wire); recover it on
+     *  download with {@code recipientId=""}.</p>
+     *
+     *  <p>Cross-language equivalent: Python
+     *  {@code ttio.workbench.client.EnvelopeRecipient}.</p> */
+    public record EnvelopeRecipient(String recipientId, byte[] key,
+                                    String algorithm) {
+        /** Convenience: an {@code aes-256-gcm} recipient. */
+        public EnvelopeRecipient(String recipientId, byte[] key) {
+            this(recipientId, key, AES_256_GCM);
+        }
+    }
+
+    /** Per-AU encrypt a {@code .tio} with a fresh DEK, wrap that DEK under
+     *  <em>each</em> recipient's key, and upload it (FD-1 Phase B).
+     *
+     *  <p>One per-run DEK is generated and wrapped once per recipient
+     *  (symmetric {@code aes-256-gcm} KEK or {@code ml-kem-1024} public key,
+     *  per {@link EnvelopeRecipient}). {@code recipients.get(0)} becomes the
+     *  packet's primary (its id is {@code ""} on the wire); the rest travel
+     *  in the Phase A append-only trailing block. Any holder of a
+     *  recipient's key recovers the DEK via {@link #downloadDecryptedMulti};
+     *  the daemon never holds a key.</p>
+     *
+     *  <p>This is the FD-1 output shape: wrap for both a server KEK
+     *  (re-processable) and the researcher's key (client-side decryptable).
+     *  Preview-gated iff any recipient uses {@code ml-kem-1024}, mirroring
+     *  the server's {@code opt_pqc_preview}. Cross-language equivalent:
+     *  Python {@code WorkbenchClient.upload_encrypted_multi}.</p> */
+    public WorkbenchTransportClient.UploadResult uploadEncryptedMulti(
+            String project, String containerUri, String tioPath,
+            List<EnvelopeRecipient> recipients, boolean preview,
+            boolean encryptHeaders) throws IOException {
+        if (recipients == null || recipients.isEmpty()) {
+            throw new IllegalArgumentException(
+                "uploadEncryptedMulti requires >= 1 recipient");
+        }
+        Set<String> seen = new HashSet<>();
+        for (int i = 1; i < recipients.size(); i++) {
+            String id = recipients.get(i).recipientId();
+            if (id == null || id.isEmpty() || !seen.add(id)) {
+                throw new IllegalArgumentException(
+                    "additional recipient_ids must be unique and non-empty "
+                    + "(the empty id is reserved for the primary recipient)");
+            }
+        }
+        boolean anyPqc = recipients.stream().anyMatch(
+            r -> WorkbenchPqc.ML_KEM_1024.equals(r.algorithm()));
+        if (anyPqc) WorkbenchPqc.requirePreviewPublic(preview);
+
+        byte[] dek = new byte[32];
+        RNG.nextBytes(dek);
+        Path enc = Files.createTempFile("ttio-multi", ".tio");
+        try {
+            Files.copy(Paths.get(tioPath), enc,
+                       StandardCopyOption.REPLACE_EXISTING);
+            PerAUFile.encryptFile(enc.toString(), dek, encryptHeaders, "hdf5");
+
+            EnvelopeRecipient primary = recipients.get(0);
+            byte[] primaryWrapped = EncryptionManager.wrapKey(
+                dek, primary.key(), false, primary.algorithm());
+            List<EncryptedTransport.Recipient> additional = new ArrayList<>();
+            for (int i = 1; i < recipients.size(); i++) {
+                EnvelopeRecipient r = recipients.get(i);
+                additional.add(new EncryptedTransport.Recipient(
+                    r.recipientId(), r.algorithm(),
+                    EncryptionManager.wrapKey(
+                        dek, r.key(), false, r.algorithm())));
+            }
+            EncryptedTransport.stampTransportWrappedDek(
+                enc.toString(), primaryWrapped, primary.algorithm(),
+                additional, "hdf5");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try (TransportWriter writer = new TransportWriter(bos)) {
+                EncryptedTransport.writeEncryptedDataset(
+                    enc.toString(), writer, "hdf5");
+            }
+            return upload(project, containerUri, bos.toByteArray());
+        } finally {
+            Files.deleteIfExists(enc);
+        }
+    }
+
+    /** Download a multi-recipient encrypted container and decrypt it using
+     *  the recipient entry the caller holds a key for (FD-1 Phase B).
+     *
+     *  <p>{@code recipientId} selects the entry to unwrap: {@code ""} is the
+     *  primary (e.g. the server KEK); pass the label given at upload (e.g.
+     *  {@code "researcher"}) for an additional recipient. {@code key} is the
+     *  matching symmetric KEK or ML-KEM-1024 private key. Preview-gated iff
+     *  the selected entry uses {@code ml-kem-1024}. Counterpart to
+     *  {@link #uploadEncryptedMulti}; cross-language equivalent: Python
+     *  {@code WorkbenchClient.download_decrypted_multi}.</p> */
+    public Map<String, PerAUFile.DecryptedRun> downloadDecryptedMulti(
+            String containerUri, byte[] key, String outTioPath,
+            String recipientId, boolean preview) throws IOException {
+        WorkbenchTransportClient.DownloadResult result = download(containerUri);
+        EncryptedTransport.readEncryptedToPath(
+            outTioPath, result.payload(), "hdf5");
+        List<EncryptedTransport.Recipient> recipients =
+            EncryptedTransport.readTransportRecipients(outTioPath, "hdf5");
+        if (recipients.isEmpty()) {
+            throw new IllegalStateException(
+                "container carries no wrapped DEK; not an envelope/PQC "
+                + "upload (use downloadDecrypted with the BYOK key instead)");
+        }
+        EncryptedTransport.Recipient match = null;
+        for (EncryptedTransport.Recipient r : recipients) {
+            if (Objects.equals(r.recipientId(), recipientId)) {
+                match = r;
+                break;
+            }
+        }
+        if (match == null) {
+            StringBuilder ids = new StringBuilder();
+            for (EncryptedTransport.Recipient r : recipients) {
+                if (ids.length() > 0) ids.append(", ");
+                ids.append('"').append(r.recipientId()).append('"');
+            }
+            throw new IllegalArgumentException(
+                "no recipient with id \"" + recipientId + "\" in container "
+                + "(available ids: " + ids + ")");
+        }
+        String alg = match.kekAlgorithm() == null || match.kekAlgorithm().isEmpty()
+            ? AES_256_GCM : match.kekAlgorithm();
+        if (WorkbenchPqc.ML_KEM_1024.equals(alg)) {
+            WorkbenchPqc.requirePreviewPublic(preview);
+        }
+        byte[] dek = EncryptionManager.unwrapKey(match.wrappedDek(), key, alg);
         return PerAUFile.decryptFile(outTioPath, dek, "hdf5");
     }
 
