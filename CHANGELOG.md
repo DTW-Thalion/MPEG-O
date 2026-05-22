@@ -11,6 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase C-0: standalone ObjC key-wrap primitive (2026-05-22)
+
+Precursor for the server key-custody seam (FD-1 Phase C). ObjC lacked a
+fileless key-wrap primitive that Java (`EncryptionManager.wrapKey`) and
+Python (`key_rotation._wrap_dek`) already expose.
+
+- `+[TTIOKeyRotationManager wrapKey:withKEK:algorithm:error:]` and
+  `+[... unwrapKey:withKEK:algorithm:error:]` — wrap/unwrap a 32-byte DEK
+  under a KEK (`aes-256-gcm` symmetric key or `ml-kem-1024` public/private
+  key) to/from the canonical v1.2 wrapped-key blob, with no HDF5 file.
+  They reuse the existing self-contained blob logic, so output is
+  byte-identical to the file-bound `-wrapDEK:` path and to the Java/Python
+  primitives. The Phase C-1 software-KMS stub calls these to (un)wrap a
+  DEK under a tenant KEK.
+- Covered by `TestC0StandaloneKeyWrap` (aes-256-gcm round-trip, wrong-KEK
+  auth failure, unsupported-algorithm rejection).
+
 ### Added -- FD-1 Phase B-2: multi-recipient envelope client API (Java) (2026-05-22)
 
 Java mirror of the B-1 client API on `WorkbenchClient`, byte-compatible
