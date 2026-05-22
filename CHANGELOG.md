@@ -11,6 +11,26 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase C-2a: server_kek_id in ProtectionMetadata (Python) (2026-05-22)
+
+Append-only `server_kek_id` field in the `ProtectionMetadata` packet, so the
+workbench daemon can record a container's server-resolvable `kek_id` at
+upload and decide server-processability (FD-1 Phase C-2). Spec + proof:
+`docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md`.
+
+- `_emit_protection_metadata(..., server_kek_id=None)` appends the field
+  after the Phase A recipient block; the trailing section is emitted iff
+  there are additional recipients OR a `server_kek_id`, so pure
+  BYOK/single-recipient packets stay byte-identical to transport-spec §4.4.
+- `_decode_protection_metadata` returns `server_kek_id` (None when absent).
+- `stamp_transport_wrapped_dek(..., server_kek_id=None)` stamps
+  `<channel>_server_kek_id`; write/read carry it; `read_transport_server_kek_id`
+  reads it back. `WorkbenchClient.upload_encrypted_multi` grows a
+  `server_kek_id` arg.
+- Covered by `tests/test_fd1_c2a_server_kek_id.py` (byte-identity when
+  absent, round-trip with/without additional recipients, storage carriage,
+  BYOK → None). Java/ObjC mirrors + conformance follow in C-2a sub-steps.
+
 ### Fixed -- ObjC encrypted-transport round-trip + CI test gating (2026-05-22)
 
 The ObjC `make check` runner exited 0 even when tests failed, so CI was
