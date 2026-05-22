@@ -120,6 +120,7 @@ extern void testJcampVibrationalRoundTrip(void);
 extern void testFD1MultiRecipient(void);
 extern void testMultiRecipientXLang(void);
 extern void testC0StandaloneKeyWrap(void);
+extern void testC2aServerKekId(void);
 
 int main(int argc, const char *argv[])
 {
@@ -400,6 +401,10 @@ int main(int argc, const char *argv[])
         START_SET("FD-1 Phase C-0: standalone key-wrap primitive")
             testC0StandaloneKeyWrap();
         END_SET("FD-1 Phase C-0: standalone key-wrap primitive")
+
+        START_SET("FD-1 Phase C-2a: server_kek_id in ProtectionMetadata")
+            testC2aServerKekId();
+        END_SET("FD-1 Phase C-2a: server_kek_id in ProtectionMetadata")
 
         START_SET("M76: JCAMP-DX compressed writer cross-language byte-parity")
             testM76JcampConformance();

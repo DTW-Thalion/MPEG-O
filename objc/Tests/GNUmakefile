@@ -68,6 +68,7 @@ TTIOTests_OBJC_FILES = \
 	TestFD1MultiRecipient.m \
 	TestMultiRecipientXLang.m \
 	TestC0StandaloneKeyWrap.m \
+	TestC2aServerKekId.m \
 	TestM76JcampConformance.m \
 	TestMilestone77.m \
 	TestMilestone78.m \
