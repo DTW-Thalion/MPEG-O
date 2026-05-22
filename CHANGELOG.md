@@ -11,6 +11,27 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase B-1: multi-recipient envelope client API (Python) (2026-05-22)
+
+Client-side API to encrypt a `.tio` for **multiple recipients** — the FD-1
+output shape (wrap the per-run DEK for both a server KEK and the
+researcher's key). Pure client-side; reuses the BYOK / envelope / PQC wrap
+primitives.
+
+- `EnvelopeRecipient(recipient_id, key, algorithm)` — one recipient's
+  wrapping key (`aes-256-gcm` symmetric KEK or `ml-kem-1024` public key);
+  re-exported from `ttio.workbench`.
+- `WorkbenchClient.upload_encrypted_multi(..., recipients=[...])` —
+  generates one DEK, `encrypt_per_au`, wraps it once per recipient, and
+  stamps `recipients[0]` as the packet primary (wire id `""`) with the
+  rest in the Phase A trailing block. Preview-gated iff any recipient uses
+  `ml-kem-1024`.
+- `WorkbenchClient.download_decrypted_multi(..., recipient_id="")` —
+  selects the recipient entry the caller holds a key for and unwraps it
+  (`""` = primary). The daemon never holds a key.
+- Covered by `tests/workbench/test_multi_recipient_client.py` (daemon-free
+  in-memory data plane), incl. the server-KEK + researcher-ML-KEM shape.
+
 ### Added -- FD-1 Phase A-4: multi-recipient cross-language conformance (2026-05-22)
 
 Completes Phase A: golden byte vectors pin the multi-recipient

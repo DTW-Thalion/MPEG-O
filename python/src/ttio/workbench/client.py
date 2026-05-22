@@ -51,6 +51,27 @@ from ttio.workbench.transport.upload import UploadClient, UploadResult
 
 
 @dataclasses.dataclass(frozen=True)
+class EnvelopeRecipient:
+    """One recipient of a multi-recipient encrypted upload (FD-1 Phase B).
+
+    The same per-run DEK is wrapped once per recipient under ``key``:
+
+    * ``algorithm="aes-256-gcm"`` -- ``key`` is a 32-byte symmetric KEK.
+    * ``algorithm="ml-kem-1024"`` -- ``key`` is a 1568-byte ML-KEM-1024
+      public key.
+
+    ``recipient_id`` is an opaque label the downloader uses to select its
+    entry; ids must be unique within an upload. The first recipient passed
+    to :meth:`WorkbenchClient.upload_encrypted_multi` becomes the packet's
+    *primary* (its id is normalised to ``""`` on the wire, per the Phase A
+    spec); recover it on download with ``recipient_id=""``.
+    """
+    recipient_id: str
+    key: bytes
+    algorithm: str = "aes-256-gcm"
+
+
+@dataclasses.dataclass(frozen=True)
 class _Endpoint:
     """Resolved server endpoint. Internal; constructed by `connect()`."""
     host: str
@@ -456,6 +477,136 @@ class WorkbenchClient:
                 "container carries no wrapped DEK; not an envelope/PQC "
                 "upload (use download_decrypted with the BYOK key instead)")
         dek = _unwrap_dek(wrapped, kek,
+                          algorithm=kek_algorithm or "aes-256-gcm")
+        return decrypt_per_au(out_tio_path, dek)
+
+    # --------------------------------- multi-recipient variant (FD-1 Phase B)
+
+    async def upload_encrypted_multi(
+        self,
+        *,
+        project: str,
+        container_uri: str,
+        tio_path: str,
+        recipients: "list[EnvelopeRecipient]",
+        encrypt_headers: bool = False,
+        resume: Optional[ResumeState] = None,
+        preview: bool = False,
+    ) -> UploadResult:
+        """Per-AU encrypt a `.tio` with a fresh DEK, wrap that DEK under
+        *each* recipient's key, and upload (FD-1 Phase B).
+
+        One per-run DEK is generated and wrapped once per recipient
+        (symmetric ``aes-256-gcm`` KEK or ``ml-kem-1024`` public key, per
+        :class:`EnvelopeRecipient`). ``recipients[0]`` becomes the packet's
+        primary (its id is ``""`` on the wire); the rest travel in the
+        append-only trailing block. Any holder of a recipient's key
+        recovers the DEK via :meth:`download_decrypted_multi`; the daemon
+        never holds a key.
+
+        This is the FD-1 output shape: wrap for both a server KEK
+        (re-processable) and the researcher's key (client-side
+        decryptable). Preview-gated iff any recipient uses ``ml-kem-1024``,
+        mirroring the server's ``opt_pqc_preview``.
+        """
+        import io as _io
+        import os
+        import shutil
+        import tempfile
+
+        from ttio.encryption_per_au import encrypt_per_au
+        from ttio.key_rotation import _wrap_dek
+        from ttio.transport.codec import TransportWriter
+        from ttio.transport.encrypted import (
+            stamp_transport_wrapped_dek,
+            write_encrypted_dataset,
+        )
+        from ttio.workbench.pqc import ML_KEM_1024, _require_preview
+
+        if not recipients:
+            raise ValueError("upload_encrypted_multi requires >= 1 recipient")
+        extra_ids = [r.recipient_id for r in recipients[1:]]
+        if "" in extra_ids or len(set(extra_ids)) != len(extra_ids):
+            raise ValueError(
+                "additional recipient_ids must be unique and non-empty "
+                "(the empty id is reserved for the primary recipient)")
+        if any(r.algorithm == ML_KEM_1024 for r in recipients):
+            _require_preview(preview)
+
+        dek = os.urandom(32)
+        with tempfile.TemporaryDirectory() as d:
+            enc_tio = os.path.join(d, "enc.tio")
+            shutil.copyfile(tio_path, enc_tio)
+            encrypt_per_au(enc_tio, dek, encrypt_headers=encrypt_headers)
+
+            primary = recipients[0]
+            primary_wrapped = _wrap_dek(dek, primary.key,
+                                        algorithm=primary.algorithm)
+            additional = [
+                (r.recipient_id, r.algorithm,
+                 _wrap_dek(dek, r.key, algorithm=r.algorithm))
+                for r in recipients[1:]
+            ]
+            stamp_transport_wrapped_dek(
+                enc_tio, primary_wrapped, primary.algorithm,
+                additional_recipients=additional)
+            stream = _io.BytesIO()
+            with TransportWriter(stream) as tw:
+                write_encrypted_dataset(tw, enc_tio)
+            tis = stream.getvalue()
+
+        return await self.upload_bytes(
+            project=project, container_uri=container_uri,
+            data=tis, resume=resume)
+
+    async def download_decrypted_multi(
+        self,
+        *,
+        container_uri: str,
+        key: bytes,
+        out_tio_path: str,
+        recipient_id: str = "",
+        preview: bool = False,
+        filters: Optional[FilterDict] = None,
+        max_au: int = 0,
+    ):
+        """Download a multi-recipient encrypted container and decrypt it
+        using the recipient entry the caller holds a key for (FD-1 Phase B).
+
+        ``recipient_id`` selects the entry to unwrap: ``""`` (the default)
+        is the primary (e.g. the server KEK); pass the label given at
+        upload (e.g. ``"researcher"``) for an additional recipient. ``key``
+        is the matching symmetric KEK or ML-KEM-1024 private key.
+        Counterpart to :meth:`upload_encrypted_multi`.
+        """
+        import io as _io
+
+        from ttio.encryption_per_au import decrypt_per_au
+        from ttio.key_rotation import _unwrap_dek
+        from ttio.transport.encrypted import (
+            read_encrypted_to_file,
+            read_transport_recipients,
+        )
+        from ttio.workbench.pqc import ML_KEM_1024, _require_preview
+
+        dl = await self.download_bytes(
+            container_uri=container_uri, filters=filters, max_au=max_au)
+        read_encrypted_to_file(_io.BytesIO(dl.payload), out_tio_path)
+        recipients = read_transport_recipients(out_tio_path)
+        if not recipients:
+            raise ValueError(
+                "container carries no wrapped DEK; not an envelope/PQC "
+                "upload (use download_decrypted with the BYOK key instead)")
+        match = next((r for r in recipients if r[0] == recipient_id), None)
+        if match is None:
+            available = ", ".join(repr(r[0]) for r in recipients)
+            raise ValueError(
+                f"no recipient with id {recipient_id!r} in container "
+                f"(available ids: {available})")
+        _rid, kek_algorithm, wrapped = match
+        if kek_algorithm == ML_KEM_1024:
+            _require_preview(preview)
+        dek = _unwrap_dek(wrapped, key,
                           algorithm=kek_algorithm or "aes-256-gcm")
         return decrypt_per_au(out_tio_path, dek)
 
