@@ -11,6 +11,31 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase A-1: multi-recipient ProtectionMetadata (Python) (2026-05-21)
+
+First implementation step of the FD-1 server-side-compute groundwork (per
+the spec-proof in `docs/superpowers/specs/`): the transport
+`ProtectionMetadata` packet can now carry the per-run DEK wrapped for
+**multiple recipients** (e.g. a server KEK + a researcher key), the
+prerequisite for encrypted pipelines whose output is decryptable both
+server-side and client-side.
+
+- Append-only wire layout: the existing five §4.4 fields are the
+  **primary** recipient; additional recipients follow in an optional
+  trailing block emitted only when present, so single-recipient packets
+  (BYOK / envelope / PQC) stay **byte-identical** to the prior format and
+  current readers parse them unchanged.
+- `_emit_protection_metadata` gains `additional_recipients`;
+  `_decode_protection_metadata` returns a `recipients` list (primary at
+  index 0). Storage carries the extra recipients on a
+  `<channel>_wrapped_dek_recipients` run attribute via
+  `write_encrypted_dataset` / `read_encrypted_to_file`.
+- `stamp_transport_wrapped_dek(..., additional_recipients=...)` +
+  new `read_transport_recipients(path)`; `read_transport_wrapped_dek`
+  remains the single-recipient accessor.
+- Java + ObjC parity for the packet (Phase A-2/A-3) and cross-language
+  conformance vectors (A-4) follow.
+
 ### Added -- vibrational .tio materialization, ObjC parity (2026-05-21)
 
 ObjC mirror completing the §3.1 cross-language trio. `TTIOAcquisitionRun`

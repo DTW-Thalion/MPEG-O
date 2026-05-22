@@ -28,6 +28,7 @@ from .codec import (
     TransportWriter,
     _SPECTRUM_CLASS_TO_WIRE,
     _instrument_config_json,  # reused via wrapper below
+    unpack_string,
 )
 from .packets import (
     AccessUnit,
@@ -143,6 +144,8 @@ def write_encrypted_dataset(
                 wrapped_dek=wrapped_dek,
                 signature_algorithm="",
                 public_key=b"",
+                additional_recipients=_read_additional_recipients(
+                    sig, first_channel),
             )
 
             spectrum_class = (io.read_string_attr(run_group, "spectrum_class")
@@ -282,6 +285,8 @@ def write_encrypted_dataset(
                 wrapped_dek=wrapped_dek,
                 signature_algorithm="",
                 public_key=b"",
+                additional_recipients=_read_additional_recipients(
+                    g_sig, g_first),
             )
             g_acquisition_mode = io.read_int_attr(g_run_group,
                                                     "acquisition_mode",
@@ -397,6 +402,70 @@ def _wire_polarity(raw: int) -> int:
     return 2                   # UNKNOWN
 
 
+def _encode_recipient_block(
+    additional_recipients: "list[tuple[str, str, bytes]]",
+) -> bytes:
+    """Encode the FD-1 Phase A append-only trailing block:
+    ``additional_recipient_count`` (u16) + per recipient
+    ``{recipient_id, kek_algorithm, wrapped_dek}``. Empty input → empty
+    bytes (the single-recipient case emits NO trailing block, keeping the
+    packet byte-identical to transport-spec §4.4)."""
+    if not additional_recipients:
+        return b""
+    out = struct.pack("<H", len(additional_recipients))
+    for recipient_id, kek_algorithm, wrapped_dek in additional_recipients:
+        out += (pack_string(recipient_id, width=2)
+                + pack_string(kek_algorithm, width=2)
+                + struct.pack("<I", len(wrapped_dek)) + wrapped_dek)
+    return out
+
+
+def _decode_recipient_block(payload: bytes, off: int):
+    """Inverse of :func:`_encode_recipient_block`. Returns
+    ``(list[(recipient_id, kek_algorithm, wrapped_dek)], new_off)``."""
+    (n,) = struct.unpack_from("<H", payload, off)
+    off += 2
+    out = []
+    for _ in range(n):
+        recipient_id, off = unpack_string(payload, off, width=2)
+        kek_algorithm, off = unpack_string(payload, off, width=2)
+        (wl,) = struct.unpack_from("<I", payload, off)
+        off += 4
+        wrapped = bytes(payload[off:off + wl])
+        off += wl
+        out.append((recipient_id, kek_algorithm, wrapped))
+    return out, off
+
+
+def _read_additional_recipients(sig, first_channel: str):
+    """Read additional (non-primary) DEK recipients stamped on a
+    ``signal_channels`` group as the ``<channel>_wrapped_dek_recipients``
+    attribute (an encoded recipient block). Returns ``[]`` when absent —
+    i.e. single-recipient runs, which is the common case."""
+    attr = f"{first_channel}_wrapped_dek_recipients"
+    if not sig.has_attribute(attr):
+        return []
+    blob = bytes(sig.get_attribute(attr))
+    if not blob:
+        return []
+    recips, _ = _decode_recipient_block(blob, 0)
+    return recips
+
+
+def _stamp_additional_recipients_attr(sig, channel: str, pm: dict) -> None:
+    """Persist a decoded packet's *additional* recipients (everything past
+    the primary) onto ``<channel>_wrapped_dek_recipients`` as a uint8
+    array. No-op for single-recipient packets, so MS/NMR/BYOK files keep
+    only the existing ``<channel>_wrapped_dek`` attribute."""
+    recipients = pm.get("recipients") or []
+    additional = recipients[1:]
+    if not additional:
+        return
+    sig.set_attribute(
+        f"{channel}_wrapped_dek_recipients",
+        np.frombuffer(_encode_recipient_block(additional), dtype=np.uint8))
+
+
 def _emit_protection_metadata(
     writer: TransportWriter,
     *,
@@ -406,6 +475,7 @@ def _emit_protection_metadata(
     wrapped_dek: bytes,
     signature_algorithm: str,
     public_key: bytes,
+    additional_recipients: "list[tuple[str, str, bytes]]" = (),
 ) -> None:
     payload = (
         pack_string(cipher_suite, width=2)
@@ -415,6 +485,7 @@ def _emit_protection_metadata(
         + pack_string(signature_algorithm, width=2)
         + struct.pack("<I", len(public_key))
         + public_key
+        + _encode_recipient_block(additional_recipients)
     )
     writer._emit(PacketType.PROTECTION_METADATA, payload,
                   dataset_id=dataset_id)
@@ -580,6 +651,7 @@ def read_encrypted_to_file(
                         np.frombuffer(pm["wrapped_dek"], dtype=np.uint8))
                     sig.set_attribute(f"{cname}_kek_algorithm",
                                          pm["kek_algorithm"])
+                    _stamp_additional_recipients_attr(sig, cname, pm)
 
             idx = run_group.create_group("spectrum_index")
             first_segs = next(iter(d["channel_segments"].values()))
@@ -634,6 +706,7 @@ def read_encrypted_to_file(
                             np.frombuffer(pm["wrapped_dek"], dtype=np.uint8))
                         g_sig.set_attribute(f"{cname}_kek_algorithm",
                                              pm["kek_algorithm"])
+                        _stamp_additional_recipients_attr(g_sig, cname, pm)
 
                 g_idx = g_run_group.create_group("genomic_index")
                 first_segs = next(iter(d["channel_segments"].values()))
@@ -707,7 +780,6 @@ def read_encrypted_to_file(
 
 
 def _decode_protection_metadata(payload: bytes) -> dict:
-    from .codec import unpack_string
     off = 0
     cipher_suite, off = unpack_string(payload, off, width=2)
     kek_algorithm, off = unpack_string(payload, off, width=2)
@@ -715,13 +787,21 @@ def _decode_protection_metadata(payload: bytes) -> dict:
     wrapped_dek = bytes(payload[off:off + wrapped_len]); off += wrapped_len
     signature_algorithm, off = unpack_string(payload, off, width=2)
     (pk_len,) = struct.unpack_from("<I", payload, off); off += 4
-    public_key = bytes(payload[off:off + pk_len])
+    public_key = bytes(payload[off:off + pk_len]); off += pk_len
+    # FD-1 Phase A: the primary recipient is the in-band wrapped DEK;
+    # additional recipients (if any) follow in the trailing block. Older
+    # single-recipient packets have no trailing bytes -> one recipient.
+    recipients = [("", kek_algorithm, wrapped_dek)]
+    if off < len(payload):
+        extra, off = _decode_recipient_block(payload, off)
+        recipients.extend(extra)
     return {
         "cipher_suite": cipher_suite,
         "kek_algorithm": kek_algorithm,
         "wrapped_dek": wrapped_dek,
         "signature_algorithm": signature_algorithm,
         "public_key": public_key,
+        "recipients": recipients,
     }
 
 
@@ -812,7 +892,7 @@ def _ingest_encrypted_au(d: dict, *, header, payload: bytes,
 
 
 def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
-                                  provider=None):
+                                  additional_recipients=(), provider=None):
     """Stamp a wrapped DEK + KEK algorithm onto every run's
     ``signal_channels`` so :func:`write_encrypted_dataset` emits it in the
     ProtectionMetadata packet.
@@ -822,10 +902,20 @@ def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
     (``ml-kem-1024``). The DEK itself is shared across all channels in a
     run (v1.0 design), so the wrapper is stamped on each run's first
     channel -- the same attribute :func:`write_encrypted_dataset` reads.
+
+    ``additional_recipients`` (FD-1 Phase A) is an optional list of
+    ``(recipient_id, kek_algorithm, wrapped_dek)`` for the *same* DEK
+    wrapped under other recipients' keys; it is stamped as the
+    ``<channel>_wrapped_dek_recipients`` attribute and emitted as the
+    packet's trailing block. Empty (the default) keeps single-recipient
+    runs byte-identical to pre-Phase-A.
     """
     from ..providers.registry import open_provider
 
     wd = np.frombuffer(wrapped_dek, dtype=np.uint8)
+    extra_blob = (np.frombuffer(
+        _encode_recipient_block(list(additional_recipients)), dtype=np.uint8)
+        if additional_recipients else None)
     sp = open_provider(path, provider=provider, mode="a")
     try:
         root = sp.root_group()
@@ -849,6 +939,9 @@ def stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *,
                     continue
                 sig.set_attribute(f"{names[0]}_wrapped_dek", wd)
                 sig.set_attribute(f"{names[0]}_kek_algorithm", kek_algorithm)
+                if extra_blob is not None:
+                    sig.set_attribute(
+                        f"{names[0]}_wrapped_dek_recipients", extra_blob)
     finally:
         sp.close()
 
@@ -887,5 +980,48 @@ def read_transport_wrapped_dek(path, *, provider=None):
                             io.read_string_attr(sig, f"{names[0]}_kek_algorithm")
                             or "")
         return b"", ""
+    finally:
+        sp.close()
+
+
+def read_transport_recipients(path, *, provider=None):
+    """Return the full recipient list stamped on the first run's
+    ``signal_channels`` as ``[(recipient_id, kek_algorithm, wrapped_dek)]``
+    (FD-1 Phase A). The primary recipient is index 0 with id ``""``;
+    additional recipients follow. Empty list if no wrapped DEK is present.
+
+    The single-recipient counterpart :func:`read_transport_wrapped_dek`
+    stays the convenience accessor for the BYOK / envelope / PQC client
+    paths that hold one key."""
+    from ..providers.registry import open_provider
+
+    sp = open_provider(path, provider=provider, mode="r")
+    try:
+        root = sp.root_group()
+        if not root.has_child("study"):
+            return []
+        study = root.open_group("study")
+        for parent in ("ms_runs", "genomic_runs"):
+            if not study.has_child(parent):
+                continue
+            g = study.open_group(parent)
+            for n in g.child_names():
+                if n.startswith("_") or not g.has_child(n):
+                    continue
+                run = g.open_group(n)
+                if not run.has_child("signal_channels"):
+                    continue
+                sig = run.open_group("signal_channels")
+                names = [c for c in (io.read_string_attr(sig, "channel_names")
+                                     or "").split(",") if c]
+                if not names or not sig.has_attribute(f"{names[0]}_wrapped_dek"):
+                    continue
+                primary = (
+                    "",
+                    io.read_string_attr(sig, f"{names[0]}_kek_algorithm") or "",
+                    bytes(sig.get_attribute(f"{names[0]}_wrapped_dek")),
+                )
+                return [primary] + _read_additional_recipients(sig, names[0])
+        return []
     finally:
         sp.close()
