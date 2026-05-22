@@ -129,9 +129,12 @@ public final class EncryptedTransport {
                                     firstCh + "_kek_algorithm", "");
                                 byte[] wrapped = readWrappedDekAttr(sig,
                                     firstCh + "_wrapped_dek");
+                                List<Recipient> extra = decodeRecipientBlockBytes(
+                                    readWrappedDekAttr(sig,
+                                        firstCh + "_wrapped_dek_recipients"));
 
                                 writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
-                                    did, 0, encodeProtection(cipherSuite, kek, wrapped));
+                                    did, 0, encodeProtection(cipherSuite, kek, wrapped, extra));
 
                                 long expectedAUs = firstChannelSegmentCount(sig, firstCh);
                                 int acqMode = intAttr(run, "acquisition_mode", 0);
@@ -197,8 +200,10 @@ public final class EncryptedTransport {
                 firstCh + "_algorithm", "aes-256-gcm");
             String kek = attrStr(sig, firstCh + "_kek_algorithm", "");
             byte[] wrapped = readWrappedDekAttr(sig, firstCh + "_wrapped_dek");
+            List<Recipient> extra = decodeRecipientBlockBytes(
+                readWrappedDekAttr(sig, firstCh + "_wrapped_dek_recipients"));
             writer.emitRawPacket(PacketType.PROTECTION_METADATA, 0,
-                datasetId, 0, encodeProtection(cipherSuite, kek, wrapped));
+                datasetId, 0, encodeProtection(cipherSuite, kek, wrapped, extra));
 
             int acqMode = intAttr(run, "acquisition_mode", 0);
             String metadataJson = genomicRunMetadataJson(
@@ -487,6 +492,22 @@ public final class EncryptedTransport {
                                                   String kekAlgorithm,
                                                   String providerName)
             throws IOException {
+        stampTransportWrappedDek(ttioPath, wrappedDek, kekAlgorithm,
+            java.util.List.of(), providerName);
+    }
+
+    /** Multi-recipient overload (FD-1 Phase A): the same DEK wrapped under
+     *  ``additionalRecipients``' keys is stamped as the
+     *  {@code <channel>_wrapped_dek_recipients} attribute and emitted as
+     *  the packet's trailing block. Empty list keeps single-recipient runs
+     *  byte-identical to pre-Phase-A. */
+    public static void stampTransportWrappedDek(String ttioPath,
+                                                  byte[] wrappedDek,
+                                                  String kekAlgorithm,
+                                                  List<Recipient> additionalRecipients,
+                                                  String providerName)
+            throws IOException {
+        byte[] recipientBlock = encodeRecipientBlock(additionalRecipients);
         StorageProvider sp = ProviderRegistry.open(ttioPath,
             StorageProvider.Mode.READ_WRITE, providerName);
         try {
@@ -510,6 +531,9 @@ public final class EncryptedTransport {
                                                        wrappedDek);
                                     sig.setAttribute(fc + "_kek_algorithm",
                                                       kekAlgorithm);
+                                    setWrappedDekAttr(sig,
+                                        fc + "_wrapped_dek_recipients",
+                                        recipientBlock);
                                 }
                             }
                         }
@@ -571,20 +595,123 @@ public final class EncryptedTransport {
         }
     }
 
+    /** Return the full DEK recipient list stamped on the first run's
+     *  {@code signal_channels} (FD-1 Phase A): index 0 is the primary
+     *  (recipient id {@code ""}), followed by any additional recipients.
+     *  Empty list when no wrapped DEK is present. {@link
+     *  #readTransportWrappedDek} stays the single-recipient accessor. */
+    public static List<Recipient> readTransportRecipients(String ttioPath,
+                                                            String providerName)
+            throws IOException {
+        StorageProvider sp = ProviderRegistry.open(ttioPath,
+            StorageProvider.Mode.READ, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            if (!root.hasChild("study")) return new ArrayList<>();
+            try (StorageGroup study = root.openGroup("study")) {
+                for (String parent : new String[]{"ms_runs", "genomic_runs"}) {
+                    if (!study.hasChild(parent)) continue;
+                    try (StorageGroup g = study.openGroup(parent)) {
+                        for (String n : g.childNames()) {
+                            if (n.startsWith("_") || !g.hasChild(n)) continue;
+                            try (StorageGroup run = g.openGroup(n)) {
+                                if (!run.hasChild("signal_channels")) continue;
+                                try (StorageGroup sig =
+                                         run.openGroup("signal_channels")) {
+                                    List<String> names = splitNames(
+                                        attrStr(sig, "channel_names", ""));
+                                    if (names.isEmpty()
+                                        || !sig.hasAttribute(
+                                            names.get(0) + "_wrapped_dek")) {
+                                        continue;
+                                    }
+                                    String fc = names.get(0);
+                                    List<Recipient> out = new ArrayList<>();
+                                    out.add(new Recipient("",
+                                        attrStr(sig, fc + "_kek_algorithm", ""),
+                                        readWrappedDekAttr(sig, fc + "_wrapped_dek")));
+                                    out.addAll(decodeRecipientBlockBytes(
+                                        readWrappedDekAttr(sig,
+                                            fc + "_wrapped_dek_recipients")));
+                                    return out;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            return new ArrayList<>();
+        } finally {
+            sp.close();
+        }
+    }
+
     // ────────────────────────────────────────────── payload encoders
 
     private static byte[] encodeProtection(String cipherSuite, String kek,
-                                             byte[] wrapped) {
+                                             byte[] wrapped,
+                                             List<Recipient> additional) {
         byte[] cs = cipherSuite.getBytes(StandardCharsets.UTF_8);
         byte[] kk = kek.getBytes(StandardCharsets.UTF_8);
-        int len = 2 + cs.length + 2 + kk.length + 4 + wrapped.length + 2 + 4;
+        byte[] block = encodeRecipientBlock(additional);
+        int len = 2 + cs.length + 2 + kk.length + 4 + wrapped.length
+                + 2 + 4 + block.length;
         ByteBuffer buf = ByteBuffer.allocate(len).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) cs.length); buf.put(cs);
         buf.putShort((short) kk.length); buf.put(kk);
         buf.putInt(wrapped.length); buf.put(wrapped);
         buf.putShort((short) 0); // signature_algorithm
         buf.putInt(0);            // public_key length
+        buf.put(block);           // FD-1 Phase A: additional recipients (empty when single)
         return buf.array();
+    }
+
+    /** FD-1 Phase A append-only trailing block:
+     *  {@code additional_recipient_count}(u16) + per recipient
+     *  {@code {recipient_id, kek_algorithm, wrapped_dek}}. Empty bytes for
+     *  no additional recipients, so single-recipient packets stay
+     *  byte-identical to transport-spec §4.4. Byte-for-byte identical to
+     *  the Python `_encode_recipient_block` (the cross-language contract).*/
+    private static byte[] encodeRecipientBlock(List<Recipient> additional) {
+        if (additional == null || additional.isEmpty()) return new byte[0];
+        int len = 2;
+        for (Recipient r : additional) {
+            len += 2 + r.recipientId().getBytes(StandardCharsets.UTF_8).length
+                 + 2 + r.kekAlgorithm().getBytes(StandardCharsets.UTF_8).length
+                 + 4 + r.wrappedDek().length;
+        }
+        ByteBuffer buf = ByteBuffer.allocate(len).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putShort((short) additional.size());
+        for (Recipient r : additional) {
+            byte[] rid = r.recipientId().getBytes(StandardCharsets.UTF_8);
+            byte[] ka = r.kekAlgorithm().getBytes(StandardCharsets.UTF_8);
+            buf.putShort((short) rid.length); buf.put(rid);
+            buf.putShort((short) ka.length); buf.put(ka);
+            buf.putInt(r.wrappedDek().length); buf.put(r.wrappedDek());
+        }
+        return buf.array();
+    }
+
+    /** Decode the trailing recipient block from a buffer positioned at its
+     *  start; returns empty when fewer than 2 bytes remain. */
+    private static List<Recipient> decodeRecipientBlock(ByteBuffer bb) {
+        List<Recipient> out = new ArrayList<>();
+        if (bb.remaining() < 2) return out;
+        int n = bb.getShort() & 0xFFFF;
+        for (int i = 0; i < n; i++) {
+            String rid = readLEString(bb, 2);
+            String ka = readLEString(bb, 2);
+            int wl = bb.getInt();
+            byte[] wd = new byte[wl]; bb.get(wd);
+            out.add(new Recipient(rid, ka, wd));
+        }
+        return out;
+    }
+
+    private static List<Recipient> decodeRecipientBlockBytes(byte[] block) {
+        if (block == null || block.length == 0) return new ArrayList<>();
+        return decodeRecipientBlock(
+            ByteBuffer.wrap(block).order(ByteOrder.LITTLE_ENDIAN));
     }
 
     private static byte[] encodeChannelData(String cname, int nElements,
@@ -694,7 +821,17 @@ public final class EncryptedTransport {
         int wLen = bb.getInt();
         byte[] wrapped = new byte[wLen];
         bb.get(wrapped);
-        return new ProtectionMeta(cs, kek, wrapped);
+        // Consume signature_algorithm + public_key to reach the FD-1
+        // trailing recipient block (both empty on pre-Phase-A packets, in
+        // which case no bytes remain -> no additional recipients).
+        List<Recipient> additional = new ArrayList<>();
+        if (bb.remaining() > 0) {
+            readLEString(bb, 2);                     // signature_algorithm
+            int pkLen = bb.getInt();
+            bb.position(bb.position() + pkLen);      // public_key
+            additional = decodeRecipientBlock(bb);
+        }
+        return new ProtectionMeta(cs, kek, wrapped, additional);
     }
 
     private static void ingestAU(int flags, byte[] payload,
@@ -888,6 +1025,9 @@ public final class EncryptedTransport {
                 setWrappedDekAttr(sig, cname + "_wrapped_dek", pm.wrappedDek);
                 sig.setAttribute(cname + "_kek_algorithm",
                                   pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
+                // FD-1 Phase A: persist additional recipients (no-op when single).
+                setWrappedDekAttr(sig, cname + "_wrapped_dek_recipients",
+                                  encodeRecipientBlock(pm.additionalRecipients));
             }
         }
 
@@ -958,6 +1098,8 @@ public final class EncryptedTransport {
                         setWrappedDekAttr(sig, cname + "_wrapped_dek", pm.wrappedDek);
                         sig.setAttribute(cname + "_kek_algorithm",
                                           pm.kekAlgorithm == null ? "" : pm.kekAlgorithm);
+                        setWrappedDekAttr(sig, cname + "_wrapped_dek_recipients",
+                                          encodeRecipientBlock(pm.additionalRecipients));
                     }
                 }
             }
@@ -1222,6 +1364,12 @@ public final class EncryptedTransport {
         }
     }
 
-    record ProtectionMeta(String cipherSuite, String kekAlgorithm,
+    /** One DEK recipient: the same per-run DEK wrapped under this
+     *  recipient's KEK. FD-1 Phase A multi-recipient support. */
+    public record Recipient(String recipientId, String kekAlgorithm,
                             byte[] wrappedDek) {}
+
+    record ProtectionMeta(String cipherSuite, String kekAlgorithm,
+                            byte[] wrappedDek,
+                            List<Recipient> additionalRecipients) {}
 }
