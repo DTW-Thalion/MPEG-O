@@ -47,26 +47,35 @@ class MultiRecipientXLangTest {
     /** One golden vector: primary fields + the additional recipient list. */
     private record Vec(String name, String cipherSuite, String kek,
                        byte[] wrapped,
-                       List<EncryptedTransport.Recipient> additional) {}
+                       List<EncryptedTransport.Recipient> additional,
+                       String serverKekId) {}
+
+    private static final String KID = "server:kek-proj-adni";
 
     private static List<Vec> vectors() {
         return List.of(
             new Vec("prot_single_byok", "aes-256-gcm", "none",
-                    new byte[0], List.of()),
+                    new byte[0], List.of(), null),
             new Vec("prot_single_envelope", "aes-256-gcm", "aes-256-gcm",
-                    SERVER, List.of()),
+                    SERVER, List.of(), null),
             new Vec("prot_single_pqc", "aes-256-gcm", "ml-kem-1024",
-                    PQC, List.of()),
+                    PQC, List.of(), null),
             new Vec("prot_multi_server_researcher", "aes-256-gcm", "aes-256-gcm",
                     SERVER, List.of(
                         new EncryptedTransport.Recipient(
-                            "researcher", "ml-kem-1024", RESEARCHER))),
+                            "researcher", "ml-kem-1024", RESEARCHER)), null),
             new Vec("prot_multi_three", "aes-256-gcm", "aes-256-gcm",
                     SERVER, List.of(
                         new EncryptedTransport.Recipient(
                             "researcher", "ml-kem-1024", RESEARCHER),
                         new EncryptedTransport.Recipient(
-                            "auditor", "rsa-4096-oaep", AUDITOR)))
+                            "auditor", "rsa-4096-oaep", AUDITOR)), null),
+            new Vec("prot_server_kek_id_single", "aes-256-gcm", "aes-256-gcm",
+                    SERVER, List.of(), KID),
+            new Vec("prot_server_kek_id_multi", "aes-256-gcm", "aes-256-gcm",
+                    SERVER, List.of(
+                        new EncryptedTransport.Recipient(
+                            "researcher", "ml-kem-1024", RESEARCHER)), KID)
         );
     }
 
@@ -162,7 +171,8 @@ class MultiRecipientXLangTest {
         for (Vec v : vectors()) {
             String golden = hexField(v.name(), "body_hex");
             byte[] body = EncryptedTransport.encodeProtection(
-                v.cipherSuite(), v.kek(), v.wrapped(), v.additional());
+                v.cipherSuite(), v.kek(), v.wrapped(), v.additional(),
+                v.serverKekId());
             assertEquals(golden, toHex(body), v.name() + ": full body bytes");
         }
     }
@@ -173,6 +183,9 @@ class MultiRecipientXLangTest {
             byte[] body = fromHex(hexField(v.name(), "body_hex"));
             EncryptedTransport.ProtectionMeta pm =
                 EncryptedTransport.parseProtection(body);
+            // FD-1 C-2a: server_kek_id round-trips through the body.
+            assertEquals(v.serverKekId(), pm.serverKekId(),
+                         v.name() + ": server_kek_id");
             // primary
             assertEquals(v.kek(), pm.kekAlgorithm(), v.name() + ": primary kek");
             assertArrayEquals(v.wrapped(), pm.wrappedDek(),

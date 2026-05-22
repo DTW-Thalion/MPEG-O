@@ -19,6 +19,7 @@ import json
 from pathlib import Path
 
 from ttio.transport.encrypted import (
+    _encode_protection_trailing,
     _encode_recipient_block,
     _emit_protection_metadata,
 )
@@ -32,13 +33,14 @@ class _CapturingWriter:
         self.payload = payload
 
 
-def _body(cipher_suite, kek_algorithm, wrapped_dek, additional):
+def _body(cipher_suite, kek_algorithm, wrapped_dek, additional,
+          server_kek_id=None):
     w = _CapturingWriter()
     _emit_protection_metadata(
         w, dataset_id=1, cipher_suite=cipher_suite,
         kek_algorithm=kek_algorithm, wrapped_dek=wrapped_dek,
         signature_algorithm="", public_key=b"",
-        additional_recipients=additional)
+        additional_recipients=additional, server_kek_id=server_kek_id)
     return w.payload
 
 
@@ -111,6 +113,30 @@ VECTORS = [
              "wrapped_dek": AUDITOR},
         ],
     },
+    {
+        "name": "prot_server_kek_id_single",
+        "description": "FD-1 C-2a: single-recipient server-processable. No "
+                       "additional recipients, so the trailing section is "
+                       "count=0 + server_kek_id.",
+        "cipher_suite": "aes-256-gcm",
+        "kek_algorithm": "aes-256-gcm",
+        "wrapped_dek": SERVER,
+        "additional_recipients": [],
+        "server_kek_id": "server:kek-proj-adni",
+    },
+    {
+        "name": "prot_server_kek_id_multi",
+        "description": "FD-1 C-2a: server-processable + a researcher "
+                       "recipient. Trailing = recipient block + server_kek_id.",
+        "cipher_suite": "aes-256-gcm",
+        "kek_algorithm": "aes-256-gcm",
+        "wrapped_dek": SERVER,
+        "additional_recipients": [
+            {"recipient_id": "researcher", "kek_algorithm": "ml-kem-1024",
+             "wrapped_dek": RESEARCHER},
+        ],
+        "server_kek_id": "server:kek-proj-adni",
+    },
 ]
 
 
@@ -121,9 +147,13 @@ def main():
             (r["recipient_id"], r["kek_algorithm"], _fill(r["wrapped_dek"]))
             for r in v["additional_recipients"]
         ]
+        server_kek_id = v.get("server_kek_id")
         body = _body(v["cipher_suite"], v["kek_algorithm"],
-                     _fill(v["wrapped_dek"]), additional)
+                     _fill(v["wrapped_dek"]), additional, server_kek_id)
         block = _encode_recipient_block(additional)
+        # The full trailing section after the five §4.4 fields (recipient
+        # block + optional server_kek_id) -- the unit ObjC pins.
+        trailing = _encode_protection_trailing(additional, server_kek_id)
         out_vectors.append({
             "name": v["name"],
             "description": v["description"],
@@ -133,7 +163,9 @@ def main():
             "signature_algorithm": "",
             "public_key": {"fill": "0x00", "len": 0},
             "additional_recipients": v["additional_recipients"],
+            "server_kek_id": server_kek_id,
             "recipient_block_hex": block.hex(),
+            "trailing_hex": trailing.hex(),
             "body_hex": body.hex(),
         })
 

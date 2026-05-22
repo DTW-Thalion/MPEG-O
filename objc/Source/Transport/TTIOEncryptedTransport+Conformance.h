@@ -26,4 +26,11 @@
 /** Decode a standalone recipient block to an array of recipient dicts. */
 + (NSArray<NSDictionary *> *)ttioConformanceDecodeRecipientBlock:(NSData *)block;
 
+/** FD-1 C-2a: encode the full trailing section after the five §4.4 fields
+ *  (recipient block + optional server_kek_id) per the proven layout:
+ *  emitted iff additional recipients OR a server_kek_id; a single-recipient
+ *  server-processable container yields count=0 + server_kek_id. */
++ (NSData *)ttioConformanceEncodeTrailing:(NSArray<NSDictionary *> *)additional
+                              serverKekId:(nullable NSString *)serverKekId;
+
 @end

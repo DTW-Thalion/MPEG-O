@@ -1708,4 +1708,20 @@ static BOOL writeEncryptedFile(NSString *path,
     return decodeRecipientBlock((const uint8_t *)block.bytes, block.length, &off);
 }
 
++ (NSData *)ttioConformanceEncodeTrailing:(NSArray<NSDictionary *> *)additional
+                              serverKekId:(NSString *)serverKekId
+{
+    NSMutableData *out = [NSMutableData data];
+    BOOL haveAdd = additional.count > 0;
+    BOOL haveKid = serverKekId.length > 0;
+    if (!haveAdd && !haveKid) return out;
+    if (haveAdd) {
+        [out appendData:encodeRecipientBlock(additional)];
+    } else {
+        appendU16LE(out, 0);   // additional_recipient_count = 0
+    }
+    if (haveKid) appendLEString(out, serverKekId, 2);
+    return out;
+}
+
 @end
