@@ -90,7 +90,7 @@ void testMultiRecipientXLang(void)
     PASS([doc isKindOfClass:[NSDictionary class]], "vectors.json parsed");
 
     NSArray<NSDictionary *> *vectors = doc[@"vectors"];
-    PASS(vectors.count == 5, "five golden vectors present");
+    PASS(vectors.count == 7, "seven golden vectors present");
 
     for (NSDictionary *v in vectors) {
         NSString *name = v[@"name"];
@@ -119,5 +119,15 @@ void testMultiRecipientXLang(void)
         }
         PASS(allMatch, "%s: recipient block round-trips byte-identically",
              name.UTF8String);
+
+        // (c) FD-1 C-2a: the full trailing section (recipient block +
+        // optional server_kek_id) encodes to golden trailing_hex.
+        id kidObj = v[@"server_kek_id"];
+        NSString *serverKekId = [kidObj isKindOfClass:[NSString class]] ? kidObj : nil;
+        NSData *trailing = [TTIOEncryptedTransport
+                         ttioConformanceEncodeTrailing:additional
+                                           serverKekId:serverKekId];
+        PASS([dataToHex(trailing) isEqualToString:v[@"trailing_hex"]],
+             "%s: trailing section encodes to golden bytes", name.UTF8String);
     }
 }

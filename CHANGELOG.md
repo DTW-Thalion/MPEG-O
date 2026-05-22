@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- FD-1 Phase C-2a-4: server_kek_id cross-language conformance (2026-05-22)
+
+Pins `server_kek_id` byte-parity across Python / Java / ObjC in the shared
+`conformance/multi_recipient/` golden vectors.
+
+- Two new golden vectors (`prot_server_kek_id_single`,
+  `prot_server_kek_id_multi`) and a `trailing_hex` field (the full trailing
+  section after the five §4.4 fields = recipient block + optional
+  `server_kek_id`); `gen_vectors.py` produces them from the Python encoder.
+- Python/Java pin `body_hex` (now including `server_kek_id`) and assert the
+  decoded `server_kek_id`; ObjC pins `trailing_hex` via a new
+  `ttioConformanceEncodeTrailing:serverKekId:`. All three assert the same
+  committed hex, so byte-parity is transitive.
+
 ### Added -- FD-1 Phase C-2a: server_kek_id in ProtectionMetadata (ObjC) (2026-05-22)
 
 ObjC mirror of the C-2a `server_kek_id` field, completing the three-language
