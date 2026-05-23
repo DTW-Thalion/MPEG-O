@@ -1038,6 +1038,9 @@ static BOOL _writePlainDataset(id<TTIOStorageGroup> group, NSString *name,
         id<TTIOStorageGroup> study = [root openGroupNamed:@"study" error:error];
         if (!study) return NO;
 
+        // datasetId numbering continues across MS + genomic loops, matching
+        // encryptFilePath's AAD scheme (genomic IDs occupy N+1..N+M).
+        uint16_t datasetId = 1;
         if ([study hasChildNamed:@"ms_runs"]) {
             id<TTIOStorageGroup> msRuns =
                 [study openGroupNamed:@"ms_runs" error:error];
@@ -1047,7 +1050,6 @@ static BOOL _writePlainDataset(id<TTIOStorageGroup> group, NSString *name,
                 [hdf5Root openGroupNamed:@"study" error:NULL];
             TTIOHDF5Group *hdf5MsRuns =
                 [hdf5Study openGroupNamed:@"ms_runs" error:NULL];
-            uint16_t datasetId = 1;
             for (NSString *runName in runNames) {
                 id<TTIOStorageGroup> run = [msRuns openGroupNamed:runName error:error];
                 id<TTIOStorageGroup> sig = [run openGroupNamed:@"signal_channels" error:error];
@@ -1150,11 +1152,64 @@ static BOOL _writePlainDataset(id<TTIOStorageGroup> group, NSString *name,
             }
         }
 
-        // Strip the per-AU feature flags so the file is no longer advertised
-        // as opt_per_au_encryption. Note: genomic-run decrypt-in-place is a
-        // follow-up; this method covers the MS path only (the FD-1 D-1
-        // pipeline use case). Genomic encrypted-run files retain their
-        // feature flags + segments until that follow-up lands.
+        // Genomic runs: same per-AU GCM scheme as MS, but channel data
+        // (sequences / qualities) is uint8 stored under the bare channel
+        // name (no _values suffix). datasetId continues from where the MS
+        // loop left off, matching encryptFilePath's AAD numbering.
+        if ([study hasChildNamed:@"genomic_runs"]) {
+            id<TTIOStorageGroup> gRuns =
+                [study openGroupNamed:@"genomic_runs" error:error];
+            if (!gRuns) return NO;
+            NSArray *gRunNames = listGroupChildren(gRuns);
+            TTIOHDF5Group *hdf5Study =
+                [hdf5Root openGroupNamed:@"study" error:NULL];
+            TTIOHDF5Group *hdf5GRuns =
+                [hdf5Study openGroupNamed:@"genomic_runs" error:NULL];
+            for (NSString *gRunName in gRunNames) {
+                id<TTIOStorageGroup> gRun =
+                    [gRuns openGroupNamed:gRunName error:error];
+                id<TTIOStorageGroup> gSig =
+                    [gRun openGroupNamed:@"signal_channels" error:error];
+                if (!gRun || !gSig) { datasetId++; continue; }
+                TTIOHDF5Group *hdf5GRun =
+                    [hdf5GRuns openGroupNamed:gRunName error:NULL];
+                TTIOHDF5Group *hdf5GSig =
+                    [hdf5GRun openGroupNamed:@"signal_channels" error:NULL];
+
+                for (NSString *cname in @[@"sequences", @"qualities"]) {
+                    NSString *segName =
+                        [NSString stringWithFormat:@"%@_segments", cname];
+                    if (![gSig hasChildNamed:segName]) continue;
+                    NSArray *segs =
+                        readChannelSegments(hdf5GSig, segName, error);
+                    if (!segs) return NO;
+                    NSData *plain = [TTIOPerAUEncryption
+                        decryptChannelFromSegments:segs
+                                   bytesPerElement:1
+                                          datasetId:datasetId
+                                        channelName:cname
+                                                key:key
+                                              error:error];
+                    if (!plain) return NO;
+                    // Write back as uint8 dataset under the bare channel name
+                    // (genomic layout has no _values suffix; see
+                    // encryptFilePath's genomic loop).
+                    if (!_writePlainDataset(gSig, cname,
+                                            TTIOPrecisionUInt8,
+                                            plain.length, plain, error)) return NO;
+                    if (![gSig deleteChildNamed:segName error:error]) return NO;
+                    NSString *algAttr =
+                        [NSString stringWithFormat:@"%@_algorithm", cname];
+                    if ([gSig hasAttributeNamed:algAttr]) {
+                        [gSig deleteAttributeNamed:algAttr error:NULL];
+                    }
+                }
+                datasetId++;
+            }
+        }
+
+        // Strip the per-AU feature flags + the root @encrypted attribute now
+        // that all encrypted segments (MS + genomic) have been decrypted.
         NSMutableSet *featureSet = [NSMutableSet setWithArray:features];
         [featureSet removeObject:@"opt_per_au_encryption"];
         [featureSet removeObject:@"opt_encrypted_au_headers"];

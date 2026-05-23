@@ -75,6 +75,12 @@ NS_ASSUME_NONNULL_BEGIN
  *  plaintext back as ``<channel>_values`` (float64), deletes
  *  ``<channel>_segments``, and removes the ``<channel>_algorithm`` attribute.
  *
+ *  Genomic runs are handled the same way: ``study/genomic_runs/<name>/
+ *  signal_channels/<sequences|qualities>_segments`` is decrypted (uint8)
+ *  and written back as the bare ``<sequences|qualities>`` dataset.
+ *  ``dataset_id`` continues from where the MS loop left off, mirroring
+ *  ``encryptFilePath:``'s AAD numbering exactly.
+ *
  *  When the file carries ``opt_encrypted_au_headers``, the six plaintext
  *  index datasets (``retention_times``, ``ms_levels``, ``polarities``,
  *  ``precursor_mzs``, ``precursor_charges``, ``base_peak_intensities``)
@@ -86,7 +92,9 @@ NS_ASSUME_NONNULL_BEGIN
  *  subsequent readers see a fully unprotected file. Idempotent: returns
  *  YES with no error when the file is already plaintext.
  *
- *  Cross-language equivalents: not yet implemented in Python / Java.
+ *  Cross-language equivalents:
+ *    Python: ``ttio.encryption_per_au.decrypt_per_au_in_place``
+ *    Java:   ``PerAUFile.decryptFileInPlace``
  */
 + (BOOL)decryptFilePathInPlace:(NSString *)path
                             key:(NSData *)key
