@@ -626,6 +626,149 @@ def decrypt_per_au(
 decrypt_per_au_file = decrypt_per_au
 
 
+def decrypt_per_au_in_place(
+    path: str,
+    key: bytes,
+    *,
+    provider: str | None = None,
+) -> None:
+    """Persist-to-disk per-AU decrypt counterpart to
+    :func:`encrypt_per_au`.
+
+    The legacy :func:`ttio.encryption.decrypt_in_place_at_path` (mirror of
+    ObjC ``+[TTIOSpectralDataset decryptInPlaceAtPath:withKey:]``) only
+    handles the ``intensity_values_encrypted`` single-dataset layout and
+    is a silent idempotent no-op on per-AU files. This function is the
+    per-AU equivalent.
+
+    For each MS run with ``<channel>_segments`` under ``signal_channels``,
+    decrypts each spectrum row with the per-AU GCM scheme
+    (AAD = ``dataset_id || au_sequence || channel_name``), writes the
+    concatenated plaintext back as ``<channel>_values`` (float64), removes
+    ``<channel>_segments`` and the ``<channel>_algorithm`` attribute. When
+    the file carries ``opt_encrypted_au_headers`` the six plaintext index
+    datasets (``retention_times``, ``ms_levels``, ``polarities``,
+    ``precursor_mzs``, ``precursor_charges``, ``base_peak_intensities``)
+    are restored from ``au_header_segments`` and the encrypted compound
+    is removed.
+
+    When the file has no genomic runs to decrypt, also strips the
+    ``opt_per_au_encryption`` / ``opt_encrypted_au_headers`` feature
+    flags and the root ``@encrypted`` attribute, so subsequent readers
+    see a fully unprotected file. Files that carry ``genomic_runs``
+    retain their feature flags + segments until the genomic decrypt
+    follow-up lands. Idempotent on already-plaintext files.
+
+    Cross-language equivalents:
+      ObjC: ``+[TTIOPerAUFile decryptFilePathInPlace:withKey:providerName:error:]``
+      Java: ``PerAUFile.decryptFilePathInPlace``
+    """
+    from . import _hdf5_io as io
+    from .providers.registry import open_provider
+
+    if len(key) != 32:
+        raise ValueError(f"AES-256-GCM key must be 32 bytes, got {len(key)}")
+
+    sp = open_provider(path, provider=provider, mode="a")
+    try:
+        root = sp.root_group()
+        version, features = io.read_feature_flags(root)
+        if "opt_per_au_encryption" not in features:
+            return  # idempotent: already plaintext
+        headers_encrypted = "opt_encrypted_au_headers" in features
+
+        study = root.open_group("study")
+        if not study.has_child("ms_runs"):
+            return
+
+        ms_runs = study.open_group("ms_runs")
+        run_names = [n for n in ms_runs.child_names()
+                     if not n.startswith("_") and ms_runs.has_child(n)]
+        dataset_id_counter = 1
+        for run_name in run_names:
+            try:
+                run_group = ms_runs.open_group(run_name)
+            except KeyError:
+                dataset_id_counter += 1
+                continue
+            sig = run_group.open_group("signal_channels")
+            idx = run_group.open_group("spectrum_index")
+            channel_names = _split_channel_names(
+                _get_str_attr(sig, "channel_names")
+            )
+            for cname in channel_names:
+                seg_name = f"{cname}_segments"
+                if not sig.has_child(seg_name):
+                    continue
+                segments = io.read_channel_segments(sig, seg_name)
+                plain = decrypt_channel_from_segments(
+                    segments,
+                    dataset_id=dataset_id_counter,
+                    channel_name=cname,
+                    key=key,
+                )
+                values_name = f"{cname}_values"
+                if sig.has_child(values_name):
+                    sig.delete_child(values_name)
+                ds = sig.create_dataset(values_name, Precision.FLOAT64,
+                                        int(np.asarray(plain).size))
+                ds.write(np.asarray(plain, dtype="<f8"))
+                sig.delete_child(seg_name)
+                alg_attr = f"{cname}_algorithm"
+                if sig.has_attribute(alg_attr):
+                    sig.delete_attribute(alg_attr)
+
+            if headers_encrypted and idx.has_child("au_header_segments"):
+                header_segs = io.read_au_header_segments(
+                    idx, "au_header_segments"
+                )
+                rows = decrypt_header_segments(
+                    header_segs, dataset_id=dataset_id_counter, key=key,
+                )
+                n = len(rows)
+                cols = [
+                    ("ms_levels",
+                     np.array([r["ms_level"] for r in rows], dtype="<i4"),
+                     Precision.INT32),
+                    ("polarities",
+                     np.array([r["polarity"] for r in rows], dtype="<i4"),
+                     Precision.INT32),
+                    ("precursor_charges",
+                     np.array([r["precursor_charge"] for r in rows], dtype="<i4"),
+                     Precision.INT32),
+                    ("retention_times",
+                     np.array([r["retention_time"] for r in rows], dtype="<f8"),
+                     Precision.FLOAT64),
+                    ("precursor_mzs",
+                     np.array([r["precursor_mz"] for r in rows], dtype="<f8"),
+                     Precision.FLOAT64),
+                    ("base_peak_intensities",
+                     np.array([r["base_peak_intensity"] for r in rows], dtype="<f8"),
+                     Precision.FLOAT64),
+                ]
+                for col_name, arr, prec in cols:
+                    if idx.has_child(col_name):
+                        idx.delete_child(col_name)
+                    cd = idx.create_dataset(col_name, prec, n)
+                    cd.write(arr)
+                idx.delete_child("au_header_segments")
+
+            dataset_id_counter += 1
+
+        # Strip feature flags + root @encrypted only when no genomic_runs
+        # remain to be decrypted. Genomic decrypt-in-place is a follow-up
+        # across all three languages.
+        if not study.has_child("genomic_runs"):
+            features_set = set(features)
+            features_set.discard("opt_per_au_encryption")
+            features_set.discard("opt_encrypted_au_headers")
+            io.write_feature_flags(root, version, sorted(features_set))
+            if root.has_attribute("encrypted"):
+                root.delete_attribute("encrypted")
+    finally:
+        sp.close()
+
+
 # ────────────────────────────────────────────────────────────────────
 # M90.4 — region-based per-AU encryption.
 #
