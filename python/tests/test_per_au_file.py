@@ -12,7 +12,11 @@ pytest.importorskip("h5py")
 import h5py
 
 from ttio.enums import AcquisitionMode, Polarity
-from ttio.encryption_per_au import decrypt_per_au_file, encrypt_per_au_file
+from ttio.encryption_per_au import (
+    decrypt_per_au_file,
+    decrypt_per_au_in_place,
+    encrypt_per_au_file,
+)
 from ttio.feature_flags import (
     OPT_ENCRYPTED_AU_HEADERS,
     OPT_PER_AU_ENCRYPTION,
@@ -175,3 +179,54 @@ class TestPerAuEncryptionWithHeaders:
             segs_ds[...] = arr
         with pytest.raises(Exception):
             decrypt_per_au_file(str(path), KEY)
+
+
+# ---------------------------------------------------- decrypt_per_au_in_place
+
+
+class TestDecryptPerAuInPlace:
+    """Persist-to-disk per-AU decrypt round-trip + idempotency."""
+
+    def test_channels_only_round_trip(self, tmp_path: Path) -> None:
+        path = _make_plaintext(tmp_path / "src.tio")
+        # Snapshot the original intensity bytes (the formula matches
+        # _make_plaintext: intensity[i] = (i + 1) * 10.0 for i in 0..total-1).
+        expected = (np.arange(20, dtype="<f8") + 1.0) * 10.0
+
+        encrypt_per_au_file(str(path), KEY)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        # opt_per_au_encryption / @encrypted cleared, intensity_values
+        # restored, intensity_segments + algorithm attr gone.
+        with h5py.File(str(path), "r") as f:
+            feats = f.attrs["features"].split(",") if "features" in f.attrs else []
+            feats = [x.strip() for x in feats if x.strip()]
+            assert OPT_PER_AU_ENCRYPTION not in feats
+            assert "encrypted" not in f.attrs
+            sig = f["study/ms_runs/run_0001/signal_channels"]
+            assert "intensity_values" in sig
+            assert "intensity_segments" not in sig
+            assert "intensity_algorithm" not in sig.attrs
+            np.testing.assert_array_equal(sig["intensity_values"][...], expected)
+
+    def test_headers_mode_restores_six_columns(self, tmp_path: Path) -> None:
+        path = _make_plaintext(tmp_path / "src.tio")
+        encrypt_per_au_file(str(path), KEY, encrypt_headers=True)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        with h5py.File(str(path), "r") as f:
+            feats = f.attrs["features"].split(",") if "features" in f.attrs else []
+            feats = [x.strip() for x in feats if x.strip()]
+            assert OPT_PER_AU_ENCRYPTION not in feats
+            assert OPT_ENCRYPTED_AU_HEADERS not in feats
+            idx = f["study/ms_runs/run_0001/spectrum_index"]
+            assert "au_header_segments" not in idx
+            for col in ("retention_times", "ms_levels", "polarities",
+                        "precursor_mzs", "precursor_charges",
+                        "base_peak_intensities"):
+                assert col in idx, f"plaintext index column {col} not restored"
+
+    def test_idempotent_on_plaintext(self, tmp_path: Path) -> None:
+        path = _make_plaintext(tmp_path / "src.tio")
+        # Calling decrypt-in-place on an already-plaintext file is a no-op.
+        decrypt_per_au_in_place(str(path), KEY)  # must not raise
