@@ -64,6 +64,7 @@ extern void testTransportConformance(void);
 extern void testSelectiveAccess(void);
 extern void testPerAUEncryption(void);
 extern void testPerAUFile(void);
+extern void testPerAUFileDecryptInPlace(void);
 extern void testEncryptedTransport(void);
 extern void testMilestone73(void);
 extern void testMilestone73_1(void);
@@ -372,6 +373,7 @@ int main(int argc, const char *argv[])
 
         START_SET("v1.0: per-AU encryption file round-trip")
             testPerAUFile();
+            testPerAUFileDecryptInPlace();
         END_SET("v1.0: per-AU encryption file round-trip")
 
         START_SET("v1.0: encrypted transport emission")

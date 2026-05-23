@@ -11,6 +11,39 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- ObjC `+[TTIOPerAUFile decryptFilePathInPlace:withKey:providerName:error:]` (2026-05-23)
+
+Persist-to-disk decrypt counterpart to `+encryptFilePath:` for the per-AU
+compound layout. Mirrors the legacy
+`+[TTIOSpectralDataset decryptInPlaceAtPath:withKey:error:]` (which only
+handles the older `intensity_values_encrypted` single-dataset format and
+is a silent idempotent no-op on per-AU files).
+
+For each MS run with `<channel>_segments` under `signal_channels`,
+decrypts each spectrum row with the per-AU GCM scheme
+(AAD = `dataset_id || au_sequence || channel_name`), writes the
+concatenated plaintext back as `<channel>_values` (float64), deletes
+`<channel>_segments`, and removes the `<channel>_algorithm` attribute.
+When the file carries `opt_encrypted_au_headers`, the six plaintext index
+datasets (`retention_times`, `ms_levels`, `polarities`, `precursor_mzs`,
+`precursor_charges`, `base_peak_intensities`) are restored from
+`au_header_segments` and the encrypted compound is removed. Strips
+`opt_per_au_encryption` / `opt_encrypted_au_headers` feature flags and
+the root `@encrypted` attribute. Idempotent on already-plaintext files.
+
+Unblocks the TTI-O Workbench server FD-1 D-1 / D-2b pipeline path: D-1's
+`decryptStoredContainerAtPath:` previously called the legacy decrypt and
+was a silent no-op on per-AU containers; the server pipeline ran on
+still-encrypted data and Phase E's "round-trip" was a false positive
+(documented in tti-workbench-server #41). Genomic-run per-AU
+decrypt-in-place is a follow-up; Python / Java equivalents are also
+gaps to mirror.
+
+Covered by `testPerAUFileDecryptInPlace` (channels-only round-trip with
+byte-equal intensity values + feature-flag clearing, headers-mode
+restoration of all 6 plaintext index columns, idempotency on a
+plaintext file).
+
 ### Added -- FD-1 Phase C-2a-4: server_kek_id cross-language conformance (2026-05-22)
 
 Pins `server_kek_id` byte-parity across Python / Java / ObjC in the shared

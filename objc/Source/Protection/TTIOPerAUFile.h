@@ -64,6 +64,35 @@ NS_ASSUME_NONNULL_BEGIN
        providerName:(nullable NSString *)providerName
               error:(NSError * _Nullable *)error;
 
+/** Per-AU AES-256-GCM decrypt-in-place. The persist-to-disk counterpart to
+ *  ``+encryptFilePath:`` -- mirrors the ``intensity_values_encrypted``
+ *  legacy decrypt-in-place (``+[TTIOSpectralDataset decryptInPlaceAtPath:]``)
+ *  but for the per-AU compound layout (``<channel>_segments``).
+ *
+ *  For each MS run with ``<channel>_segments`` under ``signal_channels``,
+ *  decrypts each spectrum row with the per-AU GCM scheme (AAD =
+ *  ``dataset_id || au_sequence || channel_name``), writes the concatenated
+ *  plaintext back as ``<channel>_values`` (float64), deletes
+ *  ``<channel>_segments``, and removes the ``<channel>_algorithm`` attribute.
+ *
+ *  When the file carries ``opt_encrypted_au_headers``, the six plaintext
+ *  index datasets (``retention_times``, ``ms_levels``, ``polarities``,
+ *  ``precursor_mzs``, ``precursor_charges``, ``base_peak_intensities``)
+ *  are restored from ``au_header_segments`` and the encrypted compound is
+ *  removed.
+ *
+ *  Clears the ``opt_per_au_encryption`` / ``opt_encrypted_au_headers``
+ *  feature flags and the root ``@encrypted`` attribute on completion, so
+ *  subsequent readers see a fully unprotected file. Idempotent: returns
+ *  YES with no error when the file is already plaintext.
+ *
+ *  Cross-language equivalents: not yet implemented in Python / Java.
+ */
++ (BOOL)decryptFilePathInPlace:(NSString *)path
+                            key:(NSData *)key
+                   providerName:(nullable NSString *)providerName
+                          error:(NSError * _Nullable *)error;
+
 #pragma mark - Region-based per-AU encryption
 
 /** Encrypt genomic signal channels with a per-chromosome key map.

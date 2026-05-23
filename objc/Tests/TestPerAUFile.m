@@ -252,3 +252,118 @@ void testPerAUFile(void)
         rmFile(path);
     }
 }
+
+
+// ── decryptFilePathInPlace round-trip ────────────────────────────────
+// Exercises the persist-to-disk counterpart to encryptFilePath: the
+// per-AU segments must be replaced by plaintext <channel>_values that
+// round-trip byte-for-byte with the original fixture, the encrypted
+// siblings + feature flags must be cleared, and the resulting file must
+// be readable as a plain TTIOSpectralDataset.
+void testPerAUFileDecryptInPlace(void)
+{
+    // 1. Channels-only round-trip: encrypt -> decrypt-in-place -> bytes equal.
+    {
+        NSString *path = tmpPath(@"dip_src1.tio");
+        rmFile(path);
+        NSError *err = nil;
+        PASS(buildPlaintextFixture(path, &err), "fixture built");
+
+        // Expected intensity (same formula buildPlaintextFixture writes):
+        // intensity[i] = (i + 1) * 10.0 for i in 0..19.
+        double expected[20];
+        for (NSUInteger i = 0; i < 20; i++) expected[i] = (double)(i + 1) * 10.0;
+        NSData *origIntensity = [NSData dataWithBytes:expected length:20 * 8];
+
+        PASS([TTIOPerAUFile encryptFilePath:path key:key42()
+                              encryptHeaders:NO providerName:nil error:&err],
+             "encryptFilePath succeeds (channels only)");
+
+        PASS([TTIOPerAUFile decryptFilePathInPlace:path key:key42()
+                                       providerName:nil error:&err],
+             "decryptFilePathInPlace succeeds");
+
+        // Feature flags + root attr cleared.
+        NSArray *featsAfterDecrypt = readFeaturesFromFile(path);
+        PASS(![featsAfterDecrypt containsObject:@"opt_per_au_encryption"],
+             "opt_per_au_encryption cleared after decrypt-in-place");
+
+        // intensity_values restored + intensity_segments gone + bytes equal.
+        // Wrap in @autoreleasepool so the HDF5 sub-group/dataset handles are
+        // released before the next file-open attempt.
+        @autoreleasepool {
+            TTIOHDF5File *fr2 = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+            TTIOHDF5Group *sigAfter = [[[[fr2 rootGroup]
+                openGroupNamed:@"study" error:NULL]
+                openGroupNamed:@"ms_runs" error:NULL]
+                openGroupNamed:@"run_0001" error:NULL];
+            sigAfter = [sigAfter openGroupNamed:@"signal_channels" error:NULL];
+            PASS([sigAfter hasChildNamed:@"intensity_values"],
+                 "intensity_values restored");
+            PASS(![sigAfter hasChildNamed:@"intensity_segments"],
+                 "intensity_segments removed");
+            PASS(![sigAfter hasAttributeNamed:@"intensity_algorithm"],
+                 "intensity_algorithm attribute removed");
+            TTIOHDF5Dataset *ds2 =
+                [sigAfter openDatasetNamed:@"intensity_values" error:NULL];
+            NSData *roundTripped = [ds2 readAll:NULL];
+            PASS([roundTripped isEqualToData:origIntensity],
+                 "intensity values byte-equal to the original fixture");
+            [fr2 close];
+        }
+
+        rmFile(path);
+    }
+
+    // 1b. Idempotent: calling decryptFilePathInPlace on an already-plaintext
+    // file (never encrypted) is a no-op + no error.
+    {
+        NSString *path = tmpPath(@"dip_plain.tio");
+        rmFile(path);
+        NSError *err = nil;
+        PASS(buildPlaintextFixture(path, &err), "idempotent fixture built");
+        PASS([TTIOPerAUFile decryptFilePathInPlace:path key:key42()
+                                       providerName:nil error:&err],
+             "decryptFilePathInPlace on plaintext file is a no-op (idempotent)");
+        rmFile(path);
+    }
+
+    // 2. Headers-encrypted round-trip: 6 plaintext index datasets restored.
+    {
+        NSString *path = tmpPath(@"dip_src2.tio");
+        rmFile(path);
+        NSError *err = nil;
+        PASS(buildPlaintextFixture(path, &err), "fixture built (headers mode)");
+
+        PASS([TTIOPerAUFile encryptFilePath:path key:key42()
+                              encryptHeaders:YES providerName:nil error:&err],
+             "encryptFilePath succeeds (channels + headers)");
+        PASS([TTIOPerAUFile decryptFilePathInPlace:path key:key42()
+                                       providerName:nil error:&err],
+             "decryptFilePathInPlace succeeds with headers");
+
+        NSArray *feats = readFeaturesFromFile(path);
+        PASS(![feats containsObject:@"opt_per_au_encryption"]
+             && ![feats containsObject:@"opt_encrypted_au_headers"],
+             "both per-AU feature flags cleared");
+
+        TTIOHDF5File *fr = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        TTIOHDF5Group *run = [[[[fr rootGroup]
+            openGroupNamed:@"study" error:NULL]
+            openGroupNamed:@"ms_runs" error:NULL]
+            openGroupNamed:@"run_0001" error:NULL];
+        TTIOHDF5Group *idx =
+            [run openGroupNamed:@"spectrum_index" error:NULL];
+        PASS(![idx hasChildNamed:@"au_header_segments"],
+             "au_header_segments removed");
+        BOOL allCols = YES;
+        for (NSString *col in @[@"retention_times", @"ms_levels",
+                                  @"polarities", @"precursor_mzs",
+                                  @"precursor_charges", @"base_peak_intensities"]) {
+            if (![idx hasChildNamed:col]) allCols = NO;
+        }
+        PASS(allCols, "all 6 plaintext index columns restored");
+        [fr close];
+        rmFile(path);
+    }
+}
