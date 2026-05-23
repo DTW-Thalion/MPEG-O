@@ -968,6 +968,211 @@ static NSData *decryptChannelWithDispatch(
 }
 
 
+#pragma mark - Per-AU decrypt-in-place
+
+// Writes `data` as a new dataset of `precision` and `length` elements under
+// `group`, replacing any existing child of the same name. NO-op on no data.
+// Used by decryptFilePathInPlace to restore plaintext channels + headers.
+static BOOL _writePlainDataset(id<TTIOStorageGroup> group, NSString *name,
+                               TTIOPrecision precision, NSUInteger length,
+                               NSData *data, NSError **error)
+{
+    if ([group hasChildNamed:name]) {
+        if (![group deleteChildNamed:name error:error]) return NO;
+    }
+    id<TTIOStorageDataset> ds =
+        [group createDatasetNamed:name
+                         precision:precision
+                            length:length
+                         chunkSize:0
+                       compression:TTIOCompressionNone
+                  compressionLevel:0
+                             error:error];
+    if (!ds) return NO;
+    return [ds writeAll:data error:error];
+}
+
++ (BOOL)decryptFilePathInPlace:(NSString *)path
+                            key:(NSData *)key
+                   providerName:(NSString *)providerName
+                          error:(NSError **)error
+{
+    if (key.length != 32) {
+        if (error) *error = makeErr(1,
+            @"AES-256-GCM key must be 32 bytes, got %lu",
+            (unsigned long)key.length);
+        return NO;
+    }
+
+    id<TTIOStorageProvider> sp =
+        [[TTIOProviderRegistry sharedRegistry] openURL:path
+                                                    mode:TTIOStorageOpenModeReadWrite
+                                                provider:providerName
+                                                   error:error];
+    if (!sp) return NO;
+
+    @try {
+        id<TTIOStorageGroup> root = [sp rootGroupWithError:error];
+        if (!root) return NO;
+
+        NSString *version = nil;
+        NSArray *features = readFeatureFlags(root, &version);
+        if (![features containsObject:@"opt_per_au_encryption"]) {
+            // Idempotent: file is already plaintext at the per-AU layer.
+            return YES;
+        }
+        BOOL headersEncrypted =
+            [features containsObject:@"opt_encrypted_au_headers"];
+
+        // Need the underlying HDF5 group for compound-dataset reads, same as
+        // decryptFilePath uses.
+        if (![sp.providerName isEqualToString:@"hdf5"]) {
+            if (error) *error = makeErr(3,
+                @"per-AU decrypt-in-place currently requires HDF5 provider (got %@)",
+                sp.providerName);
+            return NO;
+        }
+        TTIOHDF5File *hdf5File = (TTIOHDF5File *)[sp nativeHandle];
+        TTIOHDF5Group *hdf5Root = hdf5File.rootGroup;
+
+        id<TTIOStorageGroup> study = [root openGroupNamed:@"study" error:error];
+        if (!study) return NO;
+
+        if ([study hasChildNamed:@"ms_runs"]) {
+            id<TTIOStorageGroup> msRuns =
+                [study openGroupNamed:@"ms_runs" error:error];
+            if (!msRuns) return NO;
+            NSArray *runNames = listGroupChildren(msRuns);
+            TTIOHDF5Group *hdf5Study =
+                [hdf5Root openGroupNamed:@"study" error:NULL];
+            TTIOHDF5Group *hdf5MsRuns =
+                [hdf5Study openGroupNamed:@"ms_runs" error:NULL];
+            uint16_t datasetId = 1;
+            for (NSString *runName in runNames) {
+                id<TTIOStorageGroup> run = [msRuns openGroupNamed:runName error:error];
+                id<TTIOStorageGroup> sig = [run openGroupNamed:@"signal_channels" error:error];
+                id<TTIOStorageGroup> idx = [run openGroupNamed:@"spectrum_index" error:error];
+                if (!run || !sig || !idx) { datasetId++; continue; }
+
+                TTIOHDF5Group *hdf5RunGroup =
+                    [hdf5MsRuns openGroupNamed:runName error:NULL];
+                TTIOHDF5Group *hdf5Sig =
+                    [hdf5RunGroup openGroupNamed:@"signal_channels" error:NULL];
+                TTIOHDF5Group *hdf5Idx =
+                    [hdf5RunGroup openGroupNamed:@"spectrum_index" error:NULL];
+
+                NSString *channelNamesStr =
+                    readStringAttr(sig, @"channel_names") ?: @"";
+                NSArray<NSString *> *channelNames =
+                    splitChannelNames(channelNamesStr);
+
+                for (NSString *cname in channelNames) {
+                    NSString *segName =
+                        [NSString stringWithFormat:@"%@_segments", cname];
+                    if (![sig hasChildNamed:segName]) continue;
+                    NSArray *segs =
+                        readChannelSegments(hdf5Sig, segName, error);
+                    if (!segs) return NO;
+                    NSData *plain = [TTIOPerAUEncryption
+                        decryptChannelFromSegments:segs
+                                          datasetId:datasetId
+                                        channelName:cname
+                                                key:key
+                                              error:error];
+                    if (!plain) return NO;
+                    NSString *valuesName =
+                        [NSString stringWithFormat:@"%@_values", cname];
+                    NSUInteger nValues = plain.length / 8;  // float64
+                    if (!_writePlainDataset(sig, valuesName,
+                                            TTIOPrecisionFloat64,
+                                            nValues, plain, error)) return NO;
+                    if (![sig deleteChildNamed:segName error:error]) return NO;
+                    NSString *algAttr =
+                        [NSString stringWithFormat:@"%@_algorithm", cname];
+                    if ([sig hasAttributeNamed:algAttr]) {
+                        [sig deleteAttributeNamed:algAttr error:NULL];
+                    }
+                }
+
+                if (headersEncrypted && [idx hasChildNamed:@"au_header_segments"]) {
+                    NSArray *hdrSegs = readAUHeaderSegments(hdf5Idx,
+                                                              @"au_header_segments",
+                                                              error);
+                    if (!hdrSegs) return NO;
+                    NSArray<TTIOAUHeaderPlaintext *> *rows =
+                        [TTIOPerAUEncryption
+                            decryptHeaderSegments:hdrSegs
+                                         datasetId:datasetId
+                                               key:key
+                                             error:error];
+                    if (!rows) return NO;
+                    NSUInteger n = rows.count;
+                    NSMutableData *msD  = [NSMutableData dataWithLength:n * 4];
+                    NSMutableData *polD = [NSMutableData dataWithLength:n * 4];
+                    NSMutableData *pcD  = [NSMutableData dataWithLength:n * 4];
+                    NSMutableData *rtD  = [NSMutableData dataWithLength:n * 8];
+                    NSMutableData *pmzD = [NSMutableData dataWithLength:n * 8];
+                    NSMutableData *bpiD = [NSMutableData dataWithLength:n * 8];
+                    int32_t *ms  = msD.mutableBytes,
+                            *pol = polD.mutableBytes,
+                            *pc  = pcD.mutableBytes;
+                    double  *rt  = rtD.mutableBytes,
+                            *pmz = pmzD.mutableBytes,
+                            *bpi = bpiD.mutableBytes;
+                    for (NSUInteger i = 0; i < n; i++) {
+                        TTIOAUHeaderPlaintext *h = rows[i];
+                        ms[i]  = (int32_t)h.msLevel;
+                        pol[i] = (int32_t)h.polarity;
+                        pc[i]  = (int32_t)h.precursorCharge;
+                        rt[i]  = h.retentionTime;
+                        pmz[i] = h.precursorMz;
+                        bpi[i] = h.basePeakIntensity;
+                    }
+                    if (!_writePlainDataset(idx, @"ms_levels",
+                                            TTIOPrecisionInt32, n, msD, error)
+                        || !_writePlainDataset(idx, @"polarities",
+                                               TTIOPrecisionInt32, n, polD, error)
+                        || !_writePlainDataset(idx, @"precursor_charges",
+                                               TTIOPrecisionInt32, n, pcD, error)
+                        || !_writePlainDataset(idx, @"retention_times",
+                                               TTIOPrecisionFloat64, n, rtD, error)
+                        || !_writePlainDataset(idx, @"precursor_mzs",
+                                               TTIOPrecisionFloat64, n, pmzD, error)
+                        || !_writePlainDataset(idx, @"base_peak_intensities",
+                                               TTIOPrecisionFloat64, n, bpiD, error)) {
+                        return NO;
+                    }
+                    if (![idx deleteChildNamed:@"au_header_segments" error:error])
+                        return NO;
+                }
+
+                datasetId++;
+            }
+        }
+
+        // Strip the per-AU feature flags so the file is no longer advertised
+        // as opt_per_au_encryption. Note: genomic-run decrypt-in-place is a
+        // follow-up; this method covers the MS path only (the FD-1 D-1
+        // pipeline use case). Genomic encrypted-run files retain their
+        // feature flags + segments until that follow-up lands.
+        NSMutableSet *featureSet = [NSMutableSet setWithArray:features];
+        [featureSet removeObject:@"opt_per_au_encryption"];
+        [featureSet removeObject:@"opt_encrypted_au_headers"];
+        NSArray *sorted = [featureSet.allObjects
+            sortedArrayUsingSelector:@selector(compare:)];
+        if (!writeFeatureFlags(root, version, sorted, error)) return NO;
+
+        if ([root hasAttributeNamed:@"encrypted"]) {
+            [root deleteAttributeNamed:@"encrypted" error:NULL];
+        }
+    }
+    @finally {
+        [sp close];
+    }
+    return YES;
+}
+
+
 #pragma mark - M90.4 — region-based per-AU encryption
 
 + (BOOL)encryptFilePathByRegion:(NSString *)path
