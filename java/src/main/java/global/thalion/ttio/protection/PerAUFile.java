@@ -2,6 +2,8 @@
 package global.thalion.ttio.protection;
 
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.Enums.Precision;
 import global.thalion.ttio.FeatureFlags;
 import global.thalion.ttio.protection.PerAUEncryption.AUHeaderPlaintext;
 import global.thalion.ttio.protection.PerAUEncryption.ChannelSegment;
@@ -186,6 +188,168 @@ public final class PerAUFile {
         } finally {
             sp.close();
         }
+    }
+
+    /**
+     * Persist-to-disk per-AU decrypt counterpart to
+     * {@link #encryptFile(String, byte[], boolean, String)}.
+     *
+     * <p>The legacy
+     * {@link global.thalion.ttio.SpectralDataset#decryptInPlace(String, byte[])}
+     * (mirror of ObjC {@code +[TTIOSpectralDataset decryptInPlaceAtPath:withKey:]})
+     * only handles the {@code intensity_values_encrypted} single-dataset layout
+     * and is a silent idempotent no-op on per-AU files. This method is the
+     * per-AU equivalent.</p>
+     *
+     * <p>For each MS run with {@code <channel>_segments} under
+     * {@code signal_channels}, decrypts each spectrum row with the per-AU GCM
+     * scheme (AAD = {@code dataset_id || au_sequence || channel_name}), writes
+     * the concatenated plaintext back as {@code <channel>_values} (float64),
+     * removes {@code <channel>_segments} and the {@code <channel>_algorithm}
+     * attribute. When the file carries {@code opt_encrypted_au_headers} the
+     * six plaintext index datasets are restored from
+     * {@code au_header_segments} and the encrypted compound is removed.</p>
+     *
+     * <p>When the file has no genomic runs, also strips the
+     * {@code opt_per_au_encryption} / {@code opt_encrypted_au_headers}
+     * feature flags and the root {@code @encrypted} attribute. Files that
+     * carry {@code genomic_runs} retain their feature flags + segments until
+     * the genomic decrypt follow-up lands. Idempotent on already-plaintext
+     * files (returns without throwing).</p>
+     *
+     * <p>Cross-language equivalents:
+     * Python {@code ttio.encryption_per_au.decrypt_per_au_in_place};
+     * ObjC {@code +[TTIOPerAUFile decryptFilePathInPlace:withKey:providerName:error:]}.</p>
+     */
+    public static void decryptFileInPlace(String path, byte[] key,
+                                            String providerName) {
+        if (key.length != 32) {
+            throw new IllegalArgumentException(
+                "AES-256-GCM key must be 32 bytes, got " + key.length);
+        }
+        StorageProvider sp = ProviderRegistry.open(path,
+            StorageProvider.Mode.READ_WRITE, providerName);
+        try {
+            StorageGroup root = sp.rootGroup();
+            FeatureFlags flags = FeatureFlags.readFrom(root);
+            if (!flags.has(FeatureFlags.OPT_PER_AU_ENCRYPTION)) {
+                return; // idempotent: already plaintext
+            }
+            boolean headersEncrypted = flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
+
+            boolean hasGenomic;
+            try (StorageGroup study = root.openGroup("study")) {
+                hasGenomic = study.hasChild("genomic_runs");
+                if (study.hasChild("ms_runs")) {
+                    try (StorageGroup msRuns = study.openGroup("ms_runs")) {
+                        int datasetId = 1;
+                        for (String runName : runNames(msRuns)) {
+                            decryptOneRunInPlace(msRuns, runName, datasetId,
+                                                  key, headersEncrypted);
+                            datasetId++;
+                        }
+                    }
+                }
+            }
+
+            // Strip feature flags + root @encrypted only when there are no
+            // genomic_runs to decrypt. Genomic decrypt-in-place is a
+            // follow-up across all three languages.
+            if (!hasGenomic) {
+                List<String> updated = new ArrayList<>(flags.features());
+                updated.remove(FeatureFlags.OPT_PER_AU_ENCRYPTION);
+                updated.remove(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
+                java.util.Collections.sort(updated);
+                new FeatureFlags(flags.formatVersion(), updated).writeTo(root);
+                if (root.hasAttribute("encrypted")) {
+                    root.deleteAttribute("encrypted");
+                }
+            }
+        } finally {
+            sp.close();
+        }
+    }
+
+    /** Per-AU decrypt one MS run in place: replace each
+     *  {@code <channel>_segments} with a plaintext {@code <channel>_values}
+     *  and restore the 6 header columns when applicable. */
+    private static void decryptOneRunInPlace(StorageGroup msRuns,
+                                              String runName,
+                                              int datasetId, byte[] key,
+                                              boolean headersEncrypted) {
+        try (StorageGroup run = msRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels");
+             StorageGroup idx = run.openGroup("spectrum_index")) {
+
+            String rawNames = (String) sig.getAttribute("channel_names");
+            for (String cname : splitNames(rawNames)) {
+                String segName = cname + "_segments";
+                if (!sig.hasChild(segName)) continue;
+                List<ChannelSegment> segs = readChannelSegments(sig, segName);
+                byte[] plain = PerAUEncryption.decryptChannelFromSegments(
+                    segs, datasetId, cname, key);
+                double[] values = leBytesToDoubles(plain);
+
+                String valuesName = cname + "_values";
+                if (sig.hasChild(valuesName)) sig.deleteChild(valuesName);
+                try (StorageDataset ds = sig.createDataset(
+                        valuesName, Precision.FLOAT64, values.length, 0,
+                        Compression.NONE, 0)) {
+                    ds.writeAll(values);
+                }
+                sig.deleteChild(segName);
+                String algAttr = cname + "_algorithm";
+                if (sig.hasAttribute(algAttr)) sig.deleteAttribute(algAttr);
+            }
+
+            if (headersEncrypted && idx.hasChild("au_header_segments")) {
+                List<HeaderSegment> hdrSegs =
+                    readHeaderSegments(idx, "au_header_segments");
+                List<AUHeaderPlaintext> rows =
+                    PerAUEncryption.decryptHeaderSegments(hdrSegs, datasetId, key);
+                int n = rows.size();
+                int[] msLevels = new int[n];
+                int[] polarities = new int[n];
+                int[] pcs = new int[n];
+                double[] rts = new double[n];
+                double[] pmzs = new double[n];
+                double[] bpis = new double[n];
+                for (int i = 0; i < n; i++) {
+                    AUHeaderPlaintext h = rows.get(i);
+                    msLevels[i] = h.msLevel();
+                    polarities[i] = h.polarity();
+                    pcs[i] = h.precursorCharge();
+                    rts[i] = h.retentionTime();
+                    pmzs[i] = h.precursorMz();
+                    bpis[i] = h.basePeakIntensity();
+                }
+                writeIndexColumn(idx, "ms_levels", Precision.INT32, msLevels);
+                writeIndexColumn(idx, "polarities", Precision.INT32, polarities);
+                writeIndexColumn(idx, "precursor_charges", Precision.INT32, pcs);
+                writeIndexColumn(idx, "retention_times", Precision.FLOAT64, rts);
+                writeIndexColumn(idx, "precursor_mzs", Precision.FLOAT64, pmzs);
+                writeIndexColumn(idx, "base_peak_intensities", Precision.FLOAT64, bpis);
+                idx.deleteChild("au_header_segments");
+            }
+        }
+    }
+
+    private static void writeIndexColumn(StorageGroup idx, String name,
+                                          Precision precision, Object data) {
+        if (idx.hasChild(name)) idx.deleteChild(name);
+        int length = (data instanceof int[]) ? ((int[]) data).length
+                                              : ((double[]) data).length;
+        try (StorageDataset ds = idx.createDataset(name, precision, length, 0,
+                                                     Compression.NONE, 0)) {
+            ds.writeAll(data);
+        }
+    }
+
+    private static double[] leBytesToDoubles(byte[] b) {
+        double[] out = new double[b.length / 8];
+        java.nio.ByteBuffer.wrap(b).order(java.nio.ByteOrder.LITTLE_ENDIAN)
+            .asDoubleBuffer().get(out);
+        return out;
     }
 
     // ─────────────────────────────────────────── M90.4 region encryption
