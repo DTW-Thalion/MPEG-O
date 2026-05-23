@@ -210,12 +210,18 @@ public final class PerAUFile {
      * six plaintext index datasets are restored from
      * {@code au_header_segments} and the encrypted compound is removed.</p>
      *
-     * <p>When the file has no genomic runs, also strips the
-     * {@code opt_per_au_encryption} / {@code opt_encrypted_au_headers}
-     * feature flags and the root {@code @encrypted} attribute. Files that
-     * carry {@code genomic_runs} retain their feature flags + segments until
-     * the genomic decrypt follow-up lands. Idempotent on already-plaintext
-     * files (returns without throwing).</p>
+     * <p>Genomic runs are handled the same way:
+     * {@code study/genomic_runs/<name>/signal_channels/<sequences|qualities>_segments}
+     * is decrypted (uint8) and written back as the bare
+     * {@code <sequences|qualities>} dataset. {@code dataset_id} continues
+     * from where the MS loop left off, mirroring {@link #encryptFile}'s
+     * AAD numbering exactly.</p>
+     *
+     * <p>Strips the {@code opt_per_au_encryption} /
+     * {@code opt_encrypted_au_headers} feature flags and the root
+     * {@code @encrypted} attribute on completion, so subsequent readers
+     * see a fully unprotected file. Idempotent on already-plaintext files
+     * (returns without throwing).</p>
      *
      * <p>Cross-language equivalents:
      * Python {@code ttio.encryption_per_au.decrypt_per_au_in_place};
@@ -237,12 +243,10 @@ public final class PerAUFile {
             }
             boolean headersEncrypted = flags.has(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
 
-            boolean hasGenomic;
             try (StorageGroup study = root.openGroup("study")) {
-                hasGenomic = study.hasChild("genomic_runs");
+                int datasetId = 1;
                 if (study.hasChild("ms_runs")) {
                     try (StorageGroup msRuns = study.openGroup("ms_runs")) {
-                        int datasetId = 1;
                         for (String runName : runNames(msRuns)) {
                             decryptOneRunInPlace(msRuns, runName, datasetId,
                                                   key, headersEncrypted);
@@ -250,23 +254,59 @@ public final class PerAUFile {
                         }
                     }
                 }
+                // datasetId continues into genomic_runs (IDs N+1..N+M),
+                // matching encryptFile's AAD numbering.
+                if (study.hasChild("genomic_runs")) {
+                    try (StorageGroup gRuns = study.openGroup("genomic_runs")) {
+                        for (String runName : runNames(gRuns)) {
+                            decryptOneGenomicRunInPlace(gRuns, runName,
+                                                          datasetId, key);
+                            datasetId++;
+                        }
+                    }
+                }
             }
 
-            // Strip feature flags + root @encrypted only when there are no
-            // genomic_runs to decrypt. Genomic decrypt-in-place is a
-            // follow-up across all three languages.
-            if (!hasGenomic) {
-                List<String> updated = new ArrayList<>(flags.features());
-                updated.remove(FeatureFlags.OPT_PER_AU_ENCRYPTION);
-                updated.remove(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
-                java.util.Collections.sort(updated);
-                new FeatureFlags(flags.formatVersion(), updated).writeTo(root);
-                if (root.hasAttribute("encrypted")) {
-                    root.deleteAttribute("encrypted");
-                }
+            // All MS + genomic segments are now plaintext: strip the per-AU
+            // feature flags + the root @encrypted attribute.
+            List<String> updated = new ArrayList<>(flags.features());
+            updated.remove(FeatureFlags.OPT_PER_AU_ENCRYPTION);
+            updated.remove(FeatureFlags.OPT_ENCRYPTED_AU_HEADERS);
+            java.util.Collections.sort(updated);
+            new FeatureFlags(flags.formatVersion(), updated).writeTo(root);
+            if (root.hasAttribute("encrypted")) {
+                root.deleteAttribute("encrypted");
             }
         } finally {
             sp.close();
+        }
+    }
+
+    /** Per-AU decrypt one genomic run in place: replace each
+     *  {@code <sequences|qualities>_segments} with a bare uint8 dataset
+     *  under the channel name (genomic layout has no _values suffix). */
+    private static void decryptOneGenomicRunInPlace(StorageGroup gRuns,
+                                                      String runName,
+                                                      int datasetId,
+                                                      byte[] key) {
+        try (StorageGroup run = gRuns.openGroup(runName);
+             StorageGroup sig = run.openGroup("signal_channels")) {
+            for (String cname : new String[]{"sequences", "qualities"}) {
+                String segName = cname + "_segments";
+                if (!sig.hasChild(segName)) continue;
+                List<ChannelSegment> segs = readChannelSegments(sig, segName);
+                byte[] plain = PerAUEncryption.decryptChannelFromSegments(
+                    segs, datasetId, cname, key, 1);
+                if (sig.hasChild(cname)) sig.deleteChild(cname);
+                try (StorageDataset ds = sig.createDataset(
+                        cname, Precision.UINT8, plain.length, 0,
+                        Compression.NONE, 0)) {
+                    ds.writeAll(plain);
+                }
+                sig.deleteChild(segName);
+                String algAttr = cname + "_algorithm";
+                if (sig.hasAttribute(algAttr)) sig.deleteAttribute(algAttr);
+            }
         }
     }
 

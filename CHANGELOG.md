@@ -11,6 +11,31 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- Genomic-run support in per-AU decrypt-in-place (all 3 languages) (2026-05-23)
+
+Extends `decryptFilePathInPlace` / `decrypt_per_au_in_place` /
+`decryptFileInPlace` (ObjC / Python / Java) to also walk
+`study/genomic_runs/<name>/signal_channels/`, mirroring the encrypt-side
+genomic loop. Per-AU GCM-decrypts each `<sequences|qualities>_segments`
+compound (uint8) and writes the plaintext back as the bare
+`<sequences|qualities>` dataset (no `_values` suffix, matching the
+genomic layout). `dataset_id` continues from the MS loop, so the AAD
+numbering matches the encrypt path exactly.
+
+With genomic now handled, all three languages strip
+`opt_per_au_encryption` / `opt_encrypted_au_headers` / root `@encrypted`
+**unconditionally** after decryption (previously Python + Java gated the
+strip on "no genomic_runs" -- that gate is removed here and ObjC's
+already-unconditional strip is now correct because genomic IS handled).
+
+Tests:
+- ObjC: `testM90DecryptFilePathInPlaceGenomic` -- byte-equal restoration
+  of sequences + qualities, segments + algorithm attrs removed, feature
+  flag + @encrypted cleared.
+- Python: `TestGenomicDecryptInPlace.test_genomic_round_trip` -- same.
+- Java: `decryptInPlaceGenomicRoundTrip` in `M90GenomicProtectionTest`
+  -- same (via re-encrypt + decryptFile sandwich to assert byte-equal).
+
 ### Added -- Python `decrypt_per_au_in_place` + Java `PerAUFile.decryptFileInPlace` (2026-05-23)
 
 Cross-language mirrors of the ObjC `decryptFilePathInPlace:` API

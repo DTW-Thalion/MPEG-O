@@ -20,7 +20,15 @@ pytest.importorskip("cryptography")
 pytest.importorskip("h5py")
 
 from ttio import SpectralDataset
-from ttio.encryption_per_au import decrypt_per_au_file, encrypt_per_au_file
+from ttio.encryption_per_au import (
+    decrypt_per_au_file,
+    decrypt_per_au_in_place,
+    encrypt_per_au_file,
+)
+from ttio.feature_flags import (
+    OPT_ENCRYPTED_AU_HEADERS,
+    OPT_PER_AU_ENCRYPTION,
+)
 from ttio.written_genomic_run import WrittenGenomicRun
 
 
@@ -182,3 +190,33 @@ class TestGenomicPerAuRoundTrip:
             plaintext["genomic_0001"]["sequences"],
             np.frombuffer(b"ACGT" * g_n, dtype=np.uint8),
         )
+
+
+class TestGenomicDecryptInPlace:
+    """Persist-to-disk per-AU decrypt round-trip for genomic runs."""
+
+    def test_genomic_round_trip(self, tmp_path):
+        path = _make_genomic_dataset(tmp_path / "src.tio")
+        # Same content the fixture writes.
+        n_reads, read_length = 4, 8
+        orig_seq = np.frombuffer(b"ACGTACGT" * n_reads, dtype=np.uint8)
+        orig_qual = np.frombuffer(bytes([30] * (n_reads * read_length)),
+                                    dtype=np.uint8)
+
+        encrypt_per_au_file(str(path), KEY)
+        decrypt_per_au_in_place(str(path), KEY)
+
+        import h5py
+        with h5py.File(str(path), "r") as f:
+            feats = f.attrs["features"].split(",") if "features" in f.attrs else []
+            feats = [x.strip() for x in feats if x.strip()]
+            # All MS + genomic segments decrypted -> flags + @encrypted stripped.
+            assert OPT_PER_AU_ENCRYPTION not in feats
+            assert "encrypted" not in f.attrs
+            sig = f["/study/genomic_runs/genomic_0001/signal_channels"]
+            for cname in ("sequences", "qualities"):
+                assert cname in sig, f"bare {cname} dataset restored"
+                assert f"{cname}_segments" not in sig
+                assert f"{cname}_algorithm" not in sig.attrs
+            np.testing.assert_array_equal(sig["sequences"][...], orig_seq)
+            np.testing.assert_array_equal(sig["qualities"][...], orig_qual)

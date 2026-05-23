@@ -221,6 +221,65 @@ static void testM90_1RoundTripByteExact(void)
     m90RmFile(path);
 }
 
+// decryptFilePathInPlace round-trip for genomic runs: sequences +
+// qualities are restored byte-equal as bare uint8 datasets, segments +
+// algorithm attrs removed, feature flag + @encrypted stripped.
+static void testM90DecryptFilePathInPlaceGenomic(void)
+{
+    NSString *path = m90TmpPath(@"m90_dip_genomic.tio");
+    m90RmFile(path);
+    NSError *err = nil;
+    m90BuildSimpleGenomic(path,
+                            @[@"chr1", @"chr1", @"chr2", @"chr2"], &err);
+
+    // Same constants the fixture wrote (see m90BuildSimpleGenomic).
+    NSMutableData *origSeq = [NSMutableData data];
+    const uint8_t pattern[] = {'A','C','G','T','A','C','G','T'};
+    for (int i = 0; i < 4; i++) [origSeq appendBytes:pattern length:8];
+    NSMutableData *origQual = [NSMutableData dataWithLength:32];
+    memset(origQual.mutableBytes, 30, 32);
+
+    PASS([TTIOPerAUFile encryptFilePath:path key:m90Key(0x42)
+                          encryptHeaders:NO providerName:nil error:&err],
+         "M90 dip: encrypt for genomic round-trip");
+    PASS([TTIOPerAUFile decryptFilePathInPlace:path key:m90Key(0x42)
+                                   providerName:nil error:&err],
+         "M90 dip: decryptFilePathInPlace on genomic file succeeds");
+
+    @autoreleasepool {
+        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:NULL];
+        TTIOHDF5Group *root = f.rootGroup;
+        TTIOHDF5Group *sig =
+            [[[[root openGroupNamed:@"study" error:NULL]
+                openGroupNamed:@"genomic_runs" error:NULL]
+                    openGroupNamed:@"genomic_0001" error:NULL]
+                        openGroupNamed:@"signal_channels" error:NULL];
+        PASS([sig hasChildNamed:@"sequences"]
+             && [sig hasChildNamed:@"qualities"],
+             "M90 dip: bare sequences + qualities datasets restored");
+        PASS(![sig hasChildNamed:@"sequences_segments"]
+             && ![sig hasChildNamed:@"qualities_segments"],
+             "M90 dip: encrypted segment compounds removed");
+        PASS(![sig hasAttributeNamed:@"sequences_algorithm"]
+             && ![sig hasAttributeNamed:@"qualities_algorithm"],
+             "M90 dip: per-channel algorithm attrs removed");
+        NSArray *features = [TTIOFeatureFlags featuresForRoot:root] ?: @[];
+        PASS(![features containsObject:@"opt_per_au_encryption"],
+             "M90 dip: opt_per_au_encryption stripped (genomic now handled)");
+        PASS(![root hasAttributeNamed:@"encrypted"],
+             "M90 dip: root @encrypted attribute cleared");
+
+        NSData *gotSeq = [[sig openDatasetNamed:@"sequences" error:NULL] readAll:NULL];
+        NSData *gotQual = [[sig openDatasetNamed:@"qualities" error:NULL] readAll:NULL];
+        PASS([gotSeq isEqualToData:origSeq],
+             "M90 dip: sequences byte-equal to original plaintext");
+        PASS([gotQual isEqualToData:origQual],
+             "M90 dip: qualities byte-equal to original plaintext");
+        [f close];
+    }
+    m90RmFile(path);
+}
+
 static void testM90_1WrongKeyRejected(void)
 {
     NSString *path = m90TmpPath(@"m901_wrongkey.tio");
@@ -971,6 +1030,7 @@ void testM90GenomicProtection(void)
     // M90.1
     testM90_1EncryptStripsPlaintext();
     testM90_1RoundTripByteExact();
+    testM90DecryptFilePathInPlaceGenomic();
     testM90_1WrongKeyRejected();
 
     // M90.2

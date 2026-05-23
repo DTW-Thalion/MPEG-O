@@ -756,4 +756,41 @@ class M90GenomicProtectionTest {
                         + "CCCCCCCC" + "NNNNNNNN" + "ACGTACGT";
         assertEquals(expected, new String(seqs, StandardCharsets.US_ASCII));
     }
+
+    // ────────────── persist-to-disk genomic decrypt-in-place ──────────────
+
+    @Test
+    void decryptInPlaceGenomicRoundTrip() {
+        int n = 4, L = 8;
+        String path = makeUniformGenomicFixture("m90_dip_genomic.h5", n, L);
+
+        PerAUFile.encryptFile(path, key32(0x42), false, "hdf5");
+        PerAUFile.decryptFileInPlace(path, key32(0x42), "hdf5");
+
+        // After decrypt-in-place the file is fully plaintext: the read-only
+        // decrypt API now refuses it (no opt_per_au_encryption flag).
+        Exception ex = assertThrows(IllegalStateException.class,
+            () -> PerAUFile.decryptFile(path, key32(0x42), "hdf5"));
+        assertTrue(ex.getMessage().contains("opt_per_au_encryption"),
+            "feature flag stripped; subsequent decryptFile refuses");
+
+        // Re-encrypt + decrypt to assert the restored sequences/qualities
+        // round-trip byte-equal.
+        PerAUFile.encryptFile(path, key32(0x42), false, "hdf5");
+        Map<String, PerAUFile.DecryptedRun> plain =
+            PerAUFile.decryptFile(path, key32(0x42), "hdf5");
+        assertTrue(plain.containsKey("genomic_0001"));
+        PerAUFile.DecryptedRun run = plain.get("genomic_0001");
+        byte[] expectedSeqs = new byte[n * L];
+        byte[] seqUnit = "ACGTACGT".getBytes(StandardCharsets.US_ASCII);
+        for (int i = 0; i < expectedSeqs.length; i++) {
+            expectedSeqs[i] = seqUnit[i % seqUnit.length];
+        }
+        assertArrayEquals(expectedSeqs, run.channels().get("sequences"),
+            "sequences restored byte-equal after decrypt-in-place");
+        byte[] expectedQuals = new byte[n * L];
+        Arrays.fill(expectedQuals, (byte) 30);
+        assertArrayEquals(expectedQuals, run.channels().get("qualities"),
+            "qualities restored byte-equal after decrypt-in-place");
+    }
 }
