@@ -11,6 +11,37 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- Python `decrypt_per_au_in_place` + Java `PerAUFile.decryptFileInPlace` (2026-05-23)
+
+Cross-language mirrors of the ObjC `decryptFilePathInPlace:` API
+added in the prior commit, closing the parity gap noted in that PR
+(both languages previously had only the read-only `decrypt_per_au` /
+`decryptFile` and the legacy single-dataset `decryptInPlace`, which
+silently no-ops on per-AU files).
+
+- **Python:** `ttio.encryption_per_au.decrypt_per_au_in_place(path, key)`.
+  Same contract as ObjC: per-AU GCM decrypt → writes `<channel>_values`
+  back, removes `<channel>_segments` and the `<channel>_algorithm`
+  attribute, restores the 6 plaintext index columns when
+  `opt_encrypted_au_headers` was set, then (when the file has no genomic
+  runs) strips `opt_per_au_encryption` / `opt_encrypted_au_headers`
+  feature flags and the root `@encrypted` attribute. Idempotent on
+  plaintext files.
+- **Java:** `global.thalion.ttio.protection.PerAUFile.decryptFileInPlace(path, key, providerName)`.
+  Same contract.
+- **Genomic-run / mixed-MS+genomic refinement:** all three languages
+  now leave the feature flags intact when `genomic_runs` is present
+  (those segments aren't yet handled by the MS-only decrypt-in-place
+  path -- the genomic follow-up will lift this gate). The ObjC impl
+  shipped in the prior commit will be updated to match in the genomic
+  decrypt-in-place PR.
+
+Covered by `TestDecryptPerAuInPlace` (Python) and `decryptInPlace*`
+tests in `PerAUFileTest` (Java): channels-only round-trip with
+byte-equal intensity recovery + feature-flag clearing, headers-mode
+restoration of all 6 plaintext index columns, and idempotency on a
+plaintext file.
+
 ### Added -- ObjC `+[TTIOPerAUFile decryptFilePathInPlace:withKey:providerName:error:]` (2026-05-23)
 
 Persist-to-disk decrypt counterpart to `+encryptFilePath:` for the per-AU

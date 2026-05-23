@@ -139,6 +139,60 @@ class PerAUFileTest {
         assertTrue(ex.getMessage().contains("opt_per_au_encryption"));
     }
 
+    // ────────────── persist-to-disk decrypt-in-place ──────────────
+
+    @Test
+    void decryptInPlaceChannelsOnlyRoundTrip() {
+        String path = buildFixture("dip_channels.h5");
+        PerAUFile.encryptFile(path, testKey(), false, "hdf5");
+        PerAUFile.decryptFileInPlace(path, testKey(), "hdf5");
+
+        // After decrypt-in-place the file should round-trip back through
+        // the read-only API as plaintext (no opt_per_au_encryption).
+        Exception ex = assertThrows(IllegalStateException.class,
+            () -> PerAUFile.decryptFile(path, testKey(), "hdf5"));
+        assertTrue(ex.getMessage().contains("opt_per_au_encryption"),
+            "feature flag stripped; subsequent decryptFile refuses");
+
+        // And re-encrypt + read still recovers the same plaintext bytes
+        // (proves the channel values byte-equal the originals).
+        PerAUFile.encryptFile(path, testKey(), false, "hdf5");
+        Map<String, PerAUFile.DecryptedRun> plain =
+            PerAUFile.decryptFile(path, testKey(), "hdf5");
+        byte[] intensity = plain.get("run_0001").channels().get("intensity");
+        assertEquals(96, intensity.length, "3 × 4 × 8 bytes");
+        // (i+1)*10.0 for i in 0..11 as little-endian doubles
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(intensity)
+            .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < 12; i++) {
+            assertEquals((i + 1) * 10.0, bb.getDouble(),
+                "intensity[" + i + "] round-trip");
+        }
+    }
+
+    @Test
+    void decryptInPlaceHeadersModeRestoresColumns() {
+        String path = buildFixture("dip_headers.h5");
+        PerAUFile.encryptFile(path, testKey(), true, "hdf5");
+        PerAUFile.decryptFileInPlace(path, testKey(), "hdf5");
+
+        // Headers + channels both restored: re-encrypt yields a readable
+        // file with the same content again.
+        PerAUFile.encryptFile(path, testKey(), true, "hdf5");
+        Map<String, PerAUFile.DecryptedRun> plain =
+            PerAUFile.decryptFile(path, testKey(), "hdf5");
+        assertNotNull(plain.get("run_0001").auHeaders(),
+            "headers were restored before the second encrypt");
+        assertEquals(3, plain.get("run_0001").auHeaders().size());
+    }
+
+    @Test
+    void decryptInPlaceIdempotentOnPlaintext() {
+        String path = buildFixture("dip_idempotent.h5");
+        // No-op on plaintext file; must not throw.
+        PerAUFile.decryptFileInPlace(path, testKey(), "hdf5");
+    }
+
     private static byte[] copyOfBytesFromFile(String p) {
         try {
             return java.nio.file.Files.readAllBytes(java.nio.file.Paths.get(p));
