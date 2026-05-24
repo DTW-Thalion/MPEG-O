@@ -143,4 +143,39 @@ class UploadTaskTest {
                 "Should not get IllegalArgumentException for https scheme");
         }
     }
+
+    @Test
+    void emitsProgressReportsDuringUpload() throws Exception {
+        assertTrue(Files.exists(FIXTURE), "fixture missing: " + FIXTURE);
+
+        int port = findFreePort();
+        HttpServer srv = HttpServer.create(new InetSocketAddress("127.0.0.1", port), 0);
+        srv.createContext("/up", exchange -> {
+            exchange.getRequestBody().readAllBytes();
+            exchange.sendResponseHeaders(200, 0);
+            exchange.close();
+        });
+        srv.start();
+
+        try {
+            UploadTask task = new UploadTask(
+                FIXTURE.toString(),
+                "http://127.0.0.1:" + port + "/up",
+                "", false);
+            java.util.List<global.thalion.ttio.browser.progress.ProgressReport> got =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+            task.setProgressListener(got::add);
+            runAndWait(task);
+            task.get(); // throws if it failed
+            assertFalse(got.isEmpty(),
+                "task should emit at least one ProgressReport");
+            var last = got.get(got.size() - 1);
+            assertTrue(last.bytesDone() > 0L || last.unitsDone() > 0L,
+                "terminal report should show non-zero progress");
+            assertTrue(last.bytesTotal() > 0L,
+                "byte total should be known for a file-source upload");
+        } finally {
+            srv.stop(0);
+        }
+    }
 }
