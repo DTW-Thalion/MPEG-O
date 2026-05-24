@@ -35,11 +35,16 @@ as a record of what was built; current milestones use TTI-O names.
 >   proofs at `docs/superpowers/specs/2026-05-21-fd1-phase-a-...md`
 >   + `2026-05-22-fd1-c2a-server-kek-id-spec.md`.
 > - **Per-AU decrypt-in-place** parity APIs in all 3 languages
->   (PRs #161 + #162, 2026-05-23) — closes the long-standing
->   "silent no-op on per-AU files" gap on the legacy
->   `decryptInPlace` path for MS channels. Unblocks
->   `tti-workbench-server` FD-1 D-1 pipeline step. Genomic-run
->   signal-channel coverage is a follow-up.
+>   (PRs #161 + #162 + **#163**, 2026-05-23) — closes the
+>   long-standing "silent no-op on per-AU files" gap on the
+>   legacy `decryptInPlace` path. PR #163 (`5462489d`) brought
+>   genomic-run signal-channel coverage in line with MS, so all
+>   three languages now walk `study/genomic_runs/<name>/signal_channels/`
+>   in addition to `ms_runs/<name>/signal_channels/` and
+>   unconditionally clear `opt_per_au_encryption` /
+>   `opt_encrypted_au_headers` / root `@encrypted` after a
+>   successful decrypt. Unblocks `tti-workbench-server` FD-1 D-1
+>   pipeline step.
 > - **Vibrational JCAMP-DX `.tio` materialization parity**
 >   (parity-audit 3.1) shipped through PRs #144–#146 (Python +
 >   Java + ObjC).
