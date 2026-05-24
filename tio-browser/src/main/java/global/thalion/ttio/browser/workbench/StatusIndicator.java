@@ -32,6 +32,7 @@ public final class StatusIndicator {
     private final Label label;
     private final Tooltip tooltip;
     private final ConnectionListener listener;
+    private Runnable clickHandler = () -> {};
 
     public StatusIndicator() { this(ConnectionManager.instance()); }
 
@@ -60,6 +61,16 @@ public final class StatusIndicator {
      *  containing window closes so the listener doesn't pin the
      *  indicator after the window is gone. */
     public void dispose() { manager.removeListener(listener); }
+
+    /** Register a click handler. When the indicator is clicked,
+     *  the handler is invoked. Passing null is equivalent to
+     *  passing an empty runnable. The container's cursor is set
+     *  to HAND for visual feedback. */
+    public void onClick(Runnable handler) {
+        this.clickHandler = handler == null ? () -> {} : handler;
+        container.setStyle("-fx-cursor: hand;");
+        container.setOnMouseClicked(e -> clickHandler.run());
+    }
 
     /** Backing node for insertion into the status bar. */
     public HBox node() { return container; }
