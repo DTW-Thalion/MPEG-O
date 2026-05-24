@@ -73,12 +73,99 @@ needs total opacity even at the cost of full-stream transfer.
 
 ## 4. Wire format
 
-### 4.1 ProtectionMetadata packet — unchanged from M71
+### 4.1 ProtectionMetadata packet — single-recipient (v1.0)
 
 Already shipped in all three languages. See
 `docs/transport-spec.md` §4.4. The `cipher_suite` field names
 `aes-256-gcm`; the `kek_algorithm` names the DEK-wrapping
 algorithm (e.g. `rsa-oaep-sha256`, `ml-kem-1024`).
+
+### 4.1.1 Multi-recipient envelope (FD-1 Phase A, 2026-05-21)
+
+The §4.4 packet is extended with an **append-only trailing block**
+to carry the same DEK wrapped under N KEKs (the FD-1 workflow
+wraps the per-run DEK for both a server KEK and the researcher's
+key in the same container):
+
+```
+# --- primary recipient (identical to §4.4) ---
+cipher_suite_len:        uint16 ; cipher_suite:        bytes
+kek_algorithm_len:       uint16 ; kek_algorithm:       bytes
+wrapped_dek_len:         uint32 ; wrapped_dek:         bytes
+signature_algo_len:      uint16 ; signature_algorithm: bytes
+public_key_len:          uint32 ; public_key:          bytes
+# --- OPTIONAL trailing block; present iff additional_recipient_count > 0
+#     OR a server_kek_id (§4.1.2) is set ---
+additional_recipient_count: uint16
+  repeated additional_recipient_count times:
+    recipient_id_len:    uint16 ; recipient_id:        bytes   # opaque UTF-8 label
+    kek_algorithm_len:   uint16 ; kek_algorithm:       bytes
+    wrapped_dek_len:     uint32 ; wrapped_dek:         bytes
+```
+
+Compatibility properties (all proved against the real decoders;
+see `docs/superpowers/specs/2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md`
+P1–P4):
+
+- **Single-recipient packets are byte-identical to §4.4** — the
+  trailing block is omitted entirely (not even
+  `additional_recipient_count = 0`). Existing BYOK / envelope /
+  PQC containers and golden fixtures are unchanged.
+- **Pre-Phase-A readers parse multi-recipient packets** —
+  Python/Java/ObjC v1.0 readers consume the five fixed fields and
+  ignore trailing bytes, so they recover the primary recipient
+  cleanly.
+- **`recipient_id` is opaque** — the empty string denotes the
+  primary; a reader picks the entry it holds a KEK for.
+
+Cross-language byte-parity is pinned by the golden vectors at
+`conformance/multi_recipient/vectors.json` (Python, Java, ObjC
+assert against the same committed hex).
+
+Client API:
+
+| Language | Encrypt / upload                                                                        | Decrypt / download                                                                          |
+|----------|-----------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
+| Python   | `WorkbenchClient.upload_encrypted_multi(..., recipients=[EnvelopeRecipient(id,key,alg)])` | `download_decrypted_multi(..., recipient_id="")`                                            |
+| Java     | `WorkbenchClient.uploadEncryptedMulti(project, containerUri, tioPath, recipients, ...)` | `downloadDecryptedMulti(containerUri, key, outTioPath, recipientId, preview)`               |
+| ObjC     | n/a (Phase B is Python + Java only; ObjC stamps the packet via `EncryptedTransport`)    | n/a                                                                                         |
+
+A standalone key-wrap primitive (Phase C-0)
+`+[TTIOKeyRotationManager wrapKey:withKEK:algorithm:error:]` /
+`unwrapKey:` is byte-compatible with Java
+`EncryptionManager.wrapKey` and Python `key_rotation._wrap_dek`,
+producing the canonical v1.2 wrapped-key blob without an HDF5 file.
+
+### 4.1.2 Server-resolvable key id (FD-1 Phase C-2a, 2026-05-22)
+
+An optional `server_kek_id` UTF-8 field is appended **after**
+the recipient block of §4.1.1, in the same trailing section:
+
+```
+# --- present iff (additional_recipient_count > 0) OR server_kek_id present ---
+additional_recipient_count: uint16     # may be 0 (server-processable single-recipient)
+  ...recipient block as in §4.1.1...
+# --- present iff server_kek_id is set; detected by "bytes remain after recipient block" ---
+server_kek_id_len:           uint16 ; server_kek_id:    UTF-8 bytes
+```
+
+Detection is purely "bytes remain" — no version bump, no flag.
+The only structural concession to §4.1.1 is that a
+server-processable single-recipient packet emits
+`additional_recipient_count = 0` (the one case where a literal
+zero count is serialized; readers tolerate it). Containers with
+**neither** additional recipients nor `server_kek_id` emit no
+trailing section at all → byte-identical to §4.4.
+
+`server_kek_id` names the KEK that wraps the **primary**
+recipient's `wrapped_dek`. The workbench daemon records it at
+upload (without materializing the container) and answers `409
+container_not_server_decryptable` at submit time when it's absent
+or doesn't resolve. Absence ⇒ BYOK / researcher-only / PQC-to-
+researcher; the daemon can't process it.
+
+Spec proof + 7-point compatibility check:
+`docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md`.
 
 ### 4.2 AU packet header flags
 
