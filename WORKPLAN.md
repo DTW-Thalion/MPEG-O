@@ -6,6 +6,52 @@ as a record of what was built; current milestones use TTI-O names.
 
 ---
 
+> **Status (2026-05-24).** v1.0.0 shipped 2026-05-04. The
+> three-language reference implementation (ObjC normative,
+> Python `ttio`, Java `global.thalion.ttio`) is feature-frozen
+> for the v1.0 surface; post-v1.0 work appears in CHANGELOG
+> `[Unreleased]` and ships as small per-PR follow-ups rather
+> than coordinated multi-language milestones. Highlights since
+> v1.0.0:
+>
+> - **TTI-O Workbench Client (W1–W6)** shipped through PR #95
+>   (auth + transport) → PR #126 (W6.6 SDK reference docs +
+>   quickstart). Surface: `ttio` Python CLI umbrella + Python SDK
+>   (`python/src/ttio/workbench/`) + Java SDK
+>   (`java/.../workbench/`) + JavaFX desktop GUI `tio-browser`
+>   panels (Connection Manager / Container Browser / Transfer
+>   Manager + Selective Access / Cohort Query Builder / Pipeline
+>   Launcher + Job Monitor / Interactive Session Launcher /
+>   Encoding + Export). `tio-browser` rebumped to **v1.5.0** at
+>   W5.7 (#108). PQC + BYOK + federation client capabilities + W6
+>   live-acceptance smoke green.
+> - **FD-1 multi-recipient encryption (Phases A / B / C-0 /
+>   C-2a)** shipped 2026-05-21 → 2026-05-22 across all 3
+>   languages with cross-language conformance vectors at
+>   `conformance/multi_recipient/`. Append-only on §4.4 →
+>   single-recipient packets stay byte-identical, so existing
+>   BYOK / envelope / PQC fixtures are unchanged. Server-side
+>   FD-1 D+ continues in the `tti-workbench-server` repo. Spec
+>   proofs at `docs/superpowers/specs/2026-05-21-fd1-phase-a-...md`
+>   + `2026-05-22-fd1-c2a-server-kek-id-spec.md`.
+> - **Per-AU decrypt-in-place** parity APIs in all 3 languages
+>   (PRs #161 + #162, 2026-05-23) — closes the long-standing
+>   "silent no-op on per-AU files" gap on the legacy
+>   `decryptInPlace` path for MS channels. Unblocks
+>   `tti-workbench-server` FD-1 D-1 pipeline step. Genomic-run
+>   signal-channel coverage is a follow-up.
+> - **Vibrational JCAMP-DX `.tio` materialization parity**
+>   (parity-audit 3.1) shipped through PRs #144–#146 (Python +
+>   Java + ObjC).
+> - **CI** bumped to JDK 25 + GitHub Actions Node 24 runtimes
+>   (PR #92 + #142). Minimum supported runtime remains
+>   JDK 17+ for the library, JDK 22+ for `tio-browser` (JavaFX).
+>
+> For the active milestone-style handoff (or the absence
+> thereof), see [`HANDOFF.md`](HANDOFF.md).
+
+---
+
 > **Status (2026-05-02).** Phase 6 (M89 transport extension, M90
 > encryption/anonymisation, M91 multi-omics integration) **shipped**
 > alongside V- and C-series debt repayment. Phase 8 (post-M91
