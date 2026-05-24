@@ -14,6 +14,7 @@ import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -33,7 +34,7 @@ public class MainWindow {
     public void show(Stage primaryStage) {
         this.stage = primaryStage;
         this.shell = AppShell.create(List.of(
-            new ContainersWorkspace(),
+            new ContainersWorkspace(primaryStage),
             new CohortsWorkspace(primaryStage),
             new JobsWorkspace(primaryStage),
             new TransfersWorkspace(primaryStage)));
@@ -51,6 +52,7 @@ public class MainWindow {
         primaryStage.setTitle("tio-browser");
         primaryStage.show();
         wireMenuActions();
+        wireDragDrop(scene);
         // Re-route rail switching to keep the shell's center node in
         // sync after the re-parenting above:
         shell.rail().onSelect(k -> root.setCenter(shell.currentWorkspaceByKey(k).node()));
@@ -96,8 +98,8 @@ public class MainWindow {
             shell.rail().select("containers");
             containers().openFile(stage);
         });
-        encodeItem.setOnAction(e -> noop.run());
-        importItem.setOnAction(e -> noop.run());
+        encodeItem.setOnAction(e -> containers().encodeAction());
+        importItem.setOnAction(e -> containers().importAction());
         exportItem.setOnAction(e -> noop.run());
         saveAsItem.setOnAction(e -> containers().saveAs(stage));
         closeItem.setOnAction(e -> containers().closeDataset());
@@ -106,6 +108,26 @@ public class MainWindow {
         diagnosticsItem.setOnAction(e ->
             global.thalion.ttio.browser.diag.DiagnosticsDialog.show(stage));
         exitItem.setOnAction(e -> Platform.exit());
+    }
+
+    private void wireDragDrop(Scene scene) {
+        scene.setOnDragOver(event -> {
+            if (event.getDragboard().hasFiles()) {
+                event.acceptTransferModes(TransferMode.COPY);
+            }
+            event.consume();
+        });
+        scene.setOnDragDropped(event -> {
+            var db = event.getDragboard();
+            boolean success = false;
+            if (db.hasFiles() && !db.getFiles().isEmpty()) {
+                shell.rail().select("containers");
+                containers().handleDrop(db.getFiles().get(0));
+                success = true;
+            }
+            event.setDropCompleted(success);
+            event.consume();
+        });
     }
 
     public BorderPane root() { return root; }
