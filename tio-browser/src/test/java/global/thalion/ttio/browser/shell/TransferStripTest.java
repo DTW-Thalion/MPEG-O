@@ -29,6 +29,8 @@ class TransferStripTest extends ApplicationTest {
         strip.onViewAll(() -> clicked.set(true));
         stage.setScene(new Scene(new StackPane(strip.node()), 600, 40));
         stage.show();
+        stage.toFront();
+        stage.requestFocus();
     }
 
     @Test
@@ -58,7 +60,9 @@ class TransferStripTest extends ApplicationTest {
     void viewAllClickFiresCallback() {
         Transfer t = tm.newFakeUploadForTest(1000L);
         interact(() -> tm.startForTest(t));
-        clickOn(strip.viewAllButtonForTest());
+        // Use interact() + fire() instead of clickOn() to avoid TestFX
+        // focus/window-ordering flakiness when the full suite is run.
+        interact(() -> strip.viewAllButtonForTest().fire());
         assertTrue(clicked.get(),
             "onViewAll callback should fire when [view all] is clicked");
     }

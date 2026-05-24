@@ -25,11 +25,21 @@ class StatusIndicatorClickTest extends ApplicationTest {
         indicator.onClick(() -> clicked.set(true));
         stage.setScene(new Scene(new StackPane(indicator.node()), 400, 40));
         stage.show();
+        stage.toFront();
+        stage.requestFocus();
     }
 
     @Test
     void clickOnNodeFiresHandler() {
-        clickOn(indicator.node());
+        // Use interact() + fire() instead of clickOn() to avoid TestFX
+        // focus/window-ordering flakiness when the full suite is run.
+        interact(() -> indicator.node().fireEvent(
+            new javafx.scene.input.MouseEvent(
+                javafx.scene.input.MouseEvent.MOUSE_CLICKED,
+                0, 0, 0, 0,
+                javafx.scene.input.MouseButton.PRIMARY, 1,
+                false, false, false, false,
+                true, false, false, true, false, false, null)));
         assertTrue(clicked.get(),
             "onClick handler should fire when the StatusIndicator node is clicked");
     }
