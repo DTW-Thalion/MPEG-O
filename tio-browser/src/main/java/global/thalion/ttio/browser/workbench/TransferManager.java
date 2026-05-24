@@ -248,4 +248,47 @@ public final class TransferManager {
         if (Platform.isFxApplicationThread()) t.setBytesTransferred(n);
         else Platform.runLater(() -> t.setBytesTransferred(n));
     }
+
+    // ---- test helpers ----
+
+    /** Visible for tests only. Remove every transfer from the queue. */
+    public void clearAllForTest() {
+        transfers.clear();
+    }
+
+    /** Visible for tests only. Build an upload-flavoured Transfer with
+     *  a fake size; does not start a real upload. */
+    public Transfer newFakeUploadForTest(long bytesTotal) {
+        return new Transfer(TransferKind.UPLOAD,
+            "uri:tio:test/fake-" + System.nanoTime(),
+            "/tmp/fake.tio", bytesTotal, java.util.Map.of());
+    }
+
+    /** Visible for tests only. Add to queue and mark RUNNING.
+     *  Does not launch a worker thread. */
+    public void startForTest(Transfer t) {
+        Runnable add = () -> {
+            if (!transfers.contains(t)) transfers.add(t);
+            t.setState(TransferState.RUNNING);
+            t.setMessage("Running (test fixture)");
+        };
+        if (javafx.application.Platform.isFxApplicationThread()) add.run();
+        else javafx.application.Platform.runLater(add);
+    }
+
+    /** Visible for tests only. Push a synthetic ProgressReport through
+     *  the same fan-out path as a real transfer would. */
+    public void fakeProgress(Transfer t, global.thalion.ttio.browser.progress.ProgressReport r) {
+        t.setLastReport(r);
+        var tl = t.progressListener();
+        if (tl != null) tl.onProgress(r);
+        fanOutProgress(r);
+    }
+
+    /** Returns the snapshot of transfers currently in state RUNNING. */
+    public java.util.List<Transfer> activeTransfers() {
+        return transfers.stream()
+            .filter(t -> t.state() == TransferState.RUNNING)
+            .toList();
+    }
 }
