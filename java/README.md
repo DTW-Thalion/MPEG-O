@@ -8,8 +8,8 @@ License: LGPL-3.0-or-later (core), Apache-2.0 (importers/exporters)
 
 ## Prerequisites
 
-- JDK 17+
-- Maven 3.8+
+- JDK 22+ (library `pom.xml` is at `<maven.compiler.source>22</maven.compiler.source>`)
+- Maven 3.9+
 - System HDF5 libraries with Java bindings:
 
 ```bash

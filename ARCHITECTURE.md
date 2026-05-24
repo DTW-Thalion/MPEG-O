@@ -1,6 +1,6 @@
 # TTI-O Architecture
 
-TTI-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, and vibrational spectroscopy (Raman + IR).
+TTI-O adapts the MPEG-G (ISO/IEC 23092) architectural pattern — hierarchical containers, descriptor streams, access units, selective encryption, and compressed-domain query — to the needs of multi-omics analytical data: mass spectrometry, NMR, vibrational spectroscopy (Raman + IR), UV/Vis, and genomic sequencing.
 
 v1.0.0 ships three interoperable reference implementations:
 
@@ -12,10 +12,12 @@ v1.0.0 ships three interoperable reference implementations:
   of `h5py` + `numpy` that mirrors the Objective-C class
   hierarchy 1-to-1.
 - **Java (`global.thalion.ttio`)** (`java/`, LGPL-3.0 core +
-  Apache-2.0 importers/exporters) — Maven + JDK 17 implementation
-  mirroring the ObjC/Python class hierarchy. **804 / 0 / 0 / 4.**
-  Uses `javax.crypto` for AES-256-GCM and HMAC-SHA256 (no external
-  crypto dependency). HDF5 via system `libhdf5-java` bindings.
+  Apache-2.0 importers/exporters) — Maven + JDK 22 implementation
+  mirroring the ObjC/Python class hierarchy. Full library `mvn test`
+  is green; the JavaFX-based `tio-browser` GUI lives in its own
+  Maven module with its own test suite. Uses `javax.crypto` for
+  AES-256-GCM and HMAC-SHA256 (no external crypto dependency).
+  HDF5 via system `libhdf5-java` bindings.
 
 Three-way cross-implementation conformance is asserted on every
 commit: Python drives ObjC and Java subprocesses through
