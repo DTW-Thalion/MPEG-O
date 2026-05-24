@@ -291,4 +291,18 @@ public final class TransferManager {
             .filter(t -> t.state() == TransferState.RUNNING)
             .toList();
     }
+
+    /** Remove all transfers in COMPLETED state from the queue. Safe to call from any thread. */
+    public void clearCompleted() {
+        Runnable r = () -> transfers.removeIf(t -> t.state() == TransferState.COMPLETED);
+        if (Platform.isFxApplicationThread()) r.run();
+        else Platform.runLater(r);
+    }
+
+    /** Visible for tests only. Force a Transfer into a given state from any thread. */
+    public void fakeStateForTest(Transfer t, TransferState s) {
+        Runnable r = () -> t.setState(s);
+        if (Platform.isFxApplicationThread()) r.run();
+        else Platform.runLater(r);
+    }
 }
