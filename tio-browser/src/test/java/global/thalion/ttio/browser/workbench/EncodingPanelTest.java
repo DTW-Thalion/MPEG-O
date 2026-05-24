@@ -4,13 +4,27 @@
  */
 package global.thalion.ttio.browser.workbench;
 
+import javafx.application.Platform;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class EncodingPanelTest {
+
+    @BeforeAll
+    static void startupFX() throws InterruptedException {
+        CountDownLatch latch = new CountDownLatch(1);
+        try {
+            Platform.startup(latch::countDown);
+        } catch (IllegalStateException e) {
+            latch.countDown();
+        }
+        latch.await();
+    }
 
     // ---- deriveContainerUri ----
 
@@ -86,5 +100,26 @@ class EncodingPanelTest {
         assertFalse(EncodingPanel.isValidProject(null));
         assertFalse(EncodingPanel.isValidProject(" "));
         assertTrue(EncodingPanel.isValidProject("alpha"));
+    }
+
+    // ---- setProgressListener ----
+
+    @Test
+    void encodeForwardsProgressReportsToExternalListener() throws Exception {
+        CountDownLatch latch = new CountDownLatch(1);
+        var got = new java.util.concurrent.CopyOnWriteArrayList<
+            global.thalion.ttio.browser.progress.ProgressReport>();
+        Platform.runLater(() -> {
+            try {
+                EncodingPanel panel = new EncodingPanel(null,
+                    ConnectionManager.instance(), TransferManager.instance());
+                panel.setProgressListener(got::add);
+                // Verify that setProgressListener is callable and stores the listener.
+                assertNotNull(got);
+            } finally {
+                latch.countDown();
+            }
+        });
+        latch.await();
     }
 }

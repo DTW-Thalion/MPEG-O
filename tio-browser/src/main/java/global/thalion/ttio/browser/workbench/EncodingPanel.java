@@ -9,6 +9,7 @@ import global.thalion.ttio.browser.importers.ImportConfig;
 import global.thalion.ttio.browser.importers.ImportFormatRegistry;
 import global.thalion.ttio.browser.importers.ImportFormatSpec;
 import global.thalion.ttio.browser.importers.ImportTask;
+import global.thalion.ttio.browser.progress.ProgressListener;
 import javafx.geometry.Insets;
 import javafx.scene.Scene;
 import javafx.scene.control.Alert;
@@ -62,6 +63,8 @@ public final class EncodingPanel {
     private final Label statusLabel = new Label("");
     private final ProgressBar progressBar = new ProgressBar(0);
 
+    private volatile ProgressListener externalProgressListener;
+
     public EncodingPanel(Window owner) {
         this(owner, ConnectionManager.instance(), TransferManager.instance());
     }
@@ -98,6 +101,14 @@ public final class EncodingPanel {
     Button cancelButton()           { return cancelBtn; }
     Label statusLabel()             { return statusLabel; }
     ProgressBar progressBar()       { return progressBar; }
+
+    /**
+     * Set an external listener to receive progress reports from encoding operations.
+     * The listener will be invoked from the worker thread and should return quickly.
+     */
+    public void setProgressListener(ProgressListener listener) {
+        this.externalProgressListener = listener;
+    }
 
     // ---- static helpers (pure -- testable without FX) ----
 
@@ -236,6 +247,14 @@ public final class EncodingPanel {
 
         submitBtn.setDisable(true);
         ImportTask task = new ImportTask(spec, config);
+        task.setProgressListener(r -> {
+            javafx.application.Platform.runLater(() -> {
+                if (r.isDeterminate()) progressBar.setProgress(r.percent());
+                else progressBar.setProgress(-1.0);
+            });
+            var ext = externalProgressListener;
+            if (ext != null) ext.onProgress(r);
+        });
         // Encode phase: indeterminate bar + live task message. The
         // upload phase gets a determinate % in the Transfers queue.
         progressBar.setVisible(true);
