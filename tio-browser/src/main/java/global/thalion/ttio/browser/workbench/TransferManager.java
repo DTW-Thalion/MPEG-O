@@ -4,6 +4,8 @@
  */
 package global.thalion.ttio.browser.workbench;
 
+import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressTracker;
 import global.thalion.ttio.workbench.WorkbenchClient;
 import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
@@ -14,7 +16,9 @@ import javafx.collections.ObservableList;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,6 +41,15 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public final class TransferManager {
 
+    /**
+     * Callback fired whenever the transfer queue changes (items added,
+     * state transitions to COMPLETED or FAILED). Invoked on the
+     * JavaFX application thread.
+     */
+    public interface QueueListener {
+        void onQueueChanged();
+    }
+
     private static final TransferManager INSTANCE = new TransferManager();
 
     /** Process-wide singleton (one queue per running tio-browser). */
@@ -50,12 +63,25 @@ public final class TransferManager {
             t.setDaemon(true);
             return t;
         });
+        this.transfers.addListener(
+            (javafx.collections.ListChangeListener<Transfer>) change ->
+                queueListeners.forEach(QueueListener::onQueueChanged));
     }
 
     private final ObservableList<Transfer> transfers =
         FXCollections.observableArrayList();
     private final ExecutorService executor;
     private final AtomicInteger threadCounter = new AtomicInteger(0);
+
+    private final List<QueueListener> queueListeners = new CopyOnWriteArrayList<>();
+    private final List<ProgressListener> progressListeners = new CopyOnWriteArrayList<>();
+
+    /** Register a listener that is called whenever the queue list changes. */
+    public void addQueueListener(QueueListener l) { queueListeners.add(l); }
+
+    /** Register a listener that receives every {@link global.thalion.ttio.browser.progress.ProgressReport}
+     *  emitted across all active transfers. Called on the transport thread. */
+    public void addProgressListener(ProgressListener l) { progressListeners.add(l); }
 
     /** Backing list for {@link TransferQueueView}. */
     public ObservableList<Transfer> transfers() { return transfers; }
@@ -118,7 +144,7 @@ public final class TransferManager {
             byte[] payload = Files.readAllBytes(source);
             WorkbenchTransportClient.UploadResult result =
                 client.upload(project, containerUri, payload,
-                              progressFor(t, "Uploading"));
+                              progressFor(t, "Uploading", "uploading"));
             setBytes(t, payload.length);
             setState(t, TransferState.COMPLETED,
                 "Uploaded " + result.containerUri()
@@ -137,7 +163,7 @@ public final class TransferManager {
                               Transfer t) {
         try {
             setState(t, TransferState.RUNNING, "Downloading...");
-            TransferProgress progress = progressFor(t, "Downloading");
+            TransferProgress progress = progressFor(t, "Downloading", "downloading");
             WorkbenchTransportClient.DownloadResult result;
             if (filter == null || filter.isEmpty()) {
                 result = client.download(containerUri, progress);
@@ -157,15 +183,37 @@ public final class TransferManager {
         }
     }
 
-    /** Build a progress callback that drives {@code t}'s byte count
-     *  + message. The transport thread fires this per chunk; we
-     *  coalesce onto the FX thread (at most one pending update) so a
-     *  fast transfer can't flood the event loop. */
-    private static TransferProgress progressFor(Transfer t, String verb) {
+    /** Fan out a {@link global.thalion.ttio.browser.progress.ProgressReport} to all
+     *  registered manager-level {@link ProgressListener}s. Called on the transport thread. */
+    private void fanOutProgress(global.thalion.ttio.browser.progress.ProgressReport r) {
+        for (var l : progressListeners) l.onProgress(r);
+    }
+
+    /** Build a progress callback that drives {@code t}'s byte count + message and
+     *  emits {@link global.thalion.ttio.browser.progress.ProgressReport} snapshots to
+     *  per-transfer and manager-level listeners.
+     *
+     *  <p>UI updates are coalesced onto the FX thread (at most one pending update) so
+     *  a fast transfer can't flood the event loop. ProgressReport emissions happen
+     *  synchronously on the transport thread.</p>
+     */
+    private TransferProgress progressFor(Transfer t, String verb, String phase) {
+        var tracker = new ProgressTracker(
+            phase,
+            t.sizeBytes() > 0 ? t.sizeBytes() : -1L,
+            -1L,
+            System.currentTimeMillis());
         AtomicLong latest = new AtomicLong(0);
         AtomicBoolean scheduled = new AtomicBoolean(false);
         return (done, total) -> {
             latest.set(done);
+            // emit ProgressReport synchronously on the transport thread:
+            var r = tracker.sample(done, 0L, System.currentTimeMillis());
+            t.setLastReport(r);
+            var tl = t.progressListener();
+            if (tl != null) tl.onProgress(r);
+            fanOutProgress(r);
+            // existing UI-coalescing path:
             if (scheduled.compareAndSet(false, true)) {
                 Platform.runLater(() -> {
                     scheduled.set(false);
