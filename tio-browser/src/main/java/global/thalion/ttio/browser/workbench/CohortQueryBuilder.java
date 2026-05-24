@@ -13,7 +13,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
-import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
@@ -23,14 +22,11 @@ import javafx.scene.control.Label;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
-import javafx.scene.control.TextField;
 import javafx.scene.control.cell.TextFieldTableCell;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import javafx.stage.Window;
 import javafx.util.converter.DefaultStringConverter;
 
@@ -39,7 +35,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Cohort query builder window. A composite-root choice (AND / OR
+ * Cohort query builder panel. A composite-root choice (AND / OR
  * / NOT) plus a TableView of leaf rows; "Run" submits the
  * predicate as a {@link CohortQuery} via the SDK and renders the
  * result rows below.
@@ -52,6 +48,9 @@ import java.util.Map;
  *
  * <p>The server's "phenotype rejected under OR / NOT" rule
  * (workbench-server v1.0) is enforced client-side too.</p>
+ *
+ * <p>Use {@link #buildContent(ConnectionManager, Window)} to obtain
+ * the root {@link Region} for embedding inside a workspace.</p>
  */
 public final class CohortQueryBuilder {
 
@@ -61,7 +60,6 @@ public final class CohortQueryBuilder {
 
     private final Window owner;
     private final ConnectionManager manager;
-    private final Stage stage = new Stage();
 
     private final ChoiceBox<String> compositeBox = new ChoiceBox<>();
     private final ChoiceBox<String> selectBox = new ChoiceBox<>();
@@ -78,32 +76,27 @@ public final class CohortQueryBuilder {
     private final ObservableList<Map<String, Object>> resultRows =
         FXCollections.observableArrayList();
 
-    public CohortQueryBuilder(Window owner) {
-        this(owner, ConnectionManager.instance());
+    private final Region contentRoot;
+
+    /**
+     * Build and return the cohort query builder content as an
+     * embeddable {@link Region}. The caller is responsible for
+     * placing it in a workspace.
+     */
+    public static Region buildContent(ConnectionManager manager, Window owner) {
+        return new CohortQueryBuilder(owner, manager).contentRoot;
     }
 
     /** Visible for tests. */
     public CohortQueryBuilder(Window owner, ConnectionManager manager) {
         this.owner = owner;
         this.manager = manager;
-        buildUi();
+        this.contentRoot = buildUi();
         wireActions();
-    }
-
-    public void show() {
-        if (!manager.isConnected()) {
-            new Alert(AlertType.WARNING,
-                "Connect to a workbench server first "
-                + "(Workbench -> Connect...).", ButtonType.OK).showAndWait();
-            return;
-        }
-        if (leafRows.isEmpty()) addLeafRow();  // start with one blank row
-        stage.show();
     }
 
     // ---- TestFX accessors ----
 
-    Stage stage()                                { return stage; }
     ChoiceBox<String> compositeBox()              { return compositeBox; }
     ChoiceBox<String> selectBox()                 { return selectBox; }
     TableView<CohortLeafRow> leafTable()          { return leafTable; }
@@ -165,7 +158,7 @@ public final class CohortQueryBuilder {
 
     // ---- UI ----
 
-    private void buildUi() {
+    private Region buildUi() {
         compositeBox.setItems(FXCollections.observableArrayList(COMPOSITES));
         compositeBox.setValue("AND");
         selectBox.setItems(FXCollections.observableArrayList(SELECT_VALUES));
@@ -230,11 +223,7 @@ public final class CohortQueryBuilder {
         split.setOrientation(javafx.geometry.Orientation.VERTICAL);
         split.setDividerPositions(0.42);
 
-        Scene scene = new Scene(split, 1080, 720);
-        stage.setScene(scene);
-        stage.setTitle("Workbench: cohort query");
-        stage.initModality(Modality.NONE);
-        if (owner != null) stage.initOwner(owner);
+        return split;
     }
 
     private Region spacer() {
