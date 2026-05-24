@@ -18,7 +18,8 @@ import java.util.UUID;
 
 /**
  * Mutable entry in the {@link TransferManager}'s queue. JavaFX
- * properties drive the {@link TransferQueueView} table cells.
+ * properties drive the {@link global.thalion.ttio.browser.shell.workspaces.TransfersWorkspace}
+ * table cells.
  *
  * <p>The transfer-kind / URI / payload-size are fixed at
  * construction; the state / bytes-transferred / error-message
