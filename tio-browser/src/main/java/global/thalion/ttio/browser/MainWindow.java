@@ -36,7 +36,7 @@ public class MainWindow {
             new ContainersWorkspace(),
             new CohortsWorkspace(),
             new JobsWorkspace(),
-            new TransfersWorkspace()));
+            new TransfersWorkspace(primaryStage)));
         MenuBar menuBar = buildMenuBar();
         this.root = new BorderPane();
         VBox topStack = new VBox(menuBar, shell.root().getTop());
