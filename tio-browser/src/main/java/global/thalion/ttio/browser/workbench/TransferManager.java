@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Drives the W1 {@link WorkbenchTransportClient} from a daemon
  * thread pool; each {@link Transfer} carries JavaFX properties so
- * {@link TransferQueueView} cells re-render automatically as the
- * worker reports state.</p>
+ * {@link global.thalion.ttio.browser.shell.workspaces.TransfersWorkspace}
+ * cells re-render automatically as the worker reports state.</p>
  *
  * <p>v1.0 scope: fire-and-forget. The W1 client does not expose a
  * cancellation primitive, so the queue tolerates outstanding
@@ -83,7 +83,7 @@ public final class TransferManager {
      *  emitted across all active transfers. Called on the transport thread. */
     public void addProgressListener(ProgressListener l) { progressListeners.add(l); }
 
-    /** Backing list for {@link TransferQueueView}. */
+    /** Backing list for {@link global.thalion.ttio.browser.shell.workspaces.TransfersWorkspace}. */
     public ObservableList<Transfer> transfers() { return transfers; }
 
     /** Enqueue an upload of {@code source} into {@code project} at
