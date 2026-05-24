@@ -1,10 +1,13 @@
 package global.thalion.ttio.browser;
 
+import global.thalion.ttio.browser.model.OpenDataset;
 import global.thalion.ttio.browser.shell.AppShell;
 import global.thalion.ttio.browser.shell.workspaces.CohortsWorkspace;
 import global.thalion.ttio.browser.shell.workspaces.ContainersWorkspace;
 import global.thalion.ttio.browser.shell.workspaces.JobsWorkspace;
 import global.thalion.ttio.browser.shell.workspaces.TransfersWorkspace;
+import global.thalion.ttio.browser.view.DatasetTreeView;
+import global.thalion.ttio.browser.view.DetailPane;
 import javafx.application.Platform;
 import javafx.scene.Scene;
 import javafx.scene.control.Menu;
@@ -89,12 +92,15 @@ public class MainWindow {
 
     private void wireMenuActions() {
         Runnable noop = () -> {};
-        openItem.setOnAction(e -> noop.run());
+        openItem.setOnAction(e -> {
+            shell.rail().select("containers");
+            containers().openFile(stage);
+        });
         encodeItem.setOnAction(e -> noop.run());
         importItem.setOnAction(e -> noop.run());
         exportItem.setOnAction(e -> noop.run());
-        saveAsItem.setOnAction(e -> noop.run());
-        closeItem.setOnAction(e -> noop.run());
+        saveAsItem.setOnAction(e -> containers().saveAs(stage));
+        closeItem.setOnAction(e -> containers().closeDataset());
         aboutItem.setOnAction(e -> noop.run());
         userGuideItem.setOnAction(e -> noop.run());
         diagnosticsItem.setOnAction(e ->
@@ -105,6 +111,16 @@ public class MainWindow {
     public BorderPane root() { return root; }
     public AppShell shell()  { return shell; }
     public Stage stage()     { return stage; }
+
+    private ContainersWorkspace containers() {
+        return (ContainersWorkspace) shell.currentWorkspaceByKey("containers");
+    }
+
+    public OpenDataset currentDataset()                         { return containers().currentDataset(); }
+    public DatasetTreeView tree()                               { return containers().tree(); }
+    public DetailPane detail()                                  { return containers().detail(); }
+    public void loadDataset(String path, boolean readOnly)      { containers().loadDataset(path, readOnly); }
+    public javafx.scene.control.Label statusLabel()            { return containers().statusLabel(); }
 
     // Test-only accessors preserved for existing tests:
     MenuItem openMenuItem()        { return openItem; }
