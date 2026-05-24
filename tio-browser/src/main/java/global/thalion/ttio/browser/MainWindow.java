@@ -35,7 +35,7 @@ public class MainWindow {
         this.shell = AppShell.create(List.of(
             new ContainersWorkspace(),
             new CohortsWorkspace(),
-            new JobsWorkspace(),
+            new JobsWorkspace(primaryStage),
             new TransfersWorkspace(primaryStage)));
         MenuBar menuBar = buildMenuBar();
         this.root = new BorderPane();
