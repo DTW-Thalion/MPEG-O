@@ -7,6 +7,7 @@ import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashSet;
@@ -225,43 +226,80 @@ public final class Hdf5NativeLoader {
      * isn't already accounted for by the core libs list. Used on Windows
      * to extract the MinGW runtime DLL closure bundled by the release
      * workflow's "Stage natives" step.
+     *
+     * <p>Locates the JAR via this class's own {@code .class} resource
+     * (always a JAR entry, regardless of whether maven-shade-plugin
+     * emitted a directory entry for the native/ prefix). Iterating the
+     * JAR's full entry list and filtering by prefix is robust against
+     * ZIPs lacking the directory entry — see TTI-O issue #164 (the v1.4.1
+     * release JARs were repacked via tools that omit directory entries,
+     * and the prior implementation's {@code getResource(prefix)} bootstrap
+     * returned null on those).
      */
     private static void extractAllBundledWinDlls(Path dir, String resourcePrefix,
                                                  String[] coreLibs) {
         Set<String> core = new HashSet<>(Arrays.asList(coreLibs));
-        URL prefixUrl = Hdf5NativeLoader.class.getResource(resourcePrefix);
-        if (prefixUrl == null) {
+        String entryPrefix = resourcePrefix.startsWith("/")
+            ? resourcePrefix.substring(1) : resourcePrefix;
+
+        // Bootstrap to the containing JarFile via the class's own .class
+        // resource — guaranteed to be a JarFile entry, no dependency on
+        // whether the maven-shade-plugin chose to emit a directory entry
+        // for the native/win-x64/hdf5/ prefix.
+        String classResource = "/" + Hdf5NativeLoader.class.getName()
+                                     .replace('.', '/') + ".class";
+        URL classUrl = Hdf5NativeLoader.class.getResource(classResource);
+        if (classUrl == null) {
             throw new Hdf5NativeLoadException(
-                "Resource prefix not found: " + resourcePrefix);
+                "Cannot locate own class resource: " + classResource);
         }
         try {
-            URLConnection conn = prefixUrl.openConnection();
-            if (conn instanceof JarURLConnection) {
-                JarURLConnection jarConn = (JarURLConnection) conn;
-                String entryPrefix = resourcePrefix.startsWith("/")
-                    ? resourcePrefix.substring(1) : resourcePrefix;
-                JarFile jar = jarConn.getJarFile();
-                Enumeration<JarEntry> entries = jar.entries();
-                while (entries.hasMoreElements()) {
-                    JarEntry entry = entries.nextElement();
-                    String name = entry.getName();
-                    if (!name.startsWith(entryPrefix) || entry.isDirectory()) continue;
-                    String base = name.substring(entryPrefix.length());
-                    if (!base.endsWith(".dll")) continue;
-                    if (core.contains(base)) continue;  // already extracted
-                    Path target = dir.resolve(base);
-                    try (InputStream in = jar.getInputStream(entry)) {
-                        Files.copy(in, target);
-                    }
+            for (JarEntry entry : jarEntriesUnderPrefix(classUrl, entryPrefix)) {
+                String base = entry.getName().substring(entryPrefix.length());
+                if (!base.endsWith(".dll")) continue;
+                if (core.contains(base)) continue;  // already extracted
+                Path target = dir.resolve(base);
+                URLConnection conn = classUrl.openConnection();
+                JarFile jar = ((JarURLConnection) conn).getJarFile();
+                try (InputStream in = jar.getInputStream(entry)) {
+                    Files.copy(in, target);
                 }
             }
-            // (When running from an exploded classpath, e.g. unit tests,
-            // the resource prefix may be a file: URL with no JAR entries.
-            // Tests stub the loader differently — see Hdf5NativeLoaderTest.)
         } catch (IOException e) {
             throw new Hdf5NativeLoadException(
                 "Failed to enumerate bundled win-x64 DLLs from JAR", e);
         }
+    }
+
+    /**
+     * List every {@link JarEntry} under {@code entryPrefix} in the JAR
+     * containing the resource at {@code probeUrl}. Filters out directory
+     * entries; returns an empty list if the probe is not a {@code
+     * jar:file:...!/...} URL (e.g. when running from an exploded
+     * classpath in unit tests / the IDE).
+     *
+     * <p>Robust against JARs that lack a directory entry for the prefix
+     * itself (the root-cause behaviour fixed for issue #164 — repackers
+     * like {@code PowerShell Compress-Archive} omit those entries, and
+     * the prior implementation's {@code getResource(prefix)} bootstrap
+     * returned null on such JARs).
+     *
+     * <p>Package-private for unit-test access.
+     */
+    static List<JarEntry> jarEntriesUnderPrefix(URL probeUrl, String entryPrefix)
+            throws IOException {
+        URLConnection conn = probeUrl.openConnection();
+        if (!(conn instanceof JarURLConnection)) return List.of();
+        JarFile jar = ((JarURLConnection) conn).getJarFile();
+        List<JarEntry> result = new ArrayList<>();
+        Enumeration<JarEntry> entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry entry = entries.nextElement();
+            String name = entry.getName();
+            if (!name.startsWith(entryPrefix) || entry.isDirectory()) continue;
+            result.add(entry);
+        }
+        return result;
     }
 
     private static String[] libsFor(String platform) {
