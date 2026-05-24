@@ -22,14 +22,18 @@ through this repo are:
 | **C-2a / C-2a-4** | `server_kek_id` field in `ProtectionMetadata` (all 3 langs) + byte-parity vectors | ✅ shipped 2026-05-22 | [`2026-05-22-fd1-c2a-server-kek-id-spec.md`](docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md) |
 | **D+** | Server pipeline (decrypt → process → re-encrypt for researcher) | ⏳ active in `tti-workbench-server` (not this repo) | — |
 
-The most recent reference-impl-side surface (PRs #161 + #162, the
-ObjC + Python + Java **per-AU decrypt-in-place** APIs) unblocks
-FD-1's D-1 pipeline step on the server side: the legacy
-`decryptInPlace` path was a silent no-op on per-AU containers, so
-the server pipeline ran on still-encrypted data and Phase E's
-"round-trip" was a false positive (documented in
-`tti-workbench-server` #41). Genomic-run signal-channel coverage
-for these APIs is a follow-up.
+The most recent reference-impl-side surface (PRs #161 + #162 +
+**#163**, the ObjC + Python + Java **per-AU decrypt-in-place**
+APIs) unblocks FD-1's D-1 pipeline step on the server side: the
+legacy `decryptInPlace` path was a silent no-op on per-AU
+containers, so the server pipeline ran on still-encrypted data
+and Phase E's "round-trip" was a false positive (documented in
+`tti-workbench-server` #41). PR #163 (`5462489d`) closed out the
+gap by adding genomic-run signal-channel coverage to all three
+languages — `dataset_id` continues from the MS loop into the
+genomic loop so the AAD matches the encrypt path exactly, and all
+three languages now unconditionally strip the per-AU feature
+flags + `@encrypted` after a successful decrypt.
 
 ---
 

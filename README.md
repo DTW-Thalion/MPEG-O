@@ -3,7 +3,7 @@
 [![TTIO CI](https://github.com/DTW-Thalion/TTI-O/actions/workflows/ci.yml/badge.svg)](https://github.com/DTW-Thalion/TTI-O/actions/workflows/ci.yml)
 [![License: LGPL v3 (core) / Apache-2.0 (import/export)](https://img.shields.io/badge/License-LGPL_v3_%2F_Apache--2.0-blue.svg)](https://www.gnu.org/licenses/lgpl-3.0)
 [![Python: 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
-[![Java: 17+](https://img.shields.io/badge/java-17%2B-blue.svg)](https://www.java.com/)
+[![Java: 22+](https://img.shields.io/badge/java-22%2B-blue.svg)](https://www.java.com/)
 
 **TTI-O** is a reference implementation of a unified multi-omics data standard that brings mass spectrometry (MS), nuclear magnetic resonance (NMR), vibrational spectroscopy (Raman + IR), UV/Vis, and **genomic sequencing** data under a single container, class hierarchy, and access model. Its architecture is modeled on **MPEG-G** (ISO/IEC 23092), the ISO/IEC standard for genomic information representation, adapting MPEG-G's hierarchical access units, descriptor streams, selective encryption, and compressed-domain query model to the needs of both analytical spectroscopy/spectrometry AND genomic data.
 
@@ -41,7 +41,7 @@ This repository hosts three reference-implementation streams plus a desktop GUI 
 |---|---|---|
 | **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
-| **Java (`global.thalion.ttio`)** | **809/0/0/4 — full parity with ObjC and Python, JDK 17, Maven.** | `java/` |
+| **Java (`global.thalion.ttio`)** | **Full parity with ObjC and Python, JDK 22, Maven.** Library + tio-browser combined `mvn test` is green across the suite. | `java/` |
 | **`tio-browser` (JavaFX desktop GUI)** | **v1.5.0 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
@@ -144,7 +144,7 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Envelope encryption + key rotation** — DEK encrypts data, KEK wraps DEK. `/protection/key_info/` stores the wrapped-DEK blob + KEK metadata. Rotation re-wraps in O(1) without touching signal datasets.
 * **Versioned wrapped-key blob** — `[magic "MW" | version 0x02 | algorithm_id | ct_len | md_len | metadata | ciphertext]`.
 * **Crypto algorithm agility** — `CipherSuite` static catalog (AEAD / KEM / MAC / Signature / Hash / XOF). `encrypt_bytes`, `sign_dataset`, `enable_envelope_encryption` all take opt-in `algorithm=` parameters. Fixed allow-list, not plugin-registered.
-* **Per-Access-Unit encryption** — `opt_per_au_encryption` with the `<channel>_segments` VL_BYTES compound layout (see [`docs/format-spec.md`](docs/format-spec.md) §9.1). Each spectrum is a separate AES-256-GCM op with fresh IV and AAD = `dataset_id || au_sequence || channel_name`; ciphertext can't be replayed against a different AU or envelope. Optional `opt_encrypted_au_headers` also encrypts the 36-byte semantic header. Decrypt-in-place APIs across all three languages (ObjC `+[TTIOPerAUFile decryptFilePathInPlace:...]`, Python `decrypt_per_au_in_place`, Java `PerAUFile.decryptFileInPlace`) restore MS signal channels + optional headers + plaintext index columns and strip the feature flags / `@encrypted` attribute on success; genomic-run signal-channel coverage tracked separately.
+* **Per-Access-Unit encryption** — `opt_per_au_encryption` with the `<channel>_segments` VL_BYTES compound layout (see [`docs/format-spec.md`](docs/format-spec.md) §9.1). Each spectrum is a separate AES-256-GCM op with fresh IV and AAD = `dataset_id || au_sequence || channel_name`; ciphertext can't be replayed against a different AU or envelope. Optional `opt_encrypted_au_headers` also encrypts the 36-byte semantic header. Decrypt-in-place APIs across all three languages (ObjC `+[TTIOPerAUFile decryptFilePathInPlace:key:providerName:error:]`, Python `decrypt_per_au_in_place`, Java `PerAUFile.decryptFileInPlace`) restore MS and genomic-run signal channels + optional headers + plaintext index columns and strip the feature flags / `@encrypted` attribute on success — `dataset_id` continues numbering from the MS loop into the genomic loop so the AAD matches the encrypt path exactly.
 * **Multi-recipient envelopes** — one DEK wrapped under N KEKs in the same `ProtectionMetadata` packet, append-only on the §4.4 layout so single-recipient (BYOK / envelope / PQC) packets stay byte-identical and pre-upgrade readers still recover the primary recipient. Designed for the FD-1 workflow where a per-run DEK is wrapped for both a server KEK and the researcher's key. Client API: Python `WorkbenchClient.upload_encrypted_multi(..., recipients=[...])` + `download_decrypted_multi(..., recipient_id="")` and the Java mirror `uploadEncryptedMulti` / `downloadDecryptedMulti`. Spec proof: [`docs/superpowers/specs/2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md`](docs/superpowers/specs/2026-05-21-fd1-phase-a-multi-recipient-protection-metadata-spec.md); cross-language byte-parity vectors at [`conformance/multi_recipient/`](conformance/multi_recipient/).
 * **Server-resolvable key id** — an optional `server_kek_id` UTF-8 field in `ProtectionMetadata` names the KEK that wraps the primary recipient's DEK, so a workbench daemon can decide server-processability at submit time (`409 container_not_server_decryptable` for BYOK / researcher-only containers) without materializing the container. Append-only on top of the multi-recipient layout; absent ⇒ packet is byte-identical to §4.4 / Phase A. Spec proof: [`docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md`](docs/superpowers/specs/2026-05-22-fd1-c2a-server-kek-id-spec.md).
 * **HMAC-SHA256 signatures (`v2:`)** — canonical little-endian byte stream hashed field-by-field (VL strings as `u32_le(len) || bytes`). Cross-language byte-identical by construction.
@@ -205,8 +205,9 @@ Individual extras:
 | `bruker`      | `opentimspy`, `opentims-bruker-bridge`                                        | Bruker timsTOF `.d` importer                                                             |
 | `network`     | `websockets>=12.0`                                                            | `.tis` streaming transport over WebSocket                                                |
 | `integration` | `pyimzml`, `pyteomics`, `pymzml`, `isatools`                                  | Cross-tool validation harnesses (mzML XSD checks, mzTab importer fixtures, ISA-Tab tests) |
-| `test`        | pytest, pytest-asyncio, pytest-cov, hypothesis, **+ all of the above except `integration`** | Full local dev environment for `pytest`                                                   |
-| `all`         | `[crypto,import,cloud,codecs,zarr,pqc,bruker]`                                | Everything except `test` + `integration`                                                  |
+| `docs`        | `sphinx>=7`, `sphinx-autoapi>=3`, `furo>=2024.0`, `myst-nb>=1`                | Building the Sphinx API reference under `python/docs/`                                    |
+| `test`        | pytest, pytest-asyncio, pytest-cov, hypothesis, **+ all of the above except `integration` and `docs`** | Full local dev environment for `pytest`                                                   |
+| `all`         | `[crypto,import,cloud,codecs,zarr,pqc,bruker]`                                | Everything except `test`, `integration`, and `docs`                                       |
 
 ### Python quick start
 
@@ -257,8 +258,8 @@ cd python && pytest --cov=src/ttio --cov-report=term --cov-report=html
 ### Building the Java implementation
 
 ```bash
-# Prerequisites: JDK 17+, Maven 3.8+, HDF5 1.14.6 (from source)
-sudo apt-get install openjdk-17-jdk-headless maven
+# Prerequisites: JDK 22+, Maven 3.9+, HDF5 1.14.6 (from source)
+sudo apt-get install openjdk-22-jdk-headless maven
 bash scripts/install-hdf5.sh   # builds + installs HDF5 1.14.6 to /usr/local
 
 cd java

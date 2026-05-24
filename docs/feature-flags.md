@@ -14,11 +14,11 @@ Later versions layer additional features on top:
   ML-KEM-1024 envelope wrapping (FIPS 203), ML-DSA-87 dataset
   signatures (`v3:` prefix, FIPS 204). See `docs/pqc.md`.
 
-The on-disk `ttio_format_version` attribute is **"1.2"** for files
-written by v0.7+ writers (was `"1.1"` in v0.2 through v0.6). Readers
-treat the major/minor parts as documented in `docs/format-spec.md §1`
-— the minor bump is backward-compatible; v0.6 readers parse a v0.7
-file unless it carries a required flag they don't recognise.
+The on-disk `ttio_format_version` attribute is **`"1.0"`** for every
+v1.0+ file (all three reference writers stamp this unconditionally).
+Pre-v1.0 development files (historical `"0.x"` stamps) were never
+publicly released. Readers treat the major/minor parts as documented
+in `docs/format-spec.md §1`.
 
 ## Semantics
 
@@ -105,10 +105,12 @@ Algorithm discriminators:
 
 ## v1.0 flags
 
-| Flag                       | Required? | Since | Semantics |
-|----------------------------|-----------|-------|-----------|
-| `opt_per_au_encryption`    | optional  | v1.0  | Signal channels encrypt per-spectrum (per-Access-Unit) instead of channel-granular. Replaces the v0.x `<channel>_values_encrypted`/`_iv`/`_tag` layout with a single compound `<channel>_segments` dataset — one row per spectrum carrying `{offset, length, iv[12], tag[16], ciphertext}`. Required for streaming encrypted datasets through transport. See `docs/transport-encryption-design.md`. |
-| `opt_encrypted_au_headers` | optional  | v1.0  | Additionally encrypts the AU semantic filter fields (`ms_level`, `polarity`, `retention_time`, `precursor_mz`, `precursor_charge`, `ion_mobility`, `base_peak_intensity`, and pixel coords for MSImage). Requires `opt_per_au_encryption`. Disables server-side filtering — clients filter after decrypt. On disk, the plaintext `spectrum_index/*` arrays are omitted and replaced by `spectrum_index/au_header_segments` (one encrypted 36-byte row per spectrum). |
+| Flag                          | Required? | Since | Semantics |
+|-------------------------------|-----------|-------|-----------|
+| `opt_per_au_encryption`       | optional  | v1.0  | Signal channels encrypt per-spectrum (per-Access-Unit) instead of channel-granular. Replaces the v0.x `<channel>_values_encrypted`/`_iv`/`_tag` layout with a single compound `<channel>_segments` dataset — one row per spectrum carrying `{offset, length, iv[12], tag[16], ciphertext}`. Required for streaming encrypted datasets through transport. See `docs/transport-encryption-design.md` and `docs/format-spec.md §9.1`. |
+| `opt_encrypted_au_headers`    | optional  | v1.0  | Additionally encrypts the AU semantic filter fields (`ms_level`, `polarity`, `retention_time`, `precursor_mz`, `precursor_charge`, `ion_mobility`, `base_peak_intensity`, and pixel coords for MSImage). Requires `opt_per_au_encryption`. Disables server-side filtering — clients filter after decrypt. On disk, the plaintext `spectrum_index/*` arrays are omitted and replaced by `spectrum_index/au_header_segments` (one encrypted 36-byte row per spectrum). |
+| `opt_region_keyed_encryption` | optional  | v1.0  | Per-AU encryption uses a *per-region* DEK map keyed on chromosome name — e.g. encrypt chr6 / HLA, leave chr1 in clear. The reserved key `"_headers"` covers the encrypted-headers DEK independently of any chromosome key. Writers emit this flag iff at least one channel actually has a region-keyed DEK map. All three languages emit it (`python/src/ttio/encryption_per_au.py`, `java/.../FeatureFlags.java`, `objc/.../TTIOPerAUFile.m`). |
+| `opt_ms2_activation_detail`   | optional  | v1.0  | Each `spectrum_index/` group carries four extra activation-method columns: `activation_methods` (uint8 enum), `activation_energies` (float64), `isolation_window_lower_offsets` / `isolation_window_upper_offsets` (float64). PSI-MS CV accessions map onto the enum (MS:1000133 CID, MS:1000422 HCD, MS:1000598 ETD, MS:1000250 ECD, MS:1003246 UVPD, MS:1003181 EThcD). Writer emits the flag iff any run has these fields populated; readers that don't recognise the flag fall back to base activation-method dispatch. |
 
 ### Transport-stream-only flags
 

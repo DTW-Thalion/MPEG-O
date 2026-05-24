@@ -43,11 +43,11 @@ that can read HDF5 can introspect an `.tio` file with `h5dump`.
 
 ## 1. Versioning
 
-Every v0.2+ file carries two attributes on the root group `/`:
+Every v1.0+ file carries two attributes on the root group `/`:
 
 | Attribute                | Type              | Value                              |
 |--------------------------|-------------------|------------------------------------|
-| `ttio_format_version`  | fixed-len string  | `"1.2"` in v0.7; `"1.1"` in v0.2–v0.6 (major.minor) |
+| `ttio_format_version`  | fixed-len string  | `"1.0"` (current; all v1.0.0 writers stamp this unconditionally) |
 | `ttio_features`        | fixed-len string  | JSON array of feature strings      |
 
 **Version semantics:**
@@ -57,16 +57,19 @@ Every v0.2+ file carries two attributes on the root group `/`:
 - **Minor** (`1.0 -> 1.1`): backward-compatible additions. Existing
   readers may ignore new attributes/datasets they do not understand.
 
-**v0.1 detection:** files written by v0.1 code carry
-`@ttio_version = "1.0.0"` instead and have no `@ttio_features`.
-v0.2 readers detect the absence of `@ttio_features` and fall back
-to the v0.1 JSON metadata path (see §5).
+v1.0 is the first stable release. Pre-v1.0 development files
+(historical `"0.x"` stamps) were never publicly released; v1.0+
+readers are not expected to ingest them.
 
 **Feature flags** are documented in
 [`feature-flags.md`](feature-flags.md). Features without an `opt_`
-prefix are **required**: a reader must refuse to open a file that
-lists a required feature it does not support. `opt_`-prefixed features
-are informational; readers may ignore them.
+prefix are **required**: per the spec, a reader must refuse to
+open a file that lists a required feature it does not support.
+`opt_`-prefixed features are informational; readers may ignore
+them. *Implementation note:* the current v1.0 reference readers
+parse the feature list but do not yet enforce the
+required-feature-refusal gate — that enforcement is tracked as a
+v1.x follow-up.
 
 ---
 
@@ -74,32 +77,40 @@ are informational; readers may ignore them.
 
 ```
 /                                       (root group)
-├── @ttio_format_version              ("1.1")
+├── @ttio_format_version              ("1.0")
 ├── @ttio_features                    (JSON array)
 ├── @encrypted                          ("aes-256-gcm") — optional
 ├── @access_policy_json                 (JSON) — optional
-└── study/                              (group, required)
-    ├── @title                          (string)
-    ├── @isa_investigation_id           (string)
-    ├── @transitions_json               (string) — optional
-    ├── ms_runs/                        (group, always present)
-    │   ├── @_run_names                 (comma-separated run names)
-    │   └── <run_name>/                 (one group per run)
-    ├── nmr_runs/                       (group, always present)
-    │   ├── @_run_names                 (comma-separated run names)
-    │   └── <run_name>/                 (legacy NMR runs)
-    ├── identifications                 (compound dataset) — optional
-    ├── quantifications                 (compound dataset) — optional
-    ├── provenance                      (compound dataset) — optional
-    ├── identifications_sealed          (encrypted byte blob) — optional
-    ├── identifications_sealed_iv       (3 × int32) — optional
-    ├── identifications_sealed_tag      (4 × int32) — optional
-    ├── identifications_sealed_bytes    (1 × uint32) — optional
-    ├── quantifications_sealed          (encrypted byte blob) — optional
-    ├── quantifications_sealed_iv       (3 × int32) — optional
-    ├── quantifications_sealed_tag      (4 × int32) — optional
-    ├── quantifications_sealed_bytes    (1 × uint32) — optional
-    └── image_cube/                     (group) — optional, MSImage only
+├── study/                              (group, required)
+│   ├── @title                          (string)
+│   ├── @isa_investigation_id           (string)
+│   ├── @transitions_json               (string) — optional
+│   ├── ms_runs/                        (group, always present)
+│   │   ├── @_run_names                 (comma-separated run names)
+│   │   └── <run_name>/                 (one group per run)
+│   ├── nmr_runs/                       (group, always present)
+│   │   ├── @_run_names                 (comma-separated run names)
+│   │   └── <run_name>/                 (legacy NMR runs)
+│   ├── genomic_runs/                   (group) — optional, M82+ genomic data
+│   │   ├── @_run_names                 (comma-separated run names)
+│   │   └── <run_name>/                 (per-genomic-run group; see §10)
+│   ├── references/                     (group) — optional, M93+ reference embedding
+│   │   └── <reference_uri>/            (per-reference group; FASTA + chromosomes)
+│   ├── identifications                 (compound dataset) — optional
+│   ├── quantifications                 (compound dataset) — optional
+│   ├── provenance                      (compound dataset) — optional
+│   ├── identifications_sealed          (encrypted byte blob) — optional
+│   ├── identifications_sealed_iv       (3 × int32) — optional
+│   ├── identifications_sealed_tag      (4 × int32) — optional
+│   ├── identifications_sealed_bytes    (1 × uint32) — optional
+│   ├── quantifications_sealed          (encrypted byte blob) — optional
+│   ├── quantifications_sealed_iv       (3 × int32) — optional
+│   ├── quantifications_sealed_tag      (4 × int32) — optional
+│   ├── quantifications_sealed_bytes    (1 × uint32) — optional
+│   └── image_cube/                     (group) — optional, MSImage only
+└── protection/                         (group) — optional, M70+ envelope encryption
+    ├── key_info/                       (group; wrapped-DEK blob + KEK metadata; see §5b)
+    └── access_policies/                (compound dataset) — optional
 ```
 
 Runs under `/study/ms_runs/` may contain any spectrum subclass, not
@@ -629,24 +640,39 @@ per-spectrum encryption mode gated on the
 `opt_per_au_encryption` feature flag.
 
 New on-disk layout, one compound dataset per channel under
-`/study/ms_runs/<run>/signal_channels/`:
+`/study/ms_runs/<run>/signal_channels/` — and, for genomic data,
+under `/study/genomic_runs/<run>/signal_channels/`:
 
 ```
 <channel>_segments          HDF5 compound, spectrum_count rows
-    offset     uint64        index into the plaintext element stream
-    length     uint32        plaintext element count
-    iv         uint8[12]     per-row AES-256-GCM IV
-    tag        uint8[16]     per-row GCM tag
-    ciphertext VL[uint8]     ciphertext bytes
+    offset     INT64         index into the plaintext element stream
+    length     INT64         plaintext element count
+    iv         VL_BYTES      per-row AES-256-GCM IV (12 bytes)
+    tag        VL_BYTES      per-row GCM tag (16 bytes)
+    ciphertext VL_BYTES      ciphertext bytes (length-prefixed)
 @<channel>_algorithm        "aes-256-gcm"
 @<channel>_wrapped_dek      VL uint8
 @<channel>_kek_algorithm    "rsa-oaep-sha256" | "ml-kem-1024" | …
+@<channel>_wrapped_dek_recipients  (optional) base64 multi-recipient block; see §4.4 of `transport-spec.md` and `transport-encryption-design.md` §4.1.1
+@<channel>_server_kek_id    (optional) UTF-8 server-resolvable KEK id; see `transport-encryption-design.md` §4.1.2
 ```
 
+The IV / tag / ciphertext fields are HDF5 `VL_BYTES` (variable-
+length byte arrays) for all three reference implementations. IV
+is always 12 bytes, tag is always 16 bytes, and ciphertext varies
+per row.
+
 Each row's AES-GCM operation uses authenticated data
-`dataset_id (u16 LE) || row_index (u32 LE) || channel_name_utf8`
+`dataset_id (u16 LE) || au_sequence (u32 LE) || channel_name_utf8`
 so ciphertext cannot be replayed against a different spectrum
-or channel.
+or channel. (`au_sequence` is the per-AU index; older drafts of
+this doc called it `row_index` — the runtime AAD bytes are
+identical, only the doc nomenclature is normalised.)
+
+For a mixed-modality file (MS runs + genomic runs), the writer
+processes MS first and then genomic, and `dataset_id` continues
+incrementing through the genomic loop so a re-encrypt path that
+walks runs in the same order produces byte-identical ciphertext.
 
 When `opt_encrypted_au_headers` is also set, the plaintext
 `spectrum_index/*` arrays from §4 are **omitted** and replaced
@@ -654,17 +680,26 @@ with:
 
 ```
 spectrum_index/au_header_segments   HDF5 compound, one row per spectrum
-    iv         uint8[12]
-    tag        uint8[16]
-    ciphertext uint8[36]     fixed-length plaintext (36 bytes):
+    iv         VL_BYTES     12 bytes
+    tag        VL_BYTES     16 bytes
+    ciphertext VL_BYTES     36 bytes plaintext content, AES-GCM encrypted:
         acquisition_mode(u8) || ms_level(u8) || polarity(u8)
         || retention_time(f64) || precursor_mz(f64)
         || precursor_charge(u8) || ion_mobility(f64)
         || base_peak_intensity(f64)
-@wrapped_dek                 same DEK as the channel segments
+@wrapped_dek                same DEK as the channel segments
 ```
 
-AAD for the header row = `dataset_id || row_index || "header"`.
+AAD for the header row = `dataset_id (u16 LE) || au_sequence (u32 LE) || b"header"`.
+
+The `decryptInPlace` family (`+[TTIOPerAUFile decryptFilePathInPlace:...]`,
+`decrypt_per_au_in_place`, `PerAUFile.decryptFileInPlace`) reverses
+the above: each row is GCM-decrypted, the plaintext is concatenated
+back into the bare `<channel>_values` (MS) or `<channel>` (genomic)
+dataset, `<channel>_segments` and `@<channel>_algorithm` are
+removed, and on full success `opt_per_au_encryption` /
+`opt_encrypted_au_headers` / root `@encrypted` are stripped from
+the feature flags + root attributes.
 
 No v0.x back-compat: files using the v0.x channel-grained
 encryption layout cannot be opened by v1.0 encryption paths.
