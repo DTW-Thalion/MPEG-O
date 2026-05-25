@@ -283,7 +283,24 @@ public final class ReferenceImport {
      * @since 1.1.0
      */
     public void writeToDataset(SpectralDataset dataset, boolean overwrite) {
+        writeToDataset(dataset, overwrite,
+            global.thalion.ttio.io.ProgressSink.discard());
+    }
+
+    /**
+     * Overload of {@link #writeToDataset(SpectralDataset, boolean)}
+     * that fires {@code progress.onProgress(i+1, totalChromosomes)}
+     * after each chromosome's HDF5 group + attributes + dataset are
+     * written. Slow paths (whale + plant genomes with thousands of
+     * contigs) report visible mid-stream progress; the fast paths
+     * (single-chromosome refs) fire once.
+     *
+     * @since 1.3.0
+     */
+    public void writeToDataset(SpectralDataset dataset, boolean overwrite,
+                                 global.thalion.ttio.io.ProgressSink progress) {
         Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(progress, "progress");
         StorageProvider provider = dataset.provider();
         if (provider == null || !provider.isOpen()) {
             throw new IllegalStateException(
@@ -330,6 +347,9 @@ public final class ReferenceImport {
                             }
                             List<String> sortedNames = new ArrayList<>(byName.keySet());
                             Collections.sort(sortedNames);
+                            long total = sortedNames.size();
+                            progress.onProgress(0L, total);
+                            long doneCount = 0L;
                             for (String chromName : sortedNames) {
                                 byte[] seq = byName.get(chromName);
                                 try (StorageGroup c = chromsGrp.createGroup(chromName)) {
@@ -348,6 +368,8 @@ public final class ReferenceImport {
                                         closeMe.writeAll(seq);
                                     }
                                 }
+                                doneCount++;
+                                progress.onProgress(doneCount, total);
                             }
                         }
                     }
