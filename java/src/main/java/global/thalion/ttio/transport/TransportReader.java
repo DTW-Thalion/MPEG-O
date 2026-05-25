@@ -7,6 +7,7 @@ package global.thalion.ttio.transport;
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
 import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
@@ -68,6 +69,13 @@ public final class TransportReader implements AutoCloseable {
     // provenanceRecords arg so the on-disk /study/provenance_json
     // attribute round-trips.
     private final List<ProvenanceRecord> collectedProvenance = new ArrayList<>();
+    // v0.11 Task 1.7: image-cube accumulator state for the
+    // IMAGE_HEADER (0x13) → N × IMAGE_PIXEL (0x14) → END_OF_IMAGE
+    // (0x15) packet sequence. Reset at the start of every
+    // materializeTo() call. `currentImageBuilder` is non-null between
+    // IMAGE_HEADER and END_OF_IMAGE.
+    private ImageBuilder currentImageBuilder;
+    private MSImage collectedImage;
 
     public TransportReader(InputStream in) {
         this.in = in;
@@ -162,6 +170,8 @@ public final class TransportReader implements AutoCloseable {
         collectedRefs.clear();
         collectedEncryptionAlgorithm = null;
         collectedProvenance.clear();
+        currentImageBuilder = null;
+        collectedImage = null;
 
         List<PacketRecord> packets = readAllPackets();
         String title = "";
@@ -332,6 +342,18 @@ public final class TransportReader implements AutoCloseable {
                 finishReferenceGroup();
                 continue;
             }
+            if (h.packetType == PacketType.IMAGE_HEADER) {
+                startImage(rec.payload);
+                continue;
+            }
+            if (h.packetType == PacketType.IMAGE_PIXEL) {
+                appendPixel(rec.payload);
+                continue;
+            }
+            if (h.packetType == PacketType.END_OF_IMAGE) {
+                finishImage(rec.payload);
+                continue;
+            }
             if (h.packetType == PacketType.END_OF_DATASET) continue;
             if (h.packetType == PacketType.END_OF_STREAM) break;
             // Annotation / Provenance / Chromatogram / Protection: skipped in M67.
@@ -400,6 +422,16 @@ public final class TransportReader implements AutoCloseable {
                 ref.writeToDataset(created);
             }
         }
+        // v0.11 Task 1.7: embed any image cube decoded from the
+        // stream's IMAGE_* packets. MSImage.writeTo(StorageGroup)
+        // requires the /study/ group of an open writable provider,
+        // so this runs before the close+reopen dance below.
+        if (collectedImage != null) {
+            try (var studyGrp =
+                    created.provider().rootGroup().openGroup("study")) {
+                collectedImage.writeTo(studyGrp);
+            }
+        }
         // v0.11 Task 1.5: persist the dataset-level @encrypted root
         // attribute so the materialised file reports isEncrypted() ==
         // true on reopen. SpectralDataset caches encryptedAlgorithm in
@@ -410,7 +442,14 @@ public final class TransportReader implements AutoCloseable {
             created.provider().rootGroup()
                 .setAttribute("encrypted", collectedEncryptionAlgorithm);
         }
-        if (genomicRuns.isEmpty() && collectedEncryptionAlgorithm == null) {
+        // v0.11 Task 1.7: when an image was embedded after create(),
+        // the returned `created` dataset still has image() == null
+        // (SpectralDataset caches the MSImage at construction). Force
+        // a close+reopen so callers see the round-tripped image on
+        // the returned handle.
+        if (genomicRuns.isEmpty()
+                && collectedEncryptionAlgorithm == null
+                && collectedImage == null) {
             return created;
         }
         created.close();
@@ -575,6 +614,216 @@ public final class TransportReader implements AutoCloseable {
         currentRefUri = null;
         currentChromNames.clear();
         currentChromSeqs.clear();
+    }
+
+    // ---------------------------------------------------------- v0.11 §4.16-§4.18
+
+    /** v0.11 Task 1.7: decode an IMAGE_HEADER (0x13) payload and
+     *  prime the per-image accumulator. Wire layout matches
+     *  transport-spec §4.16. Only continuous-mode images
+     *  ({@code is_continuous == 1}) are supported at Task 1.7;
+     *  processed-mode (per-pixel axis) raises an exception.  */
+    private void startImage(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        int modality = bb.get() & 0xFF;
+        int width    = bb.getInt();
+        int height   = bb.getInt();
+        int bins     = bb.getInt();
+        double pxX   = bb.getDouble();
+        double pxY   = bb.getDouble();
+        int scanPat  = bb.get() & 0xFF;
+        int axisKind = bb.get() & 0xFF;
+        int axisLen  = bb.getInt();
+        double[] axis = new double[axisLen];
+        for (int i = 0; i < axisLen; i++) axis[i] = bb.getDouble();
+        int isContinuous = bb.get() & 0xFF;
+        int titleLen = bb.getShort() & 0xFFFF;
+        byte[] titleBytes = new byte[titleLen];
+        bb.get(titleBytes);
+        int isaLen = bb.getShort() & 0xFFFF;
+        byte[] isaBytes = new byte[isaLen];
+        bb.get(isaBytes);
+
+        if (isContinuous != 1) {
+            throw new IllegalStateException(
+                "IMAGE_HEADER: processed-mode (is_continuous=0) not yet "
+                + "supported in Java; continuous-mode only at Task 1.7");
+        }
+        if (modality != 0) {
+            // The materialiser writes /study/image_cube which is the
+            // MSImage on-disk path. Non-MS modalities (Raman/IR/UV-Vis)
+            // need their own value type + writeTo path; defer.
+            throw new IllegalStateException(
+                "IMAGE_HEADER: only modality=0 (MS) materialises into "
+                + "an MSImage today; got modality=" + modality);
+        }
+        currentImageBuilder = new ImageBuilder(
+            width, height, bins,
+            pxX, pxY,
+            scanPatternFromByte(scanPat),
+            axis,
+            new String(titleBytes, StandardCharsets.UTF_8),
+            new String(isaBytes,   StandardCharsets.UTF_8));
+    }
+
+    /** v0.11 Task 1.7: decode a continuous-mode IMAGE_PIXEL (0x14)
+     *  payload per transport-spec §4.17 and stash the intensities at
+     *  the pixel's row/col slot. */
+    private void appendPixel(byte[] payload) {
+        if (currentImageBuilder == null) {
+            throw new IllegalStateException(
+                "IMAGE_PIXEL received before IMAGE_HEADER");
+        }
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        int x = bb.getInt();
+        int y = bb.getInt();
+        int precision   = bb.get() & 0xFF;
+        int compression = bb.get() & 0xFF;
+        long payloadLenLong = bb.getInt() & 0xFFFFFFFFL;
+        int payloadLen = (int) payloadLenLong;
+        byte[] raw = new byte[payloadLen];
+        bb.get(raw);
+        if (compression != 0) {
+            // Writer always emits compression=NONE today; defer
+            // ZLIB/zstd inflation until a fixture requires it.
+            throw new IllegalStateException(
+                "IMAGE_PIXEL compression=" + compression
+                + " not yet supported (NONE only at Task 1.7)");
+        }
+        double[] intensities;
+        if (precision == 1) {
+            // FLOAT64
+            int n = payloadLen / 8;
+            intensities = new double[n];
+            ByteBuffer ibuf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+            for (int k = 0; k < n; k++) intensities[k] = ibuf.getDouble();
+        } else if (precision == 0) {
+            // FLOAT32 — widen to double for MSImage's double[] cube.
+            int n = payloadLen / 4;
+            intensities = new double[n];
+            ByteBuffer ibuf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+            for (int k = 0; k < n; k++) intensities[k] = ibuf.getFloat();
+        } else {
+            throw new IllegalStateException(
+                "IMAGE_PIXEL precision=" + precision
+                + " not supported (expected 0=float32 or 1=float64)");
+        }
+        currentImageBuilder.setPixel(x, y, intensities);
+    }
+
+    /** v0.11 Task 1.7: close out the current image cube on
+     *  END_OF_IMAGE (0x15). Verifies the {@code pixel_count_seen}
+     *  field matches the per-pixel ingest count and stages the
+     *  built {@link MSImage} for write-out after
+     *  {@link SpectralDataset#create} returns. */
+    private void finishImage(byte[] payload) {
+        if (currentImageBuilder == null) {
+            throw new IllegalStateException(
+                "END_OF_IMAGE without prior IMAGE_HEADER");
+        }
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        long declared = bb.getInt() & 0xFFFFFFFFL;
+        long actual = currentImageBuilder.pixelsSeen();
+        if (declared != actual) {
+            throw new IllegalStateException(
+                "END_OF_IMAGE pixel_count_seen mismatch: declared="
+                + declared + ", actual=" + actual + " (width*height="
+                + ((long) currentImageBuilder.width
+                    * currentImageBuilder.height) + ")");
+        }
+        if (actual != (long) currentImageBuilder.width
+                * currentImageBuilder.height) {
+            throw new IllegalStateException(
+                "END_OF_IMAGE pixel count " + actual
+                + " does not equal width*height="
+                + ((long) currentImageBuilder.width
+                    * currentImageBuilder.height));
+        }
+        collectedImage = currentImageBuilder.build();
+        currentImageBuilder = null;
+    }
+
+    /** Inverse of {@link TransportWriter#scanPatternToByte}. */
+    private static String scanPatternFromByte(int b) {
+        return switch (b) {
+            case 0 -> "raster";
+            case 1 -> "meander";
+            case 2 -> "random";
+            default -> "raster";
+        };
+    }
+
+    /** Per-image accumulator. Fills the intensity cube as pixels
+     *  arrive, validated against width/height/spectrum_bins from the
+     *  IMAGE_HEADER. */
+    private static final class ImageBuilder {
+        final int width;
+        final int height;
+        final int spectralPoints;
+        final double pixelSizeX;
+        final double pixelSizeY;
+        final String scanPattern;
+        final double[] axis;
+        final String title;
+        final String isaInvestigationId;
+        final double[] cube;
+        // Bitset of seen pixels to guarantee width*height unique pixels
+        // (catches duplicate (x,y) writes that would silently overwrite).
+        final boolean[] seen;
+        int seenCount;
+
+        ImageBuilder(int width, int height, int spectralPoints,
+                     double pixelSizeX, double pixelSizeY,
+                     String scanPattern, double[] axis,
+                     String title, String isaInvestigationId) {
+            this.width = width;
+            this.height = height;
+            this.spectralPoints = spectralPoints;
+            this.pixelSizeX = pixelSizeX;
+            this.pixelSizeY = pixelSizeY;
+            this.scanPattern = scanPattern;
+            this.axis = axis != null ? axis : new double[0];
+            this.title = title;
+            this.isaInvestigationId = isaInvestigationId;
+            this.cube = new double[(long) width * height
+                                   * spectralPoints > Integer.MAX_VALUE
+                ? Integer.MAX_VALUE
+                : width * height * spectralPoints];
+            this.seen = new boolean[width * height];
+        }
+
+        void setPixel(int x, int y, double[] intensities) {
+            if (x < 0 || x >= width || y < 0 || y >= height) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL coordinates out of bounds: x=" + x
+                    + ", y=" + y + " (width=" + width + ", height=" + height + ")");
+            }
+            if (intensities.length != spectralPoints) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL intensity count " + intensities.length
+                    + " does not match IMAGE_HEADER.spectrum_bins="
+                    + spectralPoints);
+            }
+            int pixelIdx = y * width + x;
+            if (seen[pixelIdx]) {
+                throw new IllegalStateException(
+                    "duplicate IMAGE_PIXEL at (x=" + x + ", y=" + y + ")");
+            }
+            seen[pixelIdx] = true;
+            seenCount++;
+            int base = (y * width + x) * spectralPoints;
+            System.arraycopy(intensities, 0, cube, base, spectralPoints);
+        }
+
+        long pixelsSeen() { return seenCount; }
+
+        MSImage build() {
+            return new MSImage(width, height, spectralPoints, 0,
+                pixelSizeX, pixelSizeY, scanPattern,
+                cube, axis,
+                title, isaInvestigationId,
+                List.of(), List.of(), List.of());
+        }
     }
 
     // ---------------------------------------------------------- helpers

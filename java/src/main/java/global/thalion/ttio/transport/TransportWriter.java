@@ -7,6 +7,7 @@ package global.thalion.ttio.transport;
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
 import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
@@ -419,6 +420,142 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.END_OF_REFERENCE_GROUP, ebuf.array(), 0, 0);
     }
 
+    // ----------------------------------------------- v0.11 §4.16-§4.18
+
+    /**
+     * v0.11 Task 1.7: emit an {@link MSImage} as the packet sequence
+     * {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL (0x14)
+     *  → END_OF_IMAGE (0x15)}, where {@code N = width * height}.
+     *
+     * <p>Wire layout matches transport-spec §4.16-§4.18. All
+     * multi-byte integers are LITTLE-ENDIAN (spec §1.7). Each pixel
+     * rides as a continuous-mode IMAGE_PIXEL — the shared m/z axis
+     * lives on the IMAGE_HEADER, and every pixel carries only its
+     * intensities (FLOAT64, uncompressed). The pixel index rides in
+     * the packet header's {@code auSequence} field
+     * ({@code y * width + x}; 0-based).</p>
+     *
+     * <p>Processed-mode (per-pixel axis, signalled by
+     * {@code is_continuous == 0}) is not yet emitted by this writer;
+     * the corresponding decoder path in {@link TransportReader} is
+     * also continuous-only at Task 1.7. Adding processed-mode is
+     * deferred to a follow-up task once a Java MSImage value type
+     * exposes per-pixel axes (the current {@link MSImage} model is
+     * continuous by construction: one {@code mzAxis} shared by all
+     * pixels).</p>
+     *
+     * <p>Reader-side materialisation is added by Task 1.7 in
+     * {@link TransportReader}; this method only emits the wire
+     * bytes.</p>
+     */
+    public void writeImage(MSImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeImage: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.mzAxis();  // length 0 or == bins
+        int axisLength = axis != null ? axis.length : 0;
+        byte modality = 0;  // MS imaging
+        byte axisKind = 0;  // mz
+        byte isContinuous = 1;  // shared axis
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        byte[] titleBytes = (img.title() == null ? "" : img.title())
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] isaBytes = (img.isaInvestigationId() == null
+            ? "" : img.isaInvestigationId())
+            .getBytes(StandardCharsets.UTF_8);
+        if (titleBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: title " + titleBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        if (isaBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: isa_id " + isaBytes.length
+                + " bytes exceeds uint16 max");
+        }
+
+        // -- IMAGE_HEADER (0x13) -----------------------------------------
+        int hdrSize = 1                  // modality
+                    + 4                  // width
+                    + 4                  // height
+                    + 4                  // spectrum_bins
+                    + 8                  // pixel_size_x
+                    + 8                  // pixel_size_y
+                    + 1                  // scan_pattern
+                    + 1                  // axis_kind
+                    + 4                  // axis_length
+                    + 8 * axisLength     // axis values
+                    + 1                  // is_continuous
+                    + 2 + titleBytes.length
+                    + 2 + isaBytes.length;
+        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
+        hbuf.put(modality);
+        hbuf.putInt(width);
+        hbuf.putInt(height);
+        hbuf.putInt(bins);
+        hbuf.putDouble(img.pixelSizeX());
+        hbuf.putDouble(img.pixelSizeY());
+        hbuf.put(scanPatternByte);
+        hbuf.put(axisKind);
+        hbuf.putInt(axisLength);
+        for (int i = 0; i < axisLength; i++) hbuf.putDouble(axis[i]);
+        hbuf.put(isContinuous);
+        hbuf.putShort((short) (titleBytes.length & 0xFFFF));
+        hbuf.put(titleBytes);
+        hbuf.putShort((short) (isaBytes.length & 0xFFFF));
+        hbuf.put(isaBytes);
+        emit(PacketType.IMAGE_HEADER, hbuf.array(), 0, 0);
+
+        // -- IMAGE_PIXEL (0x14) — one per pixel --------------------------
+        // Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
+        // compression(u8) + payload_length(u32) + intensities[..].
+        // We always emit FLOAT64 (precision=1) uncompressed (compression=0)
+        // intensities mirroring the on-disk MSImage cube precision.
+        byte precision = 1;       // FLOAT64
+        byte compression = 0;     // NONE
+        long pixelIndex = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int payloadLen = 8 * bins;
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                // MSImage.spectrumAt uses (row, col) ordering — row=y, col=x.
+                double[] spec = img.spectrumAt(y, x);
+                for (int k = 0; k < bins; k++) pbuf.putDouble(spec[k]);
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        // -- END_OF_IMAGE (0x15) -----------------------------------------
+        // pixel_count_seen: uint32 per spec §4.18.
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /** Map the MSImage scan-pattern string to the wire byte per spec
+     *  §4.16 ({@code 0=flyback, 1=meander, 2=random}). The on-disk
+     *  format uses "raster" as the default name for the flyback
+     *  pattern. Unknown values map to 0 (flyback) defensively. */
+    static byte scanPatternToByte(String scanPattern) {
+        if (scanPattern == null) return 0;
+        return switch (scanPattern) {
+            case "raster", "flyback" -> 0;
+            case "meander"           -> 1;
+            case "random"            -> 2;
+            default                  -> 0;
+        };
+    }
+
     public void writeEndOfDataset(int datasetId, long finalAUSequence) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) (datasetId & 0xFFFF));
@@ -446,14 +583,15 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
-        // Task 1.4/1.5/1.6: detect v0.11 content (references +
-        // encryption algorithm + dataset provenance today; subjects,
-        // samples, images, identifications, quantifications land in
-        // subsequent tasks at the same prelude insertion point per
-        // §5.4 ordering).
+        // Task 1.4/1.5/1.6/1.7: detect v0.11 content (references +
+        // encryption algorithm + dataset provenance + image cube
+        // today; subjects, samples, identifications, quantifications
+        // land in subsequent tasks at the same prelude insertion
+        // point per §5.4 ordering).
         boolean v011 = !dataset.references().isEmpty()
                     || dataset.isEncrypted()
-                    || !dataset.provenanceRecords().isEmpty();
+                    || !dataset.provenanceRecords().isEmpty()
+                    || dataset.image() != null;
         if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
             features.add(PacketType.TRANSPORT_V0_11_FEATURE);
         }
@@ -461,17 +599,17 @@ public final class TransportWriter implements AutoCloseable {
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
 
-        // Task 1.4/1.5/1.6: v0.11 prelude -- per §5.4 ordering, v0.11
-        // sections come BEFORE the v0.10 dataset/run sections, and the
-        // sub-sections appear in this order:
+        // Task 1.4/1.5/1.6/1.7: v0.11 prelude -- per §5.4 ordering,
+        // v0.11 sections come BEFORE the v0.10 dataset/run sections,
+        // and the sub-sections appear in this order:
         //   §5.4.1 ENCRYPTION_ALGORITHM
         //   §5.4.2 DATASET_PROVENANCE
         //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA
         //   §5.4.4 reference groups
         //   §5.4.5 image cubes
         //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
-        // Subjects, samples, images, identifications, quantifications
-        // land here in Tasks 1.7-1.9.
+        // Subjects, samples, identifications, quantifications land
+        // here in Tasks 1.8-1.9.
         if (v011) {
             if (dataset.isEncrypted()) {
                 writeEncryptionAlgorithm(dataset.encryptedAlgorithm());
@@ -481,6 +619,9 @@ public final class TransportWriter implements AutoCloseable {
             }
             for (ReferenceImport ref : dataset.references().values()) {
                 writeReferenceGroup(ref);
+            }
+            if (dataset.image() != null) {
+                writeImage(dataset.image());
             }
         }
 
