@@ -42,6 +42,9 @@ public final class Transfer {
     private volatile ProgressListener progressListener;
     private volatile ProgressReport lastReport;
 
+    private final long createdAtEpochMs = System.currentTimeMillis();
+    private volatile Long finishedAtEpochMs;
+
     public Transfer(TransferKind kind, String containerUri,
                      String localPath, long sizeBytes,
                      Map<String, Object> filter) {
@@ -68,7 +71,13 @@ public final class Transfer {
     public long bytesTransferred()        { return bytesTransferred.get(); }
     public String message()               { return message.get(); }
 
-    void setState(TransferState s)        { this.state.set(s); }
+    void setState(TransferState s) {
+        this.state.set(s);
+        if (finishedAtEpochMs == null
+            && (s == TransferState.COMPLETED || s == TransferState.FAILED)) {
+            finishedAtEpochMs = System.currentTimeMillis();
+        }
+    }
     void setBytesTransferred(long n)      { this.bytesTransferred.set(n); }
     void setMessage(String m)             { this.message.set(m == null ? "" : m); }
 
@@ -89,5 +98,22 @@ public final class Transfer {
     /** Human-readable label for the queue-view "kind" column. */
     public String kindLabel() {
         return kind == TransferKind.UPLOAD ? "Upload" : "Download";
+    }
+
+    /** Epoch ms when this Transfer was constructed (queued). */
+    public long createdAtEpochMs() { return createdAtEpochMs; }
+
+    /** Epoch ms when state first transitioned to a terminal value
+     *  (COMPLETED or FAILED), or {@code null} if not yet finished. */
+    public Long finishedAtEpochMs() { return finishedAtEpochMs; }
+
+    /** Formats an epoch-ms timestamp as a local-time HH:mm:ss string,
+     *  or "—" if null. */
+    public static String formatTimestamp(Long epochMs) {
+        if (epochMs == null) return "—";
+        return java.time.LocalTime.ofInstant(
+            java.time.Instant.ofEpochMilli(epochMs),
+            java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"));
     }
 }

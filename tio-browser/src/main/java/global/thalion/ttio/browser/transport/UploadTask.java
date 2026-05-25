@@ -48,11 +48,12 @@ public final class UploadTask extends Task<Void> {
             emit(0L);
             URI uri = URI.create(targetUrl);
             updateMessage("Uploading to " + uri.getHost() + " ...");
+            java.util.function.LongConsumer onBytesSent = this::emit;
             switch (uri.getScheme()) {
                 case "http", "https" ->
-                    TisHttpUploader.upload(uri, tis, bearerToken);
+                    TisHttpUploader.upload(uri, tis, bearerToken, onBytesSent);
                 case "ws", "wss" ->
-                    TisWsUploader.upload(uri, tis, basename(localPath));
+                    TisWsUploader.upload(uri, tis, basename(localPath), onBytesSent);
                 default -> throw new IllegalArgumentException(
                     "Unsupported URL scheme: " + uri.getScheme());
             }

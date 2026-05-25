@@ -10,6 +10,8 @@ import global.thalion.ttio.workbench.WorkbenchClient;
 import global.thalion.ttio.workbench.transport.TransferProgress;
 import global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode;
 import global.thalion.ttio.workbench.transport.WorkbenchTransportClient;
+import global.thalion.ttio.browser.transport.DownloadTask;
+import global.thalion.ttio.browser.transport.UploadTask;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -122,6 +124,93 @@ public final class TransferManager {
      *  ones are dropped. Idempotent. */
     public void shutdown() {
         executor.shutdownNow();
+    }
+
+
+    /** Enqueue an anonymous (no workbench session) upload of {@code source}
+     *  to {@code url}. {@code bearerToken} may be blank. Returns the queued Transfer. */
+    public Transfer enqueueAnonymousUpload(String url, String bearerToken, Path source) {
+        long size;
+        try { size = Files.size(source); }
+        catch (Exception e) { size = -1L; }
+        Transfer t = new Transfer(TransferKind.UPLOAD, url,
+            source.toString(), size, Map.of());
+        addToQueue(t);
+        executor.submit(() -> runAnonymousUpload(url, bearerToken, source, t));
+        return t;
+    }
+
+    /** Enqueue an anonymous download from {@code url} to {@code destination}.
+     *  {@code filter} may be empty. Returns the queued Transfer. */
+    public Transfer enqueueAnonymousDownload(String url, Path destination,
+                                               Map<String, Object> filter) {
+        Transfer t = new Transfer(TransferKind.DOWNLOAD, url,
+            destination.toString(), 0, filter);
+        addToQueue(t);
+        executor.submit(() -> runAnonymousDownload(url, destination, filter, t));
+        return t;
+    }
+
+    private void runAnonymousUpload(String url, String bearerToken,
+                                     Path source, Transfer t) {
+        try {
+            setState(t, TransferState.RUNNING, "Uploading...");
+            UploadTask task = new UploadTask(source.toString(), url, bearerToken, false);
+            ProgressListener forward = r -> {
+                t.setLastReport(r);
+                ProgressListener tl = t.progressListener();
+                if (tl != null) tl.onProgress(r);
+                fanOutProgress(r);
+                Platform.runLater(() -> {
+                    t.setBytesTransferred(r.bytesDone());
+                    if (r.bytesTotal() > 0) {
+                        long pct = Math.min(100, r.bytesDone() * 100 / r.bytesTotal());
+                        t.setMessage("Uploading... " + pct + "%");
+                    }
+                });
+            };
+            task.setProgressListener(forward);
+            task.run();
+            task.get();  // throws if it failed
+            setState(t, TransferState.COMPLETED, "Uploaded to " + url);
+        } catch (Throwable ex) {
+            setState(t, TransferState.FAILED,
+                ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+        }
+    }
+
+    private void runAnonymousDownload(String url, Path destination,
+                                        Map<String, Object> filter, Transfer t) {
+        try {
+            setState(t, TransferState.RUNNING, "Downloading...");
+            DownloadTask task = new DownloadTask(url,
+                filter == null ? Map.of() : filter,
+                destination.toString(), "hdf5", 120);
+            ProgressListener forward = r -> {
+                t.setLastReport(r);
+                ProgressListener tl = t.progressListener();
+                if (tl != null) tl.onProgress(r);
+                fanOutProgress(r);
+                Platform.runLater(() -> {
+                    t.setBytesTransferred(r.bytesDone());
+                    if (r.unitsTotal() > 0 && r.unitsDone() >= r.unitsTotal()) {
+                        t.setMessage("Downloaded " + r.bytesDone() + " bytes");
+                    } else {
+                        t.setMessage("Downloading...");
+                    }
+                });
+            };
+            task.setProgressListener(forward);
+            task.run();
+            String resultPath = task.get();
+            long bytes;
+            try { bytes = Files.size(destination); } catch (Exception e) { bytes = 0L; }
+            setBytes(t, bytes);
+            setState(t, TransferState.COMPLETED, "Saved " + bytes + " bytes to " + resultPath);
+        } catch (Throwable ex) {
+            setState(t, TransferState.FAILED,
+                ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+        }
     }
 
     // ---- internals ----
