@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongConsumer;
 
 /**
  * Java client for the TTI-O streaming transport protocol ().
@@ -49,7 +50,27 @@ public final class TransportClient {
     public List<TransportReader.PacketRecord> fetchPackets(Map<String, Object> filters,
                                                              long timeoutMs)
             throws Exception {
-        CollectingClient client = new CollectingClient(uri, filters);
+        return fetchPackets(filters, timeoutMs, null);
+    }
+
+    public List<TransportReader.PacketRecord> fetchPackets(Map<String, Object> filters)
+            throws Exception {
+        return fetchPackets(filters, 30_000);
+    }
+
+    /**
+     * Open a connection, send the query, collect all packets up to and including
+     * {@code EndOfStream}. Blocks up to {@code timeoutMs} milliseconds.
+     *
+     * @param onBytesReceived optional callback invoked after each binary frame with
+     *                        the cumulative byte count received so far (header +
+     *                        payload + optional CRC). May be {@code null}.
+     */
+    public List<TransportReader.PacketRecord> fetchPackets(Map<String, Object> filters,
+                                                             long timeoutMs,
+                                                             LongConsumer onBytesReceived)
+            throws Exception {
+        CollectingClient client = new CollectingClient(uri, filters, onBytesReceived);
         if (!client.connectBlocking(timeoutMs, TimeUnit.MILLISECONDS)) {
             throw new IllegalStateException("TransportClient: connect timed out");
         }
@@ -59,18 +80,28 @@ public final class TransportClient {
         return packets;
     }
 
-    public List<TransportReader.PacketRecord> fetchPackets(Map<String, Object> filters)
-            throws Exception {
-        return fetchPackets(filters, 30_000);
-    }
-
     /**
      * Stream a filtered dataset into a new {@code .tio} file via the
      * offline {@link TransportReader} materializer.
      */
     public SpectralDataset streamToFile(String outputPath,
                                           Map<String, Object> filters) throws Exception {
-        List<TransportReader.PacketRecord> packets = fetchPackets(filters);
+        return streamToFile(outputPath, filters, null);
+    }
+
+    /**
+     * Stream a filtered dataset into a new {@code .tio} file via the offline
+     * {@link TransportReader} materializer, reporting cumulative bytes received
+     * to {@code onBytesReceived} after each binary frame.
+     *
+     * @param onBytesReceived optional callback invoked with cumulative bytes received
+     *                        per binary frame; {@code null} disables the hook.
+     */
+    public SpectralDataset streamToFile(String outputPath,
+                                          Map<String, Object> filters,
+                                          LongConsumer onBytesReceived) throws Exception {
+        List<TransportReader.PacketRecord> packets =
+                fetchPackets(filters, 30_000, onBytesReceived);
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         for (TransportReader.PacketRecord rec : packets) {
             buf.write(rec.header.encode());
@@ -112,10 +143,14 @@ public final class TransportClient {
         final List<TransportReader.PacketRecord> packets = new ArrayList<>();
         final CompletableFuture<List<TransportReader.PacketRecord>> done =
                 new CompletableFuture<>();
+        final LongConsumer onBytesReceived;
+        long bytesReceived = 0L;
 
-        CollectingClient(URI uri, Map<String, Object> filters) {
+        CollectingClient(URI uri, Map<String, Object> filters,
+                          LongConsumer onBytesReceived) {
             super(uri);
             this.filters = filters;
+            this.onBytesReceived = onBytesReceived;
         }
 
         @Override
@@ -132,6 +167,8 @@ public final class TransportClient {
         public void onMessage(ByteBuffer bytes) {
             byte[] raw = new byte[bytes.remaining()];
             bytes.get(raw);
+            bytesReceived += raw.length;
+            if (onBytesReceived != null) onBytesReceived.accept(bytesReceived);
             TransportReader.PacketRecord rec = splitPacket(raw);
             packets.add(rec);
             if (rec.header.packetType == PacketType.END_OF_STREAM) {

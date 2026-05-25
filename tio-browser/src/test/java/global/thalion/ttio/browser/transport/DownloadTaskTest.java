@@ -189,4 +189,61 @@ class DownloadTaskTest {
             server.stop();
         }
     }
+
+    @Test
+    void emitsMultipleMidStreamProgressReports(@TempDir Path tmp) throws Exception {
+        Path fixture = Paths.get("../java/src/test/resources/ttio/minimal_ms.tio")
+            .toAbsolutePath();
+        assertTrue(Files.exists(fixture), "fixture missing: " + fixture);
+
+        int port = findFreePort();
+        TransportServer server = new TransportServer(
+            fixture.toString(), "127.0.0.1", port);
+        server.start();
+
+        try {
+            Path out = tmp.resolve("midstream.tio");
+            DownloadTask task = new DownloadTask(
+                "ws://127.0.0.1:" + port + "/",
+                Map.of(),
+                out.toString(),
+                "hdf5",
+                30);
+            java.util.List<global.thalion.ttio.browser.progress.ProgressReport> got =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+            task.setProgressListener(got::add);
+
+            runAndWait(task);
+
+            try {
+                task.get();
+            } catch (ExecutionException ee) {
+                fail("DownloadTask (mid-stream) failed: " + ee.getCause(), ee.getCause());
+            }
+
+            assertFalse(got.isEmpty(), "task should emit at least one ProgressReport");
+
+            // Verify bytesDone is monotonically non-decreasing across all reports.
+            long monotonic = -1L;
+            boolean sawMid = false;
+            long finalBytes = got.get(got.size() - 1).bytesDone();
+            for (var r : got) {
+                assertTrue(r.bytesDone() >= monotonic,
+                    "bytesDone must be monotonically non-decreasing, got " +
+                    r.bytesDone() + " after " + monotonic);
+                monotonic = r.bytesDone();
+                if (r.bytesDone() > 0 && r.bytesDone() < finalBytes) sawMid = true;
+            }
+            // A tiny fixture might fit in a single binary frame (one packet =
+            // one mid-stream report that also equals finalBytes). Guard to match
+            // UploadTaskTest conventions.
+            if (finalBytes > 0) {
+                assertTrue(sawMid,
+                    "expected at least one mid-stream report with 0 < bytesDone < finalBytes=" +
+                    finalBytes + "; reports=" + got.size());
+            }
+        } finally {
+            server.stop();
+        }
+    }
 }
