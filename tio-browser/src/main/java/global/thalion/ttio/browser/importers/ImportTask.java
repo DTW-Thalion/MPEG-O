@@ -76,12 +76,15 @@ public final class ImportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Importing " + spec.name + " from " + config.sourcePath);
-        // Indeterminate totals: target .tio size isn't known up front
-        // (codec ratio varies) and source-bytes-consumed isn't visible
-        // through reader APIs. A heartbeat ticker polls the target
-        // file's current size every 500ms so the user sees continuous
-        // bytes-processed + rate + elapsed in the numeric line.
-        tracker = new ProgressTracker("importing", -1L, -1L, System.currentTimeMillis());
+        // Use INPUT file size as the denominator (known up front, the
+        // file the user actually points at). Heartbeat ticker polls the
+        // target .tio's current size every 500ms as a coarse proxy for
+        // bytesDone, clamped to bytesTotal so the bar never exceeds
+        // 100%. At ~100% the ProgressFormatter switches to "finalizing…"
+        // to make it obvious we're in HDF5-close territory, not stalled.
+        long inputBytes = Files.size(config.sourcePath);
+        tracker = new ProgressTracker(
+            "importing", inputBytes, -1L, System.currentTimeMillis());
         emit(0L);
         java.util.concurrent.atomic.AtomicBoolean done =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -90,7 +93,7 @@ public final class ImportTask extends Task<Void> {
                 long current = 0L;
                 try {
                     if (Files.exists(config.targetTio)) {
-                        current = Files.size(config.targetTio);
+                        current = Math.min(Files.size(config.targetTio), inputBytes);
                     }
                 } catch (Exception ignored) { /* file may flicker mid-write */ }
                 emit(current);
@@ -100,6 +103,10 @@ public final class ImportTask extends Task<Void> {
         }, "import-progress-ticker");
         ticker.setDaemon(true);
         ticker.start();
+        long t0 = System.currentTimeMillis();
+        System.err.println("[ImportTask] start " + spec.name
+            + " source=" + config.sourcePath + " target=" + config.targetTio
+            + " inputBytes=" + inputBytes);
         try {
             switch (spec.name) {
             case "mzML"             -> importMzML();
@@ -119,13 +126,12 @@ public final class ImportTask extends Task<Void> {
                 spec.name + " import not yet wired -- see "
                 + "tio-browser/README.md follow-ups.");
             }
+            long t1 = System.currentTimeMillis();
+            System.err.println("[ImportTask] dispatch returned after "
+                + (t1 - t0) + " ms; final emit");
             done.set(true);
             try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
-            long finalSize = 0L;
-            try {
-                if (Files.exists(config.targetTio)) finalSize = Files.size(config.targetTio);
-            } catch (Exception ignored) {}
-            emit(finalSize);
+            emit(inputBytes);
         } finally {
             done.set(true);
             ticker.interrupt();

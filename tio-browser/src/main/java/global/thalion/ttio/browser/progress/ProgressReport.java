@@ -21,9 +21,10 @@ public record ProgressReport(
     }
 
     /**
-     * @return true if the byte-rate has fallen below ~100 B/s and at least 10 seconds have passed since the last non-zero progress delta.
+     * @return true if the byte-rate has fallen below ~100 B/s and at least 10 seconds have passed since the last non-zero progress delta. Always false when {@link #percent()} is at or above 0.99 — at ~100% the operation is finalizing (e.g. closing an HDF5 file), not stalled.
      */
     public boolean isStalled(long nowEpochMs) {
+        if (isDeterminate() && percent() >= 0.99) return false;
         return rateBytesPerSec < 100.0
             && (nowEpochMs - lastActivityEpochMs) > 10_000L;
     }
