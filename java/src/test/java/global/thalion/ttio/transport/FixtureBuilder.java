@@ -293,6 +293,119 @@ public final class FixtureBuilder {
         return target;
     }
 
+    /**
+     * Produce a {@code .tio} populated with EVERY first-class v0.11
+     * accessor at once (except {@code SUBJECTS} and {@code SAMPLES},
+     * which are deferred until they exist as first-class entities on
+     * {@link SpectralDataset}). Used by Task 1.11's
+     * {@code CoverageGapWatchdogTest} to fire whenever a writer
+     * silently drops one of the populated content types.
+     *
+     * <p>What gets populated:</p>
+     * <ul>
+     *   <li>1 reference with 3 contigs (chr_long, chr_medium, chr_short)</li>
+     *   <li>1 small MSImage in continuous mode (3x3x4)</li>
+     *   <li>2 {@link Identification} rows</li>
+     *   <li>2 {@link Quantification} rows</li>
+     *   <li>2 {@link ProvenanceRecord} entries (one rich, one minimal)</li>
+     *   <li>{@code @encrypted = "aes-256-gcm"} root attribute</li>
+     *   <li>1 MS run with 5 spectra of 4 m/z points each</li>
+     *   <li>1 genomic run with 4 short aligned reads</li>
+     * </ul>
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildEverything(Path target) throws Exception {
+        // Reference (3 contigs)
+        List<String> refNames = List.of("chr_long", "chr_medium", "chr_short");
+        List<byte[]> refSeqs = List.of(
+            repeat((byte) 'A', 6_000),
+            repeat((byte) 'C', 1_000),
+            "ACGTACGTACGTACGTAC".getBytes());
+        ReferenceImport ref = new ReferenceImport(
+            "fixture-everything-v1", refNames, refSeqs);
+
+        // MSImage (3x3x4 continuous)
+        final int w = 3;
+        final int h = 3;
+        final int s = 4;
+        double[] cube = new double[w * h * s];
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int pixelIdx = x + y * w;
+                int base = (y * w + x) * s;
+                for (int k = 0; k < s; k++) {
+                    cube[base + k] = (k + 1.0) * pixelIdx;
+                }
+            }
+        }
+        double[] mz = new double[s];
+        for (int i = 0; i < s; i++) mz[i] = 100.0 + i * 10.0;
+        MSImage image = new MSImage(w, h, s, 0,
+                10.0, 10.0, "raster",
+                cube, mz,
+                "everything", "",
+                List.of(), List.of(), List.of());
+
+        // Identifications
+        List<Identification> ids = List.of(
+            new Identification("run_0001", 0, "CompoundA", 0.91,
+                List.of("evidence1", "evidence2")),
+            new Identification("run_0001", 1, "CompoundB", 0.85,
+                List.of("evidence3")));
+
+        // Quantifications
+        List<Quantification> quants = List.of(
+            new Quantification("CompoundA", "sample-1", 12.5,
+                "intensity-sum", "counts"),
+            new Quantification("CompoundB", "sample-1", 7.3,
+                "intensity-sum", "counts"));
+
+        // Provenance
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("mode", "strict");
+        params.put("threshold", "0.5");
+        ProvenanceRecord prov1 = new ProvenanceRecord(
+            1700000000L, "TTI-O Java 1.0.0",
+            params,
+            List.of("file:///in.raw", "file:///in2.raw"),
+            List.of("file:///out.tio"));
+        ProvenanceRecord prov2 = new ProvenanceRecord(
+            1700000100L, "downstream step",
+            Map.of(),
+            List.of(),
+            List.of("file:///final.tio"));
+
+        // MS run + genomic run
+        AcquisitionRun msRun = synthMsRun("run_0001", 0, 5, 4);
+        WrittenGenomicRun genRun = synthGenomicRun();
+
+        // Combined create with MS + genomic + ids + quants + provenance,
+        // feature flags must include OPT_NATIVE_MSIMAGE_CUBE for the
+        // subsequent image.writeTo(...) layering pass.
+        FeatureFlags flags = FeatureFlags.defaultCurrent()
+            .with(FeatureFlags.OPT_NATIVE_MSIMAGE_CUBE);
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "everything", "",
+                List.of(msRun), List.of(genRun),
+                ids, quants, List.of(prov1, prov2),
+                flags)) {
+            // Reference is written via writeToDataset on an open ds.
+            ref.writeToDataset(ds);
+            // Encrypted attribute set through the open provider.
+            ds.provider().rootGroup().setAttribute("encrypted", "aes-256-gcm");
+        }
+        // Image cube layered on after create() closes the provider —
+        // mirrors the buildImageMsContinuous pattern.
+        try (Hdf5File f = Hdf5File.open(target.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study")) {
+            image.writeTo(Hdf5Provider.adapterForGroup(study));
+        }
+        return target;
+    }
+
     /** Build a deterministic synthetic MS run with {@code nSpectra}
      *  spectra of {@code pointsPerSpectrum} m/z points each. Pattern
      *  matches {@code TransportConformanceTest.buildDataset}. */
