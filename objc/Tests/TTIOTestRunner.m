@@ -122,6 +122,7 @@ extern void testFD1MultiRecipient(void);
 extern void testMultiRecipientXLang(void);
 extern void testC0StandaloneKeyWrap(void);
 extern void testC2aServerKekId(void);
+extern void testTransportPacketTypeV011(void);
 
 int main(int argc, const char *argv[])
 {
@@ -609,6 +610,10 @@ int main(int argc, const char *argv[])
             testPixelSpectraRaisesWhenMzAxisAbsent();
         }
         END_SET("1.2.0: TTIOMSImage pixelSpectra raises on missing mzAxis")
+
+        START_SET("transport v0.11: packet-type constants (0x10-0x1B) + feature flag")
+            testTransportPacketTypeV011();
+        END_SET("transport v0.11: packet-type constants (0x10-0x1B) + feature flag")
     }
     return 0;
 }

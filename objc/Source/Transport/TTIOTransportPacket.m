@@ -23,6 +23,7 @@ const NSUInteger TTIOTransportHeaderSize = 24;
 NSString *const TTIOTransportErrorDomain = @"TTIOTransportErrorDomain";
 
 NSString *const TTIOTransportBulkModeV2BlobsFeature = @"bulk_mode_v2_blobs";
+NSString *const TTIOTransportV011Feature = @"transport_v0_11";
 const uint8_t TTIOTransportCodecIdMateInlineV2    = 13;
 const uint8_t TTIOTransportCodecIdRefDiffV2       = 14;
 const uint8_t TTIOTransportCodecIdNameTokenizedV2 = 15;
