@@ -17,6 +17,7 @@ import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import global.thalion.ttio.browser.progress.ProgressDisplay;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
@@ -61,7 +62,7 @@ public final class EncodingPanel {
     private final Button submitBtn = new Button("Encode + upload");
     private final Button cancelBtn = new Button("Cancel");
     private final Label statusLabel = new Label("");
-    private final ProgressBar progressBar = new ProgressBar(0);
+    private final ProgressDisplay progressDisplay = new ProgressDisplay();
 
     private volatile ProgressListener externalProgressListener;
 
@@ -100,7 +101,7 @@ public final class EncodingPanel {
     Button submitButton()           { return submitBtn; }
     Button cancelButton()           { return cancelBtn; }
     Label statusLabel()             { return statusLabel; }
-    ProgressBar progressBar()       { return progressBar; }
+    ProgressBar progressBar()       { return progressDisplay.progressBar(); }
 
     /**
      * Set an external listener to receive progress reports from encoding operations.
@@ -167,13 +168,13 @@ public final class EncodingPanel {
         // Hidden until a run starts; indeterminate during encode (the
         // local import doesn't report granular progress -- see #114),
         // then handed off to the determinate Transfers queue on upload.
-        progressBar.setVisible(false);
-        progressBar.setManaged(false);
-        progressBar.setPrefWidth(140);
+        progressDisplay.node().setVisible(false);
+        progressDisplay.node().setManaged(false);
+        progressDisplay.node().setPrefWidth(140);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox buttons = new HBox(8, progressBar, statusLabel, spacer,
+        HBox buttons = new HBox(8, progressDisplay.node(), statusLabel, spacer,
                                 submitBtn, cancelBtn);
         buttons.setPadding(new Insets(0, 12, 12, 12));
 
@@ -248,24 +249,20 @@ public final class EncodingPanel {
         submitBtn.setDisable(true);
         ImportTask task = new ImportTask(spec, config);
         task.setProgressListener(r -> {
-            javafx.application.Platform.runLater(() -> {
-                if (r.isDeterminate()) progressBar.setProgress(r.percent());
-                else progressBar.setProgress(-1.0);
-            });
+            javafx.application.Platform.runLater(() ->
+                progressDisplay.update(r, System.currentTimeMillis()));
             var ext = externalProgressListener;
             if (ext != null) ext.onProgress(r);
         });
         // Encode phase: indeterminate bar + live task message. The
         // upload phase gets a determinate % in the Transfers queue.
-        progressBar.setVisible(true);
-        progressBar.setManaged(true);
-        progressBar.progressProperty().bind(task.progressProperty());
+        progressDisplay.node().setVisible(true);
+        progressDisplay.node().setManaged(true);
         statusLabel.textProperty().bind(task.messageProperty());
         task.setOnSucceeded(ev -> {
             statusLabel.textProperty().unbind();
-            progressBar.progressProperty().unbind();
-            progressBar.setVisible(false);
-            progressBar.setManaged(false);
+            progressDisplay.node().setVisible(false);
+            progressDisplay.node().setManaged(false);
             statusLabel.setText("Encoded; enqueuing upload...");
             transfers.enqueueUpload(manager.client(), project, uri, targetTio);
             new Alert(AlertType.INFORMATION,
@@ -276,9 +273,8 @@ public final class EncodingPanel {
         });
         task.setOnFailed(ev -> {
             statusLabel.textProperty().unbind();
-            progressBar.progressProperty().unbind();
-            progressBar.setVisible(false);
-            progressBar.setManaged(false);
+            progressDisplay.node().setVisible(false);
+            progressDisplay.node().setManaged(false);
             submitBtn.setDisable(false);
             statusLabel.setText("");
             Throwable t = task.getException();
