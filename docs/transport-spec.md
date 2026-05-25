@@ -1,4 +1,4 @@
-# TTI-O Transport Format Specification — v0.10.0
+# TTI-O Transport Format Specification — v0.11.0
 
 This document specifies the TTI-O streaming transport format: a
 self-describing binary framing protocol that carries the same logical
@@ -67,6 +67,12 @@ header. Version 1 is defined by this document.
   [`feature-flags.md`](feature-flags.md): flags without an `opt_`
   prefix are required; `opt_`-prefixed flags are informational.
 
+### 2.1 Spec version history
+
+| Version | Date       | Changes |
+|---------|------------|---------|
+| v0.11   | 2026-05-25 | Complete `.tio` coverage: references, image cubes, identifications, quantifications, dataset-level provenance, subjects/samples metadata, encryption-algorithm name. New packet types 0x10–0x1B. Backward-compatible: v0.10 readers skip unknown packet types via length-prefixed wire frames; readers that need v0.11 semantics check the `transport_v0_11` feature flag in StreamHeader. |
+
 ## 3. Wire Format
 
 ### 3.1 Packet Header
@@ -116,6 +122,18 @@ plaintext is not a meaningful mode.
 | 0x09 | `BlobV2MateInfo`      | Verbatim `mate_info/inline_v2` blob (bulk mode, §4.10)   |
 | 0x0A | `BlobV2RefDiff`       | Verbatim `sequences/refdiff_v2` blob (bulk mode, §4.11)  |
 | 0x0B | `BlobV2NameTok`       | Verbatim `read_names/name_tok_v2` blob (bulk mode, §4.12)|
+| 0x10 | `ReferenceGroupHeader`   | Reference-import header: URI + chromosome count + md5 (v0.11, §4.13) |
+| 0x11 | `ReferenceChromosome`    | One contig within a reference group (v0.11, §4.14)       |
+| 0x12 | `EndOfReferenceGroup`    | Terminates a reference group (v0.11, §4.15)              |
+| 0x13 | `ImageHeader`            | Imaging cube grid + axis metadata (v0.11, §4.16)         |
+| 0x14 | `ImagePixel`             | One pixel of an imaging cube (v0.11, §4.17)              |
+| 0x15 | `EndOfImage`             | Terminates an imaging cube (v0.11, §4.18)                |
+| 0x16 | `IdentificationsTable`   | Full identifications table as an Arrow IPC stream (v0.11, §4.19) |
+| 0x17 | `QuantificationsTable`   | Full quantifications table as an Arrow IPC stream (v0.11, §4.20) |
+| 0x18 | `DatasetProvenance`      | Dataset-level provenance chain (v0.11, §4.21)            |
+| 0x19 | `SubjectMetadata`        | Subjects table as an Arrow IPC stream (v0.11, §4.22)     |
+| 0x1A | `SampleMetadata`         | Samples table as an Arrow IPC stream (v0.11, §4.22)      |
+| 0x1B | `EncryptionAlgorithm`    | Dataset-level `@encrypted` algorithm name (v0.11, §4.23) |
 | 0xFF | `EndOfStream`         | Terminates the entire transport stream                   |
 
 ### 3.3 Checksum
@@ -466,6 +484,181 @@ blob_length:          uint32
 blob:                 bytes[blob_length]
 ```
 
+### 4.13 ReferenceGroupHeader (`0x10`) — v0.11
+
+Declares a `ReferenceImport` in the dataset: an
+`(reference_uri, chromosome_count, total_bases, md5_hex)` tuple.
+Subsequent `ReferenceChromosome` packets carry the actual contig data,
+terminated by `EndOfReferenceGroup`. One header per reference import.
+
+```
+uri_length:          uint16
+uri_utf8:            bytes[uri_length]
+chromosome_count:    uint32
+total_bases:         uint64
+md5_hex:             bytes[32]          # ASCII hex; matches format-spec §11 @md5 attr
+```
+
+### 4.14 ReferenceChromosome (`0x11`) — v0.11
+
+One per contig within a reference group. Order MUST match the
+sorted-name order used on disk (format-spec §11). The `encoding`
+byte mirrors the format-spec's Perf-A decision (skip ZLIB below
+4 KB) and lets the writer choose per chromosome; readers MUST
+handle both.
+
+```
+name_length:         uint16
+name_utf8:           bytes[name_length]
+length:              uint64             # bases (also encoded as the length attribute on disk)
+encoding:            uint8              # 0 = uncompressed UINT8, 1 = ZLIB-compressed
+payload_length:      uint32
+payload:             bytes[payload_length]   # raw bases or zlib stream
+```
+
+### 4.15 EndOfReferenceGroup (`0x12`) — v0.11
+
+Terminator for a reference group; payload is a single
+`chromosome_count_seen` field so the reader can assert against the
+matching `ReferenceGroupHeader`.
+
+```
+chromosome_count_seen: uint32
+```
+
+### 4.16 ImageHeader (`0x13`) — v0.11
+
+One per `MSImage` / vibrational / UV-Vis imaging cube (format-spec
+§7, §7a, §7b). Declares grid + axis metadata. The `is_continuous`
+flag selects which `ImagePixel` payload shape readers expect
+(continuous-mode pixels carry intensities only; processed-mode
+pixels add a per-pixel axis).
+
+```
+modality:            uint8              # 0=MS, 1=Raman, 2=IR, 3=UV-Vis
+                                        # (matches AcquisitionMode ordinals for imaging modes)
+width:               uint32
+height:              uint32
+spectrum_bins:       uint32             # per-pixel intensity samples
+pixel_size_x:        float64
+pixel_size_y:        float64
+scan_pattern:        uint8              # 0=flyback, 1=meander, 2=random
+axis_kind:           uint8              # 0=mz, 1=wavenumber, 2=wavelength, 3=ppm
+axis_length:         uint32
+axis:                float64[axis_length]   # shared axis (continuous mode)
+                                            # or zeroes (processed mode)
+is_continuous:       uint8              # 0/1; if 0, each pixel carries its own axis
+title_length:        uint16
+title_utf8:          bytes[title_length]
+isa_id_length:       uint16
+isa_id_utf8:         bytes[isa_id_length]
+```
+
+### 4.17 ImagePixel (`0x14`) — v0.11
+
+One per pixel. For continuous-mode cubes, intensities only. For
+processed-mode (signalled by `ImageHeader.is_continuous == 0`),
+intensities are followed by a per-pixel axis.
+
+Continuous-mode payload:
+```
+x:                   uint32
+y:                   uint32
+precision:           uint8              # 0=float32, 1=float64
+compression:         uint8              # 0=none, 1=zstd, 2=zlib
+payload_length:      uint32
+intensities:         bytes[payload_length]
+```
+
+Processed-mode payload appends a per-pixel axis after `intensities`:
+```
+axis_length:         uint32
+axis_payload:        bytes[axis_length]
+```
+
+### 4.18 EndOfImage (`0x15`) — v0.11
+
+Terminator for an imaging cube; payload is a single
+`pixel_count_seen` field for cross-check against `width * height`
+declared in the matching `ImageHeader`.
+
+```
+pixel_count_seen:    uint32
+```
+
+### 4.19 IdentificationsTable (`0x16`) — v0.11
+
+Single packet carrying the full `identifications` compound dataset
+as a length-prefixed Apache Arrow IPC stream. The Arrow IPC stream
+is the canonical Arrow inter-process format (magic `ARROW1` +
+schema flatbuffer + record-batch flatbuffers + EOS); it carries its
+own schema, dictionary encoding, and null bitmaps, so no TLV
+envelope on top is needed. Writers MUST emit one IPC stream per
+packet covering all rows of that table.
+
+```
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]   # self-describing Arrow IPC stream
+                                               # (schema message + record-batch messages)
+```
+
+### 4.20 QuantificationsTable (`0x17`) — v0.11
+
+Identical wire shape to `IdentificationsTable` (Arrow IPC stream);
+distinct packet type so receivers can dispatch without parsing the
+payload first.
+
+```
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]   # self-describing Arrow IPC stream
+```
+
+### 4.21 DatasetProvenance (`0x18`) — v0.11
+
+Distinct from the per-run `Provenance` packet (0x06). Carries the
+dataset-level provenance chain (format-spec §6.3). Per-record
+structure mirrors the v0.10 per-run `Provenance` record layout
+verbatim.
+
+```
+record_count:        uint32
+
+# Per record (repeated record_count times):
+timestamp_unix:      int64
+software_length:     uint16
+software:            bytes[software_length]
+parameters_length:   uint16
+parameters_json:     bytes[parameters_length]
+input_refs_length:   uint16
+input_refs_csv:      bytes[input_refs_length]
+output_refs_length:  uint16
+output_refs_csv:     bytes[output_refs_length]
+```
+
+### 4.22 SubjectMetadata (`0x19`) and SampleMetadata (`0x1A`) — v0.11
+
+For format-spec §11 subject/sample groups. Each is a single packet
+carrying the table as an Arrow IPC stream (same wire shape as 0x16
+and 0x17). Receivers ingesting these MUST write them into the
+on-disk `/study/subjects/*` and `/study/samples/*` groups.
+
+```
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]   # self-describing Arrow IPC stream
+```
+
+### 4.23 EncryptionAlgorithm (`0x1B`) — v0.11
+
+Carries the dataset-level `@encrypted` algorithm name when present
+so `isEncrypted()` round-trips correctly. Per-AU
+`ProtectionMetadata` (0x04) continues to carry the per-key material;
+this packet only conveys the algorithm-name string.
+
+```
+algorithm_length:    uint16
+algorithm_utf8:      bytes[algorithm_length]
+```
+
 ## 5. Ordering Rules
 
 1. **StreamHeader first.** The first packet of every stream MUST be
@@ -499,6 +692,24 @@ blob:                 bytes[blob_length]
 
 Receivers that encounter a violation SHOULD reject the stream and
 SHOULD surface the violated rule to the application.
+
+### 5.4 v0.11 ordering (after StreamHeader, before any DatasetHeader)
+
+When `transport_v0_11` is in the StreamHeader features list, the
+following sections appear in this order, each section optional:
+
+1. Zero or more `ENCRYPTION_ALGORITHM` (0x1B) packets.
+2. Zero or more `DATASET_PROVENANCE` (0x18) packets.
+3. Zero or more `SUBJECT_METADATA` (0x19) and `SAMPLE_METADATA` (0x1A) packets.
+4. Zero or more reference groups:
+   `REFERENCE_GROUP_HEADER` → N × `REFERENCE_CHROMOSOME` → `END_OF_REFERENCE_GROUP`.
+5. Zero or more image cubes:
+   `IMAGE_HEADER` → N × `IMAGE_PIXEL` → `END_OF_IMAGE`.
+6. Zero or more `IDENTIFICATIONS_TABLE` and `QUANTIFICATIONS_TABLE` packets.
+
+The pre-existing v0.10 run sequences (DatasetHeader + AccessUnit + ...
++ EndOfDataset) follow. `EndOfStream` (0xFF) terminates the stream
+regardless of section count.
 
 ## 6. Bidirectional Conversion
 
