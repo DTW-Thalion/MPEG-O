@@ -58,6 +58,10 @@ public final class DownloadTask extends Task<String> {
         updateMessage("Connecting to " + url + " …");
         tracker = new ProgressTracker(
             "downloading", -1L, 1L, System.currentTimeMillis());
+        // NOTE: TransportClient.streamToFile is a single blocking SDK call
+        // without per-chunk hooks. Mid-stream progress requires plumbing
+        // into the global.thalion.ttio.transport SDK; out of scope for the
+        // tio-browser UX work. Start/end emission is what we ship today.
         emit(0L, 0L);
         TransportClient client = new TransportClient(url);
         // streamToFile does not accept a timeout parameter; the caller

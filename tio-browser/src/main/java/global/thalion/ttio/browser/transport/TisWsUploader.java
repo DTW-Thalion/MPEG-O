@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.LongConsumer;
 
 /**
  * Uploads a {@code .tis} byte stream over a WebSocket connection.
@@ -35,7 +36,33 @@ public final class TisWsUploader {
     private TisWsUploader() {}
 
     /**
+     * Upload {@code tisPath} to {@code uri} via WebSocket binary frames,
+     * reporting cumulative bytes sent via {@code onBytesSent} after each
+     * 64 KiB chunk.
+     *
+     * @param uri          target URI ({@code ws://} or {@code wss://})
+     * @param tisPath      path to the temporary {@code .tis} file to upload
+     * @param basename     base filename of the original {@code .tio}
+     * @param onBytesSent  optional callback invoked with cumulative bytes
+     *                     sent after each chunk; may be {@code null}
+     * @throws Exception on failure
+     */
+    public static void upload(URI uri, Path tisPath, String basename,
+                              LongConsumer onBytesSent)
+            throws Exception {
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        UploadingClient client = new UploadingClient(uri, tisPath, basename, done, onBytesSent);
+        if (!client.connectBlocking(30, TimeUnit.SECONDS)) {
+            throw new IOException("WebSocket connect to " + uri + " timed out");
+        }
+        done.get(120, TimeUnit.SECONDS);
+        client.closeBlocking();
+    }
+
+    /**
      * Upload {@code tisPath} to {@code uri} via WebSocket binary frames.
+     * Delegates to {@link #upload(URI, Path, String, LongConsumer)} with
+     * {@code null} progress callback.
      *
      * @param uri       target URI ({@code ws://} or {@code wss://})
      * @param tisPath   path to the temporary {@code .tis} file to upload
@@ -44,13 +71,7 @@ public final class TisWsUploader {
      */
     public static void upload(URI uri, Path tisPath, String basename)
             throws Exception {
-        CompletableFuture<Void> done = new CompletableFuture<>();
-        UploadingClient client = new UploadingClient(uri, tisPath, basename, done);
-        if (!client.connectBlocking(30, TimeUnit.SECONDS)) {
-            throw new IOException("WebSocket connect to " + uri + " timed out");
-        }
-        done.get(120, TimeUnit.SECONDS);
-        client.closeBlocking();
+        upload(uri, tisPath, basename, null);
     }
 
     private static final class UploadingClient extends WebSocketClient {
@@ -58,13 +79,16 @@ public final class TisWsUploader {
         private final Path tisPath;
         private final String basename;
         private final CompletableFuture<Void> done;
+        private final LongConsumer onBytesSent;
 
         UploadingClient(URI uri, Path tisPath, String basename,
-                        CompletableFuture<Void> done) {
+                        CompletableFuture<Void> done,
+                        LongConsumer onBytesSent) {
             super(uri);
-            this.tisPath  = tisPath;
-            this.basename = basename;
-            this.done     = done;
+            this.tisPath     = tisPath;
+            this.basename    = basename;
+            this.done        = done;
+            this.onBytesSent = onBytesSent;
         }
 
         @Override
@@ -78,10 +102,13 @@ public final class TisWsUploader {
             try {
                 send(leading());
                 byte[] buf = new byte[CHUNK_SIZE];
+                long sent = 0L;
                 try (InputStream in = Files.newInputStream(tisPath)) {
                     int n;
                     while ((n = in.read(buf)) != -1) {
                         send(ByteBuffer.wrap(buf, 0, n));
+                        sent += n;
+                        if (onBytesSent != null) onBytesSent.accept(sent);
                     }
                 }
                 send(trailing());
