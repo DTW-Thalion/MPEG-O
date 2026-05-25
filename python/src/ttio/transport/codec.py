@@ -525,6 +525,110 @@ class TransportWriter:
             struct.pack("<I", chrom_count & 0xFFFFFFFF),
         )
 
+    # ------------------------------------------------ v0.11 §4.16-§4.18
+    def write_image(self, image) -> None:
+        """v0.11 Task 2.6: emit an :class:`~ttio.MSImage` as the packet
+        sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14)
+        -> END_OF_IMAGE (0x15)``, where ``N = width * height``.
+
+        Wire layout matches transport-spec §4.16-§4.18 byte-for-byte
+        with Java's :meth:`TransportWriter.writeImage` (commit
+        ``a6b1e5d9``). All multi-byte integers are LITTLE-ENDIAN
+        (spec §1.7).
+
+        Continuous-mode only — the shared m/z axis rides on the
+        IMAGE_HEADER and every IMAGE_PIXEL carries only its
+        intensities (FLOAT64, uncompressed). Processed-mode
+        (per-pixel axis) and non-MS modalities (Raman / IR / UV-Vis)
+        are deferred — the matching reader decode path raises a
+        clear ``ValueError`` if it encounters such a stream.
+
+        :param image: :class:`ttio.MSImage` to emit. ``image`` must
+            not be ``None`` (caller's responsibility to gate on
+            :attr:`SpectralDataset.image is not None`).
+        """
+        if image is None:
+            raise ValueError("write_image: image must not be None")
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.mz_axis, dtype=np.float64)
+        axis_length = int(axis.size)
+        modality = 0  # MS imaging
+        axis_kind = 0  # mz
+        is_continuous = 1  # shared axis
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+        title_bytes = (image.title or "").encode("utf-8")
+        isa_bytes = (image.isa_investigation_id or "").encode("utf-8")
+        if len(title_bytes) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: title {len(title_bytes)} bytes exceeds "
+                f"uint16 max"
+            )
+        if len(isa_bytes) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: isa_id {len(isa_bytes)} bytes exceeds "
+                f"uint16 max"
+            )
+
+        # -- IMAGE_HEADER (0x13) ----------------------------------------
+        header_payload = b"".join((
+            struct.pack("<B", modality & 0xFF),
+            struct.pack("<I", width & 0xFFFFFFFF),
+            struct.pack("<I", height & 0xFFFFFFFF),
+            struct.pack("<I", bins & 0xFFFFFFFF),
+            struct.pack("<d", float(image.pixel_size_x)),
+            struct.pack("<d", float(image.pixel_size_y)),
+            struct.pack("<B", scan_pattern_byte & 0xFF),
+            struct.pack("<B", axis_kind & 0xFF),
+            struct.pack("<I", axis_length & 0xFFFFFFFF),
+            axis.astype("<f8", copy=False).tobytes(),
+            struct.pack("<B", is_continuous & 0xFF),
+            struct.pack("<H", len(title_bytes) & 0xFFFF),
+            title_bytes,
+            struct.pack("<H", len(isa_bytes) & 0xFFFF),
+            isa_bytes,
+        ))
+        self._emit(PacketType.IMAGE_HEADER, header_payload)
+
+        # -- IMAGE_PIXEL (0x14) — one per pixel -------------------------
+        # Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
+        # compression(u8) + payload_length(u32) + intensities[..].
+        # Always FLOAT64 (precision=1), uncompressed (compression=0).
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        payload_len = 8 * bins
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        # cube shape: (height, width, spectral_points). Iterate raster:
+        # row-major over (y, x) — matches Java's y-outer / x-inner loop.
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                intensities_bytes = cube[y, x].tobytes()
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    intensities_bytes,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        # -- END_OF_IMAGE (0x15) ----------------------------------------
+        # pixel_count_seen: uint32 per spec §4.18.
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
     def write_end_of_dataset(
         self, *, dataset_id: int, final_au_sequence: int
     ) -> None:
@@ -558,12 +662,12 @@ class TransportWriter:
         if bulk_active:
             features = features + [BULK_MODE_V2_BLOBS_FEATURE]
 
-        # v0.11 Task 2.4/2.5: detect v0.11 content (references +
-        # encryption algorithm + dataset provenance today; subjects,
-        # samples, images, identifications, quantifications land in
+        # v0.11 Task 2.4/2.5/2.6: detect v0.11 content (references +
+        # encryption algorithm + dataset provenance + image cube today;
+        # subjects, samples, identifications, quantifications land in
         # subsequent tasks at the same prelude insertion point per
         # §5.4 ordering). Java parity: TransportWriter.writeDataset
-        # (commits 530a5833 + 563e09c3).
+        # (commits 530a5833 + 563e09c3 + a6b1e5d9).
         refs = getattr(dataset, "references", {}) or {}
         # ``provenance`` is a method on SpectralDataset (not a
         # property) — call it eagerly so the empty-vs-nonempty check
@@ -572,10 +676,14 @@ class TransportWriter:
             dataset_provenance = list(dataset.provenance())
         except Exception:  # pragma: no cover - defensive
             dataset_provenance = []
+        # ``image`` is a property — read once so the cache hit is shared
+        # between the flag-detect and the emit branch.
+        dataset_image = getattr(dataset, "image", None)
         has_v011_content = (
             len(refs) > 0
             or bool(getattr(dataset, "is_encrypted", False))
             or len(dataset_provenance) > 0
+            or dataset_image is not None
         )
         if has_v011_content and TRANSPORT_V0_11_FEATURE not in features:
             features = features + [TRANSPORT_V0_11_FEATURE]
@@ -588,7 +696,7 @@ class TransportWriter:
             n_datasets=len(runs) + len(genomic_runs),
         )
 
-        # v0.11 Task 2.4/2.5: v0.11 prelude — per §5.4 ordering,
+        # v0.11 Task 2.4/2.5/2.6: v0.11 prelude — per §5.4 ordering,
         # v0.11 sections come BEFORE the v0.10 dataset/run sections,
         # and the sub-sections appear in this order:
         #   §5.4.1 ENCRYPTION_ALGORITHM
@@ -597,8 +705,11 @@ class TransportWriter:
         #   §5.4.4 reference groups
         #   §5.4.5 image cubes
         #   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
-        # Subjects, samples, images, identifications, quantifications
-        # land here in subsequent Python tasks.
+        # Subjects, samples, identifications, quantifications land
+        # here in subsequent Python tasks. Reference groups are
+        # currently emitted via the explicit write_reference_group
+        # helper; wiring them into write_dataset is the Task 2.7 +
+        # 2.9 follow-up. Image is wired in at §5.4.5 today.
         if has_v011_content:
             if getattr(dataset, "is_encrypted", False):
                 algo = getattr(dataset, "encrypted_algorithm", "") or ""
@@ -606,6 +717,8 @@ class TransportWriter:
                     self.write_encryption_algorithm(algo)
             if dataset_provenance:
                 self.write_dataset_provenance(dataset_provenance)
+            if dataset_image is not None:
+                self.write_image(dataset_image)
         for i, (name, run) in enumerate(runs, start=1):
             self.write_dataset_header(
                 dataset_id=i,
@@ -976,6 +1089,28 @@ class TransportWriter:
                 stream_write(header + payload)
 
 
+def _scan_pattern_to_byte(scan_pattern: str | None) -> int:
+    """v0.11 Task 2.6: map an :class:`~ttio.MSImage` scan-pattern
+    string to the wire byte per transport-spec §4.16
+    (``0=raster/flyback, 1=meander, 2=random``).
+
+    The on-disk format uses ``"raster"`` as the default name for the
+    flyback pattern. Unknown values map to 0 (raster) defensively.
+    Java parity: :meth:`TransportWriter.scanPatternToByte`.
+    """
+    if not scan_pattern:
+        return 0
+    table = {"raster": 0, "flyback": 0, "meander": 1, "random": 2}
+    return table.get(scan_pattern, 0)
+
+
+def _scan_pattern_from_byte(b: int) -> str:
+    """Inverse of :func:`_scan_pattern_to_byte`. Java parity:
+    :meth:`TransportReader.scanPatternFromByte`.
+    """
+    return {0: "raster", 1: "meander", 2: "random"}.get(b, "raster")
+
+
 def _provenance_params_json(params) -> str:
     """v0.11 Task 2.5: serialise the ``parameters`` dict of a
     :class:`~ttio.provenance.ProvenanceRecord` to the canonical wire
@@ -1242,6 +1377,14 @@ class TransportReader:
         # parity: TransportReader.collectedProvenance (commit
         # 563e09c3).
         collected_provenance: list = []  # list[ProvenanceRecord]
+        # v0.11 Task 2.6: per-stream image-cube accumulator state for
+        # the IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) ->
+        # END_OF_IMAGE (0x15) packet sequence. ``current_image_builder``
+        # is non-None between IMAGE_HEADER and END_OF_IMAGE. Java
+        # parity: TransportReader.currentImageBuilder /
+        # collectedImage (commit a6b1e5d9).
+        current_image_builder: dict | None = None
+        collected_image = None  # type: MSImage | None
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -1453,6 +1596,165 @@ class TransportReader:
                 current_ref_uri = None
                 current_chrom_names = []
                 current_chrom_seqs = []
+            elif ptype == int(PacketType.IMAGE_HEADER):
+                # v0.11 Task 2.6: decode an IMAGE_HEADER (0x13)
+                # payload and prime the per-image accumulator. Wire
+                # layout matches transport-spec §4.16. Only
+                # continuous-mode images (is_continuous == 1) and
+                # modality == 0 (MS) are supported at Task 2.6;
+                # processed-mode / non-MS modalities raise with a
+                # clear deferral message (matches Java's a6b1e5d9).
+                pl = payload
+                off = 0
+                modality = pl[off]; off += 1
+                (img_width,) = struct.unpack_from("<I", pl, off); off += 4
+                (img_height,) = struct.unpack_from("<I", pl, off); off += 4
+                (img_bins,) = struct.unpack_from("<I", pl, off); off += 4
+                (img_px_x,) = struct.unpack_from("<d", pl, off); off += 8
+                (img_px_y,) = struct.unpack_from("<d", pl, off); off += 8
+                img_scan_byte = pl[off]; off += 1
+                img_axis_kind = pl[off]; off += 1
+                (img_axis_len,) = struct.unpack_from("<I", pl, off); off += 4
+                img_axis = np.frombuffer(
+                    pl, dtype="<f8", count=img_axis_len, offset=off
+                ).copy()
+                off += 8 * img_axis_len
+                img_continuous = pl[off]; off += 1
+                (title_len,) = struct.unpack_from("<H", pl, off); off += 2
+                img_title = pl[off:off + title_len].decode("utf-8")
+                off += title_len
+                (isa_len,) = struct.unpack_from("<H", pl, off); off += 2
+                img_isa = pl[off:off + isa_len].decode("utf-8")
+                off += isa_len
+                if img_continuous != 1:
+                    raise ValueError(
+                        "IMAGE_HEADER: processed-mode (is_continuous=0) "
+                        "not yet supported in Python; continuous-mode "
+                        "only at Task 2.6"
+                    )
+                if modality != 0:
+                    raise ValueError(
+                        f"IMAGE_HEADER: only modality=0 (MS) materialises "
+                        f"into an MSImage today; got modality={modality}"
+                    )
+                current_image_builder = {
+                    "width": int(img_width),
+                    "height": int(img_height),
+                    "spectral_points": int(img_bins),
+                    "pixel_size_x": float(img_px_x),
+                    "pixel_size_y": float(img_px_y),
+                    "scan_pattern": _scan_pattern_from_byte(img_scan_byte),
+                    "axis_kind": int(img_axis_kind),
+                    "mz_axis": img_axis,
+                    "title": img_title,
+                    "isa_investigation_id": img_isa,
+                    "cube": np.zeros(
+                        (int(img_height), int(img_width), int(img_bins)),
+                        dtype=np.float64,
+                    ),
+                    "seen": np.zeros(
+                        int(img_height) * int(img_width), dtype=bool
+                    ),
+                    "seen_count": 0,
+                }
+            elif ptype == int(PacketType.IMAGE_PIXEL):
+                # v0.11 Task 2.6: decode a continuous-mode IMAGE_PIXEL
+                # (0x14) payload per §4.17 and stash the intensities at
+                # the pixel's (y, x) slot. Java parity:
+                # TransportReader.appendPixel.
+                if current_image_builder is None:
+                    raise ValueError(
+                        "IMAGE_PIXEL received before IMAGE_HEADER"
+                    )
+                pl = payload
+                off = 0
+                (px_x,) = struct.unpack_from("<I", pl, off); off += 4
+                (px_y,) = struct.unpack_from("<I", pl, off); off += 4
+                precision = pl[off]; off += 1
+                compression = pl[off]; off += 1
+                (payload_len,) = struct.unpack_from("<I", pl, off); off += 4
+                raw = bytes(pl[off:off + payload_len])
+                if compression != 0:
+                    raise ValueError(
+                        f"IMAGE_PIXEL compression={compression} not yet "
+                        "supported (NONE only at Task 2.6)"
+                    )
+                if precision == 1:
+                    intensities = np.frombuffer(
+                        raw, dtype="<f8"
+                    ).astype(np.float64, copy=True)
+                elif precision == 0:
+                    intensities = np.frombuffer(
+                        raw, dtype="<f4"
+                    ).astype(np.float64, copy=True)
+                else:
+                    raise ValueError(
+                        f"IMAGE_PIXEL precision={precision} not supported "
+                        "(expected 0=float32 or 1=float64)"
+                    )
+                w_img = current_image_builder["width"]
+                h_img = current_image_builder["height"]
+                sp_img = current_image_builder["spectral_points"]
+                if px_x >= w_img or px_y >= h_img:
+                    raise ValueError(
+                        f"IMAGE_PIXEL coordinates out of bounds: x={px_x}, "
+                        f"y={px_y} (width={w_img}, height={h_img})"
+                    )
+                if intensities.size != sp_img:
+                    raise ValueError(
+                        f"IMAGE_PIXEL intensity count {intensities.size} "
+                        f"does not match IMAGE_HEADER.spectrum_bins={sp_img}"
+                    )
+                pixel_idx = int(px_y) * w_img + int(px_x)
+                if current_image_builder["seen"][pixel_idx]:
+                    raise ValueError(
+                        f"duplicate IMAGE_PIXEL at (x={px_x}, y={px_y})"
+                    )
+                current_image_builder["seen"][pixel_idx] = True
+                current_image_builder["seen_count"] += 1
+                current_image_builder["cube"][int(px_y), int(px_x), :] = (
+                    intensities
+                )
+            elif ptype == int(PacketType.END_OF_IMAGE):
+                # v0.11 Task 2.6: close out the current image cube on
+                # END_OF_IMAGE (0x15). Verifies pixel_count_seen against
+                # the per-pixel ingest count + width*height. Java parity:
+                # TransportReader.finishImage.
+                if current_image_builder is None:
+                    raise ValueError(
+                        "END_OF_IMAGE without prior IMAGE_HEADER"
+                    )
+                (declared,) = struct.unpack_from("<I", payload, 0)
+                actual = current_image_builder["seen_count"]
+                w_img = current_image_builder["width"]
+                h_img = current_image_builder["height"]
+                if declared != actual:
+                    raise ValueError(
+                        f"END_OF_IMAGE pixel_count_seen mismatch: "
+                        f"declared={declared}, actual={actual} "
+                        f"(width*height={w_img * h_img})"
+                    )
+                if actual != w_img * h_img:
+                    raise ValueError(
+                        f"END_OF_IMAGE pixel count {actual} does not "
+                        f"equal width*height={w_img * h_img}"
+                    )
+                from ..ms_image import MSImage
+                collected_image = MSImage(
+                    width=w_img,
+                    height=h_img,
+                    spectral_points=current_image_builder["spectral_points"],
+                    intensity=current_image_builder["cube"],
+                    mz_axis=current_image_builder["mz_axis"],
+                    pixel_size_x=current_image_builder["pixel_size_x"],
+                    pixel_size_y=current_image_builder["pixel_size_y"],
+                    scan_pattern=current_image_builder["scan_pattern"],
+                    title=current_image_builder["title"],
+                    isa_investigation_id=current_image_builder[
+                        "isa_investigation_id"
+                    ],
+                )
+                current_image_builder = None
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -1586,6 +1888,17 @@ class TransportReader:
             with SpectralDataset.open(path, writable=True) as ds_w:
                 for ref in collected_refs:
                     ref.write_to_dataset(ds_w)
+        # v0.11 Task 2.6: embed any image cube decoded from the
+        # stream's IMAGE_* packets. MSImage.write_to(study_group)
+        # creates /study/image_cube/ on the materialised .tio.
+        # SpectralDataset caches the MSImage at construction time, so
+        # the close+reopen at the end forces a fresh read of the cube
+        # on the returned handle. Java parity:
+        # TransportReader.materializeTo (commit a6b1e5d9).
+        if collected_image is not None:
+            with SpectralDataset.open(path, writable=True) as ds_w:
+                study_grp = ds_w.provider.root_group().open_group("study")
+                collected_image.write_to(study_grp)
         # v0.11 Task 2.4: persist the dataset-level @encrypted root
         # attribute so the materialised file reports is_encrypted ==
         # True on reopen. SpectralDataset caches encrypted_algorithm
