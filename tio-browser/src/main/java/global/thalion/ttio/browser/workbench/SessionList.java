@@ -12,7 +12,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
-import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
@@ -27,67 +26,26 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import java.util.List;
 
 /**
- * Workbench session list. TableView<Session> with refresh /
+ * Workbench session list content builder. TableView<Session> with refresh /
  * copy-attach-URL / terminate controls.
  *
  * <p>Attach is via the operator's own WS-capable client (CLI
  * {@code ttio sessions attach} or a terminal) -- the list copies
  * the {@code wss://} URL to the clipboard rather than embedding a
  * terminal (W5-plan open-question 2 decision b).</p>
+ *
+ * <p>This class no longer manages a Stage; call
+ * {@link #buildContent(ConnectionManager, Window)} to obtain an embeddable
+ * {@link Region} suitable for use inside {@code JobsWorkspace}.</p>
  */
 public final class SessionList {
 
-    private final Window owner;
-    private final ConnectionManager manager;
-    private final Stage stage = new Stage();
-
-    private final Button refreshBtn = new Button("Refresh");
-    private final Button copyUrlBtn = new Button("Copy attach URL");
-    private final Button terminateBtn = new Button("Terminate selected");
-    private final Label statusLabel = new Label("");
-    private final TableView<Session> table = new TableView<>();
-    private final ObservableList<Session> rows = FXCollections.observableArrayList();
-
-    public SessionList(Window owner) {
-        this(owner, ConnectionManager.instance());
-    }
-
-    /** Visible for tests. */
-    public SessionList(Window owner, ConnectionManager manager) {
-        this.owner = owner;
-        this.manager = manager;
-        buildUi();
-        wireActions();
-    }
-
-    public void show() {
-        if (!manager.isConnected()) {
-            new Alert(AlertType.WARNING,
-                "Connect to a workbench server first "
-                + "(Workbench -> Connect...).",
-                ButtonType.OK).showAndWait();
-            return;
-        }
-        stage.show();
-        beginRefresh();
-    }
-
-    // ---- TestFX accessors ----
-
-    Stage stage()                  { return stage; }
-    Button refreshButton()         { return refreshBtn; }
-    Button copyUrlButton()         { return copyUrlBtn; }
-    Button terminateButton()       { return terminateBtn; }
-    Label statusLabel()            { return statusLabel; }
-    TableView<Session> table()     { return table; }
-    ObservableList<Session> rows() { return rows; }
+    private SessionList() {}
 
     // ---- static helpers (pure) ----
 
@@ -100,9 +58,24 @@ public final class SessionList {
             session.sessionId(), client.wsScheme());
     }
 
-    // ---- UI ----
+    /**
+     * Build the embeddable content region for the session list.
+     *
+     * <p>All UI state (table, rows, toolbar) is wired and live; the
+     * returned {@code VBox} can be placed directly into any container.</p>
+     *
+     * @param manager the {@link ConnectionManager} to poll for sessions
+     * @param owner   the owning {@link Window} for any child dialogs
+     * @return the root {@link Region} of the session-list content
+     */
+    public static Region buildContent(ConnectionManager manager, Window owner) {
+        Button refreshBtn = new Button("Refresh");
+        Button copyUrlBtn = new Button("Copy attach URL");
+        Button terminateBtn = new Button("Terminate selected");
+        Label statusLabel = new Label("");
+        TableView<Session> table = new TableView<>();
+        ObservableList<Session> rows = FXCollections.observableArrayList();
 
-    private void buildUi() {
         TableColumn<Session, String> idCol = new TableColumn<>("Session ID");
         idCol.setCellValueFactory(cd -> new SimpleStringProperty(
             cd.getValue().sessionId() == null ? "" : cd.getValue().sessionId()));
@@ -139,20 +112,19 @@ public final class SessionList {
         VBox root = new VBox(toolbar, table, bottom);
         VBox.setVgrow(table, Priority.ALWAYS);
 
-        Scene scene = new Scene(root, 720, 440);
-        stage.setScene(scene);
-        stage.setTitle("Workbench sessions");
-        stage.initModality(Modality.NONE);
-        if (owner != null) stage.initOwner(owner);
+        Runnable doRefresh = () -> beginRefresh(manager, refreshBtn, statusLabel, rows);
+        refreshBtn.setOnAction(e -> doRefresh.run());
+        copyUrlBtn.setOnAction(e -> copyAttachUrl(manager, table, owner));
+        terminateBtn.setOnAction(e -> terminateSelected(manager, table, rows,
+            refreshBtn, statusLabel));
+
+        return root;
     }
 
-    private void wireActions() {
-        refreshBtn.setOnAction(e -> beginRefresh());
-        copyUrlBtn.setOnAction(e -> copyAttachUrl());
-        terminateBtn.setOnAction(e -> terminateSelected());
-    }
+    // ---- private helpers used by buildContent ----
 
-    private void beginRefresh() {
+    private static void beginRefresh(ConnectionManager manager,
+            Button refreshBtn, Label statusLabel, ObservableList<Session> rows) {
         refreshBtn.setDisable(true);
         statusLabel.setText("Loading sessions...");
         Task<List<Session>> task = new Task<>() {
@@ -178,12 +150,9 @@ public final class SessionList {
         th.start();
     }
 
-    private Session selectedSession() {
-        return table.getSelectionModel().getSelectedItem();
-    }
-
-    private void copyAttachUrl() {
-        Session s = selectedSession();
+    private static void copyAttachUrl(ConnectionManager manager,
+            TableView<Session> table, Window owner) {
+        Session s = table.getSelectionModel().getSelectedItem();
         if (s == null) return;
         String url = attachUrl(s, manager.client());
         if (url == null) {
@@ -196,19 +165,19 @@ public final class SessionList {
         ClipboardContent content = new ClipboardContent();
         content.putString(url);
         Clipboard.getSystemClipboard().setContent(content);
-        // Also surface it so the operator can copy manually if the
-        // system clipboard is unavailable (e.g. headless).
         TextInputDialog dlg = new TextInputDialog(url);
         dlg.setTitle("Attach URL");
         dlg.setHeaderText("Attach URL for " + s.sessionId()
             + " (copied to clipboard)");
         dlg.setContentText("URL:");
-        dlg.initOwner(stage);
+        dlg.initOwner(owner);
         dlg.showAndWait();
     }
 
-    private void terminateSelected() {
-        Session s = selectedSession();
+    private static void terminateSelected(ConnectionManager manager,
+            TableView<Session> table, ObservableList<Session> rows,
+            Button refreshBtn, Label statusLabel) {
+        Session s = table.getSelectionModel().getSelectedItem();
         if (s == null) return;
         if (s.isTerminal()) {
             new Alert(AlertType.INFORMATION,
@@ -228,7 +197,7 @@ public final class SessionList {
                 return null;
             }
         };
-        task.setOnSucceeded(ev -> beginRefresh());
+        task.setOnSucceeded(ev -> beginRefresh(manager, refreshBtn, statusLabel, rows));
         task.setOnFailed(ev -> {
             Throwable t = task.getException();
             new Alert(AlertType.ERROR,

@@ -403,4 +403,26 @@ class ImportTaskTest {
         assertTrue(ee.getCause() instanceof java.io.IOException,
             "expected IOException for missing .d dir, got: " + ee.getCause());
     }
+
+    @Test
+    void emitsProgressReportsDuringImport(@TempDir Path tmp) throws Exception {
+        Path src = Paths.get("../java/src/test/resources/tiny.pwiz.1.1.mzML")
+            .toAbsolutePath();
+        Path target = tmp.resolve("out.tio");
+        ImportTask task = new ImportTask(specByName("mzML"),
+            ImportConfig.basic(src, target, "hdf5", "run_0001", "progress test"));
+        var got = new java.util.concurrent.CopyOnWriteArrayList<
+            global.thalion.ttio.browser.progress.ProgressReport>();
+        task.setProgressListener(got::add);
+        runAndWait(task);
+        try {
+            task.get();
+        } catch (ExecutionException ee) {
+            fail("mzML import threw: " + ee.getCause(), ee.getCause());
+        }
+        assertFalse(got.isEmpty(),
+            "should emit at least one progress report");
+        assertTrue(got.stream().anyMatch(r -> r.bytesDone() > 0L || r.unitsDone() > 0L),
+            "should emit at least one report with non-zero progress");
+    }
 }

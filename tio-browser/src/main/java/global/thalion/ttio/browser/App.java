@@ -37,18 +37,20 @@ public class App extends Application {
         // getParameters() is null when App is constructed directly
         // (e.g., by TestFX's ApplicationTest harness) instead of via
         // Application.launch(). Treat that as "no args".
+        // TODO(Stage 2.8): re-enable --open flag once ContainersWorkspace owns
+        // dataset loading. Until then, the argument is parsed but not acted on.
         Application.Parameters params = getParameters();
         if (params != null) {
-            parseOpenPath(params.getRaw())
-                .ifPresent(p -> mainWindow.loadDataset(p, /* readOnly = */ false));
+            parseOpenPath(params.getRaw()).ifPresent(p ->
+                java.util.logging.Logger.getLogger(App.class.getName())
+                    .info("--open flag received (will be wired in Stage 2.8): " + p));
         }
     }
 
     @Override
     public void stop() {
-        if (mainWindow != null) {
-            mainWindow.dispose();
-        }
+        // dispose() removed in Task 2.7; workbench cleanup will be
+        // re-introduced via AppShell/ConnectionManager listeners in Stage 3+.
     }
 
     /**

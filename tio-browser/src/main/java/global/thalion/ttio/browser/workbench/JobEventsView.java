@@ -34,6 +34,11 @@ import java.util.Map;
  * <p>The W3 {@code JobsClient.events(jobId, consumer)} drives the
  * SSE long-poll on a worker thread; this view's consumer marshals
  * each frame to the FX thread via {@code Platform.runLater}.</p>
+ *
+ * <p>This class retains its {@link #show()} entry point (used from
+ * {@code JobMonitor.buildContent} tail-events button) and exposes a
+ * {@link #buildContent(ConnectionManager, Window, String)} static
+ * method for embedded use.</p>
  */
 public final class JobEventsView {
 
@@ -41,12 +46,6 @@ public final class JobEventsView {
     private final ConnectionManager manager;
     private final String jobId;
     private final Stage stage = new Stage();
-    private final TextArea logArea = new TextArea();
-    private final Label statusLabel = new Label("Streaming...");
-    private final Button closeBtn = new Button("Close");
-
-    private volatile boolean closed = false;
-    private volatile Thread streamThread;
 
     public JobEventsView(Window owner, String jobId) {
         this(owner, ConnectionManager.instance(), jobId);
@@ -57,21 +56,18 @@ public final class JobEventsView {
         this.owner = owner;
         this.manager = manager;
         this.jobId = jobId;
-        buildUi();
-        wireActions();
     }
 
+    /** Show the events view as a floating Stage (used from tail-events button). */
     public void show() {
+        Region content = buildContent(manager, owner, jobId);
+        Scene scene = new Scene(content, 820, 480);
+        stage.setScene(scene);
+        stage.setTitle("Workbench events: " + jobId);
+        stage.initModality(Modality.NONE);
+        if (owner != null) stage.initOwner(owner);
         stage.show();
-        beginStream();
     }
-
-    // ---- TestFX accessors ----
-
-    Stage stage()             { return stage; }
-    TextArea logArea()        { return logArea; }
-    Label statusLabel()       { return statusLabel; }
-    Button closeButton()      { return closeBtn; }
 
     // ---- static helpers ----
 
@@ -96,11 +92,26 @@ public final class JobEventsView {
             && Job.TERMINAL_STATUSES.contains(s);
     }
 
-    // ---- UI ----
-
-    private void buildUi() {
+    /**
+     * Build the embeddable content region for the job events viewer.
+     *
+     * <p>Starts the SSE stream immediately. The returned region contains
+     * a Close button that stops the stream.</p>
+     *
+     * @param manager the {@link ConnectionManager} whose client provides
+     *                the events stream
+     * @param owner   owning window (unused currently, reserved for future
+     *                child dialogs)
+     * @param jobId   the job whose events are streamed
+     * @return the root {@link Region} of the events-viewer content
+     */
+    public static Region buildContent(ConnectionManager manager,
+            Window owner, String jobId) {
+        TextArea logArea = new TextArea();
         logArea.setEditable(false);
         logArea.setStyle("-fx-font-family: monospace;");
+        Label statusLabel = new Label("Streaming...");
+        Button closeBtn = new Button("Close");
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
@@ -112,31 +123,24 @@ public final class JobEventsView {
         VBox root = new VBox(toolbar, logArea);
         VBox.setVgrow(logArea, Priority.ALWAYS);
 
-        Scene scene = new Scene(root, 820, 480);
-        stage.setScene(scene);
-        stage.setTitle("Workbench events: " + jobId);
-        stage.initModality(Modality.NONE);
-        if (owner != null) stage.initOwner(owner);
-    }
+        // Stream state
+        boolean[] closed = {false};
+        Thread[] streamThread = {null};
 
-    private void wireActions() {
-        closeBtn.setOnAction(e -> closeStream());
-        stage.setOnCloseRequest(e -> closeStream());
-    }
+        Runnable closeStream = () -> {
+            closed[0] = true;
+            Thread t = streamThread[0];
+            if (t != null) t.interrupt();
+            statusLabel.setText("Closed");
+        };
 
-    private void closeStream() {
-        closed = true;
-        Thread t = streamThread;
-        if (t != null) t.interrupt();
-        statusLabel.setText("Closed");
-        stage.close();
-    }
+        closeBtn.setOnAction(e -> closeStream.run());
 
-    private void beginStream() {
-        streamThread = new Thread(() -> {
+        // Begin streaming
+        Thread th = new Thread(() -> {
             try {
                 manager.client().jobs().events(jobId, event -> {
-                    if (closed) return;
+                    if (closed[0]) return;
                     String line = formatFrame(event);
                     boolean terminal = isTerminalEvent(event);
                     Platform.runLater(() -> {
@@ -144,15 +148,15 @@ public final class JobEventsView {
                         if (terminal) {
                             statusLabel.setText("Terminal state: "
                                 + event.data().get("status"));
-                            closed = true;
+                            closed[0] = true;
                         }
                     });
                 });
-                if (!closed) {
+                if (!closed[0]) {
                     Platform.runLater(() -> statusLabel.setText("Stream ended"));
                 }
             } catch (Throwable t) {
-                if (closed) return;
+                if (closed[0]) return;
                 final String msg = t.getMessage() == null
                     ? t.getClass().getSimpleName() : t.getMessage();
                 Platform.runLater(() -> {
@@ -163,7 +167,10 @@ public final class JobEventsView {
                 });
             }
         }, "ttio-workbench-events-" + jobId);
-        streamThread.setDaemon(true);
-        streamThread.start();
+        th.setDaemon(true);
+        streamThread[0] = th;
+        th.start();
+
+        return root;
     }
 }

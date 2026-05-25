@@ -4,6 +4,8 @@
  */
 package global.thalion.ttio.browser.workbench;
 
+import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressReport;
 import javafx.beans.property.LongProperty;
 import javafx.beans.property.ObjectProperty;
 import javafx.beans.property.SimpleLongProperty;
@@ -16,7 +18,8 @@ import java.util.UUID;
 
 /**
  * Mutable entry in the {@link TransferManager}'s queue. JavaFX
- * properties drive the {@link TransferQueueView} table cells.
+ * properties drive the {@link global.thalion.ttio.browser.shell.workspaces.TransfersWorkspace}
+ * table cells.
  *
  * <p>The transfer-kind / URI / payload-size are fixed at
  * construction; the state / bytes-transferred / error-message
@@ -35,6 +38,9 @@ public final class Transfer {
         new SimpleObjectProperty<>(TransferState.PENDING);
     private final LongProperty bytesTransferred = new SimpleLongProperty(0);
     private final StringProperty message = new SimpleStringProperty("");
+
+    private volatile ProgressListener progressListener;
+    private volatile ProgressReport lastReport;
 
     public Transfer(TransferKind kind, String containerUri,
                      String localPath, long sizeBytes,
@@ -65,6 +71,20 @@ public final class Transfer {
     void setState(TransferState s)        { this.state.set(s); }
     void setBytesTransferred(long n)      { this.bytesTransferred.set(n); }
     void setMessage(String m)             { this.message.set(m == null ? "" : m); }
+
+    /** Set a listener that receives {@link ProgressReport} snapshots on the transport thread. */
+    public void setProgressListener(ProgressListener listener) {
+        this.progressListener = listener;
+    }
+
+    /** The listener registered via {@link #setProgressListener}, or {@code null}. */
+    public ProgressListener progressListener() { return progressListener; }
+
+    /** The most-recent {@link ProgressReport} sampled for this transfer, or {@code null}. */
+    public ProgressReport lastReport() { return lastReport; }
+
+    /** Package-private: called by {@link TransferManager} on the transport thread. */
+    void setLastReport(ProgressReport r) { this.lastReport = r; }
 
     /** Human-readable label for the queue-view "kind" column. */
     public String kindLabel() {
