@@ -47,7 +47,7 @@ public final class LoginDialog {
     private final Window owner;
     private final ConnectionManager manager;
     private final Stage stage = new Stage();
-    private final TextField urlField = new TextField("wss://localhost:8443/transport");
+    private final TextField urlField = new TextField("http://localhost:18443");
     private final TextField usernameField = new TextField();
     private final PasswordField passwordField = new PasswordField();
     private final TextField totpField = new TextField();
@@ -141,13 +141,16 @@ public final class LoginDialog {
     // ---- internals ----
 
     private void buildUi() {
-        urlField.setPromptText("wss://biobank.example.com:8443/transport");
+        urlField.setPromptText("http://biobank.example.com:18443");
+        urlField.setPrefColumnCount(48);
         usernameField.setPromptText("alice");
+        usernameField.setPrefColumnCount(20);
         passwordField.setPromptText("(password)");
+        passwordField.setPrefColumnCount(32);
         totpField.setPromptText("123456");
         totpField.setPrefColumnCount(6);
         statusLabel.setWrapText(true);
-        statusLabel.setMaxWidth(380);
+        statusLabel.setMaxWidth(420);
         progress.setMaxSize(20, 20);
         progress.setVisible(false);
 

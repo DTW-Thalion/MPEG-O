@@ -64,6 +64,7 @@ public final class TransferStartDialog {
 
     private Direction direction;
     private Scope scope;
+    private static final String DEFAULT_PROJECT = "default";
 
     public TransferStartDialog(Window owner, boolean connected) {
         this.owner = owner;
@@ -74,8 +75,17 @@ public final class TransferStartDialog {
 
         uploadRadio.setSelected(true);
         direction = Direction.UPLOAD;
-        if (connected) { connectedRadio.setSelected(true); scope = Scope.CONNECTED; }
-        else           { anonymousRadio.setSelected(true); scope = Scope.ANONYMOUS_URL; }
+        if (connected) {
+            connectedRadio.setSelected(true);
+            scope = Scope.CONNECTED;
+            // Pre-fill the project with a sensible default — the user
+            // can override before submit. URI defaults are generated
+            // when a source file is picked (see fileChosen()).
+            projectField.setText(DEFAULT_PROJECT);
+        } else {
+            anonymousRadio.setSelected(true);
+            scope = Scope.ANONYMOUS_URL;
+        }
 
         connectedFields = new VBox(6,
             labelled("Project:", projectField),
@@ -92,7 +102,18 @@ public final class TransferStartDialog {
             scope = connectedRadio.isSelected() ? Scope.CONNECTED : Scope.ANONYMOUS_URL;
             refresh();
         });
-        sourceField.textProperty().addListener((o, a, b) -> refresh());
+        sourceField.textProperty().addListener((o, a, b) -> {
+            refresh();
+            // When the source field is populated and the URI field is
+            // empty, auto-generate a unique default URI by listing the
+            // server's existing containers and picking the lowest
+            // unused suffix.
+            if (scope == Scope.CONNECTED
+                && !sourceField.getText().isBlank()
+                && uriField.getText().isBlank()) {
+                generateDefaultUri();
+            }
+        });
         projectField.textProperty().addListener((o, a, b) -> refresh());
         uriField.textProperty().addListener((o, a, b) -> refresh());
         urlField.textProperty().addListener((o, a, b) -> refresh());
@@ -187,8 +208,74 @@ public final class TransferStartDialog {
         if (picked != null) sourceField.setText(picked.toString());
     }
 
+    /** Pre-fill the source field (used by callers who already know
+     *  which file should be uploaded, e.g. the currently-open dataset). */
+    public void prefillSource(java.nio.file.Path path) {
+        if (path != null) sourceField.setText(path.toString());
+    }
+
+    /**
+     * Async-fetch the server's existing container URIs for the chosen
+     * project and pick the lowest unused suffix of
+     * {@code uri:tio:<project>/<basename>[-N]}. Runs on a daemon
+     * thread so the dialog stays responsive; assigns to {@code uriField}
+     * on the FX thread only when the field is still empty (so a
+     * user-typed value isn't overwritten).
+     */
+    private void generateDefaultUri() {
+        var client = ConnectionManager.instance().client();
+        if (client == null) return;
+        String src = sourceField.getText();
+        if (src.isBlank()) return;
+        String rawBase = java.nio.file.Paths.get(src).getFileName().toString();
+        if (rawBase.endsWith(".tio")) {
+            rawBase = rawBase.substring(0, rawBase.length() - 4);
+        }
+        final String basename = rawBase.replaceAll("[^A-Za-z0-9._-]", "_");
+        final String project = projectField.getText().isBlank()
+            ? DEFAULT_PROJECT : projectField.getText().trim();
+        System.err.println("[TransferStartDialog] generating default URI: "
+            + "project=" + project + " basename=" + basename);
+        Thread t = new Thread(() -> {
+            String candidate;
+            try {
+                var page = client.containers().list(project, null, 200, null);
+                java.util.Set<String> existing = new java.util.HashSet<>();
+                for (var c : page.containers()) existing.add(c.uri());
+                String prefix = "uri:tio:" + project + "/" + basename;
+                candidate = prefix;
+                int n = 2;
+                while (existing.contains(candidate) && n < 10_000) {
+                    candidate = prefix + "-" + n++;
+                }
+                System.err.println("[TransferStartDialog] default URI = "
+                    + candidate + " (after checking " + existing.size()
+                    + " existing in project)");
+            } catch (Throwable ex) {
+                candidate = "uri:tio:" + project + "/" + basename
+                    + "-" + System.currentTimeMillis();
+                System.err.println("[TransferStartDialog] container list failed ("
+                    + ex.getClass().getSimpleName() + "); using timestamped fallback: "
+                    + candidate);
+            }
+            final String finalCandidate = candidate;
+            javafx.application.Platform.runLater(() -> {
+                if (uriField.getText().isBlank()) {
+                    uriField.setText(finalCandidate);
+                }
+            });
+        }, "transfer-default-uri");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private void submit() {
         var tm = TransferManager.instance();
+        System.err.println("[TransferStartDialog] submit: direction=" + direction
+            + " scope=" + scope + " source=" + sourceField.getText()
+            + " project=" + projectField.getText() + " uri=" + uriField.getText()
+            + " url=" + urlField.getText());
+        Transfer t;
         if (scope == Scope.CONNECTED) {
             var client = ConnectionManager.instance().client();
             if (client == null) {
@@ -196,22 +283,26 @@ public final class TransferStartDialog {
                 return;
             }
             if (direction == Direction.UPLOAD) {
-                tm.enqueueUpload(client, projectField.getText(),
+                t = tm.enqueueUpload(client, projectField.getText(),
                     uriField.getText(), Paths.get(sourceField.getText()));
             } else {
-                tm.enqueueDownload(client, uriField.getText(),
+                t = tm.enqueueDownload(client, uriField.getText(),
                     Paths.get(sourceField.getText()), selectiveAccess.buildFilter());
             }
         } else {
             // ANONYMOUS_URL
             if (direction == Direction.UPLOAD) {
-                tm.enqueueAnonymousUpload(urlField.getText(),
+                t = tm.enqueueAnonymousUpload(urlField.getText(),
                     tokenField.getText(), Paths.get(sourceField.getText()));
             } else {
-                tm.enqueueAnonymousDownload(urlField.getText(),
+                t = tm.enqueueAnonymousDownload(urlField.getText(),
                     Paths.get(sourceField.getText()), selectiveAccess.buildFilter());
             }
         }
+        System.err.println("[TransferStartDialog] enqueued transfer id="
+            + (t == null ? "null" : t.id())
+            + " state=" + (t == null ? "n/a" : t.state())
+            + " queueSize=" + tm.transfers().size());
         stage.close();
     }
 
