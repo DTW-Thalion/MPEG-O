@@ -15,6 +15,7 @@ import global.thalion.ttio.codecs.BasePack;
 import global.thalion.ttio.codecs.Rans;
 import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -202,6 +203,93 @@ public final class TransportWriter implements AutoCloseable {
         buf.putInt(blob.length);
         buf.put(blob);
         emit(PacketType.BLOB_V2_NAME_TOK, buf.array(), datasetId, 0);
+    }
+
+    // ----------------------------------------------- v0.11 §4.13–§4.15
+
+    /**
+     * Threshold below which a chromosome rides as raw UINT8
+     * (encoding=0). Mirrors transport-spec §4.14: ZLIB framing costs
+     * dominate short sequences, so the writer skips compression below
+     * 4 KiB and lets the reader handle both encodings.
+     */
+    static final int REFERENCE_CHROMOSOME_ZLIB_THRESHOLD = 4096;
+
+    /**
+     * v0.11 Stage 1: emit a {@link ReferenceImport} as the packet
+     * sequence
+     * {@code REFERENCE_GROUP_HEADER (0x10) → N × REFERENCE_CHROMOSOME (0x11)
+     *  → END_OF_REFERENCE_GROUP (0x12)}.
+     *
+     * <p>Wire layout matches transport-spec §4.13–§4.15. All
+     * multi-byte integers are LITTLE-ENDIAN (spec §1.7). The
+     * chromosome index rides in the packet header's
+     * {@code auSequence} field (0-based). The MD5 hex string from
+     * {@link ReferenceImport#md5Hex()} is emitted verbatim as 32
+     * ASCII bytes.</p>
+     *
+     * <p>The encoding byte on each chromosome record is 0
+     * (uncompressed UINT8) when the raw sequence is shorter than
+     * {@link #REFERENCE_CHROMOSOME_ZLIB_THRESHOLD}, otherwise 1
+     * (zlib via {@link java.util.zip.Deflater} with default
+     * settings).</p>
+     *
+     * <p>Reader-side materialisation is added by Task 1.3; this
+     * method only emits the wire bytes.</p>
+     */
+    public void writeReferenceGroup(ReferenceImport ref) throws IOException {
+        List<String> chromNames = ref.chromosomes();
+        List<byte[]> seqs = ref.sequences();
+        int chromCount = chromNames.size();
+        long totalBases = ref.totalBases();
+        String md5Hex = ref.md5Hex();
+        if (md5Hex == null || md5Hex.length() != 32) {
+            throw new IOException(
+                "ReferenceImport.md5Hex() must be 32 hex chars, got "
+                + (md5Hex == null ? "null" : md5Hex.length()));
+        }
+
+        // -- REFERENCE_GROUP_HEADER (0x10) -------------------------------
+        byte[] uriBytes = ref.uri().getBytes(StandardCharsets.UTF_8);
+        byte[] md5HexBytes = md5Hex.getBytes(StandardCharsets.US_ASCII);
+        int hdrSize = 2 + uriBytes.length + 4 + 8 + 32;
+        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
+        hbuf.putShort((short) (uriBytes.length & 0xFFFF));
+        hbuf.put(uriBytes);
+        hbuf.putInt(chromCount);
+        hbuf.putLong(totalBases);
+        hbuf.put(md5HexBytes);
+        emit(PacketType.REFERENCE_GROUP_HEADER, hbuf.array(), 0, 0);
+
+        // -- REFERENCE_CHROMOSOME (0x11) — one per contig ----------------
+        for (int i = 0; i < chromCount; i++) {
+            String name = chromNames.get(i);
+            byte[] seq = seqs.get(i);
+            byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
+            byte encoding;
+            byte[] payload;
+            if (seq.length < REFERENCE_CHROMOSOME_ZLIB_THRESHOLD) {
+                encoding = 0;
+                payload = seq;
+            } else {
+                encoding = 1;
+                payload = zlibDeflate(seq);
+            }
+            int recSize = 2 + nameBytes.length + 8 + 1 + 4 + payload.length;
+            ByteBuffer cbuf = ByteBuffer.allocate(recSize).order(ByteOrder.LITTLE_ENDIAN);
+            cbuf.putShort((short) (nameBytes.length & 0xFFFF));
+            cbuf.put(nameBytes);
+            cbuf.putLong((long) seq.length);
+            cbuf.put(encoding);
+            cbuf.putInt(payload.length);
+            cbuf.put(payload);
+            emit(PacketType.REFERENCE_CHROMOSOME, cbuf.array(), 0, i);
+        }
+
+        // -- END_OF_REFERENCE_GROUP (0x12) -------------------------------
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt(chromCount);
+        emit(PacketType.END_OF_REFERENCE_GROUP, ebuf.array(), 0, 0);
     }
 
     public void writeEndOfDataset(int datasetId, long finalAUSequence) throws IOException {
