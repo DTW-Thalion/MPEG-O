@@ -13,6 +13,7 @@ import global.thalion.ttio.browser.model.OpenDataset;
 import global.thalion.ttio.browser.shell.Workspace;
 import global.thalion.ttio.browser.shell.containers.UnifiedContainerNode;
 import global.thalion.ttio.browser.shell.containers.UnifiedContainerTreeView;
+import global.thalion.ttio.browser.util.RecentFiles;
 import global.thalion.ttio.browser.view.*;
 import global.thalion.ttio.browser.view.LocalRootInfoTab;
 import global.thalion.ttio.browser.view.ProjectListingTab;
@@ -63,6 +64,7 @@ public final class ContainersWorkspace implements Workspace {
 
     // --- state ---
     private OpenDataset current;
+    private final RecentFiles recent = new RecentFiles("tio-browser", 8);
 
     public ContainersWorkspace(Window owner) {
         this.owner = owner;
@@ -109,6 +111,7 @@ public final class ContainersWorkspace implements Workspace {
     public DetailPane detail()                   { return detailPane; }
     public Label statusLabel()                   { return statusLabel; }
     public UnifiedContainerTreeView unifiedTreeForTest() { return unifiedTree; }
+    public java.util.List<String> recentFiles()  { return recent.recent(); }
 
     public void openFile(Window dialogOwner) {
         FileChooser chooser = new FileChooser();
@@ -131,6 +134,7 @@ public final class ContainersWorkspace implements Workspace {
             unifiedTree.setOpenFile(path);
             showMiddleTree();
             showInRight(detailPane.control());
+            recent.record(path);
         });
         task.setOnFailed(ev -> {
             statusLabel.setText("(open failed)");
