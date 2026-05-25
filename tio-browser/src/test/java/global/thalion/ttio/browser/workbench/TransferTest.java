@@ -80,4 +80,40 @@ class TransferTest {
         assertSame(r, got.get(0));
         assertSame(r, t.lastReport());
     }
+
+    @Test
+    void createdAtIsSetAtConstruction() {
+        long before = System.currentTimeMillis();
+        Transfer t = new Transfer(TransferKind.UPLOAD, "uri:tio:t/x",
+            "/tmp/x.tio", 100L, Map.of());
+        long after = System.currentTimeMillis();
+        assertTrue(t.createdAtEpochMs() >= before
+            && t.createdAtEpochMs() <= after);
+        assertNull(t.finishedAtEpochMs());
+    }
+
+    @Test
+    void terminalStateRecordsFinishedAt() {
+        Transfer t = new Transfer(TransferKind.UPLOAD, "uri:tio:t/x",
+            "/tmp/x.tio", 100L, Map.of());
+        long before = System.currentTimeMillis();
+        t.setState(TransferState.COMPLETED);
+        long after = System.currentTimeMillis();
+        Long finished = t.finishedAtEpochMs();
+        assertNotNull(finished);
+        assertTrue(finished >= before && finished <= after);
+    }
+
+    @Test
+    void formatTimestampHandlesNull() {
+        assertEquals("—", Transfer.formatTimestamp(null));
+    }
+
+    @Test
+    void formatTimestampRendersHhMmSs() {
+        // 2026-05-24T17:00:00 in system tz - just verify format shape
+        long epochMs = System.currentTimeMillis();
+        String s = Transfer.formatTimestamp(epochMs);
+        assertTrue(s.matches("\\d{2}:\\d{2}:\\d{2}"), "format mismatch: " + s);
+    }
 }
