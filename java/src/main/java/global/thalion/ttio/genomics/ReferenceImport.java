@@ -350,19 +350,35 @@ public final class ReferenceImport {
                             long total = sortedNames.size();
                             progress.onProgress(0L, total);
                             long doneCount = 0L;
+                            // Perf A: small sequences (mitochondrial,
+                            // plasmid, short scaffolds) get contiguous
+                            // uncompressed storage instead of chunked
+                            // ZLIB. For ACGT runs < ~4 KB, deflate's
+                            // header + b-tree-chunk metadata overhead
+                            // exceeds the compression gain, and avoiding
+                            // chunked layout drops the per-dataset
+                            // metadata cost from ~5 native calls to ~1.
+                            final int SMALL_SEQ_BYTES = 4096;
                             for (String chromName : sortedNames) {
                                 byte[] seq = byName.get(chromName);
                                 try (StorageGroup c = chromsGrp.createGroup(chromName)) {
                                     c.setAttribute("length", (long) seq.length);
                                     StorageDataset ds;
-                                    try {
-                                        ds = c.createDataset("data",
-                                            Enums.Precision.UINT8, seq.length,
-                                            65536, Enums.Compression.ZLIB, 6);
-                                    } catch (UnsupportedOperationException e) {
+                                    if (seq.length < SMALL_SEQ_BYTES) {
                                         ds = c.createDataset("data",
                                             Enums.Precision.UINT8, seq.length,
                                             0, Enums.Compression.NONE, 0);
+                                    } else {
+                                        try {
+                                            ds = c.createDataset("data",
+                                                Enums.Precision.UINT8, seq.length,
+                                                Math.min(65536, seq.length),
+                                                Enums.Compression.ZLIB, 6);
+                                        } catch (UnsupportedOperationException e) {
+                                            ds = c.createDataset("data",
+                                                Enums.Precision.UINT8, seq.length,
+                                                0, Enums.Compression.NONE, 0);
+                                        }
                                     }
                                     try (StorageDataset closeMe = ds) {
                                         closeMe.writeAll(seq);

@@ -41,15 +41,33 @@ public class Hdf5File implements AutoCloseable {
         this.libThreadSafe = probeThreadSafety();
     }
 
+    // Perf B: meta block size + small data block size. HDF5 defaults
+    // to 2 KB for both, which means each new group / attribute / tiny
+    // dataset triggers its own file-block allocation + b-tree update.
+    // For workloads with thousands of small objects (e.g. a whale-
+    // genome FASTA reference with ~25k contigs), this pegs the
+    // encoder at ~17 records/s on metadata-cache flushes. Raising the
+    // meta block to 8 MB and small-data block to 2 MB amortises the
+    // allocations across hundreds of objects per native call.
+    private static final long META_BLOCK_SIZE        = 8L * 1024L * 1024L;
+    private static final long SMALL_DATA_BLOCK_SIZE  = 2L * 1024L * 1024L;
+
     /** Create a new HDF5 file, truncating any existing file at path. */
     public static Hdf5File create(String path) {
         try {
-            long fid = H5.H5Fcreate(path,
-                    HDF5Constants.H5F_ACC_TRUNC,
-                    HDF5Constants.H5P_DEFAULT,
-                    HDF5Constants.H5P_DEFAULT);
-            if (fid < 0) throw new Hdf5Errors.FileCreateException(path);
-            return new Hdf5File(fid, path);
+            long fapl = H5.H5Pcreate(HDF5Constants.H5P_FILE_ACCESS);
+            try {
+                H5.H5Pset_meta_block_size(fapl, META_BLOCK_SIZE);
+                H5.H5Pset_small_data_block_size(fapl, SMALL_DATA_BLOCK_SIZE);
+                long fid = H5.H5Fcreate(path,
+                        HDF5Constants.H5F_ACC_TRUNC,
+                        HDF5Constants.H5P_DEFAULT,
+                        fapl);
+                if (fid < 0) throw new Hdf5Errors.FileCreateException(path);
+                return new Hdf5File(fid, path);
+            } finally {
+                try { H5.H5Pclose(fapl); } catch (HDF5LibraryException ignored) {}
+            }
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.FileCreateException(path);
         }
