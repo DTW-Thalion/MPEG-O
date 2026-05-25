@@ -205,6 +205,43 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.BLOB_V2_NAME_TOK, buf.array(), datasetId, 0);
     }
 
+    // ----------------------------------------------- v0.11 §4.23
+
+    /**
+     * v0.11 Task 1.5: emit an {@code ENCRYPTION_ALGORITHM} (0x1B)
+     * packet carrying the dataset-level {@code @encrypted} algorithm
+     * name (e.g. {@code "aes-256-gcm"}). Wire layout matches
+     * transport-spec §4.23:
+     *
+     * <pre>
+     * algorithm_length:  uint16
+     * algorithm_utf8:    bytes[algorithm_length]
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7.</p>
+     *
+     * <p>This packet only conveys the algorithm-name string; per-AU
+     * key material continues to ride on {@code ProtectionMetadata}
+     * (0x04).</p>
+     */
+    public void writeEncryptionAlgorithm(String algorithm) throws IOException {
+        if (algorithm == null) {
+            throw new IllegalArgumentException(
+                "writeEncryptionAlgorithm: algorithm must not be null");
+        }
+        byte[] algoBytes = algorithm.getBytes(StandardCharsets.UTF_8);
+        if (algoBytes.length > 0xFFFF) {
+            throw new IOException(
+                "ENCRYPTION_ALGORITHM: algorithm name " + algoBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        ByteBuffer buf = ByteBuffer.allocate(2 + algoBytes.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putShort((short) (algoBytes.length & 0xFFFF));
+        buf.put(algoBytes);
+        emit(PacketType.ENCRYPTION_ALGORITHM, buf.array(), 0, 0);
+    }
+
     // ----------------------------------------------- v0.11 §4.13–§4.15
 
     /**
@@ -319,11 +356,12 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
-        // Task 1.4: detect v0.11 content (references today; subjects,
-        // samples, dataset_provenance, encryption_algorithm, images,
-        // identifications, quantifications land in subsequent tasks at
-        // the same prelude insertion point per §5.4 ordering).
-        boolean v011 = !dataset.references().isEmpty();
+        // Task 1.4/1.5: detect v0.11 content (references + encryption
+        // algorithm today; subjects, samples, dataset_provenance,
+        // images, identifications, quantifications land in subsequent
+        // tasks at the same prelude insertion point per §5.4 ordering).
+        boolean v011 = !dataset.references().isEmpty()
+                    || dataset.isEncrypted();
         if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
             features.add(PacketType.TRANSPORT_V0_11_FEATURE);
         }
@@ -331,11 +369,15 @@ public final class TransportWriter implements AutoCloseable {
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
 
-        // Task 1.4: v0.11 prelude -- per §5.4 ordering, v0.11 sections
-        // come BEFORE the v0.10 dataset/run sections. References are
-        // the only v0.11 section wired in 1.4; the rest will be added
-        // at this same point in Tasks 1.5-1.9.
+        // Task 1.4/1.5: v0.11 prelude -- per §5.4 ordering, v0.11
+        // sections come BEFORE the v0.10 dataset/run sections, and
+        // ENCRYPTION_ALGORITHM (§5.4.1) comes BEFORE reference groups
+        // (§5.4.4). Provenance, subjects, samples, images,
+        // identifications, quantifications land here in Tasks 1.6-1.9.
         if (v011) {
+            if (dataset.isEncrypted()) {
+                writeEncryptionAlgorithm(dataset.encryptedAlgorithm());
+            }
             for (ReferenceImport ref : dataset.references().values()) {
                 writeReferenceGroup(ref);
             }

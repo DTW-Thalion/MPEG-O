@@ -56,6 +56,11 @@ public final class TransportReader implements AutoCloseable {
     private final List<String> currentChromNames = new ArrayList<>();
     private final List<byte[]> currentChromSeqs  = new ArrayList<>();
     private final List<ReferenceImport> collectedRefs = new ArrayList<>();
+    // v0.11 Task 1.5: dataset-level @encrypted algorithm string carried
+    // by ENCRYPTION_ALGORITHM (0x1B) packets. null when no such packet
+    // appeared in the stream. Reset at the start of every
+    // materializeTo() call.
+    private String collectedEncryptionAlgorithm;
 
     public TransportReader(InputStream in) {
         this.in = in;
@@ -148,6 +153,7 @@ public final class TransportReader implements AutoCloseable {
         currentChromNames.clear();
         currentChromSeqs.clear();
         collectedRefs.clear();
+        collectedEncryptionAlgorithm = null;
 
         List<PacketRecord> packets = readAllPackets();
         String title = "";
@@ -298,6 +304,10 @@ public final class TransportReader implements AutoCloseable {
                 slot.nameTokBlob = blob;
                 continue;
             }
+            if (h.packetType == PacketType.ENCRYPTION_ALGORITHM) {
+                decodeEncryptionAlgorithm(rec.payload);
+                continue;
+            }
             if (h.packetType == PacketType.REFERENCE_GROUP_HEADER) {
                 startReferenceGroup(rec.payload);
                 continue;
@@ -374,9 +384,37 @@ public final class TransportReader implements AutoCloseable {
                 ref.writeToDataset(created);
             }
         }
-        if (genomicRuns.isEmpty()) return created;
+        // v0.11 Task 1.5: persist the dataset-level @encrypted root
+        // attribute so the materialised file reports isEncrypted() ==
+        // true on reopen. SpectralDataset caches encryptedAlgorithm in
+        // an instance field at construction time, so we must close +
+        // reopen to surface the value on the returned dataset (even
+        // for non-genomic streams).
+        if (collectedEncryptionAlgorithm != null) {
+            created.provider().rootGroup()
+                .setAttribute("encrypted", collectedEncryptionAlgorithm);
+        }
+        if (genomicRuns.isEmpty() && collectedEncryptionAlgorithm == null) {
+            return created;
+        }
         created.close();
         return SpectralDataset.open(outputPath);
+    }
+
+    // ---------------------------------------------------------- v0.11 §4.23
+
+    /** v0.11 Task 1.5: decode an ENCRYPTION_ALGORITHM (0x1B) payload
+     *  and stash the algorithm string for application at
+     *  materialize-time. Multiple 0x1B packets are tolerated — the
+     *  last-write-wins (spec §5.4 says "zero or more"; in practice
+     *  the writer emits exactly one). */
+    private void decodeEncryptionAlgorithm(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        int len = bb.getShort() & 0xFFFF;
+        byte[] algoBytes = new byte[len];
+        bb.get(algoBytes);
+        collectedEncryptionAlgorithm =
+            new String(algoBytes, StandardCharsets.UTF_8);
     }
 
     // ---------------------------------------------------------- reference-group helpers
