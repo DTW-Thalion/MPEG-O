@@ -89,6 +89,15 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
 @interface TTIOTransportPacketHeader : NSObject
 
 @property (nonatomic, readonly) TTIOTransportPacketType packetType;
+/** Raw wire byte for the packet type. Equal to ``packetType`` when
+ *  the byte names a known ``TTIOTransportPacketType``; otherwise this
+ *  is the unknown byte that the reader's forward-compat path
+ *  tolerated. Always populated regardless of whether the byte names a
+ *  known type. See transport-spec §6 (v0.11 skip-unknown contract).
+ *  Cross-language parity: Java
+ *  ``PacketHeader.packetTypeByte()``, Python
+ *  ``PacketHeader.packet_type_byte``. */
+@property (nonatomic, readonly) uint8_t packetTypeByte;
 @property (nonatomic, readonly) uint16_t flags;
 @property (nonatomic, readonly) uint16_t datasetId;
 @property (nonatomic, readonly) uint32_t auSequence;
@@ -109,6 +118,16 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
                                     error:(NSError * _Nullable *)error;
 
 @end
+
+/**
+ * Returns ``YES`` iff ``typeByte`` names a defined
+ * ``TTIOTransportPacketType``. Used by the reader's forward-compat
+ * skip-unknown path (transport-spec §6, v0.11 task 0.7) — decoded
+ * headers whose ``packetTypeByte`` fails this check are length-prefix
+ * skipped rather than rejected. Cross-language parity: Java
+ * ``PacketType.fromWireOrNull``, Python ``is_known_packet_type``.
+ */
+BOOL TTIOTransportIsKnownPacketType(uint8_t typeByte);
 
 /**
  * CRC-32C (Castagnoli, reflected). Used when

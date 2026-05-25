@@ -115,7 +115,8 @@ TTIOTests_OBJC_FILES = \
 	TTIOReferencesAccessorTests.m \
 	TTIOReferenceImportWriteToDatasetTests.m \
 	TestMSImageMzAxis.m \
-	TestTransportPacketTypeV011.m
+	TestTransportPacketTypeV011.m \
+	TestTransportReaderSkipUnknown.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

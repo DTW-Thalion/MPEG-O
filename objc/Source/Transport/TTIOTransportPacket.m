@@ -15,6 +15,7 @@
  */
 #include <pthread.h>
 #import "TTIOTransportPacket.h"
+#import "TTIOTransportPacket+Internal.h"
 
 const uint8_t TTIOTransportHeaderMagic[2] = {'T', 'I'};
 const uint8_t TTIOTransportVersion = 0x01;
@@ -99,6 +100,52 @@ static inline uint64_t readUInt64LE(const uint8_t *buf)
     return v;
 }
 
+// ---------------------------------------------------------- known types
+
+// Forward-compat skip-unknown (transport-spec §6, v0.11 task 0.7):
+// authoritative table of recognised wire bytes. Anything outside
+// this set is tolerated by the reader but flagged via
+// packetTypeByte != packetType. Keep in lock-step with the
+// TTIOTransportPacketType enum in TTIOTransportPacket.h. Cross-
+// language parity: Java PacketType.fromWireOrNull, Python
+// is_known_packet_type.
+static const uint8_t TTIOTransportKnownPacketTypes[] = {
+    TTIOTransportPacketStreamHeader,         // 0x01
+    TTIOTransportPacketDatasetHeader,        // 0x02
+    TTIOTransportPacketAccessUnit,           // 0x03
+    TTIOTransportPacketProtectionMetadata,   // 0x04
+    TTIOTransportPacketAnnotation,           // 0x05
+    TTIOTransportPacketProvenance,           // 0x06
+    TTIOTransportPacketChromatogram,         // 0x07
+    TTIOTransportPacketEndOfDataset,         // 0x08
+    TTIOTransportPacketBlobV2MateInfo,       // 0x09
+    TTIOTransportPacketBlobV2RefDiff,        // 0x0A
+    TTIOTransportPacketBlobV2NameTok,        // 0x0B
+    TTIOTransportPacketReferenceGroupHeader, // 0x10
+    TTIOTransportPacketReferenceChromosome,  // 0x11
+    TTIOTransportPacketEndOfReferenceGroup,  // 0x12
+    TTIOTransportPacketImageHeader,          // 0x13
+    TTIOTransportPacketImagePixel,           // 0x14
+    TTIOTransportPacketEndOfImage,           // 0x15
+    TTIOTransportPacketIdentificationsTable, // 0x16
+    TTIOTransportPacketQuantificationsTable, // 0x17
+    TTIOTransportPacketDatasetProvenance,    // 0x18
+    TTIOTransportPacketSubjectMetadata,      // 0x19
+    TTIOTransportPacketSampleMetadata,       // 0x1A
+    TTIOTransportPacketEncryptionAlgorithm,  // 0x1B
+    TTIOTransportPacketEndOfStream,          // 0xFF
+};
+
+BOOL TTIOTransportIsKnownPacketType(uint8_t typeByte)
+{
+    for (NSUInteger i = 0;
+         i < sizeof(TTIOTransportKnownPacketTypes) / sizeof(uint8_t);
+         i++) {
+        if (TTIOTransportKnownPacketTypes[i] == typeByte) return YES;
+    }
+    return NO;
+}
+
 // ---------------------------------------------------------------- header
 
 @implementation TTIOTransportPacketHeader
@@ -110,8 +157,33 @@ static inline uint64_t readUInt64LE(const uint8_t *buf)
                      payloadLength:(uint32_t)payloadLength
                        timestampNs:(uint64_t)timestampNs
 {
+    // Public ctor: assume the caller passes a known type byte (any
+    // recognised TTIOTransportPacketType). packetTypeByte mirrors it.
+    return [self initWithPacketTypeByte:(uint8_t)(type & 0xFFu)
+                                   flags:flags
+                               datasetId:datasetId
+                              auSequence:auSequence
+                           payloadLength:payloadLength
+                             timestampNs:timestampNs];
+}
+
+- (instancetype)initWithPacketTypeByte:(uint8_t)typeByte
+                                  flags:(uint16_t)flags
+                              datasetId:(uint16_t)datasetId
+                             auSequence:(uint32_t)auSequence
+                          payloadLength:(uint32_t)payloadLength
+                            timestampNs:(uint64_t)timestampNs
+{
     if ((self = [super init])) {
-        _packetType = type;
+        // Forward-compat: when the byte is not a known PacketType the
+        // typed `packetType` is left at 0 (unused wire value) and only
+        // `packetTypeByte` carries the byte. Callers that need to
+        // dispatch on the type should consult packetTypeByte +
+        // TTIOTransportIsKnownPacketType().
+        _packetTypeByte = typeByte;
+        _packetType = TTIOTransportIsKnownPacketType(typeByte)
+            ? (TTIOTransportPacketType)typeByte
+            : (TTIOTransportPacketType)0;
         _flags = flags;
         _datasetId = datasetId;
         _auSequence = auSequence;
@@ -123,16 +195,31 @@ static inline uint64_t readUInt64LE(const uint8_t *buf)
 
 - (NSData *)encode
 {
+    return [[self class] encodeRawWithTypeByte:_packetTypeByte
+                                          flags:_flags
+                                      datasetId:_datasetId
+                                     auSequence:_auSequence
+                                  payloadLength:_payloadLength
+                                    timestampNs:_timestampNs];
+}
+
++ (NSData *)encodeRawWithTypeByte:(uint8_t)typeByte
+                             flags:(uint16_t)flags
+                         datasetId:(uint16_t)datasetId
+                        auSequence:(uint32_t)auSequence
+                     payloadLength:(uint32_t)payloadLength
+                       timestampNs:(uint64_t)timestampNs
+{
     uint8_t buf[24];
     buf[0] = TTIOTransportHeaderMagic[0];
     buf[1] = TTIOTransportHeaderMagic[1];
     buf[2] = TTIOTransportVersion;
-    buf[3] = (uint8_t)(_packetType & 0xFFu);
-    writeUInt16LE(&buf[4], _flags);
-    writeUInt16LE(&buf[6], _datasetId);
-    writeUInt32LE(&buf[8], _auSequence);
-    writeUInt32LE(&buf[12], _payloadLength);
-    writeUInt64LE(&buf[16], _timestampNs);
+    buf[3] = typeByte;
+    writeUInt16LE(&buf[4], flags);
+    writeUInt16LE(&buf[6], datasetId);
+    writeUInt32LE(&buf[8], auSequence);
+    writeUInt32LE(&buf[12], payloadLength);
+    writeUInt64LE(&buf[16], timestampNs);
     return [NSData dataWithBytes:buf length:24];
 }
 
@@ -163,12 +250,16 @@ static inline uint64_t readUInt64LE(const uint8_t *buf)
                                  (unsigned)bytes[2]]}];
         return nil;
     }
-    return [[self alloc] initWithPacketType:(TTIOTransportPacketType)bytes[3]
-                                      flags:readUInt16LE(&bytes[4])
-                                  datasetId:readUInt16LE(&bytes[6])
-                                 auSequence:readUInt32LE(&bytes[8])
-                              payloadLength:readUInt32LE(&bytes[12])
-                                timestampNs:readUInt64LE(&bytes[16])];
+    // Forward-compat: tolerate unknown packet type bytes by preserving
+    // the raw byte in packetTypeByte. The reader's outer loop logs +
+    // length-prefix-skips the payload. See transport-spec §6 +
+    // TTIOTransportReader.readAllPackets.
+    return [[self alloc] initWithPacketTypeByte:bytes[3]
+                                           flags:readUInt16LE(&bytes[4])
+                                       datasetId:readUInt16LE(&bytes[6])
+                                      auSequence:readUInt32LE(&bytes[8])
+                                   payloadLength:readUInt32LE(&bytes[12])
+                                     timestampNs:readUInt64LE(&bytes[16])];
 }
 
 @end

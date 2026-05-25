@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "TTIOTransportReader.h"
+#import "TTIOTransportReader+Internal.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
@@ -162,6 +163,17 @@ static NSString *readLEString(const uint8_t *bytes, NSUInteger length,
             }
         }
 
+        // Forward-compat (transport-spec §6, v0.11 task 0.7): tolerate
+        // unknown packet types so v0.10 readers can ingest v0.11+
+        // streams. The header was length-prefixed so the payload (and
+        // CRC if present) was already consumed above — just log and
+        // record the packet so callers can observe it. The materialize
+        // loop early-continues on the same condition.
+        if (!TTIOTransportIsKnownPacketType(hdr.packetTypeByte)) {
+            NSLog(@"TTIOTransportReader: skipping unknown packet type 0x%02x",
+                  (unsigned)hdr.packetTypeByte);
+        }
+
         TTIOTransportPacketRecord *rec =
             [[TTIOTransportPacketRecord alloc] initWithHeader:hdr payload:payload];
         [out addObject:rec];
@@ -223,6 +235,15 @@ typedef struct {
         const uint8_t *bytes = (const uint8_t *)rec.payload.bytes;
         NSUInteger len = rec.payload.length;
         NSUInteger off = 0;
+
+        // Forward-compat (transport-spec §6, v0.11 task 0.7): silently
+        // skip packets whose wire type byte was not a known
+        // TTIOTransportPacketType. The per-packet loop already logged
+        // + length-prefix-consumed the bytes; we just ignore the
+        // record here so unknown packets don't trigger
+        // MissingStreamHeader / UnexpectedPayload errors. Java parity:
+        // `if (h.packetType == null) continue;`.
+        if (!TTIOTransportIsKnownPacketType(h.packetTypeByte)) continue;
 
         if (h.packetType == TTIOTransportPacketStreamHeader) {
             if (sawStreamHeader) continue;
@@ -805,6 +826,18 @@ typedef struct {
                                     quantifications:nil
                                   provenanceRecords:nil
                                               error:error];
+}
+
+@end
+
+// ---------------------------------------------------------- internal
+
+@implementation TTIOTransportReader (Internal)
+
+- (NSArray<TTIOTransportPacketRecord *> *)recordsForTest
+{
+    NSError *err = nil;
+    return [self readAllPacketsWithError:&err];
 }
 
 @end
