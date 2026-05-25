@@ -4,19 +4,31 @@
  */
 package global.thalion.ttio.transport;
 
+import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.Enums;
+import global.thalion.ttio.Enums.AcquisitionMode;
+import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.FeatureFlags;
 import global.thalion.ttio.Identification;
+import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.MSImage;
+import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.genomics.ReferenceImport;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
 import global.thalion.ttio.providers.Hdf5Provider;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Test-only fixture builder. Each {@code build...} method writes a
@@ -184,5 +196,189 @@ public final class FixtureBuilder {
             // No further writes needed.
         }
         return target;
+    }
+
+    /**
+     * Produce a {@code .tio} carrying two {@link ProvenanceRecord}
+     * entries (one with parameters + input/output refs, one minimal)
+     * and nothing else. Used by Task 1.10's accessor-matrix conformance
+     * suite to exercise the {@code DATASET_PROVENANCE} (0x18) packet on
+     * its own.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildDatasetProvenanceOnly(Path target) throws Exception {
+        Map<String, String> params = new LinkedHashMap<>();
+        params.put("mode", "strict");
+        params.put("threshold", "0.5");
+        ProvenanceRecord r1 = new ProvenanceRecord(
+            1700000000L, "TTI-O Java 1.0.0",
+            params,
+            List.of("file:///in.raw", "file:///in2.raw"),
+            List.of("file:///out.tio"));
+        ProvenanceRecord r2 = new ProvenanceRecord(
+            1700000100L, "downstream step",
+            Map.of(),
+            List.of(),
+            List.of("file:///final.tio"));
+        try (SpectralDataset ignore = SpectralDataset.create(
+                target.toString(), "provenance_only", "",
+                List.of(), List.of(), List.of(), List.of(r1, r2))) {
+            // The provenance records are persisted as the root
+            // /study/provenance_json attribute by create(...).
+        }
+        return target;
+    }
+
+    /**
+     * Produce a {@code .tio} whose root group carries the
+     * {@code @encrypted} HDF5 attribute set to
+     * {@code "aes-256-gcm"} and nothing else. Used by Task 1.10's
+     * accessor-matrix conformance suite to exercise the
+     * {@code ENCRYPTION_ALGORITHM} (0x1B) packet on its own.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildEncryptionAlgorithmOnly(Path target) throws Exception {
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "encryption_only", "",
+                List.of(), List.of(), List.of(), List.of())) {
+            // Set the root @encrypted attribute through the open
+            // provider so the on-disk file carries it.
+            ds.provider().rootGroup().setAttribute("encrypted", "aes-256-gcm");
+        }
+        return target;
+    }
+
+    /**
+     * Produce a {@code .tio} carrying a single {@link AcquisitionRun}
+     * with 5 spectra of 4 m/z points each and nothing else. Used by
+     * Task 1.10's accessor-matrix conformance suite to exercise the
+     * MS-run round-trip in isolation. Mirrors the shape used by
+     * {@code TransportConformanceTest.buildDataset(1, 5, 4)}.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildMsRunsOnly(Path target) throws Exception {
+        AcquisitionRun run = synthMsRun("run_0001", 0, 5, 4);
+        try (SpectralDataset ignore = SpectralDataset.create(
+                target.toString(), "ms_runs_only", "",
+                List.of(run), List.of(), List.of(), List.of())) {
+            // create() persists the run; no further writes needed.
+        }
+        return target;
+    }
+
+    /**
+     * Produce a {@code .tio} carrying a single genomic run (4 short
+     * aligned reads on chr1/chr2/* with deterministic sequences) and
+     * nothing else. Used by Task 1.10's accessor-matrix conformance
+     * suite to exercise the genomic-run round-trip in isolation.
+     * Mirrors the fixture shape used by
+     * {@code M89GenomicTransportTest.makeMinimalGenomicRun}.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildGenomicRunsOnly(Path target) throws Exception {
+        WrittenGenomicRun run = synthGenomicRun();
+        SpectralDataset.create(target.toString(),
+            "genomic_runs_only", "",
+            List.of(), List.of(run),
+            List.of(), List.of(), List.of(),
+            FeatureFlags.defaultCurrent()).close();
+        return target;
+    }
+
+    /** Build a deterministic synthetic MS run with {@code nSpectra}
+     *  spectra of {@code pointsPerSpectrum} m/z points each. Pattern
+     *  matches {@code TransportConformanceTest.buildDataset}. */
+    private static AcquisitionRun synthMsRun(String name, int runOffset,
+                                              int nSpectra, int pointsPerSpectrum) {
+        int total = nSpectra * pointsPerSpectrum;
+        double[] mz = new double[total];
+        double[] intensity = new double[total];
+        for (int i = 0; i < total; i++) {
+            mz[i] = 100.0 * (runOffset + 1) + i;
+            intensity[i] = 100.0 * (runOffset + 1) * (i + 1);
+        }
+        long[] offsets = new long[nSpectra];
+        int[] lengths = new int[nSpectra];
+        for (int i = 0; i < nSpectra; i++) {
+            offsets[i] = (long) i * pointsPerSpectrum;
+            lengths[i] = pointsPerSpectrum;
+        }
+        double[] rts = new double[nSpectra];
+        for (int i = 0; i < nSpectra; i++) rts[i] = 1.0 + i;
+        int[] msLevels = new int[nSpectra];
+        int[] pols = new int[nSpectra];
+        double[] pmzs = new double[nSpectra];
+        int[] pcs = new int[nSpectra];
+        double[] bpis = new double[nSpectra];
+        for (int i = 0; i < nSpectra; i++) {
+            msLevels[i] = (i % 2 == 0) ? 1 : 2;
+            pols[i] = 1;
+            pmzs[i] = msLevels[i] == 1 ? 0.0 : 500.0 + i;
+            pcs[i] = msLevels[i] == 1 ? 0 : 2;
+            double best = 0;
+            for (int k = 0; k < pointsPerSpectrum; k++) {
+                best = Math.max(best, intensity[i * pointsPerSpectrum + k]);
+            }
+            bpis[i] = best;
+        }
+        SpectrumIndex idx = new SpectrumIndex(nSpectra, offsets, lengths, rts,
+                msLevels, pols, pmzs, pcs, bpis);
+        Map<String, double[]> channels = new LinkedHashMap<>();
+        channels.put("mz", mz);
+        channels.put("intensity", intensity);
+        return new AcquisitionRun(name,
+                Enums.AcquisitionMode.MS1_DDA, idx,
+                new InstrumentConfig("", "", "", "", "", ""),
+                channels, List.of(), List.of(), "", 0.0);
+    }
+
+    /** Build a deterministic minimal {@link WrittenGenomicRun} with
+     *  4 short aligned reads. Pattern matches
+     *  {@code M89GenomicTransportTest.makeMinimalGenomicRun}. */
+    private static WrittenGenomicRun synthGenomicRun() {
+        int n = 4;
+        String[] chroms = {"chr1", "chr1", "chr2", "*"};
+        long[] positions = {100L, 200L, 50L, -1L};
+        byte[] mqs = {(byte) 60, (byte) 55, (byte) 40, (byte) 0};
+        int[] flags = {0x0003, 0x0003, 0x0003, 0x0004};
+        byte[] template = "ACGTACGTACGT".getBytes(StandardCharsets.US_ASCII);
+        int readLen = template.length;
+        byte[] sequences = new byte[n * readLen];
+        byte[] qualities = new byte[n * readLen];
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        for (int i = 0; i < n; i++) {
+            System.arraycopy(template, 0, sequences, i * readLen, readLen);
+            offsets[i] = (long) i * readLen;
+            lengths[i] = readLen;
+        }
+        Arrays.fill(qualities, (byte) 30);
+        List<String> chromsList = new ArrayList<>(Arrays.asList(chroms));
+        List<String> cigars = new ArrayList<>(n);
+        List<String> readNames = new ArrayList<>(n);
+        List<String> mateChroms = new ArrayList<>(n);
+        long[] matePos = new long[n];
+        int[] tlens = new int[n];
+        for (int i = 0; i < n; i++) {
+            cigars.add(readLen + "M");
+            readNames.add(String.format("read_%03d", i));
+            mateChroms.add("");
+            matePos[i] = -1L;
+            tlens[i] = 0;
+        }
+        return new WrittenGenomicRun(
+            AcquisitionMode.GENOMIC_WGS,
+            "GRCh38.p14", "ILLUMINA", "NA12878",
+            positions, mqs, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChroms,
+            matePos, tlens, chromsList, Compression.ZLIB);
     }
 }

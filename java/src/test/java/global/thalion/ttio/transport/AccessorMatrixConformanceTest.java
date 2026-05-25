@@ -1,7 +1,6 @@
 package global.thalion.ttio.transport;
 
 import global.thalion.ttio.SpectralDataset;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -14,7 +13,6 @@ import java.nio.file.Path;
  *  builds a fixture .tio containing only that accessor's content,
  *  round-trips it through TransportWriter -&gt; TransportReader -&gt; .tio,
  *  and asserts content equality via the accessor's matcher. */
-@Disabled("v0.11 — pending Stage 1 writer/reader implementation")
 class AccessorMatrixConformanceTest {
 
     @ParameterizedTest
