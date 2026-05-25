@@ -313,6 +313,94 @@ class TransportWriter:
             dataset_id=dataset_id,
         )
 
+    # ----------------------------------------------- v0.11 §4.21
+
+    def write_dataset_provenance(self, records) -> None:
+        """v0.11 Task 2.5: emit a
+        :data:`PacketType.DATASET_PROVENANCE` (0x18) packet carrying
+        the dataset-level provenance chain (format-spec §6.3).
+
+        One packet carries all records. Wire layout per transport-spec
+        §4.21::
+
+            record_count:        uint32
+            # repeated record_count times:
+            timestamp_unix:      int64
+            software_length:     uint16, software bytes[..]   (UTF-8)
+            parameters_length:   uint16, parameters_json[..]  (UTF-8 JSON)
+            input_refs_length:   uint16, input_refs_csv[..]   (UTF-8 CSV)
+            output_refs_length:  uint16, output_refs_csv[..]  (UTF-8 CSV)
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+        input_refs / output_refs lists ride as comma-joined UTF-8 — a
+        single empty string for an empty list (no separators).
+
+        Distinct from the per-run ``Provenance`` (0x06) packet which
+        carries one JSON record per packet.
+
+        Java parity: :meth:`TransportWriter.writeDatasetProvenance`
+        (commit ``563e09c3``). Per-field empty handling matches Java:
+        empty parameters render as ``"{}"`` (not omitted); empty refs
+        render as ``""`` (the empty-join result).
+
+        :param records: iterable of :class:`ttio.provenance.ProvenanceRecord`.
+            ``None`` raises ``ValueError``; an empty list is a no-op
+            (no packet emitted) per spec §5.4 "zero or more".
+        """
+        if records is None:
+            raise ValueError(
+                "write_dataset_provenance: records must not be None"
+            )
+        records = list(records)
+        if not records:
+            return
+        # Pre-compute UTF-8 byte arrays so we can size the buffer
+        # exactly. Mirrors the StreamHeader/DatasetHeader emit pattern.
+        software_bytes: list[bytes] = []
+        params_bytes: list[bytes] = []
+        inputs_bytes: list[bytes] = []
+        outputs_bytes: list[bytes] = []
+        total = 4  # record_count
+        for r in records:
+            sb = (r.software or "").encode("utf-8")
+            pb = _provenance_params_json(r.parameters).encode("utf-8")
+            ib = _provenance_csv_join(r.input_refs).encode("utf-8")
+            ob = _provenance_csv_join(r.output_refs).encode("utf-8")
+            for b in (sb, pb, ib, ob):
+                if len(b) > 0xFFFF:
+                    raise ValueError(
+                        f"DATASET_PROVENANCE: per-field length "
+                        f"{len(b)} exceeds uint16 max"
+                    )
+            software_bytes.append(sb)
+            params_bytes.append(pb)
+            inputs_bytes.append(ib)
+            outputs_bytes.append(ob)
+            total += (
+                8                       # timestamp_unix
+                + 2 + len(sb)
+                + 2 + len(pb)
+                + 2 + len(ib)
+                + 2 + len(ob)
+            )
+        chunks: list[bytes] = [struct.pack("<I", len(records) & 0xFFFFFFFF)]
+        for i, r in enumerate(records):
+            chunks.append(struct.pack("<q", int(r.timestamp_unix)))
+            chunks.append(struct.pack("<H", len(software_bytes[i]) & 0xFFFF))
+            chunks.append(software_bytes[i])
+            chunks.append(struct.pack("<H", len(params_bytes[i]) & 0xFFFF))
+            chunks.append(params_bytes[i])
+            chunks.append(struct.pack("<H", len(inputs_bytes[i]) & 0xFFFF))
+            chunks.append(inputs_bytes[i])
+            chunks.append(struct.pack("<H", len(outputs_bytes[i]) & 0xFFFF))
+            chunks.append(outputs_bytes[i])
+        payload = b"".join(chunks)
+        assert len(payload) == total, (
+            f"DATASET_PROVENANCE size mismatch: predicted {total}, "
+            f"actual {len(payload)}"
+        )
+        self._emit(PacketType.DATASET_PROVENANCE, payload)
+
     # ----------------------------------------------- v0.11 §4.23
 
     def write_encryption_algorithm(self, algorithm: str) -> None:
@@ -470,16 +558,24 @@ class TransportWriter:
         if bulk_active:
             features = features + [BULK_MODE_V2_BLOBS_FEATURE]
 
-        # v0.11 Task 2.4: detect v0.11 content (references +
-        # encryption algorithm today; subjects, samples,
-        # dataset_provenance, images, identifications, quantifications
-        # land in subsequent tasks at the same prelude insertion point
-        # per §5.4 ordering). Java parity:
-        # TransportWriter.writeDataset (commit 530a5833).
+        # v0.11 Task 2.4/2.5: detect v0.11 content (references +
+        # encryption algorithm + dataset provenance today; subjects,
+        # samples, images, identifications, quantifications land in
+        # subsequent tasks at the same prelude insertion point per
+        # §5.4 ordering). Java parity: TransportWriter.writeDataset
+        # (commits 530a5833 + 563e09c3).
         refs = getattr(dataset, "references", {}) or {}
+        # ``provenance`` is a method on SpectralDataset (not a
+        # property) — call it eagerly so the empty-vs-nonempty check
+        # is cheap and the actual records are reused below.
+        try:
+            dataset_provenance = list(dataset.provenance())
+        except Exception:  # pragma: no cover - defensive
+            dataset_provenance = []
         has_v011_content = (
             len(refs) > 0
             or bool(getattr(dataset, "is_encrypted", False))
+            or len(dataset_provenance) > 0
         )
         if has_v011_content and TRANSPORT_V0_11_FEATURE not in features:
             features = features + [TRANSPORT_V0_11_FEATURE]
@@ -492,17 +588,24 @@ class TransportWriter:
             n_datasets=len(runs) + len(genomic_runs),
         )
 
-        # v0.11 Task 2.4: v0.11 prelude — per §5.4 ordering, v0.11
-        # sections come BEFORE the v0.10 dataset/run sections, and
-        # ENCRYPTION_ALGORITHM (§5.4.1) comes BEFORE reference groups
-        # (§5.4.4). Provenance, subjects, samples, images,
-        # identifications, quantifications land here in subsequent
-        # Python tasks.
+        # v0.11 Task 2.4/2.5: v0.11 prelude — per §5.4 ordering,
+        # v0.11 sections come BEFORE the v0.10 dataset/run sections,
+        # and the sub-sections appear in this order:
+        #   §5.4.1 ENCRYPTION_ALGORITHM
+        #   §5.4.2 DATASET_PROVENANCE
+        #   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA
+        #   §5.4.4 reference groups
+        #   §5.4.5 image cubes
+        #   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
+        # Subjects, samples, images, identifications, quantifications
+        # land here in subsequent Python tasks.
         if has_v011_content:
             if getattr(dataset, "is_encrypted", False):
                 algo = getattr(dataset, "encrypted_algorithm", "") or ""
                 if algo:
                     self.write_encryption_algorithm(algo)
+            if dataset_provenance:
+                self.write_dataset_provenance(dataset_provenance)
         for i, (name, run) in enumerate(runs, start=1):
             self.write_dataset_header(
                 dataset_id=i,
@@ -873,6 +976,67 @@ class TransportWriter:
                 stream_write(header + payload)
 
 
+def _provenance_params_json(params) -> str:
+    """v0.11 Task 2.5: serialise the ``parameters`` dict of a
+    :class:`~ttio.provenance.ProvenanceRecord` to the canonical wire
+    JSON form.
+
+    Format: ``{"k":"v","k2":"v2"}`` with keys sort_keys-ordered and
+    no whitespace between separators. Empty dict renders as ``"{}"``.
+    Java parity: :meth:`ProvenanceRecord.parametersJson` produces the
+    same braces / quote / no-whitespace shape; Python sorts keys for
+    a deterministic on-wire ordering (Java preserves insertion order
+    via ``Map.copyOf``, which for the small Maps used in practice is
+    LinkedHashMap-equivalent).
+    """
+    if not params:
+        return "{}"
+    # Coerce values to str so a dict[str, Any] (per the Python
+    # ProvenanceRecord type annotation) still produces the
+    # string-valued shape Java emits. Sort keys for stability.
+    coerced = {str(k): str(v) for k, v in params.items()}
+    return json.dumps(coerced, sort_keys=True, separators=(",", ":"))
+
+
+def _provenance_csv_join(refs) -> str:
+    """v0.11 Task 2.5: comma-join a list of refs into the wire form.
+
+    Empty list → empty string. No quoting/escaping is performed — per
+    spec §4.21, refs are URIs that have been URL-encoded so they
+    cannot themselves contain commas. Java parity:
+    :meth:`TransportWriter.csvJoin`.
+    """
+    if not refs:
+        return ""
+    return ",".join(str(r) for r in refs)
+
+
+def _provenance_csv_split(csv: str) -> list[str]:
+    """Reverse of :func:`_provenance_csv_join`. Empty string → empty
+    list. Java parity: :meth:`TransportReader.parseCsv`."""
+    if not csv:
+        return []
+    # No quoting / escaping in v0.11 — URIs are URL-encoded so they
+    # cannot themselves contain commas. Plain split mirrors Java's
+    # ``csv.split(",", -1)``.
+    return csv.split(",")
+
+
+def _provenance_params_parse(json_blob: str) -> dict:
+    """Reverse of :func:`_provenance_params_json`. Empty / ``"{}"``
+    blob → empty dict. Tolerant of parse failure (returns empty dict).
+    Java parity: :meth:`TransportReader.parseParametersJson`."""
+    if not json_blob or json_blob == "{}":
+        return {}
+    try:
+        parsed = json.loads(json_blob)
+        if isinstance(parsed, dict):
+            return {str(k): str(v) for k, v in parsed.items()}
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {}
+
+
 def _instrument_config_json(run: AcquisitionRun) -> str:
     cfg = run.instrument_config
     return json.dumps({
@@ -1068,6 +1232,16 @@ class TransportReader:
         # parity: TransportReader.collectedEncryptionAlgorithm (commit
         # 530a5833).
         collected_encryption_algorithm: str | None = None
+        # v0.11 Task 2.5: dataset-level provenance chain decoded from
+        # DATASET_PROVENANCE (0x18) packets. Multiple 0x18 packets MAY
+        # appear in a stream (spec §5.4 "zero or more"); each carries
+        # its own record_count + records and they accumulate in
+        # emission order. Passed into ``write_minimal`` as the
+        # ``provenance`` kwarg so the on-disk
+        # ``/study/provenance_json`` attribute round-trips. Java
+        # parity: TransportReader.collectedProvenance (commit
+        # 563e09c3).
+        collected_provenance: list = []  # list[ProvenanceRecord]
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -1174,6 +1348,41 @@ class TransportReader:
                 collected_encryption_algorithm = payload[
                     2:2 + algo_len
                 ].decode("utf-8")
+            elif ptype == int(PacketType.DATASET_PROVENANCE):
+                # v0.11 Task 2.5: decode the per-packet record_count +
+                # records and append to ``collected_provenance``.
+                # Java parity: TransportReader.decodeDatasetProvenance.
+                from ..provenance import ProvenanceRecord
+                pl = payload
+                off = 0
+                (record_count,) = struct.unpack_from("<I", pl, off)
+                off += 4
+                for _ in range(record_count):
+                    (timestamp,) = struct.unpack_from("<q", pl, off)
+                    off += 8
+                    (sw_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    software = pl[off:off + sw_len].decode("utf-8")
+                    off += sw_len
+                    (pj_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    params_json = pl[off:off + pj_len].decode("utf-8")
+                    off += pj_len
+                    (in_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    inputs_csv = pl[off:off + in_len].decode("utf-8")
+                    off += in_len
+                    (out_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    outputs_csv = pl[off:off + out_len].decode("utf-8")
+                    off += out_len
+                    collected_provenance.append(ProvenanceRecord(
+                        timestamp_unix=int(timestamp),
+                        software=software,
+                        parameters=_provenance_params_parse(params_json),
+                        input_refs=_provenance_csv_split(inputs_csv),
+                        output_refs=_provenance_csv_split(outputs_csv),
+                    ))
             elif ptype == int(PacketType.REFERENCE_GROUP_HEADER):
                 # v0.11 Stage 1 / Task 2.3: decode header and prime the
                 # per-group accumulator. chromosome_count / total_bases
@@ -1359,6 +1568,12 @@ class TransportReader:
             runs=runs,
             genomic_runs=genomic_runs or None,
             features=list(stream_meta.get("features", [])) or None,
+            # v0.11 Task 2.5: surface decoded DATASET_PROVENANCE
+            # records on the materialised .tio. ``None`` when no 0x18
+            # packets appeared, matching write_minimal's signature.
+            # Java parity: TransportReader.materializeTo passes
+            # collectedProvenance into SpectralDataset.create.
+            provenance=collected_provenance or None,
             provider=provider,
         )
         # v0.11 Stage 1 / Task 2.3: embed any reference groups decoded
