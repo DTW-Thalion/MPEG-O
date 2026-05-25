@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.testfx.framework.junit5.ApplicationTest;
 import static org.junit.jupiter.api.Assertions.*;
 
+
 class TransferStartDialogTest extends ApplicationTest {
 
     private TransferStartDialog dlg;
@@ -62,15 +63,34 @@ class TransferStartDialogTest extends ApplicationTest {
     }
 
     @Test
-    void submitDisabledWhenScopeIsAnonymous() {
+    void submitEnabledForAnonymousWhenUrlAndSourcePresent() {
         interact(() -> {
             dlg = new TransferStartDialog(owner, false);
             dlg.showForTest();
             dlg.setSourceForTest("/tmp/x.tio");
-            dlg.setUriForTest("uri:tio:foo");
-            dlg.setProjectForTest("proj");
+            dlg.setUrlForTest("https://example.com/up");
         });
-        assertTrue(dlg.submitButton().isDisabled(),
-            "anonymous scope submit is not implemented in 3.x");
+        assertFalse(dlg.submitButton().isDisabled(),
+            "anonymous scope submit must be enabled when URL + source filled");
+    }
+
+    @Test
+    void anonymousUploadSubmitEnqueuesIntoTransferManager() {
+        var tm = TransferManager.instance();
+        tm.clearAllForTest();
+        interact(() -> {
+            dlg = new TransferStartDialog(owner, false);
+            dlg.showForTest();
+            dlg.setSourceForTest("/tmp/x.tio");
+            dlg.setUrlForTest("https://example.com/no-real-server");
+            dlg.setTokenForTest("");
+        });
+        interact(() -> dlg.submitButton().fire());
+        assertEquals(1, tm.transfers().size());
+        var t = tm.transfers().get(0);
+        assertEquals(TransferKind.UPLOAD, t.kind());
+        assertEquals("https://example.com/no-real-server", t.containerUri());
+        // The transfer will FAIL almost immediately because the URL is fake;
+        // we do not assert state here (it depends on timing).
     }
 }

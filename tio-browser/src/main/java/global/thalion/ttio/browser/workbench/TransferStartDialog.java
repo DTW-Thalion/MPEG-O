@@ -32,8 +32,9 @@ import java.nio.file.Paths;
  * <p>Direction selects upload vs download; scope selects connected
  * workbench (default when an authenticated session exists) vs
  * anonymous URL (default when offline, behind "Advanced" when
- * connected — present in the UI for future use but not yet
- * functional in the v1.x submit handler).</p>
+ * connected). Anonymous transfers are routed through
+ * {@link TransferManager#enqueueAnonymousUpload} and
+ * {@link TransferManager#enqueueAnonymousDownload}.</p>
  */
 public final class TransferStartDialog {
 
@@ -94,6 +95,7 @@ public final class TransferStartDialog {
         sourceField.textProperty().addListener((o, a, b) -> refresh());
         projectField.textProperty().addListener((o, a, b) -> refresh());
         uriField.textProperty().addListener((o, a, b) -> refresh());
+        urlField.textProperty().addListener((o, a, b) -> refresh());
         browseBtn.setOnAction(e -> browseForSource());
         cancelBtn.setOnAction(e -> stage.close());
         submitBtn.setOnAction(e -> submit());
@@ -163,9 +165,11 @@ public final class TransferStartDialog {
             canSubmit = haveSource && haveConnectedTarget;
             hintLabel.setText(canSubmit ? "" :
                 "Select a source file and fill in Project + Container URI.");
-        } else {
-            canSubmit = false; // anonymous not yet implemented in 3.x
-            hintLabel.setText("Anonymous-URL transfers will land in a Stage 3 follow-up.");
+        } else {  // ANONYMOUS_URL
+            boolean haveUrl = !urlField.getText().isBlank();
+            canSubmit = haveSource && haveUrl;
+            hintLabel.setText(canSubmit ? "" :
+                "Select a source file and fill in URL.");
         }
         submitBtn.setDisable(!canSubmit);
     }
@@ -184,19 +188,29 @@ public final class TransferStartDialog {
     }
 
     private void submit() {
-        if (scope != Scope.CONNECTED) return;
-        var client = ConnectionManager.instance().client();
-        if (client == null) {
-            hintLabel.setText("Not connected — reconnect via the header chip and try again.");
-            return;
-        }
         var tm = TransferManager.instance();
-        if (direction == Direction.UPLOAD) {
-            tm.enqueueUpload(client, projectField.getText(),
-                uriField.getText(), Paths.get(sourceField.getText()));
+        if (scope == Scope.CONNECTED) {
+            var client = ConnectionManager.instance().client();
+            if (client == null) {
+                hintLabel.setText("Not connected — reconnect via the header chip and try again.");
+                return;
+            }
+            if (direction == Direction.UPLOAD) {
+                tm.enqueueUpload(client, projectField.getText(),
+                    uriField.getText(), Paths.get(sourceField.getText()));
+            } else {
+                tm.enqueueDownload(client, uriField.getText(),
+                    Paths.get(sourceField.getText()), selectiveAccess.buildFilter());
+            }
         } else {
-            tm.enqueueDownload(client, uriField.getText(),
-                Paths.get(sourceField.getText()), selectiveAccess.buildFilter());
+            // ANONYMOUS_URL
+            if (direction == Direction.UPLOAD) {
+                tm.enqueueAnonymousUpload(urlField.getText(),
+                    tokenField.getText(), Paths.get(sourceField.getText()));
+            } else {
+                tm.enqueueAnonymousDownload(urlField.getText(),
+                    Paths.get(sourceField.getText()), selectiveAccess.buildFilter());
+            }
         }
         stage.close();
     }
