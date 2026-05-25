@@ -116,9 +116,10 @@ TTIOTests_OBJC_FILES = \
 	TTIOReferenceImportWriteToDatasetTests.m \
 	TestMSImageMzAxis.m \
 	TestTransportPacketTypeV011.m \
-	TestTransportReaderSkipUnknown.m
+	TestTransportReaderSkipUnknown.m \
+	TestArrowIpcCodec.m
 
-TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
+TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
