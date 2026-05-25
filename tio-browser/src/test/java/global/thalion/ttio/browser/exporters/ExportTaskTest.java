@@ -381,4 +381,39 @@ class ExportTaskTest {
                 "round-tripped MSImage must carry an mz_axis");
         }
     }
+
+    @Test
+    void emitsProgressReportsDuringExport(@TempDir Path tmp) throws Exception {
+        Path src = Paths.get("../java/src/test/resources/tiny.pwiz.1.1.mzML")
+            .toAbsolutePath();
+        Path origTio = tmp.resolve("orig.tio");
+        Path mzml = tmp.resolve("out.mzML");
+
+        // import source mzML -> orig.tio
+        ImportTask imp = new ImportTask(importSpec("mzML"),
+            ImportConfig.basic(src, origTio, "hdf5", "run_0001", "progress test"));
+        runAndWait(imp);
+        try { imp.get(); } catch (ExecutionException ee) {
+            fail("import failed: " + ee.getCause(), ee.getCause());
+        }
+
+        // export orig.tio -> mzml and capture progress reports
+        try (SpectralDataset ds = SpectralDataset.open(origTio.toString())) {
+            ExportTask task = new ExportTask(exportSpec("mzML (indexed)"),
+                ExportConfig.basic(mzml), ds);
+            var got = new java.util.concurrent.CopyOnWriteArrayList<
+                global.thalion.ttio.browser.progress.ProgressReport>();
+            task.setProgressListener(got::add);
+            runAndWait(task);
+            try {
+                task.get();
+            } catch (ExecutionException ee) {
+                fail("mzML export threw: " + ee.getCause(), ee.getCause());
+            }
+            assertFalse(got.isEmpty(),
+                "should emit at least one progress report");
+            assertTrue(got.stream().anyMatch(r -> r.bytesDone() > 0L || r.unitsDone() > 0L),
+                "should emit at least one report with non-zero progress");
+        }
+    }
 }

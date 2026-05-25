@@ -33,17 +33,16 @@ class DatasetTreeViewSmokeTest extends ApplicationTest {
         long deadline = System.nanoTime() + (long) 10e9;
         TreeItem<DatasetTreeNode> root = null;
         while (System.nanoTime() < deadline) {
-            if (win.tree() != null) {
+            if (win.tree() != null && win.tree().control().getRoot() != null) {
                 root = win.tree().control().getRoot();
-                if (root != null && !root.getChildren().isEmpty()) break;
+                break;
             }
             Thread.sleep(50);
         }
         assertNotNull(root, "tree root should be set within 10s");
         assertEquals(TreeNodeKind.DATASET_ROOT, root.getValue().kind());
         assertTrue(root.getChildren().size() >= 3,
-            "root should have at least study/feature_flags/encryption; was: "
-            + root.getChildren().size());
+            "root should have at least study/feature_flags/encryption");
     }
 
     @Test
@@ -58,9 +57,8 @@ class DatasetTreeViewSmokeTest extends ApplicationTest {
             Thread.sleep(50);
         }
         assertNotNull(win.tree().control().getRoot(),
-            "tree should be populated before selection test");
+            "tree root should be set before selection test");
 
-        // Replace the listener with a capturing one
         java.util.concurrent.atomic.AtomicReference<DatasetTreeNode> seen =
             new java.util.concurrent.atomic.AtomicReference<>();
         win.tree().onSelected(seen::set);

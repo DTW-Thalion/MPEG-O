@@ -62,4 +62,23 @@ class DatasetOpenTaskTest {
             assertFalse(result.encryptionAlgorithm().isEmpty());
         }
     }
+
+    @Test
+    void emitsProgressReportsToListener() throws Exception {
+        DatasetOpenTask task = new DatasetOpenTask(FIXTURE.toString(), true);
+        java.util.List<global.thalion.ttio.browser.progress.ProgressReport> got =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+        task.setProgressListener(got::add);
+        ExecutorService exec = Executors.newSingleThreadExecutor();
+        exec.submit(task);
+        exec.shutdown();
+        assertTrue(exec.awaitTermination(10, TimeUnit.SECONDS));
+        try (OpenDataset result = task.get()) {
+            assertNotNull(result);
+        }
+        assertFalse(got.isEmpty(),
+            "task should emit at least one ProgressReport");
+        assertTrue(got.stream().anyMatch(r -> r.unitsDone() >= 1),
+            "should emit a terminal report with unitsDone >= 1");
+    }
 }

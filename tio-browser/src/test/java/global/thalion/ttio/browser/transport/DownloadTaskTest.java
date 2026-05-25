@@ -149,4 +149,44 @@ class DownloadTaskTest {
             42);
         assertEquals(42, task.timeoutSeconds());
     }
+
+    @Test
+    void emitsProgressReportsDuringDownload(@TempDir Path tmp) throws Exception {
+        Path fixture = Paths.get("../java/src/test/resources/ttio/minimal_ms.tio")
+            .toAbsolutePath();
+        assertTrue(Files.exists(fixture), "fixture missing: " + fixture);
+
+        int port = findFreePort();
+        TransportServer server = new TransportServer(
+            fixture.toString(), "127.0.0.1", port);
+        server.start();
+
+        try {
+            Path out = tmp.resolve("downloaded.tio");
+            DownloadTask task = new DownloadTask(
+                "ws://127.0.0.1:" + port + "/",
+                Map.of(),
+                out.toString(),
+                "hdf5",
+                30);
+            java.util.List<global.thalion.ttio.browser.progress.ProgressReport> got =
+                new java.util.concurrent.CopyOnWriteArrayList<>();
+            task.setProgressListener(got::add);
+
+            runAndWait(task);
+
+            try {
+                task.get();
+            } catch (ExecutionException ee) {
+                fail("DownloadTask failed: " + ee.getCause(), ee.getCause());
+            }
+
+            assertFalse(got.isEmpty(),
+                "task should emit at least one ProgressReport");
+            assertTrue(got.stream().anyMatch(r -> r.unitsDone() >= 1),
+                "task should emit a terminal report with unitsDone >= 1");
+        } finally {
+            server.stop();
+        }
+    }
 }

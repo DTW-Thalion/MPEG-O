@@ -4,6 +4,8 @@
  */
 package global.thalion.ttio.browser.transport;
 
+import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressTracker;
 import javafx.concurrent.Task;
 
 import java.net.URI;
@@ -20,6 +22,8 @@ public final class UploadTask extends Task<Void> {
     private final String targetUrl;
     private final String bearerToken;
     private final boolean useChecksum;
+    private volatile ProgressListener progressListener;
+    private ProgressTracker tracker;
 
     public UploadTask(String localPath, String targetUrl,
                       String bearerToken, boolean useChecksum) {
@@ -29,11 +33,19 @@ public final class UploadTask extends Task<Void> {
         this.useChecksum = useChecksum;
     }
 
+    public void setProgressListener(ProgressListener listener) {
+        this.progressListener = listener;
+    }
+
     @Override
     protected Void call() throws Exception {
         updateMessage("Encoding .tio to .tis ...");
         Path tis = TisEncoder.encodeToTempFile(localPath, useChecksum);
         try {
+            long total = Files.size(tis);
+            tracker = new ProgressTracker(
+                "uploading", total, -1L, System.currentTimeMillis());
+            emit(0L);
             URI uri = URI.create(targetUrl);
             updateMessage("Uploading to " + uri.getHost() + " ...");
             switch (uri.getScheme()) {
@@ -44,11 +56,18 @@ public final class UploadTask extends Task<Void> {
                 default -> throw new IllegalArgumentException(
                     "Unsupported URL scheme: " + uri.getScheme());
             }
+            emit(total);
             updateMessage("Done.");
             return null;
         } finally {
             Files.deleteIfExists(tis);
         }
+    }
+
+    private void emit(long bytesDone) {
+        ProgressListener l = progressListener;
+        if (l == null || tracker == null) return;
+        l.onProgress(tracker.sample(bytesDone, 0L, System.currentTimeMillis()));
     }
 
     private static String basename(String path) {

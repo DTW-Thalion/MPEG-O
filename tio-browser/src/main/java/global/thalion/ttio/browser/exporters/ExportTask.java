@@ -1,6 +1,7 @@
 package global.thalion.ttio.browser.exporters;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -28,6 +29,8 @@ import global.thalion.ttio.genomics.GenomicIndex;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressTracker;
 import javafx.concurrent.Task;
 
 /**
@@ -62,6 +65,8 @@ public final class ExportTask extends Task<Void> {
     private final ExportFormatSpec spec;
     private final ExportConfig config;
     private final SpectralDataset dataset;
+    private volatile ProgressListener progressListener;
+    private ProgressTracker tracker;
 
     public ExportTask(ExportFormatSpec spec, ExportConfig config,
                       SpectralDataset dataset) {
@@ -70,25 +75,36 @@ public final class ExportTask extends Task<Void> {
         this.dataset = dataset;
     }
 
+    public void setProgressListener(ProgressListener listener) {
+        this.progressListener = listener;
+    }
+
     @Override
     protected Void call() throws Exception {
         updateMessage("Exporting " + spec.name + " to " + config.targetPath);
-        switch (spec.name) {
-            case "mzML (indexed)" -> exportMzML();
-            case "mzTab"          -> exportMzTab();
-            case "nmrML"          -> exportNmrML();
-            case "JCAMP-DX"       -> exportJcampDx();
-            case "ISA-Tab/JSON"   -> exportIsa();
-            case "BAM"            -> exportBamLike(false);
-            case "CRAM"           -> exportBamLike(true);
-            case "FASTA (reference)" -> exportFastaReference();
-            case "FASTA (reads)"     -> exportFastaReads();
-            case "FASTQ"          -> exportFastq();
-            case "imzML" -> exportImzML();
-            default -> throw new UnsupportedOperationException(
-                spec.name + " export not wired.");
+        tracker = new ProgressTracker("exporting", -1L, 1L, System.currentTimeMillis());
+        emit(0L, 0L);
+        try {
+            switch (spec.name) {
+                case "mzML (indexed)" -> exportMzML();
+                case "mzTab"          -> exportMzTab();
+                case "nmrML"          -> exportNmrML();
+                case "JCAMP-DX"       -> exportJcampDx();
+                case "ISA-Tab/JSON"   -> exportIsa();
+                case "BAM"            -> exportBamLike(false);
+                case "CRAM"           -> exportBamLike(true);
+                case "FASTA (reference)" -> exportFastaReference();
+                case "FASTA (reads)"     -> exportFastaReads();
+                case "FASTQ"          -> exportFastq();
+                case "imzML" -> exportImzML();
+                default -> throw new UnsupportedOperationException(
+                    spec.name + " export not wired.");
+            }
+            long fileSize = Files.size(config.targetPath);
+            emit(fileSize, 1L);
+        } finally {
+            updateMessage("Done.");
         }
-        updateMessage("Done.");
         return null;
     }
 
@@ -279,5 +295,11 @@ public final class ExportTask extends Task<Void> {
             cigars, readNames, mateChroms, matePos, tlens, chromosomes,
             Enums.Compression.NONE
         );
+    }
+
+    private void emit(long bytesDone, long unitsDone) {
+        ProgressListener l = progressListener;
+        if (l == null || tracker == null) return;
+        l.onProgress(tracker.sample(bytesDone, unitsDone, System.currentTimeMillis()));
     }
 }

@@ -10,7 +10,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.concurrent.Task;
 import javafx.geometry.Insets;
-import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Alert.AlertType;
 import javafx.scene.control.Button;
@@ -23,8 +22,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
-import javafx.stage.Modality;
-import javafx.stage.Stage;
 import javafx.stage.Window;
 
 import java.time.Instant;
@@ -33,12 +30,16 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 /**
- * Workbench job-monitor window. TableView<Job> with refresh /
+ * Workbench job-monitor content builder. TableView<Job> with refresh /
  * filter-by-status / cancel-selected / tail-events controls.
  *
  * <p>Drives the W3 {@link global.thalion.ttio.workbench.jobs.JobsClient};
  * SSE tail-events are opened in a separate {@link JobEventsView}
  * window.</p>
+ *
+ * <p>This class no longer manages a Stage; call
+ * {@link #buildContent(ConnectionManager, Window)} to obtain an embeddable
+ * {@link Region} suitable for use inside {@code JobsWorkspace}.</p>
  */
 public final class JobMonitor {
 
@@ -46,52 +47,7 @@ public final class JobMonitor {
         "(all)", "queued", "starting", "running",
         "completed", "failed", "cancelled");
 
-    private final Window owner;
-    private final ConnectionManager manager;
-    private final Stage stage = new Stage();
-
-    private final ChoiceBox<String> statusFilterBox = new ChoiceBox<>();
-    private final Button refreshBtn = new Button("Refresh");
-    private final Button cancelJobBtn = new Button("Cancel selected");
-    private final Button tailEventsBtn = new Button("Tail events");
-    private final Label statusLabel = new Label("");
-    private final TableView<Job> table = new TableView<>();
-    private final ObservableList<Job> rows = FXCollections.observableArrayList();
-
-    public JobMonitor(Window owner) {
-        this(owner, ConnectionManager.instance());
-    }
-
-    /** Visible for tests. */
-    public JobMonitor(Window owner, ConnectionManager manager) {
-        this.owner = owner;
-        this.manager = manager;
-        buildUi();
-        wireActions();
-    }
-
-    public void show() {
-        if (!manager.isConnected()) {
-            new Alert(AlertType.WARNING,
-                "Connect to a workbench server first "
-                + "(Workbench -> Connect...).",
-                ButtonType.OK).showAndWait();
-            return;
-        }
-        stage.show();
-        beginRefresh();
-    }
-
-    // ---- TestFX accessors ----
-
-    Stage stage()                       { return stage; }
-    ChoiceBox<String> statusFilterBox() { return statusFilterBox; }
-    Button refreshButton()              { return refreshBtn; }
-    Button cancelJobButton()            { return cancelJobBtn; }
-    Button tailEventsButton()           { return tailEventsBtn; }
-    Label statusLabel()                 { return statusLabel; }
-    TableView<Job> table()              { return table; }
-    ObservableList<Job> rows()          { return rows; }
+    private JobMonitor() {}
 
     // ---- static helpers ----
 
@@ -111,9 +67,25 @@ public final class JobMonitor {
         return box;
     }
 
-    // ---- UI ----
+    /**
+     * Build the embeddable content region for the job monitor.
+     *
+     * <p>All UI state (table, rows, toolbar) is wired and live; the
+     * returned {@code VBox} can be placed directly into any container.</p>
+     *
+     * @param manager the {@link ConnectionManager} to poll for jobs
+     * @param owner   the owning {@link Window} for any child dialogs
+     * @return the root {@link Region} of the job-monitor content
+     */
+    public static Region buildContent(ConnectionManager manager, Window owner) {
+        ChoiceBox<String> statusFilterBox = new ChoiceBox<>();
+        Button refreshBtn = new Button("Refresh");
+        Button cancelJobBtn = new Button("Cancel selected");
+        Button tailEventsBtn = new Button("Tail events");
+        Label statusLabel = new Label("");
+        TableView<Job> table = new TableView<>();
+        ObservableList<Job> rows = FXCollections.observableArrayList();
 
-    private void buildUi() {
         TableColumn<Job, String> idCol = new TableColumn<>("Job ID");
         idCol.setCellValueFactory(cd -> new SimpleStringProperty(
             cd.getValue().jobId() == null ? "" : cd.getValue().jobId()));
@@ -143,7 +115,7 @@ public final class JobMonitor {
             formatTimestamp(cd.getValue().completedAt())));
         completedCol.setPrefWidth(180);
         table.getColumns().addAll(idCol, pipeCol, statusCol, projectCol,
-                                    queuedCol, startedCol, completedCol);
+                                   queuedCol, startedCol, completedCol);
         table.setItems(rows);
 
         statusFilterBox.setItems(FXCollections.observableArrayList(STATUS_FILTERS));
@@ -163,21 +135,27 @@ public final class JobMonitor {
         VBox root = new VBox(toolbar, table, bottom);
         VBox.setVgrow(table, Priority.ALWAYS);
 
-        Scene scene = new Scene(root, 1180, 520);
-        stage.setScene(scene);
-        stage.setTitle("Workbench jobs");
-        stage.initModality(Modality.NONE);
-        if (owner != null) stage.initOwner(owner);
+        // Wire actions using local captures
+        Runnable doRefresh = () -> beginRefresh(manager, statusFilterBox,
+            refreshBtn, statusLabel, rows);
+        refreshBtn.setOnAction(e -> doRefresh.run());
+        statusFilterBox.setOnAction(e -> doRefresh.run());
+        cancelJobBtn.setOnAction(e -> cancelSelected(manager, table, rows,
+            statusFilterBox, refreshBtn, statusLabel));
+        tailEventsBtn.setOnAction(e -> {
+            Job job = table.getSelectionModel().getSelectedItem();
+            if (job == null) return;
+            new JobEventsView(owner, job.jobId()).show();
+        });
+
+        return root;
     }
 
-    private void wireActions() {
-        refreshBtn.setOnAction(e -> beginRefresh());
-        statusFilterBox.setOnAction(e -> beginRefresh());
-        cancelJobBtn.setOnAction(e -> cancelSelected());
-        tailEventsBtn.setOnAction(e -> tailEventsForSelected());
-    }
+    // ---- private helpers used by buildContent ----
 
-    private void beginRefresh() {
+    private static void beginRefresh(ConnectionManager manager,
+            ChoiceBox<String> statusFilterBox, Button refreshBtn,
+            Label statusLabel, ObservableList<Job> rows) {
         refreshBtn.setDisable(true);
         statusLabel.setText("Loading jobs...");
         final String filter = filterValue(statusFilterBox.getValue());
@@ -205,12 +183,11 @@ public final class JobMonitor {
         th.start();
     }
 
-    private Job selectedJob() {
-        return table.getSelectionModel().getSelectedItem();
-    }
-
-    private void cancelSelected() {
-        Job job = selectedJob();
+    private static void cancelSelected(ConnectionManager manager,
+            TableView<Job> table, ObservableList<Job> rows,
+            ChoiceBox<String> statusFilterBox, Button refreshBtn,
+            Label statusLabel) {
+        Job job = table.getSelectionModel().getSelectedItem();
         if (job == null) return;
         if (job.isTerminal()) {
             new Alert(AlertType.INFORMATION,
@@ -231,7 +208,8 @@ public final class JobMonitor {
                 return null;
             }
         };
-        task.setOnSucceeded(ev -> beginRefresh());
+        task.setOnSucceeded(ev -> beginRefresh(manager, statusFilterBox,
+            refreshBtn, statusLabel, rows));
         task.setOnFailed(ev -> {
             Throwable t = task.getException();
             new Alert(AlertType.ERROR,
@@ -241,11 +219,5 @@ public final class JobMonitor {
         Thread th = new Thread(task, "ttio-workbench-cancel-job");
         th.setDaemon(true);
         th.start();
-    }
-
-    private void tailEventsForSelected() {
-        Job job = selectedJob();
-        if (job == null) return;
-        new JobEventsView(stage, job.jobId()).show();
     }
 }

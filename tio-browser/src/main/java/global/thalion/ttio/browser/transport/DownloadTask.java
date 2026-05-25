@@ -1,9 +1,13 @@
 package global.thalion.ttio.browser.transport;
 
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressTracker;
 import global.thalion.ttio.transport.TransportClient;
 import javafx.concurrent.Task;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Map;
 
 /**
@@ -22,6 +26,8 @@ public final class DownloadTask extends Task<String> {
     private final String outputPath;
     private final String provider;
     private final int timeoutSeconds;
+    private volatile ProgressListener progressListener;
+    private ProgressTracker tracker;
 
     /**
      * @param url            WebSocket URL, e.g. {@code ws://host:8080/}
@@ -43,17 +49,32 @@ public final class DownloadTask extends Task<String> {
         this.timeoutSeconds = timeoutSeconds;
     }
 
+    public void setProgressListener(ProgressListener listener) {
+        this.progressListener = listener;
+    }
+
     @Override
     protected String call() throws Exception {
         updateMessage("Connecting to " + url + " …");
+        tracker = new ProgressTracker(
+            "downloading", -1L, 1L, System.currentTimeMillis());
+        emit(0L, 0L);
         TransportClient client = new TransportClient(url);
         // streamToFile does not accept a timeout parameter; the caller
         // enforces the wall-clock bound via task.get(timeoutSeconds, ...).
         try (SpectralDataset materialised = client.streamToFile(outputPath, filters)) {
             // Close immediately — the GUI re-opens via loadDataset(...).
         }
+        long fileSize = Files.size(Paths.get(outputPath));
+        emit(fileSize, 1L);
         updateMessage("Done.");
         return outputPath;
+    }
+
+    private void emit(long bytesDone, long unitsDone) {
+        ProgressListener l = progressListener;
+        if (l == null || tracker == null) return;
+        l.onProgress(tracker.sample(bytesDone, unitsDone, System.currentTimeMillis()));
     }
 
     /** Timeout hint for use by the caller’s {@code task.get(...)} call. */

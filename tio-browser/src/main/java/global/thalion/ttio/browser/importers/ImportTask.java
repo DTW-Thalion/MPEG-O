@@ -33,6 +33,8 @@ import global.thalion.ttio.importers.NmrMLReader;
 import global.thalion.ttio.importers.SamReader;
 import global.thalion.ttio.importers.ThermoRawReader;
 import global.thalion.ttio.importers.WatersMassLynxReader;
+import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressTracker;
 import javafx.concurrent.Task;
 
 /**
@@ -59,16 +61,26 @@ public final class ImportTask extends Task<Void> {
 
     private final ImportFormatSpec spec;
     private final ImportConfig config;
+    private volatile ProgressListener progressListener;
+    private ProgressTracker tracker;
 
     public ImportTask(ImportFormatSpec spec, ImportConfig config) {
         this.spec = spec;
         this.config = config;
     }
 
+    public void setProgressListener(ProgressListener listener) {
+        this.progressListener = listener;
+    }
+
     @Override
     protected Void call() throws Exception {
         updateMessage("Importing " + spec.name + " from " + config.sourcePath);
-        switch (spec.name) {
+        long bytesTotal = Files.size(config.sourcePath);
+        tracker = new ProgressTracker("importing", bytesTotal, -1L, System.currentTimeMillis());
+        emit(0L);
+        try {
+            switch (spec.name) {
             case "mzML"             -> importMzML();
             case "nmrML"            -> importNmrML();
             case "mzTab"            -> importMzTab();
@@ -85,8 +97,11 @@ public final class ImportTask extends Task<Void> {
             default -> throw new UnsupportedOperationException(
                 spec.name + " import not yet wired -- see "
                 + "tio-browser/README.md follow-ups.");
+            }
+            emit(bytesTotal);
+        } finally {
+            updateMessage("Done.");
         }
-        updateMessage("Done.");
         return null;
     }
 
@@ -335,6 +350,12 @@ public final class ImportTask extends Task<Void> {
             List.of(),
             List.of(),
             flags);
+    }
+
+    private void emit(long bytesDone) {
+        ProgressListener l = progressListener;
+        if (l == null || tracker == null) return;
+        l.onProgress(tracker.sample(bytesDone, 0L, System.currentTimeMillis()));
     }
 
     /** Visible for tests -- does the source path point at a real file? */

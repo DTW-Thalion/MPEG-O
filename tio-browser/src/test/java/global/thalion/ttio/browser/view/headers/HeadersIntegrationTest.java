@@ -33,45 +33,36 @@ class HeadersIntegrationTest extends ApplicationTest {
         long deadline = System.nanoTime() + (long) 10e9;
         while (System.nanoTime() < deadline) {
             if (win.tree() != null
-                && win.tree().control().getRoot() != null
-                && !win.tree().control().getRoot().getChildren().isEmpty()) break;
+                    && win.tree().control().getRoot() != null
+                    && !win.tree().control().getRoot().getChildren().isEmpty()) break;
             Thread.sleep(50);
         }
+        assertNotNull(win.tree().control().getRoot(),
+            "tree root should be set before selection test");
+        assertFalse(win.tree().control().getRoot().getChildren().isEmpty(),
+            "tree root should have children within 10s");
 
         Platform.runLater(() -> selectFirstNodeOfKind(TreeNodeKind.MS_RUN));
 
-        // Wait for BOTH the MS Headers tab AND the Provenance tab to
-        // register. Earlier this loop only polled for MS Headers, but
-        // DetailPane.onSelection registers matching tabs sequentially
-        // via Platform.runLater; on slower CI runners the Provenance
-        // tab may not be present yet when MS Headers appears, causing
-        // an intermittent failure on the trailing assertion. Polling
-        // for both fixes the race.
         long sel_deadline = System.nanoTime() + (long) 5e9;
         while (System.nanoTime() < sel_deadline) {
             var tabs = win.detail().control().getTabs();
-            boolean hasMsHeaders = tabs.stream()
-                .anyMatch(t -> "MS Headers".equals(t.getText()));
-            boolean hasProvenance = tabs.stream()
-                .anyMatch(t -> "Provenance".equals(t.getText()));
+            boolean hasMsHeaders = tabs.stream().anyMatch(t -> "MS Headers".equals(t.getText()));
+            boolean hasProvenance = tabs.stream().anyMatch(t -> "Provenance".equals(t.getText()));
             if (hasMsHeaders && hasProvenance) break;
             Thread.sleep(20);
         }
         var tabs = win.detail().control().getTabs();
         assertTrue(tabs.stream().anyMatch(t -> "MS Headers".equals(t.getText())),
-            "MS_RUN selection should produce an MS Headers tab; got: "
-                + tabs.stream().map(t -> t.getText()).toList());
+            "MS_RUN selection should show MS Headers tab");
         assertTrue(tabs.stream().anyMatch(t -> "Provenance".equals(t.getText())),
-            "MS_RUN selection should also produce a Provenance tab; got: "
-                + tabs.stream().map(t -> t.getText()).toList());
+            "MS_RUN selection should show Provenance tab");
     }
 
     private void selectFirstNodeOfKind(TreeNodeKind kind) {
         TreeItem<DatasetTreeNode> root = win.tree().control().getRoot();
         TreeItem<DatasetTreeNode> match = findDescendant(root, kind);
-        if (match != null) {
-            win.tree().control().getSelectionModel().select(match);
-        }
+        if (match != null) { win.tree().control().getSelectionModel().select(match); }
     }
 
     private static TreeItem<DatasetTreeNode> findDescendant(

@@ -60,4 +60,24 @@ class TransferTest {
         assertEquals("Upload", up.kindLabel());
         assertEquals("Download", dn.kindLabel());
     }
+
+    @Test
+    void transferForwardsProgressReportsToItsListener() {
+        // Use a synthetic ProgressReport emission via direct setLastReport
+        // path (no need to spin up a real WorkbenchTransportClient).
+        Transfer t = new Transfer(TransferKind.UPLOAD, "uri:tio:test/x",
+            "/tmp/x.tio", 1000L, Map.of());
+        var got = new java.util.concurrent.CopyOnWriteArrayList<
+            global.thalion.ttio.browser.progress.ProgressReport>();
+        t.setProgressListener(got::add);
+        // Simulate the manager's emission by calling the listener directly:
+        var r = new global.thalion.ttio.browser.progress.ProgressReport(
+            "uploading", 500L, 1000L, -1L, -1L,
+            100.0, Double.NaN, 5L, 5L, System.currentTimeMillis());
+        t.progressListener().onProgress(r);
+        t.setLastReport(r);
+        assertEquals(1, got.size());
+        assertSame(r, got.get(0));
+        assertSame(r, t.lastReport());
+    }
 }
