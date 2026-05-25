@@ -13,6 +13,7 @@
 @class TTIOGenomicRun;
 @class TTIOReferenceImport;
 @class TTIOProvenanceRecord;
+@class TTIOMSImage;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -252,6 +253,29 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeDatasetProvenance:(NSArray<TTIOProvenanceRecord *> *)records
                           error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 3.6: emit a <code>TTIOMSImage</code> as the packet sequence
+ * <code>IMAGE_HEADER (0x13) -&gt; N x IMAGE_PIXEL (0x14)
+ *  -&gt; END_OF_IMAGE (0x15)</code>, where <code>N = width * height</code>.
+ *
+ * <p>Wire layout matches transport-spec §4.16-§4.18. All multi-byte
+ * integers are LITTLE-ENDIAN (spec §1.7). Each pixel rides as a
+ * continuous-mode IMAGE_PIXEL — the shared m/z axis lives on the
+ * IMAGE_HEADER, and every pixel carries only its intensities (FLOAT64,
+ * uncompressed). The pixel index rides in the packet header's
+ * <code>auSequence</code> field (<code>y * width + x</code>; 0-based).</p>
+ *
+ * <p>Processed-mode (per-pixel axis, signalled by
+ * <code>is_continuous == 0</code>) is not yet emitted; the matching
+ * decoder in <code>TTIOTransportReader</code> is also continuous-only.
+ * Java parity: <code>TransportWriter.writeImage</code> (commit
+ * <code>a6b1e5d9</code>). Python parity:
+ * <code>TransportWriter.write_image</code> (commit
+ * <code>1f619ced</code>).</p>
+ */
+- (BOOL)writeImage:(TTIOMSImage *)image
+              error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 

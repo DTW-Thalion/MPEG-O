@@ -22,10 +22,12 @@
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOBulkV2Blobs.h"
 #import "Genomics/TTIOReferenceImport.h"
+#import "Image/TTIOMSImage.h"
 #import "Providers/TTIOHDF5Provider.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
+#import <hdf5.h>
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import "ValueClasses/TTIOEnums.h"
@@ -53,6 +55,14 @@ static inline uint64_t readU64(const uint8_t *b)
     uint64_t lo = (uint64_t)readU32(b);
     uint64_t hi = (uint64_t)readU32(b + 4);
     return lo | (hi << 32);
+}
+
+static inline double readF64(const uint8_t *b)
+{
+    uint64_t bits = readU64(b);
+    double v;
+    memcpy(&v, &bits, 8);
+    return v;
 }
 
 // v0.11 Task 3.3: zlib inflate for REFERENCE_CHROMOSOME encoding=1.
@@ -309,6 +319,26 @@ typedef struct {
     // .tio carries them in /study/provenance just like a source .tio.
     NSMutableArray<TTIOProvenanceRecord *> *collectedProvenance =
         [NSMutableArray array];
+
+    // v0.11 Task 3.6: per-stream accumulator for the IMAGE_HEADER ->
+    // N x IMAGE_PIXEL -> END_OF_IMAGE packet sequence (transport-spec
+    // §4.16-§4.18). Mirrors Java TransportReader.currentImageBuilder /
+    // collectedImage (commit a6b1e5d9) and Python's reader (commit
+    // 1f619ced). The MSImage is finalised on END_OF_IMAGE and embedded
+    // into the materialised .tio after writeMinimalToPath: returns.
+    // Continuous-mode only at Task 3.6; processed-mode (per-pixel axis)
+    // raises on the IMAGE_HEADER packet itself, matching Java + Python.
+    uint32_t imgWidth = 0, imgHeight = 0, imgBins = 0;
+    double imgPxX = 0.0, imgPxY = 0.0;
+    NSMutableString *imgScanPattern = [NSMutableString string];
+    NSMutableData *imgMzAxis = [NSMutableData data];
+    NSMutableString *imgTitle = [NSMutableString string];
+    NSMutableString *imgIsa = [NSMutableString string];
+    NSMutableData *imgCube = [NSMutableData data];
+    NSMutableData *imgSeen = [NSMutableData data];
+    uint64_t imgSeenCount = 0;
+    BOOL imgHeaderSeen = NO;
+    BOOL imgCollected = NO;
 
     for (TTIOTransportPacketRecord *rec in packets) {
         TTIOTransportPacketHeader *h = rec.header;
@@ -856,6 +886,235 @@ typedef struct {
             }
             continue;
         }
+        // v0.11 Task 3.6: IMAGE_HEADER (0x13). Wire layout per
+        // transport-spec §4.16: u8 modality + u32 width + u32 height
+        // + u32 spectrum_bins + f64 pixel_size_x + f64 pixel_size_y
+        // + u8 scan_pattern + u8 axis_kind + u32 axis_length +
+        // N x f64 axis + u8 is_continuous + u16 + UTF-8 title +
+        // u16 + UTF-8 isa_id. Java parity: TransportReader.startImage
+        // (commit a6b1e5d9). Python parity: TransportReader._start_image
+        // (commit 1f619ced).
+        if (h.packetType == TTIOTransportPacketImageHeader) {
+            if (off + 1 > len) continue;
+            uint8_t modality = bytes[off]; off += 1;
+            if (off + 4 > len) continue;
+            uint32_t hdrW = readU32(&bytes[off]); off += 4;
+            if (off + 4 > len) continue;
+            uint32_t hdrH = readU32(&bytes[off]); off += 4;
+            if (off + 4 > len) continue;
+            uint32_t hdrBins = readU32(&bytes[off]); off += 4;
+            if (off + 8 > len) continue;
+            double pxX = readF64(&bytes[off]); off += 8;
+            if (off + 8 > len) continue;
+            double pxY = readF64(&bytes[off]); off += 8;
+            if (off + 1 > len) continue;
+            uint8_t scanPat = bytes[off]; off += 1;
+            if (off + 1 > len) continue;
+            uint8_t axisKind = bytes[off]; off += 1;
+            (void)axisKind;  // accepted but not currently surfaced
+            if (off + 4 > len) continue;
+            uint32_t axisLen = readU32(&bytes[off]); off += 4;
+            if (off + 8 * axisLen > len) continue;
+            [imgMzAxis setLength:0];
+            for (uint32_t i = 0; i < axisLen; i++) {
+                double v = readF64(&bytes[off]); off += 8;
+                [imgMzAxis appendBytes:&v length:sizeof(double)];
+            }
+            if (off + 1 > len) continue;
+            uint8_t isCont = bytes[off]; off += 1;
+            NSString *title = readLEString(bytes, len, &off, 2) ?: @"";
+            NSString *isa = readLEString(bytes, len, &off, 2) ?: @"";
+
+            if (isCont != 1) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     @"IMAGE_HEADER: processed-mode "
+                                     @"(is_continuous=0) not yet supported "
+                                     @"in ObjC; continuous-mode only at Task 3.6"}];
+                return NO;
+            }
+            if (modality != 0) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"IMAGE_HEADER: only modality=0 (MS) "
+                                         @"materialises into an MSImage today; "
+                                         @"got modality=%u", (unsigned)modality]}];
+                return NO;
+            }
+            imgWidth = hdrW;
+            imgHeight = hdrH;
+            imgBins = hdrBins;
+            imgPxX = pxX;
+            imgPxY = pxY;
+            [imgScanPattern setString:@""];
+            switch (scanPat) {
+                case 0:  [imgScanPattern setString:@"raster"];  break;
+                case 1:  [imgScanPattern setString:@"meander"]; break;
+                case 2:  [imgScanPattern setString:@"random"];  break;
+                default: [imgScanPattern setString:@"raster"];  break;
+            }
+            [imgTitle setString:title];
+            [imgIsa setString:isa];
+            [imgCube setLength:(NSUInteger)hdrW * hdrH * hdrBins * sizeof(double)];
+            memset(imgCube.mutableBytes, 0, imgCube.length);
+            [imgSeen setLength:(NSUInteger)hdrW * hdrH];
+            memset(imgSeen.mutableBytes, 0, imgSeen.length);
+            imgSeenCount = 0;
+            imgHeaderSeen = YES;
+            continue;
+        }
+        // v0.11 Task 3.6: IMAGE_PIXEL (0x14). Wire layout per
+        // transport-spec §4.17: u32 x + u32 y + u8 precision +
+        // u8 compression + u32 payload_length + intensities[..].
+        // Continuous-mode only — precision MUST be 0 (float32) or
+        // 1 (float64); compression MUST be 0 (NONE).
+        if (h.packetType == TTIOTransportPacketImagePixel) {
+            if (!imgHeaderSeen) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     @"IMAGE_PIXEL received before IMAGE_HEADER"}];
+                return NO;
+            }
+            if (off + 4 > len) continue;
+            uint32_t px = readU32(&bytes[off]); off += 4;
+            if (off + 4 > len) continue;
+            uint32_t py = readU32(&bytes[off]); off += 4;
+            if (off + 1 > len) continue;
+            uint8_t precision = bytes[off]; off += 1;
+            if (off + 1 > len) continue;
+            uint8_t compression = bytes[off]; off += 1;
+            if (off + 4 > len) continue;
+            uint32_t payloadLen = readU32(&bytes[off]); off += 4;
+            if (off + payloadLen > len) continue;
+            if (compression != 0) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"IMAGE_PIXEL compression=%u not yet "
+                                         @"supported (NONE only at Task 3.6)",
+                                         (unsigned)compression]}];
+                return NO;
+            }
+            if (px >= imgWidth || py >= imgHeight) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"IMAGE_PIXEL coordinates out of bounds: "
+                                         @"x=%u, y=%u (width=%u, height=%u)",
+                                         (unsigned)px, (unsigned)py,
+                                         (unsigned)imgWidth, (unsigned)imgHeight]}];
+                return NO;
+            }
+            NSUInteger pixelIdx = (NSUInteger)py * imgWidth + px;
+            uint8_t *seenBytes = imgSeen.mutableBytes;
+            if (seenBytes[pixelIdx] != 0) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"duplicate IMAGE_PIXEL at (x=%u, y=%u)",
+                                         (unsigned)px, (unsigned)py]}];
+                return NO;
+            }
+            NSUInteger base = pixelIdx * imgBins;
+            double *cubeWrite = (double *)imgCube.mutableBytes;
+            if (precision == 1) {
+                // FLOAT64
+                NSUInteger n = payloadLen / 8;
+                if (n != imgBins) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"IMAGE_PIXEL intensity count %lu does not "
+                                             @"match IMAGE_HEADER.spectrum_bins=%u",
+                                             (unsigned long)n, (unsigned)imgBins]}];
+                    return NO;
+                }
+                for (NSUInteger k = 0; k < n; k++) {
+                    cubeWrite[base + k] = readF64(&bytes[off + 8 * k]);
+                }
+            } else if (precision == 0) {
+                // FLOAT32 — widen into the float64 cube.
+                NSUInteger n = payloadLen / 4;
+                if (n != imgBins) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"IMAGE_PIXEL intensity count %lu does not "
+                                             @"match IMAGE_HEADER.spectrum_bins=%u",
+                                             (unsigned long)n, (unsigned)imgBins]}];
+                    return NO;
+                }
+                for (NSUInteger k = 0; k < n; k++) {
+                    uint32_t bits = readU32(&bytes[off + 4 * k]);
+                    float f;
+                    memcpy(&f, &bits, 4);
+                    cubeWrite[base + k] = (double)f;
+                }
+            } else {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"IMAGE_PIXEL precision=%u not supported "
+                                         @"(expected 0=float32 or 1=float64)",
+                                         (unsigned)precision]}];
+                return NO;
+            }
+            seenBytes[pixelIdx] = 1;
+            imgSeenCount++;
+            continue;
+        }
+        // v0.11 Task 3.6: END_OF_IMAGE (0x15). Wire layout per
+        // transport-spec §4.18: u32 pixel_count_seen. Verifies the
+        // declared count matches the per-pixel ingest count and stages
+        // the built MSImage for write-out after writeMinimalToPath:.
+        if (h.packetType == TTIOTransportPacketEndOfImage) {
+            if (!imgHeaderSeen) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     @"END_OF_IMAGE without prior IMAGE_HEADER"}];
+                return NO;
+            }
+            if (off + 4 > len) continue;
+            uint64_t declared = (uint64_t)readU32(&bytes[off]); off += 4;
+            uint64_t expected = (uint64_t)imgWidth * (uint64_t)imgHeight;
+            if (declared != imgSeenCount) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"END_OF_IMAGE pixel_count_seen mismatch: "
+                                         @"declared=%llu, actual=%llu (width*height=%llu)",
+                                         (unsigned long long)declared,
+                                         (unsigned long long)imgSeenCount,
+                                         (unsigned long long)expected]}];
+                return NO;
+            }
+            if (imgSeenCount != expected) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"END_OF_IMAGE pixel count %llu does not "
+                                         @"equal width*height=%llu",
+                                         (unsigned long long)imgSeenCount,
+                                         (unsigned long long)expected]}];
+                return NO;
+            }
+            imgCollected = YES;
+            imgHeaderSeen = NO;
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
@@ -1082,6 +1341,137 @@ typedef struct {
                                                             ? collectedProvenance : nil)
                                                     error:error];
     if (!wrote) return NO;
+
+    // v0.11 Task 3.6: embed any image cube decoded from the stream's
+    // IMAGE_* packets. The TTI-O on-disk layout puts the image_cube
+    // group directly under /study/ (see TTIOMSImage -writeToFilePath:);
+    // here we replicate the same H5 layout inline so the production
+    // MSImage code remains untouched. Java parity:
+    // TransportReader.materializeTo embeds collectedImage via
+    // MSImage.writeTo(studyGroup) (commit a6b1e5d9). Python parity:
+    // TransportReader.materialize_to writes the cube via the storage
+    // provider (commit 1f619ced).
+    if (imgCollected) {
+        hid_t fid = H5Fopen([outputPath fileSystemRepresentation],
+                              H5F_ACC_RDWR, H5P_DEFAULT);
+        if (fid < 0) {
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"image embed: H5Fopen RDWR failed"}];
+            return NO;
+        }
+        hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+        if (studyGid < 0) {
+            H5Fclose(fid);
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"image embed: H5Gopen2 /study failed"}];
+            return NO;
+        }
+        hid_t imageGroup = H5Gcreate2(studyGid, "image_cube",
+                                        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+        if (imageGroup < 0) {
+            H5Gclose(studyGid); H5Fclose(fid);
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"image embed: H5Gcreate2 image_cube failed"}];
+            return NO;
+        }
+
+        NSUInteger tileSize = 32;
+        hsize_t dims[3]  = { (hsize_t)imgHeight,
+                             (hsize_t)imgWidth,
+                             (hsize_t)imgBins };
+        hsize_t chunk[3] = { (hsize_t)MIN(tileSize, (NSUInteger)imgHeight),
+                             (hsize_t)MIN(tileSize, (NSUInteger)imgWidth),
+                             (hsize_t)imgBins };
+        hid_t space = H5Screate_simple(3, dims, NULL);
+        hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
+        H5Pset_chunk(plist, 3, chunk);
+        H5Pset_deflate(plist, 6);
+        hid_t did = H5Dcreate2(imageGroup, "intensity",
+                                 H5T_NATIVE_DOUBLE, space,
+                                 H5P_DEFAULT, plist, H5P_DEFAULT);
+        if (did < 0) {
+            H5Pclose(plist); H5Sclose(space);
+            H5Gclose(imageGroup); H5Gclose(studyGid); H5Fclose(fid);
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"image embed: H5Dcreate2 intensity failed"}];
+            return NO;
+        }
+        herr_t st = H5Dwrite(did, H5T_NATIVE_DOUBLE,
+                              H5S_ALL, H5S_ALL, H5P_DEFAULT,
+                              imgCube.bytes);
+        if (st < 0) {
+            H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+            H5Gclose(imageGroup); H5Gclose(studyGid); H5Fclose(fid);
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"image embed: H5Dwrite intensity failed"}];
+            return NO;
+        }
+
+        // Scalar metadata attrs — mirrors TTIOMSImage writeImageCubeUnderGroup.
+        hid_t scalar = H5Screate(H5S_SCALAR);
+        #define WRITE_INT_ATTR_IMG(name, val) do { \
+            hid_t a = H5Acreate2(imageGroup, (name), H5T_NATIVE_INT64, \
+                                  scalar, H5P_DEFAULT, H5P_DEFAULT); \
+            int64_t v = (int64_t)(val); H5Awrite(a, H5T_NATIVE_INT64, &v); H5Aclose(a); \
+        } while (0)
+        #define WRITE_DBL_ATTR_IMG(name, val) do { \
+            hid_t a = H5Acreate2(imageGroup, (name), H5T_NATIVE_DOUBLE, \
+                                  scalar, H5P_DEFAULT, H5P_DEFAULT); \
+            double v = (val); H5Awrite(a, H5T_NATIVE_DOUBLE, &v); H5Aclose(a); \
+        } while (0)
+        WRITE_INT_ATTR_IMG("width",           (int64_t)imgWidth);
+        WRITE_INT_ATTR_IMG("height",          (int64_t)imgHeight);
+        WRITE_INT_ATTR_IMG("spectral_points", (int64_t)imgBins);
+        WRITE_INT_ATTR_IMG("tile_size",       (int64_t)tileSize);
+        WRITE_DBL_ATTR_IMG("pixel_size_x",    imgPxX);
+        WRITE_DBL_ATTR_IMG("pixel_size_y",    imgPxY);
+        {
+            hid_t strType = H5Tcopy(H5T_C_S1);
+            H5Tset_size(strType, H5T_VARIABLE);
+            hid_t a = H5Acreate2(imageGroup, "scan_pattern", strType, scalar,
+                                  H5P_DEFAULT, H5P_DEFAULT);
+            const char *cs = [imgScanPattern UTF8String];
+            H5Awrite(a, strType, &cs);
+            H5Aclose(a);
+            H5Tclose(strType);
+        }
+        // mz_axis 1-D dataset (1.2.0+) — preserve byte equality with
+        // a fresh writeToFilePath: by reusing the same chunking +
+        // deflate level.
+        if (imgMzAxis.length == imgBins * sizeof(double)) {
+            hsize_t axisDims[1] = { (hsize_t)imgBins };
+            hid_t axisSpace = H5Screate_simple(1, axisDims, NULL);
+            hid_t axisPlist = H5Pcreate(H5P_DATASET_CREATE);
+            H5Pset_chunk(axisPlist, 1, axisDims);
+            H5Pset_deflate(axisPlist, 6);
+            hid_t axisDid = H5Dcreate2(imageGroup, "mz_axis",
+                                        H5T_NATIVE_DOUBLE, axisSpace,
+                                        H5P_DEFAULT, axisPlist, H5P_DEFAULT);
+            if (axisDid >= 0) {
+                H5Dwrite(axisDid, H5T_NATIVE_DOUBLE,
+                         H5S_ALL, H5S_ALL, H5P_DEFAULT, imgMzAxis.bytes);
+                H5Dclose(axisDid);
+            }
+            H5Pclose(axisPlist);
+            H5Sclose(axisSpace);
+        }
+        #undef WRITE_INT_ATTR_IMG
+        #undef WRITE_DBL_ATTR_IMG
+
+        H5Sclose(scalar);
+        H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+        H5Gclose(imageGroup); H5Gclose(studyGid); H5Fclose(fid);
+    }
 
     // v0.11 Task 3.4: persist the collected encryption algorithm as the
     // root @encrypted HDF5 attribute. Mirrors how a freshly-encrypted
