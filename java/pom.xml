@@ -174,8 +174,14 @@
                 <configuration>
                     <!-- ${argLine} expands to JaCoCo's prepare-agent
                          flags (V1, verification workplan) when JaCoCo
-                         is active; expands to empty string otherwise. -->
-                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path} --enable-native-access=ALL-UNNAMED</argLine>
+                         is active; expands to empty string otherwise.
+                         The add-opens=java.base/java.nio flag is
+                         required by arrow-memory-core (transport-spec
+                         v0.11 Task 1.1+: Arrow IPC encode/decode);
+                         without it MemoryUtil's reflective Buffer.address
+                         lookup fails with InaccessibleObjectException on
+                         JDK 17+. -->
+                    <argLine>@{argLine} -Djava.library.path=${hdf5.native.path} --enable-native-access=ALL-UNNAMED --add-opens=java.base/java.nio=ALL-UNNAMED</argLine>
                 </configuration>
             </plugin>
             <plugin>
