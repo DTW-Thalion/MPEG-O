@@ -1156,16 +1156,44 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         [features addObject:TTIOTransportBulkModeV2BlobsFeature];
     }
 
-    // v0.11 Tasks 3.4 + 3.5: detect v0.11 content (encryption
-    // algorithm + dataset provenance today; references land here in
-    // a later task). Java parity: TransportWriter.writeDataset
-    // (commits 530a5833 + 563e09c3). Python parity:
-    // TransportWriter.write_dataset (commits bf38bdc9 + 434d45a6).
+    // v0.11 Tasks 3.4 + 3.5 + 3.9: detect v0.11 content for ALL six
+    // first-class accessors — encryption algorithm, dataset provenance,
+    // references, image, identifications, quantifications. Each non-
+    // empty section both (a) sets the TTIOTransportV011Feature flag in
+    // the StreamHeader and (b) emits its packet(s) in §5.4 order in
+    // the prelude block below. Java parity: TransportWriter.writeDataset
+    // (commits 530a5833 + 563e09c3 + a6b1e5d9 + a6faab16 + dc0de926).
+    // Python parity: TransportWriter.write_dataset (commits bf38bdc9 +
+    // 434d45a6 + 1f619ced + 150552b6 + 6f51e81b).
     NSArray *datasetProvenance = dataset.provenanceRecords ?: @[];
+    NSDictionary<NSString *, TTIOReferenceImport *> *datasetRefs =
+        dataset.references ?: @{};
+    // -msImage returns a non-nil placeholder (width=0, height=0,
+    // cube=empty) when /study/image_cube/ is absent — guard with a
+    // dimension check so v0.10 image-less datasets don't trigger the
+    // image branch. Java + Python return null/None directly because
+    // their image getter doesn't allocate a placeholder.
+    TTIOMSImage *datasetImage = dataset.msImage;
+    BOOL hasImage = (datasetImage != nil
+                     && datasetImage.width  > 0
+                     && datasetImage.height > 0);
+    if (!hasImage) datasetImage = nil;
+    NSArray<TTIOIdentification *> *datasetIdentifications =
+        dataset.identifications ?: @[];
+    NSArray<TTIOQuantification *> *datasetQuantifications =
+        dataset.quantifications ?: @[];
     BOOL hasEncryptionAlgo =
         dataset.isEncrypted && dataset.encryptedAlgorithm.length > 0;
     BOOL hasDatasetProv = datasetProvenance.count > 0;
-    BOOL hasV011Content = hasEncryptionAlgo || hasDatasetProv;
+    BOOL hasRefs = datasetRefs.count > 0;
+    BOOL hasIdents = datasetIdentifications.count > 0;
+    BOOL hasQuants = datasetQuantifications.count > 0;
+    BOOL hasV011Content = hasEncryptionAlgo
+                       || hasDatasetProv
+                       || hasRefs
+                       || hasImage
+                       || hasIdents
+                       || hasQuants;
     if (hasV011Content
         && ![features containsObject:TTIOTransportV011Feature]) {
         [features addObject:TTIOTransportV011Feature];
@@ -1182,9 +1210,14 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     //   §5.4.1 ENCRYPTION_ALGORITHM
     //   §5.4.2 DATASET_PROVENANCE
     //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA   (future)
-    //   §5.4.4 reference groups                      (future for writeDataset:)
-    //   §5.4.5 image cubes                           (future)
-    //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE (future)
+    //   §5.4.4 reference groups
+    //   §5.4.5 image cubes
+    //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
+    // Sort reference URIs deterministically so cross-call output is
+    // reproducible (the dictionary iteration order is otherwise
+    // undefined; Java + Python use insertion order via LinkedHashMap /
+    // dict ordering, which for an embedded-on-open dataset is the
+    // on-disk lexicographic order from the references group children).
     if (hasV011Content) {
         if (hasEncryptionAlgo) {
             if (![self writeEncryptionAlgorithm:dataset.encryptedAlgorithm
@@ -1193,6 +1226,26 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         if (hasDatasetProv) {
             if (![self writeDatasetProvenance:datasetProvenance
                                           error:error]) return NO;
+        }
+        if (hasRefs) {
+            NSArray<NSString *> *refUris =
+                [datasetRefs.allKeys sortedArrayUsingSelector:@selector(compare:)];
+            for (NSString *uri in refUris) {
+                TTIOReferenceImport *ref = datasetRefs[uri];
+                if (![self writeReferenceGroup:ref error:error]) return NO;
+            }
+        }
+        if (hasImage) {
+            if (![self writeImage:datasetImage error:error]) return NO;
+        }
+        // §5.4 step 6: identifications first, then quantifications.
+        if (hasIdents) {
+            if (![self writeIdentificationsTable:datasetIdentifications
+                                            error:error]) return NO;
+        }
+        if (hasQuants) {
+            if (![self writeQuantificationsTable:datasetQuantifications
+                                            error:error]) return NO;
         }
     }
 

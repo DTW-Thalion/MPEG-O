@@ -131,6 +131,7 @@ extern void testTransportEncryptionAlgorithm(void);
 extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
 extern void testTransportIdentificationsQuantifications(void);
+extern void testTransportWriteDatasetPrelude(void);
 
 int main(int argc, const char *argv[])
 {
@@ -654,6 +655,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
             testTransportIdentificationsQuantifications();
         END_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
+
+        START_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
+            testTransportWriteDatasetPrelude();
+        END_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
     }
     return 0;
 }
