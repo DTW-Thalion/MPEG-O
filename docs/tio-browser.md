@@ -132,10 +132,21 @@ finished rows. `Start new transfer…` opens the unified transfer
 dialog with:
 
 - Direction (Upload / Download)
-- Server scope (Connected workbench — default when an authenticated
-  session exists / Anonymous URL — UI present, submit deferred)
+- Server scope:
+  - **Connected workbench** (default when an authenticated session
+    exists) — uses the workbench WS handshake with
+    `project` + `container_uri`. Targets the workbench server you
+    logged into via the header chip.
+  - **Anonymous URL** (default when offline) — uses the legacy
+    `.tis` transport (HTTP `PUT /` with optional Bearer token, or
+    WS `{"type":"upload","filename":"X"}` text frame + binary chunks
+    + `{"type":"end"}`). This is for non-workbench endpoints
+    (simple `.tis` drop services, legacy uploaders). Pasting a
+    workbench URL here will fail — use the Connected scope for
+    workbench transfers.
 - Source / target file picker
-- Project + Container URI
+- Project + Container URI (Connected scope) or URL + optional
+  Bearer token (Anonymous scope)
 - Selective Access section (visible for downloads only): RT range,
   MS level, polarity, m/z range, dataset-id list, max AU count, etc.
 - Per-packet CRC-32C checksum option

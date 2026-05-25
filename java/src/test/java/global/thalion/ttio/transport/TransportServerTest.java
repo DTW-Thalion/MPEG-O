@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -159,6 +160,33 @@ class TransportServerTest {
                 assertEquals("M68.5 server fixture", rt.title());
                 assertNotNull(rt.msRuns().get("run_0001"));
                 assertEquals(5, rt.msRuns().get("run_0001").spectrumCount());
+            }
+        } finally {
+            server.stop();
+        }
+    }
+
+    @Test
+    void streamToFileWithListenerReportsMonotonicByteCounts(@TempDir Path dir) throws Exception {
+        try (SpectralDataset src = buildFixture(dir, "src.tio")) { /* close */ }
+
+        TransportServer server = new TransportServer(
+                dir.resolve("src.tio").toString(), "127.0.0.1", 0);
+        server.start();
+        try {
+            TransportClient client = new TransportClient("ws://127.0.0.1:" + server.port());
+            List<Long> samples = new CopyOnWriteArrayList<>();
+            Path out = dir.resolve("listener.tio");
+            try (SpectralDataset rt = client.streamToFile(out.toString(), null, samples::add)) {
+                assertNotNull(rt.msRuns().get("run_0001"));
+            }
+            assertFalse(samples.isEmpty(),
+                "onBytesReceived listener should be invoked at least once per binary frame");
+            long prev = -1L;
+            for (long s : samples) {
+                assertTrue(s > prev,
+                    "cumulative byte counts must be strictly increasing, got " + s + " after " + prev);
+                prev = s;
             }
         } finally {
             server.stop();
