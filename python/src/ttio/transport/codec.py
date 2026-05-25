@@ -41,6 +41,7 @@ from .packets import (
     CODEC_ID_REF_DIFF_V2,
     HEADER_MAGIC,
     HEADER_SIZE,
+    TRANSPORT_V0_11_FEATURE,
     VERSION,
     AccessUnit,
     ChannelData,
@@ -312,6 +313,42 @@ class TransportWriter:
             dataset_id=dataset_id,
         )
 
+    # ----------------------------------------------- v0.11 §4.23
+
+    def write_encryption_algorithm(self, algorithm: str) -> None:
+        """v0.11 Task 2.4: emit an
+        :data:`PacketType.ENCRYPTION_ALGORITHM` (0x1B) packet carrying
+        the dataset-level ``@encrypted`` algorithm name
+        (e.g. ``"aes-256-gcm"``).
+
+        Wire layout per transport-spec §4.23::
+
+            algorithm_length:  uint16
+            algorithm_utf8:    bytes[algorithm_length]
+
+        All multi-byte integers are LITTLE-ENDIAN (spec §1.7). This
+        packet only conveys the algorithm-name string; per-AU key
+        material continues to ride on ``ProtectionMetadata`` (0x04).
+
+        Java parity: :meth:`TransportWriter.writeEncryptionAlgorithm`
+        (commit ``530a5833``).
+        """
+        if algorithm is None:
+            raise ValueError(
+                "write_encryption_algorithm: algorithm must not be None"
+            )
+        algo_bytes = algorithm.encode("utf-8")
+        if len(algo_bytes) > 0xFFFF:
+            raise ValueError(
+                f"ENCRYPTION_ALGORITHM: algorithm name {len(algo_bytes)} "
+                "bytes exceeds uint16 max"
+            )
+        payload = (
+            struct.pack("<H", len(algo_bytes) & 0xFFFF)
+            + algo_bytes
+        )
+        self._emit(PacketType.ENCRYPTION_ALGORITHM, payload)
+
     # ----------------------------------------------- v0.11 §4.13-§4.15
 
     #: Threshold below which a chromosome rides as raw UINT8
@@ -432,6 +469,21 @@ class TransportWriter:
         )
         if bulk_active:
             features = features + [BULK_MODE_V2_BLOBS_FEATURE]
+
+        # v0.11 Task 2.4: detect v0.11 content (references +
+        # encryption algorithm today; subjects, samples,
+        # dataset_provenance, images, identifications, quantifications
+        # land in subsequent tasks at the same prelude insertion point
+        # per §5.4 ordering). Java parity:
+        # TransportWriter.writeDataset (commit 530a5833).
+        refs = getattr(dataset, "references", {}) or {}
+        has_v011_content = (
+            len(refs) > 0
+            or bool(getattr(dataset, "is_encrypted", False))
+        )
+        if has_v011_content and TRANSPORT_V0_11_FEATURE not in features:
+            features = features + [TRANSPORT_V0_11_FEATURE]
+
         self.write_stream_header(
             format_version="1.2",
             title=dataset.title or "",
@@ -439,6 +491,18 @@ class TransportWriter:
             features=features,
             n_datasets=len(runs) + len(genomic_runs),
         )
+
+        # v0.11 Task 2.4: v0.11 prelude — per §5.4 ordering, v0.11
+        # sections come BEFORE the v0.10 dataset/run sections, and
+        # ENCRYPTION_ALGORITHM (§5.4.1) comes BEFORE reference groups
+        # (§5.4.4). Provenance, subjects, samples, images,
+        # identifications, quantifications land here in subsequent
+        # Python tasks.
+        if has_v011_content:
+            if getattr(dataset, "is_encrypted", False):
+                algo = getattr(dataset, "encrypted_algorithm", "") or ""
+                if algo:
+                    self.write_encryption_algorithm(algo)
         for i, (name, run) in enumerate(runs, start=1):
             self.write_dataset_header(
                 dataset_id=i,
@@ -996,6 +1060,14 @@ class TransportReader:
         current_chrom_names: list[str] = []
         current_chrom_seqs: list[bytes] = []
         collected_refs: list = []  # list[ReferenceImport]
+        # v0.11 Task 2.4: dataset-level @encrypted algorithm string
+        # carried by ENCRYPTION_ALGORITHM (0x1B) packets. ``None`` when
+        # no such packet appears in the stream. Multiple 0x1B packets
+        # are tolerated — last-write-wins (spec §5.4 says "zero or
+        # more"; in practice the writer emits exactly one). Java
+        # parity: TransportReader.collectedEncryptionAlgorithm (commit
+        # 530a5833).
+        collected_encryption_algorithm: str | None = None
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -1093,6 +1165,15 @@ class TransportReader:
                         f"duplicate BlobV2NameTok for dataset_id {ds_id}"
                     )
                 slot["name_tok"] = blob
+            elif ptype == int(PacketType.ENCRYPTION_ALGORITHM):
+                # v0.11 Task 2.4: decode and stash the algorithm
+                # string for application at materialize time. Multiple
+                # 0x1B packets are tolerated (last-write-wins). Java
+                # parity: TransportReader.decodeEncryptionAlgorithm.
+                (algo_len,) = struct.unpack_from("<H", payload, 0)
+                collected_encryption_algorithm = payload[
+                    2:2 + algo_len
+                ].decode("utf-8")
             elif ptype == int(PacketType.REFERENCE_GROUP_HEADER):
                 # v0.11 Stage 1 / Task 2.3: decode header and prime the
                 # per-group accumulator. chromosome_count / total_bases
@@ -1290,6 +1371,17 @@ class TransportReader:
             with SpectralDataset.open(path, writable=True) as ds_w:
                 for ref in collected_refs:
                     ref.write_to_dataset(ds_w)
+        # v0.11 Task 2.4: persist the dataset-level @encrypted root
+        # attribute so the materialised file reports is_encrypted ==
+        # True on reopen. SpectralDataset caches encrypted_algorithm
+        # in an instance field at construction time, so we must close
+        # + reopen to surface the value on the returned dataset. Java
+        # parity: TransportReader.materializeTo (commit 530a5833).
+        if collected_encryption_algorithm is not None:
+            with SpectralDataset.open(path, writable=True) as ds_w:
+                ds_w.provider.root_group().set_attribute(
+                    "encrypted", collected_encryption_algorithm
+                )
         return SpectralDataset.open(path)
 
 
