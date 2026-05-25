@@ -54,12 +54,16 @@ public record ProvenanceRecord(
             software, parameters, inputRefs, outputRefs);
     }
 
-    /** @return JSON serialization of {@link #parameters}. */
+    /** @return JSON serialization of {@link #parameters}. Keys are
+     *  sorted lexicographically so the output is deterministic and
+     *  byte-equivalent to Python's {@code json.dumps(d, sort_keys=True)}
+     *  and ObjC's {@code NSJSONWritingSortedKeys} — required for
+     *  cross-language transport-spec v0.11 conformance. */
     public String parametersJson() {
         if (parameters.isEmpty()) return "{}";
         StringBuilder sb = new StringBuilder("{");
         boolean first = true;
-        for (var e : parameters.entrySet()) {
+        for (var e : new java.util.TreeMap<>(parameters).entrySet()) {
             if (!first) sb.append(",");
             sb.append("\"").append(e.getKey()).append("\":\"")
               .append(e.getValue().replace("\"", "\\\"")).append("\"");
