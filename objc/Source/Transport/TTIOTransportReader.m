@@ -20,9 +20,13 @@
 #import "Dataset/TTIOWrittenRun.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOBulkV2Blobs.h"
+#import "Genomics/TTIOReferenceImport.h"
+#import "Providers/TTIOHDF5Provider.h"
+#import "Providers/TTIOStorageProtocols.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import "ValueClasses/TTIOEnums.h"
+#import <objc/runtime.h>
 #import <string.h>
 #import <zlib.h>
 
@@ -39,6 +43,51 @@ static inline uint32_t readU32(const uint8_t *b)
          | ((uint32_t)b[1] << 8)
          | ((uint32_t)b[2] << 16)
          | ((uint32_t)b[3] << 24);
+}
+
+static inline uint64_t readU64(const uint8_t *b)
+{
+    uint64_t lo = (uint64_t)readU32(b);
+    uint64_t hi = (uint64_t)readU32(b + 4);
+    return lo | (hi << 32);
+}
+
+// v0.11 Task 3.3: zlib inflate for REFERENCE_CHROMOSOME encoding=1.
+// expectedLen is the sequence_length field on the wire — used to
+// size the destination buffer exactly so the decoder catches a size
+// mismatch deterministically. Returns nil on rc != Z_OK or on a
+// short / long inflation.
+static NSData *zlibInflateExact(NSData *deflated,
+                                 NSUInteger expectedLen,
+                                 NSError **error)
+{
+    if (expectedLen == 0) return [NSData data];
+    NSMutableData *out = [NSMutableData dataWithLength:expectedLen];
+    uLongf destLen = (uLongf)expectedLen;
+    int rc = uncompress((Bytef *)out.mutableBytes, &destLen,
+                          (const Bytef *)deflated.bytes,
+                          (uLong)deflated.length);
+    if (rc != Z_OK) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 [NSString stringWithFormat:
+                                     @"REFERENCE_CHROMOSOME zlib inflate failed: rc=%d",
+                                     rc]}];
+        return nil;
+    }
+    if ((NSUInteger)destLen != expectedLen) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 [NSString stringWithFormat:
+                                     @"REFERENCE_CHROMOSOME zlib payload inflated "
+                                     @"to %lu bytes; expected %lu",
+                                     (unsigned long)destLen,
+                                     (unsigned long)expectedLen]}];
+        return nil;
+    }
+    return out;
 }
 
 static NSString *readLEString(const uint8_t *bytes, NSUInteger length,
@@ -229,6 +278,20 @@ typedef struct {
         [NSMutableDictionary dictionary];
     BOOL sawStreamHeader = NO;
     BOOL bulkModeRequired = NO;
+
+    // v0.11 Task 3.3: per-stream accumulator state for the
+    // REFERENCE_GROUP_HEADER -> N x REFERENCE_CHROMOSOME ->
+    // END_OF_REFERENCE_GROUP packet sequence (transport-spec
+    // §4.13-§4.15). Mirrors Java
+    // TransportReader.currentRefUri/currentChromNames/currentChromSeqs/
+    // collectedRefs (commit 7f3dec46) and Python's reader (commit
+    // 415fc24f). `collectedRefs` is consumed after the dataset is
+    // materialised — see the post-loop block further down.
+    NSString *currentRefUri = nil;
+    NSMutableArray<NSString *> *currentChromNames = [NSMutableArray array];
+    NSMutableArray<NSData *> *currentChromSeqs = [NSMutableArray array];
+    NSMutableArray<TTIOReferenceImport *> *collectedRefs =
+        [NSMutableArray array];
 
     for (TTIOTransportPacketRecord *rec in packets) {
         TTIOTransportPacketHeader *h = rec.header;
@@ -602,6 +665,108 @@ typedef struct {
             slot.nameTokBlob = blob;
             continue;
         }
+        // v0.11 Task 3.3: REFERENCE_GROUP_HEADER (0x10) — prime
+        // per-group accumulator. chromosome_count / total_bases /
+        // md5_hex are parsed for buffer-advance only; the actual
+        // values come from the per-chromosome accumulator
+        // (TTIOReferenceImport recomputes MD5 from chromosome bytes).
+        if (h.packetType == TTIOTransportPacketReferenceGroupHeader) {
+            if (off + 2 > len) continue;
+            uint16_t uriLen = readU16(&bytes[off]); off += 2;
+            if (off + uriLen > len) continue;
+            currentRefUri = [[NSString alloc] initWithBytes:&bytes[off]
+                                                       length:uriLen
+                                                     encoding:NSUTF8StringEncoding]
+                ?: @"";
+            off += uriLen;
+            // chromosome_count (uint32) — advance only.
+            if (off + 4 > len) continue;
+            off += 4;
+            // total_bases (uint64) — advance only.
+            if (off + 8 > len) continue;
+            off += 8;
+            // md5_hex[32] — advance only.
+            if (off + 32 > len) continue;
+            off += 32;
+            [currentChromNames removeAllObjects];
+            [currentChromSeqs removeAllObjects];
+            continue;
+        }
+        if (h.packetType == TTIOTransportPacketReferenceChromosome) {
+            if (off + 2 > len) continue;
+            uint16_t nameLen = readU16(&bytes[off]); off += 2;
+            if (off + nameLen > len) continue;
+            NSString *name = [[NSString alloc] initWithBytes:&bytes[off]
+                                                       length:nameLen
+                                                     encoding:NSUTF8StringEncoding]
+                ?: @"";
+            off += nameLen;
+            if (off + 8 > len) continue;
+            uint64_t seqLen = readU64(&bytes[off]); off += 8;
+            if (off + 1 > len) continue;
+            uint8_t encoding = bytes[off]; off += 1;
+            if (off + 4 > len) continue;
+            uint32_t dataLen = readU32(&bytes[off]); off += 4;
+            if (off + dataLen > len) continue;
+            NSData *seqBytes = nil;
+            if (encoding == 0) {
+                seqBytes = [NSData dataWithBytes:&bytes[off] length:dataLen];
+                if ((uint64_t)seqBytes.length != seqLen) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"REFERENCE_CHROMOSOME raw payload length %u "
+                                             @"!= sequence_length %llu",
+                                             (unsigned)dataLen,
+                                             (unsigned long long)seqLen]}];
+                    return NO;
+                }
+            } else if (encoding == 1) {
+                NSData *deflated = [NSData dataWithBytesNoCopy:(void *)&bytes[off]
+                                                          length:dataLen
+                                                    freeWhenDone:NO];
+                NSError *infErr = nil;
+                seqBytes = zlibInflateExact(deflated,
+                                               (NSUInteger)seqLen,
+                                               &infErr);
+                if (!seqBytes) {
+                    if (error) *error = infErr;
+                    return NO;
+                }
+            } else {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"unknown REFERENCE_CHROMOSOME encoding: %u",
+                                         (unsigned)encoding]}];
+                return NO;
+            }
+            [currentChromNames addObject:name];
+            [currentChromSeqs addObject:seqBytes];
+            continue;
+        }
+        if (h.packetType == TTIOTransportPacketEndOfReferenceGroup) {
+            if (currentRefUri == nil) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     @"END_OF_REFERENCE_GROUP without prior "
+                                     @"REFERENCE_GROUP_HEADER"}];
+                return NO;
+            }
+            TTIOReferenceImport *ref =
+                [[TTIOReferenceImport alloc]
+                    initWithUri:currentRefUri
+                    chromosomes:[currentChromNames copy]
+                      sequences:[currentChromSeqs copy]];
+            [collectedRefs addObject:ref];
+            currentRefUri = nil;
+            [currentChromNames removeAllObjects];
+            [currentChromSeqs removeAllObjects];
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
@@ -817,15 +982,70 @@ typedef struct {
         genomicRuns[(NSString *)meta[@"name"]] = wgr;
     }
 
-    return [TTIOSpectralDataset writeMinimalToPath:outputPath
-                                              title:title
-                                 isaInvestigationId:isa
-                                             msRuns:runs
-                                        genomicRuns:(genomicRuns.count ? genomicRuns : nil)
-                                    identifications:nil
-                                    quantifications:nil
-                                  provenanceRecords:nil
-                                              error:error];
+    BOOL wrote = [TTIOSpectralDataset writeMinimalToPath:outputPath
+                                                    title:title
+                                       isaInvestigationId:isa
+                                                   msRuns:runs
+                                              genomicRuns:(genomicRuns.count ? genomicRuns : nil)
+                                          identifications:nil
+                                          quantifications:nil
+                                        provenanceRecords:nil
+                                                    error:error];
+    if (!wrote) return NO;
+
+    // v0.11 Task 3.3: embed any reference groups collected from the
+    // stream's REFERENCE_* packets. TTIOReferenceImport.writeToDataset
+    // requires an open writable provider; reopen the just-written .tio
+    // through TTIOHDF5Provider in ReadWrite mode and attach it to a
+    // stub TTIOSpectralDataset via object_setIvar so the public
+    // `provider` getter surfaces it (same pattern as
+    // TTIOReferenceImportWriteToDatasetTests.m). Java parity:
+    // TransportReader.materializeTo embeds collectedRefs before
+    // returning. Python parity: TransportReader.materialize_to opens
+    // SpectralDataset(writable=True), embeds, then reopens read-only.
+    if (collectedRefs.count > 0) {
+        TTIOHDF5Provider *p = [[TTIOHDF5Provider alloc] init];
+        if (![p openURL:outputPath
+                   mode:TTIOStorageOpenModeReadWrite
+                  error:error]) {
+            return NO;
+        }
+        TTIOSpectralDataset *embedDs =
+            [[TTIOSpectralDataset alloc] initWithTitle:title
+                                    isaInvestigationId:isa
+                                                msRuns:@{}
+                                               nmrRuns:@{}
+                                       identifications:@[]
+                                       quantifications:@[]
+                                     provenanceRecords:@[]
+                                           transitions:nil];
+        Ivar provIvar =
+            class_getInstanceVariable([TTIOSpectralDataset class],
+                                        "_provider");
+        if (provIvar == NULL) {
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 @"TTIOSpectralDataset _provider ivar not found "
+                                 @"— cannot attach writable provider for "
+                                 @"reference embed"}];
+            [p close];
+            return NO;
+        }
+        object_setIvar(embedDs, provIvar, p);
+        for (TTIOReferenceImport *ref in collectedRefs) {
+            NSError *embedErr = nil;
+            if (![ref writeToDataset:embedDs
+                            overwrite:YES
+                                error:&embedErr]) {
+                if (error) *error = embedErr;
+                [embedDs closeFile];
+                return NO;
+            }
+        }
+        [embedDs closeFile];
+    }
+    return YES;
 }
 
 @end
