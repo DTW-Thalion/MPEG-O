@@ -118,6 +118,7 @@ TTIOTests_OBJC_FILES = \
 	TestTransportPacketTypeV011.m \
 	TestTransportReaderSkipUnknown.m \
 	TestTransportWriterReference.m \
+	TestTransportReaderReference.m \
 	TestArrowIpcCodec.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
