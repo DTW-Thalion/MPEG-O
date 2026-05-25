@@ -131,6 +131,23 @@
             <artifactId>htsjdk</artifactId>
             <version>4.1.3</version>
         </dependency>
+
+        <!-- transport-spec v0.11: Apache Arrow for tabular packet
+             payloads (Task 0.1 of the v0.11 implementation plan).
+             arrow-memory-netty is runtime-scoped — only the off-heap
+             allocator backend is needed; arrow-vector is the
+             compile-time API surface. -->
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-vector</artifactId>
+            <version>16.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.arrow</groupId>
+            <artifactId>arrow-memory-netty</artifactId>
+            <version>16.0.0</version>
+            <scope>runtime</scope>
+        </dependency>
     </dependencies>
 
     <!-- (Previously: linux-system-hdf5 profile set hdf5.jar.path +
