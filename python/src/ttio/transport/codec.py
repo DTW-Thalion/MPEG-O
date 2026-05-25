@@ -312,6 +312,94 @@ class TransportWriter:
             dataset_id=dataset_id,
         )
 
+    # ----------------------------------------------- v0.11 §4.13-§4.15
+
+    #: Threshold below which a chromosome rides as raw UINT8
+    #: (encoding=0). Mirrors transport-spec §4.14: ZLIB framing costs
+    #: dominate short sequences, so the writer skips compression below
+    #: 4 KiB and lets the reader handle both encodings. Java parity:
+    #: ``TransportWriter.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD``.
+    REFERENCE_CHROMOSOME_ZLIB_THRESHOLD = 4096
+
+    def write_reference_group(self, ref) -> None:
+        """v0.11 Stage 1: emit a :class:`ReferenceImport` as the packet
+        sequence
+        ``REFERENCE_GROUP_HEADER (0x10) -> N x REFERENCE_CHROMOSOME (0x11)
+        -> END_OF_REFERENCE_GROUP (0x12)``.
+
+        Wire layout matches transport-spec §4.13-§4.15. All multi-byte
+        integers are LITTLE-ENDIAN (spec §1.7). The chromosome index
+        rides in the packet header's ``au_sequence`` field (0-based).
+        The MD5 hex string from ``ReferenceImport.md5.hex()`` is
+        emitted verbatim as 32 ASCII bytes.
+
+        The encoding byte on each chromosome record is 0 (uncompressed
+        UINT8) when the raw sequence is shorter than
+        :attr:`REFERENCE_CHROMOSOME_ZLIB_THRESHOLD`, otherwise 1
+        (zlib via :func:`zlib.compress` with default settings).
+
+        Reader-side materialisation is added by Task 2.3; this method
+        only emits the wire bytes. Java parity:
+        :meth:`TransportWriter.writeReferenceGroup`
+        (commit ``622aa8bd``).
+
+        :param ref: :class:`ttio.genomic.reference_import.ReferenceImport`
+            to emit. ``ref.md5`` must be the 16-byte digest the
+            constructor populates by default.
+        """
+        chrom_names = ref.chromosomes
+        seqs = ref.sequences
+        chrom_count = len(chrom_names)
+        total_bases = ref.total_bases
+        md5_hex = ref.md5.hex()
+        if len(md5_hex) != 32:
+            raise ValueError(
+                f"ReferenceImport.md5.hex() must be 32 hex chars, got "
+                f"{len(md5_hex)}"
+            )
+
+        # -- REFERENCE_GROUP_HEADER (0x10) ------------------------------
+        uri_bytes = ref.uri.encode("utf-8")
+        md5_hex_bytes = md5_hex.encode("ascii")
+        header_payload = b"".join((
+            struct.pack("<H", len(uri_bytes) & 0xFFFF),
+            uri_bytes,
+            struct.pack("<I", chrom_count & 0xFFFFFFFF),
+            struct.pack("<Q", total_bases & 0xFFFFFFFFFFFFFFFF),
+            md5_hex_bytes,
+        ))
+        self._emit(PacketType.REFERENCE_GROUP_HEADER, header_payload)
+
+        # -- REFERENCE_CHROMOSOME (0x11) — one per contig ---------------
+        for i, name in enumerate(chrom_names):
+            seq = seqs[i]
+            name_bytes = name.encode("utf-8")
+            if len(seq) < self.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD:
+                encoding = 0
+                payload_bytes = seq
+            else:
+                encoding = 1
+                payload_bytes = zlib.compress(seq)
+            chrom_payload = b"".join((
+                struct.pack("<H", len(name_bytes) & 0xFFFF),
+                name_bytes,
+                struct.pack("<Q", len(seq) & 0xFFFFFFFFFFFFFFFF),
+                struct.pack("<B", encoding & 0xFF),
+                struct.pack("<I", len(payload_bytes) & 0xFFFFFFFF),
+                bytes(payload_bytes),
+            ))
+            self._emit(
+                PacketType.REFERENCE_CHROMOSOME,
+                chrom_payload,
+                au_sequence=i,
+            )
+
+        # -- END_OF_REFERENCE_GROUP (0x12) ------------------------------
+        self._emit(
+            PacketType.END_OF_REFERENCE_GROUP,
+            struct.pack("<I", chrom_count & 0xFFFFFFFF),
+        )
+
     def write_end_of_dataset(
         self, *, dataset_id: int, final_au_sequence: int
     ) -> None:
