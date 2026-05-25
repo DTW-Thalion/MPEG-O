@@ -14,6 +14,7 @@ import javafx.scene.control.Menu;
 import javafx.scene.control.MenuBar;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.VBox;
@@ -72,13 +73,18 @@ public class MainWindow {
     private MenuBar buildMenuBar() {
         Menu fileMenu = new Menu("File");
         openItem = new MenuItem("Open…");
+        openItem.setAccelerator(KeyCombination.keyCombination("Shortcut+O"));
         openRecentMenu = new Menu("Open Recent");
+        openRecentMenu.setOnShowing(e -> rebuildRecentSubmenu());
         encodeItem = new MenuItem("Encode…");
+        encodeItem.setAccelerator(KeyCombination.keyCombination("Shortcut+E"));
         importItem = new MenuItem("Import…");
         exportItem = new MenuItem("Export…");
         saveAsItem = new MenuItem("Save As…");
         closeItem = new MenuItem("Close");
+        closeItem.setAccelerator(KeyCombination.keyCombination("Shortcut+W"));
         exitItem = new MenuItem("Exit");
+        exitItem.setAccelerator(KeyCombination.keyCombination("Shortcut+Q"));
         fileMenu.getItems().addAll(openItem, openRecentMenu, new SeparatorMenuItem(),
             encodeItem, importItem, exportItem, saveAsItem, new SeparatorMenuItem(),
             closeItem, exitItem);
@@ -90,6 +96,25 @@ public class MainWindow {
         helpMenu.getItems().addAll(aboutItem, userGuideItem, diagnosticsItem);
 
         return new MenuBar(fileMenu, helpMenu);
+    }
+
+    private void rebuildRecentSubmenu() {
+        openRecentMenu.getItems().clear();
+        java.util.List<String> paths = containers().recentFiles();
+        if (paths.isEmpty()) {
+            MenuItem empty = new MenuItem("(no recent files)");
+            empty.setDisable(true);
+            openRecentMenu.getItems().add(empty);
+            return;
+        }
+        for (String p : paths) {
+            MenuItem item = new MenuItem(p);
+            item.setOnAction(e -> {
+                shell.rail().select("containers");
+                containers().loadDataset(p, true);
+            });
+            openRecentMenu.getItems().add(item);
+        }
     }
 
     private void wireMenuActions() {
