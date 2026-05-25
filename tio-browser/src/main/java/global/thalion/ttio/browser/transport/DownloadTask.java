@@ -56,21 +56,24 @@ public final class DownloadTask extends Task<String> {
     @Override
     protected String call() throws Exception {
         updateMessage("Connecting to " + url + " …");
+        long startMs = System.currentTimeMillis();
         tracker = new ProgressTracker(
-            "downloading", -1L, 1L, System.currentTimeMillis());
-        // NOTE: TransportClient.streamToFile is a single blocking SDK call
-        // without per-chunk hooks. Mid-stream progress requires plumbing
-        // into the global.thalion.ttio.transport SDK; out of scope for the
-        // tio-browser UX work. Start/end emission is what we ship today.
+            "downloading", -1L, 1L, startMs);
         emit(0L, 0L);
+
         TransportClient client = new TransportClient(url);
+        java.util.function.LongConsumer onBytes = bytesDone -> emit(bytesDone, 0L);
         // streamToFile does not accept a timeout parameter; the caller
         // enforces the wall-clock bound via task.get(timeoutSeconds, ...).
-        try (SpectralDataset materialised = client.streamToFile(outputPath, filters)) {
+        try (SpectralDataset materialised =
+                client.streamToFile(outputPath, filters, onBytes)) {
             // Close immediately — the GUI re-opens via loadDataset(...).
         }
-        long fileSize = Files.size(Paths.get(outputPath));
-        emit(fileSize, 1L);
+
+        long finalSize;
+        try { finalSize = Files.size(Paths.get(outputPath)); }
+        catch (Exception e) { finalSize = 0L; }
+        emit(finalSize, 1L);
         updateMessage("Done.");
         return outputPath;
     }
