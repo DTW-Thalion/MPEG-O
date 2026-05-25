@@ -80,8 +80,20 @@ public enum PacketType {
     public int wire() { return wire; }
 
     public static PacketType fromWire(int v) {
+        PacketType t = fromWireOrNull(v);
+        if (t == null) {
+            throw new IllegalArgumentException("unknown packet type: 0x"
+                    + Integer.toHexString(v));
+        }
+        return t;
+    }
+
+    /** Like {@link #fromWire} but returns {@code null} for unknown
+     *  packet type bytes. Used by the reader's skip-unknown path so
+     *  v0.10 readers can tolerate v0.11+ packet types they don't
+     *  recognise (see transport-spec §6 / spec coverage v0.11). */
+    public static PacketType fromWireOrNull(int v) {
         for (PacketType t : values()) if (t.wire == v) return t;
-        throw new IllegalArgumentException("unknown packet type: 0x"
-                + Integer.toHexString(v));
+        return null;
     }
 }
