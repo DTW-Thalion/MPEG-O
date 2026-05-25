@@ -7,6 +7,7 @@ package global.thalion.ttio.transport;
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
 import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.MiniJson;
@@ -61,6 +62,12 @@ public final class TransportReader implements AutoCloseable {
     // appeared in the stream. Reset at the start of every
     // materializeTo() call.
     private String collectedEncryptionAlgorithm;
+    // v0.11 Task 1.6: dataset-level provenance chain decoded from
+    // DATASET_PROVENANCE (0x18) packets. Reset at the start of every
+    // materializeTo() call. Passed into SpectralDataset.create as the
+    // provenanceRecords arg so the on-disk /study/provenance_json
+    // attribute round-trips.
+    private final List<ProvenanceRecord> collectedProvenance = new ArrayList<>();
 
     public TransportReader(InputStream in) {
         this.in = in;
@@ -154,6 +161,7 @@ public final class TransportReader implements AutoCloseable {
         currentChromSeqs.clear();
         collectedRefs.clear();
         collectedEncryptionAlgorithm = null;
+        collectedProvenance.clear();
 
         List<PacketRecord> packets = readAllPackets();
         String title = "";
@@ -308,6 +316,10 @@ public final class TransportReader implements AutoCloseable {
                 decodeEncryptionAlgorithm(rec.payload);
                 continue;
             }
+            if (h.packetType == PacketType.DATASET_PROVENANCE) {
+                decodeDatasetProvenance(rec.payload);
+                continue;
+            }
             if (h.packetType == PacketType.REFERENCE_GROUP_HEADER) {
                 startReferenceGroup(rec.payload);
                 continue;
@@ -373,7 +385,11 @@ public final class TransportReader implements AutoCloseable {
         // would then fail to open signal_channels lazily).
         SpectralDataset created = SpectralDataset.create(
             outputPath, title, isa, runs, genomicRuns,
-            List.of(), List.of(), List.of(),
+            List.of(), List.of(),
+            // v0.11 Task 1.6: pass collected DATASET_PROVENANCE records
+            // into create so the resulting on-disk file carries the
+            // round-tripped provenance chain.
+            new ArrayList<>(collectedProvenance),
             global.thalion.ttio.FeatureFlags.defaultCurrent());
         // v0.11 Stage 1 / Task 1.3: embed any reference groups decoded
         // from the stream's REFERENCE_* packets. ReferenceImport.write-
@@ -401,7 +417,7 @@ public final class TransportReader implements AutoCloseable {
         return SpectralDataset.open(outputPath);
     }
 
-    // ---------------------------------------------------------- v0.11 §4.23
+    // ---------------------------------------------------------- v0.11 §4.21 / §4.23
 
     /** v0.11 Task 1.5: decode an ENCRYPTION_ALGORITHM (0x1B) payload
      *  and stash the algorithm string for application at
@@ -416,6 +432,71 @@ public final class TransportReader implements AutoCloseable {
         collectedEncryptionAlgorithm =
             new String(algoBytes, StandardCharsets.UTF_8);
     }
+
+    /** v0.11 Task 1.6: decode a DATASET_PROVENANCE (0x18) payload per
+     *  transport-spec §4.21 and append each record to
+     *  {@link #collectedProvenance}. Multiple 0x18 packets MAY appear
+     *  in a stream (spec §5.4 says "zero or more"); each carries its
+     *  own record_count + records and they accumulate in emission
+     *  order. */
+    private void decodeDatasetProvenance(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        int recordCount = bb.getInt();
+        for (int i = 0; i < recordCount; i++) {
+            long timestamp = bb.getLong();
+            String software   = readLEString(bb, 2);
+            String paramsJson = readLEString(bb, 2);
+            String inputsCsv  = readLEString(bb, 2);
+            String outputsCsv = readLEString(bb, 2);
+            Map<String, String> params = parseParametersJson(paramsJson);
+            List<String> inputs  = parseCsv(inputsCsv);
+            List<String> outputs = parseCsv(outputsCsv);
+            collectedProvenance.add(new ProvenanceRecord(
+                timestamp, software, params, inputs, outputs));
+        }
+    }
+
+    /** Parse a {@code {"k":"v", ...}} string back into a Map<String,
+     *  String>, matching the format emitted by
+     *  {@link ProvenanceRecord#parametersJson()}. Empty / "{}" → empty
+     *  map. */
+    private static Map<String, String> parseParametersJson(String json) {
+        if (json == null || json.isEmpty() || "{}".equals(json)) {
+            return java.util.Map.of();
+        }
+        // Defer to the shared MiniJson parser so we tolerate any
+        // future field-set extensions byte-for-byte the same way the
+        // dataset open path does (see SpectralDataset.parseProvenance-
+        // Json). The format is "{...}" with string values only —
+        // anything else gets coerced via toString(). LinkedHashMap to
+        // preserve insertion order across the round-trip.
+        Map<String, String> out = new java.util.LinkedHashMap<>();
+        try {
+            Object parsed = global.thalion.ttio.MiniJson.parse(json);
+            if (parsed instanceof Map<?, ?> mraw) {
+                for (var e : mraw.entrySet()) {
+                    Object k = e.getKey();
+                    Object v = e.getValue();
+                    if (k != null && v != null) {
+                        out.put(k.toString(), v.toString());
+                    }
+                }
+            }
+        } catch (Exception ignore) {
+            // best-effort: leave map empty on parse failure
+        }
+        return out;
+    }
+
+    /** Parse a comma-joined UTF-8 ref list. Empty string → empty list. */
+    private static List<String> parseCsv(String csv) {
+        if (csv == null || csv.isEmpty()) return List.of();
+        // No quoting / escaping in v0.11 — URIs are URL-encoded so
+        // they cannot themselves contain commas. Plain split.
+        String[] parts = csv.split(",", -1);
+        return java.util.Arrays.asList(parts);
+    }
+
 
     // ---------------------------------------------------------- reference-group helpers
 
