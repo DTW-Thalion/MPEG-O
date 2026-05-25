@@ -20,6 +20,7 @@ Scope:
 from __future__ import annotations
 
 import json
+import logging
 import struct
 import zlib
 from pathlib import Path
@@ -52,6 +53,7 @@ from .packets import (
     _CHANNEL_SUFFIX_STRUCT,
     _HEADER_STRUCT,
     crc32c,
+    is_known_packet_type,
     now_ns,
     pack_blob_mate_info,
     pack_blob_name_tok,
@@ -64,6 +66,8 @@ from .packets import (
 )
 
 _CHECKSUM_STRUCT = struct.Struct("<I")
+
+_LOG = logging.getLogger(__name__)
 
 # ---------------------------------------------------------- wire mappings
 
@@ -845,12 +849,37 @@ class TransportReader:
                 actual_crc = crc32c(payload)
                 if expected_crc != actual_crc:
                     raise ValueError(
-                        f"CRC-32C mismatch on packet type 0x{header.packet_type:02x}: "
+                        f"CRC-32C mismatch on packet type "
+                        f"0x{header.packet_type_byte:02x}: "
                         f"expected 0x{expected_crc:08x}, got 0x{actual_crc:08x}"
                     )
+            # Forward-compat (transport-spec §6 / v0.11 task 0.5):
+            # tolerate unknown packet types so v0.10 readers can ingest
+            # v0.11+ streams. The header was length-prefixed so the
+            # payload (and CRC if present) was already consumed above
+            # — just log and yield it so the caller can see it.
+            if not is_known_packet_type(header.packet_type):
+                _LOG.debug(
+                    "skipping unknown packet type 0x%02x",
+                    header.packet_type_byte,
+                )
             yield header, payload
             if header.packet_type == int(PacketType.END_OF_STREAM):
                 return
+
+    def records_for_test(self) -> list["PacketRecord"]:
+        """Materialise :meth:`iter_packets` into a list of
+        :class:`PacketRecord` values. Test-only inspection hook
+        mirroring Java's ``recordsForTest`` (forward-compat skip-unknown
+        path, v0.11 task 0.5). Underscore semantics: this is not
+        part of the stable transport-reader surface — production
+        consumers should drive :meth:`iter_packets` directly.
+        """
+        # Local import to avoid pulling the ingest module into the
+        # codec import cycle in the hot path.
+        from .ingest import PacketRecord
+        return [PacketRecord(header=h, payload=p)
+                for h, p in self.iter_packets()]
 
     def read_to_dataset(
         self,
