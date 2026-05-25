@@ -629,6 +629,71 @@ class TransportWriter:
             struct.pack("<I", pixel_index & 0xFFFFFFFF),
         )
 
+    # ----------------------------------------------- v0.11 §4.19 / §4.20
+
+    def write_identifications_table(self, rows) -> None:
+        """v0.11 Task 2.7: emit an
+        :data:`PacketType.IDENTIFICATIONS_TABLE` (0x16) packet carrying
+        the full identifications table as a single length-prefixed
+        Apache Arrow IPC stream. Wire layout per transport-spec §4.19::
+
+            arrow_ipc_length:    uint32
+            arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+        IPC stream carries its own schema, row count, and null bitmaps,
+        so no per-row TLV envelope is needed. Empty lists are a no-op
+        (no packet emitted) per spec §5.4 step 6 ("zero or more").
+
+        Java parity: :meth:`TransportWriter.writeIdentifications`
+        (commit ``a6faab16``).
+
+        :param rows: iterable of
+            :class:`ttio.identification.Identification`. ``None``
+            raises ``ValueError``.
+        """
+        if rows is None:
+            raise ValueError(
+                "write_identifications_table: rows must not be None"
+            )
+        rows = list(rows)
+        if not rows:
+            return
+        from .arrow_ipc import encode_identifications
+        ipc = encode_identifications(rows)
+        payload = struct.pack("<I", len(ipc) & 0xFFFFFFFF) + ipc
+        self._emit(PacketType.IDENTIFICATIONS_TABLE, payload)
+
+    def write_quantifications_table(self, rows) -> None:
+        """v0.11 Task 2.7: emit a
+        :data:`PacketType.QUANTIFICATIONS_TABLE` (0x17) packet carrying
+        the full quantifications table as a single length-prefixed
+        Apache Arrow IPC stream. Wire layout per transport-spec §4.20 —
+        identical shape to §4.19 but with a distinct packet type so
+        receivers can dispatch without parsing the IPC payload first.
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+        lists are a no-op (spec §5.4 step 6).
+
+        Java parity: :meth:`TransportWriter.writeQuantifications`
+        (commit ``a6faab16``).
+
+        :param rows: iterable of
+            :class:`ttio.quantification.Quantification`. ``None``
+            raises ``ValueError``.
+        """
+        if rows is None:
+            raise ValueError(
+                "write_quantifications_table: rows must not be None"
+            )
+        rows = list(rows)
+        if not rows:
+            return
+        from .arrow_ipc import encode_quantifications
+        ipc = encode_quantifications(rows)
+        payload = struct.pack("<I", len(ipc) & 0xFFFFFFFF) + ipc
+        self._emit(PacketType.QUANTIFICATIONS_TABLE, payload)
+
     def write_end_of_dataset(
         self, *, dataset_id: int, final_au_sequence: int
     ) -> None:
@@ -662,12 +727,13 @@ class TransportWriter:
         if bulk_active:
             features = features + [BULK_MODE_V2_BLOBS_FEATURE]
 
-        # v0.11 Task 2.4/2.5/2.6: detect v0.11 content (references +
-        # encryption algorithm + dataset provenance + image cube today;
-        # subjects, samples, identifications, quantifications land in
-        # subsequent tasks at the same prelude insertion point per
-        # §5.4 ordering). Java parity: TransportWriter.writeDataset
-        # (commits 530a5833 + 563e09c3 + a6b1e5d9).
+        # v0.11 Task 2.4/2.5/2.6/2.7: detect v0.11 content (references +
+        # encryption algorithm + dataset provenance + image cube +
+        # identifications/quantifications tables today; subjects and
+        # samples land at the same prelude insertion point per §5.4
+        # ordering in a follow-up task). Java parity:
+        # TransportWriter.writeDataset (commits 530a5833 + 563e09c3
+        # + a6b1e5d9 + a6faab16 + dc0de926).
         refs = getattr(dataset, "references", {}) or {}
         # ``provenance`` is a method on SpectralDataset (not a
         # property) — call it eagerly so the empty-vs-nonempty check
@@ -679,11 +745,25 @@ class TransportWriter:
         # ``image`` is a property — read once so the cache hit is shared
         # between the flag-detect and the emit branch.
         dataset_image = getattr(dataset, "image", None)
+        # identifications + quantifications are methods on
+        # SpectralDataset (matching ``provenance()``). Empty lists do
+        # not emit a packet (spec §5.4 step 6 says "zero or more")
+        # and do not trigger the v0.11 feature flag.
+        try:
+            dataset_identifications = list(dataset.identifications())
+        except Exception:  # pragma: no cover - defensive
+            dataset_identifications = []
+        try:
+            dataset_quantifications = list(dataset.quantifications())
+        except Exception:  # pragma: no cover - defensive
+            dataset_quantifications = []
         has_v011_content = (
             len(refs) > 0
             or bool(getattr(dataset, "is_encrypted", False))
             or len(dataset_provenance) > 0
             or dataset_image is not None
+            or len(dataset_identifications) > 0
+            or len(dataset_quantifications) > 0
         )
         if has_v011_content and TRANSPORT_V0_11_FEATURE not in features:
             features = features + [TRANSPORT_V0_11_FEATURE]
@@ -696,20 +776,16 @@ class TransportWriter:
             n_datasets=len(runs) + len(genomic_runs),
         )
 
-        # v0.11 Task 2.4/2.5/2.6: v0.11 prelude — per §5.4 ordering,
-        # v0.11 sections come BEFORE the v0.10 dataset/run sections,
-        # and the sub-sections appear in this order:
+        # v0.11 Task 2.4/2.5/2.6/2.7: v0.11 prelude — per §5.4
+        # ordering, v0.11 sections come BEFORE the v0.10 dataset/run
+        # sections, and the sub-sections appear in this order:
         #   §5.4.1 ENCRYPTION_ALGORITHM
         #   §5.4.2 DATASET_PROVENANCE
         #   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA
         #   §5.4.4 reference groups
         #   §5.4.5 image cubes
         #   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
-        # Subjects, samples, identifications, quantifications land
-        # here in subsequent Python tasks. Reference groups are
-        # currently emitted via the explicit write_reference_group
-        # helper; wiring them into write_dataset is the Task 2.7 +
-        # 2.9 follow-up. Image is wired in at §5.4.5 today.
+        # Subjects and samples land here in a subsequent Python task.
         if has_v011_content:
             if getattr(dataset, "is_encrypted", False):
                 algo = getattr(dataset, "encrypted_algorithm", "") or ""
@@ -717,8 +793,18 @@ class TransportWriter:
                     self.write_encryption_algorithm(algo)
             if dataset_provenance:
                 self.write_dataset_provenance(dataset_provenance)
+            # §5.4.4: reference groups, one packet sequence per
+            # ReferenceImport. Empty refs dict emits nothing.
+            for ref in refs.values():
+                self.write_reference_group(ref)
             if dataset_image is not None:
                 self.write_image(dataset_image)
+            # §5.4.6: identifications first, then quantifications.
+            # Each empty list is a no-op (spec §5.4 step 6).
+            if dataset_identifications:
+                self.write_identifications_table(dataset_identifications)
+            if dataset_quantifications:
+                self.write_quantifications_table(dataset_quantifications)
         for i, (name, run) in enumerate(runs, start=1):
             self.write_dataset_header(
                 dataset_id=i,
@@ -1385,6 +1471,17 @@ class TransportReader:
         # collectedImage (commit a6b1e5d9).
         current_image_builder: dict | None = None
         collected_image = None  # type: MSImage | None
+        # v0.11 Task 2.7: identification / quantification rows decoded
+        # from IDENTIFICATIONS_TABLE (0x16) / QUANTIFICATIONS_TABLE
+        # (0x17) packets. Multiple 0x16 / 0x17 packets MAY appear in a
+        # stream (spec §5.4 step 6 says "zero or more"); rows accumulate
+        # in emission order. Passed into ``write_minimal`` as the
+        # ``identifications`` / ``quantifications`` kwargs so the
+        # on-disk study compound datasets round-trip. Java parity:
+        # TransportReader.collectedIdentifications /
+        # collectedQuantifications (commit a6faab16).
+        collected_identifications: list = []  # list[Identification]
+        collected_quantifications: list = []  # list[Quantification]
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -1755,6 +1852,29 @@ class TransportReader:
                     ],
                 )
                 current_image_builder = None
+            elif ptype == int(PacketType.IDENTIFICATIONS_TABLE):
+                # v0.11 Task 2.7: decode the uint32-length-prefixed
+                # Arrow IPC payload and append the resulting rows to
+                # ``collected_identifications``. Multiple 0x16 packets
+                # accumulate in emission order. Java parity:
+                # TransportReader.decodeIdentificationsTable.
+                from .arrow_ipc import decode_identifications
+                (ipc_len,) = struct.unpack_from("<I", payload, 0)
+                ipc_bytes = bytes(payload[4:4 + ipc_len])
+                collected_identifications.extend(
+                    decode_identifications(ipc_bytes)
+                )
+            elif ptype == int(PacketType.QUANTIFICATIONS_TABLE):
+                # v0.11 Task 2.7: decode the uint32-length-prefixed
+                # Arrow IPC payload and append the resulting rows to
+                # ``collected_quantifications``. Java parity:
+                # TransportReader.decodeQuantificationsTable.
+                from .arrow_ipc import decode_quantifications
+                (ipc_len,) = struct.unpack_from("<I", payload, 0)
+                ipc_bytes = bytes(payload[4:4 + ipc_len])
+                collected_quantifications.extend(
+                    decode_quantifications(ipc_bytes)
+                )
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -1876,6 +1996,12 @@ class TransportReader:
             # Java parity: TransportReader.materializeTo passes
             # collectedProvenance into SpectralDataset.create.
             provenance=collected_provenance or None,
+            # v0.11 Task 2.7: surface decoded IDENTIFICATIONS_TABLE /
+            # QUANTIFICATIONS_TABLE rows on the materialised .tio.
+            # ``None`` when the wire had no 0x16 / 0x17 packets, so
+            # the matching study compound datasets are omitted.
+            identifications=collected_identifications or None,
+            quantifications=collected_quantifications or None,
             provider=provider,
         )
         # v0.11 Stage 1 / Task 2.3: embed any reference groups decoded
