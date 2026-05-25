@@ -33,6 +33,9 @@ public final class UnifiedContainerTreeView {
     private final TreeItem<UnifiedContainerNode> localRoot;
     private final TreeItem<UnifiedContainerNode> serversRoot;
 
+    /** Cached roster from the last successful async load; {@code null} until populated. */
+    private volatile ContainerRoster.Snapshot cachedRoster;
+
     /** Constructs using the process-wide {@link ConnectionManager#instance()}. */
     public UnifiedContainerTreeView() {
         this(ConnectionManager.instance());
@@ -93,6 +96,9 @@ public final class UnifiedContainerTreeView {
             new TreeItem<>(new UnifiedContainerNode.ImportLocalAction()));
     }
 
+    /** Returns the cached container roster, or {@code null} if the async load has not completed. */
+    public ContainerRoster.Snapshot cachedRoster() { return cachedRoster; }
+
     private void seedServersBranch() {
         serversRoot.setExpanded(true);
         serversRoot.getChildren().clear();
@@ -102,13 +108,43 @@ public final class UnifiedContainerTreeView {
             TreeItem<UnifiedContainerNode> server =
                 new TreeItem<>(new UnifiedContainerNode.ServerRoot(userAtHost));
             server.setExpanded(true);
-            // Lazy-load projects on demand (Stage 6 follow-up).
             server.getChildren().add(new TreeItem<>(
                 new UnifiedContainerNode.ServerProject("(loading…)", 0)));
             serversRoot.getChildren().add(server);
+            loadProjectsAsync(server);
         }
         serversRoot.getChildren().add(
             new TreeItem<>(new UnifiedContainerNode.ServerConnectAction()));
+    }
+
+    private void loadProjectsAsync(TreeItem<UnifiedContainerNode> serverItem) {
+        final var client = manager.client();
+        if (client == null) return;
+        Thread t = new Thread(() -> {
+            try {
+                ContainerRoster.Snapshot snap =
+                    ContainerRoster.fetchAndGroup(client, 200);
+                Platform.runLater(() -> {
+                    serverItem.getChildren().clear();
+                    snap.byProject().forEach((proj, containers) ->
+                        serverItem.getChildren().add(new TreeItem<>(
+                            new UnifiedContainerNode.ServerProject(
+                                proj, containers.size()))));
+                    cachedRoster = snap;
+                });
+            } catch (Throwable ex) {
+                Platform.runLater(() -> {
+                    serverItem.getChildren().clear();
+                    serverItem.getChildren().add(new TreeItem<>(
+                        new UnifiedContainerNode.ServerProject(
+                            "⚠ " + (ex.getMessage() == null
+                                ? ex.getClass().getSimpleName()
+                                : ex.getMessage()), 0)));
+                });
+            }
+        }, "unified-tree-load-projects");
+        t.setDaemon(true);
+        t.start();
     }
 
     // -----------------------------------------------------------------------
