@@ -33,6 +33,9 @@
 #import "Image/TTIOMSImage.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Transport/TTIOArrowIpcCodec.h"
 #import <time.h>
 #import <string.h>
 #import <zlib.h>
@@ -798,6 +801,72 @@ static inline void appendF64LE(NSMutableData *buf, double v)
     appendU32LE(eoi, (uint32_t)(pixelIndex & 0xFFFFFFFFull));
     return [self emitPacketType:TTIOTransportPacketEndOfImage
                          payload:eoi
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.19 / §4.20
+
+- (BOOL)writeIdentificationsTable:(NSArray<TTIOIdentification *> *)rows
+                              error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeIdentificationsTable: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        // §5.4 step 6 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeIdentifications:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeIdentificationsTable: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketIdentificationsTable
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeQuantificationsTable:(NSArray<TTIOQuantification *> *)rows
+                              error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeQuantificationsTable: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        // §5.4 step 6 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeQuantifications:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeQuantificationsTable: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketQuantificationsTable
+                         payload:payload
                        datasetId:0
                       auSequence:0
                            error:error];
