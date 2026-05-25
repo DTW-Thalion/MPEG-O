@@ -120,7 +120,8 @@ TTIOTests_OBJC_FILES = \
 	TestTransportWriterReference.m \
 	TestTransportReaderReference.m \
 	TestArrowIpcCodec.m \
-	TestTransportEncryptionAlgorithm.m
+	TestTransportEncryptionAlgorithm.m \
+	TestTransportDatasetProvenance.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

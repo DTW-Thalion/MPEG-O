@@ -128,6 +128,7 @@ extern void testTransportWriterReference(void);
 extern void testTransportReaderReference(void);
 extern void testArrowIpcCodec(void);
 extern void testTransportEncryptionAlgorithm(void);
+extern void testTransportDatasetProvenance(void);
 
 int main(int argc, const char *argv[])
 {
@@ -639,6 +640,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B) writer + reader")
             testTransportEncryptionAlgorithm();
         END_SET("transport v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B) writer + reader")
+
+        START_SET("transport v0.11 Task 3.5: DATASET_PROVENANCE (0x18) writer + reader")
+            testTransportDatasetProvenance();
+        END_SET("transport v0.11 Task 3.5: DATASET_PROVENANCE (0x18) writer + reader")
     }
     return 0;
 }

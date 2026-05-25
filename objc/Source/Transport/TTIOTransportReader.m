@@ -18,6 +18,7 @@
 #import "TTIOTransportReader+Internal.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
+#import "Dataset/TTIOProvenanceRecord.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOBulkV2Blobs.h"
 #import "Genomics/TTIOReferenceImport.h"
@@ -301,6 +302,13 @@ typedef struct {
     // (mirrors how a freshly-encrypted dataset surfaces -isEncrypted /
     // -encryptedAlgorithm).
     NSString *collectedEncryptionAlgorithm = nil;
+
+    // v0.11 Task 3.5: per-stream accumulator for the
+    // DATASET_PROVENANCE (0x18) packet. Records flow through the
+    // matching writeMinimalToPath: parameter so the materialised
+    // .tio carries them in /study/provenance just like a source .tio.
+    NSMutableArray<TTIOProvenanceRecord *> *collectedProvenance =
+        [NSMutableArray array];
 
     for (TTIOTransportPacketRecord *rec in packets) {
         TTIOTransportPacketHeader *h = rec.header;
@@ -796,6 +804,58 @@ typedef struct {
             off += algoLen;
             continue;
         }
+        // v0.11 Task 3.5: DATASET_PROVENANCE (0x18). Wire layout per
+        // transport-spec §4.21: `uint32 record_count` then N records,
+        // each `int64 timestamp_unix + uint16 software_length + UTF-8
+        // bytes + uint16 parameters_length + UTF-8 JSON +
+        // uint16 input_refs_length + UTF-8 CSV +
+        // uint16 output_refs_length + UTF-8 CSV`. The parameters JSON
+        // is decoded into an NSDictionary for the TTIOProvenanceRecord
+        // initialiser; CSV refs split on `,` with empty-string -> [].
+        // Java parity: TransportReader.materializeTo (commit
+        // 563e09c3). Python parity: TransportReader.materialize_to
+        // (commit 434d45a6).
+        if (h.packetType == TTIOTransportPacketDatasetProvenance) {
+            if (off + 4 > len) continue;
+            uint32_t recordCount = readU32(&bytes[off]); off += 4;
+            for (uint32_t recI = 0; recI < recordCount; recI++) {
+                if (off + 8 > len) break;
+                uint64_t tsBits = readU64(&bytes[off]); off += 8;
+                int64_t timestampUnix = (int64_t)tsBits;
+                NSString *software = readLEString(bytes, len, &off, 2) ?: @"";
+                NSString *paramsJson = readLEString(bytes, len, &off, 2) ?: @"{}";
+                NSString *inputsCsv = readLEString(bytes, len, &off, 2) ?: @"";
+                NSString *outputsCsv = readLEString(bytes, len, &off, 2) ?: @"";
+                // Decode parameters_json -> NSDictionary. Empty dict
+                // if parse fails (treat as `{}`).
+                NSDictionary *paramsDict = @{};
+                NSData *pjData =
+                    [paramsJson dataUsingEncoding:NSUTF8StringEncoding];
+                if (pjData.length > 0) {
+                    id parsed = [NSJSONSerialization JSONObjectWithData:pjData
+                                                                 options:0
+                                                                   error:NULL];
+                    if ([parsed isKindOfClass:[NSDictionary class]]) {
+                        paramsDict = parsed;
+                    }
+                }
+                NSArray<NSString *> *inputRefs = inputsCsv.length > 0
+                    ? [inputsCsv componentsSeparatedByString:@","]
+                    : @[];
+                NSArray<NSString *> *outputRefs = outputsCsv.length > 0
+                    ? [outputsCsv componentsSeparatedByString:@","]
+                    : @[];
+                TTIOProvenanceRecord *rec =
+                    [[TTIOProvenanceRecord alloc]
+                        initWithInputRefs:inputRefs
+                                 software:software
+                               parameters:paramsDict
+                               outputRefs:outputRefs
+                            timestampUnix:timestampUnix];
+                [collectedProvenance addObject:rec];
+            }
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
@@ -1018,7 +1078,8 @@ typedef struct {
                                               genomicRuns:(genomicRuns.count ? genomicRuns : nil)
                                           identifications:nil
                                           quantifications:nil
-                                        provenanceRecords:nil
+                                        provenanceRecords:(collectedProvenance.count
+                                                            ? collectedProvenance : nil)
                                                     error:error];
     if (!wrote) return NO;
 
