@@ -127,6 +127,7 @@ extern void testTransportReaderSkipUnknown(void);
 extern void testTransportWriterReference(void);
 extern void testTransportReaderReference(void);
 extern void testArrowIpcCodec(void);
+extern void testTransportEncryptionAlgorithm(void);
 
 int main(int argc, const char *argv[])
 {
@@ -634,6 +635,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11: TTIOArrowIpcCodec round-trip (IDENTIFICATIONS_TABLE 0x16 + QUANTIFICATIONS_TABLE 0x17)")
             testArrowIpcCodec();
         END_SET("transport v0.11: TTIOArrowIpcCodec round-trip (IDENTIFICATIONS_TABLE 0x16 + QUANTIFICATIONS_TABLE 0x17)")
+
+        START_SET("transport v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B) writer + reader")
+            testTransportEncryptionAlgorithm();
+        END_SET("transport v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B) writer + reader")
     }
     return 0;
 }

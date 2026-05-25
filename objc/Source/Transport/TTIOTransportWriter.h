@@ -186,6 +186,30 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)writeReferenceGroup:(TTIOReferenceImport *)ref
                        error:(NSError * _Nullable *)error;
 
+/**
+ * v0.11 Task 3.4: emit an <code>ENCRYPTION_ALGORITHM</code> (0x1B)
+ * packet carrying the dataset-level <code>@encrypted</code> algorithm
+ * identifier (e.g. <code>@"aes-256-gcm"</code>). Wire layout per
+ * transport-spec §4.23:
+ *
+ * <pre>
+ * algorithm_length:  uint16
+ * algorithm_utf8:    bytes[algorithm_length]
+ * </pre>
+ *
+ * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Per-AU key
+ * material continues to ride on <code>ProtectionMetadata</code> (0x04);
+ * this packet conveys only the algorithm-name string.</p>
+ *
+ * <p>Java parity:
+ * <code>TransportWriter.writeEncryptionAlgorithm</code> (commit
+ * <code>530a5833</code>). Python parity:
+ * <code>TransportWriter.write_encryption_algorithm</code> (commit
+ * <code>bf38bdc9</code>).</p>
+ */
+- (BOOL)writeEncryptionAlgorithm:(NSString *)algorithm
+                            error:(NSError * _Nullable *)error;
+
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 
 /** Emits a single GenomicRun as a stream segment.
