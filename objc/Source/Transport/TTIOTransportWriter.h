@@ -12,6 +12,7 @@
 @class TTIOAcquisitionRun;
 @class TTIOGenomicRun;
 @class TTIOReferenceImport;
+@class TTIOProvenanceRecord;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -209,6 +210,48 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeEncryptionAlgorithm:(NSString *)algorithm
                             error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 3.5: emit a <code>DATASET_PROVENANCE</code> (0x18) packet
+ * carrying the dataset-level provenance chain (format-spec §6.3). A
+ * single packet carries all records. Wire layout per transport-spec
+ * §4.21:
+ *
+ * <pre>
+ * record_count:        uint32
+ * # repeated record_count times:
+ * timestamp_unix:      int64
+ * software_length:     uint16, software bytes[..]      (UTF-8)
+ * parameters_length:   uint16, parameters_json[..]     (UTF-8 JSON)
+ * input_refs_length:   uint16, input_refs_csv[..]      (UTF-8 CSV)
+ * output_refs_length:  uint16, output_refs_csv[..]     (UTF-8 CSV)
+ * </pre>
+ *
+ * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+ * input_refs / output_refs lists ride as comma-joined UTF-8 — a
+ * single empty string for an empty list (no separators). The
+ * <code>parameters_json</code> field is the parameters dict
+ * serialised via <code>NSJSONSerialization</code> with
+ * <code>NSJSONWritingSortedKeys</code> so on-wire ordering matches
+ * Python (<code>json.dumps(d, sort_keys=True)</code>); Java preserves
+ * its <code>Map.copyOf</code> iteration order so per-record byte
+ * parity across all three languages requires the source dict to be a
+ * single-key dict (the test fixtures use single-key dicts to
+ * guarantee parity, mirroring the Python and Java test pattern).</p>
+ *
+ * <p>Distinct from the per-run <code>Provenance</code> (0x06) packet,
+ * which carries one JSON record per packet. An empty
+ * <code>records</code> array is a no-op (no packet emitted) per
+ * spec §5.4 step 2 ("zero or more").</p>
+ *
+ * <p>Java parity:
+ * <code>TransportWriter.writeDatasetProvenance</code> (commit
+ * <code>563e09c3</code>). Python parity:
+ * <code>TransportWriter.write_dataset_provenance</code> (commit
+ * <code>434d45a6</code>).</p>
+ */
+- (BOOL)writeDatasetProvenance:(NSArray<TTIOProvenanceRecord *> *)records
+                          error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 

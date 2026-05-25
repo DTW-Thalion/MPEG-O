@@ -18,6 +18,7 @@
 #import "TTIOTransportWriter.h"
 #import "Core/TTIOPortability.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOProvenanceRecord.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
 #import "Run/TTIOSpectrumIndex.h"
@@ -506,6 +507,136 @@ static const NSUInteger TTIOReferenceChromosomeZlibThreshold = 4096;
                            error:error];
 }
 
+// ---------------------------------------------------------------- v0.11 §4.21
+
+// Serialise a TTIOProvenanceRecord parameters dict to the canonical
+// wire JSON form: `{"k":"v","k2":"v2"}` with keys sorted (Python parity
+// — Java preserves Map iteration order). Empty dict renders as `{}`.
+// Mirrors Python `_provenance_params_json` (transport/codec.py).
+static NSString *provenanceParamsJSON(NSDictionary *params)
+{
+    if (params.count == 0) return @"{}";
+    // Coerce values to strings the way Python does so a dict whose
+    // values are NSNumber / arbitrary types still produces the
+    // string-valued shape Java emits via ProvenanceRecord.parametersJson().
+    NSMutableDictionary *coerced =
+        [NSMutableDictionary dictionaryWithCapacity:params.count];
+    for (id key in params) {
+        id val = params[key];
+        NSString *k = [key isKindOfClass:[NSString class]]
+            ? (NSString *)key
+            : [key description];
+        NSString *v;
+        if ([val isKindOfClass:[NSString class]]) {
+            v = (NSString *)val;
+        } else if ([val isKindOfClass:[NSNumber class]]) {
+            v = [(NSNumber *)val stringValue];
+        } else {
+            v = [val description];
+        }
+        coerced[k] = v;
+    }
+    NSData *json = [NSJSONSerialization dataWithJSONObject:coerced
+                                                    options:TTIO_JSON_SORTED_KEYS
+                                                      error:nil];
+    if (!json) return @"{}";
+    return [[NSString alloc] initWithData:json
+                                  encoding:NSUTF8StringEncoding] ?: @"{}";
+}
+
+// Comma-join an array of refs. No quoting/escaping — per spec §4.21,
+// refs are URIs that have been URL-encoded so they cannot themselves
+// contain commas. Java parity: TransportWriter.csvJoin.
+static NSString *provenanceCsvJoin(NSArray<NSString *> *refs)
+{
+    if (refs.count == 0) return @"";
+    return [refs componentsJoinedByString:@","];
+}
+
+- (BOOL)writeDatasetProvenance:(NSArray<TTIOProvenanceRecord *> *)records
+                          error:(NSError **)error
+{
+    if (records == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeDatasetProvenance: records must not be nil"}];
+        return NO;
+    }
+    if (records.count == 0) {
+        // §5.4 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    // Pre-compute UTF-8 byte arrays so we can size the buffer exactly.
+    NSMutableArray<NSData *> *softwareBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSMutableArray<NSData *> *paramsBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSMutableArray<NSData *> *inputsBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSMutableArray<NSData *> *outputsBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSUInteger total = 4;  // record_count
+    for (TTIOProvenanceRecord *r in records) {
+        NSData *sb = [(r.software ?: @"")
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *pb = [provenanceParamsJSON(r.parameters)
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *ib = [provenanceCsvJoin(r.inputRefs)
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *ob = [provenanceCsvJoin(r.outputRefs)
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        for (NSData *d in @[sb, pb, ib, ob]) {
+            if (d.length > 0xFFFFu) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"DATASET_PROVENANCE: per-field length %lu "
+                                         @"exceeds uint16 max",
+                                         (unsigned long)d.length]}];
+                return NO;
+            }
+        }
+        [softwareBytes addObject:sb];
+        [paramsBytes addObject:pb];
+        [inputsBytes addObject:ib];
+        [outputsBytes addObject:ob];
+        total += 8                    // timestamp_unix
+              + 2 + sb.length
+              + 2 + pb.length
+              + 2 + ib.length
+              + 2 + ob.length;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:total];
+    appendU32LE(payload, (uint32_t)records.count);
+    NSUInteger i = 0;
+    for (TTIOProvenanceRecord *r in records) {
+        int64_t ts = r.timestampUnix;
+        uint64_t tsBits = (uint64_t)ts;
+        uint8_t tsBuf[8];
+        for (int b = 0; b < 8; b++) tsBuf[b] = (uint8_t)((tsBits >> (b * 8)) & 0xFFu);
+        [payload appendBytes:tsBuf length:8];
+        appendU16LE(payload, (uint16_t)softwareBytes[i].length);
+        [payload appendData:softwareBytes[i]];
+        appendU16LE(payload, (uint16_t)paramsBytes[i].length);
+        [payload appendData:paramsBytes[i]];
+        appendU16LE(payload, (uint16_t)inputsBytes[i].length);
+        [payload appendData:inputsBytes[i]];
+        appendU16LE(payload, (uint16_t)outputsBytes[i].length);
+        [payload appendData:outputsBytes[i]];
+        i++;
+    }
+    NSAssert(payload.length == total,
+        @"DATASET_PROVENANCE size mismatch: predicted %lu, actual %lu",
+        (unsigned long)total, (unsigned long)payload.length);
+    return [self emitPacketType:TTIOTransportPacketDatasetProvenance
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
 // ---------------------------------------------------------------- writeDataset
 
 static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
@@ -790,14 +921,16 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         [features addObject:TTIOTransportBulkModeV2BlobsFeature];
     }
 
-    // v0.11 Task 3.4: detect v0.11 content (encryption algorithm
-    // today; dataset provenance / references land here in later
-    // tasks). Java parity: TransportWriter.writeDataset (commit
-    // 530a5833). Python parity: TransportWriter.write_dataset
-    // (commit bf38bdc9).
+    // v0.11 Tasks 3.4 + 3.5: detect v0.11 content (encryption
+    // algorithm + dataset provenance today; references land here in
+    // a later task). Java parity: TransportWriter.writeDataset
+    // (commits 530a5833 + 563e09c3). Python parity:
+    // TransportWriter.write_dataset (commits bf38bdc9 + 434d45a6).
+    NSArray *datasetProvenance = dataset.provenanceRecords ?: @[];
     BOOL hasEncryptionAlgo =
         dataset.isEncrypted && dataset.encryptedAlgorithm.length > 0;
-    BOOL hasV011Content = hasEncryptionAlgo;
+    BOOL hasDatasetProv = datasetProvenance.count > 0;
+    BOOL hasV011Content = hasEncryptionAlgo || hasDatasetProv;
     if (hasV011Content
         && ![features containsObject:TTIOTransportV011Feature]) {
         [features addObject:TTIOTransportV011Feature];
@@ -812,7 +945,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
 
     // v0.11 §5.4 prelude — sub-sections in spec order:
     //   §5.4.1 ENCRYPTION_ALGORITHM
-    //   §5.4.2 DATASET_PROVENANCE   (Task 3.5)
+    //   §5.4.2 DATASET_PROVENANCE
     //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA   (future)
     //   §5.4.4 reference groups                      (future for writeDataset:)
     //   §5.4.5 image cubes                           (future)
@@ -821,6 +954,10 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         if (hasEncryptionAlgo) {
             if (![self writeEncryptionAlgorithm:dataset.encryptedAlgorithm
                                             error:error]) return NO;
+        }
+        if (hasDatasetProv) {
+            if (![self writeDatasetProvenance:datasetProvenance
+                                          error:error]) return NO;
         }
     }
 
