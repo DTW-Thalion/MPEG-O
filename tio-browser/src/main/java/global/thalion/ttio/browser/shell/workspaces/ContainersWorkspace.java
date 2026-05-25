@@ -55,6 +55,10 @@ public final class ContainersWorkspace implements Workspace {
     private final DatasetTreeView treeView = new DatasetTreeView();
     private final Label statusLabel = new Label("(no file)");
     private final BorderPane middlePane;
+    private final StackPane middleContent = new StackPane();
+    private final Label middlePlaceholder = new Label(
+        "Open a .tio file (File → Open) or import a foreign format\n"
+        + "(File → Import) to populate the dataset tree here.");
 
     // --- right pane ---
     private final DetailPane detailPane = new DetailPane();
@@ -72,7 +76,12 @@ public final class ContainersWorkspace implements Workspace {
         registerTabs();
         treeView.onSelected(detailPane::onSelection);
 
-        middlePane = new BorderPane(treeView.control());
+        middlePlaceholder.setStyle("-fx-text-fill: #888; -fx-text-alignment: center;");
+        middlePlaceholder.setWrapText(true);
+        middlePlaceholder.setMaxWidth(280);
+        middleContent.getChildren().addAll(middlePlaceholder, treeView.control());
+        showMiddlePlaceholder();
+        middlePane = new BorderPane(middleContent);
         middlePane.setBottom(statusLabel);
 
         rightPane.getChildren().addAll(
@@ -86,9 +95,13 @@ public final class ContainersWorkspace implements Workspace {
         localRootInfo.onEncode(() -> encodeAction());
         localRootInfo.onImport(() -> importAction());
 
+        // SplitPane always carries all three items; the middle one toggles
+        // between a placeholder Label and the populated DatasetTreeView
+        // rather than being inserted/removed at runtime (dynamic-add to
+        // SplitPane.getItems has unreliable divider geometry on JavaFX 21).
         root.setOrientation(Orientation.HORIZONTAL);
-        root.getItems().addAll(unifiedTree.control(), rightPane);
-        root.setDividerPositions(0.30);
+        root.getItems().addAll(unifiedTree.control(), middlePane, rightPane);
+        root.setDividerPositions(0.22, 0.50);
 
         unifiedTree.control().getSelectionModel().selectedItemProperty()
             .addListener((obs, old, newItem) -> {
@@ -124,9 +137,11 @@ public final class ContainersWorkspace implements Workspace {
     }
 
     public void loadDataset(String path, boolean readOnly) {
+        System.err.println("[loadDataset] called: path=" + path + " readOnly=" + readOnly);
         DatasetOpenTask task = new DatasetOpenTask(path, readOnly);
         statusLabel.setText("Opening " + path + "…");
         task.setOnSucceeded(ev -> {
+            System.err.println("[loadDataset] open succeeded; building tree");
             current = task.getValue();
             statusLabel.setText(current.path());
             DatasetTreeNode treeRoot = DatasetTreeBuilder.build(current);
@@ -136,11 +151,17 @@ public final class ContainersWorkspace implements Workspace {
             showMiddleTree();
             showInRight(detailPane.control());
             recent.record(path);
+            System.err.println("[loadDataset] tree populated; middle tree visible");
         });
         task.setOnFailed(ev -> {
+            Throwable t = task.getException();
+            System.err.println("[loadDataset] FAILED: "
+                + (t == null ? "(null exception)" : t.toString()));
+            if (t != null) t.printStackTrace();
             statusLabel.setText("(open failed)");
             new Alert(Alert.AlertType.ERROR,
-                "Could not open " + path + ":\n\n" + task.getException().getMessage(),
+                "Could not open " + path + ":\n\n"
+                + (t == null ? "(unknown)" : t.getMessage()),
                 ButtonType.OK).showAndWait();
         });
         Thread th = new Thread(task, "open-" + path);
@@ -257,17 +278,21 @@ public final class ContainersWorkspace implements Workspace {
     }
 
     private void showMiddleTree() {
-        if (!root.getItems().contains(middlePane)) {
-            root.getItems().add(1, middlePane);
-            root.setDividerPositions(0.22, 0.50);
-        }
+        // Swap the placeholder for the real dataset tree inside the
+        // middle pane's StackPane. SplitPane geometry is unchanged.
+        middlePlaceholder.setVisible(false);
+        middlePlaceholder.setManaged(false);
+        treeView.control().setVisible(true);
+        treeView.control().setManaged(true);
     }
 
-    private void hideMiddleTree() {
-        if (root.getItems().contains(middlePane)) {
-            root.getItems().remove(middlePane);
-            root.setDividerPositions(0.30);
-        }
+    private void hideMiddleTree() { showMiddlePlaceholder(); }
+
+    private void showMiddlePlaceholder() {
+        middlePlaceholder.setVisible(true);
+        middlePlaceholder.setManaged(true);
+        treeView.control().setVisible(false);
+        treeView.control().setManaged(false);
     }
 
     private void onDragOver(DragEvent event) {

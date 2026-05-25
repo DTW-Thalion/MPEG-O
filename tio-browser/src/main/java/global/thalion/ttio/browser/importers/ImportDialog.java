@@ -311,6 +311,9 @@ public final class ImportDialog {
             statusLabel.textProperty().unbind();
             progress.progressBar().setProgress(1.0);
             stage.close();
+            System.err.println("[ImportDialog] setOnSucceeded; onImported="
+                + (onImported == null ? "null" : "set")
+                + " target=" + cfg.targetTio);
             if (onImported != null) onImported.accept(cfg.targetTio);
         });
         task.setOnFailed(ev -> {
