@@ -5,115 +5,163 @@ For build/install instructions see
 [`tio-browser/README.md`](../tio-browser/README.md).
 
 > **Screenshots TBD.** A release build needs to run on a real display
-> to capture the main-window and Read-Inspector views. This page is
-> the textual reference until those land.
+> to capture the activity-rail layout. This page is the textual
+> reference until those land.
 
-## Opening a file
+## Shell layout
 
-- **File → Open** picks a `.tio` from a file dialog.
-- **Drag-and-drop** any `.tio` onto the window (drops on file types
-  the importer recognizes route through the Import wizard instead).
-- **CLI**: `java -jar tio-browser-1.4.1-<your-os>.jar --open path/to/dataset.tio`
-  opens the dataset at launch.
+The window is divided into four persistent regions:
 
-The status bar shows `path · vN.N.N · MS=N · Genomic=N · Refs=N · 🔓/🔒`
-once the dataset is loaded. Selecting nodes in the left tree drives
-the detail tabs on the right.
+- **Top header bar** — app title, connection status chip
+  (`workbench: connected (alice@host)` / `workbench: disconnected`),
+  click the chip to open the Login dialog or view session details.
+- **Left activity rail** — four icon buttons selecting the active
+  workspace:
+  - 📁 **Containers** — local files + server containers
+  - 🔬 **Cohorts** — cohort query builder
+  - ⚙ **Jobs & Sessions** — pipelines and interactive sessions
+  - ⇅ **Transfers** — `.tis` upload/download queue
+- **Centre** — the active workspace's content (changes with rail
+  selection).
+- **Bottom transfer strip** — always-visible summary of in-flight
+  transfers with bytes, rate, ETA. Auto-hides when no transfers are
+  active. Click `view all` to jump to the Transfers workspace.
 
-## Importing a foreign format
+The menu bar has only two real menus: `File` (Open, Open Recent,
+Encode, Import, Export, Save As, Close, Exit) and `Help` (About,
+User guide, Diagnostics).
 
-**File → Import** opens the Import wizard. Pick a format, source
-path, target `.tio`, and run name. The wizard auto-detects the format
-when you drop a file onto the main window. Format rows whose
-required external binary is missing are greyed out with a tooltip
-explaining what's needed (see Diagnostics below).
+## Containers workspace (📁)
 
-Supported formats:
+The Containers workspace is a three-pane layout:
 
-- **MS**: mzML, ImzML
-- **NMR**: nmrML
-- **Vibrational**: JCAMP-DX (Raman, IR, UV-Vis)
-- **Genomic**: BAM, SAM, CRAM (samtools required), FASTA (reference
-  or unaligned), FASTQ
-- **Tabular**: mzTab
-- **Vendor (binary)**: Thermo `.raw` (ThermoRawFileParser required),
-  Waters MassLynx `.RAW` (masslynxraw required), Bruker timsTOF `.d`
-  (Python + opentimspy required)
+- **Left** — unified tree with two top-level branches:
+  - **Local** — currently-open `.tio` (if any), Recent files, and
+    three action nodes: `+ Open file…`, `+ Encode…`, `+ Import…`.
+  - **Servers** — each connected workbench instance with its
+    projects, plus a `+ Connect another server…` action node.
+- **Middle** (visible only when a local `.tio` is open) — the
+  dataset tree showing `SpectralDataset` structure: MS / NMR /
+  vibrational / UV-Vis runs, `GenomicRun` reads + index,
+  provenance chains, identifications + quantifications.
+- **Right** — context-sensitive detail:
+  - When `Local` is selected: empty-state with the three big CTAs.
+  - When the open file's dataset tree node is selected:
+    spectrum/read/headers/overview/etc. tabs (same as before).
+  - When a `ServerProject` is selected: paged container table.
+  - When a `ServerContainer` row is selected: metadata +
+    Download / Selective download / Server-side export /
+    Run pipeline actions.
 
-## Exporting
+Drag-and-drop a `.tio` onto the window to open it; drop any other
+recognised format and the Import wizard opens with the format
+pre-selected.
 
-**File → Export** opens the Export dialog. Format rows that don't
-apply to the open file (e.g. nmrML when there are no NMR runs, or BAM
-when `samtools` isn't on PATH) are greyed out with a tooltip
-explaining why.
+### Opening a file
 
-Supported export targets cover the same modality range as Import,
-plus signed-bytes export for the canonical-bytes audit trail.
+- **File → Open…** (`Shortcut+O`) picks a `.tio` from a file dialog.
+- **File → Open Recent ▸** lists the 8 most recently opened paths.
+- **Drag-and-drop** any `.tio` onto the window.
+- **CLI**: `java -jar tio-browser-1.4.1-<your-os>.jar --open path/to/dataset.tio`.
 
-## Plot views
+### Importing a foreign format
+
+- **File → Import…** opens the Import wizard. Pick a format, source
+  path, target `.tio`, and run name. Drag-drop a recognised foreign
+  format file onto the window to pre-select the format.
+
+Supported formats: mzML, ImzML, nmrML, JCAMP-DX (Raman/IR/UV-Vis),
+BAM/SAM/CRAM (samtools required), FASTA, FASTQ, mzTab, Thermo
+`.raw` (ThermoRawFileParser required), Waters MassLynx `.RAW`
+(masslynxraw required), Bruker timsTOF `.d` (Python + opentimspy
+required). Format rows whose required external binary is missing
+are greyed out with a tooltip explaining what's needed (see
+Diagnostics below).
+
+### Encoding a local source file → local `.tio`
+
+- **File → Encode…** (`Shortcut+E`) opens the Encoding panel.
+
+### Exporting
+
+- **File → Export…** opens the Export dialog. Format rows that don't
+  apply to the open file are greyed out with a tooltip explaining
+  why. Supported export targets cover the same modality range as
+  Import.
+
+### Plot views and Read Inspector
 
 Selecting a spectrum row in the MS/NMR/Raman/IR/UV-Vis Headers tab
-populates the Spectrum plot tab. Centroided MS spectra render as
-stems; profile MS as lines. The MinMaxBucketDownsampler keeps high-
-density profile spectra responsive.
+populates the Spectrum plot tab. Selecting a chromatogram row
+populates the Chromatogram plot tab. Selecting an aligned-read row
+in a genomic run opens the Read Inspector with sequence, qualities,
+mapping coordinates, mate-pair chrom/pos, and the AU's tag
+dictionary.
 
-Selecting a chromatogram row populates the Chromatogram plot tab.
+### Provenance, FeatureFlags, Encryption
 
-The plot toolbar provides:
-
-- Linear / log Y toggle
-- Reset zoom (returns to auto-range)
-- Save as PNG (manual rasterization, no Swing dependency)
-
-## Headers tables
-
-For every analytical run kind there's a dedicated headers table:
-
-- **MS Headers** — m/z range, scan time, MS level, polarity,
-  precursor charge, base-peak intensity, idx
-- **NMR Headers** — nucleus, scan time, idx, solvent
-- **Raman / IR / UV-Vis Headers** — integration time, idx,
-  wavelength range
-
-All columns are sortable; row selection drives the Plot tab.
-
-## Read Inspector (genomic runs)
-
-Selecting an aligned-read row in a genomic run opens the Read
-Inspector with sequence, qualities, mapping coordinates, mate-pair
-chrom/pos, and the AU's tag dictionary. On platforms where
-`libttio_rans_jni` couldn't load (Intel Mac and other unbundled
-platforms), the inspector shows a placeholder explaining the
-limitation.
-
-## Provenance, FeatureFlags, Encryption
-
-Three structural detail tabs:
+Three structural detail tabs apply to the open dataset:
 
 - **Provenance** — every recorded provenance entry's timestamp,
   software, parameters, input refs, output refs.
-- **FeatureFlags** — which optional features are enabled in the
-  open dataset (genomic, encryption, transport-bulk-mode-v2, etc.).
+- **FeatureFlags** — which optional features are enabled.
 - **Encryption** — for encrypted datasets, shows status and a
-  `Decrypt with key…` button. The button accepts a binary key file;
-  bytes are passed verbatim to `SpectralDataset.decryptInPlace(path,
-  key)`. The dataset is closed and reopened post-decrypt to refresh
-  state.
+  `Decrypt with key…` button.
 
-## Transport
+## Cohorts workspace (🔬)
 
-Transport → Download from server requests a `.tis` stream from a
-`http://`, `https://`, `ws://`, or `wss://` URL and materializes a
-local `.tio`. Transport → Upload sends a local `.tio` as a `.tis`
-byte stream to the same URL families.
+Build cohort queries against the connected workbench. Offline state
+shows a "Connect to a workbench server" CTA; once connected, the
+query builder is available. (Saved cohorts list and result-preview
+table polish lands in a follow-up.)
 
-The download dialog also accepts query-side filters (run kind,
-dataset-id list, RT range for MS, etc.) so you can fetch a subset
-of a remote dataset without downloading the whole file.
+## Jobs & Sessions workspace (⚙)
+
+Stacked layout:
+
+- **Top** — Jobs table. `New job…` opens the Pipeline Launcher
+  modal. Selecting a row shows the events / log tail inline.
+- **Bottom** — Interactive Sessions table. `New session…` opens
+  the Session Launcher modal.
+
+## Transfers workspace (⇅)
+
+Single queue for all `.tis` transfers (uploads + downloads). Filter
+by All / Active / Completed / Failed. `Clear completed` removes
+finished rows. `Start new transfer…` opens the unified transfer
+dialog with:
+
+- Direction (Upload / Download)
+- Server scope (Connected workbench — default when an authenticated
+  session exists / Anonymous URL — UI present, submit deferred)
+- Source / target file picker
+- Project + Container URI
+- Selective Access section (visible for downloads only): RT range,
+  MS level, polarity, m/z range, dataset-id list, max AU count, etc.
+- Per-packet CRC-32C checksum option
+
+The bottom transfer strip mirrors active transfers from this queue
+and is reachable from any workspace.
+
+## Progress reporting
+
+Every long-running operation (Open, Encode, Import, Export, Upload,
+Download) reports a `ProgressReport` with:
+
+- Percent complete (when total is known)
+- Bytes processed / bytes total
+- Instantaneous rate (5-second EWMA)
+- ETA seconds
+- Stalled detection (rate < 100 B/s and > 10s of silence)
+
+These appear as: `"42.0% · 1.2 GB / 2.8 GB · 18.4 MB/s · ETA 1m 27s"`
+in the bottom strip and per-row in the Transfers queue. When totals
+are unknown the line falls back to `"1.2 GB processed · 18.4 MB/s ·
+elapsed 1m 12s"`. When stalled: `"stalled — last activity 12s ago"`.
 
 ## Diagnostics
 
-**Tools → Diagnostics** opens a modal dialog probing every external
+**Help → Diagnostics…** opens a modal dialog probing every external
 binary the library can use: HDF5 JNI (in-process), `samtools`,
 `ThermoRawFileParser`, `masslynxraw`, and the Bruker Python helper.
 Each probe shows status (OK / NOT_FOUND / ERROR), resolved path,
@@ -128,5 +176,5 @@ available without restarting the app.
 
 `tio-browser` issues, feature requests, and crash reports go to the
 TTI-O monorepo issue tracker. Please include the
-**Tools → Diagnostics** output and the full stderr from a terminal-
+**Help → Diagnostics** output and the full stderr from a terminal-
 launched `java -jar tio-browser-<version>-<your-os>.jar` invocation.
