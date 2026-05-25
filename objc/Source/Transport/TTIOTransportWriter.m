@@ -28,6 +28,7 @@
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOAlignedRead.h"
+#import "Genomics/TTIOReferenceImport.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import <time.h>
@@ -69,6 +70,11 @@ static uint64_t nowNs(void)
     clock_gettime(CLOCK_REALTIME, &ts);
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
+
+// Forward declarations for static helpers defined further down. Allows
+// methods declared earlier in @implementation (e.g. -writeReferenceGroup:)
+// to call them without an out-of-order definition error.
+static NSData *zlibDeflate(NSData *input);
 
 static NSString *spectrumClassToWireName(uint8_t wire)
 {
@@ -347,6 +353,121 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
     return [self emitPacketType:TTIOTransportPacketBlobV2NameTok
                          payload:p
                        datasetId:datasetId
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.13-§4.15
+
+/**
+ * Threshold below which a chromosome rides as raw UINT8 (encoding=0).
+ * Mirrors transport-spec §4.14 + Java
+ * TransportWriter.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD + Python
+ * TransportWriter.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD.
+ */
+static const NSUInteger TTIOReferenceChromosomeZlibThreshold = 4096;
+
+- (BOOL)writeReferenceGroup:(TTIOReferenceImport *)ref
+                       error:(NSError **)error
+{
+    if (!ref) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 @"writeReferenceGroup: nil ref"}];
+        return NO;
+    }
+    NSArray<NSString *> *chromNames = ref.chromosomes;
+    NSArray<NSData *> *seqs = ref.sequences;
+    uint32_t chromCount = (uint32_t)chromNames.count;
+    uint64_t totalBases = (uint64_t)[ref totalBases];
+    NSString *md5Hex = [ref md5Hex];
+    if (md5Hex.length != 32) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 [NSString stringWithFormat:
+                                     @"ReferenceImport.md5Hex must be 32 hex chars, got %lu",
+                                     (unsigned long)md5Hex.length]}];
+        return NO;
+    }
+
+    // -- REFERENCE_GROUP_HEADER (0x10) ----------------------------------
+    NSData *uriBytes = [(ref.uri ?: @"")
+        dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    NSData *md5HexBytes = [md5Hex dataUsingEncoding:NSASCIIStringEncoding];
+    if (md5HexBytes.length != 32) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 @"ReferenceImport.md5Hex did not encode to 32 ASCII bytes"}];
+        return NO;
+    }
+    NSMutableData *hdr = [NSMutableData dataWithCapacity:
+                          2 + uriBytes.length + 4 + 8 + 32];
+    appendU16LE(hdr, (uint16_t)(uriBytes.length & 0xFFFFu));
+    [hdr appendData:uriBytes];
+    appendU32LE(hdr, chromCount);
+    uint8_t tbBuf[8];
+    for (int i = 0; i < 8; i++) tbBuf[i] = (uint8_t)((totalBases >> (i * 8)) & 0xFFu);
+    [hdr appendBytes:tbBuf length:8];
+    [hdr appendData:md5HexBytes];
+    if (![self emitPacketType:TTIOTransportPacketReferenceGroupHeader
+                       payload:hdr
+                     datasetId:0
+                    auSequence:0
+                         error:error]) return NO;
+
+    // -- REFERENCE_CHROMOSOME (0x11) — one per contig --------------------
+    for (NSUInteger i = 0; i < chromCount; i++) {
+        NSString *name = chromNames[i];
+        NSData *seq = seqs[i];
+        NSData *nameBytes =
+            [(name ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+
+        uint8_t encoding;
+        NSData *payloadBytes;
+        if (seq.length < TTIOReferenceChromosomeZlibThreshold) {
+            encoding = 0;
+            payloadBytes = seq;
+        } else {
+            encoding = 1;
+            payloadBytes = zlibDeflate(seq);
+            if (!payloadBytes) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"REFERENCE_CHROMOSOME zlib deflate failed for '%@'",
+                                             name]}];
+                return NO;
+            }
+        }
+
+        NSMutableData *rec = [NSMutableData dataWithCapacity:
+                              2 + nameBytes.length + 8 + 1 + 4 + payloadBytes.length];
+        appendU16LE(rec, (uint16_t)(nameBytes.length & 0xFFFFu));
+        [rec appendData:nameBytes];
+        uint64_t seqLen = (uint64_t)seq.length;
+        uint8_t slBuf[8];
+        for (int b = 0; b < 8; b++) slBuf[b] = (uint8_t)((seqLen >> (b * 8)) & 0xFFu);
+        [rec appendBytes:slBuf length:8];
+        [rec appendBytes:&encoding length:1];
+        appendU32LE(rec, (uint32_t)payloadBytes.length);
+        [rec appendData:payloadBytes];
+        if (![self emitPacketType:TTIOTransportPacketReferenceChromosome
+                           payload:rec
+                         datasetId:0
+                        auSequence:(uint32_t)i
+                             error:error]) return NO;
+    }
+
+    // -- END_OF_REFERENCE_GROUP (0x12) -----------------------------------
+    NSMutableData *eor = [NSMutableData dataWithCapacity:4];
+    appendU32LE(eor, chromCount);
+    return [self emitPacketType:TTIOTransportPacketEndOfReferenceGroup
+                         payload:eor
+                       datasetId:0
                       auSequence:0
                            error:error];
 }
