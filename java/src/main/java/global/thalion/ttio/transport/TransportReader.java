@@ -6,9 +6,11 @@ package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.Identification;
 import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.Quantification;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.MiniJson;
@@ -76,6 +78,15 @@ public final class TransportReader implements AutoCloseable {
     // IMAGE_HEADER and END_OF_IMAGE.
     private ImageBuilder currentImageBuilder;
     private MSImage collectedImage;
+    // v0.11 Task 1.8: identification/quantification rows decoded from
+    // IDENTIFICATIONS_TABLE (0x16) / QUANTIFICATIONS_TABLE (0x17)
+    // packets. Reset at the start of every materializeTo() call.
+    // Passed into SpectralDataset.create as the identifications /
+    // quantifications args so the on-disk
+    // /study/identifications_json + /study/quantifications_json
+    // attributes round-trip.
+    private final List<Identification> collectedIdentifications = new ArrayList<>();
+    private final List<Quantification> collectedQuantifications = new ArrayList<>();
 
     public TransportReader(InputStream in) {
         this.in = in;
@@ -172,6 +183,8 @@ public final class TransportReader implements AutoCloseable {
         collectedProvenance.clear();
         currentImageBuilder = null;
         collectedImage = null;
+        collectedIdentifications.clear();
+        collectedQuantifications.clear();
 
         List<PacketRecord> packets = readAllPackets();
         String title = "";
@@ -354,6 +367,14 @@ public final class TransportReader implements AutoCloseable {
                 finishImage(rec.payload);
                 continue;
             }
+            if (h.packetType == PacketType.IDENTIFICATIONS_TABLE) {
+                decodeIdentificationsTable(rec.payload);
+                continue;
+            }
+            if (h.packetType == PacketType.QUANTIFICATIONS_TABLE) {
+                decodeQuantificationsTable(rec.payload);
+                continue;
+            }
             if (h.packetType == PacketType.END_OF_DATASET) continue;
             if (h.packetType == PacketType.END_OF_STREAM) break;
             // Annotation / Provenance / Chromatogram / Protection: skipped in M67.
@@ -407,7 +428,12 @@ public final class TransportReader implements AutoCloseable {
         // would then fail to open signal_channels lazily).
         SpectralDataset created = SpectralDataset.create(
             outputPath, title, isa, runs, genomicRuns,
-            List.of(), List.of(),
+            // v0.11 Task 1.8: pass collected IDENTIFICATIONS_TABLE
+            // and QUANTIFICATIONS_TABLE rows into create so the
+            // resulting on-disk file carries the round-tripped
+            // identifications + quantifications tables.
+            new ArrayList<>(collectedIdentifications),
+            new ArrayList<>(collectedQuantifications),
             // v0.11 Task 1.6: pass collected DATASET_PROVENANCE records
             // into create so the resulting on-disk file carries the
             // round-tripped provenance chain.
@@ -534,6 +560,36 @@ public final class TransportReader implements AutoCloseable {
         // they cannot themselves contain commas. Plain split.
         String[] parts = csv.split(",", -1);
         return java.util.Arrays.asList(parts);
+    }
+
+    // ---------------------------------------------------------- v0.11 §4.19 / §4.20
+
+    /** v0.11 Task 1.8: decode an IDENTIFICATIONS_TABLE (0x16) payload
+     *  per transport-spec §4.19 — uint32 IPC length, then that many
+     *  bytes of an Apache Arrow IPC stream. The decoded rows append to
+     *  {@link #collectedIdentifications} so multiple 0x16 packets
+     *  accumulate in emission order (spec §5.4 step 6 says "zero or
+     *  more"). */
+    private void decodeIdentificationsTable(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        long ipcLenLong = bb.getInt() & 0xFFFFFFFFL;
+        int ipcLen = (int) ipcLenLong;
+        byte[] ipc = new byte[ipcLen];
+        bb.get(ipc);
+        collectedIdentifications.addAll(ArrowIpcCodec.decodeIdentifications(ipc));
+    }
+
+    /** v0.11 Task 1.8: decode a QUANTIFICATIONS_TABLE (0x17) payload
+     *  per transport-spec §4.20 — identical wire shape to §4.19 with
+     *  a distinct dispatch. Rows append to
+     *  {@link #collectedQuantifications}. */
+    private void decodeQuantificationsTable(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        long ipcLenLong = bb.getInt() & 0xFFFFFFFFL;
+        int ipcLen = (int) ipcLenLong;
+        byte[] ipc = new byte[ipcLen];
+        bb.get(ipc);
+        collectedQuantifications.addAll(ArrowIpcCodec.decodeQuantifications(ipc));
     }
 
 

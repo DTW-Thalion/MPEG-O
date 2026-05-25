@@ -5,7 +5,9 @@
 package global.thalion.ttio.transport;
 
 import global.thalion.ttio.FeatureFlags;
+import global.thalion.ttio.Identification;
 import global.thalion.ttio.MSImage;
+import global.thalion.ttio.Quantification;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.hdf5.Hdf5File;
@@ -125,6 +127,61 @@ public final class FixtureBuilder {
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study")) {
             image.writeTo(Hdf5Provider.adapterForGroup(study));
+        }
+        return target;
+    }
+
+    /**
+     * Produce a {@code .tio} containing a small list of
+     * {@link Identification} rows and nothing else (no runs, no
+     * genomic runs, no references, no image, no quants, no
+     * provenance). Used by the Task 1.8 transport-spec conformance
+     * suite to exercise {@code IDENTIFICATIONS_TABLE} (0x16)
+     * round-tripping on its own.
+     *
+     * <p>The rows are deterministic and match the Arrow IPC schema
+     * exposed by {@link ArrowIpcCodec} verbatim.</p>
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildIdentificationsOnly(Path target) throws Exception {
+        List<Identification> ids = List.of(
+            new Identification("run1", 42, "CompoundA", 0.91,
+                List.of("evidence1", "evidence2")),
+            new Identification("run1", 43, "CompoundB", 0.85,
+                List.of("evidence3"))
+        );
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "ids_only", "",
+                List.of(), ids, List.of(), List.of())) {
+            // No further writes needed.
+        }
+        return target;
+    }
+
+    /**
+     * Produce a {@code .tio} containing a small list of
+     * {@link Quantification} rows and nothing else (no runs, no
+     * genomic runs, no references, no image, no ids, no
+     * provenance). Used by the Task 1.8 transport-spec conformance
+     * suite to exercise {@code QUANTIFICATIONS_TABLE} (0x17)
+     * round-tripping on its own.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildQuantificationsOnly(Path target) throws Exception {
+        List<Quantification> quants = List.of(
+            new Quantification("CompoundA", "sample-1", 12.5,
+                "intensity-sum", "counts"),
+            new Quantification("CompoundB", "sample-1", 7.3,
+                "intensity-sum", "counts")
+        );
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "quants_only", "",
+                List.of(), List.of(), quants, List.of())) {
+            // No further writes needed.
         }
         return target;
     }

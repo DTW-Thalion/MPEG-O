@@ -6,9 +6,11 @@ package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.Identification;
 import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.Quantification;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
@@ -556,6 +558,69 @@ public final class TransportWriter implements AutoCloseable {
         };
     }
 
+    // ----------------------------------------------- v0.11 §4.19 / §4.20
+
+    /**
+     * v0.11 Task 1.8: emit an {@code IDENTIFICATIONS_TABLE} (0x16)
+     * packet carrying the full identifications table as a single
+     * length-prefixed Apache Arrow IPC stream. Wire layout per
+     * transport-spec §4.19:
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC stream
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+     * IPC stream carries its own schema, row count, and null bitmaps,
+     * so no per-row TLV envelope is needed. Empty lists MUST NOT
+     * invoke this method — callers (see {@link #writeDataset}) gate on
+     * {@code !list.isEmpty()} per §5.4 step 6 ("zero or more").</p>
+     */
+    public void writeIdentifications(List<Identification> identifications)
+            throws IOException {
+        if (identifications == null) {
+            throw new IllegalArgumentException(
+                "writeIdentifications: identifications must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeIdentifications(identifications);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.IDENTIFICATIONS_TABLE, buf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 1.8: emit a {@code QUANTIFICATIONS_TABLE} (0x17)
+     * packet carrying the full quantifications table as a single
+     * length-prefixed Apache Arrow IPC stream. Wire layout per
+     * transport-spec §4.20 — identical shape to §4.19 but with a
+     * distinct packet type so receivers can dispatch without parsing
+     * the IPC payload first.
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+     * lists MUST NOT invoke this method (§5.4 step 6).</p>
+     */
+    public void writeQuantifications(List<Quantification> quantifications)
+            throws IOException {
+        if (quantifications == null) {
+            throw new IllegalArgumentException(
+                "writeQuantifications: quantifications must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeQuantifications(quantifications);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.QUANTIFICATIONS_TABLE, buf.array(), 0, 0);
+    }
+
     public void writeEndOfDataset(int datasetId, long finalAUSequence) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) (datasetId & 0xFFFF));
@@ -583,15 +648,17 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
-        // Task 1.4/1.5/1.6/1.7: detect v0.11 content (references +
-        // encryption algorithm + dataset provenance + image cube
-        // today; subjects, samples, identifications, quantifications
-        // land in subsequent tasks at the same prelude insertion
-        // point per §5.4 ordering).
+        // Task 1.4/1.5/1.6/1.7/1.8: detect v0.11 content (references +
+        // encryption algorithm + dataset provenance + image cube +
+        // identifications/quantifications tables today; subjects,
+        // samples land in subsequent tasks at the same prelude
+        // insertion point per §5.4 ordering).
         boolean v011 = !dataset.references().isEmpty()
                     || dataset.isEncrypted()
                     || !dataset.provenanceRecords().isEmpty()
-                    || dataset.image() != null;
+                    || dataset.image() != null
+                    || !dataset.identifications().isEmpty()
+                    || !dataset.quantifications().isEmpty();
         if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
             features.add(PacketType.TRANSPORT_V0_11_FEATURE);
         }
@@ -599,17 +666,16 @@ public final class TransportWriter implements AutoCloseable {
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
 
-        // Task 1.4/1.5/1.6/1.7: v0.11 prelude -- per §5.4 ordering,
-        // v0.11 sections come BEFORE the v0.10 dataset/run sections,
-        // and the sub-sections appear in this order:
+        // Task 1.4/1.5/1.6/1.7/1.8: v0.11 prelude -- per §5.4
+        // ordering, v0.11 sections come BEFORE the v0.10 dataset/run
+        // sections, and the sub-sections appear in this order:
         //   §5.4.1 ENCRYPTION_ALGORITHM
         //   §5.4.2 DATASET_PROVENANCE
         //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA
         //   §5.4.4 reference groups
         //   §5.4.5 image cubes
         //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
-        // Subjects, samples, identifications, quantifications land
-        // here in Tasks 1.8-1.9.
+        // Subjects and samples land here in Task 1.9.
         if (v011) {
             if (dataset.isEncrypted()) {
                 writeEncryptionAlgorithm(dataset.encryptedAlgorithm());
@@ -622,6 +688,14 @@ public final class TransportWriter implements AutoCloseable {
             }
             if (dataset.image() != null) {
                 writeImage(dataset.image());
+            }
+            // §5.4 step 6: identifications first, then quantifications.
+            // Empty lists emit NO packet (spec says "zero or more").
+            if (!dataset.identifications().isEmpty()) {
+                writeIdentifications(dataset.identifications());
+            }
+            if (!dataset.quantifications().isEmpty()) {
+                writeQuantifications(dataset.quantifications());
             }
         }
 
