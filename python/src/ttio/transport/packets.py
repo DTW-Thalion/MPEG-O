@@ -40,6 +40,22 @@ class PacketType(IntEnum):
     BLOB_V2_MATE_INFO = 0x09
     BLOB_V2_REF_DIFF = 0x0A
     BLOB_V2_NAME_TOK = 0x0B
+    # ---- v0.11 (transport-spec-complete-coverage 2026-05-25) ----
+    # See transport-spec §4.13-§4.23. Emitted only when the
+    # StreamHeader features list contains "transport_v0_11".
+    # Java parity: global.thalion.ttio.transport.PacketType.
+    REFERENCE_GROUP_HEADER = 0x10
+    REFERENCE_CHROMOSOME   = 0x11
+    END_OF_REFERENCE_GROUP = 0x12
+    IMAGE_HEADER           = 0x13
+    IMAGE_PIXEL            = 0x14
+    END_OF_IMAGE           = 0x15
+    IDENTIFICATIONS_TABLE  = 0x16
+    QUANTIFICATIONS_TABLE  = 0x17
+    DATASET_PROVENANCE     = 0x18
+    SUBJECT_METADATA       = 0x19
+    SAMPLE_METADATA        = 0x1A
+    ENCRYPTION_ALGORITHM   = 0x1B
     END_OF_STREAM = 0xFF
 
 
@@ -47,6 +63,11 @@ class PacketType(IntEnum):
 # codec blobs ride on the wire. Receivers without bulk-mode support
 # MUST refuse the stream (no opt_ prefix → required).
 BULK_MODE_V2_BLOBS_FEATURE = "bulk_mode_v2_blobs"
+
+# v0.11 feature flag — appears in StreamHeader.features when any of
+# the 0x10-0x1B packet types ride on the wire. Receivers without
+# v0.11 support MUST refuse the stream (no opt_ prefix → required).
+TRANSPORT_V0_11_FEATURE = "transport_v0_11"
 
 
 class PacketFlag(IntFlag):
