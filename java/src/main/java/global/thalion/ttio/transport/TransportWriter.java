@@ -7,6 +7,7 @@ package global.thalion.ttio.transport;
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
 import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
@@ -242,6 +243,95 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.ENCRYPTION_ALGORITHM, buf.array(), 0, 0);
     }
 
+    // ----------------------------------------------- v0.11 §4.21
+
+    /**
+     * v0.11 Task 1.6: emit a {@code DATASET_PROVENANCE} (0x18) packet
+     * carrying the dataset-level provenance chain (format-spec §6.3).
+     * One packet carries all records — see transport-spec §4.21 for
+     * the wire layout:
+     *
+     * <pre>
+     * record_count:        uint32
+     * # repeated record_count times:
+     * timestamp_unix:      int64
+     * software_length:     uint16, software bytes[..]   (UTF-8)
+     * parameters_length:   uint16, parameters_json[..]  (UTF-8 JSON)
+     * input_refs_length:   uint16, input_refs_csv[..]   (UTF-8 CSV)
+     * output_refs_length:  uint16, output_refs_csv[..]  (UTF-8 CSV)
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+     * input_refs / output_refs lists ride as comma-joined UTF-8 — a
+     * single empty string for an empty list (no separators).</p>
+     *
+     * <p>Distinct from the per-run {@code Provenance} (0x06) packet,
+     * which carries one JSON record per packet.</p>
+     */
+    public void writeDatasetProvenance(List<ProvenanceRecord> records)
+            throws IOException {
+        if (records == null) {
+            throw new IllegalArgumentException(
+                "writeDatasetProvenance: records must not be null");
+        }
+        // Pre-compute UTF-8 byte arrays so we can size the buffer
+        // exactly. Mirrors the StreamHeader/DatasetHeader emit pattern.
+        byte[][] softwareBytes = new byte[records.size()][];
+        byte[][] paramsBytes   = new byte[records.size()][];
+        byte[][] inputsBytes   = new byte[records.size()][];
+        byte[][] outputsBytes  = new byte[records.size()][];
+        int size = 4;  // record_count
+        for (int i = 0; i < records.size(); i++) {
+            ProvenanceRecord r = records.get(i);
+            softwareBytes[i] = nz(r.software())
+                .getBytes(StandardCharsets.UTF_8);
+            paramsBytes[i]   = r.parametersJson()
+                .getBytes(StandardCharsets.UTF_8);
+            inputsBytes[i]   = csvJoin(r.inputRefs())
+                .getBytes(StandardCharsets.UTF_8);
+            outputsBytes[i]  = csvJoin(r.outputRefs())
+                .getBytes(StandardCharsets.UTF_8);
+            for (byte[] b : new byte[][]{softwareBytes[i], paramsBytes[i],
+                                          inputsBytes[i], outputsBytes[i]}) {
+                if (b.length > 0xFFFF) {
+                    throw new IOException(
+                        "DATASET_PROVENANCE: per-field length " + b.length
+                        + " exceeds uint16 max");
+                }
+            }
+            size += 8                          // timestamp_unix
+                  + 2 + softwareBytes[i].length
+                  + 2 + paramsBytes[i].length
+                  + 2 + inputsBytes[i].length
+                  + 2 + outputsBytes[i].length;
+        }
+        ByteBuffer buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(records.size());
+        for (int i = 0; i < records.size(); i++) {
+            ProvenanceRecord r = records.get(i);
+            buf.putLong(r.timestampUnix());
+            buf.putShort((short) (softwareBytes[i].length & 0xFFFF));
+            buf.put(softwareBytes[i]);
+            buf.putShort((short) (paramsBytes[i].length & 0xFFFF));
+            buf.put(paramsBytes[i]);
+            buf.putShort((short) (inputsBytes[i].length & 0xFFFF));
+            buf.put(inputsBytes[i]);
+            buf.putShort((short) (outputsBytes[i].length & 0xFFFF));
+            buf.put(outputsBytes[i]);
+        }
+        emit(PacketType.DATASET_PROVENANCE, buf.array(), 0, 0);
+    }
+
+    private static String csvJoin(List<String> refs) {
+        if (refs == null || refs.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < refs.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(refs.get(i));
+        }
+        return sb.toString();
+    }
+
     // ----------------------------------------------- v0.11 §4.13–§4.15
 
     /**
@@ -356,12 +446,14 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
-        // Task 1.4/1.5: detect v0.11 content (references + encryption
-        // algorithm today; subjects, samples, dataset_provenance,
-        // images, identifications, quantifications land in subsequent
-        // tasks at the same prelude insertion point per §5.4 ordering).
+        // Task 1.4/1.5/1.6: detect v0.11 content (references +
+        // encryption algorithm + dataset provenance today; subjects,
+        // samples, images, identifications, quantifications land in
+        // subsequent tasks at the same prelude insertion point per
+        // §5.4 ordering).
         boolean v011 = !dataset.references().isEmpty()
-                    || dataset.isEncrypted();
+                    || dataset.isEncrypted()
+                    || !dataset.provenanceRecords().isEmpty();
         if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
             features.add(PacketType.TRANSPORT_V0_11_FEATURE);
         }
@@ -369,14 +461,23 @@ public final class TransportWriter implements AutoCloseable {
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
 
-        // Task 1.4/1.5: v0.11 prelude -- per §5.4 ordering, v0.11
-        // sections come BEFORE the v0.10 dataset/run sections, and
-        // ENCRYPTION_ALGORITHM (§5.4.1) comes BEFORE reference groups
-        // (§5.4.4). Provenance, subjects, samples, images,
-        // identifications, quantifications land here in Tasks 1.6-1.9.
+        // Task 1.4/1.5/1.6: v0.11 prelude -- per §5.4 ordering, v0.11
+        // sections come BEFORE the v0.10 dataset/run sections, and the
+        // sub-sections appear in this order:
+        //   §5.4.1 ENCRYPTION_ALGORITHM
+        //   §5.4.2 DATASET_PROVENANCE
+        //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA
+        //   §5.4.4 reference groups
+        //   §5.4.5 image cubes
+        //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
+        // Subjects, samples, images, identifications, quantifications
+        // land here in Tasks 1.7-1.9.
         if (v011) {
             if (dataset.isEncrypted()) {
                 writeEncryptionAlgorithm(dataset.encryptedAlgorithm());
+            }
+            if (!dataset.provenanceRecords().isEmpty()) {
+                writeDatasetProvenance(dataset.provenanceRecords());
             }
             for (ReferenceImport ref : dataset.references().values()) {
                 writeReferenceGroup(ref);
