@@ -31,16 +31,35 @@ public final class PacketHeader {
     /** payload carries encrypted AU semantic header. */
     public static final int FLAG_ENCRYPTED_HEADER = 0x0008;
 
+    /** Decoded packet type, or {@code null} when the wire byte is not
+     *  a recognised {@link PacketType} (forward-compat skip-unknown
+     *  path; see transport-spec §6). The raw byte is always available
+     *  via {@link #packetTypeByte()}. */
     public final PacketType packetType;
     public final int flags;
     public final int datasetId;
     public final long auSequence;
     public final long payloadLength;
     public final long timestampNs;
+    /** Raw wire byte for the packet type. Equal to
+     *  {@code packetType.wire()} when {@link #packetType} is non-null;
+     *  otherwise this is the unknown byte that was tolerated and
+     *  skipped by the reader. */
+    private final int packetTypeByte;
 
     public PacketHeader(PacketType packetType, int flags, int datasetId,
                          long auSequence, long payloadLength, long timestampNs) {
+        this(packetType, packetType.wire() & 0xFF, flags, datasetId,
+             auSequence, payloadLength, timestampNs);
+    }
+
+    /** Internal constructor preserving the raw type byte. Used by
+     *  {@link #decode} when the byte is not a known {@link PacketType}. */
+    PacketHeader(PacketType packetType, int packetTypeByte, int flags,
+                  int datasetId, long auSequence, long payloadLength,
+                  long timestampNs) {
         this.packetType = packetType;
+        this.packetTypeByte = packetTypeByte & 0xFF;
         this.flags = flags;
         this.datasetId = datasetId;
         this.auSequence = auSequence;
@@ -48,11 +67,15 @@ public final class PacketHeader {
         this.timestampNs = timestampNs;
     }
 
+    /** Raw wire byte for the packet type. Always populated, even when
+     *  {@link #packetType} is {@code null}. */
+    public int packetTypeByte() { return packetTypeByte; }
+
     public byte[] encode() {
         ByteBuffer buf = ByteBuffer.allocate(HEADER_SIZE).order(ByteOrder.LITTLE_ENDIAN);
         buf.put(MAGIC);
         buf.put(VERSION);
-        buf.put((byte) (packetType.wire() & 0xFF));
+        buf.put((byte) (packetTypeByte & 0xFF));
         buf.putShort((short) (flags & 0xFFFF));
         buf.putShort((short) (datasetId & 0xFFFF));
         buf.putInt((int) (auSequence & 0xFFFFFFFFL));
@@ -82,7 +105,11 @@ public final class PacketHeader {
         long auSequence = buf.getInt() & 0xFFFFFFFFL;
         long payloadLength = buf.getInt() & 0xFFFFFFFFL;
         long timestampNs = buf.getLong();
-        return new PacketHeader(PacketType.fromWire(pt), flags, datasetId,
+        // Forward-compat: tolerate unknown packet type bytes by
+        // leaving packetType null. The reader's outer loop logs +
+        // skips the payload (see TransportReader.readAllPackets).
+        PacketType type = PacketType.fromWireOrNull(pt);
+        return new PacketHeader(type, pt, flags, datasetId,
                 auSequence, payloadLength, timestampNs);
     }
 }

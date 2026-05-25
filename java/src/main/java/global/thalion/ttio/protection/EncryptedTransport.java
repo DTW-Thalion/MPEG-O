@@ -434,6 +434,9 @@ public final class EncryptedTransport {
 
         for (TransportReader.PacketRecord rec : packets) {
             PacketType t = rec.header.packetType;
+            // Forward-compat: skip unknown packet types (their bytes
+            // were already consumed by the reader's outer loop).
+            if (t == null) continue;
             switch (t) {
                 case STREAM_HEADER -> {
                     ParsedStreamHeader h = parseStreamHeader(rec.payload);

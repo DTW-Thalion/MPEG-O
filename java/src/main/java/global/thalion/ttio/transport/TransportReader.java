@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 /**
  * Deserialises a transport byte stream into {@link PacketRecord} values
@@ -38,6 +39,9 @@ import java.util.Map;
  * {@code TTIOTransportReader}.</p>
  */
 public final class TransportReader implements AutoCloseable {
+
+    private static final Logger LOG =
+        Logger.getLogger(TransportReader.class.getName());
 
     private final InputStream in;
     private final boolean ownsStream;
@@ -96,14 +100,30 @@ public final class TransportReader implements AutoCloseable {
                 int expected = ByteBuffer.wrap(crcBytes).order(ByteOrder.LITTLE_ENDIAN).getInt();
                 int actual = Crc32c.compute(payload);
                 if (expected != actual) {
-                    throw new IOException("CRC-32C mismatch on packet type "
-                            + header.packetType + ": expected=" + Integer.toHexString(expected)
+                    throw new IOException("CRC-32C mismatch on packet type 0x"
+                            + Integer.toHexString(header.packetTypeByte())
+                            + ": expected=" + Integer.toHexString(expected)
                             + ", got=" + Integer.toHexString(actual));
                 }
+            }
+            // Forward-compat (transport-spec §6): tolerate unknown
+            // packet types so v0.10 readers can ingest v0.11+ streams.
+            // The header was length-prefixed so we already consumed
+            // the payload (and CRC if present) correctly — just log
+            // and continue iterating past it.
+            if (header.packetType == null) {
+                LOG.fine("skipping unknown packet type 0x"
+                    + Integer.toHexString(header.packetTypeByte()));
             }
             out.add(new PacketRecord(header, payload));
             if (header.packetType == PacketType.END_OF_STREAM) return out;
         }
+    }
+
+    /** Test-only accessor mirroring {@link #readAllPackets} for the
+     *  skip-unknown forward-compat tests. Package-private. */
+    List<PacketRecord> recordsForTest() throws IOException {
+        return readAllPackets();
     }
 
     // ---------------------------------------------------------- materialize
@@ -125,6 +145,10 @@ public final class TransportReader implements AutoCloseable {
 
         for (PacketRecord rec : packets) {
             PacketHeader h = rec.header;
+            // Forward-compat: skip packets whose type byte wasn't a
+            // known PacketType. readAllPackets already consumed the
+            // bytes; we just ignore the record for materialization.
+            if (h.packetType == null) continue;
             ByteBuffer buf = ByteBuffer.wrap(rec.payload).order(ByteOrder.LITTLE_ENDIAN);
 
             if (h.packetType == PacketType.STREAM_HEADER) {
