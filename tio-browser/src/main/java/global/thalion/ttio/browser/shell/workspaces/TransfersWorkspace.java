@@ -33,12 +33,6 @@ import javafx.stage.Window;
  * <p>Layout: a toolbar row at the top (Start new transfer, filter
  * ChoiceBox, Clear completed) and a {@link TableView} bound to
  * {@link TransferManager#transfers()} in the centre.</p>
- *
- * <p>TODO (Stage 7 polish): add a "Started" column — Transfer does
- * not carry a creation timestamp yet; the ID (UUID) is used as a
- * stand-in. Once a {@code createdAt} instant is added to
- * {@link Transfer}, replace the truncated-ID column with a formatted
- * timestamp.</p>
  */
 public final class TransfersWorkspace implements Workspace {
 
@@ -138,17 +132,17 @@ public final class TransfersWorkspace implements Workspace {
             new ReadOnlyStringWrapper(c.getValue().state().name()));
         stateCol.setPrefWidth(100);
 
-        // TODO (Stage 7): replace with a formatted createdAt timestamp once
-        // Transfer carries one. For now the truncated UUID disambiguates rows.
-        TableColumn<Transfer, String> idCol = new TableColumn<>("ID");
-        idCol.setCellValueFactory(c -> {
-            String id = c.getValue().id();
-            return new ReadOnlyStringWrapper(
-                id.length() > 8 ? id.substring(0, 8) : id);
-        });
-        idCol.setPrefWidth(80);
+        TableColumn<Transfer, String> startedCol = new TableColumn<>("Started");
+        startedCol.setCellValueFactory(c ->
+            new ReadOnlyStringWrapper(Transfer.formatTimestamp(c.getValue().createdAtEpochMs())));
+        startedCol.setPrefWidth(90);
 
-        table.getColumns().setAll(dirCol, nameCol, uriCol, progCol, stateCol, idCol);
+        TableColumn<Transfer, String> finishedCol = new TableColumn<>("Finished");
+        finishedCol.setCellValueFactory(c ->
+            new ReadOnlyStringWrapper(Transfer.formatTimestamp(c.getValue().finishedAtEpochMs())));
+        finishedCol.setPrefWidth(90);
+
+        table.getColumns().setAll(dirCol, nameCol, uriCol, progCol, stateCol, startedCol, finishedCol);
     }
 
     private static String basename(String path) {
