@@ -124,6 +124,7 @@ extern void testC0StandaloneKeyWrap(void);
 extern void testC2aServerKekId(void);
 extern void testTransportPacketTypeV011(void);
 extern void testTransportReaderSkipUnknown(void);
+extern void testTransportWriterReference(void);
 extern void testArrowIpcCodec(void);
 
 int main(int argc, const char *argv[])
@@ -620,6 +621,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11: reader skips unknown packet types (forward compat)")
             testTransportReaderSkipUnknown();
         END_SET("transport v0.11: reader skips unknown packet types (forward compat)")
+
+        START_SET("transport v0.11 Task 3.2: writeReferenceGroup: emits 0x10/0x11/0x12")
+            testTransportWriterReference();
+        END_SET("transport v0.11 Task 3.2: writeReferenceGroup: emits 0x10/0x11/0x12")
 
         START_SET("transport v0.11: TTIOArrowIpcCodec round-trip (IDENTIFICATIONS_TABLE 0x16 + QUANTIFICATIONS_TABLE 0x17)")
             testArrowIpcCodec();

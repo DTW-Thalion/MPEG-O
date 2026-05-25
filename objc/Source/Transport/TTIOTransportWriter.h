@@ -11,6 +11,7 @@
 @class TTIOSpectralDataset;
 @class TTIOAcquisitionRun;
 @class TTIOGenomicRun;
+@class TTIOReferenceImport;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -156,6 +157,34 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)writeBlobV2NameTokWithDatasetId:(uint16_t)datasetId
                                     blob:(NSData *)blob
                                     error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Stage 1 / Task 3.2: emit a <code>TTIOReferenceImport</code>
+ * as the packet sequence
+ * <code>REFERENCE_GROUP_HEADER (0x10) -&gt; N x REFERENCE_CHROMOSOME
+ * (0x11) -&gt; END_OF_REFERENCE_GROUP (0x12)</code>.
+ *
+ * <p>Wire layout matches transport-spec §4.13-§4.15. All multi-byte
+ * integers are LITTLE-ENDIAN (spec §1.7). The chromosome index rides
+ * in the packet header's <code>auSequence</code> field (0-based). The
+ * MD5 hex string from
+ * <code>-[TTIOReferenceImport md5Hex]</code> is emitted verbatim as
+ * 32 ASCII bytes.</p>
+ *
+ * <p>The encoding byte on each chromosome record is 0 (uncompressed
+ * UINT8) when the raw sequence is shorter than 4 KiB, otherwise 1
+ * (zlib via <code>compress2</code> with the default compression
+ * level).</p>
+ *
+ * <p>Reader-side materialisation is added by Task 3.3; this method
+ * only emits the wire bytes. Java parity:
+ * <code>TransportWriter.writeReferenceGroup(ReferenceImport)</code>
+ * (commit <code>622aa8bd</code>). Python parity:
+ * <code>TransportWriter.write_reference_group</code> (commit
+ * <code>ec529a8b</code>).</p>
+ */
+- (BOOL)writeReferenceGroup:(TTIOReferenceImport *)ref
+                       error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 
