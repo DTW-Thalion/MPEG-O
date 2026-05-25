@@ -283,7 +283,24 @@ public final class ReferenceImport {
      * @since 1.1.0
      */
     public void writeToDataset(SpectralDataset dataset, boolean overwrite) {
+        writeToDataset(dataset, overwrite,
+            global.thalion.ttio.io.ProgressSink.discard());
+    }
+
+    /**
+     * Overload of {@link #writeToDataset(SpectralDataset, boolean)}
+     * that fires {@code progress.onProgress(i+1, totalChromosomes)}
+     * after each chromosome's HDF5 group + attributes + dataset are
+     * written. Slow paths (whale + plant genomes with thousands of
+     * contigs) report visible mid-stream progress; the fast paths
+     * (single-chromosome refs) fire once.
+     *
+     * @since 1.3.0
+     */
+    public void writeToDataset(SpectralDataset dataset, boolean overwrite,
+                                 global.thalion.ttio.io.ProgressSink progress) {
         Objects.requireNonNull(dataset, "dataset");
+        Objects.requireNonNull(progress, "progress");
         StorageProvider provider = dataset.provider();
         if (provider == null || !provider.isOpen()) {
             throw new IllegalStateException(
@@ -330,24 +347,45 @@ public final class ReferenceImport {
                             }
                             List<String> sortedNames = new ArrayList<>(byName.keySet());
                             Collections.sort(sortedNames);
+                            long total = sortedNames.size();
+                            progress.onProgress(0L, total);
+                            long doneCount = 0L;
+                            // Perf A: small sequences (mitochondrial,
+                            // plasmid, short scaffolds) get contiguous
+                            // uncompressed storage instead of chunked
+                            // ZLIB. For ACGT runs < ~4 KB, deflate's
+                            // header + b-tree-chunk metadata overhead
+                            // exceeds the compression gain, and avoiding
+                            // chunked layout drops the per-dataset
+                            // metadata cost from ~5 native calls to ~1.
+                            final int SMALL_SEQ_BYTES = 4096;
                             for (String chromName : sortedNames) {
                                 byte[] seq = byName.get(chromName);
                                 try (StorageGroup c = chromsGrp.createGroup(chromName)) {
                                     c.setAttribute("length", (long) seq.length);
                                     StorageDataset ds;
-                                    try {
-                                        ds = c.createDataset("data",
-                                            Enums.Precision.UINT8, seq.length,
-                                            65536, Enums.Compression.ZLIB, 6);
-                                    } catch (UnsupportedOperationException e) {
+                                    if (seq.length < SMALL_SEQ_BYTES) {
                                         ds = c.createDataset("data",
                                             Enums.Precision.UINT8, seq.length,
                                             0, Enums.Compression.NONE, 0);
+                                    } else {
+                                        try {
+                                            ds = c.createDataset("data",
+                                                Enums.Precision.UINT8, seq.length,
+                                                Math.min(65536, seq.length),
+                                                Enums.Compression.ZLIB, 6);
+                                        } catch (UnsupportedOperationException e) {
+                                            ds = c.createDataset("data",
+                                                Enums.Precision.UINT8, seq.length,
+                                                0, Enums.Compression.NONE, 0);
+                                        }
                                     }
                                     try (StorageDataset closeMe = ds) {
                                         closeMe.writeAll(seq);
                                     }
                                 }
+                                doneCount++;
+                                progress.onProgress(doneCount, total);
                             }
                         }
                     }

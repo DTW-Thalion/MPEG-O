@@ -43,6 +43,11 @@ public final class TransfersWorkspace implements Workspace {
     private final TableView<Transfer> table = new TableView<>();
     private final FilteredList<Transfer> filtered;
     private final Window owner;
+    /** Optional: when set, supplies the currently-open local .tio path
+     *  so the Start-new-transfer dialog can pre-fill the source field
+     *  with the file the user is most likely about to upload. */
+    private java.util.function.Supplier<java.nio.file.Path> sourceSupplier =
+        () -> null;
 
     public TransfersWorkspace(Window owner) {
         this.owner = owner;
@@ -61,10 +66,41 @@ public final class TransfersWorkspace implements Workspace {
         root.setTop(topRow);
         root.setCenter(table);
 
-        startNew.setOnAction(e ->
-            new TransferStartDialog(owner,
-                ConnectionManager.instance().isConnected()).show());
+        startNew.setOnAction(e -> {
+            TransferStartDialog dlg = new TransferStartDialog(owner,
+                ConnectionManager.instance().isConnected());
+            java.nio.file.Path suggested = sourceSupplier.get();
+            if (suggested != null) dlg.prefillSource(suggested);
+            dlg.show();
+        });
         clearCompleted.setOnAction(e -> TransferManager.instance().clearCompleted());
+
+        // The Progress / State / Finished columns expose plain
+        // (non-observable) Transfer fields via ReadOnlyStringWrapper
+        // factories. JavaFX TableView only re-invokes cellValueFactory
+        // when the items list changes, not when fields inside an item
+        // mutate — so per-byte progress updates never reach the row
+        // without a manual refresh. Subscribe to the manager's
+        // progress and queue listeners, coalesce, and refresh().
+        java.util.concurrent.atomic.AtomicBoolean refreshPending =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        Runnable scheduleRefresh = () -> {
+            if (refreshPending.compareAndSet(false, true)) {
+                javafx.application.Platform.runLater(() -> {
+                    refreshPending.set(false);
+                    table.refresh();
+                });
+            }
+        };
+        TransferManager.instance().addProgressListener(r -> scheduleRefresh.run());
+        TransferManager.instance().addQueueListener(scheduleRefresh::run);
+    }
+
+    /** Wires a supplier the workspace consults on Start-new-transfer
+     *  to pre-fill the source field with a sensible default. */
+    public void setSourceSupplier(
+            java.util.function.Supplier<java.nio.file.Path> supplier) {
+        this.sourceSupplier = supplier == null ? () -> null : supplier;
     }
 
     // ---- Workspace contract ----

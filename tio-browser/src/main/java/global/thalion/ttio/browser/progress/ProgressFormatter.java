@@ -18,6 +18,19 @@ public final class ProgressFormatter {
                 + Units.humanDuration(quietSec) + " ago";
         }
 
+        // At or near 100% the source-bytes-consumed has caught up to the
+        // total, but the underlying call hasn't returned yet (e.g. HDF5
+        // file close is still flushing). Show "finalizing…" instead of
+        // a misleading rate/ETA that would compute to 0 B/s.
+        if (r.isDeterminate() && r.percent() >= 0.99) {
+            String pair;
+            if (r.bytesTotal() > 0L) pair = rawBytesPair(r);
+            else pair = Units.humanCount(r.unitsDone()) + " / "
+                      + Units.humanCount(r.unitsTotal()) + " AUs";
+            return String.format(Locale.ROOT, "%.1f%% %s %s %s finalizing%s",
+                r.percent() * 100.0, DOT, pair, DOT, ELL);
+        }
+
         boolean haveBytesTotal = r.bytesTotal() > 0L;
         boolean haveUnitsTotal = r.unitsTotal() > 0L;
         boolean haveAnyTotal   = haveBytesTotal || haveUnitsTotal;

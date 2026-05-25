@@ -74,7 +74,7 @@ public class FastaReader {
         List<String> names = new ArrayList<>();
         List<byte[]> seqs  = new ArrayList<>();
         try (InputStream in = openMaybeGzip(path)) {
-            iterateRecords(in, (name, seq) -> {
+            iterateRecords(unescapeLiteralNewlines(in, path), (name, seq) -> {
                 names.add(name);
                 seqs.add(seq);
             });
@@ -111,7 +111,7 @@ public class FastaReader {
         List<Integer> lengthsL = new ArrayList<>();
         long[] running = { 0L };
         try (InputStream in = openMaybeGzip(path)) {
-            iterateRecords(in, (name, seq) -> {
+            iterateRecords(unescapeLiteralNewlines(in, path), (name, seq) -> {
                 readNames.add(name);
                 offsetsL.add(running[0]);
                 lengthsL.add(seq.length);
@@ -165,6 +165,82 @@ public class FastaReader {
             return new GZIPInputStream(bis);
         }
         return bis;
+    }
+
+    /**
+     * Wrap {@code src} so any literal {@code 0x5C 0x6E} byte pair
+     * (backslash + ASCII 'n') is transparently emitted as a single
+     * 0x0A newline. Defends against FASTA files produced by buggy
+     * TSV-to-FASTA converters or shell scripts that embedded
+     * {@code \n} as a two-character separator between header and
+     * sequence body instead of a real line break — without the
+     * unescape, every record parses as an empty-sequence header
+     * line and downstream encoding silently produces an empty
+     * dataset with O(N) HDF5 overhead and zero real data.
+     *
+     * <p>Lone backslashes (not followed by ASCII 'n') are preserved
+     * verbatim. Logs a one-line WARNING per file on first detection
+     * so the user knows their input is malformed.</p>
+     *
+     * @since 1.3.0
+     */
+    static InputStream unescapeLiteralNewlines(InputStream src, Path path) {
+        return new LiteralNewlineUnescapingInputStream(src, path);
+    }
+
+    private static final class LiteralNewlineUnescapingInputStream
+            extends InputStream {
+
+        private final InputStream src;
+        private final Path path;
+        private int pushback = -1;
+        private boolean warned = false;
+
+        LiteralNewlineUnescapingInputStream(InputStream src, Path path) {
+            this.src  = src;
+            this.path = path;
+        }
+
+        @Override
+        public int read() throws IOException {
+            if (pushback != -1) {
+                int b = pushback;
+                pushback = -1;
+                return b;
+            }
+            int b = src.read();
+            if (b != '\\') return b;
+            int next = src.read();
+            if (next == 'n') {
+                if (!warned) {
+                    warned = true;
+                    java.util.logging.Logger
+                        .getLogger(FastaReader.class.getName())
+                        .warning("FASTA " + path + " contains literal "
+                            + "'\\n' byte pairs inside record lines; "
+                            + "treating each as a newline. This file is "
+                            + "malformed — regenerate with real LF "
+                            + "separators if you can.");
+                }
+                return '\n';
+            }
+            if (next != -1) pushback = next;
+            return '\\';
+        }
+
+        @Override
+        public int read(byte[] buf, int off, int len) throws IOException {
+            if (len <= 0) return 0;
+            int n = 0;
+            int b;
+            while (n < len && (b = read()) != -1) {
+                buf[off + n++] = (byte) b;
+            }
+            return n == 0 ? -1 : n;
+        }
+
+        @Override
+        public void close() throws IOException { src.close(); }
     }
 
     @FunctionalInterface

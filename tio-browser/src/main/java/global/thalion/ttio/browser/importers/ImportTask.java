@@ -34,7 +34,9 @@ import global.thalion.ttio.importers.SamReader;
 import global.thalion.ttio.importers.ThermoRawReader;
 import global.thalion.ttio.importers.WatersMassLynxReader;
 import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressReport;
 import global.thalion.ttio.browser.progress.ProgressTracker;
+import global.thalion.ttio.io.ProgressSink;
 import javafx.concurrent.Task;
 
 /**
@@ -62,7 +64,17 @@ public final class ImportTask extends Task<Void> {
     private final ImportFormatSpec spec;
     private final ImportConfig config;
     private volatile ProgressListener progressListener;
-    private ProgressTracker tracker;
+    /** Bytes-mode tracker, driven by the heartbeat ticker (fallback for
+     *  not-yet-instrumented formats). */
+    private ProgressTracker bytesTracker;
+    /** Units-mode tracker, driven by ProgressSink callbacks from
+     *  instrumented SDK calls (records / chromosomes / spectra). Built
+     *  lazily on first sink fire. */
+    private volatile ProgressTracker unitsTracker;
+    /** Set true by a ProgressSink when an instrumented format starts
+     *  reporting real units; the heartbeat ticker stands down. */
+    private final java.util.concurrent.atomic.AtomicBoolean sinkActive =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public ImportTask(ImportFormatSpec spec, ImportConfig config) {
         this.spec = spec;
@@ -76,9 +88,55 @@ public final class ImportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Importing " + spec.name + " from " + config.sourcePath);
-        long bytesTotal = Files.size(config.sourcePath);
-        tracker = new ProgressTracker("importing", bytesTotal, -1L, System.currentTimeMillis());
-        emit(0L);
+        long inputBytes = Files.size(config.sourcePath);
+        long startMs = System.currentTimeMillis();
+        // Fallback bytes-mode tracker for not-yet-instrumented formats.
+        // Heartbeat ticker polls target file size; SDK calls without a
+        // ProgressSink hook fall through to this path.
+        bytesTracker = new ProgressTracker(
+            "importing", inputBytes, -1L, startMs);
+        emitBytes(0L);
+        java.util.concurrent.atomic.AtomicBoolean done =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        Thread ticker = new Thread(() -> {
+            while (!done.get()) {
+                if (!sinkActive.get()) {
+                    long current = 0L;
+                    try {
+                        if (Files.exists(config.targetTio)) {
+                            current = Math.min(Files.size(config.targetTio), inputBytes);
+                        }
+                    } catch (Exception ignored) { /* file may flicker mid-write */ }
+                    emitBytes(current);
+                }
+                try { Thread.sleep(500L); }
+                catch (InterruptedException ie) { return; }
+            }
+        }, "import-progress-ticker");
+        ticker.setDaemon(true);
+        ticker.start();
+
+        // Sink supplied to instrumented SDK calls. First non-empty fire
+        // builds the units tracker; subsequent fires update it. Heartbeat
+        // sees sinkActive=true and stops polling output bytes.
+        ProgressSink sink = (recDone, recTotal) -> {
+            sinkActive.set(true);
+            ProgressTracker t = unitsTracker;
+            if (t == null && recTotal > 0L) {
+                t = new ProgressTracker(
+                    "importing", -1L, recTotal, startMs);
+                unitsTracker = t;
+            }
+            if (t == null) return;
+            ProgressReport r = t.sample(0L, recDone, System.currentTimeMillis());
+            ProgressListener l = progressListener;
+            if (l != null) l.onProgress(r);
+        };
+
+        long t0 = System.currentTimeMillis();
+        System.err.println("[ImportTask] start " + spec.name
+            + " source=" + config.sourcePath + " target=" + config.targetTio
+            + " inputBytes=" + inputBytes);
         try {
             switch (spec.name) {
             case "mzML"             -> importMzML();
@@ -87,7 +145,7 @@ public final class ImportTask extends Task<Void> {
             case "BAM"              -> importBamLike(spec.name);
             case "SAM"              -> importBamLike(spec.name);
             case "CRAM"             -> importBamLike(spec.name);
-            case "FASTA"            -> importFasta();
+            case "FASTA"            -> importFasta(sink);
             case "FASTQ"            -> importFastq();
             case "imzML"            -> importImzML();
             case "JCAMP-DX"         -> importJcampDx();
@@ -98,8 +156,18 @@ public final class ImportTask extends Task<Void> {
                 spec.name + " import not yet wired -- see "
                 + "tio-browser/README.md follow-ups.");
             }
-            emit(bytesTotal);
+            long t1 = System.currentTimeMillis();
+            System.err.println("[ImportTask] dispatch returned after "
+                + (t1 - t0) + " ms");
+            done.set(true);
+            try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
+            // For sink-instrumented paths the SDK already fired
+            // onProgress(total, total) at the last iteration. For the
+            // bytes-fallback path, emit the final 100%.
+            if (!sinkActive.get()) emitBytes(inputBytes);
         } finally {
+            done.set(true);
+            ticker.interrupt();
             updateMessage("Done.");
         }
         return null;
@@ -155,7 +223,7 @@ public final class ImportTask extends Task<Void> {
         writeGenomic(List.of(run));
     }
 
-    private void importFasta() throws Exception {
+    private void importFasta(ProgressSink sink) throws Exception {
         FastaReader r = new FastaReader(config.sourcePath);
         if (config.fastaTreatAs == ImportConfig.FastaTreatAs.REFERENCE) {
             ReferenceImport ref = r.readReference();
@@ -164,7 +232,7 @@ public final class ImportTask extends Task<Void> {
                 config.datasetTitle, "",
                 List.of(), List.of(), List.of(), List.of());
             try (ds) {
-                ref.writeToDataset(ds);
+                ref.writeToDataset(ds, /*overwrite=*/false, sink);
             }
         } else {
             WrittenGenomicRun run = r.readUnaligned(config.runName);
@@ -352,10 +420,10 @@ public final class ImportTask extends Task<Void> {
             flags);
     }
 
-    private void emit(long bytesDone) {
+    private void emitBytes(long bytesDone) {
         ProgressListener l = progressListener;
-        if (l == null || tracker == null) return;
-        l.onProgress(tracker.sample(bytesDone, 0L, System.currentTimeMillis()));
+        if (l == null || bytesTracker == null) return;
+        l.onProgress(bytesTracker.sample(bytesDone, 0L, System.currentTimeMillis()));
     }
 
     /** Visible for tests -- does the source path point at a real file? */

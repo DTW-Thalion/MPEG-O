@@ -82,8 +82,29 @@ public final class ExportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Exporting " + spec.name + " to " + config.targetPath);
-        tracker = new ProgressTracker("exporting", -1L, 1L, System.currentTimeMillis());
+        // Indeterminate totals + heartbeat ticker on the output file
+        // size, same pattern as ImportTask: writer APIs don't expose
+        // per-chunk hooks, so poll Files.size(config.targetPath) every
+        // 500ms to drive the numeric line.
+        tracker = new ProgressTracker("exporting", -1L, -1L, System.currentTimeMillis());
         emit(0L, 0L);
+        java.util.concurrent.atomic.AtomicBoolean done =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        Thread ticker = new Thread(() -> {
+            while (!done.get()) {
+                long current = 0L;
+                try {
+                    if (Files.exists(config.targetPath)) {
+                        current = Files.size(config.targetPath);
+                    }
+                } catch (Exception ignored) { /* file may flicker mid-write */ }
+                emit(current, 0L);
+                try { Thread.sleep(500L); }
+                catch (InterruptedException ie) { return; }
+            }
+        }, "export-progress-ticker");
+        ticker.setDaemon(true);
+        ticker.start();
         try {
             switch (spec.name) {
                 case "mzML (indexed)" -> exportMzML();
@@ -100,9 +121,13 @@ public final class ExportTask extends Task<Void> {
                 default -> throw new UnsupportedOperationException(
                     spec.name + " export not wired.");
             }
+            done.set(true);
+            try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
             long fileSize = Files.size(config.targetPath);
             emit(fileSize, 1L);
         } finally {
+            done.set(true);
+            ticker.interrupt();
             updateMessage("Done.");
         }
         return null;

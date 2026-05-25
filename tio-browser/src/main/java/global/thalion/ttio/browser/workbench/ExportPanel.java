@@ -20,7 +20,6 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -61,7 +60,8 @@ public final class ExportPanel {
     private final Button exportBtn = new Button("Export");
     private final Button cancelBtn = new Button("Cancel");
     private final Label statusLabel = new Label("");
-    private final ProgressBar progressBar = new ProgressBar(0);
+    private final global.thalion.ttio.browser.progress.ProgressDisplay progressDisplay =
+        new global.thalion.ttio.browser.progress.ProgressDisplay();
 
     public ExportPanel(Window owner) {
         this.owner = owner;
@@ -80,7 +80,7 @@ public final class ExportPanel {
     Button exportButton()           { return exportBtn; }
     Button cancelButton()           { return cancelBtn; }
     Label statusLabel()             { return statusLabel; }
-    ProgressBar progressBar()       { return progressBar; }
+    javafx.scene.control.ProgressBar progressBar() { return progressDisplay.progressBar(); }
 
     // ---- static helpers (pure -- testable without FX) ----
 
@@ -148,16 +148,17 @@ public final class ExportPanel {
         note.setMaxWidth(520);
         note.setStyle("-fx-text-fill: #555; -fx-font-size: 10;");
 
-        // Hidden until an export starts; indeterminate (open + export
-        // tasks don't report granular progress), then handed back once
-        // the file is written.
-        progressBar.setVisible(false);
-        progressBar.setManaged(false);
-        progressBar.setPrefWidth(140);
+        // Hidden until an export starts. ProgressDisplay (bar + numeric
+        // line) is driven by ProgressReport listeners on both DatasetOpenTask
+        // and ExportTask; ExportTask's heartbeat ticker polls the target
+        // file's size so the user sees continuous bytes-processed + rate.
+        progressDisplay.node().setVisible(false);
+        progressDisplay.node().setManaged(false);
+        progressDisplay.node().setPrefWidth(220);
 
         Region spacer = new Region();
         HBox.setHgrow(spacer, Priority.ALWAYS);
-        HBox buttons = new HBox(8, progressBar, statusLabel, spacer,
+        HBox buttons = new HBox(8, progressDisplay.node(), statusLabel, spacer,
                                 exportBtn, cancelBtn);
         buttons.setPadding(new Insets(0, 12, 12, 12));
 
@@ -222,20 +223,18 @@ public final class ExportPanel {
 
         exportBtn.setDisable(true);
         statusLabel.setText("Opening source...");
-        // Open the .tio, then run the export task with its dataset. The
-        // progress bar is indeterminate across both phases (the tasks
-        // don't report granular progress) but tells working from hung.
-        progressBar.setVisible(true);
-        progressBar.setManaged(true);
+        progressDisplay.node().setVisible(true);
+        progressDisplay.node().setManaged(true);
         DatasetOpenTask openTask = new DatasetOpenTask(src, true);
-        progressBar.progressProperty().bind(openTask.progressProperty());
+        openTask.setProgressListener(r -> javafx.application.Platform.runLater(
+            () -> progressDisplay.update(r, System.currentTimeMillis())));
         openTask.setOnSucceeded(ev -> {
             OpenDataset open = openTask.getValue();
             statusLabel.setText("Exporting...");
             ExportConfig config = ExportConfig.basic(Paths.get(target));
             ExportTask exportTask = new ExportTask(spec, config, open.dataset());
-            progressBar.progressProperty().unbind();
-            progressBar.progressProperty().bind(exportTask.progressProperty());
+            exportTask.setProgressListener(r -> javafx.application.Platform.runLater(
+                () -> progressDisplay.update(r, System.currentTimeMillis())));
             exportTask.setOnSucceeded(e2 -> {
                 open.close();
                 finishProgress();
@@ -272,9 +271,9 @@ public final class ExportPanel {
     }
 
     private void finishProgress() {
-        progressBar.progressProperty().unbind();
-        progressBar.setVisible(false);
-        progressBar.setManaged(false);
+        progressDisplay.progressBar().setProgress(1.0);
+        progressDisplay.node().setVisible(false);
+        progressDisplay.node().setManaged(false);
     }
 
     private void showError(String message) {

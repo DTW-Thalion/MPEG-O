@@ -34,11 +34,20 @@ public class MainWindow {
 
     public void show(Stage primaryStage) {
         this.stage = primaryStage;
+        ContainersWorkspace containers = new ContainersWorkspace(primaryStage);
+        TransfersWorkspace transfers = new TransfersWorkspace(primaryStage);
+        // Wire Transfers' Start-new dialog to prefill the source from the
+        // currently-open local dataset, if any.
+        transfers.setSourceSupplier(() -> {
+            var ds = containers.currentDataset();
+            if (ds == null || ds.path() == null) return null;
+            return java.nio.file.Paths.get(ds.path());
+        });
         this.shell = AppShell.create(List.of(
-            new ContainersWorkspace(primaryStage),
+            containers,
             new CohortsWorkspace(primaryStage),
             new JobsWorkspace(primaryStage),
-            new TransfersWorkspace(primaryStage)));
+            transfers));
         MenuBar menuBar = buildMenuBar();
         this.root = new BorderPane();
         VBox topStack = new VBox(menuBar, shell.root().getTop());
