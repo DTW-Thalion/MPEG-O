@@ -76,9 +76,30 @@ public final class ImportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Importing " + spec.name + " from " + config.sourcePath);
-        long bytesTotal = Files.size(config.sourcePath);
-        tracker = new ProgressTracker("importing", bytesTotal, -1L, System.currentTimeMillis());
+        // Indeterminate totals: target .tio size isn't known up front
+        // (codec ratio varies) and source-bytes-consumed isn't visible
+        // through reader APIs. A heartbeat ticker polls the target
+        // file's current size every 500ms so the user sees continuous
+        // bytes-processed + rate + elapsed in the numeric line.
+        tracker = new ProgressTracker("importing", -1L, -1L, System.currentTimeMillis());
         emit(0L);
+        java.util.concurrent.atomic.AtomicBoolean done =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+        Thread ticker = new Thread(() -> {
+            while (!done.get()) {
+                long current = 0L;
+                try {
+                    if (Files.exists(config.targetTio)) {
+                        current = Files.size(config.targetTio);
+                    }
+                } catch (Exception ignored) { /* file may flicker mid-write */ }
+                emit(current);
+                try { Thread.sleep(500L); }
+                catch (InterruptedException ie) { return; }
+            }
+        }, "import-progress-ticker");
+        ticker.setDaemon(true);
+        ticker.start();
         try {
             switch (spec.name) {
             case "mzML"             -> importMzML();
@@ -98,8 +119,16 @@ public final class ImportTask extends Task<Void> {
                 spec.name + " import not yet wired -- see "
                 + "tio-browser/README.md follow-ups.");
             }
-            emit(bytesTotal);
+            done.set(true);
+            try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
+            long finalSize = 0L;
+            try {
+                if (Files.exists(config.targetTio)) finalSize = Files.size(config.targetTio);
+            } catch (Exception ignored) {}
+            emit(finalSize);
         } finally {
+            done.set(true);
+            ticker.interrupt();
             updateMessage("Done.");
         }
         return null;
