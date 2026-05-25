@@ -23,6 +23,8 @@
 #import "Genomics/TTIOReferenceImport.h"
 #import "Providers/TTIOHDF5Provider.h"
 #import "Providers/TTIOStorageProtocols.h"
+#import "HDF5/TTIOHDF5File.h"
+#import "HDF5/TTIOHDF5Group.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import "ValueClasses/TTIOEnums.h"
@@ -292,6 +294,13 @@ typedef struct {
     NSMutableArray<NSData *> *currentChromSeqs = [NSMutableArray array];
     NSMutableArray<TTIOReferenceImport *> *collectedRefs =
         [NSMutableArray array];
+
+    // v0.11 Task 3.4: per-stream accumulator for the
+    // ENCRYPTION_ALGORITHM (0x1B) packet. Consumed after materialise
+    // by writing back as the root @encrypted attribute on the .tio
+    // (mirrors how a freshly-encrypted dataset surfaces -isEncrypted /
+    // -encryptedAlgorithm).
+    NSString *collectedEncryptionAlgorithm = nil;
 
     for (TTIOTransportPacketRecord *rec in packets) {
         TTIOTransportPacketHeader *h = rec.header;
@@ -767,6 +776,26 @@ typedef struct {
             [currentChromSeqs removeAllObjects];
             continue;
         }
+        // v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B). Wire layout per
+        // transport-spec §4.23: `uint16 algorithm_length + UTF-8
+        // bytes[algorithm_length]`. Stashed for post-materialise
+        // attachment as the root @encrypted attribute. Java parity:
+        // TransportReader.materializeTo (commit 530a5833) which calls
+        // markRootEncryptedWithEncryptionAlgorithm. Python parity:
+        // TransportReader.materialize_to (commit bf38bdc9) which sets
+        // the @encrypted root attr through the provider.
+        if (h.packetType == TTIOTransportPacketEncryptionAlgorithm) {
+            if (off + 2 > len) continue;
+            uint16_t algoLen = readU16(&bytes[off]); off += 2;
+            if (off + algoLen > len) continue;
+            collectedEncryptionAlgorithm =
+                [[NSString alloc] initWithBytes:&bytes[off]
+                                          length:algoLen
+                                        encoding:NSUTF8StringEncoding]
+                ?: @"";
+            off += algoLen;
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
@@ -992,6 +1021,27 @@ typedef struct {
                                         provenanceRecords:nil
                                                     error:error];
     if (!wrote) return NO;
+
+    // v0.11 Task 3.4: persist the collected encryption algorithm as the
+    // root @encrypted HDF5 attribute. Mirrors how a freshly-encrypted
+    // .tio surfaces -isEncrypted / -encryptedAlgorithm — readers consult
+    // the same root attribute on open. Java parity:
+    // TransportReader.materializeTo (commit 530a5833) which uses
+    // SpectralDataset.markRootEncryptedWithEncryptionAlgorithm. Python
+    // parity: TransportReader.materialize_to (commit bf38bdc9).
+    if (collectedEncryptionAlgorithm.length > 0) {
+        TTIOHDF5File *f =
+            [TTIOHDF5File openAtPath:outputPath error:error];
+        if (!f) return NO;
+        TTIOHDF5Group *root = [f rootGroup];
+        if (![root setStringAttribute:@"encrypted"
+                                  value:collectedEncryptionAlgorithm
+                                  error:error]) {
+            [f close];
+            return NO;
+        }
+        if (![f close]) return NO;
+    }
 
     // v0.11 Task 3.3: embed any reference groups collected from the
     // stream's REFERENCE_* packets. TTIOReferenceImport.writeToDataset

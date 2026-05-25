@@ -472,6 +472,40 @@ static const NSUInteger TTIOReferenceChromosomeZlibThreshold = 4096;
                            error:error];
 }
 
+// ---------------------------------------------------------------- v0.11 §4.23
+
+- (BOOL)writeEncryptionAlgorithm:(NSString *)algorithm
+                            error:(NSError **)error
+{
+    if (algorithm == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeEncryptionAlgorithm: algorithm must not be nil"}];
+        return NO;
+    }
+    NSData *algoBytes =
+        [algorithm dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    if (algoBytes.length > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"ENCRYPTION_ALGORITHM: algorithm name %lu bytes "
+                                 @"exceeds uint16 max",
+                                 (unsigned long)algoBytes.length]}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:2 + algoBytes.length];
+    appendU16LE(payload, (uint16_t)algoBytes.length);
+    [payload appendData:algoBytes];
+    return [self emitPacketType:TTIOTransportPacketEncryptionAlgorithm
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
 // ---------------------------------------------------------------- writeDataset
 
 static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
@@ -755,12 +789,40 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     if (_useBulkMode && genomicNames.count > 0) {
         [features addObject:TTIOTransportBulkModeV2BlobsFeature];
     }
+
+    // v0.11 Task 3.4: detect v0.11 content (encryption algorithm
+    // today; dataset provenance / references land here in later
+    // tasks). Java parity: TransportWriter.writeDataset (commit
+    // 530a5833). Python parity: TransportWriter.write_dataset
+    // (commit bf38bdc9).
+    BOOL hasEncryptionAlgo =
+        dataset.isEncrypted && dataset.encryptedAlgorithm.length > 0;
+    BOOL hasV011Content = hasEncryptionAlgo;
+    if (hasV011Content
+        && ![features containsObject:TTIOTransportV011Feature]) {
+        [features addObject:TTIOTransportV011Feature];
+    }
+
     if (![self writeStreamHeaderWithFormatVersion:@"1.2"
                                              title:(dataset.title ?: @"")
                                   isaInvestigation:(dataset.isaInvestigationId ?: @"")
                                           features:features
                                          nDatasets:(uint16_t)(runNames.count + genomicNames.count)
                                              error:error]) return NO;
+
+    // v0.11 §5.4 prelude — sub-sections in spec order:
+    //   §5.4.1 ENCRYPTION_ALGORITHM
+    //   §5.4.2 DATASET_PROVENANCE   (Task 3.5)
+    //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA   (future)
+    //   §5.4.4 reference groups                      (future for writeDataset:)
+    //   §5.4.5 image cubes                           (future)
+    //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE (future)
+    if (hasV011Content) {
+        if (hasEncryptionAlgo) {
+            if (![self writeEncryptionAlgorithm:dataset.encryptedAlgorithm
+                                            error:error]) return NO;
+        }
+    }
 
     uint16_t did = 1;
     for (NSString *name in runNames) {
