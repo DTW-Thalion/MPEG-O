@@ -123,6 +123,7 @@ extern void testMultiRecipientXLang(void);
 extern void testC0StandaloneKeyWrap(void);
 extern void testC2aServerKekId(void);
 extern void testTransportPacketTypeV011(void);
+extern void testTransportReaderSkipUnknown(void);
 
 int main(int argc, const char *argv[])
 {
@@ -614,6 +615,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11: packet-type constants (0x10-0x1B) + feature flag")
             testTransportPacketTypeV011();
         END_SET("transport v0.11: packet-type constants (0x10-0x1B) + feature flag")
+
+        START_SET("transport v0.11: reader skips unknown packet types (forward compat)")
+            testTransportReaderSkipUnknown();
+        END_SET("transport v0.11: reader skips unknown packet types (forward compat)")
     }
     return 0;
 }
