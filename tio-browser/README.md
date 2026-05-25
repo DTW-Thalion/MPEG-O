@@ -7,29 +7,25 @@ desktop client for the **TTI-O Workbench** server. Built on the
 
 ## Features
 
-### `.tio` browsing
+`tio-browser` is organised around four workspaces accessed via a slim
+icon rail on the left. The currently-connected workbench server (if
+any) appears as a chip in the top-right header. Active transfers
+appear in an always-visible strip across the bottom.
 
-- Open a `.tio` container; inspect its `SpectralDataset` tree, MS / NMR
-  / vibrational / UV-Vis runs, `GenomicRun` reads + index, provenance
-  chains, identifications + quantifications.
-- Per-spectrum / per-read inspector with channel-level signal plots.
+| Workspace | Capability |
+|---|---|
+| 📁 **Containers** | Browse both **local `.tio` files** and **server containers** in a single tree (Local + Servers branches). Open a local file to drive the dataset tree + spectrum / read inspector / provenance / encryption tabs. Action nodes (`+ Open file…`, `+ Encode…`, `+ Import…`, `+ Connect another server…`) launch the corresponding flows. |
+| 🔬 **Cohorts** | Cohort query builder bound to the connected workbench: compose phenotype/container/subject/sample predicates, preview counts, paginate full rows. Offline state shows a Connect CTA. |
+| ⚙ **Jobs & Sessions** | Submit pipeline jobs (`New job…`), monitor running and completed jobs with live status + logs, cancel; manage interactive notebook sessions (`New session…`). |
+| ⇅ **Transfers** | Unified queue of in-flight and completed `.tis` uploads + downloads with quantitative progress (bytes / units / rate / ETA). `Start new transfer…` opens a single dialog covering both upload and download, server-connected and (future) anonymous-URL scopes, including the Selective Access filter builder for downloads. |
 
-### TTI-O Workbench Client (W1–W6, v1.5.0)
+The `File` menu covers single-file actions (Open / Open Recent /
+Encode / Import / Export / Save As / Close / Exit) with keyboard
+shortcuts (`Shortcut+O/E/W/Q`). The `Help` menu has Diagnostics.
 
-| Panel | Capability | Workplan |
-|---|---|---|
-| Connection Manager | Bootstrap-admin login (username + password + TOTP) against a workbench daemon; live connection-status indicator. | W5.1 |
-| Container Browser | Paged `GET /v1/containers` listing with project / owner / encryption filters. | W5.2 |
-| Transfer Manager + Selective Access | Per-AU upload + download with a filter builder (RT / MS level / chromosome / position predicates). Determinate progress bar (W6.1b). | W5.3 / W6.1 |
-| Cohort Query Builder | Compose `POST /v1/cohorts/query` JSON predicates over phenotype / container / subject / sample fields; preview-count and full-rows modes; cursor pagination. | W5.4 |
-| Pipeline Launcher + Job Monitor | Submit jobs to the server, watch live status + logs, cancel running jobs. | W5.5 |
-| Interactive Session Launcher | Start an interactive analysis session through the workbench daemon. | W5.6 |
-| Encoding + Export panels | Import a vendor format → encode to `.tio` → export back to mzML / nmrML / JCAMP-DX / BAM / CRAM. Progress bar during open + export (W6 follow-up). | W5.7 |
-
-The Workbench Client SDK underneath the GUI is also exposed as a
-Python `ttio` CLI / SDK (`python/src/ttio/workbench/`) and a Java SDK
-(`java/.../workbench/`) — the GUI is a thin shell over the same
-client APIs.
+Every long-running operation reports quantitative progress (percent
+complete, bytes processed, instantaneous rate, ETA). The bottom
+transfer strip auto-hides when no transfers are active.
 
 ## Quick install (end users)
 
@@ -182,8 +178,6 @@ without restarting the app.
 - No telemetry, auto-update, or crash reporter.
 - macOS app bundles produced by `jpackage` are unsigned — users may
   need right-click → Open on first launch.
-- Workbench client requires bootstrap-admin TOTP for login; SSO
-  / OIDC is server-side scope, not exposed in the GUI yet.
 
 ## License
 
