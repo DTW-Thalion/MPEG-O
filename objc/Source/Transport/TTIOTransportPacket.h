@@ -33,11 +33,36 @@ typedef NS_ENUM(uint8_t, TTIOTransportPacketType) {
     TTIOTransportPacketBlobV2MateInfo      = 0x09,
     TTIOTransportPacketBlobV2RefDiff       = 0x0A,
     TTIOTransportPacketBlobV2NameTok       = 0x0B,
+    // ---- v0.11 (transport-spec-complete-coverage 2026-05-25) ----
+    // Emitted only when the StreamHeader features list contains
+    // "transport_v0_11". See transport-spec §4.13-§4.23.
+    // Java / Python parity:
+    //   global.thalion.ttio.transport.PacketType
+    //   ttio.transport.packets.PacketType
+    TTIOTransportPacketReferenceGroupHeader = 0x10,
+    TTIOTransportPacketReferenceChromosome  = 0x11,
+    TTIOTransportPacketEndOfReferenceGroup  = 0x12,
+    TTIOTransportPacketImageHeader          = 0x13,
+    TTIOTransportPacketImagePixel           = 0x14,
+    TTIOTransportPacketEndOfImage           = 0x15,
+    TTIOTransportPacketIdentificationsTable = 0x16,
+    TTIOTransportPacketQuantificationsTable = 0x17,
+    TTIOTransportPacketDatasetProvenance    = 0x18,
+    TTIOTransportPacketSubjectMetadata      = 0x19,
+    TTIOTransportPacketSampleMetadata       = 0x1A,
+    TTIOTransportPacketEncryptionAlgorithm  = 0x1B,
     TTIOTransportPacketEndOfStream         = 0xFF
 };
 
 /// Phase 2c-T feature flag in StreamHeader features list.
 extern NSString *const TTIOTransportBulkModeV2BlobsFeature;
+
+/// v0.11 feature flag in StreamHeader features list. Required (no
+/// opt_ prefix) when any of the 0x10-0x1B packet types ride on the
+/// wire. Cross-language parity: Java
+/// PacketType.TRANSPORT_V0_11_FEATURE, Python
+/// ttio.transport.packets.TRANSPORT_V0_11_FEATURE.
+extern NSString *const TTIOTransportV011Feature;
 
 /// Phase 2c-T codec ids (mirror TTIOCompression enum).
 extern const uint8_t TTIOTransportCodecIdMateInlineV2;       // 13
