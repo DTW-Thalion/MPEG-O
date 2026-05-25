@@ -13,6 +13,7 @@ import global.thalion.ttio.MiniJson;
 import global.thalion.ttio.codecs.BasePack;
 import global.thalion.ttio.codecs.Rans;
 import global.thalion.ttio.genomics.BulkV2Blobs;
+import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 
 import java.io.ByteArrayInputStream;
@@ -45,6 +46,16 @@ public final class TransportReader implements AutoCloseable {
 
     private final InputStream in;
     private final boolean ownsStream;
+
+    // v0.11 Stage 1 / Task 1.3: per-stream accumulator state for the
+    // REFERENCE_GROUP_HEADER → N × REFERENCE_CHROMOSOME → END_OF_REFERENCE_GROUP
+    // packet sequence. Reset at the start of every materializeTo() call.
+    // Reads of these fields outside materializeTo() are undefined; the
+    // reader is single-use (AutoCloseable) by contract.
+    private String currentRefUri;
+    private final List<String> currentChromNames = new ArrayList<>();
+    private final List<byte[]> currentChromSeqs  = new ArrayList<>();
+    private final List<ReferenceImport> collectedRefs = new ArrayList<>();
 
     public TransportReader(InputStream in) {
         this.in = in;
@@ -129,6 +140,15 @@ public final class TransportReader implements AutoCloseable {
     // ---------------------------------------------------------- materialize
 
     public SpectralDataset materializeTo(String outputPath) throws IOException {
+        // Reset Task 1.3 reference-group accumulator state so a single
+        // reader instance can drive multiple materializeTo() calls
+        // safely (defensive — the AutoCloseable contract limits us to
+        // one in practice, but the reset keeps the invariants explicit).
+        currentRefUri = null;
+        currentChromNames.clear();
+        currentChromSeqs.clear();
+        collectedRefs.clear();
+
         List<PacketRecord> packets = readAllPackets();
         String title = "";
         String isa = "";
@@ -278,6 +298,18 @@ public final class TransportReader implements AutoCloseable {
                 slot.nameTokBlob = blob;
                 continue;
             }
+            if (h.packetType == PacketType.REFERENCE_GROUP_HEADER) {
+                startReferenceGroup(rec.payload);
+                continue;
+            }
+            if (h.packetType == PacketType.REFERENCE_CHROMOSOME) {
+                appendChromosome(rec.payload);
+                continue;
+            }
+            if (h.packetType == PacketType.END_OF_REFERENCE_GROUP) {
+                finishReferenceGroup();
+                continue;
+            }
             if (h.packetType == PacketType.END_OF_DATASET) continue;
             if (h.packetType == PacketType.END_OF_STREAM) break;
             // Annotation / Provenance / Chromatogram / Protection: skipped in M67.
@@ -333,9 +365,97 @@ public final class TransportReader implements AutoCloseable {
             outputPath, title, isa, runs, genomicRuns,
             List.of(), List.of(), List.of(),
             global.thalion.ttio.FeatureFlags.defaultCurrent());
+        // v0.11 Stage 1 / Task 1.3: embed any reference groups decoded
+        // from the stream's REFERENCE_* packets. ReferenceImport.write-
+        // ToDataset(ds) requires an open writable provider, so this
+        // must run before the genomic close+reopen dance below.
+        if (!collectedRefs.isEmpty()) {
+            for (ReferenceImport ref : collectedRefs) {
+                ref.writeToDataset(created);
+            }
+        }
         if (genomicRuns.isEmpty()) return created;
         created.close();
         return SpectralDataset.open(outputPath);
+    }
+
+    // ---------------------------------------------------------- reference-group helpers
+
+    /** v0.11 Stage 1 / Task 1.3: decode a REFERENCE_GROUP_HEADER
+     *  (0x10) payload and prime the per-group accumulator. The
+     *  {@code chromosome_count} field is parsed for cross-check
+     *  purposes; the actual count is enforced by
+     *  {@link #finishReferenceGroup()} when the EOR packet arrives. */
+    private void startReferenceGroup(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        int uriLen = bb.getShort() & 0xFFFF;
+        byte[] uri = new byte[uriLen];
+        bb.get(uri);
+        currentRefUri = new String(uri, StandardCharsets.UTF_8);
+        // chromosome_count (uint32) — used as a hint; the actual count
+        // is the size of currentChromNames after all REFERENCE_CHROMOSOME
+        // packets land. Parsed here to advance the buffer position.
+        bb.getInt();
+        // total_bases (uint64) — informational; the actual total comes
+        // from summing the per-chromosome seq lengths. Parsed to advance.
+        bb.getLong();
+        // md5_hex[32] — informational; ReferenceImport recomputes from
+        // the chromosome bytes (case-preserving, sort-by-name). Parsed
+        // to consume the trailing 32 bytes of the payload.
+        byte[] md5Hex = new byte[32];
+        bb.get(md5Hex);
+        currentChromNames.clear();
+        currentChromSeqs.clear();
+    }
+
+    /** v0.11 Stage 1 / Task 1.3: decode a REFERENCE_CHROMOSOME (0x11)
+     *  payload and append it to the current group. */
+    private void appendChromosome(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        int nameLen = bb.getShort() & 0xFFFF;
+        byte[] name = new byte[nameLen];
+        bb.get(name);
+        long seqLength = bb.getLong();
+        int encoding = bb.get() & 0xFF;
+        long dataLenLong = bb.getInt() & 0xFFFFFFFFL;
+        int dataLen = (int) dataLenLong;
+        byte[] raw = new byte[dataLen];
+        bb.get(raw);
+        byte[] seq;
+        if (encoding == 0) {
+            seq = raw;
+        } else if (encoding == 1) {
+            seq = zlibInflate(raw);
+            if (seq.length != seqLength) {
+                throw new IllegalStateException(
+                    "REFERENCE_CHROMOSOME zlib payload inflated to "
+                    + seq.length + " bytes; expected " + seqLength);
+            }
+        } else {
+            throw new IllegalStateException(
+                "unknown REFERENCE_CHROMOSOME encoding: " + encoding);
+        }
+        currentChromNames.add(new String(name, StandardCharsets.UTF_8));
+        currentChromSeqs.add(seq);
+    }
+
+    /** v0.11 Stage 1 / Task 1.3: close out the current reference
+     *  group on END_OF_REFERENCE_GROUP (0x12). Builds a {@link
+     *  ReferenceImport} from the accumulated chromosomes and stages it
+     *  for {@code writeToDataset} after the {@code SpectralDataset} is
+     *  created. */
+    private void finishReferenceGroup() {
+        if (currentRefUri == null) {
+            throw new IllegalStateException(
+                "END_OF_REFERENCE_GROUP without prior REFERENCE_GROUP_HEADER");
+        }
+        collectedRefs.add(new ReferenceImport(
+            currentRefUri,
+            new ArrayList<>(currentChromNames),
+            new ArrayList<>(currentChromSeqs)));
+        currentRefUri = null;
+        currentChromNames.clear();
+        currentChromSeqs.clear();
     }
 
     // ---------------------------------------------------------- helpers
