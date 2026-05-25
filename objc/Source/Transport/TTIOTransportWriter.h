@@ -14,6 +14,8 @@
 @class TTIOReferenceImport;
 @class TTIOProvenanceRecord;
 @class TTIOMSImage;
+@class TTIOIdentification;
+@class TTIOQuantification;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -276,6 +278,54 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeImage:(TTIOMSImage *)image
               error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 3.7: emit an <code>IDENTIFICATIONS_TABLE</code> (0x16)
+ * packet carrying the full identifications table as a single
+ * length-prefixed Apache Arrow IPC stream. Wire layout per
+ * transport-spec §4.19:
+ *
+ * <pre>
+ * arrow_ipc_length:    uint32
+ * arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+ * </pre>
+ *
+ * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+ * IPC stream carries its own schema, row count, and null bitmaps,
+ * so no per-row TLV envelope is needed. An empty <code>rows</code>
+ * array is a no-op (no packet emitted) per spec §5.4 step 6 ("zero
+ * or more").</p>
+ *
+ * <p>The Arrow IPC payload bytes are NOT byte-identical to Java /
+ * Python — each Arrow binding produces a slightly different
+ * flatbuffer envelope encoding. All three SDKs decode each other's
+ * bytes (logical equivalence is the contract). The uint32 length
+ * prefix IS byte-identical.</p>
+ *
+ * <p>Java parity: <code>TransportWriter.writeIdentifications</code>
+ * (commit <code>a6faab16</code>). Python parity:
+ * <code>TransportWriter.write_identifications_table</code> (commit
+ * <code>150552b6</code>).</p>
+ */
+- (BOOL)writeIdentificationsTable:(NSArray<TTIOIdentification *> *)rows
+                              error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 3.7: emit a <code>QUANTIFICATIONS_TABLE</code> (0x17)
+ * packet carrying the full quantifications table as a single
+ * length-prefixed Apache Arrow IPC stream. Wire layout per
+ * transport-spec §4.20 — identical shape to §4.19 but with a
+ * distinct packet type so receivers can dispatch without parsing
+ * the IPC payload first.
+ *
+ * <p>An empty <code>rows</code> array is a no-op (spec §5.4 step 6).
+ * Java parity: <code>TransportWriter.writeQuantifications</code>
+ * (commit <code>a6faab16</code>). Python parity:
+ * <code>TransportWriter.write_quantifications_table</code> (commit
+ * <code>150552b6</code>).</p>
+ */
+- (BOOL)writeQuantificationsTable:(NSArray<TTIOQuantification *> *)rows
+                              error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 

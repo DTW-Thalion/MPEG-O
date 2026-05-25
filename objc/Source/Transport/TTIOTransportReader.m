@@ -23,6 +23,9 @@
 #import "Genomics/TTIOBulkV2Blobs.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Image/TTIOMSImage.h"
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Transport/TTIOArrowIpcCodec.h"
 #import "Providers/TTIOHDF5Provider.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "HDF5/TTIOHDF5File.h"
@@ -339,6 +342,21 @@ typedef struct {
     uint64_t imgSeenCount = 0;
     BOOL imgHeaderSeen = NO;
     BOOL imgCollected = NO;
+
+    // v0.11 Task 3.7: per-stream accumulators for the
+    // IDENTIFICATIONS_TABLE (0x16) and QUANTIFICATIONS_TABLE (0x17)
+    // packets (transport-spec §4.19 / §4.20). Multiple 0x16 / 0x17
+    // packets MAY appear in a stream (spec §5.4 step 6 says "zero or
+    // more"); rows accumulate in emission order. Passed into
+    // writeMinimalToPath: as the identifications / quantifications
+    // arguments so the on-disk study compound datasets round-trip.
+    // Java parity: TransportReader.collectedIdentifications /
+    // collectedQuantifications (commit a6faab16). Python parity:
+    // TransportReader.materialize_to (commit 150552b6).
+    NSMutableArray<TTIOIdentification *> *collectedIdentifications =
+        [NSMutableArray array];
+    NSMutableArray<TTIOQuantification *> *collectedQuantifications =
+        [NSMutableArray array];
 
     for (TTIOTransportPacketRecord *rec in packets) {
         TTIOTransportPacketHeader *h = rec.header;
@@ -1115,6 +1133,44 @@ typedef struct {
             imgHeaderSeen = NO;
             continue;
         }
+        // v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16). Wire layout per
+        // transport-spec §4.19: `uint32 arrow_ipc_length + bytes
+        // arrow_ipc[length]` — a single self-describing Apache Arrow
+        // IPC stream. Decoded via TTIOArrowIpcCodec; rows accumulate
+        // across multiple 0x16 packets (spec §5.4 step 6 "zero or
+        // more"). Java parity: TransportReader.decodeIdentificationsTable
+        // (commit a6faab16). Python parity:
+        // TransportReader.materialize_to (commit 150552b6).
+        if (h.packetType == TTIOTransportPacketIdentificationsTable) {
+            if (off + 4 > len) continue;
+            uint32_t ipcLen = readU32(&bytes[off]); off += 4;
+            if (off + ipcLen > len) continue;
+            NSData *ipcBytes = [NSData dataWithBytes:&bytes[off]
+                                              length:ipcLen];
+            off += ipcLen;
+            NSArray<TTIOIdentification *> *decoded =
+                [TTIOArrowIpcCodec decodeIdentifications:ipcBytes];
+            if (decoded.count > 0) {
+                [collectedIdentifications addObjectsFromArray:decoded];
+            }
+            continue;
+        }
+        // v0.11 Task 3.7: QUANTIFICATIONS_TABLE (0x17). Wire layout per
+        // transport-spec §4.20 — identical shape to §4.19.
+        if (h.packetType == TTIOTransportPacketQuantificationsTable) {
+            if (off + 4 > len) continue;
+            uint32_t ipcLen = readU32(&bytes[off]); off += 4;
+            if (off + ipcLen > len) continue;
+            NSData *ipcBytes = [NSData dataWithBytes:&bytes[off]
+                                              length:ipcLen];
+            off += ipcLen;
+            NSArray<TTIOQuantification *> *decoded =
+                [TTIOArrowIpcCodec decodeQuantifications:ipcBytes];
+            if (decoded.count > 0) {
+                [collectedQuantifications addObjectsFromArray:decoded];
+            }
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
@@ -1335,8 +1391,10 @@ typedef struct {
                                        isaInvestigationId:isa
                                                    msRuns:runs
                                               genomicRuns:(genomicRuns.count ? genomicRuns : nil)
-                                          identifications:nil
-                                          quantifications:nil
+                                          identifications:(collectedIdentifications.count
+                                                            ? collectedIdentifications : nil)
+                                          quantifications:(collectedQuantifications.count
+                                                            ? collectedQuantifications : nil)
                                         provenanceRecords:(collectedProvenance.count
                                                             ? collectedProvenance : nil)
                                                     error:error];
