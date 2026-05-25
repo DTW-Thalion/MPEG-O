@@ -11,6 +11,7 @@ import global.thalion.ttio.browser.model.DatasetTreeBuilder;
 import global.thalion.ttio.browser.model.DatasetTreeNode;
 import global.thalion.ttio.browser.model.OpenDataset;
 import global.thalion.ttio.browser.shell.Workspace;
+import global.thalion.ttio.browser.shell.containers.ContainerRoster;
 import global.thalion.ttio.browser.shell.containers.UnifiedContainerNode;
 import global.thalion.ttio.browser.shell.containers.UnifiedContainerTreeView;
 import global.thalion.ttio.browser.util.RecentFiles;
@@ -210,7 +211,17 @@ public final class ContainersWorkspace implements Workspace {
             showInRight(detailPane.control());
             unifiedTree.control().getSelectionModel().clearSelection();
 
-        } else if (node instanceof UnifiedContainerNode.ServerProject) {
+        } else if (node instanceof UnifiedContainerNode.ServerProject p) {
+            var roster = unifiedTree.cachedRoster();
+            if (roster != null) {
+                var list = roster.byProject().getOrDefault(
+                    p.name(), java.util.List.of());
+                projectListing.setContainers(
+                    javafx.collections.FXCollections.observableArrayList(list));
+            } else {
+                projectListing.setContainers(
+                    javafx.collections.FXCollections.observableArrayList());
+            }
             showInRight(projectListing.node());
             hideMiddleTree();
 
