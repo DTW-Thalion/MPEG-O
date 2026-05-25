@@ -987,6 +987,15 @@ class TransportReader:
         last_seq: dict[int, int] = {}
         saw_stream_header = False
         bulk_mode_required = False
+        # v0.11 Stage 1 / Task 2.3 — per-stream accumulator state for
+        # the REFERENCE_GROUP_HEADER -> N x REFERENCE_CHROMOSOME ->
+        # END_OF_REFERENCE_GROUP packet sequence. Java parity:
+        # TransportReader.currentRefUri / currentChromNames /
+        # currentChromSeqs / collectedRefs.
+        current_ref_uri: str | None = None
+        current_chrom_names: list[str] = []
+        current_chrom_seqs: list[bytes] = []
+        collected_refs: list = []  # list[ReferenceImport]
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -1084,6 +1093,76 @@ class TransportReader:
                         f"duplicate BlobV2NameTok for dataset_id {ds_id}"
                     )
                 slot["name_tok"] = blob
+            elif ptype == int(PacketType.REFERENCE_GROUP_HEADER):
+                # v0.11 Stage 1 / Task 2.3: decode header and prime the
+                # per-group accumulator. chromosome_count / total_bases
+                # / md5_hex are parsed for buffer-position advance only —
+                # the actual values come from the per-chromosome
+                # accumulator (ReferenceImport.__post_init__ recomputes
+                # MD5 from the sequences).
+                pl = payload
+                off = 0
+                (uri_len,) = struct.unpack_from("<H", pl, off)
+                off += 2
+                current_ref_uri = pl[off:off + uri_len].decode("utf-8")
+                off += uri_len
+                # chromosome_count (uint32) — advance only.
+                off += 4
+                # total_bases (uint64) — advance only.
+                off += 8
+                # md5_hex[32] — advance only.
+                off += 32
+                current_chrom_names = []
+                current_chrom_seqs = []
+            elif ptype == int(PacketType.REFERENCE_CHROMOSOME):
+                # v0.11 Stage 1 / Task 2.3: decode chromosome + append.
+                pl = payload
+                off = 0
+                (name_len,) = struct.unpack_from("<H", pl, off)
+                off += 2
+                name = pl[off:off + name_len].decode("utf-8")
+                off += name_len
+                (seq_len,) = struct.unpack_from("<Q", pl, off)
+                off += 8
+                encoding = pl[off]
+                off += 1
+                (data_len,) = struct.unpack_from("<I", pl, off)
+                off += 4
+                raw = bytes(pl[off:off + data_len])
+                off += data_len
+                if encoding == 0:
+                    seq_bytes = raw
+                elif encoding == 1:
+                    seq_bytes = zlib.decompress(raw)
+                    if len(seq_bytes) != seq_len:
+                        raise ValueError(
+                            f"REFERENCE_CHROMOSOME zlib payload inflated to "
+                            f"{len(seq_bytes)} bytes; expected {seq_len}"
+                        )
+                else:
+                    raise ValueError(
+                        f"unknown REFERENCE_CHROMOSOME encoding: {encoding}"
+                    )
+                current_chrom_names.append(name)
+                current_chrom_seqs.append(seq_bytes)
+            elif ptype == int(PacketType.END_OF_REFERENCE_GROUP):
+                # v0.11 Stage 1 / Task 2.3: close out the current group.
+                if current_ref_uri is None:
+                    raise ValueError(
+                        "END_OF_REFERENCE_GROUP without prior "
+                        "REFERENCE_GROUP_HEADER"
+                    )
+                # Local import to avoid pulling the genomic module into
+                # the codec import cycle when no references are present.
+                from ..genomic.reference_import import ReferenceImport
+                collected_refs.append(ReferenceImport(
+                    uri=current_ref_uri,
+                    chromosomes=list(current_chrom_names),
+                    sequences=list(current_chrom_seqs),
+                ))
+                current_ref_uri = None
+                current_chrom_names = []
+                current_chrom_seqs = []
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -1201,6 +1280,16 @@ class TransportReader:
             features=list(stream_meta.get("features", [])) or None,
             provider=provider,
         )
+        # v0.11 Stage 1 / Task 2.3: embed any reference groups decoded
+        # from the stream's REFERENCE_* packets. ReferenceImport.write_-
+        # to_dataset(ds) requires an open writable HDF5 provider, so
+        # reopen the just-written .tio in r+ mode, embed, then close
+        # before the final read-only open returned to the caller. Java
+        # parity: TransportReader.materializeTo (commit 7f3dec46).
+        if collected_refs:
+            with SpectralDataset.open(path, writable=True) as ds_w:
+                for ref in collected_refs:
+                    ref.write_to_dataset(ds_w)
         return SpectralDataset.open(path)
 
 
