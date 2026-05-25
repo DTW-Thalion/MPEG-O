@@ -319,8 +319,27 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
+        // Task 1.4: detect v0.11 content (references today; subjects,
+        // samples, dataset_provenance, encryption_algorithm, images,
+        // identifications, quantifications land in subsequent tasks at
+        // the same prelude insertion point per §5.4 ordering).
+        boolean v011 = !dataset.references().isEmpty();
+        if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
+            features.add(PacketType.TRANSPORT_V0_11_FEATURE);
+        }
+
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
+
+        // Task 1.4: v0.11 prelude -- per §5.4 ordering, v0.11 sections
+        // come BEFORE the v0.10 dataset/run sections. References are
+        // the only v0.11 section wired in 1.4; the rest will be added
+        // at this same point in Tasks 1.5-1.9.
+        if (v011) {
+            for (ReferenceImport ref : dataset.references().values()) {
+                writeReferenceGroup(ref);
+            }
+        }
 
         // Spectral dataset headers: ids 1..N.
         int id = 1;
