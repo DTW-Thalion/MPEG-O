@@ -20,7 +20,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
-import javafx.scene.control.ProgressBar;
+import global.thalion.ttio.browser.progress.ProgressDisplay;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
@@ -74,7 +74,7 @@ public final class ExportDialog {
     private final Label extrasHeader = new Label("Format options");
 
     private final Label eligibilityNote = new Label("");
-    private final ProgressBar progress = new ProgressBar(0.0);
+    private final ProgressDisplay progress = new ProgressDisplay();
     private final Label statusLabel = new Label("");
     private final Button exportBtn = new Button("Export");
     private final Button cancelBtn = new Button("Cancel");
@@ -213,10 +213,9 @@ public final class ExportDialog {
         right.setPadding(new Insets(12));
 
         HBox split = new HBox(8, left, right);
-        VBox footer = new VBox(4, eligibilityNote, progress, statusLabel,
+        VBox footer = new VBox(4, eligibilityNote, progress.node(), statusLabel,
             new HBox(8, exportBtn, cancelBtn));
         footer.setPadding(new Insets(12));
-        progress.setMaxWidth(Double.MAX_VALUE);
 
         VBox root = new VBox(8, split, footer);
 
@@ -308,20 +307,19 @@ public final class ExportDialog {
 
         SpectralDataset ds = openDataset.dataset();
         ExportTask task = new ExportTask(spec, cfg, ds);
-        progress.progressProperty().bind(task.progressProperty());
+        task.setProgressListener(r -> javafx.application.Platform.runLater(() ->
+            progress.update(r, System.currentTimeMillis())));
         statusLabel.textProperty().bind(task.messageProperty());
         exportBtn.setDisable(true);
         task.setOnSucceeded(ev -> {
-            progress.progressProperty().unbind();
             statusLabel.textProperty().unbind();
-            progress.setProgress(1.0);
+            progress.progressBar().setProgress(1.0);
             statusLabel.setText("Exported to " + cfg.targetPath);
             stage.close();
             if (onExported != null) onExported.accept(cfg.targetPath);
             tryOpenContainingFolder(cfg.targetPath);
         });
         task.setOnFailed(ev -> {
-            progress.progressProperty().unbind();
             statusLabel.textProperty().unbind();
             exportBtn.setDisable(false);
             Throwable err = task.getException();

@@ -16,7 +16,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
-import javafx.scene.control.ProgressBar;
+import global.thalion.ttio.browser.progress.ProgressDisplay;
 import javafx.scene.control.RadioButton;
 import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleGroup;
@@ -68,7 +68,7 @@ public final class ImportDialog {
 
     private final Label mzTabDialect = new Label("(detected on import)");
 
-    private final ProgressBar progress = new ProgressBar(0.0);
+    private final ProgressDisplay progress = new ProgressDisplay();
     private final Label statusLabel = new Label("");
     private final Button importBtn = new Button("Import");
     private final Button cancelBtn = new Button("Cancel");
@@ -201,8 +201,7 @@ public final class ImportDialog {
         grid.add(new Label("mzTab dialect:"), 0, row);
         grid.add(mzTabDialect,               1, row, 2, 1);
         row++;
-        grid.add(progress,                   0, row, 3, 1);
-        progress.setMaxWidth(Double.MAX_VALUE);
+        grid.add(progress.node(),             0, row, 3, 1);
         row++;
         grid.add(statusLabel,                0, row, 3, 1);
 
@@ -304,18 +303,20 @@ public final class ImportDialog {
             cramRef);
 
         ImportTask task = new ImportTask(spec, cfg);
-        progress.progressProperty().bind(task.progressProperty());
+        task.setProgressListener(r -> javafx.application.Platform.runLater(() ->
+            progress.update(r, System.currentTimeMillis())));
         statusLabel.textProperty().bind(task.messageProperty());
         importBtn.setDisable(true);
         task.setOnSucceeded(ev -> {
-            progress.progressProperty().unbind();
             statusLabel.textProperty().unbind();
-            progress.setProgress(1.0);
+            progress.progressBar().setProgress(1.0);
             stage.close();
+            System.err.println("[ImportDialog] setOnSucceeded; onImported="
+                + (onImported == null ? "null" : "set")
+                + " target=" + cfg.targetTio);
             if (onImported != null) onImported.accept(cfg.targetTio);
         });
         task.setOnFailed(ev -> {
-            progress.progressProperty().unbind();
             statusLabel.textProperty().unbind();
             importBtn.setDisable(false);
             Throwable err = task.getException();

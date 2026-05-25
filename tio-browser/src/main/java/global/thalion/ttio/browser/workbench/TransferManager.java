@@ -228,9 +228,22 @@ public final class TransferManager {
                             String containerUri,
                             Path source,
                             Transfer t) {
+        Path tis = null;
         try {
+            // WorkbenchTransportClient.upload expects a .tis transport
+            // stream (StreamHeader + DatasetHeader + AccessUnit + ...
+            // + EndOfStream). The server rejects raw .tio HDF5 bytes
+            // with "binary frame outside ReceivingAU". Encode .tio to
+            // .tis up front, send the .tis bytes, then clean up.
+            setState(t, TransferState.RUNNING, "Encoding .tio → .tis...");
+            System.err.println("[TransferManager.runUpload] encoding "
+                + source + " → .tis temp file");
+            tis = global.thalion.ttio.browser.transport
+                .TisEncoder.encodeToTempFile(source.toString(), false);
+            byte[] payload = Files.readAllBytes(tis);
+            System.err.println("[TransferManager.runUpload] tis size="
+                + payload.length + " bytes; uploading to " + containerUri);
             setState(t, TransferState.RUNNING, "Uploading...");
-            byte[] payload = Files.readAllBytes(source);
             WorkbenchTransportClient.UploadResult result =
                 client.upload(project, containerUri, payload,
                               progressFor(t, "Uploading", "uploading"));
@@ -238,10 +251,19 @@ public final class TransferManager {
             setState(t, TransferState.COMPLETED,
                 "Uploaded " + result.containerUri()
                 + " (au_seq=" + result.lastAckedAuSequence() + ")");
+            System.err.println("[TransferManager.runUpload] completed: "
+                + result.containerUri());
         } catch (Throwable ex) {
-            setState(t, TransferState.FAILED,
-                ex.getMessage() == null ? ex.getClass().getSimpleName()
-                                          : ex.getMessage());
+            String msg = ex.getMessage() == null
+                ? ex.getClass().getSimpleName() : ex.getMessage();
+            System.err.println("[TransferManager.runUpload] FAILED: " + msg);
+            ex.printStackTrace();
+            setState(t, TransferState.FAILED, msg);
+        } finally {
+            if (tis != null) {
+                try { Files.deleteIfExists(tis); }
+                catch (Exception ignored) {}
+            }
         }
     }
 
