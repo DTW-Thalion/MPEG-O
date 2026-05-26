@@ -33,9 +33,8 @@ import global.thalion.ttio.importers.NmrMLReader;
 import global.thalion.ttio.importers.SamReader;
 import global.thalion.ttio.importers.ThermoRawReader;
 import global.thalion.ttio.importers.WatersMassLynxReader;
+import global.thalion.ttio.browser.progress.PhaseProgress;
 import global.thalion.ttio.browser.progress.ProgressListener;
-import global.thalion.ttio.browser.progress.ProgressReport;
-import global.thalion.ttio.browser.progress.ProgressTracker;
 import global.thalion.ttio.io.ProgressSink;
 import javafx.concurrent.Task;
 
@@ -64,17 +63,13 @@ public final class ImportTask extends Task<Void> {
     private final ImportFormatSpec spec;
     private final ImportConfig config;
     private volatile ProgressListener progressListener;
-    /** Bytes-mode tracker, driven by the heartbeat ticker (fallback for
-     *  not-yet-instrumented formats). */
-    private ProgressTracker bytesTracker;
-    /** Units-mode tracker, driven by ProgressSink callbacks from
-     *  instrumented SDK calls (records / chromosomes / spectra). Built
-     *  lazily on first sink fire. */
-    private volatile ProgressTracker unitsTracker;
-    /** Set true by a ProgressSink when an instrumented format starts
-     *  reporting real units; the heartbeat ticker stands down. */
-    private final java.util.concurrent.atomic.AtomicBoolean sinkActive =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** Stage E: two-phase progress wrapper. Reader callbacks scale
+     *  to 0..50%, writer callbacks to 50..100%. The phase label
+     *  flips from "reading" to "encoding" at the boundary so the
+     *  UI shows which half the percent belongs to. Replaces the
+     *  pre-Stage-E single-units-tracker that "restarted" the
+     *  records count at the read/write boundary. */
+    private PhaseProgress phaseProgress;
 
     public ImportTask(ImportFormatSpec spec, ImportConfig config) {
         this.spec = spec;
@@ -88,67 +83,49 @@ public final class ImportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Importing " + spec.name + " from " + config.sourcePath);
-        long inputBytes = Files.size(config.sourcePath);
         long startMs = System.currentTimeMillis();
-        // Fallback bytes-mode tracker for not-yet-instrumented formats.
-        // Heartbeat ticker polls target file size; SDK calls without a
-        // ProgressSink hook fall through to this path.
-        bytesTracker = new ProgressTracker(
-            "importing", inputBytes, -1L, startMs);
-        emitBytes(0L);
-        java.util.concurrent.atomic.AtomicBoolean done =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
-        Thread ticker = new Thread(() -> {
-            while (!done.get()) {
-                if (!sinkActive.get()) {
-                    long current = 0L;
-                    try {
-                        if (Files.exists(config.targetTio)) {
-                            current = Math.min(Files.size(config.targetTio), inputBytes);
-                        }
-                    } catch (Exception ignored) { /* file may flicker mid-write */ }
-                    emitBytes(current);
-                }
-                try { Thread.sleep(500L); }
-                catch (InterruptedException ie) { return; }
-            }
-        }, "import-progress-ticker");
-        ticker.setDaemon(true);
-        ticker.start();
-
-        // Sink supplied to instrumented SDK calls. First non-empty fire
-        // builds the units tracker; subsequent fires update it. Heartbeat
-        // sees sinkActive=true and stops polling output bytes.
-        ProgressSink sink = (recDone, recTotal) -> {
-            sinkActive.set(true);
-            ProgressTracker t = unitsTracker;
-            if (t == null && recTotal > 0L) {
-                t = new ProgressTracker(
-                    "importing", -1L, recTotal, startMs);
-                unitsTracker = t;
-            }
-            if (t == null) return;
-            ProgressReport r = t.sample(0L, recDone, System.currentTimeMillis());
+        // Stage E commit 2: the previous bytes-heartbeat ticker has
+        // been removed. Stages A/B/C/D wired real record-level
+        // ProgressSink callbacks across every reader + writer, so
+        // the heartbeat is no longer needed -- the ProgressDisplay
+        // refresh now responds purely to real ProgressSink samples
+        // flowing through PhaseProgress.
+        //
+        // The three formats that still delegate to external
+        // converters (Waters MassLynx, Thermo .raw, Bruker timsTOF)
+        // run in a tight subprocess wait without intermediate
+        // updates; the dialog stays at 0% until the subprocess
+        // returns, at which point emitFinal() drives it to 100%.
+        //
+        // PhaseProgress fetches the listener via a small forwarder
+        // so setProgressListener() calls after call() begins still
+        // take effect (preserves the pre-Stage-E behavior).
+        ProgressListener forwarder = r -> {
             ProgressListener l = progressListener;
             if (l != null) l.onProgress(r);
         };
+        phaseProgress = new PhaseProgress(
+            forwarder, "reading", "encoding", startMs);
+        phaseProgress.emitInitial();
+
+        ProgressSink readerSink = phaseProgress.readerSink();
+        ProgressSink writerSink = phaseProgress.writerSink();
 
         long t0 = System.currentTimeMillis();
         System.err.println("[ImportTask] start " + spec.name
-            + " source=" + config.sourcePath + " target=" + config.targetTio
-            + " inputBytes=" + inputBytes);
+            + " source=" + config.sourcePath + " target=" + config.targetTio);
         try {
             switch (spec.name) {
-            case "mzML"             -> importMzML(sink);
-            case "nmrML"            -> importNmrML(sink);
-            case "mzTab"            -> importMzTab(sink);
-            case "BAM"              -> importBamLike(spec.name, sink);
-            case "SAM"              -> importBamLike(spec.name, sink);
-            case "CRAM"             -> importBamLike(spec.name, sink);
-            case "FASTA"            -> importFasta(sink);
-            case "FASTQ"            -> importFastq(sink);
-            case "imzML"            -> importImzML(sink);
-            case "JCAMP-DX"         -> importJcampDx(sink);
+            case "mzML"             -> importMzML(readerSink, writerSink);
+            case "nmrML"            -> importNmrML(readerSink, writerSink);
+            case "mzTab"            -> importMzTab(readerSink, writerSink);
+            case "BAM"              -> importBamLike(spec.name, readerSink, writerSink);
+            case "SAM"              -> importBamLike(spec.name, readerSink, writerSink);
+            case "CRAM"             -> importBamLike(spec.name, readerSink, writerSink);
+            case "FASTA"            -> importFasta(readerSink, writerSink);
+            case "FASTQ"            -> importFastq(readerSink, writerSink);
+            case "imzML"            -> importImzML(readerSink);
+            case "JCAMP-DX"         -> importJcampDx(readerSink, writerSink);
             case "Waters MassLynx"  -> importWatersMassLynx();
             case "Thermo .raw"      -> importThermoRaw();
             case "Bruker timsTOF"   -> importBrukerTimsTOF();
@@ -159,15 +136,11 @@ public final class ImportTask extends Task<Void> {
             long t1 = System.currentTimeMillis();
             System.err.println("[ImportTask] dispatch returned after "
                 + (t1 - t0) + " ms");
-            done.set(true);
-            try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
-            // For sink-instrumented paths the SDK already fired
-            // onProgress(total, total) at the last iteration. For the
-            // bytes-fallback path, emit the final 100%.
-            if (!sinkActive.get()) emitBytes(inputBytes);
+            // Emit a final 100% sample so the dialog always
+            // terminates at the full bar, regardless of whether
+            // the writer SDK fired its own terminal (T, T) sample.
+            phaseProgress.emitFinal();
         } finally {
-            done.set(true);
-            ticker.interrupt();
             updateMessage("Done.");
         }
         return null;
@@ -175,24 +148,27 @@ public final class ImportTask extends Task<Void> {
 
     // -- Existing wired formats ----------------------------------------
 
-    private void importMzML(ProgressSink sink) throws Exception {
+    private void importMzML(ProgressSink readerSink, ProgressSink writerSink)
+            throws Exception {
         AcquisitionRun run = MzMLReader.read(
-            config.sourcePath.toString(), sink);
-        writeAnalytical(List.of(run), sink);
+            config.sourcePath.toString(), readerSink);
+        writeAnalytical(List.of(run), writerSink);
     }
 
-    private void importNmrML(ProgressSink sink) throws Exception {
+    private void importNmrML(ProgressSink readerSink, ProgressSink writerSink)
+            throws Exception {
         NmrMLReader.NmrMLResult result =
-            NmrMLReader.read(config.sourcePath.toString(), sink);
-        writeAnalytical(List.of(result.run()), sink);
+            NmrMLReader.read(config.sourcePath.toString(), readerSink);
+        writeAnalytical(List.of(result.run()), writerSink);
     }
 
-    private void importMzTab(ProgressSink sink) throws Exception {
-        MzTabReader.MzTabImport im = MzTabReader.read(config.sourcePath, sink);
-        // Stage D: thread the sink through to the .tio writer's
-        // per-section progress hook too. Stage E (task #68) reshapes
-        // the phase math to a 0..50 read / 50..100 write split; for
-        // now both sides drive the same units tracker.
+    private void importMzTab(ProgressSink readerSink, ProgressSink writerSink)
+            throws Exception {
+        MzTabReader.MzTabImport im =
+            MzTabReader.read(config.sourcePath, readerSink);
+        // Stage E: writer-side sink is a separate scaled half so the
+        // dialog's percent stays monotonic across the read/write
+        // boundary (PhaseProgress.writerSink maps onto 50..100%).
         SpectralDataset.create(
             config.targetTio.toString(),
             config.datasetTitle.isEmpty() ? im.title() : config.datasetTitle,
@@ -201,20 +177,22 @@ public final class ImportTask extends Task<Void> {
             im.identifications(),
             im.quantifications(),
             List.of(),
-            sink);
+            writerSink);
     }
 
-    private void importBamLike(String name, ProgressSink sink) throws Exception {
+    private void importBamLike(String name,
+                               ProgressSink readerSink,
+                               ProgressSink writerSink) throws Exception {
         WrittenGenomicRun run;
         Path source = config.sourcePath;
         switch (name) {
             case "BAM" -> {
                 BamReader r = new BamReader(source);
-                run = r.toGenomicRun(config.runName, null, null, sink);
+                run = r.toGenomicRun(config.runName, null, null, readerSink);
             }
             case "SAM" -> {
                 SamReader r = new SamReader(source);
-                run = r.toGenomicRun(config.runName, null, null, sink);
+                run = r.toGenomicRun(config.runName, null, null, readerSink);
             }
             case "CRAM" -> {
                 if (config.cramReference == null) {
@@ -222,14 +200,15 @@ public final class ImportTask extends Task<Void> {
                         "CRAM import requires a reference FASTA");
                 }
                 CramReader r = new CramReader(source, config.cramReference);
-                run = r.toGenomicRun(config.runName, null, null, sink);
+                run = r.toGenomicRun(config.runName, null, null, readerSink);
             }
             default -> throw new IllegalStateException(name);
         }
-        writeGenomic(List.of(run), sink);
+        writeGenomic(List.of(run), writerSink);
     }
 
-    private void importFasta(ProgressSink sink) throws Exception {
+    private void importFasta(ProgressSink readerSink, ProgressSink writerSink)
+            throws Exception {
         FastaReader r = new FastaReader(config.sourcePath);
         if (config.fastaTreatAs == ImportConfig.FastaTreatAs.REFERENCE) {
             ReferenceImport ref = r.readReference();
@@ -238,23 +217,22 @@ public final class ImportTask extends Task<Void> {
                 config.datasetTitle, "",
                 List.of(), List.of(), List.of(), List.of());
             try (ds) {
-                ref.writeToDataset(ds, /*overwrite=*/false, sink);
+                ref.writeToDataset(ds, /*overwrite=*/false, writerSink);
             }
         } else {
-            // Unaligned reads: thread the sink into the FASTA reader so
-            // the dialog reports per-read progress instead of falling
-            // back to the bytes heartbeat.
-            WrittenGenomicRun run = r.readUnaligned(config.runName, sink);
-            writeGenomic(List.of(run), sink);
+            // Unaligned reads: reader fills 0..50%, writer fills 50..100%.
+            WrittenGenomicRun run = r.readUnaligned(config.runName, readerSink);
+            writeGenomic(List.of(run), writerSink);
         }
     }
 
-    private void importFastq(ProgressSink sink) throws Exception {
+    private void importFastq(ProgressSink readerSink, ProgressSink writerSink)
+            throws Exception {
         FastqReader r = (config.fastqPhred == null)
             ? new FastqReader(config.sourcePath)
             : new FastqReader(config.sourcePath, config.fastqPhred);
-        WrittenGenomicRun run = r.read(config.runName, sink);
-        writeGenomic(List.of(run), sink);
+        WrittenGenomicRun run = r.read(config.runName, readerSink);
+        writeGenomic(List.of(run), writerSink);
     }
 
     // -- Phase 8.x: newly-wired formats --------------------------------
@@ -266,8 +244,12 @@ public final class ImportTask extends Task<Void> {
      * spectra into a flat intensity cube, and writes an MSImage group
      * directly via the HDF5 layer.
      */
-    private void importImzML(ProgressSink sink) throws Exception {
-        ImzMLReader.ImzMLImport imp = ImzMLReader.read(config.sourcePath, sink);
+    private void importImzML(ProgressSink readerSink) throws Exception {
+        // imzML uses the HDF5 layer directly (not SpectralDataset.create),
+        // so there is no writer-side ProgressSink hook -- the reader
+        // alone drives the percent into the 0..50 read half, and the
+        // PhaseProgress.emitFinal() in call() finishes it at 100%.
+        ImzMLReader.ImzMLImport imp = ImzMLReader.read(config.sourcePath, readerSink);
         if (imp.spectra().isEmpty()) {
             throw new IllegalStateException(
                 "imzML import: no pixels parsed from " + config.sourcePath);
@@ -323,8 +305,9 @@ public final class ImportTask extends Task<Void> {
      * subclass (Raman, IR, UV-Vis). All named signal arrays from the
      * Spectrum are forwarded as run channels.
      */
-    private void importJcampDx(ProgressSink sink) throws Exception {
-        Spectrum spectrum = JcampDxReader.readSpectrum(config.sourcePath, sink);
+    private void importJcampDx(ProgressSink readerSink, ProgressSink writerSink)
+            throws Exception {
+        Spectrum spectrum = JcampDxReader.readSpectrum(config.sourcePath, readerSink);
 
         AcquisitionMode mode;
         if (spectrum instanceof global.thalion.ttio.RamanSpectrum) {
@@ -362,7 +345,7 @@ public final class ImportTask extends Task<Void> {
             runName, mode, index,
             new InstrumentConfig("", "", "", "", "", ""),
             channels, List.of(), List.of(), "", 0.0);
-        writeAnalytical(List.of(run), sink);
+        writeAnalytical(List.of(run), writerSink);
     }
 
     /**
@@ -403,11 +386,10 @@ public final class ImportTask extends Task<Void> {
 
     // -- Write helpers --------------------------------------------------
 
-    /** Stage D: writeAnalytical now accepts the same {@link ProgressSink}
-     *  the reader was using; the writer's per-section progress reports
-     *  flow into the same units tracker. Stage E (task #68) will split
-     *  the 0..50 / 50..100 read+write phases — for now both phases drive
-     *  the same tracker. */
+    /** Stage D: writeAnalytical accepts the writer-half {@link
+     *  ProgressSink} from {@link PhaseProgress#writerSink()}; the
+     *  writer's per-section progress flows into the 50..100% half of
+     *  the unified bar. */
     private void writeAnalytical(List<AcquisitionRun> runs, ProgressSink sink) {
         SpectralDataset.create(
             config.targetTio.toString(),
@@ -421,8 +403,7 @@ public final class ImportTask extends Task<Void> {
     }
 
     /** Stage D: writeGenomic with sink threading. See {@link
-     *  #writeAnalytical(List, ProgressSink)} for the phase-math
-     *  follow-up note. */
+     *  #writeAnalytical(List, ProgressSink)} for the two-phase note. */
     private void writeGenomic(List<WrittenGenomicRun> runs, ProgressSink sink) {
         FeatureFlags flags = new FeatureFlags(
             "1.0", List.of(FeatureFlags.OPT_GENOMIC));
@@ -437,12 +418,6 @@ public final class ImportTask extends Task<Void> {
             List.of(),
             flags,
             sink);
-    }
-
-    private void emitBytes(long bytesDone) {
-        ProgressListener l = progressListener;
-        if (l == null || bytesTracker == null) return;
-        l.onProgress(bytesTracker.sample(bytesDone, 0L, System.currentTimeMillis()));
     }
 
     /** Visible for tests -- does the source path point at a real file? */
