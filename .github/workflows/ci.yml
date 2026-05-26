@@ -46,6 +46,8 @@ jobs:
 
       - uses: ./.github/actions/setup-hdf5
 
+      - uses: ./.github/actions/setup-libarrow
+
       - name: Show toolchain versions
         run: |
           clang --version
@@ -544,6 +546,8 @@ jobs:
 
       - uses: ./.github/actions/setup-hdf5
 
+      - uses: ./.github/actions/setup-libarrow
+
       # objc/build.sh's dep check requires libttio_rans.so. Previously
       # missing — perf job was silently failing on main pushes with
       # `[FAIL] libttio_rans.so not found`. Caught & fixed during the
@@ -632,6 +636,8 @@ jobs:
         run: sudo apt-get install -y --no-install-recommends samtools
 
       - uses: ./.github/actions/setup-hdf5
+
+      - uses: ./.github/actions/setup-libarrow
 
       - uses: ./.github/actions/build-native
         with:
