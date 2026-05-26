@@ -40,7 +40,7 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from ttio.spectral_dataset import SpectralDataset  # noqa: E402
-from ttio.transport.codec import TransportReader, TransportWriter  # noqa: E402
+from ttio.transport.codec import TransportReader  # noqa: E402
 
 from _v0_11_accessor_spec import ACCESSOR_SPECS  # noqa: E402
 
@@ -82,13 +82,13 @@ def test_round_trip_preserves_accessor(spec, tmp_path: Path) -> None:
     tis = tmp_path / f"{spec.name}.tis"
     rt = tmp_path / f"{spec.name}-rt.tio"
 
-    # .tio -> .tis (encode via the high-level write_dataset path so
-    # the v0.11 prelude packets get emitted alongside the run-level
-    # AUs).
+    # .tio -> .tis. Most accessors hand off to write_dataset via the
+    # default encode_strategy on AccessorSpec; MS_IMAGE_PROCESSED
+    # overrides to call write_image_processed for the opt-in sparse
+    # wire mode (Task 5.6).
     with SpectralDataset.open(src) as ds_src:
         buf = io.BytesIO()
-        with TransportWriter(buf) as w:
-            w.write_dataset(ds_src)
+        spec.encode_strategy(ds_src, buf)
         tis.write_bytes(buf.getvalue())
 
     # .tis -> .tio (decode via the high-level read_to_dataset /
