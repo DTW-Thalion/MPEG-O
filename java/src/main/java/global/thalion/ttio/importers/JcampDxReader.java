@@ -6,6 +6,7 @@ import global.thalion.ttio.IRSpectrum;
 import global.thalion.ttio.RamanSpectrum;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.UVVisSpectrum;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -45,6 +46,11 @@ import java.util.Set;
  */
 public final class JcampDxReader {
 
+    /** JCAMP-DX files canonically carry one spectrum (vibrational or
+     *  UV-Vis). The progress contract for this reader is a single final
+     *  fire of {@code (1, 1)} after the parse succeeds. */
+    public static final int PROGRESS_INTERVAL_SPECTRA = 1;
+
     private static final Set<String> UV_VIS_DATA_TYPES = new HashSet<>(Arrays.asList(
         "UV/VIS SPECTRUM", "UV-VIS SPECTRUM", "UV/VISIBLE SPECTRUM"
     ));
@@ -52,6 +58,21 @@ public final class JcampDxReader {
     private JcampDxReader() {}
 
     public static Spectrum readSpectrum(Path path) throws IOException {
+        return readSpectrum(path, ProgressSink.discard());
+    }
+
+    /**
+     * Overload of {@link #readSpectrum(Path)} that accepts a
+     * {@link ProgressSink}. Fires {@code progress.onProgress(1, 1)} once
+     * the spectrum has been parsed; total is always {@code 1} because
+     * JCAMP-DX carries a single spectrum per file (the multi-block link
+     * block dialect is not yet supported by this reader).
+     *
+     * @since 1.5.0
+     */
+    public static Spectrum readSpectrum(Path path, ProgressSink progress)
+            throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         String text = Files.readString(path, StandardCharsets.UTF_8);
         Map<String, String> ldrs = new HashMap<>();
         List<String> bodyLines = new ArrayList<>();
@@ -177,23 +198,20 @@ public final class JcampDxReader {
         }
 
         String dataType = ldrs.getOrDefault("DATA TYPE", "").toUpperCase(Locale.ROOT);
+        Spectrum spectrum;
 
         if (UV_VIS_DATA_TYPES.contains(dataType)) {
-            return new UVVisSpectrum(
+            spectrum = new UVVisSpectrum(
                 xs, ys, 0, 0.0,
                 parseDouble(ldrs.get("$PATH LENGTH CM")),
                 ldrs.getOrDefault("$SOLVENT", ""));
-        }
-
-        if (dataType.equals("RAMAN SPECTRUM")) {
-            return new RamanSpectrum(
+        } else if (dataType.equals("RAMAN SPECTRUM")) {
+            spectrum = new RamanSpectrum(
                 xs, ys, 0, 0.0,
                 parseDouble(ldrs.get("$EXCITATION WAVELENGTH NM")),
                 parseDouble(ldrs.get("$LASER POWER MW")),
                 parseDouble(ldrs.get("$INTEGRATION TIME SEC")));
-        }
-
-        if (dataType.equals("INFRARED ABSORBANCE")
+        } else if (dataType.equals("INFRARED ABSORBANCE")
                 || dataType.equals("INFRARED TRANSMITTANCE")
                 || dataType.equals("INFRARED SPECTRUM")) {
             IRMode mode;
@@ -205,15 +223,20 @@ public final class JcampDxReader {
                 String yUnits = ldrs.getOrDefault("YUNITS", "").toUpperCase(Locale.ROOT);
                 mode = yUnits.contains("ABSORB") ? IRMode.ABSORBANCE : IRMode.TRANSMITTANCE;
             }
-            return new IRSpectrum(
+            spectrum = new IRSpectrum(
                 xs, ys, 0, 0.0,
                 mode,
                 parseDouble(ldrs.get("RESOLUTION")),
                 (long) parseDouble(ldrs.get("$NUMBER OF SCANS")));
+        } else {
+            throw new IllegalArgumentException(
+                "JCAMP-DX: unsupported DATA TYPE='"
+                + ldrs.getOrDefault("DATA TYPE", "") + "'");
         }
 
-        throw new IllegalArgumentException(
-            "JCAMP-DX: unsupported DATA TYPE='" + ldrs.getOrDefault("DATA TYPE", "") + "'");
+        // Final fire — single-spectrum file, total now known.
+        progress.onProgress(1L, 1L);
+        return spectrum;
     }
 
     private static double parseDouble(String v) {

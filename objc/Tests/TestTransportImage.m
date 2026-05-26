@@ -442,31 +442,38 @@ static void testEoiPixelCountMismatchRejected(void)
     // header to land on payload[0] and patch the 4-byte pixel_count.
     uint8_t *p = mut.mutableBytes;
     NSUInteger n = mut.length;
-    NSUInteger eoiPacketTypeIdx = NSNotFound;
-    // Packet wire layout (see TTIOTransportPacket.m): a fixed-size
-    // header preceded by sync magic. The packet type byte lives at a
-    // known offset within the header. To avoid coupling to those exact
-    // offsets, scan backwards (skipping the final EndOfStream packet
-    // type 0x03) for byte 0x15.
-    for (NSUInteger i = n; i > 0; i--) {
-        if (p[i - 1] == 0x15) { eoiPacketTypeIdx = i - 1; break; }
-    }
-    PASS(eoiPacketTypeIdx != NSNotFound,
-         "3.6 mism: located END_OF_IMAGE packet-type byte 0x15");
-    // The pixel_count_seen field is the first 4 bytes of the EOI
-    // payload. From the writeImage emit path, the payload immediately
-    // follows the fixed packet header; the EOI is the last 4-byte
-    // payload before EndOfStream. Locate the payload by scanning
-    // forward for the unique `01 00 00 00` (1-pixel count) within the
-    // last 32 bytes after the EOI type byte.
-    BOOL patched = NO;
-    NSUInteger searchStart = eoiPacketTypeIdx;
-    NSUInteger searchEnd = MIN(n, eoiPacketTypeIdx + 64);
-    for (NSUInteger i = searchStart; i + 4 <= searchEnd; i++) {
-        if (p[i] == 0x01 && p[i+1] == 0x00 && p[i+2] == 0x00 && p[i+3] == 0x00) {
-            p[i] = 0x63; p[i+1] = 0x00; p[i+2] = 0x00; p[i+3] = 0x00;
-            patched = YES;
+    NSUInteger eoiPacketStart = NSNotFound;
+    // Packet wire layout (see TTIOTransportPacket.m): every packet
+    // starts with the 4-byte signature {'T', 'I', version=0x01,
+    // type_byte}. For END_OF_IMAGE the type is 0x15. Earlier versions
+    // of this test scanned backwards for byte 0x15 alone — that's a
+    // common byte value that collides with the float64 intensity
+    // payload bytes upstream, producing intermittent CI flakes
+    // (PR #175). Anchor on the full 4-byte magic+version+type prefix
+    // to make the scan deterministic regardless of payload content.
+    for (NSUInteger i = n; i >= 4; i--) {
+        if (p[i - 4] == 'T' && p[i - 3] == 'I'
+                && p[i - 2] == 0x01 && p[i - 1] == 0x15) {
+            eoiPacketStart = i - 4;
             break;
+        }
+    }
+    PASS(eoiPacketStart != NSNotFound,
+         "3.6 mism: located END_OF_IMAGE packet header [T,I,01,15]");
+    // From TTIOTransportHeaderSize == 24, the EOI payload starts at
+    // eoiPacketStart + 24. The pixel_count_seen field is the first
+    // 4 bytes of that payload. Patch in place.
+    BOOL patched = NO;
+    if (eoiPacketStart != NSNotFound && eoiPacketStart + 24 + 4 <= n) {
+        NSUInteger payloadIdx = eoiPacketStart + 24;
+        // Sanity check: should currently read 0x01 0x00 0x00 0x00 (one pixel).
+        if (p[payloadIdx]     == 0x01 && p[payloadIdx + 1] == 0x00
+                && p[payloadIdx + 2] == 0x00 && p[payloadIdx + 3] == 0x00) {
+            p[payloadIdx]     = 0x63;  // 99 little-endian
+            p[payloadIdx + 1] = 0x00;
+            p[payloadIdx + 2] = 0x00;
+            p[payloadIdx + 3] = 0x00;
+            patched = YES;
         }
     }
     PASS(patched, "3.6 mism: patched EOI pixel_count_seen to 99");

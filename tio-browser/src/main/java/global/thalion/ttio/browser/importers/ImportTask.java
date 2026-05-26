@@ -139,16 +139,16 @@ public final class ImportTask extends Task<Void> {
             + " inputBytes=" + inputBytes);
         try {
             switch (spec.name) {
-            case "mzML"             -> importMzML();
-            case "nmrML"            -> importNmrML();
-            case "mzTab"            -> importMzTab();
+            case "mzML"             -> importMzML(sink);
+            case "nmrML"            -> importNmrML(sink);
+            case "mzTab"            -> importMzTab(sink);
             case "BAM"              -> importBamLike(spec.name, sink);
             case "SAM"              -> importBamLike(spec.name, sink);
             case "CRAM"             -> importBamLike(spec.name, sink);
             case "FASTA"            -> importFasta(sink);
             case "FASTQ"            -> importFastq(sink);
-            case "imzML"            -> importImzML();
-            case "JCAMP-DX"         -> importJcampDx();
+            case "imzML"            -> importImzML(sink);
+            case "JCAMP-DX"         -> importJcampDx(sink);
             case "Waters MassLynx"  -> importWatersMassLynx();
             case "Thermo .raw"      -> importThermoRaw();
             case "Bruker timsTOF"   -> importBrukerTimsTOF();
@@ -175,19 +175,20 @@ public final class ImportTask extends Task<Void> {
 
     // -- Existing wired formats ----------------------------------------
 
-    private void importMzML() throws Exception {
-        AcquisitionRun run = MzMLReader.read(config.sourcePath.toString());
+    private void importMzML(ProgressSink sink) throws Exception {
+        AcquisitionRun run = MzMLReader.read(
+            config.sourcePath.toString(), sink);
         writeAnalytical(List.of(run));
     }
 
-    private void importNmrML() throws Exception {
+    private void importNmrML(ProgressSink sink) throws Exception {
         NmrMLReader.NmrMLResult result =
-            NmrMLReader.read(config.sourcePath.toString());
+            NmrMLReader.read(config.sourcePath.toString(), sink);
         writeAnalytical(List.of(result.run()));
     }
 
-    private void importMzTab() throws Exception {
-        MzTabReader.MzTabImport im = MzTabReader.read(config.sourcePath);
+    private void importMzTab(ProgressSink sink) throws Exception {
+        MzTabReader.MzTabImport im = MzTabReader.read(config.sourcePath, sink);
         SpectralDataset.create(
             config.targetTio.toString(),
             config.datasetTitle.isEmpty() ? im.title() : config.datasetTitle,
@@ -260,8 +261,8 @@ public final class ImportTask extends Task<Void> {
      * spectra into a flat intensity cube, and writes an MSImage group
      * directly via the HDF5 layer.
      */
-    private void importImzML() throws Exception {
-        ImzMLReader.ImzMLImport imp = ImzMLReader.read(config.sourcePath);
+    private void importImzML(ProgressSink sink) throws Exception {
+        ImzMLReader.ImzMLImport imp = ImzMLReader.read(config.sourcePath, sink);
         if (imp.spectra().isEmpty()) {
             throw new IllegalStateException(
                 "imzML import: no pixels parsed from " + config.sourcePath);
@@ -317,8 +318,8 @@ public final class ImportTask extends Task<Void> {
      * subclass (Raman, IR, UV-Vis). All named signal arrays from the
      * Spectrum are forwarded as run channels.
      */
-    private void importJcampDx() throws Exception {
-        Spectrum spectrum = JcampDxReader.readSpectrum(config.sourcePath);
+    private void importJcampDx(ProgressSink sink) throws Exception {
+        Spectrum spectrum = JcampDxReader.readSpectrum(config.sourcePath, sink);
 
         AcquisitionMode mode;
         if (spectrum instanceof global.thalion.ttio.RamanSpectrum) {
