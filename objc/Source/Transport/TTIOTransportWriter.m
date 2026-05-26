@@ -31,6 +31,8 @@
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Image/TTIOMSImage.h"
+#import "Image/TTIORamanImage.h"
+#import "Image/TTIOIRImage.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import "Dataset/TTIOIdentification.h"
@@ -667,42 +669,43 @@ static inline void appendF64LE(NSMutableData *buf, double v)
     [buf appendBytes:b length:8];
 }
 
-- (BOOL)writeImage:(TTIOMSImage *)image
-              error:(NSError **)error
+// v0.11 Task 5.3: shared IMAGE_HEADER (0x13) packing routine.
+// Mirrors Java emitImageHeader / Python _emit_image_header so the
+// common header shape stays byte-stable across modalities (MS / Raman
+// / IR) and the modality_extras slot is appended once per call. The
+// continuous-mode bit, axis_kind, and modality-specific tail come
+// from the caller.
+- (BOOL)emitImageHeaderWithModality:(uint8_t)modality
+                              width:(NSUInteger)width
+                             height:(NSUInteger)height
+                               bins:(NSUInteger)bins
+                         pixelSizeX:(double)pxX
+                         pixelSizeY:(double)pxY
+                    scanPatternByte:(uint8_t)scanPatternByte
+                           axisKind:(uint8_t)axisKind
+                               axis:(NSData *)axis
+                       isContinuous:(uint8_t)isContinuous
+                              title:(NSString *)title
+                              isaId:(NSString *)isaId
+                             extras:(NSData *)extras
+                              error:(NSError **)error
 {
-    if (image == nil) {
-        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                 code:TTIOTransportErrorUnexpectedPayload
-                                             userInfo:@{NSLocalizedDescriptionKey:
-                             @"writeImage: image must not be nil"}];
-        return NO;
-    }
-    NSUInteger width  = image.width;
-    NSUInteger height = image.height;
-    NSUInteger bins   = image.spectralPoints;
-    NSData *mzAxis = image.mzAxis;
-    NSUInteger axisLength = (mzAxis.length / sizeof(double));
-    if (mzAxis != nil && axisLength != bins) {
+    NSUInteger axisLength = (axis.length / sizeof(double));
+    if (axis != nil && axisLength != bins && axis.length > 0) {
         if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                  code:TTIOTransportErrorUnexpectedPayload
                                              userInfo:@{NSLocalizedDescriptionKey:
                              [NSString stringWithFormat:
-                                 @"IMAGE_HEADER: mz_axis length %lu does not match "
+                                 @"IMAGE_HEADER: axis length %lu does not match "
                                  @"spectrum_bins %lu",
                                  (unsigned long)axisLength,
                                  (unsigned long)bins]}];
         return NO;
     }
-    uint8_t modality = 0;        // MS imaging
-    uint8_t axisKind = 0;        // mz
-    uint8_t isContinuous = 1;    // shared axis
-    uint8_t scanPatternByte = scanPatternToWireByte(image.scanPattern);
-
     NSData *titleBytes =
-        [(image.title ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        [(title ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
     NSData *isaBytes =
-        [(image.isaInvestigationId ?: @"") dataUsingEncoding:NSUTF8StringEncoding]
-        ?: [NSData data];
+        [(isaId ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
     if (titleBytes.length > 0xFFFFu) {
         if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                  code:TTIOTransportErrorUnexpectedPayload
@@ -721,8 +724,17 @@ static inline void appendF64LE(NSMutableData *buf, double v)
                                  (unsigned long)isaBytes.length]}];
         return NO;
     }
-
-    // -- IMAGE_HEADER (0x13) -----------------------------------------
+    NSUInteger extrasLen = extras.length;
+    if (extrasLen > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: modality_extras %lu bytes "
+                                 @"exceeds uint16 max",
+                                 (unsigned long)extrasLen]}];
+        return NO;
+    }
     NSUInteger hdrSize = 1                       // modality
                        + 4                       // width
                        + 4                       // height
@@ -735,19 +747,20 @@ static inline void appendF64LE(NSMutableData *buf, double v)
                        + 8 * axisLength          // axis values
                        + 1                       // is_continuous
                        + 2 + titleBytes.length
-                       + 2 + isaBytes.length;
+                       + 2 + isaBytes.length
+                       + 2 + extrasLen;          // modality_extras (5.3)
     NSMutableData *hdr = [NSMutableData dataWithCapacity:hdrSize];
     [hdr appendBytes:&modality length:1];
     appendU32LE(hdr, (uint32_t)width);
     appendU32LE(hdr, (uint32_t)height);
     appendU32LE(hdr, (uint32_t)bins);
-    appendF64LE(hdr, image.pixelSizeX);
-    appendF64LE(hdr, image.pixelSizeY);
+    appendF64LE(hdr, pxX);
+    appendF64LE(hdr, pxY);
     [hdr appendBytes:&scanPatternByte length:1];
     [hdr appendBytes:&axisKind length:1];
     appendU32LE(hdr, (uint32_t)axisLength);
     if (axisLength > 0) {
-        const double *axisVals = (const double *)mzAxis.bytes;
+        const double *axisVals = (const double *)axis.bytes;
         for (NSUInteger i = 0; i < axisLength; i++) {
             appendF64LE(hdr, axisVals[i]);
         }
@@ -757,53 +770,57 @@ static inline void appendF64LE(NSMutableData *buf, double v)
     [hdr appendData:titleBytes];
     appendU16LE(hdr, (uint16_t)isaBytes.length);
     [hdr appendData:isaBytes];
+    appendU16LE(hdr, (uint16_t)extrasLen);
+    if (extrasLen > 0) [hdr appendData:extras];
     NSAssert(hdr.length == hdrSize,
         @"IMAGE_HEADER size mismatch: predicted %lu, actual %lu",
         (unsigned long)hdrSize, (unsigned long)hdr.length);
-    if (![self emitPacketType:TTIOTransportPacketImageHeader
-                       payload:hdr
-                     datasetId:0
-                    auSequence:0
-                         error:error]) return NO;
-
-    // -- IMAGE_PIXEL (0x14) — one per pixel --------------------------
-    // Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
-    // compression(u8) + payload_length(u32) + intensities[..]. We
-    // always emit FLOAT64 (precision=1) uncompressed (compression=0)
-    // intensities lifted directly from the MSImage cube.
-    uint8_t precision = 1;       // FLOAT64
-    uint8_t compression = 0;     // NONE
-    uint32_t payloadLen = (uint32_t)(bins * sizeof(double));
-    uint64_t pixelIndex = 0;
-    const double *cubeP = (const double *)image.cube.bytes;
-    for (NSUInteger y = 0; y < height; y++) {
-        for (NSUInteger x = 0; x < width; x++) {
-            NSMutableData *rec =
-                [NSMutableData dataWithCapacity:4 + 4 + 1 + 1 + 4 + payloadLen];
-            appendU32LE(rec, (uint32_t)x);
-            appendU32LE(rec, (uint32_t)y);
-            [rec appendBytes:&precision length:1];
-            [rec appendBytes:&compression length:1];
-            appendU32LE(rec, payloadLen);
-            NSUInteger base = (y * width + x) * bins;
-            [rec appendBytes:&cubeP[base] length:payloadLen];
-            if (![self emitPacketType:TTIOTransportPacketImagePixel
-                               payload:rec
-                             datasetId:0
-                            auSequence:(uint32_t)pixelIndex
-                                 error:error]) return NO;
-            pixelIndex++;
-        }
-    }
-
-    // -- END_OF_IMAGE (0x15) -----------------------------------------
-    NSMutableData *eoi = [NSMutableData dataWithCapacity:4];
-    appendU32LE(eoi, (uint32_t)(pixelIndex & 0xFFFFFFFFull));
-    return [self emitPacketType:TTIOTransportPacketEndOfImage
-                         payload:eoi
+    return [self emitPacketType:TTIOTransportPacketImageHeader
+                         payload:hdr
                        datasetId:0
                       auSequence:0
                            error:error];
+}
+
+- (BOOL)writeImage:(TTIOMSImage *)image
+              error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeImage: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *mzAxis = image.mzAxis;
+
+    // v0.11 Task 5.3: emit the shared IMAGE_HEADER. modality=0 (MS)
+    // has no modality-specific extras (spec §4.16); the slot is still
+    // present on the wire (2-byte length + 0 bytes) so unknown-
+    // modality readers can advance past the header uniformly.
+    if (![self emitImageHeaderWithModality:0
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:0       // mz
+                                      axis:mzAxis
+                              isContinuous:1
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:[NSData data]
+                                     error:error]) return NO;
+
+    return [self emitImagePixelsForCubeBytes:(const double *)image.cube.bytes
+                                       width:width
+                                      height:height
+                                        bins:bins
+                                       error:error];
 }
 
 // ---------------------------------------------------------------- v0.11 §4.17 (5.1)
@@ -822,91 +839,24 @@ static inline void appendF64LE(NSMutableData *buf, double v)
     NSUInteger height = image.height;
     NSUInteger bins   = image.spectralPoints;
     NSData *mzAxis = image.mzAxis;
-    NSUInteger axisLength = (mzAxis.length / sizeof(double));
-    if (mzAxis != nil && axisLength != bins) {
-        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                 code:TTIOTransportErrorUnexpectedPayload
-                                             userInfo:@{NSLocalizedDescriptionKey:
-                             [NSString stringWithFormat:
-                                 @"IMAGE_HEADER: mz_axis length %lu does not match "
-                                 @"spectrum_bins %lu",
-                                 (unsigned long)axisLength,
-                                 (unsigned long)bins]}];
-        return NO;
-    }
-    uint8_t modality = 0;        // MS imaging
-    uint8_t axisKind = 0;        // mz
-    uint8_t isContinuous = 0;    // processed (sparse)
-    uint8_t scanPatternByte = scanPatternToWireByte(image.scanPattern);
 
-    NSData *titleBytes =
-        [(image.title ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
-    NSData *isaBytes =
-        [(image.isaInvestigationId ?: @"") dataUsingEncoding:NSUTF8StringEncoding]
-        ?: [NSData data];
-    if (titleBytes.length > 0xFFFFu) {
-        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                 code:TTIOTransportErrorUnexpectedPayload
-                                             userInfo:@{NSLocalizedDescriptionKey:
-                             [NSString stringWithFormat:
-                                 @"IMAGE_HEADER: title %lu bytes exceeds uint16 max",
-                                 (unsigned long)titleBytes.length]}];
-        return NO;
-    }
-    if (isaBytes.length > 0xFFFFu) {
-        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                 code:TTIOTransportErrorUnexpectedPayload
-                                             userInfo:@{NSLocalizedDescriptionKey:
-                             [NSString stringWithFormat:
-                                 @"IMAGE_HEADER: isa_id %lu bytes exceeds uint16 max",
-                                 (unsigned long)isaBytes.length]}];
-        return NO;
-    }
-
-    // -- IMAGE_HEADER (0x13) — identical layout to writeImage:,
-    //    is_continuous=0 signals the sparse pixel payload below.
-    NSUInteger hdrSize = 1                       // modality
-                       + 4                       // width
-                       + 4                       // height
-                       + 4                       // spectrum_bins
-                       + 8                       // pixel_size_x
-                       + 8                       // pixel_size_y
-                       + 1                       // scan_pattern
-                       + 1                       // axis_kind
-                       + 4                       // axis_length
-                       + 8 * axisLength          // axis values (shared)
-                       + 1                       // is_continuous
-                       + 2 + titleBytes.length
-                       + 2 + isaBytes.length;
-    NSMutableData *hdr = [NSMutableData dataWithCapacity:hdrSize];
-    [hdr appendBytes:&modality length:1];
-    appendU32LE(hdr, (uint32_t)width);
-    appendU32LE(hdr, (uint32_t)height);
-    appendU32LE(hdr, (uint32_t)bins);
-    appendF64LE(hdr, image.pixelSizeX);
-    appendF64LE(hdr, image.pixelSizeY);
-    [hdr appendBytes:&scanPatternByte length:1];
-    [hdr appendBytes:&axisKind length:1];
-    appendU32LE(hdr, (uint32_t)axisLength);
-    if (axisLength > 0) {
-        const double *axisVals = (const double *)mzAxis.bytes;
-        for (NSUInteger i = 0; i < axisLength; i++) {
-            appendF64LE(hdr, axisVals[i]);
-        }
-    }
-    [hdr appendBytes:&isContinuous length:1];
-    appendU16LE(hdr, (uint16_t)titleBytes.length);
-    [hdr appendData:titleBytes];
-    appendU16LE(hdr, (uint16_t)isaBytes.length);
-    [hdr appendData:isaBytes];
-    NSAssert(hdr.length == hdrSize,
-        @"IMAGE_HEADER size mismatch: predicted %lu, actual %lu",
-        (unsigned long)hdrSize, (unsigned long)hdr.length);
-    if (![self emitPacketType:TTIOTransportPacketImageHeader
-                       payload:hdr
-                     datasetId:0
-                    auSequence:0
-                         error:error]) return NO;
+    // v0.11 Task 5.3: emit the shared IMAGE_HEADER with
+    // is_continuous=0 signalling sparse pixel payloads. modality=0
+    // (MS) carries no modality_extras (empty bytes).
+    if (![self emitImageHeaderWithModality:0
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:0       // mz
+                                      axis:mzAxis
+                              isContinuous:0       // processed (sparse)
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:[NSData data]
+                                     error:error]) return NO;
 
     // -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
     // Each pixel: u32 x + u32 y + u8 precision + u8 compression +
@@ -962,6 +912,134 @@ static inline void appendF64LE(NSMutableData *buf, double v)
                        datasetId:0
                       auSequence:0
                            error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.16 (5.3)
+
+// Helper: emit a continuous-mode IMAGE_PIXEL stream for an arbitrary
+// image cube (Raman / IR). Shared loop for modalities 1 and 2 — each
+// pixel rides as `x + y + precision(=1 FLOAT64) + compression(=0) +
+// payload_length(=bins*8) + dense intensity vector`.
+- (BOOL)emitImagePixelsForCubeBytes:(const double *)cubeP
+                              width:(NSUInteger)width
+                             height:(NSUInteger)height
+                               bins:(NSUInteger)bins
+                              error:(NSError **)error
+{
+    uint8_t precision = 1;       // FLOAT64
+    uint8_t compression = 0;     // NONE
+    uint32_t payloadLen = (uint32_t)(bins * sizeof(double));
+    uint64_t pixelIndex = 0;
+    for (NSUInteger y = 0; y < height; y++) {
+        for (NSUInteger x = 0; x < width; x++) {
+            NSMutableData *rec =
+                [NSMutableData dataWithCapacity:4 + 4 + 1 + 1 + 4 + payloadLen];
+            appendU32LE(rec, (uint32_t)x);
+            appendU32LE(rec, (uint32_t)y);
+            [rec appendBytes:&precision length:1];
+            [rec appendBytes:&compression length:1];
+            appendU32LE(rec, payloadLen);
+            NSUInteger base = (y * width + x) * bins;
+            [rec appendBytes:&cubeP[base] length:payloadLen];
+            if (![self emitPacketType:TTIOTransportPacketImagePixel
+                               payload:rec
+                             datasetId:0
+                            auSequence:(uint32_t)pixelIndex
+                                 error:error]) return NO;
+            pixelIndex++;
+        }
+    }
+    NSMutableData *eoi = [NSMutableData dataWithCapacity:4];
+    appendU32LE(eoi, (uint32_t)(pixelIndex & 0xFFFFFFFFull));
+    return [self emitPacketType:TTIOTransportPacketEndOfImage
+                         payload:eoi
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeRamanImage:(TTIORamanImage *)image
+                  error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeRamanImage: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *wavenumbers = image.wavenumbers;
+
+    // Raman modality_extras: 8B excitation_wavelength_nm + 8B laser_power_mw.
+    NSMutableData *extras = [NSMutableData dataWithCapacity:16];
+    appendF64LE(extras, image.excitationWavelengthNm);
+    appendF64LE(extras, image.laserPowerMw);
+
+    if (![self emitImageHeaderWithModality:1
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:1       // wavenumber
+                                      axis:wavenumbers
+                              isContinuous:1
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:extras
+                                     error:error]) return NO;
+    return [self emitImagePixelsForCubeBytes:(const double *)image.cube.bytes
+                                       width:width
+                                      height:height
+                                        bins:bins
+                                       error:error];
+}
+
+- (BOOL)writeIRImage:(TTIOIRImage *)image
+               error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeIRImage: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *wavenumbers = image.wavenumbers;
+
+    // IR modality_extras: u8 ir_mode (0=transmittance, 1=absorbance)
+    // + f64 resolution_cm_inv. Total 9 bytes.
+    uint8_t irModeByte = (image.mode == TTIOIRModeAbsorbance) ? 1 : 0;
+    NSMutableData *extras = [NSMutableData dataWithCapacity:9];
+    [extras appendBytes:&irModeByte length:1];
+    appendF64LE(extras, image.resolutionCmInv);
+
+    if (![self emitImageHeaderWithModality:2
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:1       // wavenumber
+                                      axis:wavenumbers
+                              isContinuous:1
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:extras
+                                     error:error]) return NO;
+    return [self emitImagePixelsForCubeBytes:(const double *)image.cube.bytes
+                                       width:width
+                                      height:height
+                                        bins:bins
+                                       error:error];
 }
 
 // ---------------------------------------------------------------- v0.11 §4.19 / §4.20
@@ -1326,16 +1404,26 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     NSArray *datasetProvenance = dataset.provenanceRecords ?: @[];
     NSDictionary<NSString *, TTIOReferenceImport *> *datasetRefs =
         dataset.references ?: @{};
-    // -msImage returns a non-nil placeholder (width=0, height=0,
-    // cube=empty) when /study/image_cube/ is absent — guard with a
-    // dimension check so v0.10 image-less datasets don't trigger the
-    // image branch. Java + Python return null/None directly because
-    // their image getter doesn't allocate a placeholder.
+    // -msImage / -ramanImage / -irImage return non-nil placeholders
+    // (width=0, height=0) when their cube group is absent — guard
+    // with a dimension check so v0.10 image-less datasets don't
+    // trigger an image branch. Java + Python return null/None
+    // directly because their getters don't allocate a placeholder.
     TTIOMSImage *datasetImage = dataset.msImage;
     BOOL hasImage = (datasetImage != nil
                      && datasetImage.width  > 0
                      && datasetImage.height > 0);
     if (!hasImage) datasetImage = nil;
+    TTIORamanImage *datasetRamanImage = dataset.ramanImage;
+    BOOL hasRamanImage = (datasetRamanImage != nil
+                          && datasetRamanImage.width  > 0
+                          && datasetRamanImage.height > 0);
+    if (!hasRamanImage) datasetRamanImage = nil;
+    TTIOIRImage *datasetIRImage = dataset.irImage;
+    BOOL hasIRImage = (datasetIRImage != nil
+                       && datasetIRImage.width  > 0
+                       && datasetIRImage.height > 0);
+    if (!hasIRImage) datasetIRImage = nil;
     NSArray<TTIOIdentification *> *datasetIdentifications =
         dataset.identifications ?: @[];
     NSArray<TTIOQuantification *> *datasetQuantifications =
@@ -1350,6 +1438,8 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
                        || hasDatasetProv
                        || hasRefs
                        || hasImage
+                       || hasRamanImage
+                       || hasIRImage
                        || hasIdents
                        || hasQuants;
     if (hasV011Content
@@ -1393,8 +1483,19 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
                 if (![self writeReferenceGroup:ref error:error]) return NO;
             }
         }
+        // §5.4.5 image cubes: MS → Raman → IR (deterministic emission
+        // order when more than one modality is populated on the same
+        // dataset). Java parity: TransportWriter.writeDataset
+        // (commit f99ec47d). Python parity: TransportWriter.write_dataset
+        // (commit 6abead73).
         if (hasImage) {
             if (![self writeImage:datasetImage error:error]) return NO;
+        }
+        if (hasRamanImage) {
+            if (![self writeRamanImage:datasetRamanImage error:error]) return NO;
+        }
+        if (hasIRImage) {
+            if (![self writeIRImage:datasetIRImage error:error]) return NO;
         }
         // §5.4 step 6: identifications first, then quantifications.
         if (hasIdents) {

@@ -14,6 +14,8 @@
 @class TTIOReferenceImport;
 @class TTIOProvenanceRecord;
 @class TTIOMSImage;
+@class TTIORamanImage;
+@class TTIOIRImage;
 @class TTIOIdentification;
 @class TTIOQuantification;
 
@@ -317,6 +319,61 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeImageProcessed:(TTIOMSImage *)image
                       error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 5.3 (Deferral 1): emit a <code>TTIORamanImage</code>
+ * as the packet sequence
+ * <code>IMAGE_HEADER (0x13) -&gt; N x IMAGE_PIXEL (0x14) -&gt;
+ *  END_OF_IMAGE (0x15)</code> with <code>modality = 1</code>.
+ *
+ * <p>Wire layout per transport-spec §4.16 (LITTLE-ENDIAN). The
+ * shared axis on the IMAGE_HEADER carries the Raman wavenumbers
+ * vector (<code>axis_kind = 1 = wavenumber</code>). The
+ * <code>modality_extras</code> slot at the tail of the
+ * IMAGE_HEADER carries:</p>
+ *
+ * <pre>
+ *   excitation_wavelength_nm: float64
+ *   laser_power_mw:           float64
+ * </pre>
+ *
+ * <p>(16 bytes total.) Each pixel rides as a continuous-mode
+ * IMAGE_PIXEL whose <code>payload_bytes</code> is a dense vector
+ * of <code>spectrum_bins</code> FLOAT64 intensities at the shared
+ * wavenumber axis.</p>
+ *
+ * <p>Java parity: <code>TransportWriter.writeRamanImage</code>
+ * (commit <code>f99ec47d</code>). Python parity:
+ * <code>TransportWriter.write_raman_image</code> (commit
+ * <code>6abead73</code>).</p>
+ */
+- (BOOL)writeRamanImage:(TTIORamanImage *)image
+                  error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 5.3 (Deferral 1): emit a <code>TTIOIRImage</code> as
+ * the packet sequence
+ * <code>IMAGE_HEADER (0x13) -&gt; N x IMAGE_PIXEL (0x14) -&gt;
+ *  END_OF_IMAGE (0x15)</code> with <code>modality = 2</code>.
+ *
+ * <p>Wire layout per transport-spec §4.16 (LITTLE-ENDIAN). The
+ * shared axis carries the IR wavenumbers vector
+ * (<code>axis_kind = 1 = wavenumber</code>). The
+ * <code>modality_extras</code> slot carries:</p>
+ *
+ * <pre>
+ *   ir_mode:            uint8   # 0=TRANSMITTANCE, 1=ABSORBANCE
+ *   resolution_cm_inv:  float64
+ * </pre>
+ *
+ * <p>(9 bytes total.) Java parity:
+ * <code>TransportWriter.writeIRImage</code> (commit
+ * <code>f99ec47d</code>). Python parity:
+ * <code>TransportWriter.write_ir_image</code> (commit
+ * <code>6abead73</code>).</p>
+ */
+- (BOOL)writeIRImage:(TTIOIRImage *)image
+               error:(NSError * _Nullable *)error;
 
 /**
  * v0.11 Task 3.7: emit an <code>IDENTIFICATIONS_TABLE</code> (0x16)

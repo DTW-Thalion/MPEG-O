@@ -249,6 +249,136 @@ static NSString *readLEString(const uint8_t *bytes, NSUInteger length,
     return out;
 }
 
+// v0.11 Task 5.3: shared HDF5 cube-group writer for raman/ir image
+// embed. Mirrors the inline MS image_cube layout already in
+// writeTtioToPath: but generalised over group name + axis dataset
+// name + extra scalar attrs. Used by the modality dispatcher when
+// materialising a stream that carries Raman or IR pixels.
+//
+// Returns NO + populates *error on HDF5 failure. studyGid is owned by
+// the caller; this helper does not close it.
+static BOOL writeImageCubeGroupAtStudy(hid_t studyGid,
+                                       const char *groupName,
+                                       uint32_t width, uint32_t height,
+                                       uint32_t bins, NSUInteger tileSize,
+                                       double pixelSizeX, double pixelSizeY,
+                                       NSString *scanPattern,
+                                       NSData *axis,
+                                       const void *cubeBytes,
+                                       NSDictionary<NSString *, NSNumber *> *doubleAttrs,
+                                       NSDictionary<NSString *, NSString *> *stringAttrs,
+                                       NSError **error)
+{
+    hid_t g = H5Gcreate2(studyGid, groupName,
+                          H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    if (g < 0) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"image embed: H5Gcreate2 %s failed",
+                                 groupName]}];
+        return NO;
+    }
+    hsize_t dims[3]  = { (hsize_t)height, (hsize_t)width, (hsize_t)bins };
+    hsize_t chunk[3] = { (hsize_t)MIN(tileSize, (NSUInteger)height),
+                         (hsize_t)MIN(tileSize, (NSUInteger)width),
+                         (hsize_t)bins };
+    hid_t space = H5Screate_simple(3, dims, NULL);
+    hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
+    H5Pset_chunk(plist, 3, chunk);
+    H5Pset_deflate(plist, 6);
+    hid_t did = H5Dcreate2(g, "intensity",
+                           H5T_NATIVE_DOUBLE, space,
+                           H5P_DEFAULT, plist, H5P_DEFAULT);
+    if (did < 0) {
+        H5Pclose(plist); H5Sclose(space); H5Gclose(g);
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"image embed: H5Dcreate2 intensity failed"}];
+        return NO;
+    }
+    herr_t st = H5Dwrite(did, H5T_NATIVE_DOUBLE,
+                          H5S_ALL, H5S_ALL, H5P_DEFAULT, cubeBytes);
+    H5Dclose(did); H5Pclose(plist); H5Sclose(space);
+    if (st < 0) {
+        H5Gclose(g);
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"image embed: H5Dwrite intensity failed"}];
+        return NO;
+    }
+    // 1-D wavenumbers / mz_axis dataset (consumed by RamanImage /
+    // IRImage / MSImage round-trip). MSImage writes "mz_axis" with
+    // chunked + deflate=6; RamanImage / IRImage write "wavenumbers"
+    // with default contiguous layout — match each modality's
+    // production writer so the bytes round-trip identically.
+    if (axis.length == bins * sizeof(double)) {
+        hsize_t aDims[1] = { (hsize_t)bins };
+        hid_t aSpace = H5Screate_simple(1, aDims, NULL);
+        BOOL isMs = (strcmp(groupName, "image_cube") == 0);
+        const char *axisName = isMs ? "mz_axis" : "wavenumbers";
+        hid_t aPlist = H5P_DEFAULT;
+        hid_t axisPlist = -1;
+        if (isMs) {
+            axisPlist = H5Pcreate(H5P_DATASET_CREATE);
+            H5Pset_chunk(axisPlist, 1, aDims);
+            H5Pset_deflate(axisPlist, 6);
+            aPlist = axisPlist;
+        }
+        hid_t aDid = H5Dcreate2(g, axisName,
+                                 H5T_NATIVE_DOUBLE, aSpace,
+                                 H5P_DEFAULT, aPlist, H5P_DEFAULT);
+        if (aDid >= 0) {
+            H5Dwrite(aDid, H5T_NATIVE_DOUBLE, H5S_ALL, H5S_ALL,
+                     H5P_DEFAULT, axis.bytes);
+            H5Dclose(aDid);
+        }
+        if (axisPlist >= 0) H5Pclose(axisPlist);
+        H5Sclose(aSpace);
+    }
+    hid_t scalar = H5Screate(H5S_SCALAR);
+    #define WRITE_INT_SHARED(name, val) do { \
+        hid_t a = H5Acreate2(g, (name), H5T_NATIVE_INT64, \
+                              scalar, H5P_DEFAULT, H5P_DEFAULT); \
+        int64_t v = (int64_t)(val); H5Awrite(a, H5T_NATIVE_INT64, &v); H5Aclose(a); \
+    } while (0)
+    #define WRITE_DBL_SHARED(name, val) do { \
+        hid_t a = H5Acreate2(g, (name), H5T_NATIVE_DOUBLE, \
+                              scalar, H5P_DEFAULT, H5P_DEFAULT); \
+        double v = (val); H5Awrite(a, H5T_NATIVE_DOUBLE, &v); H5Aclose(a); \
+    } while (0)
+    #define WRITE_STR_SHARED(name, val) do { \
+        hid_t t = H5Tcopy(H5T_C_S1); H5Tset_size(t, H5T_VARIABLE); \
+        hid_t a = H5Acreate2(g, (name), t, scalar, H5P_DEFAULT, H5P_DEFAULT); \
+        const char *cs = [(val ?: @"") UTF8String]; H5Awrite(a, t, &cs); \
+        H5Aclose(a); H5Tclose(t); \
+    } while (0)
+
+    WRITE_INT_SHARED("width",           (int64_t)width);
+    WRITE_INT_SHARED("height",          (int64_t)height);
+    WRITE_INT_SHARED("spectral_points", (int64_t)bins);
+    WRITE_INT_SHARED("tile_size",       (int64_t)tileSize);
+    WRITE_DBL_SHARED("pixel_size_x",    pixelSizeX);
+    WRITE_DBL_SHARED("pixel_size_y",    pixelSizeY);
+    for (NSString *k in doubleAttrs) {
+        WRITE_DBL_SHARED([k UTF8String], [doubleAttrs[k] doubleValue]);
+    }
+    for (NSString *k in stringAttrs) {
+        WRITE_STR_SHARED([k UTF8String], stringAttrs[k]);
+    }
+    WRITE_STR_SHARED("scan_pattern", (scanPattern ?: @""));
+
+    #undef WRITE_INT_SHARED
+    #undef WRITE_DBL_SHARED
+    #undef WRITE_STR_SHARED
+    H5Sclose(scalar);
+    H5Gclose(g);
+    return YES;
+}
+
 // ---------------------------------------------------------------- materialize
 
 static TTIOPolarity polarityFromWire(uint8_t w)
@@ -346,6 +476,42 @@ typedef struct {
     BOOL imgHeaderSeen = NO;
     BOOL imgCollected = NO;
     BOOL imgIsContinuous = YES;
+    // v0.11 Stage 5.3: per-modality dispatch state. The IMAGE_HEADER
+    // modality byte selects which materialiser writes the cube on
+    // END_OF_IMAGE; the modality_extras tail carries the per-modality
+    // metadata. imgSkipping is YES between IMAGE_HEADER (unknown
+    // modality) and the matching END_OF_IMAGE so following
+    // IMAGE_PIXEL packets are silently dropped (forward-compat per
+    // §4.16). Per-modality snapshots are taken at END_OF_IMAGE time
+    // so MS → Raman → IR on the same stream can all be materialised.
+    // Java parity: TransportReader (commit f99ec47d). Python parity:
+    // TransportReader (commit 6abead73).
+    uint8_t imgModality = 0;
+    BOOL imgRamanCollected = NO;
+    BOOL imgIRCollected = NO;
+    double imgRamanExcitationNm = 0.0;
+    double imgRamanLaserPowerMw = 0.0;
+    uint8_t imgIRModeByte = 0;
+    double imgIRResolutionCmInv = 0.0;
+    BOOL imgSkipping = NO;
+    // Snapshots (one per modality) — set when END_OF_IMAGE fires so
+    // subsequent IMAGE_HEADERs of other modalities don't clobber the
+    // earlier modality's bytes.
+    uint32_t msImgWidth = 0, msImgHeight = 0, msImgBins = 0;
+    double msImgPxX = 0.0, msImgPxY = 0.0;
+    NSData *msImgCubeSnap = nil;
+    NSData *msImgAxisSnap = nil;
+    NSString *msImgScanSnap = nil;
+    uint32_t ramanImgWidth = 0, ramanImgHeight = 0, ramanImgBins = 0;
+    double ramanImgPxX = 0.0, ramanImgPxY = 0.0;
+    NSData *ramanImgCubeSnap = nil;
+    NSData *ramanImgAxisSnap = nil;
+    NSString *ramanImgScanSnap = nil;
+    uint32_t irImgWidth = 0, irImgHeight = 0, irImgBins = 0;
+    double irImgPxX = 0.0, irImgPxY = 0.0;
+    NSData *irImgCubeSnap = nil;
+    NSData *irImgAxisSnap = nil;
+    NSString *irImgScanSnap = nil;
 
     // v0.11 Task 3.7: per-stream accumulators for the
     // IDENTIFICATIONS_TABLE (0x16) and QUANTIFICATIONS_TABLE (0x17)
@@ -947,6 +1113,28 @@ typedef struct {
             NSString *title = readLEString(bytes, len, &off, 2) ?: @"";
             NSString *isa = readLEString(bytes, len, &off, 2) ?: @"";
 
+            // v0.11 Stage 5.3: parse modality_extras tail. Older
+            // (pre-5.3) streams emit no such slot, so probe the
+            // remaining length: an unfilled slot stays empty rather
+            // than fault the stream.
+            NSData *imgExtras = [NSData data];
+            if (off + 2 <= len) {
+                uint16_t extrasLen = readU16(&bytes[off]); off += 2;
+                if (off + extrasLen > len) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"IMAGE_HEADER: modality_extras_length "
+                                             @"%u exceeds remaining payload",
+                                             (unsigned)extrasLen]}];
+                    return NO;
+                }
+                imgExtras = [NSData dataWithBytes:&bytes[off]
+                                            length:extrasLen];
+                off += extrasLen;
+            }
+
             if (isCont != 0 && isCont != 1) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                          code:TTIOTransportErrorUnexpectedPayload
@@ -956,16 +1144,55 @@ typedef struct {
                                          @"0 or 1; got %u", (unsigned)isCont]}];
                 return NO;
             }
-            if (modality != 0) {
-                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                         code:TTIOTransportErrorUnexpectedPayload
-                                                     userInfo:@{NSLocalizedDescriptionKey:
-                                     [NSString stringWithFormat:
-                                         @"IMAGE_HEADER: only modality=0 (MS) "
-                                         @"materialises into an MSImage today; "
-                                         @"got modality=%u", (unsigned)modality]}];
-                return NO;
+
+            // v0.11 Stage 5.3: modality dispatch — 0=MS, 1=Raman,
+            // 2=IR. Unknown modalities are logged + skipped (forward
+            // compat per §4.16); the self-describing extras_len has
+            // already advanced the buffer past the IMAGE_HEADER.
+            imgSkipping = NO;
+            if (modality == 0) {
+                // MS — no extras consumed.
+            } else if (modality == 1) {
+                if (imgExtras.length != 16) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"IMAGE_HEADER (modality=1, Raman) "
+                                             @"expects 16-byte modality_extras "
+                                             @"(excitation + laser_power); got %lu",
+                                             (unsigned long)imgExtras.length]}];
+                    return NO;
+                }
+                const uint8_t *eb = imgExtras.bytes;
+                imgRamanExcitationNm = readF64(&eb[0]);
+                imgRamanLaserPowerMw = readF64(&eb[8]);
+            } else if (modality == 2) {
+                if (imgExtras.length != 9) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"IMAGE_HEADER (modality=2, IR) "
+                                             @"expects 9-byte modality_extras "
+                                             @"(ir_mode + resolution); got %lu",
+                                             (unsigned long)imgExtras.length]}];
+                    return NO;
+                }
+                const uint8_t *eb = imgExtras.bytes;
+                imgIRModeByte = eb[0];
+                imgIRResolutionCmInv = readF64(&eb[1]);
+            } else {
+                NSLog(@"[TTIOTransportReader] IMAGE_HEADER: unknown "
+                      @"modality=%u; skipping image block (extras_len=%lu, "
+                      @"width=%u, height=%u)",
+                      (unsigned)modality, (unsigned long)imgExtras.length,
+                      (unsigned)hdrW, (unsigned)hdrH);
+                imgSkipping = YES;
+                imgHeaderSeen = YES;  // need a matching END_OF_IMAGE to clear
+                continue;
             }
+            imgModality = modality;
             imgWidth = hdrW;
             imgHeight = hdrH;
             imgBins = hdrBins;
@@ -995,6 +1222,9 @@ typedef struct {
         // Continuous-mode only — precision MUST be 0 (float32) or
         // 1 (float64); compression MUST be 0 (NONE).
         if (h.packetType == TTIOTransportPacketImagePixel) {
+            // v0.11 Stage 5.3: unknown-modality stream — silently drop
+            // the pixel until the matching END_OF_IMAGE.
+            if (imgSkipping) continue;
             if (!imgHeaderSeen) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                          code:TTIOTransportErrorUnexpectedPayload
@@ -1164,6 +1394,12 @@ typedef struct {
         // declared count matches the per-pixel ingest count and stages
         // the built MSImage for write-out after writeMinimalToPath:.
         if (h.packetType == TTIOTransportPacketEndOfImage) {
+            // v0.11 Stage 5.3: drain an unknown-modality block.
+            if (imgSkipping) {
+                imgSkipping = NO;
+                imgHeaderSeen = NO;
+                continue;
+            }
             if (!imgHeaderSeen) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                          code:TTIOTransportErrorUnexpectedPayload
@@ -1197,7 +1433,38 @@ typedef struct {
                                          (unsigned long long)expected]}];
                 return NO;
             }
-            imgCollected = YES;
+            // Per-modality collection flags + snapshots. The
+            // materialiser branches on these after writeMinimalToPath:
+            // returns. Snapshots use [imgCube copy] so an immediate
+            // following IMAGE_HEADER (of a different modality) can
+            // reset the shared imgCube buffer without invalidating
+            // the earlier modality's data. ARC keeps the strong
+            // references alive via the assignments below.
+            NSData *cubeSnap = [imgCube copy];
+            NSData *axisSnap = [imgMzAxis copy];
+            NSString *scanSnap = [imgScanPattern copy];
+            if (imgModality == 0) {
+                imgCollected = YES;
+                msImgWidth = imgWidth; msImgHeight = imgHeight; msImgBins = imgBins;
+                msImgPxX = imgPxX; msImgPxY = imgPxY;
+                msImgCubeSnap = cubeSnap;
+                msImgAxisSnap = axisSnap;
+                msImgScanSnap = scanSnap;
+            } else if (imgModality == 1) {
+                imgRamanCollected = YES;
+                ramanImgWidth = imgWidth; ramanImgHeight = imgHeight; ramanImgBins = imgBins;
+                ramanImgPxX = imgPxX; ramanImgPxY = imgPxY;
+                ramanImgCubeSnap = cubeSnap;
+                ramanImgAxisSnap = axisSnap;
+                ramanImgScanSnap = scanSnap;
+            } else if (imgModality == 2) {
+                imgIRCollected = YES;
+                irImgWidth = imgWidth; irImgHeight = imgHeight; irImgBins = imgBins;
+                irImgPxX = imgPxX; irImgPxY = imgPxY;
+                irImgCubeSnap = cubeSnap;
+                irImgAxisSnap = axisSnap;
+                irImgScanSnap = scanSnap;
+            }
             imgHeaderSeen = NO;
             continue;
         }
@@ -1496,107 +1763,78 @@ typedef struct {
                                  @"image embed: H5Gopen2 /study failed"}];
             return NO;
         }
-        hid_t imageGroup = H5Gcreate2(studyGid, "image_cube",
-                                        H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-        if (imageGroup < 0) {
-            H5Gclose(studyGid); H5Fclose(fid);
+        BOOL msOk = writeImageCubeGroupAtStudy(
+            studyGid, "image_cube",
+            msImgWidth, msImgHeight, msImgBins, /*tileSize=*/32,
+            msImgPxX, msImgPxY, msImgScanSnap,
+            msImgAxisSnap, msImgCubeSnap.bytes,
+            @{}, @{},
+            error);
+        H5Gclose(studyGid);
+        H5Fclose(fid);
+        if (!msOk) return NO;
+    }
+
+    // v0.11 Stage 5.3 (Deferral 1): embed Raman + IR cubes alongside
+    // the MS image_cube when the stream carried IMAGE blocks with
+    // modality 1 / 2. Each modality lives in its own
+    // /study/{raman,ir}_image_cube/ subgroup so all three coexist on
+    // the same materialised .tio. Java parity:
+    // TransportReader.materializeTo (commit f99ec47d). Python parity:
+    // TransportReader.materialize_to (commit 6abead73).
+    if (imgRamanCollected || imgIRCollected) {
+        hid_t fid = H5Fopen([outputPath fileSystemRepresentation],
+                              H5F_ACC_RDWR, H5P_DEFAULT);
+        if (fid < 0) {
             if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                      code:TTIOTransportErrorUnexpectedPayload
                                                  userInfo:@{NSLocalizedDescriptionKey:
-                                 @"image embed: H5Gcreate2 image_cube failed"}];
+                                 @"raman/ir image embed: H5Fopen RDWR failed"}];
             return NO;
         }
-
-        NSUInteger tileSize = 32;
-        hsize_t dims[3]  = { (hsize_t)imgHeight,
-                             (hsize_t)imgWidth,
-                             (hsize_t)imgBins };
-        hsize_t chunk[3] = { (hsize_t)MIN(tileSize, (NSUInteger)imgHeight),
-                             (hsize_t)MIN(tileSize, (NSUInteger)imgWidth),
-                             (hsize_t)imgBins };
-        hid_t space = H5Screate_simple(3, dims, NULL);
-        hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
-        H5Pset_chunk(plist, 3, chunk);
-        H5Pset_deflate(plist, 6);
-        hid_t did = H5Dcreate2(imageGroup, "intensity",
-                                 H5T_NATIVE_DOUBLE, space,
-                                 H5P_DEFAULT, plist, H5P_DEFAULT);
-        if (did < 0) {
-            H5Pclose(plist); H5Sclose(space);
-            H5Gclose(imageGroup); H5Gclose(studyGid); H5Fclose(fid);
+        hid_t studyGid = H5Gopen2(fid, "study", H5P_DEFAULT);
+        if (studyGid < 0) {
+            H5Fclose(fid);
             if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                      code:TTIOTransportErrorUnexpectedPayload
                                                  userInfo:@{NSLocalizedDescriptionKey:
-                                 @"image embed: H5Dcreate2 intensity failed"}];
+                                 @"raman/ir image embed: H5Gopen2 /study failed"}];
             return NO;
         }
-        herr_t st = H5Dwrite(did, H5T_NATIVE_DOUBLE,
-                              H5S_ALL, H5S_ALL, H5P_DEFAULT,
-                              imgCube.bytes);
-        if (st < 0) {
-            H5Dclose(did); H5Pclose(plist); H5Sclose(space);
-            H5Gclose(imageGroup); H5Gclose(studyGid); H5Fclose(fid);
-            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                     code:TTIOTransportErrorUnexpectedPayload
-                                                 userInfo:@{NSLocalizedDescriptionKey:
-                                 @"image embed: H5Dwrite intensity failed"}];
-            return NO;
+        BOOL ok = YES;
+        if (imgRamanCollected) {
+            // Raman modality_extras carries excitation_wavelength_nm
+            // + laser_power_mw — both materialise as group-level
+            // double attrs on /study/raman_image_cube/, matching
+            // TTIORamanImage -writeToFilePath:.
+            ok = writeImageCubeGroupAtStudy(
+                studyGid, "raman_image_cube",
+                ramanImgWidth, ramanImgHeight, ramanImgBins, /*tileSize=*/32,
+                ramanImgPxX, ramanImgPxY, ramanImgScanSnap,
+                ramanImgAxisSnap, ramanImgCubeSnap.bytes,
+                @{ @"excitation_wavelength_nm": @(imgRamanExcitationNm),
+                   @"laser_power_mw":           @(imgRamanLaserPowerMw) },
+                @{},
+                error);
         }
-
-        // Scalar metadata attrs — mirrors TTIOMSImage writeImageCubeUnderGroup.
-        hid_t scalar = H5Screate(H5S_SCALAR);
-        #define WRITE_INT_ATTR_IMG(name, val) do { \
-            hid_t a = H5Acreate2(imageGroup, (name), H5T_NATIVE_INT64, \
-                                  scalar, H5P_DEFAULT, H5P_DEFAULT); \
-            int64_t v = (int64_t)(val); H5Awrite(a, H5T_NATIVE_INT64, &v); H5Aclose(a); \
-        } while (0)
-        #define WRITE_DBL_ATTR_IMG(name, val) do { \
-            hid_t a = H5Acreate2(imageGroup, (name), H5T_NATIVE_DOUBLE, \
-                                  scalar, H5P_DEFAULT, H5P_DEFAULT); \
-            double v = (val); H5Awrite(a, H5T_NATIVE_DOUBLE, &v); H5Aclose(a); \
-        } while (0)
-        WRITE_INT_ATTR_IMG("width",           (int64_t)imgWidth);
-        WRITE_INT_ATTR_IMG("height",          (int64_t)imgHeight);
-        WRITE_INT_ATTR_IMG("spectral_points", (int64_t)imgBins);
-        WRITE_INT_ATTR_IMG("tile_size",       (int64_t)tileSize);
-        WRITE_DBL_ATTR_IMG("pixel_size_x",    imgPxX);
-        WRITE_DBL_ATTR_IMG("pixel_size_y",    imgPxY);
-        {
-            hid_t strType = H5Tcopy(H5T_C_S1);
-            H5Tset_size(strType, H5T_VARIABLE);
-            hid_t a = H5Acreate2(imageGroup, "scan_pattern", strType, scalar,
-                                  H5P_DEFAULT, H5P_DEFAULT);
-            const char *cs = [imgScanPattern UTF8String];
-            H5Awrite(a, strType, &cs);
-            H5Aclose(a);
-            H5Tclose(strType);
+        if (ok && imgIRCollected) {
+            // IR modality_extras → resolution_cm_inv (double attr)
+            // + ir_mode (string attr, "absorbance" / "transmittance"
+            // — matches TTIOIRImage -writeToFilePath:).
+            NSString *irModeStr = (imgIRModeByte == 1)
+                ? @"absorbance" : @"transmittance";
+            ok = writeImageCubeGroupAtStudy(
+                studyGid, "ir_image_cube",
+                irImgWidth, irImgHeight, irImgBins, /*tileSize=*/32,
+                irImgPxX, irImgPxY, irImgScanSnap,
+                irImgAxisSnap, irImgCubeSnap.bytes,
+                @{ @"resolution_cm_inv": @(imgIRResolutionCmInv) },
+                @{ @"ir_mode":           irModeStr },
+                error);
         }
-        // mz_axis 1-D dataset (1.2.0+) — preserve byte equality with
-        // a fresh writeToFilePath: by reusing the same chunking +
-        // deflate level.
-        if (imgMzAxis.length == imgBins * sizeof(double)) {
-            hsize_t axisDims[1] = { (hsize_t)imgBins };
-            hid_t axisSpace = H5Screate_simple(1, axisDims, NULL);
-            hid_t axisPlist = H5Pcreate(H5P_DATASET_CREATE);
-            H5Pset_chunk(axisPlist, 1, axisDims);
-            H5Pset_deflate(axisPlist, 6);
-            hid_t axisDid = H5Dcreate2(imageGroup, "mz_axis",
-                                        H5T_NATIVE_DOUBLE, axisSpace,
-                                        H5P_DEFAULT, axisPlist, H5P_DEFAULT);
-            if (axisDid >= 0) {
-                H5Dwrite(axisDid, H5T_NATIVE_DOUBLE,
-                         H5S_ALL, H5S_ALL, H5P_DEFAULT, imgMzAxis.bytes);
-                H5Dclose(axisDid);
-            }
-            H5Pclose(axisPlist);
-            H5Sclose(axisSpace);
-        }
-        #undef WRITE_INT_ATTR_IMG
-        #undef WRITE_DBL_ATTR_IMG
-
-        H5Sclose(scalar);
-        H5Dclose(did); H5Pclose(plist); H5Sclose(space);
-        H5Gclose(imageGroup); H5Gclose(studyGid); H5Fclose(fid);
+        H5Gclose(studyGid);
+        H5Fclose(fid);
+        if (!ok) return NO;
     }
 
     // v0.11 Task 3.4: persist the collected encryption algorithm as the
