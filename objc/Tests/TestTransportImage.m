@@ -475,76 +475,6 @@ static void testEoiPixelCountMismatchRejected(void)
     unlink([outPath fileSystemRepresentation]);
 }
 
-// -------- 7. processed-mode rejected (deferred) ----------------------------
-
-// Hand-roll a stream whose IMAGE_HEADER has is_continuous=0. We
-// synthesise the entire packet via the low-level writer + a tiny patch.
-static void testProcessedModeRejected(void)
-{
-    TTIOMSImage *img = buildContinuousFixture();
-    NSMutableData *buf = [NSMutableData data];
-    TTIOTransportWriter *w =
-        [[TTIOTransportWriter alloc] initWithMutableData:buf];
-    NSError *err = nil;
-    PASS([w writeStreamHeaderWithFormatVersion:@"1.2"
-                                          title:@"img-proc"
-                               isaInvestigation:@""
-                                       features:@[]
-                                      nDatasets:0
-                                          error:&err],
-         "3.6 proc: StreamHeader");
-    PASS([w writeImage:img error:&err], "3.6 proc: writeImage");
-    PASS([w writeEndOfStreamWithError:&err], "3.6 proc: EndOfStream");
-
-    // Locate the IMAGE_HEADER packet (type 0x13) and flip the
-    // is_continuous byte to 0. The reader is expected to raise.
-    NSMutableData *mut = [buf mutableCopy];
-    TTIOTransportReader *probe =
-        [[TTIOTransportReader alloc] initWithData:mut];
-    NSArray<TTIOTransportPacketRecord *> *records =
-        [probe readAllPacketsWithError:&err];
-    NSData *hdrPayload = records[1].payload;
-    // is_continuous offset in IMAGE_HEADER payload:
-    //   1 (modality) + 4 (w) + 4 (h) + 4 (bins) + 8 (pxX) + 8 (pxY)
-    //   + 1 (scan) + 1 (axis_kind) + 4 (axis_len) + 8*axis_len
-    NSUInteger isContOff = 1 + 4 + 4 + 4 + 8 + 8 + 1 + 1 + 4 + 8 * 5;
-    const uint8_t *hb = hdrPayload.bytes;
-    PASS(hb[isContOff] == 1u,
-         "3.6 proc: pre-patch is_continuous == 1");
-
-    // Search the raw stream buffer for that specific byte. We can't
-    // easily locate the absolute offset, so scan for the IMAGE_HEADER
-    // payload's first 9 bytes (modality + width + height) which are
-    // deterministic: 00 04 00 00 00 04 00 00 00 ...
-    uint8_t *p = mut.mutableBytes;
-    NSUInteger n = mut.length;
-    NSUInteger headerStart = NSNotFound;
-    for (NSUInteger i = 0; i + 9 <= n; i++) {
-        if (p[i]   == 0x00 && p[i+1] == 0x04 && p[i+2] == 0x00
-         && p[i+3] == 0x00 && p[i+4] == 0x00 && p[i+5] == 0x04
-         && p[i+6] == 0x00 && p[i+7] == 0x00 && p[i+8] == 0x00) {
-            headerStart = i;
-            break;
-        }
-    }
-    PASS(headerStart != NSNotFound,
-         "3.6 proc: located IMAGE_HEADER payload start in stream");
-    if (headerStart != NSNotFound) {
-        p[headerStart + isContOff] = 0u;  // flip to processed-mode
-    }
-
-    NSString *outPath = makeTempPathI(@"proc");
-    unlink([outPath fileSystemRepresentation]);
-    TTIOTransportReader *r =
-        [[TTIOTransportReader alloc] initWithData:mut];
-    err = nil;
-    BOOL ok = [r writeTtioToPath:outPath error:&err];
-    PASS(!ok && err != nil,
-         "3.6 proc: reader rejects processed-mode (is_continuous=0)");
-
-    unlink([outPath fileSystemRepresentation]);
-}
-
 // -------- entry point ------------------------------------------------------
 
 void testTransportImage(void);
@@ -556,5 +486,4 @@ void testTransportImage(void)
     testImageRoundTripViaMaterialize();
     testNoImagePacketsForImagelessDataset();
     testEoiPixelCountMismatchRejected();
-    testProcessedModeRejected();
 }

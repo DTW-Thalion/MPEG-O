@@ -123,6 +123,7 @@ TTIOTests_OBJC_FILES = \
 	TestTransportEncryptionAlgorithm.m \
 	TestTransportDatasetProvenance.m \
 	TestTransportImage.m \
+	TestTransportImageProcessed.m \
 	TestTransportIdentificationsQuantifications.m \
 	TestTransportWriteDatasetPrelude.m \
 	TTIOV011FixtureBuilder.m \
