@@ -12,6 +12,7 @@ import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.hdf5.Hdf5CompoundIO;
 import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
+import global.thalion.ttio.io.ProgressSink;
 import global.thalion.ttio.providers.Hdf5Provider;
 import global.thalion.ttio.providers.StorageProvider;
 
@@ -600,6 +601,28 @@ public class SpectralDataset implements
             List<Subject> subjects,
             List<Sample> samples,
             FeatureFlags featureFlags) {
+        return createViaProviderMixed(url, title, isaInvestigationId,
+                runs, genomicRuns, genomicRunNames,
+                identifications, quantifications, provenanceRecords,
+                subjects, samples, featureFlags, () -> {});
+    }
+
+    /** Stage D ProgressSink-aware variant of {@link #createViaProviderMixed}.
+     *  {@code bumpSection} runs once after each §5.4-ordered section
+     *  finishes writing (caller has already emitted the (0, total)
+     *  baseline). */
+    private static SpectralDataset createViaProviderMixed(
+            String url, String title, String isaInvestigationId,
+            List<AcquisitionRun> runs,
+            List<WrittenGenomicRun> genomicRuns,
+            List<String> genomicRunNames,
+            List<Identification> identifications,
+            List<Quantification> quantifications,
+            List<ProvenanceRecord> provenanceRecords,
+            List<Subject> subjects,
+            List<Sample> samples,
+            FeatureFlags featureFlags,
+            Runnable bumpSection) {
         StorageProvider provider = global.thalion.ttio.providers
                 .ProviderRegistry.open(url, StorageProvider.Mode.CREATE);
         // Batch all create-time writes into a single provider transaction so
@@ -630,18 +653,22 @@ public class SpectralDataset implements
                         }
                         ms.setAttribute("_run_names", names.toString());
                     }
+                    bumpSection.run();  // ms_runs done
                 }
                 if (identifications != null && !identifications.isEmpty()) {
                     study.setAttribute("identifications_json",
                             buildIdentificationsJson(identifications));
+                    bumpSection.run();  // identifications done
                 }
                 if (quantifications != null && !quantifications.isEmpty()) {
                     study.setAttribute("quantifications_json",
                             buildQuantificationsJson(quantifications));
+                    bumpSection.run();  // quantifications done
                 }
                 if (provenanceRecords != null && !provenanceRecords.isEmpty()) {
                     study.setAttribute("provenance_json",
                             buildProvenanceJson(provenanceRecords));
+                    bumpSection.run();  // provenance done
                 }
 
                 // genomic_runs subtree (provider-agnostic).
@@ -651,6 +678,7 @@ public class SpectralDataset implements
                     // before writing genomic_runs (provider-agnostic
                     // mirror of the HDF5 fast path).
                     embedReferencesForRuns(study, genomicRuns);
+                    bumpSection.run();  // references done
                     try (var gG = study.createGroup("genomic_runs")) {
                         StringBuilder names = new StringBuilder();
                         for (int i = 0; i < genomicRuns.size(); i++) {
@@ -665,13 +693,16 @@ public class SpectralDataset implements
                         }
                         gG.setAttribute("_run_names", names.toString());
                     }
+                    bumpSection.run();  // genomic_runs done
                 }
 
                 // Stage 6: per-row subject + sample groups (provider-
                 // agnostic). Mirrors the HDF5 fast path; validation
                 // already ran upstream in createMixed.
                 writeSubjectsViaProvider(study, subjects);
+                if (subjects != null && !subjects.isEmpty()) bumpSection.run();
                 writeSamplesViaProvider(study, samples);
+                if (samples != null && !samples.isEmpty()) bumpSection.run();
 
                 SpectralDataset out = new SpectralDataset(provider, null,
                         featureFlags, title, isaInvestigationId, runMap,
@@ -689,6 +720,18 @@ public class SpectralDataset implements
 
     // ── Create (write) ──────────────────────────────────────────────
 
+    /** Sections in §5.4 on-disk write order. Used by the Stage D
+     *  per-section ProgressSink reporting. The on-disk write order
+     *  (which the writer follows below) puts {@code ms_runs} before
+     *  {@code references} so spectral-only files keep their existing
+     *  byte layout; the per-section sink reports section indices in
+     *  that same emit order so the UI label tracks the actual write
+     *  step. */
+    private static final List<String> CREATE_SECTION_LABELS = List.of(
+        "ms_runs", "references", "genomic_runs",
+        "identifications", "quantifications", "provenance",
+        "subjects", "samples");
+
     /** Create a new .tio file with the given content. */
     public static SpectralDataset create(String path, String title,
                                           String isaInvestigationId,
@@ -699,6 +742,44 @@ public class SpectralDataset implements
         return create(path, title, isaInvestigationId, runs,
                 identifications, quantifications, provenanceRecords,
                 autoFeatureFlags(runs));
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #create(String, String, String, List, List, List, List)}
+     * that fires {@code progress.onProgress(sectionIdx, sectionCount)}
+     * once per §5.4-ordered section as it is materialised. UI can drive
+     * a determinate progress bar showing "writing identifications..."
+     * with section-count progress.
+     *
+     * <p>The total {@code sectionCount} reflects only sections that
+     * will actually be written (empty collections are skipped, so a
+     * spectral-only .tio with no identifications / no provenance fires
+     * fewer reports than one with the full set).</p>
+     *
+     * <p>The outer sink does not see byte counts (HDF5 does not expose
+     * those per-section cleanly); for per-record progress within a
+     * section, consumers should wire a sink directly into the relevant
+     * writer (e.g. {@link MzMLWriter#write(AcquisitionRun, String,
+     * boolean, ProgressSink)}) — Stage D's writer side has those.</p>
+     *
+     * @since 1.5.0
+     */
+    public static SpectralDataset create(String path, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          ProgressSink progress) {
+        return createMixed(path, title, isaInvestigationId,
+                runs != null ? runs : List.of(),
+                List.of(),
+                new java.util.ArrayList<String>(),
+                identifications, quantifications, provenanceRecords,
+                List.of(), List.of(),
+                autoFeatureFlags(runs),
+                progress != null ? progress : ProgressSink.discard());
     }
 
     /** Stage 6 (transport-spec v0.11, Deferral 2): create a .tio file
@@ -872,6 +953,28 @@ public class SpectralDataset implements
                                           List<Quantification> quantifications,
                                           List<ProvenanceRecord> provenanceRecords,
                                           FeatureFlags featureFlags) {
+        return create(pathOrUrl, title, isaInvestigationId,
+                runs, genomicRuns, identifications, quantifications,
+                provenanceRecords, featureFlags, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of the genomic-aware
+     * {@link #create(String, String, String, List, List, List, List, List, FeatureFlags)}
+     * that fires {@code progress.onProgress(sectionIdx, sectionCount)}
+     * once per §5.4-ordered section as it is materialised.
+     *
+     * @since 1.5.0
+     */
+    public static SpectralDataset create(String pathOrUrl, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<WrittenGenomicRun> genomicRuns,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          FeatureFlags featureFlags,
+                                          ProgressSink progress) {
         // Phase 2: forward through the names-aware helper with the
         // legacy auto-naming scheme (genomic_NNNN). The mixed-Map create
         // overload calls createMixed directly with caller-supplied names.
@@ -886,7 +989,9 @@ public class SpectralDataset implements
                 genomicRuns != null ? genomicRuns : List.of(),
                 autoNames,
                 identifications, quantifications, provenanceRecords,
-                featureFlags);
+                List.of(), List.of(),
+                featureFlags,
+                progress != null ? progress : ProgressSink.discard());
     }
 
     /** Back-compat overload for callers that don't pass Subject /
@@ -904,7 +1009,8 @@ public class SpectralDataset implements
                 runs, genomicRuns, genomicRunNames,
                 identifications, quantifications, provenanceRecords,
                 List.of(), List.of(),
-                featureFlags);
+                featureFlags,
+                ProgressSink.discard());
     }
 
     /** Phase 2 (post-M91): names-aware backend used by both the
@@ -926,6 +1032,29 @@ public class SpectralDataset implements
             List<Subject> subjects,
             List<Sample> samples,
             FeatureFlags featureFlags) {
+        return createMixed(pathOrUrl, title, isaInvestigationId,
+                runs, genomicRuns, genomicRunNames,
+                identifications, quantifications, provenanceRecords,
+                subjects, samples, featureFlags,
+                ProgressSink.discard());
+    }
+
+    /** Stage D ProgressSink-aware overload of {@link #createMixed} that
+     *  fires {@code progress.onProgress(sectionIdx, sectionCount)} once
+     *  per §5.4-ordered section as it is materialised. */
+    private static SpectralDataset createMixed(
+            String pathOrUrl, String title, String isaInvestigationId,
+            List<AcquisitionRun> runs,
+            List<WrittenGenomicRun> genomicRuns,
+            java.util.Collection<String> genomicRunNames,
+            List<Identification> identifications,
+            List<Quantification> quantifications,
+            List<ProvenanceRecord> provenanceRecords,
+            List<Subject> subjects,
+            List<Sample> samples,
+            FeatureFlags featureFlags,
+            ProgressSink progress) {
+        if (progress == null) progress = ProgressSink.discard();
         // v1.0 single format-version stamp. Readers gate optional
         // features by the feature-flag list (opt_*), not by version
         // equality.
@@ -958,11 +1087,38 @@ public class SpectralDataset implements
         List<Sample> samplesList = samples != null ? samples : List.of();
         validateSubjectsAndSamples(subjectsList, samplesList);
 
+        // Stage D: pre-compute which §5.4 sections will be written so
+        // the per-section ProgressSink reports a determinate total.
+        // Emit order matches the writer's actual on-disk emission:
+        //   ms_runs → references → genomic_runs → identifications →
+        //   quantifications → provenance → subjects → samples.
+        // (references is bundled with genomic_runs because the writer
+        // calls embedReferencesForRuns immediately before genomic_runs.)
+        long sectionTotal = 0L;
+        if (runs != null && !runs.isEmpty()) sectionTotal++;
+        if (hasGenomic) sectionTotal += 2L;  // references + genomic_runs
+        if (identifications != null && !identifications.isEmpty()) sectionTotal++;
+        if (quantifications != null && !quantifications.isEmpty()) sectionTotal++;
+        if (provenanceRecords != null && !provenanceRecords.isEmpty()) sectionTotal++;
+        if (!subjectsList.isEmpty()) sectionTotal++;
+        if (!samplesList.isEmpty()) sectionTotal++;
+        final long sectionTotalFinal = sectionTotal;
+        final ProgressSink sink = progress;
+        // Initial fire at (0, total) so listeners can establish a
+        // determinate baseline before the first section completes.
+        sink.onProgress(0L, sectionTotalFinal);
+        final long[] sectionDone = { 0L };
+        Runnable bumpSection = () -> {
+            sectionDone[0]++;
+            sink.onProgress(sectionDone[0], sectionTotalFinal);
+        };
+
         if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
             return createViaProviderMixed(pathOrUrl, title, isaInvestigationId,
                     runs, genomicRuns, gNamesList,
                     identifications, quantifications,
-                    provenanceRecords, subjectsList, samplesList, featureFlags);
+                    provenanceRecords, subjectsList, samplesList, featureFlags,
+                    bumpSection);
         }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
                 .open(pathOrUrl, StorageProvider.Mode.CREATE);
@@ -990,6 +1146,7 @@ public class SpectralDataset implements
                         }
                         msRunsGroup.setStringAttribute("_run_names", names.toString());
                     }
+                    bumpSection.run();  // ms_runs done
                 }
 
                 // genomic_runs subtree (only when non-empty).
@@ -1001,6 +1158,7 @@ public class SpectralDataset implements
                     // the md5 attribute back from disk if needed.
                     embedReferencesForRuns(
                         Hdf5Provider.adapterForGroup(study), genomicRuns);
+                    bumpSection.run();  // references done
                     try (Hdf5Group gRunsGroup = study.createGroup("genomic_runs")) {
                         StringBuilder names = new StringBuilder();
                         for (int i = 0; i < genomicRuns.size(); i++) {
@@ -1018,16 +1176,20 @@ public class SpectralDataset implements
                         }
                         gRunsGroup.setStringAttribute("_run_names", names.toString());
                     }
+                    bumpSection.run();  // genomic_runs done
                 }
 
                 if (identifications != null && !identifications.isEmpty()) {
                     writeIdentifications(study, identifications);
+                    bumpSection.run();  // identifications done
                 }
                 if (quantifications != null && !quantifications.isEmpty()) {
                     writeQuantifications(study, quantifications);
+                    bumpSection.run();  // quantifications done
                 }
                 if (provenanceRecords != null && !provenanceRecords.isEmpty()) {
                     writeProvenance(study, provenanceRecords);
+                    bumpSection.run();  // provenance done
                 }
 
                 // Stage 6 (transport-spec v0.11, Deferral 2): per-row
@@ -1036,7 +1198,9 @@ public class SpectralDataset implements
                 // (duplicate-ID raise + soft-FK warning), so the writer
                 // here just emits the typed attributes.
                 writeSubjects(study, subjectsList);
+                if (!subjectsList.isEmpty()) bumpSection.run();  // subjects done
                 writeSamples(study, samplesList);
+                if (!samplesList.isEmpty()) bumpSection.run();  // samples done
 
                 return new SpectralDataset(provider, file, featureFlags, title, isaInvestigationId,
                         runMap, genomicMap, Map.of(), null, null, null,

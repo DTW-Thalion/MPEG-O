@@ -8,6 +8,7 @@ package global.thalion.ttio.exporters;
 import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -46,10 +47,15 @@ public final class FastqWriter {
     private static final int QUAL_UNKNOWN_BYTE = 0xFF;
     private static final byte PHRED33_FILL = (byte) '!';
 
+    /** Stage D: emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during FASTQ record serialisation. Mirrors
+     *  {@code FastqReader.PROGRESS_INTERVAL_READS = 1000}. */
+    public static final int PROGRESS_INTERVAL_READS = 1000;
+
     private FastqWriter() {}
 
     public static void write(WrittenGenomicRun run, Path path) throws IOException {
-        write(run, path, null, 33);
+        write(run, path, null, 33, ProgressSink.discard());
     }
 
     /**
@@ -63,18 +69,37 @@ public final class FastqWriter {
         WrittenGenomicRun run, Path path,
         Boolean gzipOutput, int phredOffset
     ) throws IOException {
+        write(run, path, gzipOutput, phredOffset, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #write(WrittenGenomicRun, Path, Boolean, int)} that fires
+     * {@code progress.onProgress(readsDone, totalReads)} every
+     * {@link #PROGRESS_INTERVAL_READS} records and a final fire once
+     * the buffer is flushed to disk.
+     *
+     * @since 1.5.0
+     */
+    public static void write(
+        WrittenGenomicRun run, Path path,
+        Boolean gzipOutput, int phredOffset, ProgressSink progress
+    ) throws IOException {
         if (phredOffset != 33 && phredOffset != 64) {
             throw new IllegalArgumentException(
                 "phredOffset must be 33 or 64 (got " + phredOffset + ")"
             );
         }
+        if (progress == null) progress = ProgressSink.discard();
         boolean gz = gzipOutput != null
             ? gzipOutput
             : path.getFileName().toString().toLowerCase().endsWith(".gz");
 
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         Set<String> seen = new HashSet<>();
-        for (int i = 0; i < run.readNames().size(); i++) {
+        int nRecs = run.readNames().size();
+        long total = nRecs;
+        for (int i = 0; i < nRecs; i++) {
             int off = (int) run.offsets()[i];
             int len = run.lengths()[i];
             byte[] seq = new byte[len];
@@ -115,6 +140,10 @@ public final class FastqWriter {
             buf.write('\n');
             buf.write(qual);
             buf.write('\n');
+            long done = (long) (i + 1);
+            if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
+                progress.onProgress(done, total);
+            }
         }
         byte[] body = buf.toByteArray();
 
@@ -127,6 +156,7 @@ public final class FastqWriter {
                 out.write(body);
             }
         }
+        progress.onProgress(total, total);
     }
 
     /**
@@ -142,11 +172,28 @@ public final class FastqWriter {
         GenomicRun run, Path path,
         Boolean gzipOutput, int phredOffset
     ) throws IOException {
+        write(run, path, gzipOutput, phredOffset, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #write(GenomicRun, Path, Boolean, int)} that fires
+     * {@code progress.onProgress(readsDone, totalReads)} every
+     * {@link #PROGRESS_INTERVAL_READS} records and a final fire once
+     * the buffer is flushed to disk.
+     *
+     * @since 1.5.0
+     */
+    public static void write(
+        GenomicRun run, Path path,
+        Boolean gzipOutput, int phredOffset, ProgressSink progress
+    ) throws IOException {
         if (phredOffset != 33 && phredOffset != 64) {
             throw new IllegalArgumentException(
                 "phredOffset must be 33 or 64 (got " + phredOffset + ")"
             );
         }
+        if (progress == null) progress = ProgressSink.discard();
         boolean gz = gzipOutput != null
             ? gzipOutput
             : path.getFileName().toString().toLowerCase().endsWith(".gz");
@@ -158,6 +205,7 @@ public final class FastqWriter {
         // need). Mirrors the 24× speedup the Python FastqWriter saw
         // from this same pattern.
         int n = run.readCount();
+        long total = n;
         byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
         byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];
         List<String> namesAll = run.readNamesAll();
@@ -202,6 +250,10 @@ public final class FastqWriter {
             buf.write('\n');
             buf.write(qual);
             buf.write('\n');
+            long done = (long) (i + 1);
+            if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
+                progress.onProgress(done, total);
+            }
         }
         byte[] body = buf.toByteArray();
 
@@ -214,9 +266,10 @@ public final class FastqWriter {
                 out.write(body);
             }
         }
+        progress.onProgress(total, total);
     }
 
     public static void write(GenomicRun run, Path path) throws IOException {
-        write(run, path, null, 33);
+        write(run, path, null, 33, ProgressSink.discard());
     }
 }

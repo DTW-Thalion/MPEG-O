@@ -9,6 +9,7 @@ import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.io.ProgressSink;
 import java.nio.charset.StandardCharsets;
 
 import java.io.ByteArrayOutputStream;
@@ -44,6 +45,13 @@ public final class FastaWriter {
 
     public static final int DEFAULT_LINE_WIDTH = 60;
 
+    /** Stage D: emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during FASTA-of-reads serialisation. Mirrors
+     *  {@code FastaReader.PROGRESS_INTERVAL_READS = 1000}. The reference
+     *  write path uses a per-chromosome cadence instead (typically a
+     *  few dozen contigs at most, so one fire per chromosome is fine). */
+    public static final int PROGRESS_INTERVAL_READS = 1000;
+
     private FastaWriter() {}
 
     /**
@@ -62,18 +70,45 @@ public final class FastaWriter {
         ReferenceImport reference, Path path,
         int lineWidth, Boolean gzipOutput, boolean writeFai
     ) throws IOException {
+        writeReference(reference, path, lineWidth, gzipOutput, writeFai,
+            ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #writeReference(ReferenceImport, Path, int, Boolean, boolean)}
+     * that fires {@code progress.onProgress(chromsDone, totalChroms)}
+     * once per chromosome record and a final fire when bytes hit disk.
+     *
+     * @since 1.5.0
+     */
+    public static void writeReference(
+        ReferenceImport reference, Path path,
+        int lineWidth, Boolean gzipOutput, boolean writeFai,
+        ProgressSink progress
+    ) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
+        long total = reference.chromosomes().size();
         List<Record> records = new ArrayList<>();
         for (int i = 0; i < reference.chromosomes().size(); i++) {
             records.add(new Record(
                 reference.chromosomes().get(i),
                 reference.sequences().get(i)
             ));
+            // Per-chromosome cadence (writeReference is for reference
+            // FASTAs — typically tens of contigs at most).
+            long done = (long) (i + 1);
+            if (done < total) {
+                progress.onProgress(done, total);
+            }
         }
         writeRecords(records, path, lineWidth, gzipOutput, writeFai);
+        progress.onProgress(total, total);
     }
 
     public static void writeReference(ReferenceImport reference, Path path) throws IOException {
-        writeReference(reference, path, DEFAULT_LINE_WIDTH, null, true);
+        writeReference(reference, path, DEFAULT_LINE_WIDTH, null, true,
+            ProgressSink.discard());
     }
 
     /**
@@ -86,6 +121,26 @@ public final class FastaWriter {
         WrittenGenomicRun run, Path path,
         int lineWidth, Boolean gzipOutput, boolean writeFai
     ) throws IOException {
+        writeRun(run, path, lineWidth, gzipOutput, writeFai,
+            ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #writeRun(WrittenGenomicRun, Path, int, Boolean, boolean)}
+     * that fires {@code progress.onProgress(readsDone, totalReads)}
+     * every {@link #PROGRESS_INTERVAL_READS} records during the
+     * record-collection loop and a final fire when bytes hit disk.
+     *
+     * @since 1.5.0
+     */
+    public static void writeRun(
+        WrittenGenomicRun run, Path path,
+        int lineWidth, Boolean gzipOutput, boolean writeFai,
+        ProgressSink progress
+    ) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
+        long total = run.readNames().size();
         List<Record> records = new ArrayList<>();
         Set<String> seen = new HashSet<>();
         for (int i = 0; i < run.readNames().size(); i++) {
@@ -97,12 +152,17 @@ public final class FastaWriter {
             if (seen.contains(name)) name = name + "#" + i;
             seen.add(name);
             records.add(new Record(name, seq));
+            long done = (long) (i + 1);
+            if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
+                progress.onProgress(done, total);
+            }
         }
         writeRecords(records, path, lineWidth, gzipOutput, writeFai);
+        progress.onProgress(total, total);
     }
 
     public static void writeRun(WrittenGenomicRun run, Path path) throws IOException {
-        writeRun(run, path, DEFAULT_LINE_WIDTH, null, true);
+        writeRun(run, path, DEFAULT_LINE_WIDTH, null, true, ProgressSink.discard());
     }
 
     /**
@@ -118,12 +178,32 @@ public final class FastaWriter {
         GenomicRun run, Path path,
         int lineWidth, Boolean gzipOutput, boolean writeFai
     ) throws IOException {
+        writeRun(run, path, lineWidth, gzipOutput, writeFai,
+            ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #writeRun(GenomicRun, Path, int, Boolean, boolean)}
+     * that fires {@code progress.onProgress(readsDone, totalReads)}
+     * every {@link #PROGRESS_INTERVAL_READS} records and a final fire
+     * when bytes hit disk.
+     *
+     * @since 1.5.0
+     */
+    public static void writeRun(
+        GenomicRun run, Path path,
+        int lineWidth, Boolean gzipOutput, boolean writeFai,
+        ProgressSink progress
+    ) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         // Same bulk-fetch pattern as FastqWriter:
         // pre-fetch the whole sequences buffer + read-names list once,
         // slice in-memory per record. Skips per-read AlignedRead
         // materialisation, which would also decode cigar / mate triple —
         // fields FASTA does not need.
         int n = run.readCount();
+        long total = n;
         byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
         java.util.List<String> namesAll = run.readNamesAll();
         List<Record> records = new ArrayList<>(n);
@@ -137,12 +217,17 @@ public final class FastaWriter {
             byte[] seq = new byte[len];
             if (len > 0) System.arraycopy(seqAll, off, seq, 0, len);
             records.add(new Record(name, seq));
+            long done = (long) (i + 1);
+            if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
+                progress.onProgress(done, total);
+            }
         }
         writeRecords(records, path, lineWidth, gzipOutput, writeFai);
+        progress.onProgress(total, total);
     }
 
     public static void writeRun(GenomicRun run, Path path) throws IOException {
-        writeRun(run, path, DEFAULT_LINE_WIDTH, null, true);
+        writeRun(run, path, DEFAULT_LINE_WIDTH, null, true, ProgressSink.discard());
     }
 
     // ------------------------------------------------------------------

@@ -4,6 +4,7 @@ package global.thalion.ttio.exporters;
 import global.thalion.ttio.*;
 import global.thalion.ttio.Enums.*;
 import global.thalion.ttio.importers.CVTermMapper;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -33,11 +34,16 @@ import java.util.zip.Deflater;
  */
 public final class MzMLWriter {
 
+    /** Stage D: emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during mzML spectrum serialisation. Mirrors
+     *  {@code MzMLReader.PROGRESS_INTERVAL_SPECTRA = 100}. */
+    public static final int PROGRESS_INTERVAL_SPECTRA = 100;
+
     private MzMLWriter() {}
 
     /** Write with zlib compression enabled by default. */
     public static void write(AcquisitionRun run, String path) {
-        write(run, path, true);
+        write(run, path, true, ProgressSink.discard());
     }
 
     /**
@@ -48,6 +54,20 @@ public final class MzMLWriter {
      * @param zlibCompress  if true, zlib-compress binary data arrays
      */
     public static void write(AcquisitionRun run, String path, boolean zlibCompress) {
+        write(run, path, zlibCompress, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of {@link #write(AcquisitionRun, String, boolean)}
+     * that fires {@code progress.onProgress(specsDone, totalSpecs)}
+     * every {@link #PROGRESS_INTERVAL_SPECTRA} spectra and a final fire
+     * once the file is flushed.
+     *
+     * @since 1.5.0
+     */
+    public static void write(AcquisitionRun run, String path,
+                              boolean zlibCompress, ProgressSink progress) {
+        if (progress == null) progress = ProgressSink.discard();
         StringBuilder sb = new StringBuilder();
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<indexedmzML xmlns=\"http://psi.hupo.org/ms/mzml\"" +
@@ -248,6 +268,11 @@ public final class MzMLWriter {
 
             sb.append("        </binaryDataArrayList>\n");
             sb.append("      </spectrum>\n");
+
+            long done = (long) (i + 1);
+            if (done % PROGRESS_INTERVAL_SPECTRA == 0 && done < specCount) {
+                progress.onProgress(done, (long) specCount);
+            }
         }
 
         sb.append("    </spectrumList>\n");
@@ -352,6 +377,7 @@ public final class MzMLWriter {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to write mzML: " + path, e);
         }
+        progress.onProgress((long) specCount, (long) specCount);
     }
 
     // ── Encoding helpers ───────────────────────────────────────────

@@ -5,6 +5,7 @@ import global.thalion.ttio.Enums.IRMode;
 import global.thalion.ttio.IRSpectrum;
 import global.thalion.ttio.RamanSpectrum;
 import global.thalion.ttio.UVVisSpectrum;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -84,6 +85,23 @@ public final class JcampDxWriter {
                                           Path path,
                                           String title,
                                           JcampDxEncoding encoding) throws IOException {
+        writeRamanSpectrum(spectrum, path, title, encoding, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #writeRamanSpectrum(RamanSpectrum, Path, String, JcampDxEncoding)}
+     * that fires a single {@code progress.onProgress(1, 1)} once the
+     * file is on disk. JCAMP-DX stores a single 1-D spectrum per file.
+     *
+     * @since 1.5.0
+     */
+    public static void writeRamanSpectrum(RamanSpectrum spectrum,
+                                          Path path,
+                                          String title,
+                                          JcampDxEncoding encoding,
+                                          ProgressSink progress) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         double[] xs = spectrum.wavenumberValues();
         double[] ys = spectrum.intensityValues();
         checkLengths(xs, ys, "wavenumber", "intensity");
@@ -109,6 +127,7 @@ public final class JcampDxWriter {
             appendXYDATA(sb, xs, ys);
             sb.append("##END=\n");
             Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
+            progress.onProgress(1L, 1L);
             return;
         }
 
@@ -121,12 +140,30 @@ public final class JcampDxWriter {
                         "##$INTEGRATION TIME SEC=" + JcampDxEncode.formatG10(spectrum.integrationTimeSec()),
                 });
         Files.writeString(path, body, StandardCharsets.UTF_8);
+        progress.onProgress(1L, 1L);
     }
 
     public static void writeIRSpectrum(IRSpectrum spectrum,
                                        Path path,
                                        String title,
                                        JcampDxEncoding encoding) throws IOException {
+        writeIRSpectrum(spectrum, path, title, encoding, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #writeIRSpectrum(IRSpectrum, Path, String, JcampDxEncoding)}
+     * that fires a single {@code progress.onProgress(1, 1)} once the
+     * file is on disk.
+     *
+     * @since 1.5.0
+     */
+    public static void writeIRSpectrum(IRSpectrum spectrum,
+                                       Path path,
+                                       String title,
+                                       JcampDxEncoding encoding,
+                                       ProgressSink progress) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         double[] xs = spectrum.wavenumberValues();
         double[] ys = spectrum.intensityValues();
         checkLengths(xs, ys, "wavenumber", "intensity");
@@ -155,6 +192,7 @@ public final class JcampDxWriter {
             appendXYDATA(sb, xs, ys);
             sb.append("##END=\n");
             Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
+            progress.onProgress(1L, 1L);
             return;
         }
 
@@ -166,12 +204,30 @@ public final class JcampDxWriter {
                         "##$NUMBER OF SCANS=" + spectrum.numberOfScans(),
                 });
         Files.writeString(path, body, StandardCharsets.UTF_8);
+        progress.onProgress(1L, 1L);
     }
 
     public static void writeUVVisSpectrum(UVVisSpectrum spectrum,
                                           Path path,
                                           String title,
                                           JcampDxEncoding encoding) throws IOException {
+        writeUVVisSpectrum(spectrum, path, title, encoding, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #writeUVVisSpectrum(UVVisSpectrum, Path, String, JcampDxEncoding)}
+     * that fires a single {@code progress.onProgress(1, 1)} once the
+     * file is on disk.
+     *
+     * @since 1.5.0
+     */
+    public static void writeUVVisSpectrum(UVVisSpectrum spectrum,
+                                          Path path,
+                                          String title,
+                                          JcampDxEncoding encoding,
+                                          ProgressSink progress) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         double[] xs = spectrum.wavelengthValues();
         double[] ys = spectrum.absorbanceValues();
         checkLengths(xs, ys, "wavelength", "absorbance");
@@ -196,6 +252,7 @@ public final class JcampDxWriter {
             appendXYDATA(sb, xs, ys);
             sb.append("##END=\n");
             Files.writeString(path, sb.toString(), StandardCharsets.UTF_8);
+            progress.onProgress(1L, 1L);
             return;
         }
 
@@ -207,6 +264,7 @@ public final class JcampDxWriter {
                         "##$SOLVENT=" + spectrum.solvent(),
                 });
         Files.writeString(path, body, StandardCharsets.UTF_8);
+        progress.onProgress(1L, 1L);
     }
 
     // ── Compressed shared path ────────────────────────────────────
