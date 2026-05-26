@@ -3929,7 +3929,11 @@ TTIOReadSubjectsFromFile(NSString *path)
 {
     if (path == nil) return @[];
     NSError *err = nil;
-    TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+    // Read-only — the lazy accessor coexists with the
+    // readFromFilePath: provider that also holds the file RO. HDF5
+    // allows multiple RO handles per file but rejects RDWR while RO
+    // is held.
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
     if (f == nil) return @[];
     TTIOHDF5Group *root = [f rootGroup];
     TTIOHDF5Group *study = nil;
@@ -3998,7 +4002,7 @@ TTIOReadSamplesFromFile(NSString *path)
 {
     if (path == nil) return @[];
     NSError *err = nil;
-    TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
     if (f == nil) return @[];
     TTIOHDF5Group *root = [f rootGroup];
     TTIOHDF5Group *study = nil;

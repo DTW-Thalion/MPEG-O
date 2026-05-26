@@ -18,6 +18,8 @@
 @class TTIOIRImage;
 @class TTIOIdentification;
 @class TTIOQuantification;
+@class TTIOSubject;
+@class TTIOSample;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -422,6 +424,43 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeQuantificationsTable:(NSArray<TTIOQuantification *> *)rows
                               error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 6.4 (Stage 6): emit a <code>SUBJECT_METADATA</code>
+ * (0x19) packet carrying the dataset-level subject table as a single
+ * length-prefixed Apache Arrow IPC stream. Wire layout per
+ * transport-spec §4.22:
+ *
+ * <pre>
+ * arrow_ipc_length:    uint32
+ * arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+ * </pre>
+ *
+ * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Wire shape
+ * mirrors <code>-writeIdentificationsTable:</code> exactly. An empty
+ * <code>rows</code> array emits no packet per spec §5.4 step 5
+ * ("zero or more").</p>
+ *
+ * <p>Java parity:
+ * <code>TransportWriter.writeSubjectMetadata</code> (commit
+ * <code>dd211600</code>). Python parity:
+ * <code>TransportWriter.write_subject_metadata</code> (commit
+ * <code>00c7e1b7</code>).</p>
+ */
+- (BOOL)writeSubjectMetadata:(NSArray<TTIOSubject *> *)rows
+                       error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 6.4 (Stage 6): emit a <code>SAMPLE_METADATA</code>
+ * (0x1A) packet — identical shape to §4.22, distinct packet type so
+ * receivers can dispatch without parsing the IPC payload.
+ *
+ * <p>Java parity:
+ * <code>TransportWriter.writeSampleMetadata</code>. Python parity:
+ * <code>TransportWriter.write_sample_metadata</code>.</p>
+ */
+- (BOOL)writeSampleMetadata:(NSArray<TTIOSample *> *)rows
+                      error:(NSError * _Nullable *)error;
 
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 

@@ -25,6 +25,8 @@
 #import "Image/TTIOMSImage.h"
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOSubject.h"
+#import "Dataset/TTIOSample.h"
 #import "Transport/TTIOArrowIpcCodec.h"
 #import "Providers/TTIOHDF5Provider.h"
 #import "Providers/TTIOStorageProtocols.h"
@@ -530,6 +532,17 @@ typedef struct {
     NSMutableArray<TTIOIdentification *> *collectedIdentifications =
         [NSMutableArray array];
     NSMutableArray<TTIOQuantification *> *collectedQuantifications =
+        [NSMutableArray array];
+    // v0.11 Task 6.4 (Stage 6): per-stream accumulators for
+    // SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) — same shape
+    // as the 0x16 / 0x17 accumulators. Materialised onto the
+    // generated .tio after writeMinimalToPath: returns (the writer's
+    // public API doesn't accept subjects/samples directly, mirroring
+    // how Java's TransportReader.materializeTo layers them on with
+    // setAttribute after the file is created).
+    NSMutableArray<TTIOSubject *> *collectedSubjects =
+        [NSMutableArray array];
+    NSMutableArray<TTIOSample *> *collectedSamples =
         [NSMutableArray array];
 
     for (TTIOTransportPacketRecord *rec in packets) {
@@ -1510,6 +1523,42 @@ typedef struct {
             }
             continue;
         }
+        // v0.11 Task 6.4 (Stage 6): SUBJECT_METADATA (0x19) +
+        // SAMPLE_METADATA (0x1A). Wire layout per transport-spec
+        // §4.22 — `uint32 arrow_ipc_length + bytes
+        // arrow_ipc[length]`. Rows accumulate across multiple packets
+        // per spec §5.4 step 5 "zero or more". Java parity:
+        // TransportReader.decodeSubjectMetadata /
+        // decodeSampleMetadata (commit dd211600). Python parity:
+        // TransportReader.materialize_to (commit 00c7e1b7).
+        if (h.packetType == TTIOTransportPacketSubjectMetadata) {
+            if (off + 4 > len) continue;
+            uint32_t ipcLen = readU32(&bytes[off]); off += 4;
+            if (off + ipcLen > len) continue;
+            NSData *ipcBytes = [NSData dataWithBytes:&bytes[off]
+                                              length:ipcLen];
+            off += ipcLen;
+            NSArray<TTIOSubject *> *decoded =
+                [TTIOArrowIpcCodec decodeSubjects:ipcBytes];
+            if (decoded.count > 0) {
+                [collectedSubjects addObjectsFromArray:decoded];
+            }
+            continue;
+        }
+        if (h.packetType == TTIOTransportPacketSampleMetadata) {
+            if (off + 4 > len) continue;
+            uint32_t ipcLen = readU32(&bytes[off]); off += 4;
+            if (off + ipcLen > len) continue;
+            NSData *ipcBytes = [NSData dataWithBytes:&bytes[off]
+                                              length:ipcLen];
+            off += ipcLen;
+            NSArray<TTIOSample *> *decoded =
+                [TTIOArrowIpcCodec decodeSamples:ipcBytes];
+            if (decoded.count > 0) {
+                [collectedSamples addObjectsFromArray:decoded];
+            }
+            continue;
+        }
         if (h.packetType == TTIOTransportPacketEndOfDataset) continue;
         if (h.packetType == TTIOTransportPacketEndOfStream) break;
         // Annotation/Provenance/Chromatogram/Protection — skipped in M67.
@@ -1738,6 +1787,95 @@ typedef struct {
                                                             ? collectedProvenance : nil)
                                                     error:error];
     if (!wrote) return NO;
+
+    // v0.11 Task 6.4 (Stage 6): layer any decoded Subjects + Samples
+    // onto /study/subjects/<external_id>/ + /study/samples/<sample_id>/
+    // per-row HDF5 groups. writeMinimalToPath doesn't accept Stage 6
+    // accessors yet, so we reopen the file RW and write the typed
+    // attributes directly — mirrors the pattern Java's
+    // TransportReader.materializeTo established (commit dd211600,
+    // "wrote subjects via setAttribute after the create call"). Soft-FK
+    // mismatches surface via NSLog (validation runs upstream, doesn't
+    // fail materialise — spec §4.4).
+    if (collectedSubjects.count > 0 || collectedSamples.count > 0) {
+        @try {
+            [TTIOSpectralDataset validateSubjects:collectedSubjects
+                                            samples:collectedSamples];
+        } @catch (NSException *exc) {
+            // Duplicate IDs from a malformed stream — surface as error.
+            if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                     code:TTIOTransportErrorUnexpectedPayload
+                                                 userInfo:@{NSLocalizedDescriptionKey:
+                                 [NSString stringWithFormat:
+                                     @"SUBJECT/SAMPLE_METADATA embed: %@",
+                                     exc.reason]}];
+            return NO;
+        }
+        TTIOHDF5File *f =
+            [TTIOHDF5File openAtPath:outputPath error:error];
+        if (f == nil) return NO;
+        TTIOHDF5Group *rootGroup = [f rootGroup];
+        TTIOHDF5Group *studyGroup =
+            [rootGroup openGroupNamed:@"study" error:error];
+        if (studyGroup == nil) { [f close]; return NO; }
+        if (collectedSubjects.count > 0) {
+            TTIOHDF5Group *sg =
+                [studyGroup createGroupNamed:@"subjects" error:error];
+            if (sg == nil) { [f close]; return NO; }
+            for (TTIOSubject *s in collectedSubjects) {
+                TTIOHDF5Group *row =
+                    [sg createGroupNamed:s.externalId error:error];
+                if (row == nil) { [f close]; return NO; }
+                if (![row setStringAttribute:@"external_id"
+                                        value:s.externalId
+                                        error:error]) { [f close]; return NO; }
+                if (s.project.length > 0) {
+                    if (![row setStringAttribute:@"project" value:s.project
+                                            error:error]) { [f close]; return NO; }
+                }
+                if (s.sex.length > 0) {
+                    if (![row setStringAttribute:@"sex" value:s.sex
+                                            error:error]) { [f close]; return NO; }
+                }
+                if (![row setIntegerAttribute:@"birth_year"
+                                          value:s.birthYear
+                                          error:error]) { [f close]; return NO; }
+                if (![row setStringAttribute:@"attributes_json"
+                                        value:[s attributesJson]
+                                        error:error]) { [f close]; return NO; }
+            }
+        }
+        if (collectedSamples.count > 0) {
+            TTIOHDF5Group *smg =
+                [studyGroup createGroupNamed:@"samples" error:error];
+            if (smg == nil) { [f close]; return NO; }
+            for (TTIOSample *s in collectedSamples) {
+                TTIOHDF5Group *row =
+                    [smg createGroupNamed:s.sampleId error:error];
+                if (row == nil) { [f close]; return NO; }
+                if (![row setStringAttribute:@"sample_id"
+                                        value:s.sampleId
+                                        error:error]) { [f close]; return NO; }
+                if (s.subjectExternalId.length > 0) {
+                    if (![row setStringAttribute:@"subject_external_id"
+                                            value:s.subjectExternalId
+                                            error:error]) { [f close]; return NO; }
+                }
+                if (s.sampleKind.length > 0) {
+                    if (![row setStringAttribute:@"sample_kind"
+                                            value:s.sampleKind
+                                            error:error]) { [f close]; return NO; }
+                }
+                if (![row setIntegerAttribute:@"collected_at"
+                                          value:s.collectedAt
+                                          error:error]) { [f close]; return NO; }
+                if (![row setStringAttribute:@"attributes_json"
+                                        value:[s attributesJson]
+                                        error:error]) { [f close]; return NO; }
+            }
+        }
+        if (![f close]) return NO;
+    }
 
     // v0.11 Task 3.6: embed any image cube decoded from the stream's
     // IMAGE_* packets. The TTI-O on-disk layout puts the image_cube
