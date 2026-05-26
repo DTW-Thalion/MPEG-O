@@ -142,11 +142,11 @@ public final class ImportTask extends Task<Void> {
             case "mzML"             -> importMzML();
             case "nmrML"            -> importNmrML();
             case "mzTab"            -> importMzTab();
-            case "BAM"              -> importBamLike(spec.name);
-            case "SAM"              -> importBamLike(spec.name);
-            case "CRAM"             -> importBamLike(spec.name);
+            case "BAM"              -> importBamLike(spec.name, sink);
+            case "SAM"              -> importBamLike(spec.name, sink);
+            case "CRAM"             -> importBamLike(spec.name, sink);
             case "FASTA"            -> importFasta(sink);
-            case "FASTQ"            -> importFastq();
+            case "FASTQ"            -> importFastq(sink);
             case "imzML"            -> importImzML();
             case "JCAMP-DX"         -> importJcampDx();
             case "Waters MassLynx"  -> importWatersMassLynx();
@@ -198,17 +198,17 @@ public final class ImportTask extends Task<Void> {
             List.of());
     }
 
-    private void importBamLike(String name) throws Exception {
+    private void importBamLike(String name, ProgressSink sink) throws Exception {
         WrittenGenomicRun run;
         Path source = config.sourcePath;
         switch (name) {
             case "BAM" -> {
                 BamReader r = new BamReader(source);
-                run = r.toGenomicRun(config.runName);
+                run = r.toGenomicRun(config.runName, null, null, sink);
             }
             case "SAM" -> {
                 SamReader r = new SamReader(source);
-                run = r.toGenomicRun(config.runName);
+                run = r.toGenomicRun(config.runName, null, null, sink);
             }
             case "CRAM" -> {
                 if (config.cramReference == null) {
@@ -216,7 +216,7 @@ public final class ImportTask extends Task<Void> {
                         "CRAM import requires a reference FASTA");
                 }
                 CramReader r = new CramReader(source, config.cramReference);
-                run = r.toGenomicRun(config.runName);
+                run = r.toGenomicRun(config.runName, null, null, sink);
             }
             default -> throw new IllegalStateException(name);
         }
@@ -235,16 +235,19 @@ public final class ImportTask extends Task<Void> {
                 ref.writeToDataset(ds, /*overwrite=*/false, sink);
             }
         } else {
-            WrittenGenomicRun run = r.readUnaligned(config.runName);
+            // Unaligned reads: thread the sink into the FASTA reader so
+            // the dialog reports per-read progress instead of falling
+            // back to the bytes heartbeat.
+            WrittenGenomicRun run = r.readUnaligned(config.runName, sink);
             writeGenomic(List.of(run));
         }
     }
 
-    private void importFastq() throws Exception {
+    private void importFastq(ProgressSink sink) throws Exception {
         FastqReader r = (config.fastqPhred == null)
             ? new FastqReader(config.sourcePath)
             : new FastqReader(config.sourcePath, config.fastqPhred);
-        WrittenGenomicRun run = r.read(config.runName);
+        WrittenGenomicRun run = r.read(config.runName, sink);
         writeGenomic(List.of(run));
     }
 
