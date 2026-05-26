@@ -218,8 +218,15 @@ static void testImageHeaderWireLayout(void)
     ho += titleLen;
     uint16_t isaLen = leU16I(&hb[ho]); ho += 2;
     PASS(isaLen == 0u, "3.6 wire: isa_id length == 0"); ho += isaLen;
+    // v0.11 Stage 5.3: modality_extras tail. MS modality (0) carries
+    // an empty extras body (length=0) but the 2-byte length prefix
+    // is still on the wire so unknown-modality readers can advance
+    // past the header uniformly.
+    uint16_t extrasLen = leU16I(&hb[ho]); ho += 2;
+    PASS(extrasLen == 0u,
+         "3.6 wire: modality=0 modality_extras_length == 0");
     PASS(ho == hdrPayload.length,
-         "3.6 wire: no trailing IMAGE_HEADER bytes");
+         "3.6 wire: no trailing IMAGE_HEADER bytes after modality_extras");
 }
 
 // -------- 3. IMAGE_PIXEL wire layout + intensity round-trip ----------------

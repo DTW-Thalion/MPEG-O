@@ -132,6 +132,8 @@ extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
 extern void testTransportImageProcessed(void);
 extern void testSpectralDatasetIRImage(void);
+extern void testTransportRamanImage(void);
+extern void testTransportIRImage(void);
 extern void testTransportIdentificationsQuantifications(void);
 extern void testTransportWriteDatasetPrelude(void);
 extern void testAccessorMatrixConformance(void);
@@ -663,6 +665,14 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
             testSpectralDatasetIRImage();
         END_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
+
+        START_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — Raman (modality=1)")
+            testTransportRamanImage();
+        END_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — Raman (modality=1)")
+
+        START_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — IR (modality=2)")
+            testTransportIRImage();
+        END_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — IR (modality=2)")
 
         START_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
             testTransportIdentificationsQuantifications();
