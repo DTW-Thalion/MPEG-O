@@ -2,7 +2,6 @@ package global.thalion.ttio.browser.exporters;
 
 import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,8 +28,8 @@ import global.thalion.ttio.genomics.GenomicIndex;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.browser.progress.PhaseProgress;
 import global.thalion.ttio.browser.progress.ProgressListener;
-import global.thalion.ttio.browser.progress.ProgressReport;
 import global.thalion.ttio.browser.progress.ProgressTracker;
 import global.thalion.ttio.io.ProgressSink;
 import javafx.concurrent.Task;
@@ -68,12 +67,18 @@ public final class ExportTask extends Task<Void> {
     private final ExportConfig config;
     private final SpectralDataset dataset;
     private volatile ProgressListener progressListener;
+    /** Stage E: two-phase progress wrapper. The .tio source-read
+     *  side fills 0..50% and the target-format writer fills
+     *  50..100%. Replaces the pre-Stage-E single-units-tracker
+     *  that "restarted" the records count at the read/write
+     *  boundary. */
+    private PhaseProgress phaseProgress;
+    /** Fallback bytes-mode tracker for ISA-Tab/JSON, which writes
+     *  via java.nio.Files.writeString rather than through a sink-
+     *  instrumented SDK call. Driven by the heartbeat ticker which
+     *  polls target file size. Removed in Stage E commit 2 once
+     *  all formats have real callbacks. */
     private ProgressTracker tracker;
-    /** Stage D: per-record sink driven by the writer-side SDK calls
-     *  (BamWriter, MzMLWriter, ...). First non-empty fire flips the
-     *  bytes-heartbeat ticker off so the dialog shows determinate
-     *  per-record progress instead of polled output-file size. */
-    private ProgressTracker unitsTracker;
     private final java.util.concurrent.atomic.AtomicBoolean sinkActive =
         new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -91,11 +96,12 @@ public final class ExportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Exporting " + spec.name + " to " + config.targetPath);
-        // Indeterminate totals + heartbeat ticker on the output file
-        // size, same pattern as ImportTask: writer APIs don't expose
-        // per-chunk hooks, so poll Files.size(config.targetPath) every
-        // 500ms to drive the numeric line.
         long startMs = System.currentTimeMillis();
+        // Fallback bytes-mode tracker for the heartbeat path
+        // (ISA-Tab/JSON has no per-record hook). Real sink-
+        // instrumented formats flip sinkActive=true on first emit
+        // and the heartbeat stands down. Stage E commit 2 removes
+        // this fallback entirely.
         tracker = new ProgressTracker("exporting", -1L, -1L, startMs);
         emit(0L, 0L);
         java.util.concurrent.atomic.AtomicBoolean done =
@@ -118,46 +124,57 @@ public final class ExportTask extends Task<Void> {
         ticker.setDaemon(true);
         ticker.start();
 
-        // Stage D: per-record sink wired into the writer-side SDK
-        // calls. First non-empty fire flips the bytes-heartbeat ticker
-        // off (sinkActive=true) and the dialog drives determinate
-        // per-record progress instead of polling output bytes.
-        ProgressSink sink = (recDone, recTotal) -> {
+        // Stage E: two-phase progress. The reader half fills
+        // 0..50%, the writer half fills 50..100%. PhaseProgress
+        // flips sinkActive=true on first emit so the heartbeat
+        // ticker stands down.
+        ProgressListener forwarder = r -> {
             sinkActive.set(true);
-            ProgressTracker t = unitsTracker;
-            if (t == null && recTotal > 0L) {
-                t = new ProgressTracker(
-                    "exporting", -1L, recTotal, startMs);
-                unitsTracker = t;
-            }
-            if (t == null) return;
-            ProgressReport r = t.sample(0L, recDone, System.currentTimeMillis());
             ProgressListener l = progressListener;
             if (l != null) l.onProgress(r);
         };
+        phaseProgress = new PhaseProgress(
+            forwarder, "reading", "writing", startMs);
+
+        // Reader phase: opening + materialising the source data
+        // happens inside pickRun() / pickGenomicRun() / dataset.image()
+        // which are synchronous-fast and don't fire ProgressSink
+        // callbacks (the dataset is already open before ExportTask
+        // runs). Fire a single (1, 1) reader sample so the bar
+        // advances to the 50% phase boundary before the writer
+        // starts; the phase label flips from "reading" to "writing".
+        // Future enhancement: thread a reader-side sink through
+        // SpectralDataset section loads.
+        ProgressSink readerSink = phaseProgress.readerSink();
+        ProgressSink writerSink = phaseProgress.writerSink();
+        readerSink.onProgress(1L, 1L);
 
         try {
             switch (spec.name) {
-                case "mzML (indexed)" -> exportMzML(sink);
-                case "mzTab"          -> exportMzTab(sink);
-                case "nmrML"          -> exportNmrML(sink);
-                case "JCAMP-DX"       -> exportJcampDx(sink);
+                case "mzML (indexed)" -> exportMzML(writerSink);
+                case "mzTab"          -> exportMzTab(writerSink);
+                case "nmrML"          -> exportNmrML(writerSink);
+                case "JCAMP-DX"       -> exportJcampDx(writerSink);
                 case "ISA-Tab/JSON"   -> exportIsa();
-                case "BAM"            -> exportBamLike(false, sink);
-                case "CRAM"           -> exportBamLike(true, sink);
-                case "FASTA (reference)" -> exportFastaReference(sink);
-                case "FASTA (reads)"     -> exportFastaReads(sink);
-                case "FASTQ"          -> exportFastq(sink);
-                case "imzML"          -> exportImzML(sink);
+                case "BAM"            -> exportBamLike(false, writerSink);
+                case "CRAM"           -> exportBamLike(true, writerSink);
+                case "FASTA (reference)" -> exportFastaReference(writerSink);
+                case "FASTA (reads)"     -> exportFastaReads(writerSink);
+                case "FASTQ"          -> exportFastq(writerSink);
+                case "imzML"          -> exportImzML(writerSink);
                 default -> throw new UnsupportedOperationException(
                     spec.name + " export not wired.");
             }
             done.set(true);
             try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
-            // For sink-instrumented paths the writer SDK already fired
-            // onProgress(total, total) at the last record. For the
-            // bytes-fallback path (ISA-Tab/JSON), emit the final 100%.
-            if (!sinkActive.get()) {
+            if (sinkActive.get()) {
+                // Sink-instrumented path: PhaseProgress fires the
+                // final 100% sample so the dialog terminates at
+                // the full bar.
+                phaseProgress.emitFinal();
+            } else {
+                // Bytes-fallback path (ISA-Tab/JSON): emit final
+                // 100% via the output-file size.
                 long fileSize = Files.size(config.targetPath);
                 emit(fileSize, 1L);
             }
@@ -316,6 +333,12 @@ public final class ExportTask extends Task<Void> {
         return dataset.genomicRuns().values().iterator().next();
     }
 
+    private void emit(long bytesDone, long unitsDone) {
+        ProgressListener l = progressListener;
+        if (l == null || tracker == null) return;
+        l.onProgress(tracker.sample(bytesDone, unitsDone, System.currentTimeMillis()));
+    }
+
     /** Materialise a read-side {@link GenomicRun} into a write-side
      *  {@link WrittenGenomicRun} for BAM / CRAM consumption. */
     static WrittenGenomicRun toWritten(GenomicRun run) {
@@ -361,9 +384,4 @@ public final class ExportTask extends Task<Void> {
         );
     }
 
-    private void emit(long bytesDone, long unitsDone) {
-        ProgressListener l = progressListener;
-        if (l == null || tracker == null) return;
-        l.onProgress(tracker.sample(bytesDone, unitsDone, System.currentTimeMillis()));
-    }
 }
