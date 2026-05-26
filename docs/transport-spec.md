@@ -71,7 +71,7 @@ header. Version 1 is defined by this document.
 
 | Version | Date       | Changes |
 |---------|------------|---------|
-| v0.11   | 2026-05-25 | Complete `.tio` coverage: references, image cubes, identifications, quantifications, dataset-level provenance, subjects/samples metadata, encryption-algorithm name. New packet types 0x10–0x1B. Backward-compatible: v0.10 readers skip unknown packet types via length-prefixed wire frames; readers that need v0.11 semantics check the `transport_v0_11` feature flag in StreamHeader. |
+| v0.11   | 2026-05-25 | Complete `.tio` coverage: references, image cubes, identifications, quantifications, dataset-level provenance, subjects/samples metadata, encryption-algorithm name. New packet types 0x10–0x1B. `SUBJECT_METADATA` (0x19) + `SAMPLE_METADATA` (0x1A) wire format finalised 2026-05-26 (§4.22). Backward-compatible: v0.10 readers skip unknown packet types via length-prefixed wire frames; readers that need v0.11 semantics check the `transport_v0_11` feature flag in StreamHeader. |
 
 ## 3. Wire Format
 
@@ -496,13 +496,13 @@ uri_length:          uint16
 uri_utf8:            bytes[uri_length]
 chromosome_count:    uint32
 total_bases:         uint64
-md5_hex:             bytes[32]          # ASCII hex; matches format-spec §11 @md5 attr
+md5_hex:             bytes[32]          # ASCII hex; matches format-spec §10.10 @md5 attr
 ```
 
 ### 4.14 ReferenceChromosome (`0x11`) — v0.11
 
 One per contig within a reference group. Order MUST match the
-sorted-name order used on disk (format-spec §11). The `encoding`
+sorted-name order used on disk (format-spec §10.10). The `encoding`
 byte mirrors the format-spec's Perf-A decision (skip ZLIB below
 4 KB) and lets the writer choose per chromosome; readers MUST
 handle both.
@@ -688,15 +688,80 @@ output_refs_csv:     bytes[output_refs_length]
 
 ### 4.22 SubjectMetadata (`0x19`) and SampleMetadata (`0x1A`) — v0.11
 
-For format-spec §11 subject/sample groups. Each is a single packet
-carrying the table as an Arrow IPC stream (same wire shape as 0x16
-and 0x17). Receivers ingesting these MUST write them into the
-on-disk `/study/subjects/*` and `/study/samples/*` groups.
+Two distinct packet types carrying the dataset's Subject and Sample
+tables (see [`format-spec.md`](format-spec.md) §11 for the on-disk
+HDF5 layout). Each packet wraps a single length-prefixed Apache
+Arrow IPC stream — same wire shape as `IdentificationsTable` (§4.19)
+and `QuantificationsTable` (§4.20). Writers MUST emit at most one
+packet of each type per stream, covering all rows of that table.
+Distinct packet types let receivers dispatch without parsing the
+payload first; receivers ingesting these MUST write the rows into
+the on-disk `/study/subjects/<external_id>/` and
+`/study/samples/<sample_id>/` per-row groups.
 
 ```
 arrow_ipc_length:    uint32
 arrow_ipc:           bytes[arrow_ipc_length]   # self-describing Arrow IPC stream
+                                               # (schema message + record-batch messages)
 ```
+
+**`SUBJECT_METADATA (0x19)` Arrow schema:**
+
+| Column            | Arrow type | Nullable | Notes                                                                                |
+|-------------------|-----------:|---------:|--------------------------------------------------------------------------------------|
+| `external_id`     | utf8       | no       | Primary key. Matches the on-disk group leaf name (`/study/subjects/<external_id>/`). |
+| `project`         | utf8       | yes      | Empty-string in source → Arrow null on the wire.                                     |
+| `sex`             | utf8       | yes      | Empty-string in source → Arrow null on the wire.                                     |
+| `birth_year`      | int32      | yes      | Sentinel `0` in source → Arrow null on the wire. Widened from on-disk int64 to int32 for Arrow column-width consistency with `Identification.spectrum_index`; 4-digit years fit comfortably. |
+| `attributes_json` | utf8       | yes      | Open-extension slot. Schema-nullable BUT always emitted with `"{}"` for empty (never literal Arrow null). Encoding matches the on-disk attribute (sort_keys, separators `","`/`":"`; see format-spec §11). |
+
+**`SAMPLE_METADATA (0x1A)` Arrow schema:**
+
+| Column                | Arrow type | Nullable | Notes                                                                                          |
+|-----------------------|-----------:|---------:|------------------------------------------------------------------------------------------------|
+| `sample_id`           | utf8       | no       | Primary key. Matches the on-disk group leaf name (`/study/samples/<sample_id>/`).              |
+| `subject_external_id` | utf8       | yes      | Soft foreign key to `SUBJECT_METADATA.external_id`. Empty-string in source → Arrow null on the wire. Mismatch logs WARNING but is not an error (format-spec §11.3). |
+| `sample_kind`         | utf8       | yes      | Empty-string in source → Arrow null on the wire.                                               |
+| `collected_at`        | int64      | yes      | Unix seconds since epoch; sentinel `0` in source → Arrow null on the wire. Wider than `birth_year` intentionally — covers the full unix-seconds range. |
+| `attributes_json`     | utf8       | yes      | Open-extension slot. Same `"{}"` convention as in `SUBJECT_METADATA`.                          |
+
+**Null-handling convention** (applies symmetrically to encode + decode):
+
+| Source representation                            | On-the-wire (Arrow)  | Materialised row                       |
+|--------------------------------------------------|----------------------|----------------------------------------|
+| Optional string column: empty-string (`""`)      | Arrow null           | empty-string (`""`)                    |
+| Optional int column: sentinel `0`                | Arrow null           | sentinel `0`                           |
+| `attributes_json`: always present                | utf8 (never null)    | `"{}"` if empty, sort_keys JSON otherwise |
+
+Writers MUST emit Arrow null (not empty-string / not `0`) for absent
+optional values so Python / Objective-C readers correctly produce
+`None` / `nil` (or the documented sentinel in materialised rows).
+The `attributes_json` column never carries literal Arrow null —
+empty extension maps surface as the two-byte string `"{}"`.
+
+**Cardinality.** Emit zero packets when the corresponding table is
+empty (no subjects ⇒ no `SUBJECT_METADATA` packet; no samples ⇒ no
+`SAMPLE_METADATA` packet). An empty table is never encoded as a
+zero-row Arrow batch.
+
+**Cross-language byte equivalence.** Logical equivalence, not byte
+equality — same rule as `IdentificationsTable` / `QuantificationsTable`.
+Arrow Java, pyarrow, and libarrow-C++ each emit different flatbuffer
+envelopes; the row content cross-decodes correctly across all three
+SDKs. The leading `uint32 arrow_ipc_length` prefix is byte-identical
+across implementations.
+
+**Ordering.** Per §5.4, when `transport_v0_11` is set, both
+`SUBJECT_METADATA` and `SAMPLE_METADATA` appear in section 3 (after
+`ENCRYPTION_ALGORITHM` + `DATASET_PROVENANCE`, before reference
+groups). `SUBJECT_METADATA` MUST precede `SAMPLE_METADATA` so a
+streaming receiver can resolve `subject_external_id` forward references
+during materialise (a Sample whose `subject_external_id` has not yet
+been seen still decodes — the FK is soft per format-spec §11.3 — but
+emitting subjects first keeps the soft-FK warning surface clean).
+
+The on-disk relationship to `AcquisitionRun.sampleName` (the canonical
+run→sample link string) is unchanged by transport: see format-spec §11.
 
 ### 4.23 EncryptionAlgorithm (`0x1B`) — v0.11
 
@@ -883,7 +948,7 @@ it as a subset `.tio`.
 
 ## 8. Gotchas
 
-(These entries supplement [`format-spec.md`](format-spec.md) §13.)
+(These entries supplement [`format-spec.md`](format-spec.md) §14.)
 
 1. **Endianness.** All multi-byte fields are little-endian. Readers
    on big-endian platforms MUST byte-swap. Python: `struct.pack('<...')`.
