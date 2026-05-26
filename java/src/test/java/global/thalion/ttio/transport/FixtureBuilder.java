@@ -411,24 +411,34 @@ public final class FixtureBuilder {
     /**
      * Stage 6 / Task 6.2: produce a {@code .tio} carrying a small list
      * of {@link Subject} rows and nothing else. Used by the SUBJECT_METADATA
-     * (0x19) round-trip suite. The list deliberately mixes a fully-
-     * populated row (all optional fields set, multi-key attributes)
-     * with a minimal row (all optionals at the unset sentinel) so the
-     * write/read pair exercises both the "value present" and "Arrow
-     * null on the wire" branches of the codec.
+     * (0x19) round-trip suite and the AccessorMatrix SUBJECTS entry
+     * (Task 6.6).
+     *
+     * <p>Two rows by design — one minimal (external_id only; all
+     * optionals at their unset sentinels) and one fully populated
+     * (every optional set, multi-key sort-keys attributes map) — so
+     * the write/read pair exercises both the "value present" and
+     * "Arrow null on the wire" branches of the codec, and the cross-
+     * language byte-parity ride on {@code attributesJson} sort-keys
+     * order.</p>
+     *
+     * <p>IDs follow the Task 6.6 convention (SUBJ-A / SUBJ-B) — short,
+     * ASCII, no slashes / no dots; safe for {@code /study/subjects/&lt;id&gt;/}
+     * HDF5 group naming on every platform.</p>
      *
      * @param target file path to write
      * @return {@code target}, unchanged, for fluent use in tests
      */
     public static Path buildSubjectsOnly(Path target) throws Exception {
+        // Minimal: external_id only, all optionals at unset sentinel.
+        Subject minimal = new Subject("SUBJ-A", "", "", 0L, Map.of());
+        // Full: every optional set + multi-key attributes (the
+        // cross-language sort-keys byte parity probe).
         Map<String, String> attrs = new LinkedHashMap<>();
         attrs.put("notes", "fully populated subject");
         attrs.put("cohort", "control");
-        List<Subject> subjects = List.of(
-            new Subject("SUB-001", "PROJ_A", "F", 1985L, attrs),
-            // minimal row: empty project/sex + sentinel birth_year=0
-            // + empty attributes
-            new Subject("SUB-002", "", "", 0L, Map.of()));
+        Subject full = new Subject("SUBJ-B", "PROJ_A", "F", 1985L, attrs);
+        List<Subject> subjects = List.of(minimal, full);
         try (SpectralDataset ds = SpectralDataset.create(
                 target.toString(), "subjects_only", "",
                 List.of(), List.of(), List.of(), List.of(),
@@ -439,22 +449,40 @@ public final class FixtureBuilder {
     }
 
     /**
-     * Stage 6 / Task 6.2: produce a {@code .tio} carrying a small list
-     * of {@link Sample} rows and nothing else. Used by the SAMPLE_METADATA
-     * (0x1A) round-trip suite. Same shape as {@link #buildSubjectsOnly}
-     * (mix of fully-populated + minimal rows).
+     * Stage 6 / Task 6.2 + Task 6.6: produce a {@code .tio} carrying a
+     * small list of {@link Sample} rows and nothing else. Used by the
+     * SAMPLE_METADATA (0x1A) round-trip suite and the AccessorMatrix
+     * SAMPLES entry.
+     *
+     * <p>Three rows by design:</p>
+     * <ul>
+     *   <li>{@code SMPL-1} — minimal (sample_id only; subject_external_id
+     *       empty, sample_kind empty, collected_at sentinel, no attrs).</li>
+     *   <li>{@code SMPL-2} — references a Subject that does NOT exist
+     *       in this fixture ({@code subject_external_id = "SUBJ-MISSING"});
+     *       valid per spec §4.4 (anonymous / cross-dataset samples
+     *       are valid; only logs a WARNING on write).</li>
+     *   <li>{@code SMPL-3} — fully populated (every optional set,
+     *       multi-key sort-keys attributes map). Exercises the cross-
+     *       language byte-parity on {@code attributesJson}.</li>
+     * </ul>
      *
      * @param target file path to write
      * @return {@code target}, unchanged, for fluent use in tests
      */
     public static Path buildSamplesOnly(Path target) throws Exception {
+        Sample minimal = new Sample("SMPL-1", "", "", 0L, Map.of());
+        // Soft-FK miss: subject_external_id refers to a Subject that
+        // doesn't exist in this fixture. Spec §4.4 allows this; the
+        // validator logs a WARNING but does not fail the write.
+        Sample danglingFk =
+            new Sample("SMPL-2", "SUBJ-MISSING", "plasma", 0L, Map.of());
         Map<String, String> attrs = new LinkedHashMap<>();
         attrs.put("tissue", "liver");
         attrs.put("notes", "freshly collected");
-        List<Sample> samples = List.of(
-            new Sample("SAMP-001", "SUB-001", "tissue",
-                1700000000L, attrs),
-            new Sample("SAMP-002", "", "", 0L, Map.of()));
+        Sample full = new Sample("SMPL-3", "", "tissue",
+            1700000000L, attrs);
+        List<Sample> samples = List.of(minimal, danglingFk, full);
         try (SpectralDataset ds = SpectralDataset.create(
                 target.toString(), "samples_only", "",
                 List.of(), List.of(), List.of(), List.of(),
@@ -491,9 +519,7 @@ public final class FixtureBuilder {
 
     /**
      * Produce a {@code .tio} populated with EVERY first-class v0.11
-     * accessor at once (except {@code SUBJECTS} and {@code SAMPLES},
-     * which are deferred until they exist as first-class entities on
-     * {@link SpectralDataset}). Used by Task 1.11's
+     * accessor at once. Used by Task 1.11's
      * {@code CoverageGapWatchdogTest} to fire whenever a writer
      * silently drops one of the populated content types.
      *
@@ -507,6 +533,13 @@ public final class FixtureBuilder {
      *   <li>{@code @encrypted = "aes-256-gcm"} root attribute</li>
      *   <li>1 MS run with 5 spectra of 4 m/z points each</li>
      *   <li>1 genomic run with 4 short aligned reads</li>
+     *   <li>Task 6.6: 2 {@link Subject} rows + 3 {@link Sample} rows,
+     *       exercising every cross-cardinality case from spec §8:
+     *       one fully-linked pair (SUBJ-A &lt;-&gt; SMPL-1), one Subject
+     *       without a matching Sample (SUBJ-B), one Sample with an
+     *       empty subject ref (SMPL-2), and one Sample whose
+     *       {@code subject_external_id} points at a Subject that
+     *       does not exist in this fixture (SMPL-3 -&gt; SUBJ-MISSING).</li>
      * </ul>
      *
      * @param target file path to write
@@ -577,6 +610,30 @@ public final class FixtureBuilder {
         AcquisitionRun msRun = synthMsRun("run_0001", 0, 5, 4);
         WrittenGenomicRun genRun = synthGenomicRun();
 
+        // Task 6.6: 2 Subjects + 3 Samples exercising every spec §8
+        // cross-cardinality case:
+        //   SUBJ-A — matched (SMPL-1 soft-FK points at it)
+        //   SUBJ-B — unmatched (no sample references it)
+        //   SMPL-1 — fully linked to SUBJ-A (full row, multi-key attrs)
+        //   SMPL-2 — anonymous (subject_external_id = "")
+        //   SMPL-3 — Sample without matching Subject
+        //            (subject_external_id = "SUBJ-MISSING")
+        Map<String, String> subAttrs = new LinkedHashMap<>();
+        subAttrs.put("notes", "fully populated subject");
+        subAttrs.put("cohort", "control");
+        List<Subject> subjects = List.of(
+            new Subject("SUBJ-A", "PROJ_A", "F", 1985L, subAttrs),
+            // unmatched Subject — no sample carries subject_external_id="SUBJ-B"
+            new Subject("SUBJ-B", "", "", 0L, Map.of()));
+        Map<String, String> smplAttrs = new LinkedHashMap<>();
+        smplAttrs.put("tissue", "liver");
+        smplAttrs.put("notes", "freshly collected");
+        List<Sample> samples = List.of(
+            new Sample("SMPL-1", "SUBJ-A", "tissue",
+                1700000000L, smplAttrs),
+            new Sample("SMPL-2", "", "plasma", 0L, Map.of()),
+            new Sample("SMPL-3", "SUBJ-MISSING", "", 0L, Map.of()));
+
         // Combined create with MS + genomic + ids + quants + provenance,
         // feature flags must include OPT_NATIVE_MSIMAGE_CUBE for the
         // subsequent image.writeTo(...) layering pass.
@@ -593,13 +650,80 @@ public final class FixtureBuilder {
             ds.provider().rootGroup().setAttribute("encrypted", "aes-256-gcm");
         }
         // Image cube layered on after create() closes the provider —
-        // mirrors the buildImageMsContinuous pattern.
+        // mirrors the buildImageMsContinuous pattern. Subjects + samples
+        // are layered in the same reopen so we don't need a third
+        // file-open/close.
         try (Hdf5File f = Hdf5File.open(target.toString());
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study")) {
             image.writeTo(Hdf5Provider.adapterForGroup(study));
+            // Task 6.6: layer per-row /study/subjects/<external_id>/ and
+            // /study/samples/<sample_id>/ groups via raw HDF5 writes.
+            // Mirrors the production layout written by
+            // SpectralDataset.createMixed's writeSubjectsViaProvider /
+            // writeSamplesViaProvider — duplicated here as a test-only
+            // helper because the public create() overload that accepts
+            // (genomicRuns, subjects, samples) together doesn't exist
+            // yet (private createMixed does the actual work).
+            writeSubjectsToStudy(study, subjects);
+            writeSamplesToStudy(study, samples);
         }
         return target;
+    }
+
+    /** Mirror of {@code SpectralDataset.writeSubjectsViaProvider} for
+     *  use after {@code create()} closes its provider. Writes per-row
+     *  groups under {@code /study/subjects/<external_id>/} with the
+     *  same attribute set (external_id, project, sex, birth_year,
+     *  attributes_json) so the reader-side {@code readSubjects} lifts
+     *  them back as if they had been written by the create path. */
+    private static void writeSubjectsToStudy(Hdf5Group study,
+                                              List<Subject> subjects) {
+        if (subjects == null || subjects.isEmpty()) return;
+        try (Hdf5Group subjectsGroup = study.createGroup("subjects")) {
+            for (Subject s : subjects) {
+                try (Hdf5Group row = subjectsGroup.createGroup(s.externalId())) {
+                    row.setStringAttribute("external_id", s.externalId());
+                    if (!s.project().isEmpty()) {
+                        row.setStringAttribute("project", s.project());
+                    }
+                    if (!s.sex().isEmpty()) {
+                        row.setStringAttribute("sex", s.sex());
+                    }
+                    row.setIntegerAttribute("birth_year", s.birthYear());
+                    row.setStringAttribute(
+                        "attributes_json", s.attributesJson());
+                }
+            }
+        }
+    }
+
+    /** Mirror of {@code SpectralDataset.writeSamplesViaProvider} for
+     *  use after {@code create()} closes its provider. Mirrors the
+     *  on-disk attribute layout exactly so the reader returns the
+     *  same {@link Sample} rows. */
+    private static void writeSamplesToStudy(Hdf5Group study,
+                                             List<Sample> samples) {
+        if (samples == null || samples.isEmpty()) return;
+        try (Hdf5Group samplesGroup = study.createGroup("samples")) {
+            for (Sample s : samples) {
+                try (Hdf5Group row = samplesGroup.createGroup(s.sampleId())) {
+                    row.setStringAttribute("sample_id", s.sampleId());
+                    if (!s.subjectExternalId().isEmpty()) {
+                        row.setStringAttribute(
+                            "subject_external_id", s.subjectExternalId());
+                    }
+                    if (!s.sampleKind().isEmpty()) {
+                        row.setStringAttribute(
+                            "sample_kind", s.sampleKind());
+                    }
+                    row.setIntegerAttribute(
+                        "collected_at", s.collectedAt());
+                    row.setStringAttribute(
+                        "attributes_json", s.attributesJson());
+                }
+            }
+        }
     }
 
     /** Build a deterministic synthetic MS run with {@code nSpectra}
