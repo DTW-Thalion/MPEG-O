@@ -20,6 +20,7 @@ Scope:
 from __future__ import annotations
 
 import json
+import logging
 import struct
 import zlib
 from pathlib import Path
@@ -40,6 +41,7 @@ from .packets import (
     CODEC_ID_REF_DIFF_V2,
     HEADER_MAGIC,
     HEADER_SIZE,
+    TRANSPORT_V0_11_FEATURE,
     VERSION,
     AccessUnit,
     ChannelData,
@@ -52,6 +54,7 @@ from .packets import (
     _CHANNEL_SUFFIX_STRUCT,
     _HEADER_STRUCT,
     crc32c,
+    is_known_packet_type,
     now_ns,
     pack_blob_mate_info,
     pack_blob_name_tok,
@@ -64,6 +67,8 @@ from .packets import (
 )
 
 _CHECKSUM_STRUCT = struct.Struct("<I")
+
+_LOG = logging.getLogger(__name__)
 
 # ---------------------------------------------------------- wire mappings
 
@@ -308,6 +313,768 @@ class TransportWriter:
             dataset_id=dataset_id,
         )
 
+    # ----------------------------------------------- v0.11 §4.21
+
+    def write_dataset_provenance(self, records) -> None:
+        """v0.11 Task 2.5: emit a
+        :data:`PacketType.DATASET_PROVENANCE` (0x18) packet carrying
+        the dataset-level provenance chain (format-spec §6.3).
+
+        One packet carries all records. Wire layout per transport-spec
+        §4.21::
+
+            record_count:        uint32
+            # repeated record_count times:
+            timestamp_unix:      int64
+            software_length:     uint16, software bytes[..]   (UTF-8)
+            parameters_length:   uint16, parameters_json[..]  (UTF-8 JSON)
+            input_refs_length:   uint16, input_refs_csv[..]   (UTF-8 CSV)
+            output_refs_length:  uint16, output_refs_csv[..]  (UTF-8 CSV)
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+        input_refs / output_refs lists ride as comma-joined UTF-8 — a
+        single empty string for an empty list (no separators).
+
+        Distinct from the per-run ``Provenance`` (0x06) packet which
+        carries one JSON record per packet.
+
+        Java parity: :meth:`TransportWriter.writeDatasetProvenance`
+        (commit ``563e09c3``). Per-field empty handling matches Java:
+        empty parameters render as ``"{}"`` (not omitted); empty refs
+        render as ``""`` (the empty-join result).
+
+        :param records: iterable of :class:`ttio.provenance.ProvenanceRecord`.
+            ``None`` raises ``ValueError``; an empty list is a no-op
+            (no packet emitted) per spec §5.4 "zero or more".
+        """
+        if records is None:
+            raise ValueError(
+                "write_dataset_provenance: records must not be None"
+            )
+        records = list(records)
+        if not records:
+            return
+        # Pre-compute UTF-8 byte arrays so we can size the buffer
+        # exactly. Mirrors the StreamHeader/DatasetHeader emit pattern.
+        software_bytes: list[bytes] = []
+        params_bytes: list[bytes] = []
+        inputs_bytes: list[bytes] = []
+        outputs_bytes: list[bytes] = []
+        total = 4  # record_count
+        for r in records:
+            sb = (r.software or "").encode("utf-8")
+            pb = _provenance_params_json(r.parameters).encode("utf-8")
+            ib = _provenance_csv_join(r.input_refs).encode("utf-8")
+            ob = _provenance_csv_join(r.output_refs).encode("utf-8")
+            for b in (sb, pb, ib, ob):
+                if len(b) > 0xFFFF:
+                    raise ValueError(
+                        f"DATASET_PROVENANCE: per-field length "
+                        f"{len(b)} exceeds uint16 max"
+                    )
+            software_bytes.append(sb)
+            params_bytes.append(pb)
+            inputs_bytes.append(ib)
+            outputs_bytes.append(ob)
+            total += (
+                8                       # timestamp_unix
+                + 2 + len(sb)
+                + 2 + len(pb)
+                + 2 + len(ib)
+                + 2 + len(ob)
+            )
+        chunks: list[bytes] = [struct.pack("<I", len(records) & 0xFFFFFFFF)]
+        for i, r in enumerate(records):
+            chunks.append(struct.pack("<q", int(r.timestamp_unix)))
+            chunks.append(struct.pack("<H", len(software_bytes[i]) & 0xFFFF))
+            chunks.append(software_bytes[i])
+            chunks.append(struct.pack("<H", len(params_bytes[i]) & 0xFFFF))
+            chunks.append(params_bytes[i])
+            chunks.append(struct.pack("<H", len(inputs_bytes[i]) & 0xFFFF))
+            chunks.append(inputs_bytes[i])
+            chunks.append(struct.pack("<H", len(outputs_bytes[i]) & 0xFFFF))
+            chunks.append(outputs_bytes[i])
+        payload = b"".join(chunks)
+        assert len(payload) == total, (
+            f"DATASET_PROVENANCE size mismatch: predicted {total}, "
+            f"actual {len(payload)}"
+        )
+        self._emit(PacketType.DATASET_PROVENANCE, payload)
+
+    # ----------------------------------------------- v0.11 §4.23
+
+    def write_encryption_algorithm(self, algorithm: str) -> None:
+        """v0.11 Task 2.4: emit an
+        :data:`PacketType.ENCRYPTION_ALGORITHM` (0x1B) packet carrying
+        the dataset-level ``@encrypted`` algorithm name
+        (e.g. ``"aes-256-gcm"``).
+
+        Wire layout per transport-spec §4.23::
+
+            algorithm_length:  uint16
+            algorithm_utf8:    bytes[algorithm_length]
+
+        All multi-byte integers are LITTLE-ENDIAN (spec §1.7). This
+        packet only conveys the algorithm-name string; per-AU key
+        material continues to ride on ``ProtectionMetadata`` (0x04).
+
+        Java parity: :meth:`TransportWriter.writeEncryptionAlgorithm`
+        (commit ``530a5833``).
+        """
+        if algorithm is None:
+            raise ValueError(
+                "write_encryption_algorithm: algorithm must not be None"
+            )
+        algo_bytes = algorithm.encode("utf-8")
+        if len(algo_bytes) > 0xFFFF:
+            raise ValueError(
+                f"ENCRYPTION_ALGORITHM: algorithm name {len(algo_bytes)} "
+                "bytes exceeds uint16 max"
+            )
+        payload = (
+            struct.pack("<H", len(algo_bytes) & 0xFFFF)
+            + algo_bytes
+        )
+        self._emit(PacketType.ENCRYPTION_ALGORITHM, payload)
+
+    # ----------------------------------------------- v0.11 §4.13-§4.15
+
+    #: Threshold below which a chromosome rides as raw UINT8
+    #: (encoding=0). Mirrors transport-spec §4.14: ZLIB framing costs
+    #: dominate short sequences, so the writer skips compression below
+    #: 4 KiB and lets the reader handle both encodings. Java parity:
+    #: ``TransportWriter.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD``.
+    REFERENCE_CHROMOSOME_ZLIB_THRESHOLD = 4096
+
+    def write_reference_group(self, ref) -> None:
+        """v0.11 Stage 1: emit a :class:`ReferenceImport` as the packet
+        sequence
+        ``REFERENCE_GROUP_HEADER (0x10) -> N x REFERENCE_CHROMOSOME (0x11)
+        -> END_OF_REFERENCE_GROUP (0x12)``.
+
+        Wire layout matches transport-spec §4.13-§4.15. All multi-byte
+        integers are LITTLE-ENDIAN (spec §1.7). The chromosome index
+        rides in the packet header's ``au_sequence`` field (0-based).
+        The MD5 hex string from ``ReferenceImport.md5.hex()`` is
+        emitted verbatim as 32 ASCII bytes.
+
+        The encoding byte on each chromosome record is 0 (uncompressed
+        UINT8) when the raw sequence is shorter than
+        :attr:`REFERENCE_CHROMOSOME_ZLIB_THRESHOLD`, otherwise 1
+        (zlib via :func:`zlib.compress` with default settings).
+
+        Reader-side materialisation is added by Task 2.3; this method
+        only emits the wire bytes. Java parity:
+        :meth:`TransportWriter.writeReferenceGroup`
+        (commit ``622aa8bd``).
+
+        :param ref: :class:`ttio.genomic.reference_import.ReferenceImport`
+            to emit. ``ref.md5`` must be the 16-byte digest the
+            constructor populates by default.
+        """
+        chrom_names = ref.chromosomes
+        seqs = ref.sequences
+        chrom_count = len(chrom_names)
+        total_bases = ref.total_bases
+        md5_hex = ref.md5.hex()
+        if len(md5_hex) != 32:
+            raise ValueError(
+                f"ReferenceImport.md5.hex() must be 32 hex chars, got "
+                f"{len(md5_hex)}"
+            )
+
+        # -- REFERENCE_GROUP_HEADER (0x10) ------------------------------
+        uri_bytes = ref.uri.encode("utf-8")
+        md5_hex_bytes = md5_hex.encode("ascii")
+        header_payload = b"".join((
+            struct.pack("<H", len(uri_bytes) & 0xFFFF),
+            uri_bytes,
+            struct.pack("<I", chrom_count & 0xFFFFFFFF),
+            struct.pack("<Q", total_bases & 0xFFFFFFFFFFFFFFFF),
+            md5_hex_bytes,
+        ))
+        self._emit(PacketType.REFERENCE_GROUP_HEADER, header_payload)
+
+        # -- REFERENCE_CHROMOSOME (0x11) — one per contig ---------------
+        for i, name in enumerate(chrom_names):
+            seq = seqs[i]
+            name_bytes = name.encode("utf-8")
+            if len(seq) < self.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD:
+                encoding = 0
+                payload_bytes = seq
+            else:
+                encoding = 1
+                payload_bytes = zlib.compress(seq)
+            chrom_payload = b"".join((
+                struct.pack("<H", len(name_bytes) & 0xFFFF),
+                name_bytes,
+                struct.pack("<Q", len(seq) & 0xFFFFFFFFFFFFFFFF),
+                struct.pack("<B", encoding & 0xFF),
+                struct.pack("<I", len(payload_bytes) & 0xFFFFFFFF),
+                bytes(payload_bytes),
+            ))
+            self._emit(
+                PacketType.REFERENCE_CHROMOSOME,
+                chrom_payload,
+                au_sequence=i,
+            )
+
+        # -- END_OF_REFERENCE_GROUP (0x12) ------------------------------
+        self._emit(
+            PacketType.END_OF_REFERENCE_GROUP,
+            struct.pack("<I", chrom_count & 0xFFFFFFFF),
+        )
+
+    # ------------------------------------------------ v0.11 §4.16-§4.18
+    def _emit_image_header(
+        self,
+        *,
+        modality: int,
+        width: int,
+        height: int,
+        bins: int,
+        pixel_size_x: float,
+        pixel_size_y: float,
+        scan_pattern_byte: int,
+        axis_kind: int,
+        axis: np.ndarray,
+        is_continuous: int,
+        title: str,
+        isa_id: str,
+        extras: bytes,
+    ) -> None:
+        """v0.11 Task 5.3: shared IMAGE_HEADER (0x13) packing routine.
+
+        Mirrors Java's ``emitImageHeader`` helper so the common
+        header shape stays byte-stable across modalities (MS / Raman
+        / IR) and the ``modality_extras`` slot is appended once per
+        call. The continuous-mode bit and the modality-specific tail
+        come from the caller.
+        """
+        axis = np.asarray(axis, dtype=np.float64)
+        title_bytes = (title or "").encode("utf-8")
+        isa_bytes = (isa_id or "").encode("utf-8")
+        if len(title_bytes) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: title {len(title_bytes)} bytes exceeds "
+                f"uint16 max"
+            )
+        if len(isa_bytes) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: isa_id {len(isa_bytes)} bytes exceeds "
+                f"uint16 max"
+            )
+        if len(extras) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: modality_extras {len(extras)} bytes "
+                f"exceeds uint16 max"
+            )
+        header_payload = b"".join((
+            struct.pack("<B", modality & 0xFF),
+            struct.pack("<I", width & 0xFFFFFFFF),
+            struct.pack("<I", height & 0xFFFFFFFF),
+            struct.pack("<I", bins & 0xFFFFFFFF),
+            struct.pack("<d", float(pixel_size_x)),
+            struct.pack("<d", float(pixel_size_y)),
+            struct.pack("<B", scan_pattern_byte & 0xFF),
+            struct.pack("<B", axis_kind & 0xFF),
+            struct.pack("<I", int(axis.size) & 0xFFFFFFFF),
+            axis.astype("<f8", copy=False).tobytes(),
+            struct.pack("<B", is_continuous & 0xFF),
+            struct.pack("<H", len(title_bytes) & 0xFFFF),
+            title_bytes,
+            struct.pack("<H", len(isa_bytes) & 0xFFFF),
+            isa_bytes,
+            struct.pack("<H", len(extras) & 0xFFFF),
+            bytes(extras),
+        ))
+        self._emit(PacketType.IMAGE_HEADER, header_payload)
+
+    def write_image(self, image) -> None:
+        """v0.11 Task 2.6: emit an :class:`~ttio.MSImage` as the packet
+        sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14)
+        -> END_OF_IMAGE (0x15)``, where ``N = width * height``.
+
+        Wire layout matches transport-spec §4.16-§4.18 byte-for-byte
+        with Java's :meth:`TransportWriter.writeImage` (commit
+        ``a6b1e5d9``). All multi-byte integers are LITTLE-ENDIAN
+        (spec §1.7).
+
+        Continuous-mode only — the shared m/z axis rides on the
+        IMAGE_HEADER and every IMAGE_PIXEL carries only its
+        intensities (FLOAT64, uncompressed). For sparse cubes the
+        opt-in :meth:`write_image_processed` sibling emits the same
+        packet sequence with ``is_continuous=0`` and per-pixel
+        ``(channel_index, intensity)`` pairs (spec §4.17).
+
+        :param image: :class:`ttio.MSImage` to emit. ``image`` must
+            not be ``None`` (caller's responsibility to gate on
+            :attr:`SpectralDataset.image is not None`).
+        """
+        if image is None:
+            raise ValueError("write_image: image must not be None")
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.mz_axis, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+
+        # -- IMAGE_HEADER (0x13) ----------------------------------------
+        # Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        self._emit_image_header(
+            modality=0,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=0,  # mz
+            axis=axis,
+            is_continuous=1,
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=b"",
+        )
+
+        # -- IMAGE_PIXEL (0x14) — one per pixel -------------------------
+        # Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
+        # compression(u8) + payload_length(u32) + intensities[..].
+        # Always FLOAT64 (precision=1), uncompressed (compression=0).
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        payload_len = 8 * bins
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        # cube shape: (height, width, spectral_points). Iterate raster:
+        # row-major over (y, x) — matches Java's y-outer / x-inner loop.
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                intensities_bytes = cube[y, x].tobytes()
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    intensities_bytes,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        # -- END_OF_IMAGE (0x15) ----------------------------------------
+        # pixel_count_seen: uint32 per spec §4.18.
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
+    def write_image_processed(self, image) -> None:
+        """v0.11 Task 5.1 (Deferral 1): emit an :class:`~ttio.MSImage`
+        as the packet sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+        (0x15)`` in **processed mode** (sparse), where each pixel
+        carries only its nonzero ``(channel_index, intensity)`` pairs
+        indexed into the shared ``mz_axis``. The dense cube is
+        reconstructed by the reader.
+
+        Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+        IMAGE_HEADER is identical to :meth:`write_image` except for
+        ``is_continuous=0``; each IMAGE_PIXEL payload is::
+
+          x(u32) + y(u32) + precision(u8) + compression(u8)
+            + payload_length(u32)
+            + payload_bytes = nonzero_count(u32)
+                + nonzero_count × { channel_index(u32) + intensity(f64) }
+
+        Nonzero is defined strictly as ``v != 0.0``; NaN is preserved
+        verbatim (NaN compares unequal to 0.0). The MSImage data model
+        stays dense; processed mode is purely a wire optimisation for
+        sparse cubes.
+
+        This is an opt-in sibling of :meth:`write_image`. Callers pick
+        continuous vs processed mode explicitly today; an automatic
+        heuristic (emit whichever is smaller) is a follow-up. Java
+        parity: :meth:`TransportWriter.writeImageProcessed` (commit
+        ``1889343e``).
+
+        :param image: :class:`ttio.MSImage` to emit. ``image`` must
+            not be ``None``.
+        """
+        if image is None:
+            raise ValueError("write_image_processed: image must not be None")
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.mz_axis, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+
+        # -- IMAGE_HEADER (0x13) — shared layout, is_continuous=0 -------
+        # Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        self._emit_image_header(
+            modality=0,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=0,  # mz
+            axis=axis,
+            is_continuous=0,  # processed
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=b"",
+        )
+
+        # -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
+        # Always FLOAT64 (precision=1) uncompressed (compression=0) —
+        # mirrors write_image above so the wire round-trip stays
+        # byte-exact with the cube.
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                spec = cube[y, x]
+                # Nonzero mask (v != 0.0); NaN preserved verbatim.
+                nz_mask = spec != 0.0
+                nz_indices = np.nonzero(nz_mask)[0]
+                nz_count = int(nz_indices.size)
+                payload_len = 4 + nz_count * (4 + 8)
+                # Pack sparse entries: nonzero_count(u32) + repeating
+                # (channel_index u32 + intensity f64). Match Java's
+                # ascending-channel iteration order (numpy.nonzero
+                # returns sorted indices for rank-1 input).
+                if nz_count > 0:
+                    fmt = "<" + ("Id" * nz_count)
+                    pairs: list = []
+                    for ch in nz_indices:
+                        pairs.append(int(ch))
+                        pairs.append(float(spec[int(ch)]))
+                    entries = struct.pack(fmt, *pairs)
+                else:
+                    entries = b""
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    struct.pack("<I", nz_count & 0xFFFFFFFF),
+                    entries,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        # -- END_OF_IMAGE (0x15) ----------------------------------------
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
+    def write_raman_image(self, image) -> None:
+        """v0.11 Task 5.3 (Deferral 1): emit a :class:`~ttio.RamanImage`
+        as the packet sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+        (0x15)`` with ``modality=1``.
+
+        Wire layout per transport-spec §4.16. The shared axis on the
+        IMAGE_HEADER carries the Raman wavenumbers vector
+        (``axis_kind = 1 = wavenumber``). The ``modality_extras`` slot
+        at the tail of the IMAGE_HEADER carries the Raman-specific
+        fields::
+
+            excitation_wavelength_nm:  float64
+            laser_power_mw:            float64
+
+        (16 bytes total.)
+
+        Each pixel rides as a continuous-mode IMAGE_PIXEL whose
+        ``payload_bytes`` is a dense vector of ``spectrum_bins``
+        FLOAT64 intensities at the shared wavenumber axis. Java
+        parity: :meth:`TransportWriter.writeRamanImage` (commit
+        ``f99ec47d``).
+        """
+        if image is None:
+            raise ValueError("write_raman_image: image must not be None")
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.wavenumbers, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+        # Raman modality_extras: 8B excitation_wavelength_nm + 8B laser_power_mw.
+        extras = struct.pack(
+            "<dd",
+            float(image.excitation_wavelength_nm),
+            float(image.laser_power_mw),
+        )
+
+        self._emit_image_header(
+            modality=1,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=1,  # wavenumber
+            axis=axis,
+            is_continuous=1,
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=extras,
+        )
+
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        payload_len = 8 * bins
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                intensities_bytes = cube[y, x].tobytes()
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    intensities_bytes,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
+    def write_ir_image(self, image) -> None:
+        """v0.11 Task 5.3 (Deferral 1): emit an :class:`~ttio.IRImage`
+        as the packet sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+        (0x15)`` with ``modality=2``.
+
+        Wire layout per transport-spec §4.16. The shared axis on the
+        IMAGE_HEADER carries the IR wavenumbers vector
+        (``axis_kind = 1 = wavenumber``). The ``modality_extras`` slot
+        at the tail of the IMAGE_HEADER carries the IR-specific
+        fields::
+
+            ir_mode:            uint8   # 0=transmittance, 1=absorbance
+            resolution_cm_inv:  float64
+
+        (9 bytes total.) Java parity:
+        :meth:`TransportWriter.writeIRImage` (commit ``f99ec47d``).
+        """
+        if image is None:
+            raise ValueError("write_ir_image: image must not be None")
+
+        from ..enums import IRMode
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.wavenumbers, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+        # IR modality_extras: u8 ir_mode + f64 resolution_cm_inv = 9B.
+        ir_mode_byte = 1 if image.mode == IRMode.ABSORBANCE else 0
+        extras = struct.pack(
+            "<Bd",
+            ir_mode_byte & 0xFF,
+            float(image.resolution_cm_inv),
+        )
+
+        self._emit_image_header(
+            modality=2,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=1,  # wavenumber
+            axis=axis,
+            is_continuous=1,
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=extras,
+        )
+
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        payload_len = 8 * bins
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                intensities_bytes = cube[y, x].tobytes()
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    intensities_bytes,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
+    # ----------------------------------------------- v0.11 §4.19 / §4.20
+
+    def write_identifications_table(self, rows) -> None:
+        """v0.11 Task 2.7: emit an
+        :data:`PacketType.IDENTIFICATIONS_TABLE` (0x16) packet carrying
+        the full identifications table as a single length-prefixed
+        Apache Arrow IPC stream. Wire layout per transport-spec §4.19::
+
+            arrow_ipc_length:    uint32
+            arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+        IPC stream carries its own schema, row count, and null bitmaps,
+        so no per-row TLV envelope is needed. Empty lists are a no-op
+        (no packet emitted) per spec §5.4 step 6 ("zero or more").
+
+        Java parity: :meth:`TransportWriter.writeIdentifications`
+        (commit ``a6faab16``).
+
+        :param rows: iterable of
+            :class:`ttio.identification.Identification`. ``None``
+            raises ``ValueError``.
+        """
+        if rows is None:
+            raise ValueError(
+                "write_identifications_table: rows must not be None"
+            )
+        rows = list(rows)
+        if not rows:
+            return
+        from .arrow_ipc import encode_identifications
+        ipc = encode_identifications(rows)
+        payload = struct.pack("<I", len(ipc) & 0xFFFFFFFF) + ipc
+        self._emit(PacketType.IDENTIFICATIONS_TABLE, payload)
+
+    def write_quantifications_table(self, rows) -> None:
+        """v0.11 Task 2.7: emit a
+        :data:`PacketType.QUANTIFICATIONS_TABLE` (0x17) packet carrying
+        the full quantifications table as a single length-prefixed
+        Apache Arrow IPC stream. Wire layout per transport-spec §4.20 —
+        identical shape to §4.19 but with a distinct packet type so
+        receivers can dispatch without parsing the IPC payload first.
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+        lists are a no-op (spec §5.4 step 6).
+
+        Java parity: :meth:`TransportWriter.writeQuantifications`
+        (commit ``a6faab16``).
+
+        :param rows: iterable of
+            :class:`ttio.quantification.Quantification`. ``None``
+            raises ``ValueError``.
+        """
+        if rows is None:
+            raise ValueError(
+                "write_quantifications_table: rows must not be None"
+            )
+        rows = list(rows)
+        if not rows:
+            return
+        from .arrow_ipc import encode_quantifications
+        ipc = encode_quantifications(rows)
+        payload = struct.pack("<I", len(ipc) & 0xFFFFFFFF) + ipc
+        self._emit(PacketType.QUANTIFICATIONS_TABLE, payload)
+
+    # ----------------------------------------------- v0.11 §4.22 (Stage 6)
+
+    def write_subject_metadata(self, rows) -> None:
+        """Stage 6 / Task 6.3: emit a
+        :data:`PacketType.SUBJECT_METADATA` (0x19) packet carrying the
+        full Subject table as a single length-prefixed Apache Arrow
+        IPC stream. Wire layout per transport-spec §4.22::
+
+            arrow_ipc_length:    uint32
+            arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+        IPC stream carries its own schema, row count, and null bitmaps,
+        so no per-row TLV envelope is needed. Empty lists are a no-op
+        (spec §5.4 step 5: "zero or more").
+
+        Java parity: :meth:`TransportWriter.writeSubjectMetadata`
+        (commit ``dd211600``).
+
+        :param rows: iterable of :class:`ttio.subject.Subject`.
+            ``None`` raises ``ValueError``.
+        """
+        if rows is None:
+            raise ValueError(
+                "write_subject_metadata: rows must not be None"
+            )
+        rows = list(rows)
+        if not rows:
+            return
+        from .arrow_ipc import encode_subjects
+        ipc = encode_subjects(rows)
+        payload = struct.pack("<I", len(ipc) & 0xFFFFFFFF) + ipc
+        self._emit(PacketType.SUBJECT_METADATA, payload)
+
+    def write_sample_metadata(self, rows) -> None:
+        """Stage 6 / Task 6.3: emit a
+        :data:`PacketType.SAMPLE_METADATA` (0x1A) packet carrying the
+        full Sample table as a single length-prefixed Apache Arrow IPC
+        stream. Wire layout per transport-spec §4.22 — identical shape
+        to the SUBJECT_METADATA framing with a distinct packet type so
+        receivers can dispatch without parsing the IPC payload first.
+
+        All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+        lists are a no-op (spec §5.4 step 5).
+
+        Java parity: :meth:`TransportWriter.writeSampleMetadata`
+        (commit ``dd211600``).
+
+        :param rows: iterable of :class:`ttio.sample.Sample`. ``None``
+            raises ``ValueError``.
+        """
+        if rows is None:
+            raise ValueError(
+                "write_sample_metadata: rows must not be None"
+            )
+        rows = list(rows)
+        if not rows:
+            return
+        from .arrow_ipc import encode_samples
+        ipc = encode_samples(rows)
+        payload = struct.pack("<I", len(ipc) & 0xFFFFFFFF) + ipc
+        self._emit(PacketType.SAMPLE_METADATA, payload)
+
     def write_end_of_dataset(
         self, *, dataset_id: int, final_au_sequence: int
     ) -> None:
@@ -340,6 +1107,68 @@ class TransportWriter:
         )
         if bulk_active:
             features = features + [BULK_MODE_V2_BLOBS_FEATURE]
+
+        # v0.11 Task 2.4/2.5/2.6/2.7: detect v0.11 content (references +
+        # encryption algorithm + dataset provenance + image cube +
+        # identifications/quantifications tables today; subjects and
+        # samples land at the same prelude insertion point per §5.4
+        # ordering in a follow-up task). Java parity:
+        # TransportWriter.writeDataset (commits 530a5833 + 563e09c3
+        # + a6b1e5d9 + a6faab16 + dc0de926).
+        refs = getattr(dataset, "references", {}) or {}
+        # ``provenance`` is a method on SpectralDataset (not a
+        # property) — call it eagerly so the empty-vs-nonempty check
+        # is cheap and the actual records are reused below.
+        try:
+            dataset_provenance = list(dataset.provenance())
+        except Exception:  # pragma: no cover - defensive
+            dataset_provenance = []
+        # ``image`` / ``raman_image`` / ``ir_image`` are properties — read
+        # once so the cache hit is shared between the flag-detect and
+        # the emit branch.
+        dataset_image = getattr(dataset, "image", None)
+        dataset_raman_image = getattr(dataset, "raman_image", None)
+        dataset_ir_image = getattr(dataset, "ir_image", None)
+        # identifications + quantifications are methods on
+        # SpectralDataset (matching ``provenance()``). Empty lists do
+        # not emit a packet (spec §5.4 step 6 says "zero or more")
+        # and do not trigger the v0.11 feature flag.
+        try:
+            dataset_identifications = list(dataset.identifications())
+        except Exception:  # pragma: no cover - defensive
+            dataset_identifications = []
+        try:
+            dataset_quantifications = list(dataset.quantifications())
+        except Exception:  # pragma: no cover - defensive
+            dataset_quantifications = []
+        # Stage 6 / Task 6.3 (transport-spec v0.11 §4.22): subjects +
+        # samples are lazy properties on SpectralDataset (not methods).
+        # Read once so the cache hit is shared between the flag-detect
+        # and the emit branch. Defensive try/except follows the same
+        # pattern as the identifications/quantifications block above.
+        try:
+            dataset_subjects = list(getattr(dataset, "subjects", []) or [])
+        except Exception:  # pragma: no cover - defensive
+            dataset_subjects = []
+        try:
+            dataset_samples = list(getattr(dataset, "samples", []) or [])
+        except Exception:  # pragma: no cover - defensive
+            dataset_samples = []
+        has_v011_content = (
+            len(refs) > 0
+            or bool(getattr(dataset, "is_encrypted", False))
+            or len(dataset_provenance) > 0
+            or dataset_image is not None
+            or dataset_raman_image is not None
+            or dataset_ir_image is not None
+            or len(dataset_identifications) > 0
+            or len(dataset_quantifications) > 0
+            or len(dataset_subjects) > 0
+            or len(dataset_samples) > 0
+        )
+        if has_v011_content and TRANSPORT_V0_11_FEATURE not in features:
+            features = features + [TRANSPORT_V0_11_FEATURE]
+
         self.write_stream_header(
             format_version="1.2",
             title=dataset.title or "",
@@ -347,6 +1176,53 @@ class TransportWriter:
             features=features,
             n_datasets=len(runs) + len(genomic_runs),
         )
+
+        # v0.11 Task 2.4/2.5/2.6/2.7/6.3: v0.11 prelude — per §5.4
+        # ordering, v0.11 sections come BEFORE the v0.10 dataset/run
+        # sections, and the sub-sections appear in this order:
+        #   §5.4.1 ENCRYPTION_ALGORITHM
+        #   §5.4.2 DATASET_PROVENANCE
+        #   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA  (subjects first)
+        #   §5.4.4 reference groups
+        #   §5.4.5 image cubes
+        #   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
+        if has_v011_content:
+            if getattr(dataset, "is_encrypted", False):
+                algo = getattr(dataset, "encrypted_algorithm", "") or ""
+                if algo:
+                    self.write_encryption_algorithm(algo)
+            if dataset_provenance:
+                self.write_dataset_provenance(dataset_provenance)
+            # §5.4.3 Stage 6 / Task 6.3: SUBJECT_METADATA (0x19) emits
+            # before SAMPLE_METADATA (0x1A) so a downstream reader sees
+            # subjects ahead of any samples that soft-FK into them.
+            # Empty lists emit NO packet (spec §5.4 step 5: "zero or
+            # more"). Java parity: TransportWriter.writeDataset (commit
+            # dd211600).
+            if dataset_subjects:
+                self.write_subject_metadata(dataset_subjects)
+            if dataset_samples:
+                self.write_sample_metadata(dataset_samples)
+            # §5.4.4: reference groups, one packet sequence per
+            # ReferenceImport. Empty refs dict emits nothing.
+            for ref in refs.values():
+                self.write_reference_group(ref)
+            # §5.4.5 image cubes: MS → Raman → IR (deterministic
+            # emission order when more than one modality is populated
+            # on the same dataset). Java parity: TransportWriter.write-
+            # Dataset (commit f99ec47d).
+            if dataset_image is not None:
+                self.write_image(dataset_image)
+            if dataset_raman_image is not None:
+                self.write_raman_image(dataset_raman_image)
+            if dataset_ir_image is not None:
+                self.write_ir_image(dataset_ir_image)
+            # §5.4.6: identifications first, then quantifications.
+            # Each empty list is a no-op (spec §5.4 step 6).
+            if dataset_identifications:
+                self.write_identifications_table(dataset_identifications)
+            if dataset_quantifications:
+                self.write_quantifications_table(dataset_quantifications)
         for i, (name, run) in enumerate(runs, start=1):
             self.write_dataset_header(
                 dataset_id=i,
@@ -717,6 +1593,89 @@ class TransportWriter:
                 stream_write(header + payload)
 
 
+def _scan_pattern_to_byte(scan_pattern: str | None) -> int:
+    """v0.11 Task 2.6: map an :class:`~ttio.MSImage` scan-pattern
+    string to the wire byte per transport-spec §4.16
+    (``0=raster/flyback, 1=meander, 2=random``).
+
+    The on-disk format uses ``"raster"`` as the default name for the
+    flyback pattern. Unknown values map to 0 (raster) defensively.
+    Java parity: :meth:`TransportWriter.scanPatternToByte`.
+    """
+    if not scan_pattern:
+        return 0
+    table = {"raster": 0, "flyback": 0, "meander": 1, "random": 2}
+    return table.get(scan_pattern, 0)
+
+
+def _scan_pattern_from_byte(b: int) -> str:
+    """Inverse of :func:`_scan_pattern_to_byte`. Java parity:
+    :meth:`TransportReader.scanPatternFromByte`.
+    """
+    return {0: "raster", 1: "meander", 2: "random"}.get(b, "raster")
+
+
+def _provenance_params_json(params) -> str:
+    """v0.11 Task 2.5: serialise the ``parameters`` dict of a
+    :class:`~ttio.provenance.ProvenanceRecord` to the canonical wire
+    JSON form.
+
+    Format: ``{"k":"v","k2":"v2"}`` with keys sort_keys-ordered and
+    no whitespace between separators. Empty dict renders as ``"{}"``.
+    Java parity: :meth:`ProvenanceRecord.parametersJson` produces the
+    same braces / quote / no-whitespace shape; Python sorts keys for
+    a deterministic on-wire ordering (Java preserves insertion order
+    via ``Map.copyOf``, which for the small Maps used in practice is
+    LinkedHashMap-equivalent).
+    """
+    if not params:
+        return "{}"
+    # Coerce values to str so a dict[str, Any] (per the Python
+    # ProvenanceRecord type annotation) still produces the
+    # string-valued shape Java emits. Sort keys for stability.
+    coerced = {str(k): str(v) for k, v in params.items()}
+    return json.dumps(coerced, sort_keys=True, separators=(",", ":"))
+
+
+def _provenance_csv_join(refs) -> str:
+    """v0.11 Task 2.5: comma-join a list of refs into the wire form.
+
+    Empty list → empty string. No quoting/escaping is performed — per
+    spec §4.21, refs are URIs that have been URL-encoded so they
+    cannot themselves contain commas. Java parity:
+    :meth:`TransportWriter.csvJoin`.
+    """
+    if not refs:
+        return ""
+    return ",".join(str(r) for r in refs)
+
+
+def _provenance_csv_split(csv: str) -> list[str]:
+    """Reverse of :func:`_provenance_csv_join`. Empty string → empty
+    list. Java parity: :meth:`TransportReader.parseCsv`."""
+    if not csv:
+        return []
+    # No quoting / escaping in v0.11 — URIs are URL-encoded so they
+    # cannot themselves contain commas. Plain split mirrors Java's
+    # ``csv.split(",", -1)``.
+    return csv.split(",")
+
+
+def _provenance_params_parse(json_blob: str) -> dict:
+    """Reverse of :func:`_provenance_params_json`. Empty / ``"{}"``
+    blob → empty dict. Tolerant of parse failure (returns empty dict).
+    Java parity: :meth:`TransportReader.parseParametersJson`."""
+    if not json_blob or json_blob == "{}":
+        return {}
+    try:
+        parsed = json.loads(json_blob)
+        if isinstance(parsed, dict):
+            return {str(k): str(v) for k, v in parsed.items()}
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return {}
+
+
 def _instrument_config_json(run: AcquisitionRun) -> str:
     cfg = run.instrument_config
     return json.dumps({
@@ -845,12 +1804,37 @@ class TransportReader:
                 actual_crc = crc32c(payload)
                 if expected_crc != actual_crc:
                     raise ValueError(
-                        f"CRC-32C mismatch on packet type 0x{header.packet_type:02x}: "
+                        f"CRC-32C mismatch on packet type "
+                        f"0x{header.packet_type_byte:02x}: "
                         f"expected 0x{expected_crc:08x}, got 0x{actual_crc:08x}"
                     )
+            # Forward-compat (transport-spec §6 / v0.11 task 0.5):
+            # tolerate unknown packet types so v0.10 readers can ingest
+            # v0.11+ streams. The header was length-prefixed so the
+            # payload (and CRC if present) was already consumed above
+            # — just log and yield it so the caller can see it.
+            if not is_known_packet_type(header.packet_type):
+                _LOG.debug(
+                    "skipping unknown packet type 0x%02x",
+                    header.packet_type_byte,
+                )
             yield header, payload
             if header.packet_type == int(PacketType.END_OF_STREAM):
                 return
+
+    def records_for_test(self) -> list["PacketRecord"]:
+        """Materialise :meth:`iter_packets` into a list of
+        :class:`PacketRecord` values. Test-only inspection hook
+        mirroring Java's ``recordsForTest`` (forward-compat skip-unknown
+        path, v0.11 task 0.5). Underscore semantics: this is not
+        part of the stable transport-reader surface — production
+        consumers should drive :meth:`iter_packets` directly.
+        """
+        # Local import to avoid pulling the ingest module into the
+        # codec import cycle in the hot path.
+        from .ingest import PacketRecord
+        return [PacketRecord(header=h, payload=p)
+                for h, p in self.iter_packets()]
 
     def read_to_dataset(
         self,
@@ -870,6 +1854,72 @@ class TransportReader:
         last_seq: dict[int, int] = {}
         saw_stream_header = False
         bulk_mode_required = False
+        # v0.11 Stage 1 / Task 2.3 — per-stream accumulator state for
+        # the REFERENCE_GROUP_HEADER -> N x REFERENCE_CHROMOSOME ->
+        # END_OF_REFERENCE_GROUP packet sequence. Java parity:
+        # TransportReader.currentRefUri / currentChromNames /
+        # currentChromSeqs / collectedRefs.
+        current_ref_uri: str | None = None
+        current_chrom_names: list[str] = []
+        current_chrom_seqs: list[bytes] = []
+        collected_refs: list = []  # list[ReferenceImport]
+        # v0.11 Task 2.4: dataset-level @encrypted algorithm string
+        # carried by ENCRYPTION_ALGORITHM (0x1B) packets. ``None`` when
+        # no such packet appears in the stream. Multiple 0x1B packets
+        # are tolerated — last-write-wins (spec §5.4 says "zero or
+        # more"; in practice the writer emits exactly one). Java
+        # parity: TransportReader.collectedEncryptionAlgorithm (commit
+        # 530a5833).
+        collected_encryption_algorithm: str | None = None
+        # v0.11 Task 2.5: dataset-level provenance chain decoded from
+        # DATASET_PROVENANCE (0x18) packets. Multiple 0x18 packets MAY
+        # appear in a stream (spec §5.4 "zero or more"); each carries
+        # its own record_count + records and they accumulate in
+        # emission order. Passed into ``write_minimal`` as the
+        # ``provenance`` kwarg so the on-disk
+        # ``/study/provenance_json`` attribute round-trips. Java
+        # parity: TransportReader.collectedProvenance (commit
+        # 563e09c3).
+        collected_provenance: list = []  # list[ProvenanceRecord]
+        # v0.11 Task 2.6: per-stream image-cube accumulator state for
+        # the IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) ->
+        # END_OF_IMAGE (0x15) packet sequence. ``current_image_builder``
+        # is non-None between IMAGE_HEADER and END_OF_IMAGE. Java
+        # parity: TransportReader.currentImageBuilder /
+        # collectedImage (commit a6b1e5d9).
+        current_image_builder: dict | None = None
+        collected_image = None  # type: MSImage | None
+        # v0.11 Task 5.3 (Deferral 1): per-modality image accumulators.
+        # The IMAGE_HEADER's modality byte selects which collected_*
+        # slot is filled at END_OF_IMAGE time. ``current_image_skipping``
+        # is True between IMAGE_HEADER (unknown modality) and the
+        # matching END_OF_IMAGE so following IMAGE_PIXEL packets are
+        # silently dropped (forward-compat per §4.16).
+        collected_raman_image = None  # type: RamanImage | None
+        collected_ir_image = None  # type: IRImage | None
+        current_image_skipping = False
+        # v0.11 Task 2.7: identification / quantification rows decoded
+        # from IDENTIFICATIONS_TABLE (0x16) / QUANTIFICATIONS_TABLE
+        # (0x17) packets. Multiple 0x16 / 0x17 packets MAY appear in a
+        # stream (spec §5.4 step 6 says "zero or more"); rows accumulate
+        # in emission order. Passed into ``write_minimal`` as the
+        # ``identifications`` / ``quantifications`` kwargs so the
+        # on-disk study compound datasets round-trip. Java parity:
+        # TransportReader.collectedIdentifications /
+        # collectedQuantifications (commit a6faab16).
+        collected_identifications: list = []  # list[Identification]
+        collected_quantifications: list = []  # list[Quantification]
+        # Stage 6 / Task 6.3 (transport-spec v0.11 §4.22): subject +
+        # sample rows decoded from SUBJECT_METADATA (0x19) /
+        # SAMPLE_METADATA (0x1A) packets. Multiple 0x19 / 0x1A packets
+        # MAY appear in a stream (spec §5.4 step 5: "zero or more");
+        # rows accumulate in emission order. Passed into ``write_minimal``
+        # as the ``subjects`` / ``samples`` kwargs so the on-disk
+        # per-row groups round-trip via SpectralDataset's lazy properties.
+        # Java parity: TransportReader.collectedSubjects /
+        # collectedSamples (commit dd211600).
+        collected_subjects: list = []  # list[Subject]
+        collected_samples: list = []  # list[Sample]
 
         for header, payload in self.iter_packets():
             ptype = header.packet_type
@@ -967,6 +2017,483 @@ class TransportReader:
                         f"duplicate BlobV2NameTok for dataset_id {ds_id}"
                     )
                 slot["name_tok"] = blob
+            elif ptype == int(PacketType.ENCRYPTION_ALGORITHM):
+                # v0.11 Task 2.4: decode and stash the algorithm
+                # string for application at materialize time. Multiple
+                # 0x1B packets are tolerated (last-write-wins). Java
+                # parity: TransportReader.decodeEncryptionAlgorithm.
+                (algo_len,) = struct.unpack_from("<H", payload, 0)
+                collected_encryption_algorithm = payload[
+                    2:2 + algo_len
+                ].decode("utf-8")
+            elif ptype == int(PacketType.DATASET_PROVENANCE):
+                # v0.11 Task 2.5: decode the per-packet record_count +
+                # records and append to ``collected_provenance``.
+                # Java parity: TransportReader.decodeDatasetProvenance.
+                from ..provenance import ProvenanceRecord
+                pl = payload
+                off = 0
+                (record_count,) = struct.unpack_from("<I", pl, off)
+                off += 4
+                for _ in range(record_count):
+                    (timestamp,) = struct.unpack_from("<q", pl, off)
+                    off += 8
+                    (sw_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    software = pl[off:off + sw_len].decode("utf-8")
+                    off += sw_len
+                    (pj_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    params_json = pl[off:off + pj_len].decode("utf-8")
+                    off += pj_len
+                    (in_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    inputs_csv = pl[off:off + in_len].decode("utf-8")
+                    off += in_len
+                    (out_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    outputs_csv = pl[off:off + out_len].decode("utf-8")
+                    off += out_len
+                    collected_provenance.append(ProvenanceRecord(
+                        timestamp_unix=int(timestamp),
+                        software=software,
+                        parameters=_provenance_params_parse(params_json),
+                        input_refs=_provenance_csv_split(inputs_csv),
+                        output_refs=_provenance_csv_split(outputs_csv),
+                    ))
+            elif ptype == int(PacketType.REFERENCE_GROUP_HEADER):
+                # v0.11 Stage 1 / Task 2.3: decode header and prime the
+                # per-group accumulator. chromosome_count / total_bases
+                # / md5_hex are parsed for buffer-position advance only —
+                # the actual values come from the per-chromosome
+                # accumulator (ReferenceImport.__post_init__ recomputes
+                # MD5 from the sequences).
+                pl = payload
+                off = 0
+                (uri_len,) = struct.unpack_from("<H", pl, off)
+                off += 2
+                current_ref_uri = pl[off:off + uri_len].decode("utf-8")
+                off += uri_len
+                # chromosome_count (uint32) — advance only.
+                off += 4
+                # total_bases (uint64) — advance only.
+                off += 8
+                # md5_hex[32] — advance only.
+                off += 32
+                current_chrom_names = []
+                current_chrom_seqs = []
+            elif ptype == int(PacketType.REFERENCE_CHROMOSOME):
+                # v0.11 Stage 1 / Task 2.3: decode chromosome + append.
+                pl = payload
+                off = 0
+                (name_len,) = struct.unpack_from("<H", pl, off)
+                off += 2
+                name = pl[off:off + name_len].decode("utf-8")
+                off += name_len
+                (seq_len,) = struct.unpack_from("<Q", pl, off)
+                off += 8
+                encoding = pl[off]
+                off += 1
+                (data_len,) = struct.unpack_from("<I", pl, off)
+                off += 4
+                raw = bytes(pl[off:off + data_len])
+                off += data_len
+                if encoding == 0:
+                    seq_bytes = raw
+                elif encoding == 1:
+                    seq_bytes = zlib.decompress(raw)
+                    if len(seq_bytes) != seq_len:
+                        raise ValueError(
+                            f"REFERENCE_CHROMOSOME zlib payload inflated to "
+                            f"{len(seq_bytes)} bytes; expected {seq_len}"
+                        )
+                else:
+                    raise ValueError(
+                        f"unknown REFERENCE_CHROMOSOME encoding: {encoding}"
+                    )
+                current_chrom_names.append(name)
+                current_chrom_seqs.append(seq_bytes)
+            elif ptype == int(PacketType.END_OF_REFERENCE_GROUP):
+                # v0.11 Stage 1 / Task 2.3: close out the current group.
+                if current_ref_uri is None:
+                    raise ValueError(
+                        "END_OF_REFERENCE_GROUP without prior "
+                        "REFERENCE_GROUP_HEADER"
+                    )
+                # Local import to avoid pulling the genomic module into
+                # the codec import cycle when no references are present.
+                from ..genomic.reference_import import ReferenceImport
+                collected_refs.append(ReferenceImport(
+                    uri=current_ref_uri,
+                    chromosomes=list(current_chrom_names),
+                    sequences=list(current_chrom_seqs),
+                ))
+                current_ref_uri = None
+                current_chrom_names = []
+                current_chrom_seqs = []
+            elif ptype == int(PacketType.IMAGE_HEADER):
+                # v0.11 Task 2.6 / 5.1 (Deferral 1): decode an
+                # IMAGE_HEADER (0x13) payload and prime the per-image
+                # accumulator. Wire layout matches transport-spec
+                # §4.16. Both continuous-mode (is_continuous == 1) and
+                # processed-mode (is_continuous == 0, sparse
+                # {channel,intensity} pairs indexed into the shared
+                # axis) are supported; the mode flag is cached on the
+                # builder and read by the IMAGE_PIXEL branch. Only
+                # modality == 0 (MS) materialises today;
+                # Raman/IR/UV-Vis modalities are handled by the
+                # Task 5.3 modality-dispatch follow-up.
+                pl = payload
+                off = 0
+                modality = pl[off]; off += 1
+                (img_width,) = struct.unpack_from("<I", pl, off); off += 4
+                (img_height,) = struct.unpack_from("<I", pl, off); off += 4
+                (img_bins,) = struct.unpack_from("<I", pl, off); off += 4
+                (img_px_x,) = struct.unpack_from("<d", pl, off); off += 8
+                (img_px_y,) = struct.unpack_from("<d", pl, off); off += 8
+                img_scan_byte = pl[off]; off += 1
+                img_axis_kind = pl[off]; off += 1
+                (img_axis_len,) = struct.unpack_from("<I", pl, off); off += 4
+                img_axis = np.frombuffer(
+                    pl, dtype="<f8", count=img_axis_len, offset=off
+                ).copy()
+                off += 8 * img_axis_len
+                img_continuous = pl[off]; off += 1
+                (title_len,) = struct.unpack_from("<H", pl, off); off += 2
+                img_title = pl[off:off + title_len].decode("utf-8")
+                off += title_len
+                (isa_len,) = struct.unpack_from("<H", pl, off); off += 2
+                img_isa = pl[off:off + isa_len].decode("utf-8")
+                off += isa_len
+                # v0.11 Task 5.3: optional modality_extras slot at the
+                # tail. v0.10 streams emitted no such field, so older
+                # fixtures may end at `isa_id`. Probe length to stay
+                # backwards-compatible.
+                if off + 2 <= len(pl):
+                    (extras_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    img_extras = bytes(pl[off:off + extras_len])
+                    off += extras_len
+                else:
+                    img_extras = b""
+                if img_continuous not in (0, 1):
+                    raise ValueError(
+                        f"IMAGE_HEADER: is_continuous must be 0 or 1; "
+                        f"got {img_continuous}"
+                    )
+                # v0.11 Task 5.3: modality dispatch. modality 0=MS, 1=Raman,
+                # 2=IR. Unknown modalities are logged + skipped (forward
+                # compat per §4.16); the self-describing extras_len has
+                # already advanced the buffer past the IMAGE_HEADER.
+                if modality == 0:
+                    builder_modality = 0
+                    builder_extras = {}
+                elif modality == 1:
+                    if len(img_extras) != 16:
+                        raise ValueError(
+                            f"IMAGE_HEADER (modality=1, Raman) expects "
+                            f"16-byte modality_extras (excitation + "
+                            f"laser_power); got {len(img_extras)}"
+                        )
+                    exc, laser = struct.unpack("<dd", img_extras)
+                    builder_modality = 1
+                    builder_extras = {
+                        "excitation_wavelength_nm": float(exc),
+                        "laser_power_mw": float(laser),
+                    }
+                elif modality == 2:
+                    if len(img_extras) != 9:
+                        raise ValueError(
+                            f"IMAGE_HEADER (modality=2, IR) expects "
+                            f"9-byte modality_extras (ir_mode + "
+                            f"resolution); got {len(img_extras)}"
+                        )
+                    ir_mode_byte, resolution = struct.unpack(
+                        "<Bd", img_extras
+                    )
+                    builder_modality = 2
+                    builder_extras = {
+                        "ir_mode_byte": int(ir_mode_byte),
+                        "resolution_cm_inv": float(resolution),
+                    }
+                else:
+                    _LOG.warning(
+                        "IMAGE_HEADER: unknown modality=%d; skipping "
+                        "image block (extras_len=%d, width=%d, height=%d)",
+                        modality, len(img_extras), int(img_width),
+                        int(img_height),
+                    )
+                    current_image_skipping = True
+                    current_image_builder = None
+                    continue
+
+                current_image_builder = {
+                    "modality": builder_modality,
+                    "extras": builder_extras,
+                    "width": int(img_width),
+                    "height": int(img_height),
+                    "spectral_points": int(img_bins),
+                    "pixel_size_x": float(img_px_x),
+                    "pixel_size_y": float(img_px_y),
+                    "scan_pattern": _scan_pattern_from_byte(img_scan_byte),
+                    "axis_kind": int(img_axis_kind),
+                    "axis": img_axis,
+                    "title": img_title,
+                    "isa_investigation_id": img_isa,
+                    "is_continuous": bool(img_continuous),
+                    "cube": np.zeros(
+                        (int(img_height), int(img_width), int(img_bins)),
+                        dtype=np.float64,
+                    ),
+                    "seen": np.zeros(
+                        int(img_height) * int(img_width), dtype=bool
+                    ),
+                    "seen_count": 0,
+                }
+            elif ptype == int(PacketType.IMAGE_PIXEL):
+                # v0.11 Task 2.6 / 5.1 (Deferral 1): decode an
+                # IMAGE_PIXEL (0x14) payload per §4.17 and stash the
+                # intensities at the pixel's (y, x) slot. The wire
+                # shape inside ``payload_bytes`` branches on the
+                # cached ``is_continuous`` from the IMAGE_HEADER:
+                #
+                #   * continuous: dense ``spectrum_bins`` intensities
+                #   * processed:  ``u32 nonzero_count`` + that many
+                #                 ``u32 channel_index + fXX intensity``
+                #                 pairs; unmentioned channels stay 0.0.
+                #
+                # Java parity: TransportReader.appendPixel.
+                if current_image_skipping:
+                    # v0.11 Task 5.3: unknown-modality stream — silently
+                    # drop the pixel until the matching END_OF_IMAGE.
+                    continue
+                if current_image_builder is None:
+                    raise ValueError(
+                        "IMAGE_PIXEL received before IMAGE_HEADER"
+                    )
+                pl = payload
+                off = 0
+                (px_x,) = struct.unpack_from("<I", pl, off); off += 4
+                (px_y,) = struct.unpack_from("<I", pl, off); off += 4
+                precision = pl[off]; off += 1
+                compression = pl[off]; off += 1
+                (payload_len,) = struct.unpack_from("<I", pl, off); off += 4
+                raw = bytes(pl[off:off + payload_len])
+                if compression != 0:
+                    raise ValueError(
+                        f"IMAGE_PIXEL compression={compression} not yet "
+                        "supported (NONE only at Task 2.6)"
+                    )
+                if precision not in (0, 1):
+                    raise ValueError(
+                        f"IMAGE_PIXEL precision={precision} not supported "
+                        "(expected 0=float32 or 1=float64)"
+                    )
+                w_img = current_image_builder["width"]
+                h_img = current_image_builder["height"]
+                sp_img = current_image_builder["spectral_points"]
+                is_cont = current_image_builder["is_continuous"]
+                if px_x >= w_img or px_y >= h_img:
+                    raise ValueError(
+                        f"IMAGE_PIXEL coordinates out of bounds: x={px_x}, "
+                        f"y={px_y} (width={w_img}, height={h_img})"
+                    )
+                if is_cont:
+                    if precision == 1:
+                        intensities = np.frombuffer(
+                            raw, dtype="<f8"
+                        ).astype(np.float64, copy=True)
+                    else:
+                        intensities = np.frombuffer(
+                            raw, dtype="<f4"
+                        ).astype(np.float64, copy=True)
+                    if intensities.size != sp_img:
+                        raise ValueError(
+                            f"IMAGE_PIXEL intensity count {intensities.size} "
+                            f"does not match IMAGE_HEADER.spectrum_bins={sp_img}"
+                        )
+                else:
+                    # Processed-mode: u32 nonzero_count + entries.
+                    intensities = np.zeros(sp_img, dtype=np.float64)
+                    if payload_len < 4:
+                        raise ValueError(
+                            "IMAGE_PIXEL (processed) payload too short to "
+                            "carry nonzero_count"
+                        )
+                    (nonzero_count,) = struct.unpack_from("<I", raw, 0)
+                    entry_off = 4
+                    val_size = 8 if precision == 1 else 4
+                    val_fmt = "<d" if precision == 1 else "<f"
+                    expected_payload_len = 4 + nonzero_count * (4 + val_size)
+                    if payload_len != expected_payload_len:
+                        raise ValueError(
+                            f"IMAGE_PIXEL (processed) payload_length "
+                            f"{payload_len} does not match nonzero_count="
+                            f"{nonzero_count} (expected "
+                            f"{expected_payload_len})"
+                        )
+                    for _ in range(nonzero_count):
+                        (ch,) = struct.unpack_from(
+                            "<I", raw, entry_off
+                        )
+                        entry_off += 4
+                        (v,) = struct.unpack_from(
+                            val_fmt, raw, entry_off
+                        )
+                        entry_off += val_size
+                        if ch >= sp_img:
+                            raise ValueError(
+                                f"IMAGE_PIXEL (processed) channel_index "
+                                f"{ch} out of range [0, {sp_img}) at "
+                                f"pixel (x={px_x}, y={px_y})"
+                            )
+                        intensities[int(ch)] = float(v)
+                pixel_idx = int(px_y) * w_img + int(px_x)
+                if current_image_builder["seen"][pixel_idx]:
+                    raise ValueError(
+                        f"duplicate IMAGE_PIXEL at (x={px_x}, y={px_y})"
+                    )
+                current_image_builder["seen"][pixel_idx] = True
+                current_image_builder["seen_count"] += 1
+                current_image_builder["cube"][int(px_y), int(px_x), :] = (
+                    intensities
+                )
+            elif ptype == int(PacketType.END_OF_IMAGE):
+                # v0.11 Task 2.6 / 5.3 (Deferral 1): close out the
+                # current image cube on END_OF_IMAGE (0x15). Verifies
+                # pixel_count_seen against the per-pixel ingest count
+                # + width*height. Dispatches to the per-modality
+                # collected_* slot (MS / Raman / IR). Java parity:
+                # TransportReader.finishImage.
+                if current_image_skipping:
+                    # v0.11 Task 5.3: drain the END_OF_IMAGE of a
+                    # skipped (unknown-modality) block. The
+                    # pixel_count_seen field is still consumed for
+                    # stream hygiene but not validated against any
+                    # per-pixel count (we never accumulated one).
+                    current_image_skipping = False
+                    continue
+                if current_image_builder is None:
+                    raise ValueError(
+                        "END_OF_IMAGE without prior IMAGE_HEADER"
+                    )
+                (declared,) = struct.unpack_from("<I", payload, 0)
+                actual = current_image_builder["seen_count"]
+                w_img = current_image_builder["width"]
+                h_img = current_image_builder["height"]
+                if declared != actual:
+                    raise ValueError(
+                        f"END_OF_IMAGE pixel_count_seen mismatch: "
+                        f"declared={declared}, actual={actual} "
+                        f"(width*height={w_img * h_img})"
+                    )
+                if actual != w_img * h_img:
+                    raise ValueError(
+                        f"END_OF_IMAGE pixel count {actual} does not "
+                        f"equal width*height={w_img * h_img}"
+                    )
+                builder_modality = current_image_builder["modality"]
+                builder_extras = current_image_builder["extras"]
+                if builder_modality == 0:
+                    from ..ms_image import MSImage
+                    collected_image = MSImage(
+                        width=w_img,
+                        height=h_img,
+                        spectral_points=current_image_builder["spectral_points"],
+                        intensity=current_image_builder["cube"],
+                        mz_axis=current_image_builder["axis"],
+                        pixel_size_x=current_image_builder["pixel_size_x"],
+                        pixel_size_y=current_image_builder["pixel_size_y"],
+                        scan_pattern=current_image_builder["scan_pattern"],
+                        title=current_image_builder["title"],
+                        isa_investigation_id=current_image_builder[
+                            "isa_investigation_id"
+                        ],
+                    )
+                elif builder_modality == 1:
+                    from ..raman_image import RamanImage
+                    collected_raman_image = RamanImage(
+                        width=w_img,
+                        height=h_img,
+                        spectral_points=current_image_builder["spectral_points"],
+                        intensity=current_image_builder["cube"],
+                        wavenumbers=current_image_builder["axis"],
+                        pixel_size_x=current_image_builder["pixel_size_x"],
+                        pixel_size_y=current_image_builder["pixel_size_y"],
+                        scan_pattern=current_image_builder["scan_pattern"],
+                        excitation_wavelength_nm=builder_extras[
+                            "excitation_wavelength_nm"
+                        ],
+                        laser_power_mw=builder_extras["laser_power_mw"],
+                        title=current_image_builder["title"],
+                        isa_investigation_id=current_image_builder[
+                            "isa_investigation_id"
+                        ],
+                    )
+                elif builder_modality == 2:
+                    from ..enums import IRMode
+                    from ..ir_image import IRImage
+                    ir_mode = (IRMode.ABSORBANCE
+                               if builder_extras["ir_mode_byte"] == 1
+                               else IRMode.TRANSMITTANCE)
+                    collected_ir_image = IRImage(
+                        width=w_img,
+                        height=h_img,
+                        spectral_points=current_image_builder["spectral_points"],
+                        intensity=current_image_builder["cube"],
+                        wavenumbers=current_image_builder["axis"],
+                        pixel_size_x=current_image_builder["pixel_size_x"],
+                        pixel_size_y=current_image_builder["pixel_size_y"],
+                        scan_pattern=current_image_builder["scan_pattern"],
+                        mode=ir_mode,
+                        resolution_cm_inv=builder_extras["resolution_cm_inv"],
+                        title=current_image_builder["title"],
+                        isa_investigation_id=current_image_builder[
+                            "isa_investigation_id"
+                        ],
+                    )
+                current_image_builder = None
+            elif ptype == int(PacketType.IDENTIFICATIONS_TABLE):
+                # v0.11 Task 2.7: decode the uint32-length-prefixed
+                # Arrow IPC payload and append the resulting rows to
+                # ``collected_identifications``. Multiple 0x16 packets
+                # accumulate in emission order. Java parity:
+                # TransportReader.decodeIdentificationsTable.
+                from .arrow_ipc import decode_identifications
+                (ipc_len,) = struct.unpack_from("<I", payload, 0)
+                ipc_bytes = bytes(payload[4:4 + ipc_len])
+                collected_identifications.extend(
+                    decode_identifications(ipc_bytes)
+                )
+            elif ptype == int(PacketType.QUANTIFICATIONS_TABLE):
+                # v0.11 Task 2.7: decode the uint32-length-prefixed
+                # Arrow IPC payload and append the resulting rows to
+                # ``collected_quantifications``. Java parity:
+                # TransportReader.decodeQuantificationsTable.
+                from .arrow_ipc import decode_quantifications
+                (ipc_len,) = struct.unpack_from("<I", payload, 0)
+                ipc_bytes = bytes(payload[4:4 + ipc_len])
+                collected_quantifications.extend(
+                    decode_quantifications(ipc_bytes)
+                )
+            elif ptype == int(PacketType.SUBJECT_METADATA):
+                # Stage 6 / Task 6.3: decode the uint32-length-prefixed
+                # Arrow IPC payload and append the resulting rows to
+                # ``collected_subjects``. Java parity:
+                # TransportReader.decodeSubjectMetadata.
+                from .arrow_ipc import decode_subjects
+                (ipc_len,) = struct.unpack_from("<I", payload, 0)
+                ipc_bytes = bytes(payload[4:4 + ipc_len])
+                collected_subjects.extend(decode_subjects(ipc_bytes))
+            elif ptype == int(PacketType.SAMPLE_METADATA):
+                # Stage 6 / Task 6.3: decode the uint32-length-prefixed
+                # Arrow IPC payload and append the resulting rows to
+                # ``collected_samples``. Java parity:
+                # TransportReader.decodeSampleMetadata.
+                from .arrow_ipc import decode_samples
+                (ipc_len,) = struct.unpack_from("<I", payload, 0)
+                ipc_bytes = bytes(payload[4:4 + ipc_len])
+                collected_samples.extend(decode_samples(ipc_bytes))
             elif ptype == int(PacketType.END_OF_DATASET):
                 continue
             elif ptype == int(PacketType.END_OF_STREAM):
@@ -1082,8 +2609,68 @@ class TransportReader:
             runs=runs,
             genomic_runs=genomic_runs or None,
             features=list(stream_meta.get("features", [])) or None,
+            # v0.11 Task 2.5: surface decoded DATASET_PROVENANCE
+            # records on the materialised .tio. ``None`` when no 0x18
+            # packets appeared, matching write_minimal's signature.
+            # Java parity: TransportReader.materializeTo passes
+            # collectedProvenance into SpectralDataset.create.
+            provenance=collected_provenance or None,
+            # v0.11 Task 2.7: surface decoded IDENTIFICATIONS_TABLE /
+            # QUANTIFICATIONS_TABLE rows on the materialised .tio.
+            # ``None`` when the wire had no 0x16 / 0x17 packets, so
+            # the matching study compound datasets are omitted.
+            identifications=collected_identifications or None,
+            quantifications=collected_quantifications or None,
+            # Stage 6 / Task 6.3: surface decoded SUBJECT_METADATA /
+            # SAMPLE_METADATA rows on the materialised .tio as per-row
+            # groups under /study/subjects/ + /study/samples/. ``None``
+            # when the wire had no 0x19 / 0x1A packets so the matching
+            # groups are absent (pre-Stage-6 compat). Java parity:
+            # TransportReader.materializeTo layering loop.
+            subjects=collected_subjects or None,
+            samples=collected_samples or None,
             provider=provider,
         )
+        # v0.11 Stage 1 / Task 2.3: embed any reference groups decoded
+        # from the stream's REFERENCE_* packets. ReferenceImport.write_-
+        # to_dataset(ds) requires an open writable HDF5 provider, so
+        # reopen the just-written .tio in r+ mode, embed, then close
+        # before the final read-only open returned to the caller. Java
+        # parity: TransportReader.materializeTo (commit 7f3dec46).
+        if collected_refs:
+            with SpectralDataset.open(path, writable=True) as ds_w:
+                for ref in collected_refs:
+                    ref.write_to_dataset(ds_w)
+        # v0.11 Task 2.6 / 5.3 (Deferral 1): embed any image cubes
+        # decoded from the stream's IMAGE_* packets. Each modality
+        # lives in its own /study/{image_cube,raman_image_cube,
+        # ir_image_cube} subgroup, so all three can coexist on the
+        # same dataset. SpectralDataset caches the per-modality image
+        # at construction time, so the close+reopen at the end forces
+        # a fresh read of each cube on the returned handle. Java
+        # parity: TransportReader.materializeTo (commit f99ec47d).
+        if (collected_image is not None
+                or collected_raman_image is not None
+                or collected_ir_image is not None):
+            with SpectralDataset.open(path, writable=True) as ds_w:
+                study_grp = ds_w.provider.root_group().open_group("study")
+                if collected_image is not None:
+                    collected_image.write_to(study_grp)
+                if collected_raman_image is not None:
+                    collected_raman_image.write_to(study_grp)
+                if collected_ir_image is not None:
+                    collected_ir_image.write_to(study_grp)
+        # v0.11 Task 2.4: persist the dataset-level @encrypted root
+        # attribute so the materialised file reports is_encrypted ==
+        # True on reopen. SpectralDataset caches encrypted_algorithm
+        # in an instance field at construction time, so we must close
+        # + reopen to surface the value on the returned dataset. Java
+        # parity: TransportReader.materializeTo (commit 530a5833).
+        if collected_encryption_algorithm is not None:
+            with SpectralDataset.open(path, writable=True) as ds_w:
+                ds_w.provider.root_group().set_attribute(
+                    "encrypted", collected_encryption_algorithm
+                )
         return SpectralDataset.open(path)
 
 

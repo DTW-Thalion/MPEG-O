@@ -48,6 +48,8 @@ libTTIO_HEADER_FILES = \
 	Dataset/TTIOIdentification.h \
 	Dataset/TTIOQuantification.h \
 	Dataset/TTIOProvenanceRecord.h \
+	Dataset/TTIOSubject.h \
+	Dataset/TTIOSample.h \
 	Dataset/TTIOTransitionList.h \
 	Dataset/TTIOSpectralDataset.h \
 	Dataset/TTIOWrittenRun.h \
@@ -106,6 +108,7 @@ libTTIO_HEADER_FILES = \
 	Providers/TTIOSqliteProvider.h \
 	Providers/TTIOZarrProvider.h \
 	Transport/TTIOTransportPacket.h \
+	Transport/TTIOArrowIpcCodec.h \
 	Transport/TTIOAccessUnit.h \
 	Transport/TTIOTransportWriter.h \
 	Transport/TTIOTransportReader.h \
@@ -167,6 +170,8 @@ libTTIO_OBJC_FILES = \
 	Dataset/TTIOIdentification.m \
 	Dataset/TTIOQuantification.m \
 	Dataset/TTIOProvenanceRecord.m \
+	Dataset/TTIOSubject.m \
+	Dataset/TTIOSample.m \
 	Dataset/TTIOTransitionList.m \
 	Dataset/TTIOSpectralDataset.m \
 	Dataset/TTIOWrittenRun.m \
@@ -223,6 +228,7 @@ libTTIO_OBJC_FILES = \
 	Providers/TTIOSqliteProvider.m \
 	Providers/TTIOZarrProvider.m \
 	Transport/TTIOTransportPacket.m \
+	Transport/TTIOArrowIpcCodec.m \
 	Transport/TTIOAccessUnit.m \
 	Transport/TTIOTransportWriter.m \
 	Transport/TTIOTransportReader.m \
@@ -246,7 +252,17 @@ libTTIO_OBJC_FILES = \
 	Codecs/TTIODeltaRans.m \
 	Codecs/TTIOReferenceResolver.m
 
-libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
+# Objective-C++ source files compiled with `clang -x objective-c++`.
+# Pulled in via the GNUstep make convention (xxx_OBJCC_FILES); the
+# .mm suffix is mapped to an Objective-C++ build rule in
+# /usr/share/GNUstep/Makefiles/Instance/rules.make.
+#
+# TTIOArrowIpcBridge.mm links against libarrow (Apache Arrow C++); see
+# GNUmakefile.preamble for the include/link wiring.
+libTTIO_OBJCC_FILES = \
+	Transport/TTIOArrowIpcBridge.mm
+
+libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets -larrow -lstdc++
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make

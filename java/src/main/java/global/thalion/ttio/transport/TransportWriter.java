@@ -6,7 +6,16 @@ package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.Enums.IRMode;
+import global.thalion.ttio.IRImage;
+import global.thalion.ttio.Identification;
 import global.thalion.ttio.InstrumentConfig;
+import global.thalion.ttio.MSImage;
+import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
+import global.thalion.ttio.Subject;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
@@ -15,6 +24,7 @@ import global.thalion.ttio.codecs.BasePack;
 import global.thalion.ttio.codecs.Rans;
 import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -204,6 +214,746 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.BLOB_V2_NAME_TOK, buf.array(), datasetId, 0);
     }
 
+    // ----------------------------------------------- v0.11 §4.23
+
+    /**
+     * v0.11 Task 1.5: emit an {@code ENCRYPTION_ALGORITHM} (0x1B)
+     * packet carrying the dataset-level {@code @encrypted} algorithm
+     * name (e.g. {@code "aes-256-gcm"}). Wire layout matches
+     * transport-spec §4.23:
+     *
+     * <pre>
+     * algorithm_length:  uint16
+     * algorithm_utf8:    bytes[algorithm_length]
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7.</p>
+     *
+     * <p>This packet only conveys the algorithm-name string; per-AU
+     * key material continues to ride on {@code ProtectionMetadata}
+     * (0x04).</p>
+     */
+    public void writeEncryptionAlgorithm(String algorithm) throws IOException {
+        if (algorithm == null) {
+            throw new IllegalArgumentException(
+                "writeEncryptionAlgorithm: algorithm must not be null");
+        }
+        byte[] algoBytes = algorithm.getBytes(StandardCharsets.UTF_8);
+        if (algoBytes.length > 0xFFFF) {
+            throw new IOException(
+                "ENCRYPTION_ALGORITHM: algorithm name " + algoBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        ByteBuffer buf = ByteBuffer.allocate(2 + algoBytes.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putShort((short) (algoBytes.length & 0xFFFF));
+        buf.put(algoBytes);
+        emit(PacketType.ENCRYPTION_ALGORITHM, buf.array(), 0, 0);
+    }
+
+    // ----------------------------------------------- v0.11 §4.21
+
+    /**
+     * v0.11 Task 1.6: emit a {@code DATASET_PROVENANCE} (0x18) packet
+     * carrying the dataset-level provenance chain (format-spec §6.3).
+     * One packet carries all records — see transport-spec §4.21 for
+     * the wire layout:
+     *
+     * <pre>
+     * record_count:        uint32
+     * # repeated record_count times:
+     * timestamp_unix:      int64
+     * software_length:     uint16, software bytes[..]   (UTF-8)
+     * parameters_length:   uint16, parameters_json[..]  (UTF-8 JSON)
+     * input_refs_length:   uint16, input_refs_csv[..]   (UTF-8 CSV)
+     * output_refs_length:  uint16, output_refs_csv[..]  (UTF-8 CSV)
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+     * input_refs / output_refs lists ride as comma-joined UTF-8 — a
+     * single empty string for an empty list (no separators).</p>
+     *
+     * <p>Distinct from the per-run {@code Provenance} (0x06) packet,
+     * which carries one JSON record per packet.</p>
+     */
+    public void writeDatasetProvenance(List<ProvenanceRecord> records)
+            throws IOException {
+        if (records == null) {
+            throw new IllegalArgumentException(
+                "writeDatasetProvenance: records must not be null");
+        }
+        // Pre-compute UTF-8 byte arrays so we can size the buffer
+        // exactly. Mirrors the StreamHeader/DatasetHeader emit pattern.
+        byte[][] softwareBytes = new byte[records.size()][];
+        byte[][] paramsBytes   = new byte[records.size()][];
+        byte[][] inputsBytes   = new byte[records.size()][];
+        byte[][] outputsBytes  = new byte[records.size()][];
+        int size = 4;  // record_count
+        for (int i = 0; i < records.size(); i++) {
+            ProvenanceRecord r = records.get(i);
+            softwareBytes[i] = nz(r.software())
+                .getBytes(StandardCharsets.UTF_8);
+            paramsBytes[i]   = r.parametersJson()
+                .getBytes(StandardCharsets.UTF_8);
+            inputsBytes[i]   = csvJoin(r.inputRefs())
+                .getBytes(StandardCharsets.UTF_8);
+            outputsBytes[i]  = csvJoin(r.outputRefs())
+                .getBytes(StandardCharsets.UTF_8);
+            for (byte[] b : new byte[][]{softwareBytes[i], paramsBytes[i],
+                                          inputsBytes[i], outputsBytes[i]}) {
+                if (b.length > 0xFFFF) {
+                    throw new IOException(
+                        "DATASET_PROVENANCE: per-field length " + b.length
+                        + " exceeds uint16 max");
+                }
+            }
+            size += 8                          // timestamp_unix
+                  + 2 + softwareBytes[i].length
+                  + 2 + paramsBytes[i].length
+                  + 2 + inputsBytes[i].length
+                  + 2 + outputsBytes[i].length;
+        }
+        ByteBuffer buf = ByteBuffer.allocate(size).order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(records.size());
+        for (int i = 0; i < records.size(); i++) {
+            ProvenanceRecord r = records.get(i);
+            buf.putLong(r.timestampUnix());
+            buf.putShort((short) (softwareBytes[i].length & 0xFFFF));
+            buf.put(softwareBytes[i]);
+            buf.putShort((short) (paramsBytes[i].length & 0xFFFF));
+            buf.put(paramsBytes[i]);
+            buf.putShort((short) (inputsBytes[i].length & 0xFFFF));
+            buf.put(inputsBytes[i]);
+            buf.putShort((short) (outputsBytes[i].length & 0xFFFF));
+            buf.put(outputsBytes[i]);
+        }
+        emit(PacketType.DATASET_PROVENANCE, buf.array(), 0, 0);
+    }
+
+    private static String csvJoin(List<String> refs) {
+        if (refs == null || refs.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < refs.size(); i++) {
+            if (i > 0) sb.append(',');
+            sb.append(refs.get(i));
+        }
+        return sb.toString();
+    }
+
+    // ----------------------------------------------- v0.11 §4.13–§4.15
+
+    /**
+     * Threshold below which a chromosome rides as raw UINT8
+     * (encoding=0). Mirrors transport-spec §4.14: ZLIB framing costs
+     * dominate short sequences, so the writer skips compression below
+     * 4 KiB and lets the reader handle both encodings.
+     */
+    static final int REFERENCE_CHROMOSOME_ZLIB_THRESHOLD = 4096;
+
+    /**
+     * v0.11 Stage 1: emit a {@link ReferenceImport} as the packet
+     * sequence
+     * {@code REFERENCE_GROUP_HEADER (0x10) → N × REFERENCE_CHROMOSOME (0x11)
+     *  → END_OF_REFERENCE_GROUP (0x12)}.
+     *
+     * <p>Wire layout matches transport-spec §4.13–§4.15. All
+     * multi-byte integers are LITTLE-ENDIAN (spec §1.7). The
+     * chromosome index rides in the packet header's
+     * {@code auSequence} field (0-based). The MD5 hex string from
+     * {@link ReferenceImport#md5Hex()} is emitted verbatim as 32
+     * ASCII bytes.</p>
+     *
+     * <p>The encoding byte on each chromosome record is 0
+     * (uncompressed UINT8) when the raw sequence is shorter than
+     * {@link #REFERENCE_CHROMOSOME_ZLIB_THRESHOLD}, otherwise 1
+     * (zlib via {@link java.util.zip.Deflater} with default
+     * settings).</p>
+     *
+     * <p>Reader-side materialisation is added by Task 1.3; this
+     * method only emits the wire bytes.</p>
+     */
+    public void writeReferenceGroup(ReferenceImport ref) throws IOException {
+        List<String> chromNames = ref.chromosomes();
+        List<byte[]> seqs = ref.sequences();
+        int chromCount = chromNames.size();
+        long totalBases = ref.totalBases();
+        String md5Hex = ref.md5Hex();
+        if (md5Hex == null || md5Hex.length() != 32) {
+            throw new IOException(
+                "ReferenceImport.md5Hex() must be 32 hex chars, got "
+                + (md5Hex == null ? "null" : md5Hex.length()));
+        }
+
+        // -- REFERENCE_GROUP_HEADER (0x10) -------------------------------
+        byte[] uriBytes = ref.uri().getBytes(StandardCharsets.UTF_8);
+        byte[] md5HexBytes = md5Hex.getBytes(StandardCharsets.US_ASCII);
+        int hdrSize = 2 + uriBytes.length + 4 + 8 + 32;
+        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
+        hbuf.putShort((short) (uriBytes.length & 0xFFFF));
+        hbuf.put(uriBytes);
+        hbuf.putInt(chromCount);
+        hbuf.putLong(totalBases);
+        hbuf.put(md5HexBytes);
+        emit(PacketType.REFERENCE_GROUP_HEADER, hbuf.array(), 0, 0);
+
+        // -- REFERENCE_CHROMOSOME (0x11) — one per contig ----------------
+        for (int i = 0; i < chromCount; i++) {
+            String name = chromNames.get(i);
+            byte[] seq = seqs.get(i);
+            byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
+            byte encoding;
+            byte[] payload;
+            if (seq.length < REFERENCE_CHROMOSOME_ZLIB_THRESHOLD) {
+                encoding = 0;
+                payload = seq;
+            } else {
+                encoding = 1;
+                payload = zlibDeflate(seq);
+            }
+            int recSize = 2 + nameBytes.length + 8 + 1 + 4 + payload.length;
+            ByteBuffer cbuf = ByteBuffer.allocate(recSize).order(ByteOrder.LITTLE_ENDIAN);
+            cbuf.putShort((short) (nameBytes.length & 0xFFFF));
+            cbuf.put(nameBytes);
+            cbuf.putLong((long) seq.length);
+            cbuf.put(encoding);
+            cbuf.putInt(payload.length);
+            cbuf.put(payload);
+            emit(PacketType.REFERENCE_CHROMOSOME, cbuf.array(), 0, i);
+        }
+
+        // -- END_OF_REFERENCE_GROUP (0x12) -------------------------------
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt(chromCount);
+        emit(PacketType.END_OF_REFERENCE_GROUP, ebuf.array(), 0, 0);
+    }
+
+    // ----------------------------------------------- v0.11 §4.16-§4.18
+
+    /**
+     * v0.11 Task 1.7: emit an {@link MSImage} as the packet sequence
+     * {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL (0x14)
+     *  → END_OF_IMAGE (0x15)}, where {@code N = width * height}.
+     *
+     * <p>Wire layout matches transport-spec §4.16-§4.18. All
+     * multi-byte integers are LITTLE-ENDIAN (spec §1.7). Each pixel
+     * rides as a continuous-mode IMAGE_PIXEL — the shared m/z axis
+     * lives on the IMAGE_HEADER, and every pixel carries only its
+     * intensities (FLOAT64, uncompressed). The pixel index rides in
+     * the packet header's {@code auSequence} field
+     * ({@code y * width + x}; 0-based).</p>
+     *
+     * <p>Processed-mode (per-pixel axis, signalled by
+     * {@code is_continuous == 0}) is not yet emitted by this writer;
+     * the corresponding decoder path in {@link TransportReader} is
+     * also continuous-only at Task 1.7. Adding processed-mode is
+     * deferred to a follow-up task once a Java MSImage value type
+     * exposes per-pixel axes (the current {@link MSImage} model is
+     * continuous by construction: one {@code mzAxis} shared by all
+     * pixels).</p>
+     *
+     * <p>Reader-side materialisation is added by Task 1.7 in
+     * {@link TransportReader}; this method only emits the wire
+     * bytes.</p>
+     */
+    public void writeImage(MSImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeImage: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.mzAxis();  // length 0 or == bins
+        byte axisKind = 0;  // mz
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        // Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        byte[] extras = new byte[0];
+
+        // -- IMAGE_HEADER (0x13) -----------------------------------------
+        emitImageHeader((byte) 0, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 1,  // is_continuous = 1 (shared axis)
+            img.title(), img.isaInvestigationId(),
+            extras);
+
+        // -- IMAGE_PIXEL (0x14) — one per pixel --------------------------
+        // Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
+        // compression(u8) + payload_length(u32) + intensities[..].
+        // We always emit FLOAT64 (precision=1) uncompressed (compression=0)
+        // intensities mirroring the on-disk MSImage cube precision.
+        byte precision = 1;       // FLOAT64
+        byte compression = 0;     // NONE
+        long pixelIndex = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int payloadLen = 8 * bins;
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                // MSImage.spectrumAt uses (row, col) ordering — row=y, col=x.
+                double[] spec = img.spectrumAt(y, x);
+                for (int k = 0; k < bins; k++) pbuf.putDouble(spec[k]);
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        // -- END_OF_IMAGE (0x15) -----------------------------------------
+        // pixel_count_seen: uint32 per spec §4.18.
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.3 (Deferral 1): emit a {@link RamanImage} as the
+     * packet sequence {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+     * (0x14) → END_OF_IMAGE (0x15)} with {@code modality=1}.
+     *
+     * <p>Wire layout per transport-spec §4.16. The shared axis on
+     * the IMAGE_HEADER carries the Raman wavenumbers vector
+     * ({@code axis_kind = 1 = wavenumber}). The
+     * {@code modality_extras} slot at the tail of the IMAGE_HEADER
+     * carries the Raman-specific fields:</p>
+     * <pre>
+     *   excitation_wavelength_nm:  float64
+     *   laser_power_mw:            float64
+     * </pre>
+     * <p>(16 bytes total.)</p>
+     *
+     * <p>Each pixel rides as a continuous-mode IMAGE_PIXEL whose
+     * {@code payload_bytes} is a dense vector of
+     * {@code spectrum_bins} FLOAT64 intensities at the shared
+     * wavenumber axis.</p>
+     */
+    public void writeRamanImage(RamanImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeRamanImage: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.wavenumbers();
+        byte axisKind = 1;  // wavenumber
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        // Raman modality_extras: 8B excitation_wavelength_nm + 8B laser_power_mw.
+        ByteBuffer extrasBuf = ByteBuffer.allocate(16)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        extrasBuf.putDouble(img.excitationWavelengthNm());
+        extrasBuf.putDouble(img.laserPowerMw());
+
+        emitImageHeader((byte) 1, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 1,
+            img.title(), img.isaInvestigationId(),
+            extrasBuf.array());
+
+        byte precision = 1;
+        byte compression = 0;
+        long pixelIndex = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int payloadLen = 8 * bins;
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                double[] spec = img.spectrumAt(y, x);
+                for (int k = 0; k < bins; k++) pbuf.putDouble(spec[k]);
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.3 (Deferral 1): emit an {@link IRImage} as the
+     * packet sequence {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+     * (0x14) → END_OF_IMAGE (0x15)} with {@code modality=2}.
+     *
+     * <p>Wire layout per transport-spec §4.16. The shared axis on
+     * the IMAGE_HEADER carries the IR wavenumbers vector
+     * ({@code axis_kind = 1 = wavenumber}). The
+     * {@code modality_extras} slot at the tail of the IMAGE_HEADER
+     * carries the IR-specific fields:</p>
+     * <pre>
+     *   ir_mode:            uint8   # 0=transmittance, 1=absorbance
+     *   resolution_cm_inv:  float64
+     * </pre>
+     * <p>(9 bytes total.)</p>
+     */
+    public void writeIRImage(IRImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeIRImage: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.wavenumbers();
+        byte axisKind = 1;  // wavenumber
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        // IR modality_extras: u8 ir_mode + f64 resolution_cm_inv = 9B.
+        ByteBuffer extrasBuf = ByteBuffer.allocate(9)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        extrasBuf.put((byte) (img.mode() == IRMode.ABSORBANCE ? 1 : 0));
+        extrasBuf.putDouble(img.resolutionCmInv());
+
+        emitImageHeader((byte) 2, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 1,
+            img.title(), img.isaInvestigationId(),
+            extrasBuf.array());
+
+        byte precision = 1;
+        byte compression = 0;
+        long pixelIndex = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int payloadLen = 8 * bins;
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                double[] spec = img.spectrumAt(y, x);
+                for (int k = 0; k < bins; k++) pbuf.putDouble(spec[k]);
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.3: shared IMAGE_HEADER (0x13) packing routine.
+     * Used by {@link #writeImage}, {@link #writeRamanImage},
+     * {@link #writeIRImage} (and the processed-mode variant) so the
+     * common shape stays byte-stable across modalities and the
+     * {@code modality_extras} slot is appended once per call.
+     */
+    private void emitImageHeader(byte modality,
+                                 int width, int height, int bins,
+                                 double pixelSizeX, double pixelSizeY,
+                                 byte scanPatternByte, byte axisKind,
+                                 double[] axis,
+                                 byte isContinuous,
+                                 String title, String isaId,
+                                 byte[] extras) throws IOException {
+        if (axis == null) axis = new double[0];
+        if (extras == null) extras = new byte[0];
+        byte[] titleBytes = (title == null ? "" : title)
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] isaBytes = (isaId == null ? "" : isaId)
+            .getBytes(StandardCharsets.UTF_8);
+        if (titleBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: title " + titleBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        if (isaBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: isa_id " + isaBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        if (extras.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: modality_extras "
+                + extras.length + " bytes exceeds uint16 max");
+        }
+        int axisLength = axis.length;
+        int hdrSize = 1                  // modality
+                    + 4                  // width
+                    + 4                  // height
+                    + 4                  // spectrum_bins
+                    + 8                  // pixel_size_x
+                    + 8                  // pixel_size_y
+                    + 1                  // scan_pattern
+                    + 1                  // axis_kind
+                    + 4                  // axis_length
+                    + 8 * axisLength     // axis values
+                    + 1                  // is_continuous
+                    + 2 + titleBytes.length
+                    + 2 + isaBytes.length
+                    + 2 + extras.length;  // modality_extras
+        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
+        hbuf.put(modality);
+        hbuf.putInt(width);
+        hbuf.putInt(height);
+        hbuf.putInt(bins);
+        hbuf.putDouble(pixelSizeX);
+        hbuf.putDouble(pixelSizeY);
+        hbuf.put(scanPatternByte);
+        hbuf.put(axisKind);
+        hbuf.putInt(axisLength);
+        for (int i = 0; i < axisLength; i++) hbuf.putDouble(axis[i]);
+        hbuf.put(isContinuous);
+        hbuf.putShort((short) (titleBytes.length & 0xFFFF));
+        hbuf.put(titleBytes);
+        hbuf.putShort((short) (isaBytes.length & 0xFFFF));
+        hbuf.put(isaBytes);
+        hbuf.putShort((short) (extras.length & 0xFFFF));
+        hbuf.put(extras);
+        emit(PacketType.IMAGE_HEADER, hbuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.1 (Deferral 1): emit an {@link MSImage} as the
+     * packet sequence {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+     * (0x14) → END_OF_IMAGE (0x15)} in <b>processed mode</b>
+     * (sparse), where each pixel carries only its nonzero
+     * {@code (channel_index, intensity)} pairs indexed into the
+     * shared {@code mzAxis}. The dense cube is reconstructed by the
+     * reader.
+     *
+     * <p>Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+     * IMAGE_HEADER is identical to {@link #writeImage} except for
+     * {@code is_continuous = 0}; each IMAGE_PIXEL payload is</p>
+     * <pre>
+     *   x(u32) + y(u32) + precision(u8) + compression(u8)
+     *     + payload_length(u32)
+     *     + payload_bytes = nonzero_count(u32)
+     *         + nonzero_count × { channel_index(u32) + intensity(f64) }
+     * </pre>
+     *
+     * <p>Nonzero is defined strictly as {@code v != 0.0}; NaN is
+     * preserved (NaN compares unequal to 0.0, so it is emitted
+     * verbatim as a nonzero entry). The MSImage data model stays
+     * dense; processed mode is purely a wire optimisation for sparse
+     * cubes.</p>
+     *
+     * <p>This is an opt-in sibling of {@link #writeImage}. Callers
+     * pick continuous vs processed mode explicitly today; the
+     * automatic heuristic (emit whichever is smaller) lands in a
+     * follow-up task.</p>
+     */
+    public void writeImageProcessed(MSImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeImageProcessed: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.mzAxis();
+        byte axisKind = 0;  // mz
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        // Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        byte[] extras = new byte[0];
+
+        // -- IMAGE_HEADER (0x13) — shared layout, is_continuous=0 -------
+        emitImageHeader((byte) 0, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 0,  // is_continuous = 0 (processed)
+            img.title(), img.isaInvestigationId(),
+            extras);
+
+        // -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
+        // We always emit FLOAT64 (precision=1) uncompressed
+        // (compression=0) intensities — mirrors writeImage above and
+        // keeps the wire round-trip byte-exact with the cube.
+        byte precision = 1;       // FLOAT64
+        byte compression = 0;     // NONE
+        long pixelIndex = 0;
+        double[] cube = img.intensityCube();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int base = (y * width + x) * bins;
+                // First pass: count nonzeros (v != 0.0; NaN counts as
+                // nonzero because NaN != 0.0, preserving NaN on the wire).
+                int nonzero = 0;
+                for (int k = 0; k < bins; k++) {
+                    if (cube[base + k] != 0.0) nonzero++;
+                }
+                int payloadLen = 4 + nonzero * (4 + 8);
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                pbuf.putInt(nonzero);
+                for (int k = 0; k < bins; k++) {
+                    double v = cube[base + k];
+                    if (v != 0.0) {
+                        pbuf.putInt(k);
+                        pbuf.putDouble(v);
+                    }
+                }
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        // -- END_OF_IMAGE (0x15) -----------------------------------------
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /** Map the MSImage scan-pattern string to the wire byte per spec
+     *  §4.16 ({@code 0=flyback, 1=meander, 2=random}). The on-disk
+     *  format uses "raster" as the default name for the flyback
+     *  pattern. Unknown values map to 0 (flyback) defensively. */
+    static byte scanPatternToByte(String scanPattern) {
+        if (scanPattern == null) return 0;
+        return switch (scanPattern) {
+            case "raster", "flyback" -> 0;
+            case "meander"           -> 1;
+            case "random"            -> 2;
+            default                  -> 0;
+        };
+    }
+
+    // ----------------------------------------------- v0.11 §4.19 / §4.20
+
+    /**
+     * v0.11 Task 1.8: emit an {@code IDENTIFICATIONS_TABLE} (0x16)
+     * packet carrying the full identifications table as a single
+     * length-prefixed Apache Arrow IPC stream. Wire layout per
+     * transport-spec §4.19:
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC stream
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+     * IPC stream carries its own schema, row count, and null bitmaps,
+     * so no per-row TLV envelope is needed. Empty lists MUST NOT
+     * invoke this method — callers (see {@link #writeDataset}) gate on
+     * {@code !list.isEmpty()} per §5.4 step 6 ("zero or more").</p>
+     */
+    public void writeIdentifications(List<Identification> identifications)
+            throws IOException {
+        if (identifications == null) {
+            throw new IllegalArgumentException(
+                "writeIdentifications: identifications must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeIdentifications(identifications);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.IDENTIFICATIONS_TABLE, buf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 1.8: emit a {@code QUANTIFICATIONS_TABLE} (0x17)
+     * packet carrying the full quantifications table as a single
+     * length-prefixed Apache Arrow IPC stream. Wire layout per
+     * transport-spec §4.20 — identical shape to §4.19 but with a
+     * distinct packet type so receivers can dispatch without parsing
+     * the IPC payload first.
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+     * lists MUST NOT invoke this method (§5.4 step 6).</p>
+     */
+    public void writeQuantifications(List<Quantification> quantifications)
+            throws IOException {
+        if (quantifications == null) {
+            throw new IllegalArgumentException(
+                "writeQuantifications: quantifications must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeQuantifications(quantifications);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.QUANTIFICATIONS_TABLE, buf.array(), 0, 0);
+    }
+
+    // ----------------------------------------------- v0.11 §4.22 (Stage 6)
+
+    /**
+     * Stage 6 / Task 6.2: emit a {@code SUBJECT_METADATA} (0x19) packet
+     * carrying the full {@link Subject} table as a single length-
+     * prefixed Apache Arrow IPC stream. Wire layout per transport-spec
+     * §4.22:
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC stream
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+     * payload schema and null-handling conventions live in
+     * {@link ArrowIpcCodec}. Empty lists MUST NOT invoke this method —
+     * callers (see {@link #writeDataset}) gate on
+     * {@code !list.isEmpty()} per §5.4 step 5 ("zero or more").</p>
+     */
+    public void writeSubjectMetadata(List<Subject> subjects)
+            throws IOException {
+        if (subjects == null) {
+            throw new IllegalArgumentException(
+                "writeSubjectMetadata: subjects must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeSubjects(subjects);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.SUBJECT_METADATA, buf.array(), 0, 0);
+    }
+
+    /**
+     * Stage 6 / Task 6.2: emit a {@code SAMPLE_METADATA} (0x1A) packet
+     * carrying the full {@link Sample} table as a single length-prefixed
+     * Apache Arrow IPC stream. Wire layout per transport-spec §4.22 —
+     * identical shape to the SUBJECT_METADATA framing with a distinct
+     * packet type so receivers can dispatch without parsing the IPC
+     * payload first.
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+     * lists MUST NOT invoke this method (§5.4 step 5).</p>
+     */
+    public void writeSampleMetadata(List<Sample> samples)
+            throws IOException {
+        if (samples == null) {
+            throw new IllegalArgumentException(
+                "writeSampleMetadata: samples must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeSamples(samples);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.SAMPLE_METADATA, buf.array(), 0, 0);
+    }
+
     public void writeEndOfDataset(int datasetId, long finalAUSequence) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) (datasetId & 0xFFFF));
@@ -231,8 +981,79 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
+        // Task 1.4/1.5/1.6/1.7/1.8/6.2: detect v0.11 content
+        // (references + encryption algorithm + dataset provenance +
+        // image cube + identifications/quantifications tables +
+        // subjects + samples — all the v0.11 prelude content types
+        // ship under the same TRANSPORT_V0_11_FEATURE flag).
+        boolean v011 = !dataset.references().isEmpty()
+                    || dataset.isEncrypted()
+                    || !dataset.provenanceRecords().isEmpty()
+                    || dataset.image() != null
+                    || dataset.ramanImage() != null
+                    || dataset.irImage() != null
+                    || !dataset.identifications().isEmpty()
+                    || !dataset.quantifications().isEmpty()
+                    || !dataset.subjects().isEmpty()
+                    || !dataset.samples().isEmpty();
+        if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
+            features.add(PacketType.TRANSPORT_V0_11_FEATURE);
+        }
+
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
+
+        // Task 1.4/1.5/1.6/1.7/1.8/6.2: v0.11 prelude -- per §5.4
+        // ordering, v0.11 sections come BEFORE the v0.10 dataset/run
+        // sections, and the sub-sections appear in this order:
+        //   §5.4.1 ENCRYPTION_ALGORITHM
+        //   §5.4.2 DATASET_PROVENANCE
+        //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA  (subjects first)
+        //   §5.4.4 reference groups
+        //   §5.4.5 image cubes
+        //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
+        if (v011) {
+            if (dataset.isEncrypted()) {
+                writeEncryptionAlgorithm(dataset.encryptedAlgorithm());
+            }
+            if (!dataset.provenanceRecords().isEmpty()) {
+                writeDatasetProvenance(dataset.provenanceRecords());
+            }
+            // §5.4.3 Stage 6 / Task 6.2: SUBJECT_METADATA (0x19) emits
+            // before SAMPLE_METADATA (0x1A) so a downstream reader sees
+            // subjects ahead of any samples that soft-FK into them.
+            // Empty lists emit NO packet (spec §5.4 step 5 says "zero
+            // or more").
+            if (!dataset.subjects().isEmpty()) {
+                writeSubjectMetadata(dataset.subjects());
+            }
+            if (!dataset.samples().isEmpty()) {
+                writeSampleMetadata(dataset.samples());
+            }
+            for (ReferenceImport ref : dataset.references().values()) {
+                writeReferenceGroup(ref);
+            }
+            // Task 5.3 (Deferral 1): image cubes emit in MS → Raman → IR
+            // order so a downstream reader sees a deterministic sequence
+            // when more than one modality is present on the same dataset.
+            if (dataset.image() != null) {
+                writeImage(dataset.image());
+            }
+            if (dataset.ramanImage() != null) {
+                writeRamanImage(dataset.ramanImage());
+            }
+            if (dataset.irImage() != null) {
+                writeIRImage(dataset.irImage());
+            }
+            // §5.4 step 6: identifications first, then quantifications.
+            // Empty lists emit NO packet (spec says "zero or more").
+            if (!dataset.identifications().isEmpty()) {
+                writeIdentifications(dataset.identifications());
+            }
+            if (!dataset.quantifications().isEmpty()) {
+                writeQuantifications(dataset.quantifications());
+            }
+        }
 
         // Spectral dataset headers: ids 1..N.
         int id = 1;

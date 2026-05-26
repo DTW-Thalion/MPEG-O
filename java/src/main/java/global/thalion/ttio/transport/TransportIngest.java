@@ -214,7 +214,7 @@ public final class TransportIngest {
                     throw fail(String.format(
                         "CRC-32C mismatch on packet type 0x%02x: "
                         + "advertised 0x%08x, computed 0x%08x",
-                        header.packetType.wire(),
+                        header.packetTypeByte(),
                         advertised, computed));
                 }
             }

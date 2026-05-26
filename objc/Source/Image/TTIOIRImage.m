@@ -175,8 +175,12 @@ static BOOL writeIRCube(hid_t parentGid,
     WRITE_DBL("pixel_size_x",    pxX);
     WRITE_DBL("pixel_size_y",    pxY);
     WRITE_DBL("resolution_cm_inv", resolution);
-    WRITE_STR("ir_mode",
-              (mode == TTIOIRModeAbsorbance) ? @"absorbance" : @"transmittance");
+    // ir_mode written as i64 enum (0=TRANSMITTANCE, 1=ABSORBANCE)
+    // for cross-language parity with Python's int(IRMode) convention.
+    // Legacy VL-string form (absorbance/transmittance) still parsed by
+    // the reader below for backward compat with pre-fix .tio files.
+    WRITE_INT("ir_mode",
+              (mode == TTIOIRModeAbsorbance) ? 1 : 0);
     WRITE_STR("scan_pattern", (scanPattern ?: @""));
 
     #undef WRITE_INT
@@ -246,17 +250,64 @@ static BOOL writeIRCube(hid_t parentGid,
     a = H5Aopen(g, "height",          H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rHeight = (NSUInteger)vi;
     a = H5Aopen(g, "spectral_points", H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rSp = (NSUInteger)vi;
     a = H5Aopen(g, "tile_size",       H5P_DEFAULT); H5Aread(a, H5T_NATIVE_INT64, &vi); H5Aclose(a); rTileSize = (NSUInteger)vi;
+    // Read a scalar double attribute that may be either H5T_FLOAT (new
+    // typed form written by this class and by Python+Java) or H5T_STRING
+    // (legacy form written by pre-fix Java; ObjC always wrote f64 here).
+    // Tolerating both keeps cross-SDK reads of older .tio files working.
+    #define READ_DBL_OR_STR(name, outVar) do { \
+        if (H5Aexists(g, (name)) > 0) { \
+            hid_t _a = H5Aopen(g, (name), H5P_DEFAULT); \
+            hid_t _t = H5Aget_type(_a); \
+            H5T_class_t _cls = H5Tget_class(_t); \
+            if (_cls == H5T_FLOAT) { \
+                double _dv = 0.0; \
+                H5Aread(_a, H5T_NATIVE_DOUBLE, &_dv); \
+                (outVar) = _dv; \
+            } else if (_cls == H5T_STRING) { \
+                char *_cs = NULL; \
+                H5Aread(_a, _t, &_cs); \
+                if (_cs) { \
+                    (outVar) = atof(_cs); \
+                    hid_t _ssp = H5Aget_space(_a); \
+                    H5Dvlen_reclaim(_t, _ssp, H5P_DEFAULT, &_cs); \
+                    H5Sclose(_ssp); \
+                } \
+            } \
+            H5Tclose(_t); \
+            H5Aclose(_a); \
+        } \
+    } while (0)
     double pxX = 0, pxY = 0, resCmInv = 0;
-    if (H5Aexists(g, "pixel_size_x") > 0)      { a = H5Aopen(g, "pixel_size_x",      H5P_DEFAULT); H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); pxX = vd; }
-    if (H5Aexists(g, "pixel_size_y") > 0)      { a = H5Aopen(g, "pixel_size_y",      H5P_DEFAULT); H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); pxY = vd; }
-    if (H5Aexists(g, "resolution_cm_inv") > 0) { a = H5Aopen(g, "resolution_cm_inv", H5P_DEFAULT); H5Aread(a, H5T_NATIVE_DOUBLE, &vd); H5Aclose(a); resCmInv = vd; }
+    READ_DBL_OR_STR("pixel_size_x", pxX);
+    READ_DBL_OR_STR("pixel_size_y", pxY);
+    READ_DBL_OR_STR("resolution_cm_inv", resCmInv);
+    #undef READ_DBL_OR_STR
+    (void)vd;
+    // ir_mode: new typed wire-form is H5T_NATIVE_INT64 (0=trans, 1=abs)
+    // to match Python's int(IRMode). Pre-fix Java + ObjC wrote a VL
+    // string ("absorbance"/"transmittance"); accept both for backward
+    // compat with existing .tio files.
     TTIOIRMode rMode = TTIOIRModeTransmittance;
     if (H5Aexists(g, "ir_mode") > 0) {
-        a = H5Aopen(g, "ir_mode", H5P_DEFAULT); hid_t t = H5Aget_type(a);
-        char *cs = NULL; H5Aread(a, t, &cs);
-        if (cs && strcmp(cs, "absorbance") == 0) rMode = TTIOIRModeAbsorbance;
-        if (cs) { hid_t ssp = H5Aget_space(a); H5Dvlen_reclaim(t, ssp, H5P_DEFAULT, &cs); H5Sclose(ssp); }
-        H5Tclose(t); H5Aclose(a);
+        a = H5Aopen(g, "ir_mode", H5P_DEFAULT);
+        hid_t t = H5Aget_type(a);
+        H5T_class_t tcls = H5Tget_class(t);
+        if (tcls == H5T_INTEGER) {
+            int64_t mv = 0;
+            H5Aread(a, H5T_NATIVE_INT64, &mv);
+            rMode = (mv == 1) ? TTIOIRModeAbsorbance : TTIOIRModeTransmittance;
+        } else if (tcls == H5T_STRING) {
+            char *cs = NULL;
+            H5Aread(a, t, &cs);
+            if (cs && strcmp(cs, "absorbance") == 0) rMode = TTIOIRModeAbsorbance;
+            if (cs) {
+                hid_t ssp = H5Aget_space(a);
+                H5Dvlen_reclaim(t, ssp, H5P_DEFAULT, &cs);
+                H5Sclose(ssp);
+            }
+        }
+        H5Tclose(t);
+        H5Aclose(a);
     }
     NSString *scanPat = @"";
     if (H5Aexists(g, "scan_pattern") > 0) {

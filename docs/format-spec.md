@@ -96,6 +96,10 @@ v1.x follow-up.
 │   │   └── <run_name>/                 (per-genomic-run group; see §10)
 │   ├── references/                     (group) — optional, M93+ reference embedding
 │   │   └── <reference_uri>/            (per-reference group; FASTA + chromosomes)
+│   ├── subjects/                       (group) — optional, v0.11 cohort metadata (see §11)
+│   │   └── <external_id>/              (per-Subject group)
+│   ├── samples/                        (group) — optional, v0.11 cohort metadata (see §11)
+│   │   └── <sample_id>/                (per-Sample group)
 │   ├── identifications                 (compound dataset) — optional
 │   ├── quantifications                 (compound dataset) — optional
 │   ├── provenance                      (compound dataset) — optional
@@ -1404,7 +1408,151 @@ RANS_ORDER0 / RANS_ORDER1 / QUALITY_BINNED are accepted on the
 `qualities` channel; BASE_PACK and the v2 codecs (13/14/15) are
 rejected as wrong-content.
 
-## 11. Backward compatibility
+## 11. Subjects + Samples (v0.11)
+
+`/study/subjects/` and `/study/samples/` carry per-dataset cohort
+metadata: who the data came from (`Subject`) and what was collected
+from them (`Sample`). Each is a parent group containing one HDF5
+**sub-group per row**, keyed by the row's primary key. The
+attribute schema mirrors the data model in the v1.4 subjects/samples
+design (`docs/superpowers/specs/2026-05-26-subjects-samples-design.md`).
+
+The transport-stream encoding of these two tables is documented in
+[`transport-spec.md`](transport-spec.md) §4.22 (`SUBJECT_METADATA`
+0x19 + `SAMPLE_METADATA` 0x1A, length-prefixed Arrow IPC).
+
+### 11.1 Layout
+
+```
+/study/subjects/
+└── <external_id>/                       (HDF5 group, one per Subject)
+    # Attributes (all optional except external_id):
+    @external_id        : VL string  — primary key; matches the group leaf name
+    @project            : VL string  — empty string when absent in source
+    @sex                : VL string  — empty string when absent in source
+    @birth_year         : int64      — sentinel 0 = unknown
+    @attributes_json    : VL string  — sort_keys JSON object; "{}" when empty
+
+/study/samples/
+└── <sample_id>/                         (HDF5 group, one per Sample)
+    # Attributes (all optional except sample_id):
+    @sample_id            : VL string  — primary key; matches the group leaf name
+    @subject_external_id  : VL string  — soft FK; empty string when absent in source
+    @sample_kind          : VL string  — empty string when absent in source
+    @collected_at         : int64      — unix seconds since epoch; sentinel 0 = unknown
+    @attributes_json      : VL string  — sort_keys JSON object; "{}" when empty
+```
+
+Per-row groups (rather than a single compound dataset) are used
+because HDF5 compound datasets are awkward to extend (adding a
+column rewrites the table) and do not accept variable-length string
+fields cleanly. Per-row groups inspect cleanly with `h5dump` and let
+`attributes_json` carry the open-extension slot without
+table-schema gymnastics. The cost is metadata overhead for large
+cohorts (≈ hundreds of bytes per row), acceptable for v1.4.
+
+### 11.2 Attribute schemas
+
+**Subject attributes** (on `/study/subjects/<external_id>/`):
+
+| Attribute          | Type      | Required | Notes                                                                                |
+|--------------------|-----------|----------|--------------------------------------------------------------------------------------|
+| `external_id`      | VL string | **yes**  | Unique within the dataset. Matches the group leaf name verbatim. Primary key.        |
+| `project`          | VL string | no       | Free string, often a study acronym. Empty string `""` when absent in source.         |
+| `sex`              | VL string | no       | Free string (e.g. `"M"`, `"F"`, `"NA"`). Empty string `""` when absent in source.    |
+| `birth_year`       | int64     | no       | 4-digit YYYY. Sentinel `0` denotes unknown.                                          |
+| `attributes_json`  | VL string | no       | Open-extension slot: JSON object, `sort_keys=true`, separators `","`/`":"`. `"{}"` when empty (never absent). See §11.4. |
+
+**Sample attributes** (on `/study/samples/<sample_id>/`):
+
+| Attribute              | Type      | Required | Notes                                                                                |
+|------------------------|-----------|----------|--------------------------------------------------------------------------------------|
+| `sample_id`            | VL string | **yes**  | Unique within the dataset. Matches the group leaf name verbatim. Primary key.        |
+| `subject_external_id`  | VL string | no       | Soft foreign key to `Subject.external_id` in this dataset (see §11.3). Empty string `""` when absent in source. |
+| `sample_kind`          | VL string | no       | Free string. Empty string `""` when absent in source.                                |
+| `collected_at`         | int64     | no       | Unix seconds since epoch. Sentinel `0` denotes unknown.                              |
+| `attributes_json`      | VL string | no       | Open-extension slot — same convention as on Subject. `"{}"` when empty.              |
+
+### 11.3 ID safety, validation, and soft-FK
+
+**ID safety.** Because `external_id` and `sample_id` are used
+verbatim as HDF5 group names, they MUST be valid HDF5 group names:
+non-empty and containing no `/` characters (the HDF5 path separator).
+Writers SHALL validate these constraints and raise on violation.
+Readers SHOULD tolerate corruption — an unreadable row name surfaces
+as a warning and the row is skipped, mirroring the §11.4 forward
+compatibility posture.
+
+**Soft-FK.** `Sample.subject_external_id` is a *soft* reference:
+- Present and matching a Subject in this dataset → consistent.
+- Present but no matching Subject in this dataset → log a WARNING
+  (NOT an error). This allows datasets to ship Samples without
+  full Subject metadata.
+- Absent (empty string) → fine. Anonymous samples are valid.
+
+**Duplicates.** Duplicate `external_id` or `sample_id` on write
+SHALL raise. The HDF5 group-name uniqueness check enforces this at
+the on-disk layer.
+
+### 11.4 Cardinality and the empty case
+
+- Zero or more Subjects per dataset.
+- Zero or more Samples per dataset.
+
+If a dataset has **no Subjects**, `/study/subjects/` is **absent
+entirely** (NOT an empty group). Likewise for `/study/samples/`.
+Readers MUST treat an absent parent group as zero rows and surface
+the corresponding accessor as an empty list — never an error.
+
+### 11.5 Relationship to `AcquisitionRun.sampleName`
+
+`AcquisitionRun.sampleName` (a free string on each acquisition run;
+see §3) remains the canonical run→sample link. When both Sample
+rows in `/study/samples/` and `AcquisitionRun.sampleName` are
+present, applications SHOULD treat `sampleName` as a foreign key
+into `Sample.sample_id`: a run's `sampleName` matches one Sample's
+`sample_id`. No automatic enrichment is performed — Sample lookup
+is the caller's job.
+
+Anonymous runs (no matching Sample row) remain valid. Mismatched
+`sampleName` values surface as application-level data quality
+warnings, NOT reader errors. Datasets without explicit Subject
+or Sample groups are unchanged in interpretation: the run→sample
+link stays a free string.
+
+### 11.6 `attributes_json` byte form
+
+`attributes_json` MUST be encoded as a JSON object with:
+
+- `sort_keys=true` — keys appear in code-point sorted order.
+- No whitespace between tokens; separators `","` (item) and `":"`
+  (key-value).
+- An empty map encodes to the two-byte string `"{}"` (NEVER absent,
+  NEVER literal HDF5 null).
+
+This matches Python `json.dumps(d, sort_keys=True,
+separators=(",", ":"))`, the Java reference writer's
+`TreeMap`-walk encoder, and the Objective-C reference writer's
+`NSJSONWritingSortedKeys` option. Byte equality across the three
+SDKs is required for cross-language conformance and stable
+content hashes.
+
+### 11.7 Backward compatibility
+
+`/study/subjects/` and `/study/samples/` were introduced in v0.11.
+Pre-v0.11 readers naturally see neither group (the writer simply
+does not emit them when the caller passes no subjects/samples) and
+materialise empty cohort accessors. v0.11+ readers opening a
+pre-v0.11 file MUST surface empty `subjects()` / `samples()`
+lists and MUST NOT raise. No feature flag gates the layout — the
+group's presence is itself the signal — though the transport
+layer's `transport_v0_11` flag covers the wire-format counterpart
+(`SUBJECT_METADATA` 0x19 + `SAMPLE_METADATA` 0x1A; see
+transport-spec §4.22).
+
+---
+
+## 12. Backward compatibility
 
 A v0.2 reader recognizes a v0.1 file by the absence of
 `@ttio_features`. The fallback paths:
@@ -1421,7 +1569,7 @@ A v0.2 reader recognizes a v0.1 file by the absence of
 All v0.1 files written by libTTIO v0.1.0-alpha are readable by v0.2.0
 code without modification.
 
-### 11.1 Compound JSON mirror (v0.6 / M37)
+### 12.1 Compound JSON mirror (v0.6 / M37)
 
 All three writers (ObjC, Python, Java) emit the `*_json` string
 attribute <em>alongside</em> the `/study/{identifications,quantifications,provenance}`
@@ -1454,7 +1602,7 @@ A future release will remove the mirror once Java's HDF5 binding
 gains compound-with-VL read support, at which point every reader
 will go through the compound dataset directly.
 
-### 11.2 Per-AU encrypted layout (v0.10+)
+### 12.2 Per-AU encrypted layout (v0.10+)
 
 A v0.10 reader recognises a per-AU-encrypted file by
 `opt_per_au_encryption` in `@ttio_features`. The channel layout
@@ -1481,7 +1629,7 @@ must be materialised to re-slice per-spectrum).
 
 ---
 
-## 12. Example `h5dump` output (minimal MS file)
+## 13. Example `h5dump` output (minimal MS file)
 
 ```
 HDF5 "minimal_ms.tio" {
@@ -1523,7 +1671,7 @@ GROUP "/" {
 
 ---
 
-## 13. Conformance checklist for a new reader
+## 14. Conformance checklist for a new reader
 
 1. Open the file with any HDF5 library.
 2. Read `@ttio_format_version`. If absent, treat as v0.1.

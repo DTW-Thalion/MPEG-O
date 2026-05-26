@@ -11,6 +11,113 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added -- Transport-spec v0.11: complete `.tio` coverage across all 3 SDKs (2026-05-26)
+
+The transport (`.tis`) protocol now round-trips every first-class
+`SpectralDataset` accessor in Java / Python / Objective-C. Resolves
+the silent-drop bug where `writeDataset(...)` on a reference-bearing
+`.tio` was producing a 180-byte `.tis` (only `StreamHeader` +
+`EndOfStream`) because the writer iterated `msRuns` + `genomicRuns`
+only.
+
+**Wire format — 12 new packet types (0x10–0x1B)** documented in
+`docs/transport-spec.md` §4.13–§4.23 and `docs/format-spec.md` §11
+(new):
+
+- `REFERENCE_GROUP_HEADER` 0x10, `REFERENCE_CHROMOSOME` 0x11,
+  `END_OF_REFERENCE_GROUP` 0x12 — per-chromosome with encoding=0
+  raw / encoding=1 zlib at a 4 KiB threshold.
+- `IMAGE_HEADER` 0x13, `IMAGE_PIXEL` 0x14, `END_OF_IMAGE` 0x15 —
+  modality dispatch byte (0=MS, 1=Raman, 2=IR) with a self-describing
+  `u16 modality_extras_length + bytes` slot. MS supports continuous
+  (dense) and processed (sparse `{channel,intensity}` pairs indexed
+  into the shared `mzAxis`).
+- `IDENTIFICATIONS_TABLE` 0x16, `QUANTIFICATIONS_TABLE` 0x17,
+  `SUBJECT_METADATA` 0x19, `SAMPLE_METADATA` 0x1A — Arrow IPC stream
+  with a `uint32 LE length` prefix.
+- `DATASET_PROVENANCE` 0x18 — single packet with `uint32 record_count`
+  + N inline records.
+- `ENCRYPTION_ALGORITHM` 0x1B — `uint16 length + UTF-8 algorithm`.
+
+Ordering follows transport-spec §5.4: encryption → provenance →
+subjects → samples → references → image → identifications →
+quantifications, BEFORE the v0.10 dataset/run sections.
+
+**Backward compat.** `transport_v0_11` StreamHeader feature flag is
+set only when v0.11 content is present. v0.10 streams are byte-
+equivalent to pre-Stage-0 output. Readers ingest unknown packet types
+via a skip-unknown forward-compat path (length-prefixed wire frames,
+log + skip on unrecognized type byte).
+
+**New first-class entities and accessors:**
+
+- `Subject` / `Sample` — tight core (`external_id`/`project`/`sex`/
+  `birth_year` and `sample_id`/`subject_external_id`/`sample_kind`/
+  `collected_at`) plus an open `attributes: Map<String,String>` slot.
+  Stored as per-row HDF5 groups under `/study/subjects/<external_id>/`
+  and `/study/samples/<sample_id>/`. Validation: duplicate / empty /
+  slash-bearing IDs raise; soft-FK mismatch (Sample referencing an
+  unknown Subject) logs a WARNING. `AcquisitionRun.sampleName` stays
+  the canonical run→sample link string (no breaking change). New
+  `SpectralDataset.subjects()` / `.samples()` accessors (Java),
+  `subjects` / `samples` properties (Python), `-subjects` / `-samples`
+  (ObjC). New 9-arg `SpectralDataset.create(..., subjects, samples)`
+  overload (Java); `subjects=` + `samples=` kwargs on Python's
+  `write_minimal`.
+- `IRImage` — promoted to first-class on SpectralDataset in all 3
+  SDKs (`.irImage()` / `.ir_image` / `-irImage`) alongside the
+  existing `.image()` (MSImage) and `.ramanImage()` accessors.
+  IR-specific HDF5 attrs are now typed int64 (`ir_mode`) + float64
+  (`resolution_cm_inv`, `pixel_size_*`) in all 3 SDKs for cross-lang
+  byte parity; Java + ObjC readers retain backward compat for legacy
+  VL-string attribute form.
+
+**Conformance — three nets prevent future silent-drop regressions:**
+
+- `AccessorMatrixConformanceTest` parameterised over 13 accessors
+  in each SDK (REFERENCES, MS_RUNS, GENOMIC_RUNS, IMAGE, MS_IMAGE_
+  PROCESSED, RAMAN_IMAGE, IR_IMAGE, IDENTIFICATIONS, QUANTIFICATIONS,
+  DATASET_PROVENANCE, ENCRYPTION_ALGORITHM, SUBJECTS, SAMPLES). Each
+  builds a single-accessor fixture, round-trips through writer +
+  reader, asserts byte- or content-equivalence.
+- `CoverageGapWatchdogTest` runs the `everything.tio` fixture
+  (every accessor populated) through `writeDataset`; if `.tis < 1%`
+  of `.tio` size, the watchdog fires. Caught the silent-drop bug
+  immediately when run against pre-fix code.
+- Cross-language conformance: `Tests/cross_lang/transport_v0_11/
+  accessor_matrix_xlang.sh` drives every encoder × every decoder
+  pair (9 directional pairs × 13 accessors = 117 cells, plus 3
+  bytes-equal sanity tests = 120 cells). 111 pass / 9 skipped on
+  envs without `libttio_rans` (only GENOMIC_RUNS gated).
+
+**Cross-language byte equivalence:**
+
+- Hand-written packets (REFERENCES, IMAGE, ENCRYPTION_ALGORITHM,
+  DATASET_PROVENANCE) are byte-identical across Java / Python / ObjC
+  when given identical inputs. Java's `ProvenanceRecord.parametersJson`
+  was patched to sort keys for parity with Python's `sort_keys=True`
+  and ObjC's `NSJSONWritingSortedKeys`.
+- Arrow IPC packets (0x16, 0x17, 0x19, 0x1A) are logically
+  equivalent — Arrow Java 16 / pyarrow 16 / libarrow-C++ 24 each
+  emit different flatbuffer envelopes, but row content cross-decodes
+  identically. Schema column names match exactly across SDKs.
+
+**Tooling and build dependencies:**
+
+- `pyarrow >= 16` added to `python/pyproject.toml` (required for
+  Arrow IPC).
+- Apache Arrow Java 16 added to `java/pom.xml`. Surefire `argLine`
+  gains `--add-opens=java.base/java.nio=ALL-UNNAMED` for `arrow-
+  memory-core`'s reflective `Buffer.address` lookup on JDK 17+.
+- libarrow-C++ 24 wired into `objc/Source/GNUmakefile.preamble` via
+  `pkg-config arrow` with `-std=c++20`. New `TTIOArrowIpcBridge.mm`
+  (Objective-C++) keeps libarrow symbols quarantined to a single
+  translation unit; pure-ObjC callers see `TTIOArrowIpcCodec` only.
+
+**Tags:** `stage-0-transport-v0-11-foundation` through
+`stage-6-transport-v0-11-subjects-samples` are pushed for incremental
+review. 72 commits ahead of `main`.
+
 ### Added -- Genomic-run support in per-AU decrypt-in-place (all 3 languages) (2026-05-23)
 
 Extends `decryptFilePathInPlace` / `decrypt_per_au_in_place` /

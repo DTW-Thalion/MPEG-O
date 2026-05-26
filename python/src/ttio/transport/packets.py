@@ -40,13 +40,48 @@ class PacketType(IntEnum):
     BLOB_V2_MATE_INFO = 0x09
     BLOB_V2_REF_DIFF = 0x0A
     BLOB_V2_NAME_TOK = 0x0B
+    # ---- v0.11 (transport-spec-complete-coverage 2026-05-25) ----
+    # See transport-spec §4.13-§4.23. Emitted only when the
+    # StreamHeader features list contains "transport_v0_11".
+    # Java parity: global.thalion.ttio.transport.PacketType.
+    REFERENCE_GROUP_HEADER = 0x10
+    REFERENCE_CHROMOSOME   = 0x11
+    END_OF_REFERENCE_GROUP = 0x12
+    IMAGE_HEADER           = 0x13
+    IMAGE_PIXEL            = 0x14
+    END_OF_IMAGE           = 0x15
+    IDENTIFICATIONS_TABLE  = 0x16
+    QUANTIFICATIONS_TABLE  = 0x17
+    DATASET_PROVENANCE     = 0x18
+    SUBJECT_METADATA       = 0x19
+    SAMPLE_METADATA        = 0x1A
+    ENCRYPTION_ALGORITHM   = 0x1B
     END_OF_STREAM = 0xFF
+
+
+_KNOWN_PACKET_TYPE_BYTES = frozenset(int(pt) for pt in PacketType)
+
+
+def is_known_packet_type(type_byte: int) -> bool:
+    """Return True iff ``type_byte`` is a defined :class:`PacketType`.
+
+    Used by the reader's forward-compat path (v0.11 task 0.5 / Java
+    parity ``PacketType.fromWireOrNull``) to decide whether to skip an
+    unrecognised packet rather than fail. The header has already been
+    length-prefix-decoded; only the dispatch arm differs.
+    """
+    return (int(type_byte) & 0xFF) in _KNOWN_PACKET_TYPE_BYTES
 
 
 # Bulk-mode feature flag — appears in StreamHeader.features when v2
 # codec blobs ride on the wire. Receivers without bulk-mode support
 # MUST refuse the stream (no opt_ prefix → required).
 BULK_MODE_V2_BLOBS_FEATURE = "bulk_mode_v2_blobs"
+
+# v0.11 feature flag — appears in StreamHeader.features when any of
+# the 0x10-0x1B packet types ride on the wire. Receivers without
+# v0.11 support MUST refuse the stream (no opt_ prefix → required).
+TRANSPORT_V0_11_FEATURE = "transport_v0_11"
 
 
 class PacketFlag(IntFlag):
@@ -95,7 +130,14 @@ def crc32c(data: bytes) -> int:
 
 @dataclass(frozen=True, slots=True)
 class PacketHeader:
-    """24-byte transport packet header."""
+    """24-byte transport packet header.
+
+    :attr:`packet_type` is stored as a raw uint8 wire byte (not the
+    :class:`PacketType` enum) so headers decoded from forward-compat
+    streams whose type byte is outside the enum still round-trip
+    cleanly. See :attr:`packet_type_byte` and the v0.11 skip-unknown
+    contract (``transport-spec`` §6 / task 0.5).
+    """
 
     packet_type: int
     flags: int = 0
@@ -103,6 +145,14 @@ class PacketHeader:
     au_sequence: int = 0
     payload_length: int = 0
     timestamp_ns: int = 0
+
+    @property
+    def packet_type_byte(self) -> int:
+        """Raw uint8 wire byte for the packet type. Always populated,
+        regardless of whether the byte names a known :class:`PacketType`.
+        Java parity: :meth:`PacketHeader.packetTypeByte`.
+        """
+        return int(self.packet_type) & 0xFF
 
     def to_bytes(self) -> bytes:
         return _HEADER_STRUCT.pack(

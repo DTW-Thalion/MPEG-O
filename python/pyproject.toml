@@ -28,6 +28,11 @@ classifiers = [
 dependencies = [
     "h5py>=3.0",
     "numpy>=1.24",
+    # Apache Arrow IPC for transport-spec v0.11 tabular packets
+    # (IDENTIFICATIONS_TABLE 0x16 + QUANTIFICATIONS_TABLE 0x17). Java
+    # uses arrow-vector 16; pyarrow's wire format is logically
+    # compatible across all 16.x releases.
+    "pyarrow>=16.0",
 ]
 
 [project.optional-dependencies]

@@ -121,11 +121,13 @@ public class IRImage {
             ic.setAttribute("width", (long) width);
             ic.setAttribute("height", (long) height);
             ic.setAttribute("spectral_points", (long) spectralPoints);
-            ic.setAttribute("pixel_size_x", String.valueOf(pixelSizeX));
-            ic.setAttribute("pixel_size_y", String.valueOf(pixelSizeY));
+            ic.setAttribute("pixel_size_x", Double.valueOf(pixelSizeX));
+            ic.setAttribute("pixel_size_y", Double.valueOf(pixelSizeY));
+            // ir_mode written as i64 enum (0=TRANSMITTANCE, 1=ABSORBANCE)
+            // for cross-language parity with Python's int(IRMode) convention.
             ic.setAttribute("ir_mode",
-                    mode == IRMode.ABSORBANCE ? "absorbance" : "transmittance");
-            ic.setAttribute("resolution_cm_inv", String.valueOf(resolutionCmInv));
+                    Long.valueOf(mode == IRMode.ABSORBANCE ? 1L : 0L));
+            ic.setAttribute("resolution_cm_inv", Double.valueOf(resolutionCmInv));
             if (scanPattern != null)
                 ic.setAttribute("scan_pattern", scanPattern);
             if (tileSize > 0)
@@ -156,23 +158,19 @@ public class IRImage {
             int width = ((Number) ic.getAttribute("width")).intValue();
             int height = ((Number) ic.getAttribute("height")).intValue();
             int spectralPoints = ((Number) ic.getAttribute("spectral_points")).intValue();
-            double pixelSizeX = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_x")
-                            ? (String) ic.getAttribute("pixel_size_x") : "0");
-            double pixelSizeY = Double.parseDouble(
-                    ic.hasAttribute("pixel_size_y")
-                            ? (String) ic.getAttribute("pixel_size_y") : "0");
+            double pixelSizeX = ic.hasAttribute("pixel_size_x")
+                    ? parseDoubleAttr(ic.getAttribute("pixel_size_x")) : 0.0;
+            double pixelSizeY = ic.hasAttribute("pixel_size_y")
+                    ? parseDoubleAttr(ic.getAttribute("pixel_size_y")) : 0.0;
             String scanPattern = ic.hasAttribute("scan_pattern")
                     ? (String) ic.getAttribute("scan_pattern") : null;
             int tileSize = ic.hasAttribute("tile_size")
                     ? ((Number) ic.getAttribute("tile_size")).intValue() : 0;
-            String modeStr = ic.hasAttribute("ir_mode")
-                    ? (String) ic.getAttribute("ir_mode") : "transmittance";
-            IRMode mode = "absorbance".equalsIgnoreCase(modeStr)
-                    ? IRMode.ABSORBANCE : IRMode.TRANSMITTANCE;
-            double resolutionCmInv = Double.parseDouble(
-                    ic.hasAttribute("resolution_cm_inv")
-                            ? (String) ic.getAttribute("resolution_cm_inv") : "0");
+            IRMode mode = ic.hasAttribute("ir_mode")
+                    ? parseIRModeAttr(ic.getAttribute("ir_mode"))
+                    : IRMode.TRANSMITTANCE;
+            double resolutionCmInv = ic.hasAttribute("resolution_cm_inv")
+                    ? parseDoubleAttr(ic.getAttribute("resolution_cm_inv")) : 0.0;
 
             double[] cube;
             try (StorageDataset ds = ic.openDataset("intensity")) {
@@ -188,5 +186,36 @@ public class IRImage {
                     cube, wn,
                     "", "", List.of(), List.of(), List.of());
         }
+    }
+
+    /**
+     * Parse a double attribute that may be stored as either a
+     * {@link Number} (new native-double form, written by this class
+     * and by Python/ObjC since the cross-lang parity fix) or a
+     * {@link String} (legacy form written by Java prior to the fix).
+     *
+     * <p>Copy-pasted from {@code RamanImage} deliberately: the helper
+     * is small, and cross-class coupling via a shared utility would
+     * require widening the package-private API surface without
+     * meaningful benefit.</p>
+     */
+    private static double parseDoubleAttr(Object value) {
+        if (value instanceof Number n) return n.doubleValue();
+        return Double.parseDouble((String) value);
+    }
+
+    /**
+     * Parse an {@code ir_mode} attribute that may be stored as either
+     * a {@link Number} (new i64 enum form, 0=TRANSMITTANCE,
+     * 1=ABSORBANCE — matches Python's {@code int(IRMode)}) or a
+     * {@link String} (legacy form: "transmittance" / "absorbance").
+     * Unknown values fall back to {@link IRMode#TRANSMITTANCE}.
+     */
+    private static IRMode parseIRModeAttr(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue() == 1L ? IRMode.ABSORBANCE : IRMode.TRANSMITTANCE;
+        }
+        return "absorbance".equalsIgnoreCase((String) value)
+                ? IRMode.ABSORBANCE : IRMode.TRANSMITTANCE;
     }
 }

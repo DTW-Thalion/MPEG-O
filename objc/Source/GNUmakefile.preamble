@@ -5,6 +5,24 @@ include ../GNUmakefile.preamble
 ADDITIONAL_CPPFLAGS += -I.
 
 # ---------------------------------------------------------------------------
+# Apache Arrow C++ (libarrow) for TTIOArrowIpcBridge.mm
+# ---------------------------------------------------------------------------
+# transport-spec v0.11 IDENTIFICATIONS_TABLE (0x16) +
+# QUANTIFICATIONS_TABLE (0x17) payloads are Arrow IPC streams. There is
+# no native Objective-C Arrow binding; we wrap libarrow C++ via a
+# .mm bridge. pkg-config supplies -I/usr/include (Ubuntu's
+# libarrow-dev) and the -larrow link flag is added to
+# libTTIO_LIBRARIES_DEPEND_UPON in GNUmakefile.
+ARROW_CFLAGS := $(shell pkg-config --cflags arrow 2>/dev/null)
+ifneq ($(ARROW_CFLAGS),)
+  ADDITIONAL_CPPFLAGS  += $(ARROW_CFLAGS)
+  # libarrow >= 14 requires C++20 (uses std::span, std::bit_width,
+  # std::popcount) -- the Ubuntu 24.04 libarrow-dev package ships
+  # 24.0.0 (verified via `pkg-config --modversion arrow`).
+  ADDITIONAL_OBJCCFLAGS += $(ARROW_CFLAGS) -std=c++20
+endif
+
+# ---------------------------------------------------------------------------
 # Optional native rANS fast path (Task 17, Phase B)
 # ---------------------------------------------------------------------------
 # When libttio_rans.so has been built (native/_build/libttio_rans.so) wire

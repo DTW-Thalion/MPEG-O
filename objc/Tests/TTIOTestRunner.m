@@ -122,6 +122,27 @@ extern void testFD1MultiRecipient(void);
 extern void testMultiRecipientXLang(void);
 extern void testC0StandaloneKeyWrap(void);
 extern void testC2aServerKekId(void);
+extern void testTransportPacketTypeV011(void);
+extern void testTransportReaderSkipUnknown(void);
+extern void testTransportWriterReference(void);
+extern void testTransportReaderReference(void);
+extern void testArrowIpcCodec(void);
+extern void testTransportEncryptionAlgorithm(void);
+extern void testTransportDatasetProvenance(void);
+extern void testTransportImage(void);
+extern void testTransportImageProcessed(void);
+extern void testSpectralDatasetIRImage(void);
+extern void testIRImageWriteReadTypedAttrs(void);
+extern void testTransportRamanImage(void);
+extern void testTransportIRImage(void);
+extern void testTransportIdentificationsQuantifications(void);
+extern void testTransportWriteDatasetPrelude(void);
+extern void testSubjectSample(void);
+extern void testSpectralDatasetSubjectsSamples(void);
+extern void testArrowIpcCodecSubjectsSamples(void);
+extern void testTransportSubjectsSamples(void);
+extern void testAccessorMatrixConformance(void);
+extern void testCoverageGapWatchdog(void);
 
 int main(int argc, const char *argv[])
 {
@@ -609,6 +630,90 @@ int main(int argc, const char *argv[])
             testPixelSpectraRaisesWhenMzAxisAbsent();
         }
         END_SET("1.2.0: TTIOMSImage pixelSpectra raises on missing mzAxis")
+
+        START_SET("transport v0.11: packet-type constants (0x10-0x1B) + feature flag")
+            testTransportPacketTypeV011();
+        END_SET("transport v0.11: packet-type constants (0x10-0x1B) + feature flag")
+
+        START_SET("transport v0.11: reader skips unknown packet types (forward compat)")
+            testTransportReaderSkipUnknown();
+        END_SET("transport v0.11: reader skips unknown packet types (forward compat)")
+
+        START_SET("transport v0.11 Task 3.2: writeReferenceGroup: emits 0x10/0x11/0x12")
+            testTransportWriterReference();
+        END_SET("transport v0.11 Task 3.2: writeReferenceGroup: emits 0x10/0x11/0x12")
+
+        START_SET("transport v0.11 Task 3.3: reader decodes 0x10/0x11/0x12 into SpectralDataset")
+            testTransportReaderReference();
+        END_SET("transport v0.11 Task 3.3: reader decodes 0x10/0x11/0x12 into SpectralDataset")
+
+        START_SET("transport v0.11: TTIOArrowIpcCodec round-trip (IDENTIFICATIONS_TABLE 0x16 + QUANTIFICATIONS_TABLE 0x17)")
+            testArrowIpcCodec();
+        END_SET("transport v0.11: TTIOArrowIpcCodec round-trip (IDENTIFICATIONS_TABLE 0x16 + QUANTIFICATIONS_TABLE 0x17)")
+
+        START_SET("transport v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B) writer + reader")
+            testTransportEncryptionAlgorithm();
+        END_SET("transport v0.11 Task 3.4: ENCRYPTION_ALGORITHM (0x1B) writer + reader")
+
+        START_SET("transport v0.11 Task 3.5: DATASET_PROVENANCE (0x18) writer + reader")
+            testTransportDatasetProvenance();
+        END_SET("transport v0.11 Task 3.5: DATASET_PROVENANCE (0x18) writer + reader")
+
+        START_SET("transport v0.11 Task 3.6: IMAGE_HEADER + IMAGE_PIXEL + END_OF_IMAGE (0x13-0x15) writer + reader")
+            testTransportImage();
+        END_SET("transport v0.11 Task 3.6: IMAGE_HEADER + IMAGE_PIXEL + END_OF_IMAGE (0x13-0x15) writer + reader")
+
+        START_SET("transport v0.11 Task 5.1: IMAGE_PIXEL processed-mode (sparse) writer + reader")
+            testTransportImageProcessed();
+        END_SET("transport v0.11 Task 5.1: IMAGE_PIXEL processed-mode (sparse) writer + reader")
+
+        START_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
+            testSpectralDatasetIRImage();
+        END_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
+
+        START_SET("transport v0.11 Task 5.6 follow-up: TTIOIRImage typed HDF5 attrs (ir_mode i64) for cross-lang parity")
+            testIRImageWriteReadTypedAttrs();
+        END_SET("transport v0.11 Task 5.6 follow-up: TTIOIRImage typed HDF5 attrs (ir_mode i64) for cross-lang parity")
+
+        START_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — Raman (modality=1)")
+            testTransportRamanImage();
+        END_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — Raman (modality=1)")
+
+        START_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — IR (modality=2)")
+            testTransportIRImage();
+        END_SET("transport v0.11 Task 5.3: IMAGE modality dispatch — IR (modality=2)")
+
+        START_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
+            testTransportIdentificationsQuantifications();
+        END_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
+
+        START_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
+            testTransportWriteDatasetPrelude();
+        END_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
+
+        START_SET("Stage 6.4: TTIOSubject + TTIOSample validation + attributesJson byte parity")
+            testSubjectSample();
+        END_SET("Stage 6.4: TTIOSubject + TTIOSample validation + attributesJson byte parity")
+
+        START_SET("Stage 6.4: TTIOSpectralDataset subjects + samples HDF5 round-trip + soft-FK warning")
+            testSpectralDatasetSubjectsSamples();
+        END_SET("Stage 6.4: TTIOSpectralDataset subjects + samples HDF5 round-trip + soft-FK warning")
+
+        START_SET("Stage 6.4: TTIOArrowIpcCodec subjects + samples encode/decode (0x19 + 0x1A null convention)")
+            testArrowIpcCodecSubjectsSamples();
+        END_SET("Stage 6.4: TTIOArrowIpcCodec subjects + samples encode/decode (0x19 + 0x1A null convention)")
+
+        START_SET("Stage 6.4: SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) writer + reader wire round-trip")
+            testTransportSubjectsSamples();
+        END_SET("Stage 6.4: SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) writer + reader wire round-trip")
+
+        START_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
+            testAccessorMatrixConformance();
+        END_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
+
+        START_SET("transport v0.11 Task 3.10: CoverageGapWatchdog (.tis >= 1% of .tio + every accessor preserved)")
+            testCoverageGapWatchdog();
+        END_SET("transport v0.11 Task 3.10: CoverageGapWatchdog (.tis >= 1% of .tio + every accessor preserved)")
     }
     return 0;
 }

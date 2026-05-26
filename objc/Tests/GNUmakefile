@@ -114,9 +114,32 @@ TTIOTests_OBJC_FILES = \
 	TestFastaFastqTioRoundTrip.m \
 	TTIOReferencesAccessorTests.m \
 	TTIOReferenceImportWriteToDatasetTests.m \
-	TestMSImageMzAxis.m
+	TestMSImageMzAxis.m \
+	TestTransportPacketTypeV011.m \
+	TestTransportReaderSkipUnknown.m \
+	TestTransportWriterReference.m \
+	TestTransportReaderReference.m \
+	TestArrowIpcCodec.m \
+	TestTransportEncryptionAlgorithm.m \
+	TestTransportDatasetProvenance.m \
+	TestTransportImage.m \
+	TestTransportImageProcessed.m \
+	TestSpectralDatasetIRImage.m \
+	TestIRImageWriteReadTypedAttrs.m \
+	TestTransportRamanImage.m \
+	TestTransportIRImage.m \
+	TestTransportIdentificationsQuantifications.m \
+	TestTransportWriteDatasetPrelude.m \
+	TestSubjectSample.m \
+	TestSpectralDatasetSubjectsSamples.m \
+	TestArrowIpcCodecSubjectsSamples.m \
+	TestTransportSubjectsSamples.m \
+	TTIOV011FixtureBuilder.m \
+	TTIOAccessorSpec.m \
+	TestAccessorMatrixConformance.m \
+	TestCoverageGapWatchdog.m
 
-TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3
+TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
