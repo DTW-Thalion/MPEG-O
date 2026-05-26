@@ -178,17 +178,21 @@ public final class ImportTask extends Task<Void> {
     private void importMzML(ProgressSink sink) throws Exception {
         AcquisitionRun run = MzMLReader.read(
             config.sourcePath.toString(), sink);
-        writeAnalytical(List.of(run));
+        writeAnalytical(List.of(run), sink);
     }
 
     private void importNmrML(ProgressSink sink) throws Exception {
         NmrMLReader.NmrMLResult result =
             NmrMLReader.read(config.sourcePath.toString(), sink);
-        writeAnalytical(List.of(result.run()));
+        writeAnalytical(List.of(result.run()), sink);
     }
 
     private void importMzTab(ProgressSink sink) throws Exception {
         MzTabReader.MzTabImport im = MzTabReader.read(config.sourcePath, sink);
+        // Stage D: thread the sink through to the .tio writer's
+        // per-section progress hook too. Stage E (task #68) reshapes
+        // the phase math to a 0..50 read / 50..100 write split; for
+        // now both sides drive the same units tracker.
         SpectralDataset.create(
             config.targetTio.toString(),
             config.datasetTitle.isEmpty() ? im.title() : config.datasetTitle,
@@ -196,7 +200,8 @@ public final class ImportTask extends Task<Void> {
             List.of(),
             im.identifications(),
             im.quantifications(),
-            List.of());
+            List.of(),
+            sink);
     }
 
     private void importBamLike(String name, ProgressSink sink) throws Exception {
@@ -221,7 +226,7 @@ public final class ImportTask extends Task<Void> {
             }
             default -> throw new IllegalStateException(name);
         }
-        writeGenomic(List.of(run));
+        writeGenomic(List.of(run), sink);
     }
 
     private void importFasta(ProgressSink sink) throws Exception {
@@ -240,7 +245,7 @@ public final class ImportTask extends Task<Void> {
             // the dialog reports per-read progress instead of falling
             // back to the bytes heartbeat.
             WrittenGenomicRun run = r.readUnaligned(config.runName, sink);
-            writeGenomic(List.of(run));
+            writeGenomic(List.of(run), sink);
         }
     }
 
@@ -249,7 +254,7 @@ public final class ImportTask extends Task<Void> {
             ? new FastqReader(config.sourcePath)
             : new FastqReader(config.sourcePath, config.fastqPhred);
         WrittenGenomicRun run = r.read(config.runName, sink);
-        writeGenomic(List.of(run));
+        writeGenomic(List.of(run), sink);
     }
 
     // -- Phase 8.x: newly-wired formats --------------------------------
@@ -357,7 +362,7 @@ public final class ImportTask extends Task<Void> {
             runName, mode, index,
             new InstrumentConfig("", "", "", "", "", ""),
             channels, List.of(), List.of(), "", 0.0);
-        writeAnalytical(List.of(run));
+        writeAnalytical(List.of(run), sink);
     }
 
     /**
@@ -369,7 +374,7 @@ public final class ImportTask extends Task<Void> {
     private void importWatersMassLynx() throws Exception {
         AcquisitionRun run =
             WatersMassLynxReader.read(config.sourcePath.toString());
-        writeAnalytical(List.of(run));
+        writeAnalytical(List.of(run), ProgressSink.discard());
     }
 
     /**
@@ -381,7 +386,7 @@ public final class ImportTask extends Task<Void> {
     private void importThermoRaw() throws Exception {
         AcquisitionRun run =
             ThermoRawReader.read(config.sourcePath.toString());
-        writeAnalytical(List.of(run));
+        writeAnalytical(List.of(run), ProgressSink.discard());
     }
 
     /**
@@ -398,7 +403,12 @@ public final class ImportTask extends Task<Void> {
 
     // -- Write helpers --------------------------------------------------
 
-    private void writeAnalytical(List<AcquisitionRun> runs) {
+    /** Stage D: writeAnalytical now accepts the same {@link ProgressSink}
+     *  the reader was using; the writer's per-section progress reports
+     *  flow into the same units tracker. Stage E (task #68) will split
+     *  the 0..50 / 50..100 read+write phases — for now both phases drive
+     *  the same tracker. */
+    private void writeAnalytical(List<AcquisitionRun> runs, ProgressSink sink) {
         SpectralDataset.create(
             config.targetTio.toString(),
             config.datasetTitle,
@@ -406,10 +416,14 @@ public final class ImportTask extends Task<Void> {
             runs,
             List.of(),
             List.of(),
-            List.of());
+            List.of(),
+            sink);
     }
 
-    private void writeGenomic(List<WrittenGenomicRun> runs) {
+    /** Stage D: writeGenomic with sink threading. See {@link
+     *  #writeAnalytical(List, ProgressSink)} for the phase-math
+     *  follow-up note. */
+    private void writeGenomic(List<WrittenGenomicRun> runs, ProgressSink sink) {
         FeatureFlags flags = new FeatureFlags(
             "1.0", List.of(FeatureFlags.OPT_GENOMIC));
         SpectralDataset.create(
@@ -421,7 +435,8 @@ public final class ImportTask extends Task<Void> {
             List.of(),
             List.of(),
             List.of(),
-            flags);
+            flags,
+            sink);
     }
 
     private void emitBytes(long bytesDone) {
