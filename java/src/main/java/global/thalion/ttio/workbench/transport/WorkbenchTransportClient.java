@@ -17,8 +17,13 @@ import org.java_websocket.protocols.IProtocol;
 import org.java_websocket.protocols.Protocol;
 
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -101,7 +106,14 @@ public final class WorkbenchTransportClient {
                                 long lastAckedAuSequence,
                                 String resumeHandle) {}
 
-    /** Upload a fully-buffered {@code .tis} byte payload. */
+    /** Upload a fully-buffered {@code .tis} byte payload.
+     *
+     *  <p>Memory cost: at least {@code payload.length} heap for the
+     *  caller-supplied byte[] (this method does not copy). For
+     *  multi-MB payloads, prefer
+     *  {@link #upload(String, String, Path, ResumeState, TransferProgress)}
+     *  which streams from a file in {@code chunkSize}-bounded slices.</p>
+     */
     public UploadResult upload(String project, String containerUri, byte[] payload) {
         return upload(project, containerUri, payload, null, null);
     }
@@ -119,11 +131,62 @@ public final class WorkbenchTransportClient {
     public UploadResult upload(String project, String containerUri,
                                  byte[] payload, ResumeState resume,
                                  TransferProgress progress) {
+        // Wrap the byte[] in a BytesPayloadSource and dispatch through
+        // the unified driver path. No copy — the byte[] is read in-place.
+        PayloadSource src = new BytesPayloadSource(payload);
+        try {
+            return runUpload(project, containerUri, src, resume, progress);
+        } finally {
+            try { src.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    /** Streaming upload — read the {@code .tis} payload from a file
+     *  on disk in {@code chunkSize}-bounded slices instead of slurping
+     *  the whole thing into a {@code byte[]}.
+     *
+     *  <p>Peak heap during this call is O({@code chunkSize}) — one
+     *  chunk read into a ByteBuffer and at most one chunk in flight
+     *  on the WS thread — regardless of {@code payloadFile} size. Use
+     *  this overload for multi-GB {@code .tis} uploads where the
+     *  byte[] entry point would OOM long before bytes hit the wire.</p>
+     *
+     *  <p>The {@link TransferProgress} callback fires
+     *  {@code (bytesSent, totalBytes)} with the same shape as the
+     *  byte[] path; downstream
+     *  {@code PhaseProgress} / {@code ProgressTracker} wiring is
+     *  byte-equivalent.</p>
+     */
+    public UploadResult upload(String project, String containerUri,
+                                 Path payloadFile,
+                                 ResumeState resume,
+                                 TransferProgress progress) throws IOException {
+        long totalBytes = Files.size(payloadFile);
+        FileChannel ch = FileChannel.open(payloadFile, StandardOpenOption.READ);
+        PayloadSource src = new FilePayloadSource(ch, totalBytes);
+        try {
+            return runUpload(project, containerUri, src, resume, progress);
+        } finally {
+            try { src.close(); } catch (IOException ignored) {}
+        }
+    }
+
+    /** Streaming-upload convenience overload without resume / progress. */
+    public UploadResult upload(String project, String containerUri,
+                                 Path payloadFile) throws IOException {
+        return upload(project, containerUri, payloadFile, null, null);
+    }
+
+    /** Shared driver-runner used by both the byte[] and Path overloads. */
+    private UploadResult runUpload(String project, String containerUri,
+                                     PayloadSource source,
+                                     ResumeState resume,
+                                     TransferProgress progress) {
         URI uri = wsUri();
         UploadDriver driver = new UploadDriver(
             uri, token, owner, project, containerUri,
             resume == null ? null : resume.resumeHandle(),
-            payload, chunkSize, progress);
+            source, chunkSize, progress);
 
         if (!driver.connectBlockingWith(defaultTimeoutMs)) {
             throw new WorkbenchTransportException.Handshake(
@@ -266,7 +329,8 @@ public final class WorkbenchTransportClient {
         private final String project;
         private final String containerUri;
         private final String resumeHandle;
-        private final byte[] payload;
+        private final PayloadSource source;
+        private final long totalBytes;
         private final int chunkSize;
         private final TransferProgress progress;
 
@@ -277,7 +341,7 @@ public final class WorkbenchTransportClient {
 
         UploadDriver(URI uri, String token, String owner, String project,
                        String containerUri, String resumeHandle,
-                       byte[] payload, int chunkSize,
+                       PayloadSource source, int chunkSize,
                        TransferProgress progress) {
             super(uri, draftWithSubprotocol());
             this.token = token;
@@ -285,7 +349,8 @@ public final class WorkbenchTransportClient {
             this.project = project;
             this.containerUri = containerUri;
             this.resumeHandle = resumeHandle;
-            this.payload = payload;
+            this.source = source;
+            this.totalBytes = source.size();
             this.chunkSize = chunkSize;
             this.progress = progress;
         }
@@ -358,14 +423,40 @@ public final class WorkbenchTransportClient {
         }
 
         private void pumpPayload() {
+            // We allocate a fresh ByteBuffer per chunk. The Java-WebSocket
+            // layer retains the buffer reference until the I/O thread
+            // drains the frame, so reusing one buffer across send() calls
+            // would corrupt earlier-queued frames. Allocating per chunk
+            // means peak heap is O(chunkSize * outstanding-in-WS-queue);
+            // we cap that via hasBufferedData() backpressure below so
+            // steady-state heap stays bounded regardless of payload size.
             try {
-                int off = 0;
-                reportProgress(0, payload.length);
-                while (off < payload.length && !future.isDone()) {
-                    int end = Math.min(off + chunkSize, payload.length);
-                    send(ByteBuffer.wrap(payload, off, end - off));
-                    off = end;
-                    reportProgress(off, payload.length);
+                long off = 0L;
+                reportProgress(0L, totalBytes);
+                while (off < totalBytes && !future.isDone()) {
+                    // Backpressure: if the WS layer hasn't drained the
+                    // previous frame yet, yield briefly so the outbound
+                    // queue can't grow unboundedly on a slow link.
+                    int spins = 0;
+                    while (hasBufferedData() && !future.isDone()
+                            && spins < 100_000) {
+                        try { Thread.sleep(1); }
+                        catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
+                        spins++;
+                    }
+                    long remaining = totalBytes - off;
+                    int want = (int) Math.min((long) chunkSize, remaining);
+                    ByteBuffer chunk = ByteBuffer.allocate(want);
+                    int n = source.read(chunk, off);
+                    if (n < 0) break;          // EOF
+                    if (n == 0) continue;      // spurious zero — retry
+                    chunk.flip();
+                    send(chunk);
+                    off += n;
+                    reportProgress(off, totalBytes);
                 }
             } catch (Exception e) {
                 future.completeExceptionally(
