@@ -266,6 +266,7 @@ static BOOL writeImageCubeGroupAtStudy(hid_t studyGid,
                                        NSData *axis,
                                        const void *cubeBytes,
                                        NSDictionary<NSString *, NSNumber *> *doubleAttrs,
+                                       NSDictionary<NSString *, NSNumber *> *intAttrs,
                                        NSDictionary<NSString *, NSString *> *stringAttrs,
                                        NSError **error)
 {
@@ -365,6 +366,9 @@ static BOOL writeImageCubeGroupAtStudy(hid_t studyGid,
     WRITE_DBL_SHARED("pixel_size_y",    pixelSizeY);
     for (NSString *k in doubleAttrs) {
         WRITE_DBL_SHARED([k UTF8String], [doubleAttrs[k] doubleValue]);
+    }
+    for (NSString *k in intAttrs) {
+        WRITE_INT_SHARED([k UTF8String], [intAttrs[k] longLongValue]);
     }
     for (NSString *k in stringAttrs) {
         WRITE_STR_SHARED([k UTF8String], stringAttrs[k]);
@@ -1768,7 +1772,7 @@ typedef struct {
             msImgWidth, msImgHeight, msImgBins, /*tileSize=*/32,
             msImgPxX, msImgPxY, msImgScanSnap,
             msImgAxisSnap, msImgCubeSnap.bytes,
-            @{}, @{},
+            @{}, @{}, @{},
             error);
         H5Gclose(studyGid);
         H5Fclose(fid);
@@ -1815,21 +1819,23 @@ typedef struct {
                 @{ @"excitation_wavelength_nm": @(imgRamanExcitationNm),
                    @"laser_power_mw":           @(imgRamanLaserPowerMw) },
                 @{},
+                @{},
                 error);
         }
         if (ok && imgIRCollected) {
             // IR modality_extras → resolution_cm_inv (double attr)
-            // + ir_mode (string attr, "absorbance" / "transmittance"
-            // — matches TTIOIRImage -writeToFilePath:).
-            NSString *irModeStr = (imgIRModeByte == 1)
-                ? @"absorbance" : @"transmittance";
+            // + ir_mode (i64 enum: 0=transmittance, 1=absorbance —
+            // matches Python's int(IRMode) convention and the typed
+            // wire-form now used by TTIOIRImage -writeToFilePath:
+            // post-Stage-5.6 cross-language parity fix).
             ok = writeImageCubeGroupAtStudy(
                 studyGid, "ir_image_cube",
                 irImgWidth, irImgHeight, irImgBins, /*tileSize=*/32,
                 irImgPxX, irImgPxY, irImgScanSnap,
                 irImgAxisSnap, irImgCubeSnap.bytes,
                 @{ @"resolution_cm_inv": @(imgIRResolutionCmInv) },
-                @{ @"ir_mode":           irModeStr },
+                @{ @"ir_mode":           @((imgIRModeByte == 1) ? 1LL : 0LL) },
+                @{},
                 error);
         }
         H5Gclose(studyGid);

@@ -329,22 +329,12 @@ def test_xlang_round_trip_preserves_accessor(
                 "/usr/local/lib/."
             )
     # Stage 5 / Task 5.6 cross-language IR_IMAGE — the SDK on-disk
-    # representations diverge for the ``ir_mode`` HDF5 attribute:
-    #   Python writes int (0/1)
-    #   Java + ObjC write string ("transmittance"/"absorbance")
-    # Same drift exists for ``resolution_cm_inv``/``pixel_size_*``
-    # (Java stringifies floats; Python stores native float64). Until
-    # the on-disk representation is unified, the only IR_IMAGE cross-
-    # language cell that passes is py-py. The per-SDK conformance
-    # suites still cover all three IR_IMAGE round-trips; this skip
-    # documents the limitation rather than masking it.
-    if spec.name == "IR_IMAGE" and (enc_lang, dec_lang) != ("py", "py"):
-        pytest.skip(
-            "IR_IMAGE cross-language ir_mode/resolution_cm_inv "
-            "on-disk attribute representation differs across SDKs "
-            "(Python: int/float64; Java+ObjC: string). Tracked as a "
-            "follow-up; per-SDK conformance still passes."
-        )
+    # representations were unified in commits e0a34674 (Java) and
+    # 589f8a93 (ObjC): all three SDKs now write ``ir_mode`` as int64
+    # (0=transmittance, 1=absorbance) and ``pixel_size_*`` /
+    # ``resolution_cm_inv`` as native float64, matching Python's
+    # original layout. Readers retain backward compat with the
+    # legacy VL-string form, so existing .tio files keep loading.
 
     from ttio.spectral_dataset import SpectralDataset
 
