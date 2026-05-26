@@ -20,6 +20,8 @@
 #import "TTIOArrowIpcCodec.h"
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOSubject.h"
+#import "Dataset/TTIOSample.h"
 
 /* Bridge entry points (TTIOArrowIpcBridge.mm). */
 extern NSData    *TTIOArrowIpcEncode(NSString *schemaName, NSString *rowsJson);
@@ -202,6 +204,195 @@ static NSArray<NSString *> *EvidenceChainFromJson(NSString *json)
                normalizationMethod:(r[@"normalization_method"] ?: @"")
                               unit:(r[@"unit"] ?: @"")];
         [out addObject:q];
+    }
+    return [out copy];
+}
+
+// =====================================================================
+//  Subjects (packet 0x19, Stage 6 / transport-spec §4.22)
+// =====================================================================
+//
+// Null convention (cross-lang with Java + Python):
+//   - Optional strings project + sex: empty-string @"" -> Arrow null
+//     on the wire; decoded back to @"" on read.
+//   - birth_year: sentinel 0 -> Arrow null on the wire; decoded back
+//     to 0 on read.
+//   - external_id is notNullable; attributes_json is always present
+//     (@"{}" for empty maps).
+// All three transformations live in TTIOArrowIpcBridge.mm
+// (ShouldNullOnEmptyString + ShouldNullOnZero); the codec just
+// marshals NSDictionary rows to/from JSON.
+
++ (NSData *)encodeSubjects:(NSArray<TTIOSubject *> *)rows
+{
+    NSMutableArray<NSDictionary *> *jsonRows =
+        [NSMutableArray arrayWithCapacity:rows.count];
+    for (TTIOSubject *r in rows) {
+        // birth_year is int32 on the wire (column-width consistency
+        // with the identification table, see design spec §6.1).
+        NSNumber *by = @((int32_t)r.birthYear);
+        [jsonRows addObject:@{
+            @"external_id":     r.externalId ?: @"",
+            @"project":         r.project ?: @"",
+            @"sex":             r.sex ?: @"",
+            @"birth_year":      by,
+            @"attributes_json": [r attributesJson] ?: @"{}",
+        }];
+    }
+    NSError *jsonErr = nil;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:jsonRows
+                                                       options:0
+                                                         error:&jsonErr];
+    if (!jsonData) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"TTIOArrowIpcCodec: encode JSON build failed: %@", jsonErr];
+    }
+    NSString *jsonStr = [[NSString alloc] initWithData:jsonData
+                                              encoding:NSUTF8StringEncoding];
+    NSData *out = TTIOArrowIpcEncode(@"subjects", jsonStr);
+    if (!out) {
+        [NSException raise:NSGenericException
+                    format:@"TTIOArrowIpcCodec: Arrow IPC encode (subjects) failed"];
+    }
+    return out;
+}
+
++ (NSArray<TTIOSubject *> *)decodeSubjects:(NSData *)ipc
+{
+    if (!ipc || ipc.length == 0) return @[];
+    NSString *rowsJson = TTIOArrowIpcDecode(@"subjects", ipc);
+    if (!rowsJson) {
+        [NSException raise:NSGenericException
+                    format:@"TTIOArrowIpcCodec: Arrow IPC decode (subjects) failed"];
+    }
+    NSData *jsonData = [rowsJson dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *jsonErr = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:jsonData
+                                                options:0
+                                                  error:&jsonErr];
+    if (!parsed || ![parsed isKindOfClass:[NSArray class]]) {
+        [NSException raise:NSGenericException
+                    format:@"TTIOArrowIpcCodec: decode JSON parse failed: %@", jsonErr];
+    }
+    NSArray<NSDictionary *> *rows = (NSArray<NSDictionary *> *)parsed;
+    NSMutableArray<TTIOSubject *> *out =
+        [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSDictionary *r in rows) {
+        NSNumber *by = r[@"birth_year"];
+        NSString *attrsJson = r[@"attributes_json"];
+        if (![attrsJson isKindOfClass:[NSString class]]) attrsJson = @"{}";
+        NSDictionary<NSString *, NSString *> *attrs =
+            [self _parseAttributesJsonForCodec:attrsJson];
+        TTIOSubject *s = [[TTIOSubject alloc]
+            initWithExternalId:(r[@"external_id"] ?: @"")
+                        project:(r[@"project"] ?: @"")
+                            sex:(r[@"sex"] ?: @"")
+                      birthYear:(int64_t)[by longLongValue]
+                     attributes:attrs];
+        [out addObject:s];
+    }
+    return [out copy];
+}
+
+// =====================================================================
+//  Samples (packet 0x1A, Stage 6 / transport-spec §4.22)
+// =====================================================================
+
++ (NSData *)encodeSamples:(NSArray<TTIOSample *> *)rows
+{
+    NSMutableArray<NSDictionary *> *jsonRows =
+        [NSMutableArray arrayWithCapacity:rows.count];
+    for (TTIOSample *r in rows) {
+        // collected_at is int64 on the wire (Unix seconds since epoch).
+        NSNumber *ts = @((long long)r.collectedAt);
+        [jsonRows addObject:@{
+            @"sample_id":           r.sampleId ?: @"",
+            @"subject_external_id": r.subjectExternalId ?: @"",
+            @"sample_kind":         r.sampleKind ?: @"",
+            @"collected_at":        ts,
+            @"attributes_json":     [r attributesJson] ?: @"{}",
+        }];
+    }
+    NSError *jsonErr = nil;
+    NSData *jsonData = [NSJSONSerialization dataWithJSONObject:jsonRows
+                                                       options:0
+                                                         error:&jsonErr];
+    if (!jsonData) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"TTIOArrowIpcCodec: encode JSON build failed: %@", jsonErr];
+    }
+    NSString *jsonStr = [[NSString alloc] initWithData:jsonData
+                                              encoding:NSUTF8StringEncoding];
+    NSData *out = TTIOArrowIpcEncode(@"samples", jsonStr);
+    if (!out) {
+        [NSException raise:NSGenericException
+                    format:@"TTIOArrowIpcCodec: Arrow IPC encode (samples) failed"];
+    }
+    return out;
+}
+
++ (NSArray<TTIOSample *> *)decodeSamples:(NSData *)ipc
+{
+    if (!ipc || ipc.length == 0) return @[];
+    NSString *rowsJson = TTIOArrowIpcDecode(@"samples", ipc);
+    if (!rowsJson) {
+        [NSException raise:NSGenericException
+                    format:@"TTIOArrowIpcCodec: Arrow IPC decode (samples) failed"];
+    }
+    NSData *jsonData = [rowsJson dataUsingEncoding:NSUTF8StringEncoding];
+    NSError *jsonErr = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:jsonData
+                                                options:0
+                                                  error:&jsonErr];
+    if (!parsed || ![parsed isKindOfClass:[NSArray class]]) {
+        [NSException raise:NSGenericException
+                    format:@"TTIOArrowIpcCodec: decode JSON parse failed: %@", jsonErr];
+    }
+    NSArray<NSDictionary *> *rows = (NSArray<NSDictionary *> *)parsed;
+    NSMutableArray<TTIOSample *> *out =
+        [NSMutableArray arrayWithCapacity:rows.count];
+    for (NSDictionary *r in rows) {
+        NSNumber *ts = r[@"collected_at"];
+        NSString *attrsJson = r[@"attributes_json"];
+        if (![attrsJson isKindOfClass:[NSString class]]) attrsJson = @"{}";
+        NSDictionary<NSString *, NSString *> *attrs =
+            [self _parseAttributesJsonForCodec:attrsJson];
+        TTIOSample *s = [[TTIOSample alloc]
+            initWithSampleId:(r[@"sample_id"] ?: @"")
+           subjectExternalId:(r[@"subject_external_id"] ?: @"")
+                  sampleKind:(r[@"sample_kind"] ?: @"")
+                 collectedAt:(int64_t)[ts longLongValue]
+                  attributes:attrs];
+        [out addObject:s];
+    }
+    return [out copy];
+}
+
+// Decode attributes_json into a string-keyed/string-valued dict.
+// "{}" and the empty string both round-trip to @{}.
++ (NSDictionary<NSString *, NSString *> *)
+    _parseAttributesJsonForCodec:(NSString *)blob
+{
+    if (blob == nil || blob.length == 0 || [blob isEqualToString:@"{}"]) {
+        return @{};
+    }
+    NSData *data = [blob dataUsingEncoding:NSUTF8StringEncoding];
+    if (data == nil) return @{};
+    NSError *err = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:data
+                                                options:0
+                                                  error:&err];
+    if (![parsed isKindOfClass:[NSDictionary class]]) return @{};
+    NSMutableDictionary<NSString *, NSString *> *out =
+        [NSMutableDictionary dictionaryWithCapacity:[parsed count]];
+    for (id key in (NSDictionary *)parsed) {
+        if (![key isKindOfClass:[NSString class]]) continue;
+        id v = ((NSDictionary *)parsed)[key];
+        if ([v isKindOfClass:[NSString class]]) {
+            out[(NSString *)key] = (NSString *)v;
+        } else if (v != [NSNull null]) {
+            out[(NSString *)key] = [v description];
+        }
     }
     return [out copy];
 }

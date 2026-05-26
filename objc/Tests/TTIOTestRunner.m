@@ -139,6 +139,7 @@ extern void testTransportIdentificationsQuantifications(void);
 extern void testTransportWriteDatasetPrelude(void);
 extern void testSubjectSample(void);
 extern void testSpectralDatasetSubjectsSamples(void);
+extern void testArrowIpcCodecSubjectsSamples(void);
 extern void testAccessorMatrixConformance(void);
 extern void testCoverageGapWatchdog(void);
 
@@ -696,6 +697,10 @@ int main(int argc, const char *argv[])
         START_SET("Stage 6.4: TTIOSpectralDataset subjects + samples HDF5 round-trip + soft-FK warning")
             testSpectralDatasetSubjectsSamples();
         END_SET("Stage 6.4: TTIOSpectralDataset subjects + samples HDF5 round-trip + soft-FK warning")
+
+        START_SET("Stage 6.4: TTIOArrowIpcCodec subjects + samples encode/decode (0x19 + 0x1A null convention)")
+            testArrowIpcCodecSubjectsSamples();
+        END_SET("Stage 6.4: TTIOArrowIpcCodec subjects + samples encode/decode (0x19 + 0x1A null convention)")
 
         START_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
             testAccessorMatrixConformance();
