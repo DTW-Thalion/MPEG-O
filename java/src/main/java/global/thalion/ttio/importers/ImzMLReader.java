@@ -4,6 +4,7 @@
  */
 package global.thalion.ttio.importers;
 
+import global.thalion.ttio.io.ProgressSink;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 import org.xml.sax.helpers.DefaultHandler;
@@ -93,16 +94,46 @@ public final class ImzMLReader {
         public ImzMLBinaryException(String msg) { super(msg); }
     }
 
+    /** Default emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during the .ibd materialisation loop. Imaging-MS files often
+     *  have tens of thousands of pixels, so reporting per-pixel would
+     *  drown the UI thread; 100 pixels keeps overhead negligible while
+     *  still giving sub-second updates on typical files. */
+    public static final int PROGRESS_INTERVAL_SPECTRA = 100;
+
     private ImzMLReader() {}
 
     /** Parse an imzML metadata file, locating the sibling .ibd via
      *  filename rewriting. */
     public static ImzMLImport read(Path imzmlPath) throws IOException {
-        return read(imzmlPath, null);
+        return read(imzmlPath, null, ProgressSink.discard());
     }
 
     /** Parse an imzML metadata file with an explicit .ibd location. */
     public static ImzMLImport read(Path imzmlPath, Path ibdPath) throws IOException {
+        return read(imzmlPath, ibdPath, ProgressSink.discard());
+    }
+
+    /** Overload of {@link #read(Path)} that accepts a
+     *  {@link ProgressSink}. */
+    public static ImzMLImport read(Path imzmlPath, ProgressSink progress)
+            throws IOException {
+        return read(imzmlPath, null, progress);
+    }
+
+    /**
+     * Parse an imzML metadata file with an explicit .ibd location,
+     * firing {@code progress.onProgress(pixelsDone, totalPixels)} every
+     * {@link #PROGRESS_INTERVAL_SPECTRA} pixels during the .ibd
+     * materialisation phase. The total is known up front (one stub per
+     * {@code <spectrum>}), so callbacks carry a real {@code total} from
+     * the first fire instead of {@code -1L}.
+     *
+     * @since 1.5.0
+     */
+    public static ImzMLImport read(Path imzmlPath, Path ibdPath,
+                                    ProgressSink progress) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         if (!Files.isRegularFile(imzmlPath)) {
             throw new ImzMLParseException("imzML metadata not found: " + imzmlPath);
         }
@@ -151,8 +182,10 @@ public final class ImzMLReader {
             }
 
             List<PixelSpectrum> pixels = new ArrayList<>(handler.stubs.size());
+            long totalPixels = handler.stubs.size();
             double[] sharedMz = null;
             boolean continuous = "continuous".equals(handler.mode);
+            long pixelsDone = 0L;
             for (Stub stub : handler.stubs) {
                 double[] mz = readArray(raf, stub.mzOffset, stub.mzLength,
                                          stub.mzPrecision, ibdSize, resolvedIbd, "m/z");
@@ -173,7 +206,13 @@ public final class ImzMLReader {
                 }
                 pixels.add(new PixelSpectrum(stub.x, stub.y, stub.z,
                                               effectiveMz, intensity));
+                pixelsDone++;
+                if (pixelsDone % PROGRESS_INTERVAL_SPECTRA == 0) {
+                    progress.onProgress(pixelsDone, totalPixels);
+                }
             }
+            // Final fire — total is known up front for imzML.
+            progress.onProgress(pixelsDone, totalPixels);
 
             return new ImzMLImport(
                 handler.mode, handler.uuidHex,

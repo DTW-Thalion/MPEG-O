@@ -3,6 +3,7 @@ package global.thalion.ttio.importers;
 
 import global.thalion.ttio.*;
 import global.thalion.ttio.Enums.*;
+import global.thalion.ttio.io.ProgressSink;
 
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
@@ -38,6 +39,11 @@ import java.util.zip.Inflater;
  *
  */
 public final class NmrMLReader {
+
+    /** nmrML files canonically carry one 1-D spectrum (and optionally a
+     *  FID). The progress contract for this reader is therefore a single
+     *  final fire of {@code (1, 1)} after the parse succeeds. */
+    public static final int PROGRESS_INTERVAL_SPECTRA = 1;
 
     private NmrMLReader() {}
 
@@ -98,8 +104,17 @@ public final class NmrMLReader {
      *         migrate to checked {@link java.io.IOException}).
      */
     public static NmrMLResult read(String path) throws NmrMLParseException {
+        return read(path, ProgressSink.discard());
+    }
+
+    /** Overload of {@link #read(String)} that accepts a
+     *  {@link ProgressSink}. nmrML produces a single 1-D spectrum, so
+     *  the sink fires exactly once with {@code (1, 1)} after a
+     *  successful parse. */
+    public static NmrMLResult read(String path, ProgressSink progress)
+            throws NmrMLParseException {
         try (InputStream is = Files.newInputStream(Path.of(path))) {
-            return read(is, Path.of(path).getFileName().toString());
+            return read(is, Path.of(path).getFileName().toString(), progress);
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to read nmrML: " + path, e);
         }
@@ -112,13 +127,31 @@ public final class NmrMLReader {
      */
     public static NmrMLResult read(InputStream is, String name)
             throws NmrMLParseException {
+        return read(is, name, ProgressSink.discard());
+    }
+
+    /**
+     * Overload of {@link #read(InputStream, String)} that accepts a
+     * {@link ProgressSink}. Fires {@code progress.onProgress(1, 1)} once
+     * the spectrum has been parsed; total is always {@code 1} because
+     * nmrML's canonical structure holds a single 1-D spectrum (plus an
+     * optional FID, which is part of the same logical acquisition).
+     *
+     * @since 1.5.0
+     */
+    public static NmrMLResult read(InputStream is, String name,
+                                    ProgressSink progress)
+            throws NmrMLParseException {
+        if (progress == null) progress = ProgressSink.discard();
         try {
             SAXParserFactory factory = SAXParserFactory.newInstance();
             factory.setNamespaceAware(true);
             SAXParser parser = factory.newSAXParser();
             NmrMLHandler handler = new NmrMLHandler();
             parser.parse(is, handler);
-            return handler.buildResult(name);
+            NmrMLResult result = handler.buildResult(name);
+            progress.onProgress(1L, 1L);
+            return result;
         } catch (Exception e) {
             throw new NmrMLParseException(
                 "Failed to parse nmrML: " + name + ": " + e.getMessage(), e);
