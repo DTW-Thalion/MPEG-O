@@ -5,6 +5,7 @@
 package global.thalion.ttio.browser.workbench;
 
 import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressReport;
 import global.thalion.ttio.browser.progress.ProgressTracker;
 import global.thalion.ttio.workbench.WorkbenchClient;
 import global.thalion.ttio.workbench.transport.TransferProgress;
@@ -349,8 +350,44 @@ public final class TransferManager {
         return (n / (1024L * 1024 * 1024)) + " GB";
     }
 
-    private static void setState(Transfer t, TransferState s, String msg) {
-        Runnable r = () -> { t.setState(s); t.setMessage(msg); };
+    private void setState(Transfer t, TransferState s, String msg) {
+        Runnable r = () -> {
+            TransferState prev = t.state();
+            // Synthesize a final 100% ProgressReport on terminal-state
+            // transitions BEFORE flipping the state, so when downstream
+            // listeners observe COMPLETED they also see a coherent
+            // progress sample (instead of the last partial-byte snapshot
+            // from mid-upload — which on a fast localhost transfer leaves
+            // the UI showing e.g. "0.1% — 128 kB" forever).
+            if ((s == TransferState.COMPLETED || s == TransferState.FAILED)
+                    && prev != s) {
+                long size = t.sizeBytes();
+                if (size > 0) {
+                    long elapsedSec = Math.max(0L,
+                        (System.currentTimeMillis() - t.createdAtEpochMs()) / 1000L);
+                    t.setLastReport(new ProgressReport(
+                        s == TransferState.COMPLETED ? "complete" : "failed",
+                        size, size,           // bytesDone == bytesTotal => 100%
+                        0L, 0L,               // unitsDone, unitsTotal
+                        0.0, 0.0,             // rates
+                        0L,                    // etaSeconds
+                        elapsedSec,
+                        System.currentTimeMillis()));
+                }
+            }
+            t.setState(s);
+            t.setMessage(msg);
+            // The observable-list listener (transfers.addListener at
+            // construction) only fires on add/remove. State transitions
+            // inside a Transfer don't propagate to queueListeners by
+            // default — TransfersWorkspace would never refresh on
+            // PENDING -> RUNNING -> COMPLETED. Fire the listeners
+            // explicitly here so every state change re-renders the row.
+            for (QueueListener l : queueListeners) {
+                try { l.onQueueChanged(); }
+                catch (Exception ignored) {}
+            }
+        };
         if (Platform.isFxApplicationThread()) r.run();
         else Platform.runLater(r);
     }
