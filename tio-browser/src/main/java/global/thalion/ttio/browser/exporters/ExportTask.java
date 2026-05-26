@@ -30,7 +30,9 @@ import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.browser.progress.ProgressListener;
+import global.thalion.ttio.browser.progress.ProgressReport;
 import global.thalion.ttio.browser.progress.ProgressTracker;
+import global.thalion.ttio.io.ProgressSink;
 import javafx.concurrent.Task;
 
 /**
@@ -67,6 +69,13 @@ public final class ExportTask extends Task<Void> {
     private final SpectralDataset dataset;
     private volatile ProgressListener progressListener;
     private ProgressTracker tracker;
+    /** Stage D: per-record sink driven by the writer-side SDK calls
+     *  (BamWriter, MzMLWriter, ...). First non-empty fire flips the
+     *  bytes-heartbeat ticker off so the dialog shows determinate
+     *  per-record progress instead of polled output-file size. */
+    private ProgressTracker unitsTracker;
+    private final java.util.concurrent.atomic.AtomicBoolean sinkActive =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public ExportTask(ExportFormatSpec spec, ExportConfig config,
                       SpectralDataset dataset) {
@@ -86,45 +95,72 @@ public final class ExportTask extends Task<Void> {
         // size, same pattern as ImportTask: writer APIs don't expose
         // per-chunk hooks, so poll Files.size(config.targetPath) every
         // 500ms to drive the numeric line.
-        tracker = new ProgressTracker("exporting", -1L, -1L, System.currentTimeMillis());
+        long startMs = System.currentTimeMillis();
+        tracker = new ProgressTracker("exporting", -1L, -1L, startMs);
         emit(0L, 0L);
         java.util.concurrent.atomic.AtomicBoolean done =
             new java.util.concurrent.atomic.AtomicBoolean(false);
         Thread ticker = new Thread(() -> {
             while (!done.get()) {
-                long current = 0L;
-                try {
-                    if (Files.exists(config.targetPath)) {
-                        current = Files.size(config.targetPath);
-                    }
-                } catch (Exception ignored) { /* file may flicker mid-write */ }
-                emit(current, 0L);
+                if (!sinkActive.get()) {
+                    long current = 0L;
+                    try {
+                        if (Files.exists(config.targetPath)) {
+                            current = Files.size(config.targetPath);
+                        }
+                    } catch (Exception ignored) { /* file may flicker mid-write */ }
+                    emit(current, 0L);
+                }
                 try { Thread.sleep(500L); }
                 catch (InterruptedException ie) { return; }
             }
         }, "export-progress-ticker");
         ticker.setDaemon(true);
         ticker.start();
+
+        // Stage D: per-record sink wired into the writer-side SDK
+        // calls. First non-empty fire flips the bytes-heartbeat ticker
+        // off (sinkActive=true) and the dialog drives determinate
+        // per-record progress instead of polling output bytes.
+        ProgressSink sink = (recDone, recTotal) -> {
+            sinkActive.set(true);
+            ProgressTracker t = unitsTracker;
+            if (t == null && recTotal > 0L) {
+                t = new ProgressTracker(
+                    "exporting", -1L, recTotal, startMs);
+                unitsTracker = t;
+            }
+            if (t == null) return;
+            ProgressReport r = t.sample(0L, recDone, System.currentTimeMillis());
+            ProgressListener l = progressListener;
+            if (l != null) l.onProgress(r);
+        };
+
         try {
             switch (spec.name) {
-                case "mzML (indexed)" -> exportMzML();
-                case "mzTab"          -> exportMzTab();
-                case "nmrML"          -> exportNmrML();
-                case "JCAMP-DX"       -> exportJcampDx();
+                case "mzML (indexed)" -> exportMzML(sink);
+                case "mzTab"          -> exportMzTab(sink);
+                case "nmrML"          -> exportNmrML(sink);
+                case "JCAMP-DX"       -> exportJcampDx(sink);
                 case "ISA-Tab/JSON"   -> exportIsa();
-                case "BAM"            -> exportBamLike(false);
-                case "CRAM"           -> exportBamLike(true);
-                case "FASTA (reference)" -> exportFastaReference();
-                case "FASTA (reads)"     -> exportFastaReads();
-                case "FASTQ"          -> exportFastq();
-                case "imzML" -> exportImzML();
+                case "BAM"            -> exportBamLike(false, sink);
+                case "CRAM"           -> exportBamLike(true, sink);
+                case "FASTA (reference)" -> exportFastaReference(sink);
+                case "FASTA (reads)"     -> exportFastaReads(sink);
+                case "FASTQ"          -> exportFastq(sink);
+                case "imzML"          -> exportImzML(sink);
                 default -> throw new UnsupportedOperationException(
                     spec.name + " export not wired.");
             }
             done.set(true);
             try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
-            long fileSize = Files.size(config.targetPath);
-            emit(fileSize, 1L);
+            // For sink-instrumented paths the writer SDK already fired
+            // onProgress(total, total) at the last record. For the
+            // bytes-fallback path (ISA-Tab/JSON), emit the final 100%.
+            if (!sinkActive.get()) {
+                long fileSize = Files.size(config.targetPath);
+                emit(fileSize, 1L);
+            }
         } finally {
             done.set(true);
             ticker.interrupt();
@@ -135,40 +171,42 @@ public final class ExportTask extends Task<Void> {
 
     // ── analytical formats ──────────────────────────────────────────
 
-    private void exportMzML() {
+    private void exportMzML(ProgressSink sink) {
         AcquisitionRun run = pickRun();
-        MzMLWriter.write(run, config.targetPath.toString(), true);
+        MzMLWriter.write(run, config.targetPath.toString(), true, sink);
     }
 
-    private void exportNmrML() {
+    private void exportNmrML(ProgressSink sink) {
         AcquisitionRun run = pickRun();
-        NmrMLWriter.write(run, config.targetPath.toString());
+        NmrMLWriter.write(run, config.targetPath.toString(), sink);
     }
 
-    private void exportMzTab() {
+    private void exportMzTab(ProgressSink sink) {
         MzTabWriter.write(
             config.targetPath,
             dataset.identifications(),
             dataset.quantifications(),
+            java.util.List.of(),
             config.mzTabDialect,
             dataset.title(),
-            "");
+            "",
+            sink);
     }
 
-    private void exportJcampDx() throws IOException {
+    private void exportJcampDx(ProgressSink sink) throws IOException {
         JcampDxEncoding enc = JcampDxEncoding.fromString(config.jcampEncoding);
         for (AcquisitionRun run : dataset.msRuns().values()) {
             for (Spectrum s : run.spectra()) {
                 if (s instanceof RamanSpectrum r) {
-                    JcampDxWriter.writeRamanSpectrum(r, config.targetPath, dataset.title(), enc);
+                    JcampDxWriter.writeRamanSpectrum(r, config.targetPath, dataset.title(), enc, sink);
                     return;
                 }
                 if (s instanceof IRSpectrum ir) {
-                    JcampDxWriter.writeIRSpectrum(ir, config.targetPath, dataset.title(), enc);
+                    JcampDxWriter.writeIRSpectrum(ir, config.targetPath, dataset.title(), enc, sink);
                     return;
                 }
                 if (s instanceof UVVisSpectrum uv) {
-                    JcampDxWriter.writeUVVisSpectrum(uv, config.targetPath, dataset.title(), enc);
+                    JcampDxWriter.writeUVVisSpectrum(uv, config.targetPath, dataset.title(), enc, sink);
                     return;
                 }
             }
@@ -193,7 +231,7 @@ public final class ExportTask extends Task<Void> {
 
     // ── genomic formats ─────────────────────────────────────────────
 
-    private void exportBamLike(boolean cram) throws Exception {
+    private void exportBamLike(boolean cram, ProgressSink sink) throws Exception {
         GenomicRun run = pickGenomicRun();
         WrittenGenomicRun w = toWritten(run);
         BamWriter writer;
@@ -206,32 +244,32 @@ public final class ExportTask extends Task<Void> {
         } else {
             writer = new BamWriter(config.targetPath);
         }
-        writer.write(w, dataset.provenanceRecords(), true);
+        writer.write(w, dataset.provenanceRecords(), true, sink);
     }
 
-    private void exportFastaReference() throws IOException {
+    private void exportFastaReference(ProgressSink sink) throws IOException {
         if (dataset.references().isEmpty()) {
             throw new IllegalStateException(
                 "FASTA (reference) export found no embedded references.");
         }
         ReferenceImport ref = dataset.references().values().iterator().next();
         FastaWriter.writeReference(ref, config.targetPath,
-            config.fastaLineWidth, config.gzipOutput, false);
+            config.fastaLineWidth, config.gzipOutput, false, sink);
     }
 
-    private void exportFastaReads() throws IOException {
+    private void exportFastaReads(ProgressSink sink) throws IOException {
         GenomicRun run = pickGenomicRun();
         FastaWriter.writeRun(run, config.targetPath,
-            config.fastaLineWidth, config.gzipOutput, false);
+            config.fastaLineWidth, config.gzipOutput, false, sink);
     }
 
-    private void exportFastq() throws IOException {
+    private void exportFastq(ProgressSink sink) throws IOException {
         GenomicRun run = pickGenomicRun();
         FastqWriter.write(run, config.targetPath,
-            config.gzipOutput, config.fastqPhred);
+            config.gzipOutput, config.fastqPhred, sink);
     }
 
-    private void exportImzML() {
+    private void exportImzML(ProgressSink sink) {
         MSImage img = dataset.image();
         if (img == null) {
             throw new IllegalStateException(
@@ -246,7 +284,8 @@ public final class ExportTask extends Task<Void> {
             img.width(), img.height(), 1,
             img.pixelSizeX(), img.pixelSizeY(),
             img.scanPattern() != null ? img.scanPattern() : "flyback",
-            /* uuidHex */ null);
+            /* uuidHex */ null,
+            sink);
     }
 
     // ── helpers ─────────────────────────────────────────────────────
