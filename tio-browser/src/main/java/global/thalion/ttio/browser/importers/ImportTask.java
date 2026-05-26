@@ -35,7 +35,6 @@ import global.thalion.ttio.importers.ThermoRawReader;
 import global.thalion.ttio.importers.WatersMassLynxReader;
 import global.thalion.ttio.browser.progress.PhaseProgress;
 import global.thalion.ttio.browser.progress.ProgressListener;
-import global.thalion.ttio.browser.progress.ProgressTracker;
 import global.thalion.ttio.io.ProgressSink;
 import javafx.concurrent.Task;
 
@@ -71,17 +70,6 @@ public final class ImportTask extends Task<Void> {
      *  pre-Stage-E single-units-tracker that "restarted" the
      *  records count at the read/write boundary. */
     private PhaseProgress phaseProgress;
-    /** Fallback bytes-mode tracker for not-yet-sink-instrumented
-     *  formats (Waters / Thermo / Bruker -- where SDK delegates
-     *  to external converters with no per-record hook). Driven by
-     *  the heartbeat ticker which polls target file size. Removed
-     *  in Stage E commit 2 once all formats have real callbacks. */
-    private ProgressTracker bytesTracker;
-    /** Set true by PhaseProgress callbacks; gates the heartbeat
-     *  ticker so it stands down once real records-based progress
-     *  is flowing. */
-    private final java.util.concurrent.atomic.AtomicBoolean sinkActive =
-        new java.util.concurrent.atomic.AtomicBoolean(false);
 
     public ImportTask(ImportFormatSpec spec, ImportConfig config) {
         this.spec = spec;
@@ -95,58 +83,37 @@ public final class ImportTask extends Task<Void> {
     @Override
     protected Void call() throws Exception {
         updateMessage("Importing " + spec.name + " from " + config.sourcePath);
-        long inputBytes = Files.size(config.sourcePath);
         long startMs = System.currentTimeMillis();
-        // Fallback bytes-mode tracker for the heartbeat path
-        // (Waters / Thermo / Bruker formats with no per-record
-        // hook -- they go through external converters). Real
-        // sink-instrumented formats flip sinkActive=true on first
-        // emit and the heartbeat stands down. Stage E commit 2
-        // removes this fallback entirely.
-        bytesTracker = new ProgressTracker(
-            "importing", inputBytes, -1L, startMs);
-        emitBytes(0L);
-        java.util.concurrent.atomic.AtomicBoolean done =
-            new java.util.concurrent.atomic.AtomicBoolean(false);
-        Thread ticker = new Thread(() -> {
-            while (!done.get()) {
-                if (!sinkActive.get()) {
-                    long current = 0L;
-                    try {
-                        if (Files.exists(config.targetTio)) {
-                            current = Math.min(Files.size(config.targetTio), inputBytes);
-                        }
-                    } catch (Exception ignored) { /* file may flicker mid-write */ }
-                    emitBytes(current);
-                }
-                try { Thread.sleep(500L); }
-                catch (InterruptedException ie) { return; }
-            }
-        }, "import-progress-ticker");
-        ticker.setDaemon(true);
-        ticker.start();
-
-        // Stage E: two-phase progress. Reader fills 0..50%; writer
-        // fills 50..100%. PhaseProgress flips sinkActive=true on
-        // first emit so the heartbeat ticker stands down.
+        // Stage E commit 2: the previous bytes-heartbeat ticker has
+        // been removed. Stages A/B/C/D wired real record-level
+        // ProgressSink callbacks across every reader + writer, so
+        // the heartbeat is no longer needed -- the ProgressDisplay
+        // refresh now responds purely to real ProgressSink samples
+        // flowing through PhaseProgress.
+        //
+        // The three formats that still delegate to external
+        // converters (Waters MassLynx, Thermo .raw, Bruker timsTOF)
+        // run in a tight subprocess wait without intermediate
+        // updates; the dialog stays at 0% until the subprocess
+        // returns, at which point emitFinal() drives it to 100%.
+        //
         // PhaseProgress fetches the listener via a small forwarder
         // so setProgressListener() calls after call() begins still
         // take effect (preserves the pre-Stage-E behavior).
         ProgressListener forwarder = r -> {
-            sinkActive.set(true);
             ProgressListener l = progressListener;
             if (l != null) l.onProgress(r);
         };
         phaseProgress = new PhaseProgress(
             forwarder, "reading", "encoding", startMs);
+        phaseProgress.emitInitial();
 
         ProgressSink readerSink = phaseProgress.readerSink();
         ProgressSink writerSink = phaseProgress.writerSink();
 
         long t0 = System.currentTimeMillis();
         System.err.println("[ImportTask] start " + spec.name
-            + " source=" + config.sourcePath + " target=" + config.targetTio
-            + " inputBytes=" + inputBytes);
+            + " source=" + config.sourcePath + " target=" + config.targetTio);
         try {
             switch (spec.name) {
             case "mzML"             -> importMzML(readerSink, writerSink);
@@ -169,20 +136,11 @@ public final class ImportTask extends Task<Void> {
             long t1 = System.currentTimeMillis();
             System.err.println("[ImportTask] dispatch returned after "
                 + (t1 - t0) + " ms");
-            done.set(true);
-            try { ticker.join(1_000L); } catch (InterruptedException ignored) {}
-            if (sinkActive.get()) {
-                // Sink-instrumented format: emit final 100% via
-                // PhaseProgress so the bar terminates cleanly.
-                phaseProgress.emitFinal();
-            } else {
-                // Bytes-fallback path: emit the final input-size
-                // bytes-done sample.
-                emitBytes(inputBytes);
-            }
+            // Emit a final 100% sample so the dialog always
+            // terminates at the full bar, regardless of whether
+            // the writer SDK fired its own terminal (T, T) sample.
+            phaseProgress.emitFinal();
         } finally {
-            done.set(true);
-            ticker.interrupt();
             updateMessage("Done.");
         }
         return null;
@@ -460,12 +418,6 @@ public final class ImportTask extends Task<Void> {
             List.of(),
             flags,
             sink);
-    }
-
-    private void emitBytes(long bytesDone) {
-        ProgressListener l = progressListener;
-        if (l == null || bytesTracker == null) return;
-        l.onProgress(bytesTracker.sample(bytesDone, 0L, System.currentTimeMillis()));
     }
 
     /** Visible for tests -- does the source path point at a real file? */
