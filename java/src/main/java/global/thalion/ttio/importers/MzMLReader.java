@@ -7,6 +7,7 @@ package global.thalion.ttio.importers;
 
 import global.thalion.ttio.*;
 import global.thalion.ttio.Enums.*;
+import global.thalion.ttio.io.ProgressSink;
 import org.xml.sax.*;
 import org.xml.sax.helpers.DefaultHandler;
 import javax.xml.parsers.SAXParser;
@@ -32,13 +33,20 @@ import java.util.zip.Inflater;
  */
 public class MzMLReader {
 
+    /** Default emit-every-N cadence for {@link ProgressSink} callbacks.
+     *  Spectra are heavier than reads (peaks + intensities + m/z arrays
+     *  per spectrum), so the cadence is intentionally coarser than
+     *  Stage B's 1000-reads to keep overhead negligible while still
+     *  giving visible updates on multi-thousand-spectrum files. */
+    public static final int PROGRESS_INTERVAL_SPECTRA = 100;
+
     /**
      * @throws MzMLParseException if the document is malformed.
      * @throws IOException if the file cannot be read.
      */
     public static AcquisitionRun read(String path)
             throws MzMLParseException, IOException {
-        return read(new File(path));
+        return read(new File(path), ProgressSink.discard());
     }
 
     /**
@@ -47,12 +55,38 @@ public class MzMLReader {
      */
     public static AcquisitionRun read(File file)
             throws MzMLParseException, IOException {
+        return read(file, ProgressSink.discard());
+    }
+
+    /** Overload of {@link #read(String)} that accepts a {@link ProgressSink}. */
+    public static AcquisitionRun read(String path, ProgressSink progress)
+            throws MzMLParseException, IOException {
+        return read(new File(path), progress);
+    }
+
+    /**
+     * Parse an mzML file, firing
+     * {@code progress.onProgress(spectraDone, -1L)} every
+     * {@link #PROGRESS_INTERVAL_SPECTRA} {@code <spectrum>} closing tags
+     * and a final {@code onProgress(total, total)} once the spectrum
+     * count is known. Total is reported as {@code -1L} mid-parse because
+     * mzML's {@code spectrumList count} attribute is not always present
+     * or trustworthy; the final fire stamps both {@code done} and
+     * {@code total} with the true count.
+     *
+     * @since 1.5.0
+     */
+    public static AcquisitionRun read(File file, ProgressSink progress)
+            throws MzMLParseException, IOException {
+        if (progress == null) progress = ProgressSink.discard();
         try {
             SAXParserFactory factory = SAXParserFactory.newInstance();
             factory.setNamespaceAware(true);
             SAXParser parser = factory.newSAXParser();
-            MzMLHandler handler = new MzMLHandler();
+            MzMLHandler handler = new MzMLHandler(progress);
             parser.parse(file, handler);
+            // Final fire — total is now known.
+            progress.onProgress(handler.spectraEmitted, handler.spectraEmitted);
             return handler.buildRun(file.getName().replaceFirst("\\.mzML$", ""));
         } catch (SAXException | javax.xml.parsers.ParserConfigurationException e) {
             throw new MzMLParseException(
@@ -101,6 +135,14 @@ public class MzMLReader {
     }
 
     private static class MzMLHandler extends DefaultHandler {
+        // Progress reporting
+        private final ProgressSink progress;
+        long spectraEmitted = 0L;
+
+        MzMLHandler(ProgressSink progress) {
+            this.progress = (progress != null) ? progress : ProgressSink.discard();
+        }
+
         // Spectrum accumulation
         private final List<double[]> mzArrays = new ArrayList<>();
         private final List<double[]> intensityArrays = new ArrayList<>();
@@ -352,6 +394,10 @@ public class MzMLReader {
                 case "spectrum" -> {
                     finishSpectrum();
                     inSpectrum = false;
+                    spectraEmitted++;
+                    if (spectraEmitted % PROGRESS_INTERVAL_SPECTRA == 0) {
+                        progress.onProgress(spectraEmitted, -1L);
+                    }
                 }
                 case "chromatogram" -> {
                     finishChromatogram();
