@@ -137,6 +137,8 @@ extern void testTransportRamanImage(void);
 extern void testTransportIRImage(void);
 extern void testTransportIdentificationsQuantifications(void);
 extern void testTransportWriteDatasetPrelude(void);
+extern void testSubjectSample(void);
+extern void testSpectralDatasetSubjectsSamples(void);
 extern void testAccessorMatrixConformance(void);
 extern void testCoverageGapWatchdog(void);
 
@@ -686,6 +688,14 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
             testTransportWriteDatasetPrelude();
         END_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
+
+        START_SET("Stage 6.4: TTIOSubject + TTIOSample validation + attributesJson byte parity")
+            testSubjectSample();
+        END_SET("Stage 6.4: TTIOSubject + TTIOSample validation + attributesJson byte parity")
+
+        START_SET("Stage 6.4: TTIOSpectralDataset subjects + samples HDF5 round-trip + soft-FK warning")
+            testSpectralDatasetSubjectsSamples();
+        END_SET("Stage 6.4: TTIOSpectralDataset subjects + samples HDF5 round-trip + soft-FK warning")
 
         START_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
             testAccessorMatrixConformance();

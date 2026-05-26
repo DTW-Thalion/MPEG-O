@@ -3883,7 +3883,249 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 #import "../Image/TTIOMSImage.h"
 #import "../Image/TTIORamanImage.h"
 #import "../Image/TTIOIRImage.h"
+#import "TTIOSubject.h"
+#import "TTIOSample.h"
+#import "../HDF5/TTIOHDF5File.h"
+#import "../HDF5/TTIOHDF5Group.h"
 #import <objc/runtime.h>
+
+// ─── Stage 6 (transport-spec v0.11, Deferral 2): Subjects + Samples ──
+//
+// /study/subjects/<external_id>/ and /study/samples/<sample_id>/ per-row
+// HDF5 group readers, mirroring Java SpectralDataset.readSubjects /
+// readSamples (commit dd39f4e6) and Python SpectralDataset.subjects /
+// samples (commit 721ad21c). Lazy + cached via objc_setAssociatedObject
+// in the same pattern as -msImage / -ramanImage / -irImage above.
+
+static NSDictionary<NSString *, NSString *> *
+TTIOParseAttributesJsonString(NSString *blob)
+{
+    if (blob == nil || blob.length == 0 || [blob isEqualToString:@"{}"]) {
+        return @{};
+    }
+    NSData *data = [blob dataUsingEncoding:NSUTF8StringEncoding];
+    if (data == nil) return @{};
+    NSError *err = nil;
+    id parsed = [NSJSONSerialization JSONObjectWithData:data
+                                                options:0
+                                                  error:&err];
+    if (![parsed isKindOfClass:[NSDictionary class]]) return @{};
+    NSMutableDictionary<NSString *, NSString *> *out =
+        [NSMutableDictionary dictionaryWithCapacity:[parsed count]];
+    for (id key in (NSDictionary *)parsed) {
+        if (![key isKindOfClass:[NSString class]]) continue;
+        id v = ((NSDictionary *)parsed)[key];
+        if ([v isKindOfClass:[NSString class]]) {
+            out[(NSString *)key] = (NSString *)v;
+        } else if (v != [NSNull null]) {
+            out[(NSString *)key] = [v description];
+        }
+    }
+    return [out copy];
+}
+
+static NSArray<TTIOSubject *> *
+TTIOReadSubjectsFromFile(NSString *path)
+{
+    if (path == nil) return @[];
+    NSError *err = nil;
+    TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+    if (f == nil) return @[];
+    TTIOHDF5Group *root = [f rootGroup];
+    TTIOHDF5Group *study = nil;
+    if ([root hasChildNamed:@"study"]) {
+        study = [root openGroupNamed:@"study" error:NULL];
+    }
+    if (study == nil || ![study hasChildNamed:@"subjects"]) {
+        [f close];
+        return @[];
+    }
+    TTIOHDF5Group *subjects = [study openGroupNamed:@"subjects" error:NULL];
+    if (subjects == nil) { [f close]; return @[]; }
+    NSMutableArray<TTIOSubject *> *out = [NSMutableArray array];
+    for (NSString *name in [subjects childNames]) {
+        TTIOHDF5Group *row = [subjects openGroupNamed:name error:NULL];
+        if (row == nil) continue;
+        NSString *externalId = name;
+        if ([row hasAttributeNamed:@"external_id"]) {
+            NSString *v = [row stringAttributeNamed:@"external_id" error:NULL];
+            if (v != nil) externalId = v;
+        }
+        NSString *project = @"";
+        if ([row hasAttributeNamed:@"project"]) {
+            NSString *v = [row stringAttributeNamed:@"project" error:NULL];
+            if (v != nil) project = v;
+        }
+        NSString *sex = @"";
+        if ([row hasAttributeNamed:@"sex"]) {
+            NSString *v = [row stringAttributeNamed:@"sex" error:NULL];
+            if (v != nil) sex = v;
+        }
+        int64_t birthYear = 0;
+        if ([row hasAttributeNamed:@"birth_year"]) {
+            BOOL exists = NO;
+            int64_t v = [row integerAttributeNamed:@"birth_year"
+                                            exists:&exists error:NULL];
+            if (exists) birthYear = v;
+        }
+        NSDictionary<NSString *, NSString *> *attrs = @{};
+        if ([row hasAttributeNamed:@"attributes_json"]) {
+            NSString *v = [row stringAttributeNamed:@"attributes_json" error:NULL];
+            attrs = TTIOParseAttributesJsonString(v);
+        }
+        @try {
+            TTIOSubject *s = [[TTIOSubject alloc]
+                initWithExternalId:externalId
+                            project:project
+                                sex:sex
+                          birthYear:birthYear
+                         attributes:attrs];
+            [out addObject:s];
+        } @catch (NSException *exc) {
+            // Skip rows that fail validation (e.g. empty externalId on
+            // a corrupted file) — readers MAY tolerate these per design
+            // spec §4.4 forward-compat note.
+            NSLog(@"TTIOSpectralDataset.subjects: skipping invalid row "
+                  @"'%@': %@", name, exc.reason);
+        }
+    }
+    [f close];
+    return [out copy];
+}
+
+static NSArray<TTIOSample *> *
+TTIOReadSamplesFromFile(NSString *path)
+{
+    if (path == nil) return @[];
+    NSError *err = nil;
+    TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+    if (f == nil) return @[];
+    TTIOHDF5Group *root = [f rootGroup];
+    TTIOHDF5Group *study = nil;
+    if ([root hasChildNamed:@"study"]) {
+        study = [root openGroupNamed:@"study" error:NULL];
+    }
+    if (study == nil || ![study hasChildNamed:@"samples"]) {
+        [f close];
+        return @[];
+    }
+    TTIOHDF5Group *samples = [study openGroupNamed:@"samples" error:NULL];
+    if (samples == nil) { [f close]; return @[]; }
+    NSMutableArray<TTIOSample *> *out = [NSMutableArray array];
+    for (NSString *name in [samples childNames]) {
+        TTIOHDF5Group *row = [samples openGroupNamed:name error:NULL];
+        if (row == nil) continue;
+        NSString *sampleId = name;
+        if ([row hasAttributeNamed:@"sample_id"]) {
+            NSString *v = [row stringAttributeNamed:@"sample_id" error:NULL];
+            if (v != nil) sampleId = v;
+        }
+        NSString *subjectExternalId = @"";
+        if ([row hasAttributeNamed:@"subject_external_id"]) {
+            NSString *v = [row stringAttributeNamed:@"subject_external_id" error:NULL];
+            if (v != nil) subjectExternalId = v;
+        }
+        NSString *sampleKind = @"";
+        if ([row hasAttributeNamed:@"sample_kind"]) {
+            NSString *v = [row stringAttributeNamed:@"sample_kind" error:NULL];
+            if (v != nil) sampleKind = v;
+        }
+        int64_t collectedAt = 0;
+        if ([row hasAttributeNamed:@"collected_at"]) {
+            BOOL exists = NO;
+            int64_t v = [row integerAttributeNamed:@"collected_at"
+                                            exists:&exists error:NULL];
+            if (exists) collectedAt = v;
+        }
+        NSDictionary<NSString *, NSString *> *attrs = @{};
+        if ([row hasAttributeNamed:@"attributes_json"]) {
+            NSString *v = [row stringAttributeNamed:@"attributes_json" error:NULL];
+            attrs = TTIOParseAttributesJsonString(v);
+        }
+        @try {
+            TTIOSample *s = [[TTIOSample alloc]
+                initWithSampleId:sampleId
+               subjectExternalId:subjectExternalId
+                      sampleKind:sampleKind
+                     collectedAt:collectedAt
+                      attributes:attrs];
+            [out addObject:s];
+        } @catch (NSException *exc) {
+            NSLog(@"TTIOSpectralDataset.samples: skipping invalid row "
+                  @"'%@': %@", name, exc.reason);
+        }
+    }
+    [f close];
+    return [out copy];
+}
+
+@implementation TTIOSpectralDataset (SubjectsSamples)
+
+- (NSArray<TTIOSubject *> *)subjects
+{
+    // Lazy + cached, mirroring -msImage / -ramanImage / -irImage above
+    // (Stage 5.2 commit 50ef8bc3).
+    static const void * const kSubjectsCacheKey = &kSubjectsCacheKey;
+    NSArray<TTIOSubject *> *cached =
+        objc_getAssociatedObject(self, kSubjectsCacheKey);
+    if (cached != nil) return cached;
+    NSArray<TTIOSubject *> *out = TTIOReadSubjectsFromFile([self filePath]);
+    if (out == nil) out = @[];
+    objc_setAssociatedObject(self, kSubjectsCacheKey, out,
+                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return out;
+}
+
+- (NSArray<TTIOSample *> *)samples
+{
+    static const void * const kSamplesCacheKey = &kSamplesCacheKey;
+    NSArray<TTIOSample *> *cached =
+        objc_getAssociatedObject(self, kSamplesCacheKey);
+    if (cached != nil) return cached;
+    NSArray<TTIOSample *> *out = TTIOReadSamplesFromFile([self filePath]);
+    if (out == nil) out = @[];
+    objc_setAssociatedObject(self, kSamplesCacheKey, out,
+                              OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return out;
+}
+
++ (void)validateSubjects:(NSArray<TTIOSubject *> *)subjects
+                  samples:(NSArray<TTIOSample *> *)samples
+{
+    // Design spec §4.4: duplicate IDs raise; soft-FK mismatch is a
+    // WARNING. Mirrors Java SpectralDataset.validateSubjectsAndSamples
+    // (commit dd39f4e6) and Python SpectralDataset._validate_stage6
+    // (commit 721ad21c).
+    NSMutableSet<NSString *> *seenSubjects = [NSMutableSet set];
+    for (TTIOSubject *s in subjects) {
+        if ([seenSubjects containsObject:s.externalId]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"duplicate Subject.externalId: %@",
+                                s.externalId];
+        }
+        [seenSubjects addObject:s.externalId];
+    }
+    NSMutableSet<NSString *> *seenSamples = [NSMutableSet set];
+    for (TTIOSample *s in samples) {
+        if ([seenSamples containsObject:s.sampleId]) {
+            [NSException raise:NSInvalidArgumentException
+                        format:@"duplicate Sample.sampleId: %@", s.sampleId];
+        }
+        [seenSamples addObject:s.sampleId];
+    }
+    for (TTIOSample *s in samples) {
+        NSString *fk = s.subjectExternalId;
+        if (fk == nil || fk.length == 0) continue;
+        if (![seenSubjects containsObject:fk]) {
+            NSLog(@"WARNING: Sample '%@' references unknown "
+                  @"Subject.externalId '%@' — soft-FK mismatch, "
+                  @"writing anyway (spec §4.4).",
+                  s.sampleId, fk);
+        }
+    }
+}
+
+@end
 
 @implementation TTIOSpectralDataset (Image)
 
