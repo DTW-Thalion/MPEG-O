@@ -113,12 +113,25 @@ public final class WorkbenchTransportClient {
      *  multi-MB payloads, prefer
      *  {@link #upload(String, String, Path, ResumeState, TransferProgress)}
      *  which streams from a file in {@code chunkSize}-bounded slices.</p>
+     *
+     *  @deprecated since 1.5.0. Prefer the streaming
+     *      {@link #upload(String, String, Path, ResumeState, TransferProgress)}
+     *      overload — peak heap = O({@code chunkSize}) instead of
+     *      O({@code payload.length}). The byte[] entry point remains
+     *      functional for in-memory test fixtures and small-payload
+     *      callers but is not recommended for new code.
      */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public UploadResult upload(String project, String containerUri, byte[] payload) {
         return upload(project, containerUri, payload, null, null);
     }
 
-    /** Upload with optional resume state. */
+    /** Upload with optional resume state.
+     *
+     *  @deprecated since 1.5.0. See
+     *      {@link #upload(String, String, byte[])}.
+     */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public UploadResult upload(String project, String containerUri,
                                  byte[] payload, ResumeState resume) {
         return upload(project, containerUri, payload, resume, null);
@@ -127,7 +140,12 @@ public final class WorkbenchTransportClient {
     /** Upload with optional resume state + a progress callback.
      *  {@code progress} (nullable) is invoked with
      *  {@code (bytesSent, payload.length)} as chunks are enqueued,
-     *  plus a final {@code (length, length)} once fully sent. */
+     *  plus a final {@code (length, length)} once fully sent.
+     *
+     *  @deprecated since 1.5.0. See
+     *      {@link #upload(String, String, byte[])}.
+     */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public UploadResult upload(String project, String containerUri,
                                  byte[] payload, ResumeState resume,
                                  TransferProgress progress) {

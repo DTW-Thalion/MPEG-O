@@ -160,6 +160,7 @@ class WorkbenchTransportClientStreamingUploadTest {
             "progress should have ticked all the way to the file size");
     }
 
+    @SuppressWarnings("deprecation") // exercises the legacy byte[] overload by design
     @Test
     void streamingUploadDeprecationCompatible_byteArrayPathStillWorks(
             @TempDir Path dir) throws Exception {

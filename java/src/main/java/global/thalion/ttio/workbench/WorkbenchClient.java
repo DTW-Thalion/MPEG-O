@@ -114,7 +114,14 @@ public final class WorkbenchClient implements AutoCloseable {
             .build();
     }
 
-    /** Convenience: one-shot upload via the transport client. */
+    /** Convenience: one-shot upload via the transport client.
+     *
+     *  @deprecated since 1.5.0. Prefer
+     *      {@link #upload(String, String, Path, TransferProgress)}
+     *      which streams from disk — peak heap O({@code chunkSize})
+     *      instead of O({@code payload.length}).
+     */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public WorkbenchTransportClient.UploadResult upload(
             String project, String containerUri, byte[] payload) {
         return transportClient().upload(project, containerUri, payload);
@@ -122,7 +129,12 @@ public final class WorkbenchClient implements AutoCloseable {
 
     /** Convenience: one-shot upload reporting byte progress.
      *  {@code progress} receives {@code (bytesSent, payload.length)}
-     *  per chunk — a determinate fraction. */
+     *  per chunk — a determinate fraction.
+     *
+     *  @deprecated since 1.5.0. See
+     *      {@link #upload(String, String, byte[])}.
+     */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public WorkbenchTransportClient.UploadResult upload(
             String project, String containerUri, byte[] payload,
             TransferProgress progress) {
