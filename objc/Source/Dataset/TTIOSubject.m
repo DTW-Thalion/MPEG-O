@@ -15,6 +15,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOSubject.h"
+#import "Core/TTIOPortability.h"
 
 @implementation TTIOSubject
 
@@ -52,7 +53,7 @@
     NSError *err = nil;
     NSData *data = [NSJSONSerialization
         dataWithJSONObject:_attributes
-                   options:NSJSONWritingSortedKeys
+                   options:TTIO_JSON_SORTED_KEYS
                      error:&err];
     if (data == nil) return @"{}";
     NSString *s = [[NSString alloc] initWithData:data
