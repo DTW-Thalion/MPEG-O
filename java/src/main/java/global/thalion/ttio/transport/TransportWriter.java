@@ -544,6 +544,141 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
     }
 
+    /**
+     * v0.11 Task 5.1 (Deferral 1): emit an {@link MSImage} as the
+     * packet sequence {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+     * (0x14) → END_OF_IMAGE (0x15)} in <b>processed mode</b>
+     * (sparse), where each pixel carries only its nonzero
+     * {@code (channel_index, intensity)} pairs indexed into the
+     * shared {@code mzAxis}. The dense cube is reconstructed by the
+     * reader.
+     *
+     * <p>Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+     * IMAGE_HEADER is identical to {@link #writeImage} except for
+     * {@code is_continuous = 0}; each IMAGE_PIXEL payload is</p>
+     * <pre>
+     *   x(u32) + y(u32) + precision(u8) + compression(u8)
+     *     + payload_length(u32)
+     *     + payload_bytes = nonzero_count(u32)
+     *         + nonzero_count × { channel_index(u32) + intensity(f64) }
+     * </pre>
+     *
+     * <p>Nonzero is defined strictly as {@code v != 0.0}; NaN is
+     * preserved (NaN compares unequal to 0.0, so it is emitted
+     * verbatim as a nonzero entry). The MSImage data model stays
+     * dense; processed mode is purely a wire optimisation for sparse
+     * cubes.</p>
+     *
+     * <p>This is an opt-in sibling of {@link #writeImage}. Callers
+     * pick continuous vs processed mode explicitly today; the
+     * automatic heuristic (emit whichever is smaller) lands in a
+     * follow-up task.</p>
+     */
+    public void writeImageProcessed(MSImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeImageProcessed: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.mzAxis();
+        int axisLength = axis != null ? axis.length : 0;
+        byte modality = 0;  // MS imaging
+        byte axisKind = 0;  // mz
+        byte isContinuous = 0;  // processed
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        byte[] titleBytes = (img.title() == null ? "" : img.title())
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] isaBytes = (img.isaInvestigationId() == null
+            ? "" : img.isaInvestigationId())
+            .getBytes(StandardCharsets.UTF_8);
+        if (titleBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: title " + titleBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        if (isaBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: isa_id " + isaBytes.length
+                + " bytes exceeds uint16 max");
+        }
+
+        // -- IMAGE_HEADER (0x13) — identical layout, is_continuous=0 ----
+        int hdrSize = 1                  // modality
+                    + 4                  // width
+                    + 4                  // height
+                    + 4                  // spectrum_bins
+                    + 8                  // pixel_size_x
+                    + 8                  // pixel_size_y
+                    + 1                  // scan_pattern
+                    + 1                  // axis_kind
+                    + 4                  // axis_length
+                    + 8 * axisLength     // axis values (still the shared axis)
+                    + 1                  // is_continuous
+                    + 2 + titleBytes.length
+                    + 2 + isaBytes.length;
+        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
+        hbuf.put(modality);
+        hbuf.putInt(width);
+        hbuf.putInt(height);
+        hbuf.putInt(bins);
+        hbuf.putDouble(img.pixelSizeX());
+        hbuf.putDouble(img.pixelSizeY());
+        hbuf.put(scanPatternByte);
+        hbuf.put(axisKind);
+        hbuf.putInt(axisLength);
+        for (int i = 0; i < axisLength; i++) hbuf.putDouble(axis[i]);
+        hbuf.put(isContinuous);
+        hbuf.putShort((short) (titleBytes.length & 0xFFFF));
+        hbuf.put(titleBytes);
+        hbuf.putShort((short) (isaBytes.length & 0xFFFF));
+        hbuf.put(isaBytes);
+        emit(PacketType.IMAGE_HEADER, hbuf.array(), 0, 0);
+
+        // -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
+        // We always emit FLOAT64 (precision=1) uncompressed
+        // (compression=0) intensities — mirrors writeImage above and
+        // keeps the wire round-trip byte-exact with the cube.
+        byte precision = 1;       // FLOAT64
+        byte compression = 0;     // NONE
+        long pixelIndex = 0;
+        double[] cube = img.intensityCube();
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int base = (y * width + x) * bins;
+                // First pass: count nonzeros (v != 0.0; NaN counts as
+                // nonzero because NaN != 0.0, preserving NaN on the wire).
+                int nonzero = 0;
+                for (int k = 0; k < bins; k++) {
+                    if (cube[base + k] != 0.0) nonzero++;
+                }
+                int payloadLen = 4 + nonzero * (4 + 8);
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                pbuf.putInt(nonzero);
+                for (int k = 0; k < bins; k++) {
+                    double v = cube[base + k];
+                    if (v != 0.0) {
+                        pbuf.putInt(k);
+                        pbuf.putDouble(v);
+                    }
+                }
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        // -- END_OF_IMAGE (0x15) -----------------------------------------
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
     /** Map the MSImage scan-pattern string to the wire byte per spec
      *  §4.16 ({@code 0=flyback, 1=meander, 2=random}). The on-disk
      *  format uses "raster" as the default name for the flyback
