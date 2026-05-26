@@ -37,6 +37,8 @@ from .providers.base import StorageGroup
 from .providers.hdf5 import Hdf5Provider
 from .provenance import ProvenanceRecord
 from .quantification import Quantification
+from .sample import Sample  # Stage 6 (transport-spec v0.11, Deferral 2)
+from .subject import Subject  # Stage 6 (transport-spec v0.11, Deferral 2)
 from .written_genomic_run import WrittenGenomicRun  # M82
 
 # M23 sentinel: returned by ``read_lock``/``write_lock`` when ``thread_safe``
@@ -123,6 +125,13 @@ class SpectralDataset:
     # Lazy ir_image cache — populated on first access of the `ir_image` property.
     _ir_image_cache_loaded: bool = field(default=False, repr=False)
     _ir_image_cache: "IRImage | None" = field(default=None, repr=False)
+    # Stage 6 (transport-spec v0.11, Deferral 2): lazy subject + sample
+    # caches. Populated on first access of the `subjects` / `samples`
+    # property by enumerating `/study/subjects/` / `/study/samples/`.
+    _subjects_cache_loaded: bool = field(default=False, repr=False)
+    _subjects_cache: list[Subject] = field(default_factory=list, repr=False)
+    _samples_cache_loaded: bool = field(default=False, repr=False)
+    _samples_cache: list[Sample] = field(default_factory=list, repr=False)
 
     # ------------------------------------------------------------- lifecycle
 
@@ -511,6 +520,40 @@ class SpectralDataset:
         return self._ir_image_cache
 
     @property
+    def subjects(self) -> list[Subject]:
+        """List of :class:`~ttio.subject.Subject` rows persisted under
+        ``/study/subjects/`` on this dataset, in on-disk iteration
+        order. Empty list when no Subjects were written (which is
+        most pre-Stage-6 files). Lazily populated on first access.
+
+        Stage 6 (transport-spec v0.11, Deferral 2). Mirrors Java
+        :meth:`global.thalion.ttio.SpectralDataset.subjects`.
+
+        :since: 1.4.0
+        """
+        if not self._subjects_cache_loaded:
+            self._subjects_cache_loaded = True
+            self._subjects_cache = _read_subjects(self.provider, self.file)
+        return self._subjects_cache
+
+    @property
+    def samples(self) -> list[Sample]:
+        """List of :class:`~ttio.sample.Sample` rows persisted under
+        ``/study/samples/`` on this dataset, in on-disk iteration
+        order. Empty list when no Samples were written. Lazily
+        populated on first access.
+
+        Stage 6 (transport-spec v0.11, Deferral 2). Mirrors Java
+        :meth:`global.thalion.ttio.SpectralDataset.samples`.
+
+        :since: 1.4.0
+        """
+        if not self._samples_cache_loaded:
+            self._samples_cache_loaded = True
+            self._samples_cache = _read_samples(self.provider, self.file)
+        return self._samples_cache
+
+    @property
     def all_runs(self) -> Mapping[str, AcquisitionRun]:
         """Union of MS and NMR runs, keyed by run name.
 
@@ -821,6 +864,8 @@ class SpectralDataset:
         image: "MSImage | None" = None,
         raman_image: "RamanImage | None" = None,
         ir_image: "IRImage | None" = None,
+        subjects: list[Subject] | None = None,
+        samples: list[Sample] | None = None,
     ) -> Path:
         """Write a minimal v1.1 ``.tio`` file from in-memory data.
 
@@ -836,6 +881,14 @@ class SpectralDataset:
             owns its lifecycle in that case.
         """
         p = Path(path)
+        # Stage 6 (transport-spec v0.11, Deferral 2): validate
+        # Subject + Sample lists upfront so the writer fails fast on
+        # duplicate IDs before any backend mutation. Soft-FK warnings
+        # are emitted by the same call.
+        subjects_list = list(subjects) if subjects else []
+        samples_list = list(samples) if samples else []
+        if subjects_list or samples_list:
+            _validate_subjects_and_samples(subjects_list, samples_list)
         feature_list = features or [
             "base_v1",
             "compound_identifications",
@@ -929,6 +982,14 @@ class SpectralDataset:
                         raman_image.write_to(_Hdf5Group(study))
                     if ir_image is not None:
                         ir_image.write_to(_Hdf5Group(study))
+                # Stage 6 (transport-spec v0.11, Deferral 2): per-row
+                # subject + sample groups at /study/subjects/<external_id>/
+                # and /study/samples/<sample_id>/. Validation already ran
+                # upstream (duplicate-ID raise + soft-FK WARNING).
+                if subjects_list:
+                    _write_subjects_h5(study, subjects_list)
+                if samples_list:
+                    _write_samples_h5(study, samples_list)
             return p
 
         # Provider-driven write path — Memory / SQLite / Zarr / future.
@@ -980,6 +1041,12 @@ class SpectralDataset:
                 raman_image.write_to(study)   # study is already a StorageGroup here
             if ir_image is not None:
                 ir_image.write_to(study)   # study is already a StorageGroup here
+            # Stage 6 (transport-spec v0.11, Deferral 2): provider-path
+            # mirror of the HDF5 fast path.
+            if subjects_list:
+                _write_subjects_provider(study, subjects_list)
+            if samples_list:
+                _write_samples_provider(study, samples_list)
         finally:
             if owns_provider:
                 sp.close()
@@ -2326,3 +2393,292 @@ def _decode_provenance_json(blob: str) -> list[ProvenanceRecord]:
             output_refs=[str(x) for x in r.get("output_refs", [])],
         ))
     return out
+
+
+# ── Stage 6 (transport-spec v0.11, Deferral 2): Subjects + Samples ──
+# Per design spec docs/superpowers/specs/2026-05-26-subjects-samples-design.md
+# §4.4 (validation), §5 (HDF5 layout). Mirrors Java's
+# SpectralDataset.{validateSubjectsAndSamples, writeSubjects, writeSamples,
+# readSubjects, readSamples} from commit dd39f4e6.
+
+import logging  # noqa: E402
+
+_STAGE6_LOG = logging.getLogger(__name__)
+
+
+def _validate_subjects_and_samples(
+    subjects: list[Subject], samples: list[Sample]
+) -> None:
+    """Pre-write validation per spec §4.4:
+    duplicate ``Subject.external_id`` or ``Sample.sample_id`` raises
+    :class:`ValueError`; soft-FK mismatch (``Sample.subject_external_id``
+    not found in Subject list) logs WARNING but does not fail."""
+    seen_subjects: set[str] = set()
+    for s in subjects:
+        if s.external_id in seen_subjects:
+            raise ValueError(
+                f"duplicate Subject.external_id: {s.external_id}"
+            )
+        seen_subjects.add(s.external_id)
+    seen_samples: set[str] = set()
+    for s in samples:
+        if s.sample_id in seen_samples:
+            raise ValueError(
+                f"duplicate Sample.sample_id: {s.sample_id}"
+            )
+        seen_samples.add(s.sample_id)
+    for s in samples:
+        fk = s.subject_external_id
+        if not fk:
+            continue
+        if fk not in seen_subjects:
+            _STAGE6_LOG.warning(
+                "Sample %r references unknown Subject.external_id %r "
+                "— soft-FK mismatch, writing anyway (spec §4.4).",
+                s.sample_id, fk,
+            )
+
+
+def _write_subjects_h5(study: h5py.Group, subjects: list[Subject]) -> None:
+    """HDF5 fast path: write ``/study/subjects/<external_id>/`` per-row
+    groups with typed attributes. Mirrors Java's
+    :meth:`SpectralDataset.writeSubjects`."""
+    if not subjects:
+        return
+    from ttio.providers.hdf5 import _Group as _Hdf5Group
+    subjects_group = study.create_group("subjects")
+    for s in subjects:
+        row_native = subjects_group.create_group(s.external_id)
+        row = _Hdf5Group(row_native)
+        # external_id (str) — always written.
+        io.write_fixed_string_attr(row, "external_id", s.external_id)
+        # optional strings — only emit when non-empty (Java parity).
+        if s.project:
+            io.write_fixed_string_attr(row, "project", s.project)
+        if s.sex:
+            io.write_fixed_string_attr(row, "sex", s.sex)
+        # birth_year (int64) — always written; sentinel 0 means unknown.
+        io.write_int_attr(row, "birth_year", int(s.birth_year))
+        # attributes_json — always written; "{}" when empty.
+        io.write_fixed_string_attr(row, "attributes_json", s.attributes_json())
+
+
+def _write_samples_h5(study: h5py.Group, samples: list[Sample]) -> None:
+    """HDF5 fast path: write ``/study/samples/<sample_id>/`` per-row
+    groups with typed attributes. Mirrors Java's
+    :meth:`SpectralDataset.writeSamples`."""
+    if not samples:
+        return
+    from ttio.providers.hdf5 import _Group as _Hdf5Group
+    samples_group = study.create_group("samples")
+    for s in samples:
+        row_native = samples_group.create_group(s.sample_id)
+        row = _Hdf5Group(row_native)
+        io.write_fixed_string_attr(row, "sample_id", s.sample_id)
+        if s.subject_external_id:
+            io.write_fixed_string_attr(
+                row, "subject_external_id", s.subject_external_id
+            )
+        if s.sample_kind:
+            io.write_fixed_string_attr(row, "sample_kind", s.sample_kind)
+        io.write_int_attr(row, "collected_at", int(s.collected_at))
+        io.write_fixed_string_attr(row, "attributes_json", s.attributes_json())
+
+
+def _write_subjects_provider(
+    study: StorageGroup, subjects: list[Subject]
+) -> None:
+    """Provider-agnostic mirror of :func:`_write_subjects_h5`."""
+    if not subjects:
+        return
+    subjects_group = study.create_group("subjects")
+    for s in subjects:
+        row = subjects_group.create_group(s.external_id)
+        row.set_attribute("external_id", s.external_id)
+        if s.project:
+            row.set_attribute("project", s.project)
+        if s.sex:
+            row.set_attribute("sex", s.sex)
+        row.set_attribute("birth_year", int(s.birth_year))
+        row.set_attribute("attributes_json", s.attributes_json())
+
+
+def _write_samples_provider(
+    study: StorageGroup, samples: list[Sample]
+) -> None:
+    """Provider-agnostic mirror of :func:`_write_samples_h5`."""
+    if not samples:
+        return
+    samples_group = study.create_group("samples")
+    for s in samples:
+        row = samples_group.create_group(s.sample_id)
+        row.set_attribute("sample_id", s.sample_id)
+        if s.subject_external_id:
+            row.set_attribute("subject_external_id", s.subject_external_id)
+        if s.sample_kind:
+            row.set_attribute("sample_kind", s.sample_kind)
+        row.set_attribute("collected_at", int(s.collected_at))
+        row.set_attribute("attributes_json", s.attributes_json())
+
+
+def _parse_attributes_json(blob: str | None) -> dict[str, str]:
+    """Parse ``attributes_json`` back into a ``dict[str, str]``.
+    Mirrors Java's ``MiniJson.parseStringMap`` semantics for the
+    Subject + Sample case (``{}`` and the empty string both decode to
+    an empty dict)."""
+    if not blob or blob == "{}":
+        return {}
+    try:
+        parsed = json.loads(blob)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(parsed, dict):
+        return {}
+    return {str(k): str(v) for k, v in parsed.items()}
+
+
+def _read_subjects(
+    provider: StorageProvider | None, file: h5py.File | None
+) -> list[Subject]:
+    """Stage 6: enumerate ``/study/subjects/`` children and decode each
+    per-row group into a :class:`Subject`. Empty list when the group
+    is absent (pre-Stage-6 files)."""
+    out: list[Subject] = []
+    # Fast path: native h5py.
+    if file is not None:
+        if "study" not in file:
+            return out
+        study = file["study"]
+        if "subjects" not in study:
+            return out
+        from ttio.providers.hdf5 import _Group as _Hdf5Group
+        subjects_group = study["subjects"]
+        for name in subjects_group.keys():
+            row_native = subjects_group[name]
+            row = _Hdf5Group(row_native)
+            external_id = io.read_string_attr(row, "external_id", default=name) or name
+            project = io.read_string_attr(row, "project", default="") or ""
+            sex = io.read_string_attr(row, "sex", default="") or ""
+            birth_year = io.read_int_attr(row, "birth_year", default=0) or 0
+            attrs_json = io.read_string_attr(row, "attributes_json", default="{}") or "{}"
+            out.append(Subject(
+                external_id=external_id,
+                project=project,
+                sex=sex,
+                birth_year=int(birth_year),
+                attributes=_parse_attributes_json(attrs_json),
+            ))
+        return out
+    # Provider path.
+    if provider is None:
+        return out
+    root = provider.root_group()
+    if not root.has_child("study"):
+        return out
+    study = root.open_group("study")
+    if not study.has_child("subjects"):
+        return out
+    subjects_group = study.open_group("subjects")
+    for name in subjects_group.child_names():
+        row = subjects_group.open_group(name)
+        external_id = _read_string_attr_or_default(row, "external_id", name)
+        project = _read_string_attr_or_default(row, "project", "")
+        sex = _read_string_attr_or_default(row, "sex", "")
+        birth_year = _read_long_attr_or_default(row, "birth_year", 0)
+        attrs_json = _read_string_attr_or_default(row, "attributes_json", "{}")
+        out.append(Subject(
+            external_id=external_id,
+            project=project,
+            sex=sex,
+            birth_year=int(birth_year),
+            attributes=_parse_attributes_json(attrs_json),
+        ))
+    return out
+
+
+def _read_samples(
+    provider: StorageProvider | None, file: h5py.File | None
+) -> list[Sample]:
+    """Stage 6: enumerate ``/study/samples/`` children and decode each
+    per-row group into a :class:`Sample`. Empty list when the group
+    is absent (pre-Stage-6 files)."""
+    out: list[Sample] = []
+    if file is not None:
+        if "study" not in file:
+            return out
+        study = file["study"]
+        if "samples" not in study:
+            return out
+        from ttio.providers.hdf5 import _Group as _Hdf5Group
+        samples_group = study["samples"]
+        for name in samples_group.keys():
+            row_native = samples_group[name]
+            row = _Hdf5Group(row_native)
+            sample_id = io.read_string_attr(row, "sample_id", default=name) or name
+            subject_external_id = io.read_string_attr(
+                row, "subject_external_id", default=""
+            ) or ""
+            sample_kind = io.read_string_attr(row, "sample_kind", default="") or ""
+            collected_at = io.read_int_attr(row, "collected_at", default=0) or 0
+            attrs_json = io.read_string_attr(row, "attributes_json", default="{}") or "{}"
+            out.append(Sample(
+                sample_id=sample_id,
+                subject_external_id=subject_external_id,
+                sample_kind=sample_kind,
+                collected_at=int(collected_at),
+                attributes=_parse_attributes_json(attrs_json),
+            ))
+        return out
+    if provider is None:
+        return out
+    root = provider.root_group()
+    if not root.has_child("study"):
+        return out
+    study = root.open_group("study")
+    if not study.has_child("samples"):
+        return out
+    samples_group = study.open_group("samples")
+    for name in samples_group.child_names():
+        row = samples_group.open_group(name)
+        sample_id = _read_string_attr_or_default(row, "sample_id", name)
+        subject_external_id = _read_string_attr_or_default(
+            row, "subject_external_id", ""
+        )
+        sample_kind = _read_string_attr_or_default(row, "sample_kind", "")
+        collected_at = _read_long_attr_or_default(row, "collected_at", 0)
+        attrs_json = _read_string_attr_or_default(row, "attributes_json", "{}")
+        out.append(Sample(
+            sample_id=sample_id,
+            subject_external_id=subject_external_id,
+            sample_kind=sample_kind,
+            collected_at=int(collected_at),
+            attributes=_parse_attributes_json(attrs_json),
+        ))
+    return out
+
+
+def _read_string_attr_or_default(
+    group: StorageGroup, name: str, fallback: str
+) -> str:
+    if not group.has_attribute(name):
+        return fallback
+    v = group.get_attribute(name)
+    if v is None:
+        return fallback
+    if isinstance(v, bytes):
+        return v.decode("utf-8")
+    return str(v)
+
+
+def _read_long_attr_or_default(
+    group: StorageGroup, name: str, fallback: int
+) -> int:
+    if not group.has_attribute(name):
+        return fallback
+    v = group.get_attribute(name)
+    if v is None:
+        return fallback
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return fallback
