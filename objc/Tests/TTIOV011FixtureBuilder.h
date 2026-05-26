@@ -76,7 +76,9 @@ NS_ASSUME_NONNULL_BEGIN
 /** Everything: every populated accessor at once. 1 reference (3
  *  contigs), 3x3x4 MSImage, 2 ids, 2 quants, 2 provenance,
  *  @encrypted = "aes-256-gcm", 1 MS run (5 spectra of 4 m/z), 1
- *  genomic run (4 short reads). Used by TestCoverageGapWatchdog. */
+ *  genomic run (4 short reads), Task 6.6: 2 TTIOSubject + 3
+ *  TTIOSample rows exercising every spec §8 cross-cardinality case.
+ *  Used by TestCoverageGapWatchdog. */
 + (BOOL)buildEverythingAtPath:(NSString *)path
                           error:(NSError * _Nullable * _Nullable)error;
 
@@ -104,6 +106,26 @@ NS_ASSUME_NONNULL_BEGIN
  *  scan = "raster", pixel size = 10.0 x 10.0. Matches the Java +
  *  Python siblings byte-for-byte. */
 + (BOOL)buildIrImageOnlyAtPath:(NSString *)path
+                           error:(NSError * _Nullable * _Nullable)error;
+
+#pragma mark - Stage 6 (Task 6.6) fixtures (Deferral 2)
+
+/** Subjects only: 2 TTIOSubject rows persisted as per-row HDF5
+ *  groups under /study/subjects/. Row 0: SUBJ-A (minimal — external_id
+ *  only, all optionals at unset sentinel). Row 1: SUBJ-B (fully
+ *  populated — project=PROJ_A, sex=F, birth_year=1985, multi-key
+ *  attributes map). Matches the Java + Python siblings byte-for-byte
+ *  on the JSON attributes (sort-keys order). */
++ (BOOL)buildSubjectsOnlyAtPath:(NSString *)path
+                            error:(NSError * _Nullable * _Nullable)error;
+
+/** Samples only: 3 TTIOSample rows persisted as per-row HDF5
+ *  groups under /study/samples/. Row 0: SMPL-1 (minimal). Row 1:
+ *  SMPL-2 (subject_external_id=SUBJ-MISSING — soft-FK miss; per
+ *  spec §4.4 this is allowed and only logs a WARNING). Row 2:
+ *  SMPL-3 (fully populated, multi-key attributes). Matches the
+ *  Java + Python siblings. */
++ (BOOL)buildSamplesOnlyAtPath:(NSString *)path
                            error:(NSError * _Nullable * _Nullable)error;
 
 @end
