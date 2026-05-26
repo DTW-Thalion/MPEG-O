@@ -17,7 +17,9 @@
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Image/TTIOIRImage.h"
 #import "Image/TTIOMSImage.h"
+#import "Image/TTIORamanImage.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "Providers/TTIOHDF5Provider.h"
@@ -677,6 +679,87 @@ static TTIOSpectralDataset *fb_makeWritableStub(NSString *path,
     }
 
     return YES;
+}
+
+// ─────────── Stage 5 / Task 5.6 fixtures (Deferral 1) ──────────────
+
++ (BOOL)buildImageMsProcessedOnlyAtPath:(NSString *)path
+                                    error:(NSError **)error
+{
+    // Same fixture shape as +buildImageMsContinuousAtPath: — the
+    // encode-side override is the only knob that varies between
+    // MS_IMAGE and MS_IMAGE_PROCESSED.
+    return [self buildImageMsContinuousAtPath:path error:error];
+}
+
++ (BOOL)buildRamanImageOnlyAtPath:(NSString *)path
+                              error:(NSError **)error
+{
+    unlink([path fileSystemRepresentation]);
+    const NSUInteger w = 3, h = 3, s = 5;
+    NSMutableData *cube = [NSMutableData dataWithLength:w * h * s * sizeof(double)];
+    double *p = (double *)cube.mutableBytes;
+    for (NSUInteger i = 0; i < w * h * s; i++) {
+        p[i] = (double)i * 0.5;
+    }
+    NSMutableData *wn = [NSMutableData dataWithLength:s * sizeof(double)];
+    double *wnp = (double *)wn.mutableBytes;
+    double wnVals[5] = {1000.0, 1100.0, 1200.0, 1300.0, 1400.0};
+    memcpy(wnp, wnVals, sizeof(wnVals));
+
+    TTIORamanImage *img = [[TTIORamanImage alloc]
+                            initWithTitle:@"raman_image_only"
+                       isaInvestigationId:@""
+                          identifications:@[]
+                          quantifications:@[]
+                        provenanceRecords:@[]
+                                    width:w
+                                   height:h
+                           spectralPoints:s
+                                 tileSize:32
+                               pixelSizeX:10.0
+                               pixelSizeY:10.0
+                              scanPattern:@"raster"
+                   excitationWavelengthNm:785.0
+                             laserPowerMw:50.0
+                                     cube:cube
+                              wavenumbers:wn];
+    return [img writeToFilePath:path error:error];
+}
+
++ (BOOL)buildIrImageOnlyAtPath:(NSString *)path
+                           error:(NSError **)error
+{
+    unlink([path fileSystemRepresentation]);
+    const NSUInteger w = 3, h = 3, s = 5;
+    NSMutableData *cube = [NSMutableData dataWithLength:w * h * s * sizeof(double)];
+    double *p = (double *)cube.mutableBytes;
+    for (NSUInteger i = 0; i < w * h * s; i++) {
+        p[i] = (double)i * 0.5;
+    }
+    NSMutableData *wn = [NSMutableData dataWithLength:s * sizeof(double)];
+    double *wnp = (double *)wn.mutableBytes;
+    double wnVals[5] = {1000.0, 1100.0, 1200.0, 1300.0, 1400.0};
+    memcpy(wnp, wnVals, sizeof(wnVals));
+
+    TTIOIRImage *img = [[TTIOIRImage alloc]
+                          initWithTitle:@"ir_image_only"
+                     isaInvestigationId:@""
+                        identifications:@[]
+                        quantifications:@[]
+                      provenanceRecords:@[]
+                                  width:w
+                                 height:h
+                         spectralPoints:s
+                               tileSize:32
+                             pixelSizeX:10.0
+                             pixelSizeY:10.0
+                            scanPattern:@"raster"
+                                   mode:TTIOIRModeAbsorbance
+                        resolutionCmInv:4.0
+                                   cube:cube
+                            wavenumbers:wn];
+    return [img writeToFilePath:path error:error];
 }
 
 @end

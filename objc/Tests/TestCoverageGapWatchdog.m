@@ -127,8 +127,19 @@ static void testEverythingFixtureRoundTripsEveryAccessor(void)
     PASS(a != nil && b != nil,
          "3.10 cgw rt: both ends re-open");
 
+    // Stage 5 (Task 5.6) accessors are intentionally not populated by
+    // +buildEverythingAtPath: MS_IMAGE_PROCESSED is a wire-mode
+    // override of the same MSImage already covered by IMAGE;
+    // RAMAN_IMAGE / IR_IMAGE are first-class siblings of MSImage on
+    // TTIOSpectralDataset that the v0.11 everything fixture does not
+    // yet include. The per-accessor conformance suite still exercises
+    // all three.
+    NSSet<NSString *> *stage5Skip = [NSSet setWithArray:@[
+        @"MS_IMAGE_PROCESSED", @"RAMAN_IMAGE", @"IR_IMAGE",
+    ]];
     NSArray<TTIOAccessorSpec *> *specs = TTIOAccessorSpecsAll();
     for (TTIOAccessorSpec *spec in specs) {
+        if ([stage5Skip containsObject:spec.name]) continue;
         NSString *mismatch = nil;
         NS_DURING
             mismatch = spec.assertEqual(a, b);

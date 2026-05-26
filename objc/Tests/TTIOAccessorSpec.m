@@ -19,10 +19,15 @@
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOGenomicRun.h"
+#import "Image/TTIOIRImage.h"
 #import "Image/TTIOMSImage.h"
+#import "Image/TTIORamanImage.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Spectra/TTIOSpectrum.h"
 #import "Core/TTIOSignalArray.h"
+#import "Transport/TTIOTransportWriter.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "ValueClasses/TTIOEnums.h"
 
 // ────────────────────────── TTIOAccessorSpec ───────────────────────
 
@@ -31,10 +36,22 @@
                         build:(TTIOAccessorBuildBlock)build
                   assertEqual:(TTIOAccessorAssertBlock)assertEqual
 {
+    return [self initWithName:name
+                         build:build
+                   assertEqual:assertEqual
+                   encodeBlock:nil];
+}
+
+- (instancetype)initWithName:(NSString *)name
+                        build:(TTIOAccessorBuildBlock)build
+                  assertEqual:(TTIOAccessorAssertBlock)assertEqual
+                  encodeBlock:(TTIOAccessorEncodeBlock)encodeBlock
+{
     if ((self = [super init])) {
         _name = [name copy];
         _build = [build copy];
         _assertEqual = [assertEqual copy];
+        _encodeBlock = [encodeBlock copy];
     }
     return self;
 }
@@ -377,6 +394,108 @@ static NSString *spec_encryptionEqual(TTIOSpectralDataset *a,
     return nil;
 }
 
+// ─────── Stage 5 / Task 5.6 comparators (Deferral 1) ──────────────
+
+static NSString *spec_ramanImageEqual(TTIOSpectralDataset *a,
+                                        TTIOSpectralDataset *b)
+{
+    TTIORamanImage *ra = a.ramanImage;
+    TTIORamanImage *rb = b.ramanImage;
+    if (ra == nil || rb == nil) {
+        return [NSString stringWithFormat:
+            @"RamanImage missing on at least one side: a=%p, b=%p",
+            (void *)ra, (void *)rb];
+    }
+    if (ra.width != rb.width
+        || ra.height != rb.height
+        || ra.spectralPoints != rb.spectralPoints) {
+        return [NSString stringWithFormat:
+            @"raman shape mismatch: %lux%lux%lu vs %lux%lux%lu",
+            (unsigned long)ra.width, (unsigned long)ra.height,
+            (unsigned long)ra.spectralPoints,
+            (unsigned long)rb.width, (unsigned long)rb.height,
+            (unsigned long)rb.spectralPoints];
+    }
+    if (fabs(ra.excitationWavelengthNm - rb.excitationWavelengthNm) > 1e-9) {
+        return [NSString stringWithFormat:
+            @"excitationWavelengthNm mismatch: %f vs %f",
+            ra.excitationWavelengthNm, rb.excitationWavelengthNm];
+    }
+    if (fabs(ra.laserPowerMw - rb.laserPowerMw) > 1e-9) {
+        return [NSString stringWithFormat:
+            @"laserPowerMw mismatch: %f vs %f",
+            ra.laserPowerMw, rb.laserPowerMw];
+    }
+    NSString *spA = ra.scanPattern ?: @"";
+    NSString *spB = rb.scanPattern ?: @"";
+    if (![spA isEqualToString:spB]) {
+        return [NSString stringWithFormat:
+            @"raman scanPattern mismatch: '%@' vs '%@'", spA, spB];
+    }
+    if (![ra.wavenumbers isEqualToData:rb.wavenumbers]) {
+        return [NSString stringWithFormat:
+            @"raman wavenumbers byte mismatch (lens %lu vs %lu)",
+            (unsigned long)ra.wavenumbers.length,
+            (unsigned long)rb.wavenumbers.length];
+    }
+    if (![ra.cube isEqualToData:rb.cube]) {
+        return [NSString stringWithFormat:
+            @"raman intensity-cube byte mismatch (lens %lu vs %lu)",
+            (unsigned long)ra.cube.length, (unsigned long)rb.cube.length];
+    }
+    return nil;
+}
+
+static NSString *spec_irImageEqual(TTIOSpectralDataset *a,
+                                     TTIOSpectralDataset *b)
+{
+    TTIOIRImage *ia = a.irImage;
+    TTIOIRImage *ib = b.irImage;
+    if (ia == nil || ib == nil) {
+        return [NSString stringWithFormat:
+            @"IRImage missing on at least one side: a=%p, b=%p",
+            (void *)ia, (void *)ib];
+    }
+    if (ia.width != ib.width
+        || ia.height != ib.height
+        || ia.spectralPoints != ib.spectralPoints) {
+        return [NSString stringWithFormat:
+            @"ir shape mismatch: %lux%lux%lu vs %lux%lux%lu",
+            (unsigned long)ia.width, (unsigned long)ia.height,
+            (unsigned long)ia.spectralPoints,
+            (unsigned long)ib.width, (unsigned long)ib.height,
+            (unsigned long)ib.spectralPoints];
+    }
+    if (ia.mode != ib.mode) {
+        return [NSString stringWithFormat:
+            @"ir mode mismatch: %lu vs %lu",
+            (unsigned long)ia.mode, (unsigned long)ib.mode];
+    }
+    if (fabs(ia.resolutionCmInv - ib.resolutionCmInv) > 1e-9) {
+        return [NSString stringWithFormat:
+            @"ir resolutionCmInv mismatch: %f vs %f",
+            ia.resolutionCmInv, ib.resolutionCmInv];
+    }
+    NSString *spA = ia.scanPattern ?: @"";
+    NSString *spB = ib.scanPattern ?: @"";
+    if (![spA isEqualToString:spB]) {
+        return [NSString stringWithFormat:
+            @"ir scanPattern mismatch: '%@' vs '%@'", spA, spB];
+    }
+    if (![ia.wavenumbers isEqualToData:ib.wavenumbers]) {
+        return [NSString stringWithFormat:
+            @"ir wavenumbers byte mismatch (lens %lu vs %lu)",
+            (unsigned long)ia.wavenumbers.length,
+            (unsigned long)ib.wavenumbers.length];
+    }
+    if (![ia.cube isEqualToData:ib.cube]) {
+        return [NSString stringWithFormat:
+            @"ir intensity-cube byte mismatch (lens %lu vs %lu)",
+            (unsigned long)ia.cube.length, (unsigned long)ib.cube.length];
+    }
+    return nil;
+}
+
 // ────────────────────────── spec list ───────────────────────────────
 
 static NSArray<TTIOAccessorSpec *> *_ttioAccessorSpecsList = nil;
@@ -468,6 +587,71 @@ static void _ttioAccessorSpecsInit(void)
                  assertEqual:^NSString *(TTIOSpectralDataset *a,
                                           TTIOSpectralDataset *b) {
                      return spec_encryptionEqual(a, b);
+                 }],
+            // Stage 5 / Task 5.6 (Deferral 1) — MS_IMAGE_PROCESSED reuses
+            // the IMAGE fixture and comparator; the encodeBlock swaps the
+            // continuous-mode -writeImage: for sparse -writeImageProcessed:.
+            [[TTIOAccessorSpec alloc]
+                initWithName:@"MS_IMAGE_PROCESSED"
+                       build:^BOOL(NSString *path, NSError **error) {
+                           return [TTIOV011FixtureBuilder
+                               buildImageMsProcessedOnlyAtPath:path
+                                                          error:error];
+                       }
+                 assertEqual:^NSString *(TTIOSpectralDataset *a,
+                                          TTIOSpectralDataset *b) {
+                     // Processed mode is strictly a wire-shape change;
+                     // reuse the IMAGE comparator verbatim.
+                     return spec_imageEqual(a, b);
+                 }
+                 encodeBlock:^BOOL(TTIOSpectralDataset *source,
+                                    NSString *outputPath,
+                                    NSError **error) {
+                     // §5.4 prelude mimic with writeImageProcessed in
+                     // place of writeImage. The fixture carries only an
+                     // MSImage so the prelude collapses to header +
+                     // image + EOS.
+                     TTIOTransportWriter *w = [[TTIOTransportWriter alloc]
+                         initWithOutputPath:outputPath];
+                     if (w == nil) {
+                         if (error) *error = [NSError errorWithDomain:
+                             @"TTIOAccessorSpec" code:1 userInfo:
+                             @{NSLocalizedDescriptionKey:
+                               @"open writer failed"}];
+                         return NO;
+                     }
+                     BOOL ok = [w writeStreamHeaderWithFormatVersion:@"1.2"
+                                                                title:(source.title ?: @"")
+                                                     isaInvestigation:(source.isaInvestigationId ?: @"")
+                                                             features:@[TTIOTransportV011Feature]
+                                                            nDatasets:0
+                                                                error:error];
+                     if (!ok) { [w close]; return NO; }
+                     ok = [w writeImageProcessed:source.msImage error:error];
+                     if (!ok) { [w close]; return NO; }
+                     ok = [w writeEndOfStreamWithError:error];
+                     [w close];
+                     return ok;
+                 }],
+            [[TTIOAccessorSpec alloc]
+                initWithName:@"RAMAN_IMAGE"
+                       build:^BOOL(NSString *path, NSError **error) {
+                           return [TTIOV011FixtureBuilder
+                               buildRamanImageOnlyAtPath:path error:error];
+                       }
+                 assertEqual:^NSString *(TTIOSpectralDataset *a,
+                                          TTIOSpectralDataset *b) {
+                     return spec_ramanImageEqual(a, b);
+                 }],
+            [[TTIOAccessorSpec alloc]
+                initWithName:@"IR_IMAGE"
+                       build:^BOOL(NSString *path, NSError **error) {
+                           return [TTIOV011FixtureBuilder
+                               buildIrImageOnlyAtPath:path error:error];
+                       }
+                 assertEqual:^NSString *(TTIOSpectralDataset *a,
+                                          TTIOSpectralDataset *b) {
+                     return spec_irImageEqual(a, b);
                  }],
     ] retain];
 }

@@ -60,15 +60,23 @@ static void runOneAccessor(TTIOAccessorSpec *spec)
         return;
     }
 
-    // .tio -> .tis
+    // .tio -> .tis. Most accessors hand off to -writeDataset:; the
+    // MS_IMAGE_PROCESSED entry overrides via the optional encodeBlock
+    // (Task 5.6) to emit the §5.4 prelude with -writeImageProcessed:
+    // swapped in for -writeImage:.
     TTIOSpectralDataset *source =
         [TTIOSpectralDataset readFromFilePath:src error:&err];
     PASS((source != nil), "%s", amcLabel(spec.name, @"source dataset opens"));
 
-    TTIOTransportWriter *w =
-        [[TTIOTransportWriter alloc] initWithOutputPath:tis];
-    BOOL wrote = [w writeDataset:source error:&err];
-    [w close];
+    BOOL wrote;
+    if (spec.encodeBlock != nil) {
+        wrote = spec.encodeBlock(source, tis, &err);
+    } else {
+        TTIOTransportWriter *w =
+            [[TTIOTransportWriter alloc] initWithOutputPath:tis];
+        wrote = [w writeDataset:source error:&err];
+        [w close];
+    }
     PASS((wrote && err == nil), "%s",
          amcLabel(spec.name, @"writeDataset emitted .tis"));
 

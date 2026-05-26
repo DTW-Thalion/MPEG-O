@@ -80,6 +80,32 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)buildEverythingAtPath:(NSString *)path
                           error:(NSError * _Nullable * _Nullable)error;
 
+#pragma mark - Stage 5 (Task 5.6) fixtures
+
+/** MS image — processed/sparse wire mode. The on-disk .tio is
+ *  identical to +buildImageMsContinuousAtPath: — only the encode
+ *  step differs (the MS_IMAGE_PROCESSED accessor's `encodeBlock`
+ *  emits the MS image block via -writeImageProcessed: instead of
+ *  -writeImage:). */
++ (BOOL)buildImageMsProcessedOnlyAtPath:(NSString *)path
+                                    error:(NSError * _Nullable * _Nullable)error;
+
+/** Raman image only: 3x3x5 cube, intensity[i] = i*0.5,
+ *  wavenumbers = [1000, 1100, 1200, 1300, 1400] cm-1,
+ *  excitation = 785.0 nm, laser power = 50.0 mW,
+ *  scan = "raster", pixel size = 10.0 x 10.0. Matches the Java +
+ *  Python siblings byte-for-byte. */
++ (BOOL)buildRamanImageOnlyAtPath:(NSString *)path
+                              error:(NSError * _Nullable * _Nullable)error;
+
+/** IR image only: 3x3x5 cube, intensity[i] = i*0.5,
+ *  wavenumbers = [1000, 1100, 1200, 1300, 1400] cm-1,
+ *  mode = TTIOIRModeAbsorbance, resolution = 4.0 cm-1,
+ *  scan = "raster", pixel size = 10.0 x 10.0. Matches the Java +
+ *  Python siblings byte-for-byte. */
++ (BOOL)buildIrImageOnlyAtPath:(NSString *)path
+                           error:(NSError * _Nullable * _Nullable)error;
+
 @end
 
 NS_ASSUME_NONNULL_END
