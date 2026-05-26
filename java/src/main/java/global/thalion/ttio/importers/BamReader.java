@@ -9,6 +9,7 @@ import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.io.ProgressSink;
 
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMProgramRecord;
@@ -55,8 +56,21 @@ import java.util.Map;
  * by the {@code cross-compat} CI job.</p>
  *
  * (M87, v1.5.0 htsjdk swap)
+ *
+ * <p>TODO (parity): Python {@code ttio.importers.bam.BamReader} and
+ * Objective-C {@code TTIOBamReader} should grow a matching
+ * {@code ProgressSink}-style callback in a future cross-language
+ * parity PR so all three implementations expose the same per-read
+ * progress hook.</p>
  */
 public class BamReader {
+
+    /** Default emit-every-N cadence for the
+     *  {@link #toGenomicRun(String, String, String, ProgressSink)}
+     *  {@link ProgressSink}. The htsjdk record iterator can chew
+     *  through several hundred thousand records per second; a tighter
+     *  cadence drowns the GUI thread without adding info. */
+    public static final int PROGRESS_INTERVAL_READS = 1000;
 
     static {
         // htsjdk's CRAM decoder validates the reference sequence MD5 by
@@ -104,17 +118,36 @@ public class BamReader {
 
     /** Default name {@code "genomic_0001"}, no region filter, no sample override. */
     public WrittenGenomicRun toGenomicRun(String name) throws IOException {
-        return toGenomicRun(name, null, null);
+        return toGenomicRun(name, null, null, ProgressSink.discard());
     }
 
     /** No sample override. */
     public WrittenGenomicRun toGenomicRun(String name, String region)
             throws IOException {
-        return toGenomicRun(name, region, null);
+        return toGenomicRun(name, region, null, ProgressSink.discard());
+    }
+
+    /** Backwards-compatible overload without a {@link ProgressSink}. */
+    public WrittenGenomicRun toGenomicRun(String name, String region,
+                                          String sampleName) throws IOException {
+        return toGenomicRun(name, region, sampleName, ProgressSink.discard());
+    }
+
+    /** {@code ProgressSink}-accepting overload; defaults region + sample
+     *  to {@code null}. */
+    public WrittenGenomicRun toGenomicRun(String name, ProgressSink progress)
+            throws IOException {
+        return toGenomicRun(name, null, null, progress);
     }
 
     /**
-     * Read the BAM/SAM and return a {@link WrittenGenomicRun}.
+     * Read the BAM/SAM and return a {@link WrittenGenomicRun}, firing
+     * {@code progress.onProgress(readsDone, -1L)} every
+     * {@link #PROGRESS_INTERVAL_READS} records during iteration and a
+     * final {@code onProgress(total, total)} once all records have been
+     * consumed. Total is unknown mid-iteration because htsjdk's record
+     * iterator does not expose a cheap count without re-walking the
+     * file (and the file may be region-filtered).
      *
      * @param name        run name (becomes {@code /study/genomic_runs/<name>}).
      * @param region      optional region filter (e.g. {@code "chr1:1000-2000"},
@@ -122,11 +155,17 @@ public class BamReader {
      *                    means no filter.
      * @param sampleName  optional override for {@code sample_name};
      *                    {@code null} means "use first @RG SM:".
+     * @param progress    progress callback; {@link ProgressSink#discard()}
+     *                    if you don't care.
      * @throws IOException if the file is missing, malformed, or a region
      *                     filter is requested against an unindexed file.
+     * @since 1.5.0
      */
     public WrittenGenomicRun toGenomicRun(String name, String region,
-                                          String sampleName) throws IOException {
+                                          String sampleName,
+                                          ProgressSink progress)
+            throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         if (!Files.exists(path)) {
             throw new IOException("BAM/SAM file not found: " + path);
         }
@@ -313,6 +352,10 @@ public class BamReader {
                     seqChunks.add(seqBytes);
                     qualChunks.add(qualBytes);
                     runningOffset += length;
+
+                    if (readNames.size() % PROGRESS_INTERVAL_READS == 0) {
+                        progress.onProgress(readNames.size(), -1L);
+                    }
                 }
             } finally {
                 if (it instanceof htsjdk.samtools.util.CloseableIterator<?>) {
@@ -362,6 +405,12 @@ public class BamReader {
         }
 
         this.lastProvenance = List.copyOf(provenance);
+
+        // Final progress fire — total is now known. Listeners can flip
+        // from indeterminate ("done out of ?") to determinate
+        // ("done == total"), which the import dialog uses to mark
+        // 100% before the write phase begins.
+        progress.onProgress((long) n, (long) n);
 
         return new WrittenGenomicRun(
             AcquisitionMode.GENOMIC_WGS,

@@ -9,6 +9,7 @@ import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -39,8 +40,18 @@ import java.util.zip.GZIPInputStream;
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.importers.fasta.FastaReader}, Objective-C
  * {@code TTIOFastaReader}.</p>
+ *
+ * <p>TODO (parity): the per-contig progress hook on {@code readReference}
+ * is mirrored by Python's {@code ReferenceImport} sink wiring; the
+ * {@code readUnaligned} sink added here should grow Python +
+ * Objective-C equivalents in a future cross-language parity PR.</p>
  */
 public class FastaReader {
+
+    /** Default emit-every-N cadence for the
+     *  {@link #readUnaligned(String, String, String, AcquisitionMode, ProgressSink)}
+     *  {@link ProgressSink}. Same default as {@link FastqReader}. */
+    public static final int PROGRESS_INTERVAL_READS = 1000;
 
     /** SAM unmapped sentinels — match BamReader's "QUAL absent" path. */
     static final int  UNMAPPED_FLAG       = 4;
@@ -104,6 +115,27 @@ public class FastaReader {
         String sampleName, String platform, String referenceUri,
         AcquisitionMode acquisitionMode
     ) throws IOException {
+        return readUnaligned(sampleName, platform, referenceUri,
+            acquisitionMode, ProgressSink.discard());
+    }
+
+    /**
+     * Parse the file as a set of unaligned reads, emitting per-read
+     * {@link ProgressSink} callbacks.
+     *
+     * <p>Fires {@code progress.onProgress(done, -1L)} every
+     * {@link #PROGRESS_INTERVAL_READS} records during the parse phase
+     * (total is unknown until the trailing record flushes) and a final
+     * {@code onProgress(total, total)} once the count is known.</p>
+     *
+     * @since 1.5.0
+     */
+    public WrittenGenomicRun readUnaligned(
+        String sampleName, String platform, String referenceUri,
+        AcquisitionMode acquisitionMode, ProgressSink progress
+    ) throws IOException {
+        final ProgressSink sink =
+            (progress != null) ? progress : ProgressSink.discard();
         List<String> readNames = new ArrayList<>();
         ByteArrayOutputStream seqBuf  = new ByteArrayOutputStream();
         ByteArrayOutputStream qualBuf = new ByteArrayOutputStream();
@@ -128,6 +160,10 @@ public class FastaReader {
                     throw new RuntimeException(ioe);
                 }
                 running[0] += seq.length;
+                long done = readNames.size();
+                if (done % PROGRESS_INTERVAL_READS == 0) {
+                    sink.onProgress(done, -1L);
+                }
             });
         }
         if (readNames.isEmpty()) {
@@ -135,6 +171,7 @@ public class FastaReader {
                 "no FASTA records found in " + path
             );
         }
+        sink.onProgress(readNames.size(), readNames.size());
         return buildUnalignedRun(
             readNames, seqBuf.toByteArray(), qualBuf.toByteArray(),
             offsetsL, lengthsL,
@@ -145,6 +182,15 @@ public class FastaReader {
     /** Convenience overload with no platform / reference URI. */
     public WrittenGenomicRun readUnaligned(String sampleName) throws IOException {
         return readUnaligned(sampleName, "", "", AcquisitionMode.GENOMIC_WGS);
+    }
+
+    /** Convenience overload with no platform / reference URI that
+     *  accepts a {@link ProgressSink}. */
+    public WrittenGenomicRun readUnaligned(String sampleName,
+                                           ProgressSink progress)
+            throws IOException {
+        return readUnaligned(sampleName, "", "", AcquisitionMode.GENOMIC_WGS,
+            progress);
     }
 
     // ------------------------------------------------------------------

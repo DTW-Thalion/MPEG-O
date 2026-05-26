@@ -7,6 +7,7 @@ package global.thalion.ttio.importers;
 
 import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -34,8 +35,20 @@ import java.util.List;
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.importers.fastq.FastqReader}, Objective-C
  * {@code TTIOFastqReader}.</p>
+ *
+ * <p>TODO (parity): Python {@code ttio.importers.fastq.FastqReader} and
+ * Objective-C {@code TTIOFastqReader} should grow a matching
+ * {@code ProgressSink}-style callback in a future cross-language parity
+ * PR so all three implementations expose the same per-read progress
+ * hook.</p>
  */
 public class FastqReader {
+
+    /** Default emit-every-N cadence for {@link ProgressSink} callbacks.
+     *  Small enough that even small input files get visible updates,
+     *  large enough that the per-callback overhead stays well below 1%
+     *  of parse time. */
+    public static final int PROGRESS_INTERVAL_READS = 1000;
 
     private final Path path;
     private final Integer forcedPhred;
@@ -98,7 +111,8 @@ public class FastqReader {
     }
 
     public WrittenGenomicRun read(String sampleName) throws IOException {
-        return read(sampleName, "", "", AcquisitionMode.GENOMIC_WGS);
+        return read(sampleName, "", "", AcquisitionMode.GENOMIC_WGS,
+            ProgressSink.discard());
     }
 
     /**
@@ -112,20 +126,58 @@ public class FastqReader {
         String sampleName, String platform, String referenceUri,
         AcquisitionMode acquisitionMode
     ) throws IOException {
+        return read(sampleName, platform, referenceUri, acquisitionMode,
+            ProgressSink.discard());
+    }
+
+    /** Convenience overload mirroring {@link #read(String)} that accepts
+     *  a {@link ProgressSink}. */
+    public WrittenGenomicRun read(String sampleName, ProgressSink progress)
+            throws IOException {
+        return read(sampleName, "", "", AcquisitionMode.GENOMIC_WGS, progress);
+    }
+
+    /**
+     * Parse the file and return an unaligned {@link WrittenGenomicRun},
+     * firing {@code progress.onProgress(readsDone, -1L)} every
+     * {@link #PROGRESS_INTERVAL_READS} records during the parse phase
+     * and a final {@code onProgress(total, total)} once the record
+     * count is known.
+     *
+     * <p>Total is reported as {@code -1L} mid-parse because FASTQ
+     * gives no record-count up front; the final fire stamps both
+     * {@code done} and {@code total} with the true count so listeners
+     * can switch from indeterminate to determinate display.</p>
+     *
+     * @since 1.5.0
+     */
+    public WrittenGenomicRun read(
+        String sampleName, String platform, String referenceUri,
+        AcquisitionMode acquisitionMode, ProgressSink progress
+    ) throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         // First pass: collect raw records.
         List<String> readNames = new ArrayList<>();
         List<byte[]> seqs = new ArrayList<>();
         List<byte[]> quals = new ArrayList<>();
+        final ProgressSink sink = progress;
+        final long[] counter = { 0L };
         try (InputStream in = FastaReader.openMaybeGzip(path)) {
             iterateRecords(in, (name, seq, qual) -> {
                 readNames.add(name);
                 seqs.add(seq);
                 quals.add(qual);
+                counter[0]++;
+                if (counter[0] % PROGRESS_INTERVAL_READS == 0) {
+                    sink.onProgress(counter[0], -1L);
+                }
             });
         }
         if (readNames.isEmpty()) {
             throw new FastqParseException("no FASTQ records found in " + path);
         }
+        // Final fire — total is now known.
+        sink.onProgress(counter[0], counter[0]);
 
         int offset;
         if (forcedPhred != null) {
