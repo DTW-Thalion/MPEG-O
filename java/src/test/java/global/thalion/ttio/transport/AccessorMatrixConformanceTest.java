@@ -23,11 +23,13 @@ class AccessorMatrixConformanceTest {
         Path tis = tmp.resolve(accessor.name() + ".tis");
         Path rt  = tmp.resolve(accessor.name() + "-roundtrip.tio");
 
-        // .tio -> .tis
+        // .tio -> .tis. Most accessors hand off to writeDataset via the
+        // default {@link AccessorSpec#encode} implementation; the
+        // MS_IMAGE_PROCESSED entry overrides to call writeImageProcessed
+        // for the opt-in sparse wire mode.
         try (SpectralDataset s = SpectralDataset.open(src.toString());
-             OutputStream out = Files.newOutputStream(tis);
-             TransportWriter w = new TransportWriter(out)) {
-            w.writeDataset(s);
+             OutputStream out = Files.newOutputStream(tis)) {
+            accessor.encode(s, out);
         }
 
         // .tis -> .tio

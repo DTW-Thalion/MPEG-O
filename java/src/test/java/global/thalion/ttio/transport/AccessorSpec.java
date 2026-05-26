@@ -1,16 +1,19 @@
 package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.IRImage;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.MassSpectrum;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 
+import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
@@ -27,7 +30,15 @@ import java.util.Objects;
  *  ENCRYPTION_ALGORITHM. SUBJECTS + SAMPLES are deferred until they
  *  exist as first-class entities on {@link SpectralDataset}; the v0.11
  *  spec mentions them but the data model still surfaces them only as
- *  server-side cohort predicates.</p> */
+ *  server-side cohort predicates.</p>
+ *
+ *  <p>Stage 5 (Task 5.6, Deferral 1): MS_IMAGE_PROCESSED, RAMAN_IMAGE,
+ *  IR_IMAGE. The MS_IMAGE_PROCESSED entry shares the MSImage fixture
+ *  with {@link #IMAGE} but overrides the encode step to call
+ *  {@code writeImageProcessed} (opt-in sparse wire mode) instead of
+ *  {@code writeImage} so the conformance suite exercises both wire
+ *  shapes. RAMAN_IMAGE / IR_IMAGE use {@code writeDataset} unchanged
+ *  because they integrate via the §5.4.5 prelude image block.</p> */
 public enum AccessorSpec {
 
     REFERENCES {
@@ -307,8 +318,189 @@ public enum AccessorSpec {
                     + b.encryptedAlgorithm() + "'");
             }
         }
+    },
+
+    /** Stage 5 (Task 5.6): same MSImage fixture as {@link #IMAGE} but
+     *  encoded via {@link TransportWriter#writeImageProcessed} (opt-in
+     *  sparse wire mode). The decoded .tio carries an MSImage whose
+     *  dense intensityCube round-trips byte-for-byte regardless of
+     *  which wire mode was used. */
+    MS_IMAGE_PROCESSED {
+        @Override public Path buildFixture(Path tmp) throws Exception {
+            return FixtureBuilder.buildImageMsProcessedOnly(
+                tmp.resolve("image_processed.tio"));
+        }
+
+        @Override public void encode(SpectralDataset source, OutputStream out)
+                throws Exception {
+            // §5.4 prelude mimic, swapping writeImage→writeImageProcessed
+            // for the MS image block. The fixture carries only an
+            // MSImage (no other v0.11 content, no runs) so the rest of
+            // the prelude collapses to a stream header + image +
+            // EOS. Matches the {@code writeDataset} ordering exactly so
+            // a downstream {@code materializeTo} reads a fully-formed
+            // .tio with the dense cube restored.
+            try (TransportWriter w = new TransportWriter(out)) {
+                w.writeStreamHeader(
+                    "1.2", source.title(), source.isaInvestigationId(),
+                    List.of(PacketType.TRANSPORT_V0_11_FEATURE),
+                    0);
+                w.writeImageProcessed(source.image());
+                w.writeEndOfStream();
+            }
+        }
+
+        @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
+            // Reuse the IMAGE comparator verbatim: processed mode is
+            // strictly a wire-shape change, content equality is the
+            // same predicate.
+            AccessorSpec.IMAGE.assertContentEquals(a, b);
+        }
+    },
+
+    /** Stage 5 (Task 5.6, Deferral 1): RAMAN_IMAGE round-trip via the
+     *  v0.11 prelude image block (modality=1). Fixture is a small
+     *  3x3x5 Raman cube; comparator asserts width/height/spectral-
+     *  points/intensities/wavenumbers/excitation/laser-power/scan-
+     *  pattern. */
+    RAMAN_IMAGE {
+        @Override public Path buildFixture(Path tmp) throws Exception {
+            return FixtureBuilder.buildRamanImageOnly(
+                tmp.resolve("raman.tio"));
+        }
+
+        @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
+            RamanImage ra = a.ramanImage();
+            RamanImage rb = b.ramanImage();
+            if (ra == null || rb == null) {
+                throw new AssertionError("RamanImage missing on at least "
+                    + "one side: a=" + ra + ", b=" + rb);
+            }
+            if (ra.width() != rb.width()
+                    || ra.height() != rb.height()
+                    || ra.spectralPoints() != rb.spectralPoints()) {
+                throw new AssertionError("raman shape mismatch: "
+                    + ra.width() + "x" + ra.height() + "x" + ra.spectralPoints()
+                    + " vs " + rb.width() + "x" + rb.height() + "x"
+                    + rb.spectralPoints());
+            }
+            if (Math.abs(ra.excitationWavelengthNm()
+                          - rb.excitationWavelengthNm()) >= 1e-9) {
+                throw new AssertionError("excitationWavelengthNm mismatch: "
+                    + ra.excitationWavelengthNm() + " vs "
+                    + rb.excitationWavelengthNm());
+            }
+            if (Math.abs(ra.laserPowerMw() - rb.laserPowerMw()) >= 1e-9) {
+                throw new AssertionError("laserPowerMw mismatch: "
+                    + ra.laserPowerMw() + " vs " + rb.laserPowerMw());
+            }
+            if (!Objects.equals(ra.scanPattern(), rb.scanPattern())) {
+                throw new AssertionError("raman scanPattern mismatch: '"
+                    + ra.scanPattern() + "' vs '" + rb.scanPattern() + "'");
+            }
+            double[] wnA = ra.wavenumbers();
+            double[] wnB = rb.wavenumbers();
+            if (wnA.length != wnB.length) {
+                throw new AssertionError("wavenumbers length mismatch: "
+                    + wnA.length + " vs " + wnB.length);
+            }
+            for (int i = 0; i < wnA.length; i++) {
+                if (Math.abs(wnA[i] - wnB[i]) >= 1e-9) {
+                    throw new AssertionError("wavenumbers[" + i + "] mismatch: "
+                        + wnA[i] + " vs " + wnB[i]);
+                }
+            }
+            double[] cA = ra.intensityCube();
+            double[] cB = rb.intensityCube();
+            if (cA.length != cB.length) {
+                throw new AssertionError("raman intensity-cube length: "
+                    + cA.length + " vs " + cB.length);
+            }
+            for (int i = 0; i < cA.length; i++) {
+                if (Math.abs(cA[i] - cB[i]) >= 1e-9) {
+                    throw new AssertionError("raman intensity-cube[" + i
+                        + "] mismatch: " + cA[i] + " vs " + cB[i]);
+                }
+            }
+        }
+    },
+
+    /** Stage 5 (Task 5.6, Deferral 1): IR_IMAGE round-trip via the
+     *  v0.11 prelude image block (modality=2). Fixture is a small
+     *  3x3x5 IR cube; comparator asserts width/height/spectral-
+     *  points/intensities/wavenumbers/mode/resolution/scan-pattern. */
+    IR_IMAGE {
+        @Override public Path buildFixture(Path tmp) throws Exception {
+            return FixtureBuilder.buildIrImageOnly(
+                tmp.resolve("ir.tio"));
+        }
+
+        @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
+            IRImage ia = a.irImage();
+            IRImage ib = b.irImage();
+            if (ia == null || ib == null) {
+                throw new AssertionError("IRImage missing on at least one "
+                    + "side: a=" + ia + ", b=" + ib);
+            }
+            if (ia.width() != ib.width()
+                    || ia.height() != ib.height()
+                    || ia.spectralPoints() != ib.spectralPoints()) {
+                throw new AssertionError("ir shape mismatch: "
+                    + ia.width() + "x" + ia.height() + "x" + ia.spectralPoints()
+                    + " vs " + ib.width() + "x" + ib.height() + "x"
+                    + ib.spectralPoints());
+            }
+            if (ia.mode() != ib.mode()) {
+                throw new AssertionError("ir mode mismatch: " + ia.mode()
+                    + " vs " + ib.mode());
+            }
+            if (Math.abs(ia.resolutionCmInv() - ib.resolutionCmInv()) >= 1e-9) {
+                throw new AssertionError("ir resolutionCmInv mismatch: "
+                    + ia.resolutionCmInv() + " vs " + ib.resolutionCmInv());
+            }
+            if (!Objects.equals(ia.scanPattern(), ib.scanPattern())) {
+                throw new AssertionError("ir scanPattern mismatch: '"
+                    + ia.scanPattern() + "' vs '" + ib.scanPattern() + "'");
+            }
+            double[] wnA = ia.wavenumbers();
+            double[] wnB = ib.wavenumbers();
+            if (wnA.length != wnB.length) {
+                throw new AssertionError("ir wavenumbers length mismatch: "
+                    + wnA.length + " vs " + wnB.length);
+            }
+            for (int i = 0; i < wnA.length; i++) {
+                if (Math.abs(wnA[i] - wnB[i]) >= 1e-9) {
+                    throw new AssertionError("ir wavenumbers[" + i + "] mismatch: "
+                        + wnA[i] + " vs " + wnB[i]);
+                }
+            }
+            double[] cA = ia.intensityCube();
+            double[] cB = ib.intensityCube();
+            if (cA.length != cB.length) {
+                throw new AssertionError("ir intensity-cube length: "
+                    + cA.length + " vs " + cB.length);
+            }
+            for (int i = 0; i < cA.length; i++) {
+                if (Math.abs(cA[i] - cB[i]) >= 1e-9) {
+                    throw new AssertionError("ir intensity-cube[" + i
+                        + "] mismatch: " + cA[i] + " vs " + cB[i]);
+                }
+            }
+        }
     };
 
     public abstract Path buildFixture(Path tmp) throws Exception;
     public abstract void assertContentEquals(SpectralDataset a, SpectralDataset b);
+
+    /** Stage 5 (Task 5.6): encode {@code source}'s .tio content to a
+     *  .tis on {@code out}. Default uses {@link TransportWriter#writeDataset}
+     *  so most accessors get the normal §5.4 prelude + dataset path.
+     *  Override only when the accessor exercises a non-default wire
+     *  shape (e.g. {@link #MS_IMAGE_PROCESSED} swaps to
+     *  {@code writeImageProcessed}). */
+    public void encode(SpectralDataset source, OutputStream out) throws Exception {
+        try (TransportWriter w = new TransportWriter(out)) {
+            w.writeDataset(source);
+        }
+    }
 }
