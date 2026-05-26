@@ -14,7 +14,9 @@ import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
 import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.Subject;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.MiniJson;
 import global.thalion.ttio.codecs.BasePack;
@@ -102,6 +104,14 @@ public final class TransportReader implements AutoCloseable {
     // attributes round-trip.
     private final List<Identification> collectedIdentifications = new ArrayList<>();
     private final List<Quantification> collectedQuantifications = new ArrayList<>();
+    // Stage 6 / Task 6.2: subject + sample rows decoded from
+    // SUBJECT_METADATA (0x19) / SAMPLE_METADATA (0x1A) packets. Reset
+    // at the start of every materializeTo() call. Persisted to the
+    // resulting HDF5 file's /study/subjects/ + /study/samples/ groups
+    // before the close+reopen dance so SpectralDataset.open() surfaces
+    // them on the returned handle.
+    private final List<Subject> collectedSubjects = new ArrayList<>();
+    private final List<Sample> collectedSamples = new ArrayList<>();
 
     public TransportReader(InputStream in) {
         this.in = in;
@@ -205,6 +215,8 @@ public final class TransportReader implements AutoCloseable {
         currentImageSkipping = false;
         collectedIdentifications.clear();
         collectedQuantifications.clear();
+        collectedSubjects.clear();
+        collectedSamples.clear();
 
         List<PacketRecord> packets = readAllPackets();
         String title = "";
@@ -395,6 +407,14 @@ public final class TransportReader implements AutoCloseable {
                 decodeQuantificationsTable(rec.payload);
                 continue;
             }
+            if (h.packetType == PacketType.SUBJECT_METADATA) {
+                decodeSubjectMetadata(rec.payload);
+                continue;
+            }
+            if (h.packetType == PacketType.SAMPLE_METADATA) {
+                decodeSampleMetadata(rec.payload);
+                continue;
+            }
             if (h.packetType == PacketType.END_OF_DATASET) continue;
             if (h.packetType == PacketType.END_OF_STREAM) break;
             // Annotation / Provenance / Chromatogram / Protection: skipped in M67.
@@ -491,6 +511,64 @@ public final class TransportReader implements AutoCloseable {
                 }
             }
         }
+        // Stage 6 / Task 6.2: persist Subject / Sample rows decoded
+        // from SUBJECT_METADATA (0x19) / SAMPLE_METADATA (0x1A) packets
+        // as per-row groups under /study/subjects/ + /study/samples/.
+        // SpectralDataset.create()'s public-overloads do not yet
+        // expose a "runs + genomicRuns + subjects + samples" form, so
+        // we layer them onto the open file via StorageGroup directly —
+        // mirrors the encryption-algorithm + image layering pattern
+        // immediately above and below. The close+reopen at the bottom
+        // of this method then surfaces them via SpectralDataset.open's
+        // readSubjects + readSamples on the returned handle. The HDF5
+        // layout matches SpectralDataset.writeSubjectsViaProvider /
+        // writeSamplesViaProvider exactly (per-row groups with typed
+        // attributes; absent group when the list is empty).
+        if (!collectedSubjects.isEmpty() || !collectedSamples.isEmpty()) {
+            try (var studyGrp =
+                    created.provider().rootGroup().openGroup("study")) {
+                if (!collectedSubjects.isEmpty()) {
+                    try (var subjectsGroup = studyGrp.createGroup("subjects")) {
+                        for (Subject s : collectedSubjects) {
+                            try (var row = subjectsGroup.createGroup(s.externalId())) {
+                                row.setAttribute("external_id", s.externalId());
+                                if (!s.project().isEmpty()) {
+                                    row.setAttribute("project", s.project());
+                                }
+                                if (!s.sex().isEmpty()) {
+                                    row.setAttribute("sex", s.sex());
+                                }
+                                row.setAttribute("birth_year",
+                                    Long.valueOf(s.birthYear()));
+                                row.setAttribute("attributes_json",
+                                    s.attributesJson());
+                            }
+                        }
+                    }
+                }
+                if (!collectedSamples.isEmpty()) {
+                    try (var samplesGroup = studyGrp.createGroup("samples")) {
+                        for (Sample s : collectedSamples) {
+                            try (var row = samplesGroup.createGroup(s.sampleId())) {
+                                row.setAttribute("sample_id", s.sampleId());
+                                if (!s.subjectExternalId().isEmpty()) {
+                                    row.setAttribute("subject_external_id",
+                                        s.subjectExternalId());
+                                }
+                                if (!s.sampleKind().isEmpty()) {
+                                    row.setAttribute("sample_kind",
+                                        s.sampleKind());
+                                }
+                                row.setAttribute("collected_at",
+                                    Long.valueOf(s.collectedAt()));
+                                row.setAttribute("attributes_json",
+                                    s.attributesJson());
+                            }
+                        }
+                    }
+                }
+            }
+        }
         // v0.11 Task 1.5: persist the dataset-level @encrypted root
         // attribute so the materialised file reports isEncrypted() ==
         // true on reopen. SpectralDataset caches encryptedAlgorithm in
@@ -501,16 +579,19 @@ public final class TransportReader implements AutoCloseable {
             created.provider().rootGroup()
                 .setAttribute("encrypted", collectedEncryptionAlgorithm);
         }
-        // v0.11 Task 1.7: when an image was embedded after create(),
-        // the returned `created` dataset still has image() == null
-        // (SpectralDataset caches the MSImage at construction). Force
-        // a close+reopen so callers see the round-tripped image on
-        // the returned handle.
+        // v0.11 Task 1.7 + Stage 6 / Task 6.2: when an image, subject,
+        // or sample was embedded after create(), the returned `created`
+        // dataset still has image()/subjects()/samples() == null /
+        // empty (SpectralDataset caches them at construction). Force a
+        // close+reopen so callers see the round-tripped content on the
+        // returned handle.
         if (genomicRuns.isEmpty()
                 && collectedEncryptionAlgorithm == null
                 && collectedImage == null
                 && collectedRamanImage == null
-                && collectedIrImage == null) {
+                && collectedIrImage == null
+                && collectedSubjects.isEmpty()
+                && collectedSamples.isEmpty()) {
             return created;
         }
         created.close();
@@ -625,6 +706,35 @@ public final class TransportReader implements AutoCloseable {
         byte[] ipc = new byte[ipcLen];
         bb.get(ipc);
         collectedQuantifications.addAll(ArrowIpcCodec.decodeQuantifications(ipc));
+    }
+
+    // ---------------------------------------------------------- v0.11 §4.22 (Stage 6 / Task 6.2)
+
+    /** Stage 6 / Task 6.2: decode a SUBJECT_METADATA (0x19) payload per
+     *  transport-spec §4.22 — uint32 IPC length, then that many bytes
+     *  of an Apache Arrow IPC stream. Rows append to
+     *  {@link #collectedSubjects} so multiple 0x19 packets accumulate
+     *  in emission order (spec §5.4 step 5 says "zero or more"). */
+    private void decodeSubjectMetadata(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        long ipcLenLong = bb.getInt() & 0xFFFFFFFFL;
+        int ipcLen = (int) ipcLenLong;
+        byte[] ipc = new byte[ipcLen];
+        bb.get(ipc);
+        collectedSubjects.addAll(ArrowIpcCodec.decodeSubjects(ipc));
+    }
+
+    /** Stage 6 / Task 6.2: decode a SAMPLE_METADATA (0x1A) payload per
+     *  transport-spec §4.22 — identical wire shape to the
+     *  SUBJECT_METADATA framing with a distinct dispatch. Rows append
+     *  to {@link #collectedSamples}. */
+    private void decodeSampleMetadata(byte[] payload) {
+        ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
+        long ipcLenLong = bb.getInt() & 0xFFFFFFFFL;
+        int ipcLen = (int) ipcLenLong;
+        byte[] ipc = new byte[ipcLen];
+        bb.get(ipc);
+        collectedSamples.addAll(ArrowIpcCodec.decodeSamples(ipc));
     }
 
 

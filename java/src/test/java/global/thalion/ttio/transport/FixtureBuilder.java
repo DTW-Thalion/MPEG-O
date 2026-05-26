@@ -17,7 +17,9 @@ import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
 import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.Subject;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
@@ -403,6 +405,87 @@ public final class FixtureBuilder {
             List.of(), List.of(run),
             List.of(), List.of(), List.of(),
             FeatureFlags.defaultCurrent()).close();
+        return target;
+    }
+
+    /**
+     * Stage 6 / Task 6.2: produce a {@code .tio} carrying a small list
+     * of {@link Subject} rows and nothing else. Used by the SUBJECT_METADATA
+     * (0x19) round-trip suite. The list deliberately mixes a fully-
+     * populated row (all optional fields set, multi-key attributes)
+     * with a minimal row (all optionals at the unset sentinel) so the
+     * write/read pair exercises both the "value present" and "Arrow
+     * null on the wire" branches of the codec.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildSubjectsOnly(Path target) throws Exception {
+        Map<String, String> attrs = new LinkedHashMap<>();
+        attrs.put("notes", "fully populated subject");
+        attrs.put("cohort", "control");
+        List<Subject> subjects = List.of(
+            new Subject("SUB-001", "PROJ_A", "F", 1985L, attrs),
+            // minimal row: empty project/sex + sentinel birth_year=0
+            // + empty attributes
+            new Subject("SUB-002", "", "", 0L, Map.of()));
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "subjects_only", "",
+                List.of(), List.of(), List.of(), List.of(),
+                subjects, List.of())) {
+            // No further writes needed.
+        }
+        return target;
+    }
+
+    /**
+     * Stage 6 / Task 6.2: produce a {@code .tio} carrying a small list
+     * of {@link Sample} rows and nothing else. Used by the SAMPLE_METADATA
+     * (0x1A) round-trip suite. Same shape as {@link #buildSubjectsOnly}
+     * (mix of fully-populated + minimal rows).
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildSamplesOnly(Path target) throws Exception {
+        Map<String, String> attrs = new LinkedHashMap<>();
+        attrs.put("tissue", "liver");
+        attrs.put("notes", "freshly collected");
+        List<Sample> samples = List.of(
+            new Sample("SAMP-001", "SUB-001", "tissue",
+                1700000000L, attrs),
+            new Sample("SAMP-002", "", "", 0L, Map.of()));
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "samples_only", "",
+                List.of(), List.of(), List.of(), List.of(),
+                List.of(), samples)) {
+            // No further writes needed.
+        }
+        return target;
+    }
+
+    /**
+     * Stage 6 / Task 6.2: produce a {@code .tio} carrying both
+     * {@link Subject} and {@link Sample} rows. Used to verify the
+     * §5.4 step 5 emission order (SUBJECT_METADATA precedes
+     * SAMPLE_METADATA) on the wire.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildSubjectsAndSamples(Path target) throws Exception {
+        List<Subject> subjects = List.of(
+            new Subject("SUB-A", "P", "F", 1980L,
+                Map.of("k", "v")));
+        List<Sample> samples = List.of(
+            new Sample("SAMP-A", "SUB-A", "tissue",
+                1700000000L, Map.of("notes", "ok")));
+        try (SpectralDataset ds = SpectralDataset.create(
+                target.toString(), "subjects_and_samples", "",
+                List.of(), List.of(), List.of(), List.of(),
+                subjects, samples)) {
+            // No further writes needed.
+        }
         return target;
     }
 

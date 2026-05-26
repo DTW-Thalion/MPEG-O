@@ -14,6 +14,8 @@ import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
 import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
+import global.thalion.ttio.Subject;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
@@ -889,6 +891,69 @@ public final class TransportWriter implements AutoCloseable {
         emit(PacketType.QUANTIFICATIONS_TABLE, buf.array(), 0, 0);
     }
 
+    // ----------------------------------------------- v0.11 §4.22 (Stage 6)
+
+    /**
+     * Stage 6 / Task 6.2: emit a {@code SUBJECT_METADATA} (0x19) packet
+     * carrying the full {@link Subject} table as a single length-
+     * prefixed Apache Arrow IPC stream. Wire layout per transport-spec
+     * §4.22:
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC stream
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+     * payload schema and null-handling conventions live in
+     * {@link ArrowIpcCodec}. Empty lists MUST NOT invoke this method —
+     * callers (see {@link #writeDataset}) gate on
+     * {@code !list.isEmpty()} per §5.4 step 5 ("zero or more").</p>
+     */
+    public void writeSubjectMetadata(List<Subject> subjects)
+            throws IOException {
+        if (subjects == null) {
+            throw new IllegalArgumentException(
+                "writeSubjectMetadata: subjects must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeSubjects(subjects);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.SUBJECT_METADATA, buf.array(), 0, 0);
+    }
+
+    /**
+     * Stage 6 / Task 6.2: emit a {@code SAMPLE_METADATA} (0x1A) packet
+     * carrying the full {@link Sample} table as a single length-prefixed
+     * Apache Arrow IPC stream. Wire layout per transport-spec §4.22 —
+     * identical shape to the SUBJECT_METADATA framing with a distinct
+     * packet type so receivers can dispatch without parsing the IPC
+     * payload first.
+     *
+     * <pre>
+     * arrow_ipc_length:    uint32
+     * arrow_ipc:           bytes[arrow_ipc_length]
+     * </pre>
+     *
+     * <p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+     * lists MUST NOT invoke this method (§5.4 step 5).</p>
+     */
+    public void writeSampleMetadata(List<Sample> samples)
+            throws IOException {
+        if (samples == null) {
+            throw new IllegalArgumentException(
+                "writeSampleMetadata: samples must not be null");
+        }
+        byte[] ipc = ArrowIpcCodec.encodeSamples(samples);
+        ByteBuffer buf = ByteBuffer.allocate(4 + ipc.length)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        buf.putInt(ipc.length);
+        buf.put(ipc);
+        emit(PacketType.SAMPLE_METADATA, buf.array(), 0, 0);
+    }
+
     public void writeEndOfDataset(int datasetId, long finalAUSequence) throws IOException {
         ByteBuffer buf = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
         buf.putShort((short) (datasetId & 0xFFFF));
@@ -916,11 +981,11 @@ public final class TransportWriter implements AutoCloseable {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
-        // Task 1.4/1.5/1.6/1.7/1.8: detect v0.11 content (references +
-        // encryption algorithm + dataset provenance + image cube +
-        // identifications/quantifications tables today; subjects,
-        // samples land in subsequent tasks at the same prelude
-        // insertion point per §5.4 ordering).
+        // Task 1.4/1.5/1.6/1.7/1.8/6.2: detect v0.11 content
+        // (references + encryption algorithm + dataset provenance +
+        // image cube + identifications/quantifications tables +
+        // subjects + samples — all the v0.11 prelude content types
+        // ship under the same TRANSPORT_V0_11_FEATURE flag).
         boolean v011 = !dataset.references().isEmpty()
                     || dataset.isEncrypted()
                     || !dataset.provenanceRecords().isEmpty()
@@ -928,7 +993,9 @@ public final class TransportWriter implements AutoCloseable {
                     || dataset.ramanImage() != null
                     || dataset.irImage() != null
                     || !dataset.identifications().isEmpty()
-                    || !dataset.quantifications().isEmpty();
+                    || !dataset.quantifications().isEmpty()
+                    || !dataset.subjects().isEmpty()
+                    || !dataset.samples().isEmpty();
         if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
             features.add(PacketType.TRANSPORT_V0_11_FEATURE);
         }
@@ -936,22 +1003,32 @@ public final class TransportWriter implements AutoCloseable {
         writeStreamHeader("1.2", dataset.title(), dataset.isaInvestigationId(),
                 features, runs.size() + genomicRuns.size());
 
-        // Task 1.4/1.5/1.6/1.7/1.8: v0.11 prelude -- per §5.4
+        // Task 1.4/1.5/1.6/1.7/1.8/6.2: v0.11 prelude -- per §5.4
         // ordering, v0.11 sections come BEFORE the v0.10 dataset/run
         // sections, and the sub-sections appear in this order:
         //   §5.4.1 ENCRYPTION_ALGORITHM
         //   §5.4.2 DATASET_PROVENANCE
-        //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA
+        //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA  (subjects first)
         //   §5.4.4 reference groups
         //   §5.4.5 image cubes
         //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
-        // Subjects and samples land here in Task 1.9.
         if (v011) {
             if (dataset.isEncrypted()) {
                 writeEncryptionAlgorithm(dataset.encryptedAlgorithm());
             }
             if (!dataset.provenanceRecords().isEmpty()) {
                 writeDatasetProvenance(dataset.provenanceRecords());
+            }
+            // §5.4.3 Stage 6 / Task 6.2: SUBJECT_METADATA (0x19) emits
+            // before SAMPLE_METADATA (0x1A) so a downstream reader sees
+            // subjects ahead of any samples that soft-FK into them.
+            // Empty lists emit NO packet (spec §5.4 step 5 says "zero
+            // or more").
+            if (!dataset.subjects().isEmpty()) {
+                writeSubjectMetadata(dataset.subjects());
+            }
+            if (!dataset.samples().isEmpty()) {
+                writeSampleMetadata(dataset.samples());
             }
             for (ReferenceImport ref : dataset.references().values()) {
                 writeReferenceGroup(ref);
