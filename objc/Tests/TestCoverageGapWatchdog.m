@@ -1,9 +1,13 @@
 /*
  * TestCoverageGapWatchdog.m — Task 3.10 of transport-spec v0.11.
  *
- * Crude-but-effective floor: the .tis byte size MUST be at least 1%
- * of the source .tio byte size. If a writer silently drops a content
- * type, this test fires immediately.
+ * Crude-but-effective floor: the .tis byte size MUST exceed an
+ * absolute 2 KiB minimum. The original silent-drop bug produced a
+ * ~180-byte StreamHeader+EndOfStream-only output; an empty stream
+ * baseline is ~500 bytes. 2 KiB sits well above that. An earlier
+ * version used a .tis > .tio / 100 ratio assertion; that flaked
+ * across libhdf5 versions (CI's libhdf5 inflated everything.tio 75x
+ * vs local builds via different metadata allocation).
  *
  * Wired against the `everything.tio` fixture that exercises every
  * first-class v0.11 accessor at once. A second test method
@@ -51,9 +55,16 @@ static long long cgwFileSize(NSString *path)
     return (long long)st.st_size;
 }
 
-// ── 1. .tis size at least 1% of .tio on the everything fixture ──────
+// ── 1. .tis above absolute floor on the everything fixture ──────────
 
-static void testTisSizeAtLeastOnePercentOfTio(void)
+/* Empirical floor: a .tis carrying only StreamHeader + EndOfStream is
+ * ~500 bytes. The original silent-drop bug reported by users produced
+ * 180 bytes. 2 KiB sits well above the empty-output baseline while
+ * leaving headroom for HDF5 metadata variation in .tio sizes (which
+ * this test no longer compares against). */
+static const long long kMinTisBytes = 2000;
+
+static void testTisAboveMinimumOnEverythingFixture(void)
 {
     NSString *src = cgwTempPath(@"everything.tio");
     NSString *tis = cgwTempPath(@"everything.tis");
@@ -81,11 +92,10 @@ static void testTisSizeAtLeastOnePercentOfTio(void)
     long long tisSize = cgwFileSize(tis);
     PASS(srcSize > 0 && tisSize > 0,
          "3.10 cgw: both files have positive size");
-    NSLog(@"  [3.10 cgw] .tio=%lld bytes, .tis=%lld bytes, ratio=%.2f%%",
-          srcSize, tisSize,
-          srcSize > 0 ? (100.0 * (double)tisSize / (double)srcSize) : 0.0);
-    PASS(tisSize > srcSize / 100,
-         "3.10 cgw: .tis > 1%% of .tio (rules out silent drop)");
+    NSLog(@"  [3.10 cgw] .tio=%lld bytes, .tis=%lld bytes, floor=%lld",
+          srcSize, tisSize, kMinTisBytes);
+    PASS(tisSize > kMinTisBytes,
+         "3.10 cgw: .tis > 2 KiB absolute floor (rules out silent drop)");
 
     cgwRm(src); cgwRm(tis);
 }
@@ -168,6 +178,6 @@ static void testEverythingFixtureRoundTripsEveryAccessor(void)
 void testCoverageGapWatchdog(void);
 void testCoverageGapWatchdog(void)
 {
-    testTisSizeAtLeastOnePercentOfTio();
+    testTisAboveMinimumOnEverythingFixture();
     testEverythingFixtureRoundTripsEveryAccessor();
 }

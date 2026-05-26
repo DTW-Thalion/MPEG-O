@@ -4,11 +4,14 @@ all-in-one ``everything.tio`` fixture.
 
 Two complementary checks:
 
-* :func:`test_tis_size_at_least_one_percent_of_tio_on_everything_fixture` —
-  the encoded ``.tis`` byte size MUST be at least 1% of the source
-  ``.tio`` byte size. If a writer accidentally short-circuits an
-  entire accessor (e.g. forgets to emit the IMAGE packet sequence
-  for a populated MSImage), this floor catches it immediately.
+* :func:`test_tis_above_minimum_on_everything_fixture` — the encoded
+  ``.tis`` byte size MUST exceed an absolute 2 KiB floor. The original
+  silent-drop bug produced a ~180-byte StreamHeader+EndOfStream-only
+  output; an empty stream baseline is ~500 bytes. 2 KiB sits well
+  above that. An earlier version of this test used a
+  ``.tis > .tio / 100`` ratio assertion; that flaked across libhdf5
+  versions because metadata allocation differs significantly between
+  GHA runners and local dev (.tio observed 75× larger on CI).
 
 * :func:`test_everything_fixture_round_trips_every_accessor` — runs
   every :class:`AccessorSpec` comparator against the source vs
@@ -75,23 +78,28 @@ def _encode_via_write_dataset(src: Path, tis: Path) -> Path:
     return tis
 
 
-def test_tis_size_at_least_one_percent_of_tio_on_everything_fixture(
-    tmp_path: Path,
-) -> None:
-    """The .tis byte size MUST be at least 1% of the source .tio
-    size. The 1% floor is loose by design — current measurements
-    (Java) show 7.8% — so any future writer that silently drops an
-    accessor will crash through it cleanly with a message that
-    points at the byte counts."""
+_MIN_TIS_BYTES = 2_000
+"""Empirical floor: a .tis carrying only StreamHeader + EndOfStream is
+~500 bytes. The original silent-drop bug reported by users produced
+180 bytes. 2 KiB sits well above the empty-output baseline while
+leaving headroom for HDF5 metadata variation in .tio sizes (which
+this test no longer compares against)."""
+
+
+def test_tis_above_minimum_on_everything_fixture(tmp_path: Path) -> None:
+    """The .tis byte size MUST exceed the absolute floor when given a
+    non-empty everything.tio. Any writer that silently drops every
+    accessor (or one large enough to push output under the floor) will
+    crash through this assertion cleanly."""
     src = build_everything(tmp_path / "everything.tio")
     tis = _encode_via_write_dataset(src, tmp_path / "everything.tis")
 
     src_size = src.stat().st_size
     tis_size = tis.stat().st_size
-    assert tis_size > src_size / 100, (
-        f"Coverage gap watchdog: .tis {tis_size} bytes < 1% of "
-        f".tio {src_size} bytes — likely a writer is silently "
-        f"dropping a content type."
+    assert tis_size > _MIN_TIS_BYTES, (
+        f"Coverage gap watchdog: .tis {tis_size} bytes <= "
+        f"{_MIN_TIS_BYTES} byte floor (.tio = {src_size} bytes) — "
+        f"likely a writer is silently dropping a content type."
     )
 
 
