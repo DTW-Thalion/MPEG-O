@@ -785,6 +785,168 @@ class TransportWriter:
             struct.pack("<I", pixel_index & 0xFFFFFFFF),
         )
 
+    def write_raman_image(self, image) -> None:
+        """v0.11 Task 5.3 (Deferral 1): emit a :class:`~ttio.RamanImage`
+        as the packet sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+        (0x15)`` with ``modality=1``.
+
+        Wire layout per transport-spec §4.16. The shared axis on the
+        IMAGE_HEADER carries the Raman wavenumbers vector
+        (``axis_kind = 1 = wavenumber``). The ``modality_extras`` slot
+        at the tail of the IMAGE_HEADER carries the Raman-specific
+        fields::
+
+            excitation_wavelength_nm:  float64
+            laser_power_mw:            float64
+
+        (16 bytes total.)
+
+        Each pixel rides as a continuous-mode IMAGE_PIXEL whose
+        ``payload_bytes`` is a dense vector of ``spectrum_bins``
+        FLOAT64 intensities at the shared wavenumber axis. Java
+        parity: :meth:`TransportWriter.writeRamanImage` (commit
+        ``f99ec47d``).
+        """
+        if image is None:
+            raise ValueError("write_raman_image: image must not be None")
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.wavenumbers, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+        # Raman modality_extras: 8B excitation_wavelength_nm + 8B laser_power_mw.
+        extras = struct.pack(
+            "<dd",
+            float(image.excitation_wavelength_nm),
+            float(image.laser_power_mw),
+        )
+
+        self._emit_image_header(
+            modality=1,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=1,  # wavenumber
+            axis=axis,
+            is_continuous=1,
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=extras,
+        )
+
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        payload_len = 8 * bins
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                intensities_bytes = cube[y, x].tobytes()
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    intensities_bytes,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
+    def write_ir_image(self, image) -> None:
+        """v0.11 Task 5.3 (Deferral 1): emit an :class:`~ttio.IRImage`
+        as the packet sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+        (0x15)`` with ``modality=2``.
+
+        Wire layout per transport-spec §4.16. The shared axis on the
+        IMAGE_HEADER carries the IR wavenumbers vector
+        (``axis_kind = 1 = wavenumber``). The ``modality_extras`` slot
+        at the tail of the IMAGE_HEADER carries the IR-specific
+        fields::
+
+            ir_mode:            uint8   # 0=transmittance, 1=absorbance
+            resolution_cm_inv:  float64
+
+        (9 bytes total.) Java parity:
+        :meth:`TransportWriter.writeIRImage` (commit ``f99ec47d``).
+        """
+        if image is None:
+            raise ValueError("write_ir_image: image must not be None")
+
+        from ..enums import IRMode
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.wavenumbers, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+        # IR modality_extras: u8 ir_mode + f64 resolution_cm_inv = 9B.
+        ir_mode_byte = 1 if image.mode == IRMode.ABSORBANCE else 0
+        extras = struct.pack(
+            "<Bd",
+            ir_mode_byte & 0xFF,
+            float(image.resolution_cm_inv),
+        )
+
+        self._emit_image_header(
+            modality=2,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=1,  # wavenumber
+            axis=axis,
+            is_continuous=1,
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=extras,
+        )
+
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        payload_len = 8 * bins
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                intensities_bytes = cube[y, x].tobytes()
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    intensities_bytes,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
     # ----------------------------------------------- v0.11 §4.19 / §4.20
 
     def write_identifications_table(self, rows) -> None:
@@ -898,9 +1060,12 @@ class TransportWriter:
             dataset_provenance = list(dataset.provenance())
         except Exception:  # pragma: no cover - defensive
             dataset_provenance = []
-        # ``image`` is a property — read once so the cache hit is shared
-        # between the flag-detect and the emit branch.
+        # ``image`` / ``raman_image`` / ``ir_image`` are properties — read
+        # once so the cache hit is shared between the flag-detect and
+        # the emit branch.
         dataset_image = getattr(dataset, "image", None)
+        dataset_raman_image = getattr(dataset, "raman_image", None)
+        dataset_ir_image = getattr(dataset, "ir_image", None)
         # identifications + quantifications are methods on
         # SpectralDataset (matching ``provenance()``). Empty lists do
         # not emit a packet (spec §5.4 step 6 says "zero or more")
@@ -918,6 +1083,8 @@ class TransportWriter:
             or bool(getattr(dataset, "is_encrypted", False))
             or len(dataset_provenance) > 0
             or dataset_image is not None
+            or dataset_raman_image is not None
+            or dataset_ir_image is not None
             or len(dataset_identifications) > 0
             or len(dataset_quantifications) > 0
         )
@@ -953,8 +1120,16 @@ class TransportWriter:
             # ReferenceImport. Empty refs dict emits nothing.
             for ref in refs.values():
                 self.write_reference_group(ref)
+            # §5.4.5 image cubes: MS → Raman → IR (deterministic
+            # emission order when more than one modality is populated
+            # on the same dataset). Java parity: TransportWriter.write-
+            # Dataset (commit f99ec47d).
             if dataset_image is not None:
                 self.write_image(dataset_image)
+            if dataset_raman_image is not None:
+                self.write_raman_image(dataset_raman_image)
+            if dataset_ir_image is not None:
+                self.write_ir_image(dataset_ir_image)
             # §5.4.6: identifications first, then quantifications.
             # Each empty list is a no-op (spec §5.4 step 6).
             if dataset_identifications:
@@ -1627,6 +1802,15 @@ class TransportReader:
         # collectedImage (commit a6b1e5d9).
         current_image_builder: dict | None = None
         collected_image = None  # type: MSImage | None
+        # v0.11 Task 5.3 (Deferral 1): per-modality image accumulators.
+        # The IMAGE_HEADER's modality byte selects which collected_*
+        # slot is filled at END_OF_IMAGE time. ``current_image_skipping``
+        # is True between IMAGE_HEADER (unknown modality) and the
+        # matching END_OF_IMAGE so following IMAGE_PIXEL packets are
+        # silently dropped (forward-compat per §4.16).
+        collected_raman_image = None  # type: RamanImage | None
+        collected_ir_image = None  # type: IRImage | None
+        current_image_skipping = False
         # v0.11 Task 2.7: identification / quantification rows decoded
         # from IDENTIFICATIONS_TABLE (0x16) / QUANTIFICATIONS_TABLE
         # (0x17) packets. Multiple 0x16 / 0x17 packets MAY appear in a
@@ -1899,12 +2083,55 @@ class TransportReader:
                         f"IMAGE_HEADER: is_continuous must be 0 or 1; "
                         f"got {img_continuous}"
                     )
-                if modality != 0:
-                    raise ValueError(
-                        f"IMAGE_HEADER: only modality=0 (MS) materialises "
-                        f"into an MSImage today; got modality={modality}"
+                # v0.11 Task 5.3: modality dispatch. modality 0=MS, 1=Raman,
+                # 2=IR. Unknown modalities are logged + skipped (forward
+                # compat per §4.16); the self-describing extras_len has
+                # already advanced the buffer past the IMAGE_HEADER.
+                if modality == 0:
+                    builder_modality = 0
+                    builder_extras = {}
+                elif modality == 1:
+                    if len(img_extras) != 16:
+                        raise ValueError(
+                            f"IMAGE_HEADER (modality=1, Raman) expects "
+                            f"16-byte modality_extras (excitation + "
+                            f"laser_power); got {len(img_extras)}"
+                        )
+                    exc, laser = struct.unpack("<dd", img_extras)
+                    builder_modality = 1
+                    builder_extras = {
+                        "excitation_wavelength_nm": float(exc),
+                        "laser_power_mw": float(laser),
+                    }
+                elif modality == 2:
+                    if len(img_extras) != 9:
+                        raise ValueError(
+                            f"IMAGE_HEADER (modality=2, IR) expects "
+                            f"9-byte modality_extras (ir_mode + "
+                            f"resolution); got {len(img_extras)}"
+                        )
+                    ir_mode_byte, resolution = struct.unpack(
+                        "<Bd", img_extras
                     )
+                    builder_modality = 2
+                    builder_extras = {
+                        "ir_mode_byte": int(ir_mode_byte),
+                        "resolution_cm_inv": float(resolution),
+                    }
+                else:
+                    _LOG.warning(
+                        "IMAGE_HEADER: unknown modality=%d; skipping "
+                        "image block (extras_len=%d, width=%d, height=%d)",
+                        modality, len(img_extras), int(img_width),
+                        int(img_height),
+                    )
+                    current_image_skipping = True
+                    current_image_builder = None
+                    continue
+
                 current_image_builder = {
+                    "modality": builder_modality,
+                    "extras": builder_extras,
                     "width": int(img_width),
                     "height": int(img_height),
                     "spectral_points": int(img_bins),
@@ -1912,7 +2139,7 @@ class TransportReader:
                     "pixel_size_y": float(img_px_y),
                     "scan_pattern": _scan_pattern_from_byte(img_scan_byte),
                     "axis_kind": int(img_axis_kind),
-                    "mz_axis": img_axis,
+                    "axis": img_axis,
                     "title": img_title,
                     "isa_investigation_id": img_isa,
                     "is_continuous": bool(img_continuous),
@@ -1938,6 +2165,10 @@ class TransportReader:
                 #                 pairs; unmentioned channels stay 0.0.
                 #
                 # Java parity: TransportReader.appendPixel.
+                if current_image_skipping:
+                    # v0.11 Task 5.3: unknown-modality stream — silently
+                    # drop the pixel until the matching END_OF_IMAGE.
+                    continue
                 if current_image_builder is None:
                     raise ValueError(
                         "IMAGE_PIXEL received before IMAGE_HEADER"
@@ -2030,10 +2261,20 @@ class TransportReader:
                     intensities
                 )
             elif ptype == int(PacketType.END_OF_IMAGE):
-                # v0.11 Task 2.6: close out the current image cube on
-                # END_OF_IMAGE (0x15). Verifies pixel_count_seen against
-                # the per-pixel ingest count + width*height. Java parity:
+                # v0.11 Task 2.6 / 5.3 (Deferral 1): close out the
+                # current image cube on END_OF_IMAGE (0x15). Verifies
+                # pixel_count_seen against the per-pixel ingest count
+                # + width*height. Dispatches to the per-modality
+                # collected_* slot (MS / Raman / IR). Java parity:
                 # TransportReader.finishImage.
+                if current_image_skipping:
+                    # v0.11 Task 5.3: drain the END_OF_IMAGE of a
+                    # skipped (unknown-modality) block. The
+                    # pixel_count_seen field is still consumed for
+                    # stream hygiene but not validated against any
+                    # per-pixel count (we never accumulated one).
+                    current_image_skipping = False
+                    continue
                 if current_image_builder is None:
                     raise ValueError(
                         "END_OF_IMAGE without prior IMAGE_HEADER"
@@ -2053,21 +2294,66 @@ class TransportReader:
                         f"END_OF_IMAGE pixel count {actual} does not "
                         f"equal width*height={w_img * h_img}"
                     )
-                from ..ms_image import MSImage
-                collected_image = MSImage(
-                    width=w_img,
-                    height=h_img,
-                    spectral_points=current_image_builder["spectral_points"],
-                    intensity=current_image_builder["cube"],
-                    mz_axis=current_image_builder["mz_axis"],
-                    pixel_size_x=current_image_builder["pixel_size_x"],
-                    pixel_size_y=current_image_builder["pixel_size_y"],
-                    scan_pattern=current_image_builder["scan_pattern"],
-                    title=current_image_builder["title"],
-                    isa_investigation_id=current_image_builder[
-                        "isa_investigation_id"
-                    ],
-                )
+                builder_modality = current_image_builder["modality"]
+                builder_extras = current_image_builder["extras"]
+                if builder_modality == 0:
+                    from ..ms_image import MSImage
+                    collected_image = MSImage(
+                        width=w_img,
+                        height=h_img,
+                        spectral_points=current_image_builder["spectral_points"],
+                        intensity=current_image_builder["cube"],
+                        mz_axis=current_image_builder["axis"],
+                        pixel_size_x=current_image_builder["pixel_size_x"],
+                        pixel_size_y=current_image_builder["pixel_size_y"],
+                        scan_pattern=current_image_builder["scan_pattern"],
+                        title=current_image_builder["title"],
+                        isa_investigation_id=current_image_builder[
+                            "isa_investigation_id"
+                        ],
+                    )
+                elif builder_modality == 1:
+                    from ..raman_image import RamanImage
+                    collected_raman_image = RamanImage(
+                        width=w_img,
+                        height=h_img,
+                        spectral_points=current_image_builder["spectral_points"],
+                        intensity=current_image_builder["cube"],
+                        wavenumbers=current_image_builder["axis"],
+                        pixel_size_x=current_image_builder["pixel_size_x"],
+                        pixel_size_y=current_image_builder["pixel_size_y"],
+                        scan_pattern=current_image_builder["scan_pattern"],
+                        excitation_wavelength_nm=builder_extras[
+                            "excitation_wavelength_nm"
+                        ],
+                        laser_power_mw=builder_extras["laser_power_mw"],
+                        title=current_image_builder["title"],
+                        isa_investigation_id=current_image_builder[
+                            "isa_investigation_id"
+                        ],
+                    )
+                elif builder_modality == 2:
+                    from ..enums import IRMode
+                    from ..ir_image import IRImage
+                    ir_mode = (IRMode.ABSORBANCE
+                               if builder_extras["ir_mode_byte"] == 1
+                               else IRMode.TRANSMITTANCE)
+                    collected_ir_image = IRImage(
+                        width=w_img,
+                        height=h_img,
+                        spectral_points=current_image_builder["spectral_points"],
+                        intensity=current_image_builder["cube"],
+                        wavenumbers=current_image_builder["axis"],
+                        pixel_size_x=current_image_builder["pixel_size_x"],
+                        pixel_size_y=current_image_builder["pixel_size_y"],
+                        scan_pattern=current_image_builder["scan_pattern"],
+                        mode=ir_mode,
+                        resolution_cm_inv=builder_extras["resolution_cm_inv"],
+                        title=current_image_builder["title"],
+                        isa_investigation_id=current_image_builder[
+                            "isa_investigation_id"
+                        ],
+                    )
                 current_image_builder = None
             elif ptype == int(PacketType.IDENTIFICATIONS_TABLE):
                 # v0.11 Task 2.7: decode the uint32-length-prefixed
@@ -2231,17 +2517,25 @@ class TransportReader:
             with SpectralDataset.open(path, writable=True) as ds_w:
                 for ref in collected_refs:
                     ref.write_to_dataset(ds_w)
-        # v0.11 Task 2.6: embed any image cube decoded from the
-        # stream's IMAGE_* packets. MSImage.write_to(study_group)
-        # creates /study/image_cube/ on the materialised .tio.
-        # SpectralDataset caches the MSImage at construction time, so
-        # the close+reopen at the end forces a fresh read of the cube
-        # on the returned handle. Java parity:
-        # TransportReader.materializeTo (commit a6b1e5d9).
-        if collected_image is not None:
+        # v0.11 Task 2.6 / 5.3 (Deferral 1): embed any image cubes
+        # decoded from the stream's IMAGE_* packets. Each modality
+        # lives in its own /study/{image_cube,raman_image_cube,
+        # ir_image_cube} subgroup, so all three can coexist on the
+        # same dataset. SpectralDataset caches the per-modality image
+        # at construction time, so the close+reopen at the end forces
+        # a fresh read of each cube on the returned handle. Java
+        # parity: TransportReader.materializeTo (commit f99ec47d).
+        if (collected_image is not None
+                or collected_raman_image is not None
+                or collected_ir_image is not None):
             with SpectralDataset.open(path, writable=True) as ds_w:
                 study_grp = ds_w.provider.root_group().open_group("study")
-                collected_image.write_to(study_grp)
+                if collected_image is not None:
+                    collected_image.write_to(study_grp)
+                if collected_raman_image is not None:
+                    collected_raman_image.write_to(study_grp)
+                if collected_ir_image is not None:
+                    collected_ir_image.write_to(study_grp)
         # v0.11 Task 2.4: persist the dataset-level @encrypted root
         # attribute so the materialised file reports is_encrypted ==
         # True on reopen. SpectralDataset caches encrypted_algorithm
