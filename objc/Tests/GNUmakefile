@@ -124,6 +124,7 @@ TTIOTests_OBJC_FILES = \
 	TestTransportDatasetProvenance.m \
 	TestTransportImage.m \
 	TestTransportImageProcessed.m \
+	TestSpectralDatasetIRImage.m \
 	TestTransportIdentificationsQuantifications.m \
 	TestTransportWriteDatasetPrelude.m \
 	TTIOV011FixtureBuilder.m \

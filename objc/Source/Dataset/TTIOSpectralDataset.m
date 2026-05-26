@@ -3881,6 +3881,8 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 @end
 
 #import "../Image/TTIOMSImage.h"
+#import "../Image/TTIORamanImage.h"
+#import "../Image/TTIOIRImage.h"
 #import <objc/runtime.h>
 
 @implementation TTIOSpectralDataset (Image)
@@ -3900,6 +3902,45 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     TTIOMSImage *img = [TTIOMSImage readFromFilePath:path error:&err];
     if (img != nil) {
         objc_setAssociatedObject(self, kMsImageCacheKey, img,
+                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return img;
+}
+
+- (TTIORamanImage *)ramanImage
+{
+    // v0.11 Stage 5.2: lazy /study/raman_image_cube accessor mirroring
+    // -msImage. Java parity: SpectralDataset.ramanImage(). Python parity:
+    // SpectralDataset.raman_image (lazy property).
+    static const void * const kRamanImageCacheKey = &kRamanImageCacheKey;
+    TTIORamanImage *cached = objc_getAssociatedObject(self, kRamanImageCacheKey);
+    if (cached != nil) return cached;
+    NSString *path = [self filePath];
+    if (path == nil) return nil;
+    NSError *err = nil;
+    TTIORamanImage *img = [TTIORamanImage readFromFilePath:path error:&err];
+    if (img != nil) {
+        objc_setAssociatedObject(self, kRamanImageCacheKey, img,
+                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    return img;
+}
+
+- (TTIOIRImage *)irImage
+{
+    // v0.11 Stage 5.2: lazy /study/ir_image_cube accessor mirroring
+    // -msImage / -ramanImage. Java parity: SpectralDataset.irImage()
+    // (commit 97fb065e). Python parity: SpectralDataset.ir_image
+    // (commit 8b57baa7).
+    static const void * const kIRImageCacheKey = &kIRImageCacheKey;
+    TTIOIRImage *cached = objc_getAssociatedObject(self, kIRImageCacheKey);
+    if (cached != nil) return cached;
+    NSString *path = [self filePath];
+    if (path == nil) return nil;
+    NSError *err = nil;
+    TTIOIRImage *img = [TTIOIRImage readFromFilePath:path error:&err];
+    if (img != nil) {
+        objc_setAssociatedObject(self, kIRImageCacheKey, img,
                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     return img;

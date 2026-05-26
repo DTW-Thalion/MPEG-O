@@ -286,6 +286,8 @@
 
 
 @class TTIOMSImage;
+@class TTIORamanImage;
+@class TTIOIRImage;
 
 @interface TTIOSpectralDataset (Image)
 /** The embedded MSImage when /study/image_cube is present; nil otherwise.
@@ -293,6 +295,24 @@
  *  TTIOSpectralDataset.
  *  @since 1.2.0 */
 @property (readonly, nullable) TTIOMSImage *msImage;
+
+/** The embedded RamanImage when /study/raman_image_cube is present; nil
+ *  otherwise. Mirrors <code>msImage</code> — reads and materialises the
+ *  image lazily from the dataset file on first access. Java parity:
+ *  <code>SpectralDataset.ramanImage()</code>. Python parity:
+ *  <code>SpectralDataset.raman_image</code>.
+ *  @since 1.2.0 */
+@property (readonly, nullable) TTIORamanImage *ramanImage;
+
+/** The embedded IRImage when /study/ir_image_cube is present; nil
+ *  otherwise. Mirrors <code>msImage</code> / <code>ramanImage</code> for
+ *  the third imaging modality. Java parity:
+ *  <code>SpectralDataset.irImage()</code> (commit
+ *  <code>97fb065e</code>). Python parity:
+ *  <code>SpectralDataset.ir_image</code> (commit
+ *  <code>8b57baa7</code>).
+ *  @since 1.2.0 */
+@property (readonly, nullable) TTIOIRImage *irImage;
 @end
 
 #endif
