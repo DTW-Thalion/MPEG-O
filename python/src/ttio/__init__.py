@@ -34,6 +34,8 @@ from .identification import Identification
 from .quantification import Quantification
 from .feature import Feature
 from .provenance import ProvenanceRecord
+from .sample import Sample
+from .subject import Subject
 from .transition_list import Transition, TransitionList
 from .feature_flags import FeatureFlags
 from .acquisition_run import AcquisitionRun, SpectrumIndex
@@ -80,6 +82,8 @@ __all__ = [
     "Quantification",
     "Feature",
     "ProvenanceRecord",
+    "Sample",
+    "Subject",
     "Transition",
     "TransitionList",
     "FeatureFlags",

@@ -286,6 +286,58 @@
 
 
 @class TTIOMSImage;
+@class TTIORamanImage;
+@class TTIOIRImage;
+@class TTIOSubject;
+@class TTIOSample;
+
+@interface TTIOSpectralDataset (SubjectsSamples)
+/** Stage 6 (transport-spec v0.11, Deferral 2): every
+ *  <code>TTIOSubject</code> persisted under
+ *  <code>/study/subjects/</code> on this dataset, in on-disk
+ *  iteration order. Empty array when no Subjects were written
+ *  (which is most pre-Stage-6 files). Lazily materialised from the
+ *  HDF5 file on first access and cached via
+ *  <code>objc_setAssociatedObject</code>.
+ *
+ *  <p>Java parity: <code>SpectralDataset.subjects()</code>. Python
+ *  parity: <code>SpectralDataset.subjects</code>.</p>
+ *
+ *  @since 1.4.0 */
+@property (readonly, copy) NSArray<TTIOSubject *> *subjects;
+
+/** Stage 6 (transport-spec v0.11, Deferral 2): every
+ *  <code>TTIOSample</code> persisted under
+ *  <code>/study/samples/</code> on this dataset, in on-disk
+ *  iteration order. Empty array when no Samples were written.
+ *
+ *  <p>Java parity: <code>SpectralDataset.samples()</code>. Python
+ *  parity: <code>SpectralDataset.samples</code>.</p>
+ *
+ *  @since 1.4.0 */
+@property (readonly, copy) NSArray<TTIOSample *> *samples;
+
+/**
+ * Stage 6 pre-write validation (design spec §4.4):
+ *
+ * <ul>
+ *   <li>Duplicate <code>Subject.externalId</code> or
+ *       <code>Sample.sampleId</code> raises
+ *       <code>NSInvalidArgumentException</code>.</li>
+ *   <li><code>Sample.subjectExternalId</code> that does not match any
+ *       Subject in <code>subjects</code> logs a WARNING (via
+ *       <code>NSLog</code>) but does not raise. Anonymous /
+ *       cross-dataset samples are valid.</li>
+ * </ul>
+ *
+ * <p>Called by the transport reader before persisting per-row groups,
+ * and exposed publicly so writers can pre-flight any
+ * <code>TTIOSubject</code> / <code>TTIOSample</code> list pair
+ * without having to materialise to disk first.</p>
+ */
++ (void)validateSubjects:(NSArray<TTIOSubject *> *)subjects
+                  samples:(NSArray<TTIOSample *> *)samples;
+@end
 
 @interface TTIOSpectralDataset (Image)
 /** The embedded MSImage when /study/image_cube is present; nil otherwise.
@@ -293,6 +345,24 @@
  *  TTIOSpectralDataset.
  *  @since 1.2.0 */
 @property (readonly, nullable) TTIOMSImage *msImage;
+
+/** The embedded RamanImage when /study/raman_image_cube is present; nil
+ *  otherwise. Mirrors <code>msImage</code> — reads and materialises the
+ *  image lazily from the dataset file on first access. Java parity:
+ *  <code>SpectralDataset.ramanImage()</code>. Python parity:
+ *  <code>SpectralDataset.raman_image</code>.
+ *  @since 1.2.0 */
+@property (readonly, nullable) TTIORamanImage *ramanImage;
+
+/** The embedded IRImage when /study/ir_image_cube is present; nil
+ *  otherwise. Mirrors <code>msImage</code> / <code>ramanImage</code> for
+ *  the third imaging modality. Java parity:
+ *  <code>SpectralDataset.irImage()</code> (commit
+ *  <code>97fb065e</code>). Python parity:
+ *  <code>SpectralDataset.ir_image</code> (commit
+ *  <code>8b57baa7</code>).
+ *  @since 1.2.0 */
+@property (readonly, nullable) TTIOIRImage *irImage;
 @end
 
 #endif

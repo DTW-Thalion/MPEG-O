@@ -33,11 +33,36 @@ typedef NS_ENUM(uint8_t, TTIOTransportPacketType) {
     TTIOTransportPacketBlobV2MateInfo      = 0x09,
     TTIOTransportPacketBlobV2RefDiff       = 0x0A,
     TTIOTransportPacketBlobV2NameTok       = 0x0B,
+    // ---- v0.11 (transport-spec-complete-coverage 2026-05-25) ----
+    // Emitted only when the StreamHeader features list contains
+    // "transport_v0_11". See transport-spec §4.13-§4.23.
+    // Java / Python parity:
+    //   global.thalion.ttio.transport.PacketType
+    //   ttio.transport.packets.PacketType
+    TTIOTransportPacketReferenceGroupHeader = 0x10,
+    TTIOTransportPacketReferenceChromosome  = 0x11,
+    TTIOTransportPacketEndOfReferenceGroup  = 0x12,
+    TTIOTransportPacketImageHeader          = 0x13,
+    TTIOTransportPacketImagePixel           = 0x14,
+    TTIOTransportPacketEndOfImage           = 0x15,
+    TTIOTransportPacketIdentificationsTable = 0x16,
+    TTIOTransportPacketQuantificationsTable = 0x17,
+    TTIOTransportPacketDatasetProvenance    = 0x18,
+    TTIOTransportPacketSubjectMetadata      = 0x19,
+    TTIOTransportPacketSampleMetadata       = 0x1A,
+    TTIOTransportPacketEncryptionAlgorithm  = 0x1B,
     TTIOTransportPacketEndOfStream         = 0xFF
 };
 
 /// Phase 2c-T feature flag in StreamHeader features list.
 extern NSString *const TTIOTransportBulkModeV2BlobsFeature;
+
+/// v0.11 feature flag in StreamHeader features list. Required (no
+/// opt_ prefix) when any of the 0x10-0x1B packet types ride on the
+/// wire. Cross-language parity: Java
+/// PacketType.TRANSPORT_V0_11_FEATURE, Python
+/// ttio.transport.packets.TRANSPORT_V0_11_FEATURE.
+extern NSString *const TTIOTransportV011Feature;
 
 /// Phase 2c-T codec ids (mirror TTIOCompression enum).
 extern const uint8_t TTIOTransportCodecIdMateInlineV2;       // 13
@@ -64,6 +89,15 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
 @interface TTIOTransportPacketHeader : NSObject
 
 @property (nonatomic, readonly) TTIOTransportPacketType packetType;
+/** Raw wire byte for the packet type. Equal to ``packetType`` when
+ *  the byte names a known ``TTIOTransportPacketType``; otherwise this
+ *  is the unknown byte that the reader's forward-compat path
+ *  tolerated. Always populated regardless of whether the byte names a
+ *  known type. See transport-spec §6 (v0.11 skip-unknown contract).
+ *  Cross-language parity: Java
+ *  ``PacketHeader.packetTypeByte()``, Python
+ *  ``PacketHeader.packet_type_byte``. */
+@property (nonatomic, readonly) uint8_t packetTypeByte;
 @property (nonatomic, readonly) uint16_t flags;
 @property (nonatomic, readonly) uint16_t datasetId;
 @property (nonatomic, readonly) uint32_t auSequence;
@@ -84,6 +118,16 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
                                     error:(NSError * _Nullable *)error;
 
 @end
+
+/**
+ * Returns ``YES`` iff ``typeByte`` names a defined
+ * ``TTIOTransportPacketType``. Used by the reader's forward-compat
+ * skip-unknown path (transport-spec §6, v0.11 task 0.7) — decoded
+ * headers whose ``packetTypeByte`` fails this check are length-prefix
+ * skipped rather than rejected. Cross-language parity: Java
+ * ``PacketType.fromWireOrNull``, Python ``is_known_packet_type``.
+ */
+BOOL TTIOTransportIsKnownPacketType(uint8_t typeByte);
 
 /**
  * CRC-32C (Castagnoli, reflected). Used when

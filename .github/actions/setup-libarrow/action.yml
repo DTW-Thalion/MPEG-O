@@ -1,0 +1,27 @@
+name: Setup libarrow-dev
+description: >-
+  Install Apache Arrow C++ (libarrow-dev) via Apache's apt source.
+  Required by ObjC's Source/Transport/TTIOArrowIpcBridge.mm for the
+  transport-spec v0.11 tabular packets (IDENTIFICATIONS_TABLE,
+  QUANTIFICATIONS_TABLE, SUBJECT_METADATA, SAMPLE_METADATA). Ubuntu
+  24.04 noble does not ship libarrow-dev in its default repos, so
+  the install comes from Apache's documented apt source per
+  https://arrow.apache.org/install/.
+
+runs:
+  using: composite
+  steps:
+    - name: Install libarrow-dev (Apache apt source)
+      shell: bash
+      run: |
+        set -eo pipefail
+        sudo apt-get update -qq
+        sudo apt-get install -y -V --no-install-recommends \
+          ca-certificates lsb-release wget
+        wget -qO /tmp/apache-arrow-apt-source.deb \
+          "https://apache.jfrog.io/artifactory/arrow/ubuntu/apache-arrow-apt-source-latest-$(lsb_release --codename --short).deb"
+        sudo apt-get install -y -V --no-install-recommends \
+          /tmp/apache-arrow-apt-source.deb
+        sudo apt-get update -qq
+        sudo apt-get install -y -V --no-install-recommends libarrow-dev
+        pkg-config --modversion arrow

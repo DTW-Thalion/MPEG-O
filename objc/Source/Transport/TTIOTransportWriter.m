@@ -18,6 +18,7 @@
 #import "TTIOTransportWriter.h"
 #import "Core/TTIOPortability.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOProvenanceRecord.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
 #import "Run/TTIOSpectrumIndex.h"
@@ -28,8 +29,17 @@
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOAlignedRead.h"
+#import "Genomics/TTIOReferenceImport.h"
+#import "Image/TTIOMSImage.h"
+#import "Image/TTIORamanImage.h"
+#import "Image/TTIOIRImage.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
+#import "Dataset/TTIOIdentification.h"
+#import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOSubject.h"
+#import "Dataset/TTIOSample.h"
+#import "Transport/TTIOArrowIpcCodec.h"
 #import <time.h>
 #import <string.h>
 #import <zlib.h>
@@ -69,6 +79,11 @@ static uint64_t nowNs(void)
     clock_gettime(CLOCK_REALTIME, &ts);
     return (uint64_t)ts.tv_sec * 1000000000ull + (uint64_t)ts.tv_nsec;
 }
+
+// Forward declarations for static helpers defined further down. Allows
+// methods declared earlier in @implementation (e.g. -writeReferenceGroup:)
+// to call them without an out-of-order definition error.
+static NSData *zlibDeflate(NSData *input);
 
 static NSString *spectrumClassToWireName(uint8_t wire)
 {
@@ -351,6 +366,814 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
                            error:error];
 }
 
+// ---------------------------------------------------------------- v0.11 §4.13-§4.15
+
+/**
+ * Threshold below which a chromosome rides as raw UINT8 (encoding=0).
+ * Mirrors transport-spec §4.14 + Java
+ * TransportWriter.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD + Python
+ * TransportWriter.REFERENCE_CHROMOSOME_ZLIB_THRESHOLD.
+ */
+static const NSUInteger TTIOReferenceChromosomeZlibThreshold = 4096;
+
+- (BOOL)writeReferenceGroup:(TTIOReferenceImport *)ref
+                       error:(NSError **)error
+{
+    if (!ref) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 @"writeReferenceGroup: nil ref"}];
+        return NO;
+    }
+    NSArray<NSString *> *chromNames = ref.chromosomes;
+    NSArray<NSData *> *seqs = ref.sequences;
+    uint32_t chromCount = (uint32_t)chromNames.count;
+    uint64_t totalBases = (uint64_t)[ref totalBases];
+    NSString *md5Hex = [ref md5Hex];
+    if (md5Hex.length != 32) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 [NSString stringWithFormat:
+                                     @"ReferenceImport.md5Hex must be 32 hex chars, got %lu",
+                                     (unsigned long)md5Hex.length]}];
+        return NO;
+    }
+
+    // -- REFERENCE_GROUP_HEADER (0x10) ----------------------------------
+    NSData *uriBytes = [(ref.uri ?: @"")
+        dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    NSData *md5HexBytes = [md5Hex dataUsingEncoding:NSASCIIStringEncoding];
+    if (md5HexBytes.length != 32) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 @"ReferenceImport.md5Hex did not encode to 32 ASCII bytes"}];
+        return NO;
+    }
+    NSMutableData *hdr = [NSMutableData dataWithCapacity:
+                          2 + uriBytes.length + 4 + 8 + 32];
+    appendU16LE(hdr, (uint16_t)(uriBytes.length & 0xFFFFu));
+    [hdr appendData:uriBytes];
+    appendU32LE(hdr, chromCount);
+    uint8_t tbBuf[8];
+    for (int i = 0; i < 8; i++) tbBuf[i] = (uint8_t)((totalBases >> (i * 8)) & 0xFFu);
+    [hdr appendBytes:tbBuf length:8];
+    [hdr appendData:md5HexBytes];
+    if (![self emitPacketType:TTIOTransportPacketReferenceGroupHeader
+                       payload:hdr
+                     datasetId:0
+                    auSequence:0
+                         error:error]) return NO;
+
+    // -- REFERENCE_CHROMOSOME (0x11) — one per contig --------------------
+    for (NSUInteger i = 0; i < chromCount; i++) {
+        NSString *name = chromNames[i];
+        NSData *seq = seqs[i];
+        NSData *nameBytes =
+            [(name ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+
+        uint8_t encoding;
+        NSData *payloadBytes;
+        if (seq.length < TTIOReferenceChromosomeZlibThreshold) {
+            encoding = 0;
+            payloadBytes = seq;
+        } else {
+            encoding = 1;
+            payloadBytes = zlibDeflate(seq);
+            if (!payloadBytes) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"REFERENCE_CHROMOSOME zlib deflate failed for '%@'",
+                                             name]}];
+                return NO;
+            }
+        }
+
+        NSMutableData *rec = [NSMutableData dataWithCapacity:
+                              2 + nameBytes.length + 8 + 1 + 4 + payloadBytes.length];
+        appendU16LE(rec, (uint16_t)(nameBytes.length & 0xFFFFu));
+        [rec appendData:nameBytes];
+        uint64_t seqLen = (uint64_t)seq.length;
+        uint8_t slBuf[8];
+        for (int b = 0; b < 8; b++) slBuf[b] = (uint8_t)((seqLen >> (b * 8)) & 0xFFu);
+        [rec appendBytes:slBuf length:8];
+        [rec appendBytes:&encoding length:1];
+        appendU32LE(rec, (uint32_t)payloadBytes.length);
+        [rec appendData:payloadBytes];
+        if (![self emitPacketType:TTIOTransportPacketReferenceChromosome
+                           payload:rec
+                         datasetId:0
+                        auSequence:(uint32_t)i
+                             error:error]) return NO;
+    }
+
+    // -- END_OF_REFERENCE_GROUP (0x12) -----------------------------------
+    NSMutableData *eor = [NSMutableData dataWithCapacity:4];
+    appendU32LE(eor, chromCount);
+    return [self emitPacketType:TTIOTransportPacketEndOfReferenceGroup
+                         payload:eor
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.23
+
+- (BOOL)writeEncryptionAlgorithm:(NSString *)algorithm
+                            error:(NSError **)error
+{
+    if (algorithm == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeEncryptionAlgorithm: algorithm must not be nil"}];
+        return NO;
+    }
+    NSData *algoBytes =
+        [algorithm dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    if (algoBytes.length > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"ENCRYPTION_ALGORITHM: algorithm name %lu bytes "
+                                 @"exceeds uint16 max",
+                                 (unsigned long)algoBytes.length]}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:2 + algoBytes.length];
+    appendU16LE(payload, (uint16_t)algoBytes.length);
+    [payload appendData:algoBytes];
+    return [self emitPacketType:TTIOTransportPacketEncryptionAlgorithm
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.21
+
+// Serialise a TTIOProvenanceRecord parameters dict to the canonical
+// wire JSON form: `{"k":"v","k2":"v2"}` with keys sorted (Python parity
+// — Java preserves Map iteration order). Empty dict renders as `{}`.
+// Mirrors Python `_provenance_params_json` (transport/codec.py).
+static NSString *provenanceParamsJSON(NSDictionary *params)
+{
+    if (params.count == 0) return @"{}";
+    // Coerce values to strings the way Python does so a dict whose
+    // values are NSNumber / arbitrary types still produces the
+    // string-valued shape Java emits via ProvenanceRecord.parametersJson().
+    NSMutableDictionary *coerced =
+        [NSMutableDictionary dictionaryWithCapacity:params.count];
+    for (id key in params) {
+        id val = params[key];
+        NSString *k = [key isKindOfClass:[NSString class]]
+            ? (NSString *)key
+            : [key description];
+        NSString *v;
+        if ([val isKindOfClass:[NSString class]]) {
+            v = (NSString *)val;
+        } else if ([val isKindOfClass:[NSNumber class]]) {
+            v = [(NSNumber *)val stringValue];
+        } else {
+            v = [val description];
+        }
+        coerced[k] = v;
+    }
+    // Use TTIOSortedKeysJSON for byte-equivalent emit with
+    // Python's `json.dumps(sort_keys=True, separators=(",", ":"))`
+    // and Java's TreeMap-walk on every Foundation we support, including
+    // GNUstep-base 1.31.1 where NSJSONWritingSortedKeys is a no-op.
+    return TTIOSortedKeysJSON(coerced);
+}
+
+// Comma-join an array of refs. No quoting/escaping — per spec §4.21,
+// refs are URIs that have been URL-encoded so they cannot themselves
+// contain commas. Java parity: TransportWriter.csvJoin.
+static NSString *provenanceCsvJoin(NSArray<NSString *> *refs)
+{
+    if (refs.count == 0) return @"";
+    return [refs componentsJoinedByString:@","];
+}
+
+- (BOOL)writeDatasetProvenance:(NSArray<TTIOProvenanceRecord *> *)records
+                          error:(NSError **)error
+{
+    if (records == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeDatasetProvenance: records must not be nil"}];
+        return NO;
+    }
+    if (records.count == 0) {
+        // §5.4 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    // Pre-compute UTF-8 byte arrays so we can size the buffer exactly.
+    NSMutableArray<NSData *> *softwareBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSMutableArray<NSData *> *paramsBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSMutableArray<NSData *> *inputsBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSMutableArray<NSData *> *outputsBytes =
+        [NSMutableArray arrayWithCapacity:records.count];
+    NSUInteger total = 4;  // record_count
+    for (TTIOProvenanceRecord *r in records) {
+        NSData *sb = [(r.software ?: @"")
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *pb = [provenanceParamsJSON(r.parameters)
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *ib = [provenanceCsvJoin(r.inputRefs)
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        NSData *ob = [provenanceCsvJoin(r.outputRefs)
+            dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+        for (NSData *d in @[sb, pb, ib, ob]) {
+            if (d.length > 0xFFFFu) {
+                if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                         code:TTIOTransportErrorUnexpectedPayload
+                                                     userInfo:@{NSLocalizedDescriptionKey:
+                                     [NSString stringWithFormat:
+                                         @"DATASET_PROVENANCE: per-field length %lu "
+                                         @"exceeds uint16 max",
+                                         (unsigned long)d.length]}];
+                return NO;
+            }
+        }
+        [softwareBytes addObject:sb];
+        [paramsBytes addObject:pb];
+        [inputsBytes addObject:ib];
+        [outputsBytes addObject:ob];
+        total += 8                    // timestamp_unix
+              + 2 + sb.length
+              + 2 + pb.length
+              + 2 + ib.length
+              + 2 + ob.length;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:total];
+    appendU32LE(payload, (uint32_t)records.count);
+    NSUInteger i = 0;
+    for (TTIOProvenanceRecord *r in records) {
+        int64_t ts = r.timestampUnix;
+        uint64_t tsBits = (uint64_t)ts;
+        uint8_t tsBuf[8];
+        for (int b = 0; b < 8; b++) tsBuf[b] = (uint8_t)((tsBits >> (b * 8)) & 0xFFu);
+        [payload appendBytes:tsBuf length:8];
+        appendU16LE(payload, (uint16_t)softwareBytes[i].length);
+        [payload appendData:softwareBytes[i]];
+        appendU16LE(payload, (uint16_t)paramsBytes[i].length);
+        [payload appendData:paramsBytes[i]];
+        appendU16LE(payload, (uint16_t)inputsBytes[i].length);
+        [payload appendData:inputsBytes[i]];
+        appendU16LE(payload, (uint16_t)outputsBytes[i].length);
+        [payload appendData:outputsBytes[i]];
+        i++;
+    }
+    NSAssert(payload.length == total,
+        @"DATASET_PROVENANCE size mismatch: predicted %lu, actual %lu",
+        (unsigned long)total, (unsigned long)payload.length);
+    return [self emitPacketType:TTIOTransportPacketDatasetProvenance
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.16-§4.18
+
+// Map TTIOMSImage.scanPattern to the wire byte per spec §4.16
+// (0=flyback, 1=meander, 2=random). The on-disk format uses "raster"
+// as the default name for the flyback pattern. Unknown values map
+// defensively to 0 (flyback). Java parity:
+// TransportWriter.scanPatternToByte (commit a6b1e5d9).
+static uint8_t scanPatternToWireByte(NSString *scanPattern)
+{
+    if (scanPattern == nil) return 0;
+    if ([scanPattern isEqualToString:@"raster"]) return 0;
+    if ([scanPattern isEqualToString:@"flyback"]) return 0;
+    if ([scanPattern isEqualToString:@"meander"]) return 1;
+    if ([scanPattern isEqualToString:@"random"]) return 2;
+    return 0;
+}
+
+static inline void appendF64LE(NSMutableData *buf, double v)
+{
+    uint64_t bits;
+    memcpy(&bits, &v, 8);
+    uint8_t b[8];
+    for (int i = 0; i < 8; i++) b[i] = (uint8_t)((bits >> (i * 8)) & 0xFFu);
+    [buf appendBytes:b length:8];
+}
+
+// v0.11 Task 5.3: shared IMAGE_HEADER (0x13) packing routine.
+// Mirrors Java emitImageHeader / Python _emit_image_header so the
+// common header shape stays byte-stable across modalities (MS / Raman
+// / IR) and the modality_extras slot is appended once per call. The
+// continuous-mode bit, axis_kind, and modality-specific tail come
+// from the caller.
+- (BOOL)emitImageHeaderWithModality:(uint8_t)modality
+                              width:(NSUInteger)width
+                             height:(NSUInteger)height
+                               bins:(NSUInteger)bins
+                         pixelSizeX:(double)pxX
+                         pixelSizeY:(double)pxY
+                    scanPatternByte:(uint8_t)scanPatternByte
+                           axisKind:(uint8_t)axisKind
+                               axis:(NSData *)axis
+                       isContinuous:(uint8_t)isContinuous
+                              title:(NSString *)title
+                              isaId:(NSString *)isaId
+                             extras:(NSData *)extras
+                              error:(NSError **)error
+{
+    NSUInteger axisLength = (axis.length / sizeof(double));
+    if (axis != nil && axisLength != bins && axis.length > 0) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: axis length %lu does not match "
+                                 @"spectrum_bins %lu",
+                                 (unsigned long)axisLength,
+                                 (unsigned long)bins]}];
+        return NO;
+    }
+    NSData *titleBytes =
+        [(title ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    NSData *isaBytes =
+        [(isaId ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    if (titleBytes.length > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: title %lu bytes exceeds uint16 max",
+                                 (unsigned long)titleBytes.length]}];
+        return NO;
+    }
+    if (isaBytes.length > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: isa_id %lu bytes exceeds uint16 max",
+                                 (unsigned long)isaBytes.length]}];
+        return NO;
+    }
+    NSUInteger extrasLen = extras.length;
+    if (extrasLen > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: modality_extras %lu bytes "
+                                 @"exceeds uint16 max",
+                                 (unsigned long)extrasLen]}];
+        return NO;
+    }
+    NSUInteger hdrSize = 1                       // modality
+                       + 4                       // width
+                       + 4                       // height
+                       + 4                       // spectrum_bins
+                       + 8                       // pixel_size_x
+                       + 8                       // pixel_size_y
+                       + 1                       // scan_pattern
+                       + 1                       // axis_kind
+                       + 4                       // axis_length
+                       + 8 * axisLength          // axis values
+                       + 1                       // is_continuous
+                       + 2 + titleBytes.length
+                       + 2 + isaBytes.length
+                       + 2 + extrasLen;          // modality_extras (5.3)
+    NSMutableData *hdr = [NSMutableData dataWithCapacity:hdrSize];
+    [hdr appendBytes:&modality length:1];
+    appendU32LE(hdr, (uint32_t)width);
+    appendU32LE(hdr, (uint32_t)height);
+    appendU32LE(hdr, (uint32_t)bins);
+    appendF64LE(hdr, pxX);
+    appendF64LE(hdr, pxY);
+    [hdr appendBytes:&scanPatternByte length:1];
+    [hdr appendBytes:&axisKind length:1];
+    appendU32LE(hdr, (uint32_t)axisLength);
+    if (axisLength > 0) {
+        const double *axisVals = (const double *)axis.bytes;
+        for (NSUInteger i = 0; i < axisLength; i++) {
+            appendF64LE(hdr, axisVals[i]);
+        }
+    }
+    [hdr appendBytes:&isContinuous length:1];
+    appendU16LE(hdr, (uint16_t)titleBytes.length);
+    [hdr appendData:titleBytes];
+    appendU16LE(hdr, (uint16_t)isaBytes.length);
+    [hdr appendData:isaBytes];
+    appendU16LE(hdr, (uint16_t)extrasLen);
+    if (extrasLen > 0) [hdr appendData:extras];
+    NSAssert(hdr.length == hdrSize,
+        @"IMAGE_HEADER size mismatch: predicted %lu, actual %lu",
+        (unsigned long)hdrSize, (unsigned long)hdr.length);
+    return [self emitPacketType:TTIOTransportPacketImageHeader
+                         payload:hdr
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeImage:(TTIOMSImage *)image
+              error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeImage: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *mzAxis = image.mzAxis;
+
+    // v0.11 Task 5.3: emit the shared IMAGE_HEADER. modality=0 (MS)
+    // has no modality-specific extras (spec §4.16); the slot is still
+    // present on the wire (2-byte length + 0 bytes) so unknown-
+    // modality readers can advance past the header uniformly.
+    if (![self emitImageHeaderWithModality:0
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:0       // mz
+                                      axis:mzAxis
+                              isContinuous:1
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:[NSData data]
+                                     error:error]) return NO;
+
+    return [self emitImagePixelsForCubeBytes:(const double *)image.cube.bytes
+                                       width:width
+                                      height:height
+                                        bins:bins
+                                       error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.17 (5.1)
+
+- (BOOL)writeImageProcessed:(TTIOMSImage *)image
+                      error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeImageProcessed: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *mzAxis = image.mzAxis;
+
+    // v0.11 Task 5.3: emit the shared IMAGE_HEADER with
+    // is_continuous=0 signalling sparse pixel payloads. modality=0
+    // (MS) carries no modality_extras (empty bytes).
+    if (![self emitImageHeaderWithModality:0
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:0       // mz
+                                      axis:mzAxis
+                              isContinuous:0       // processed (sparse)
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:[NSData data]
+                                     error:error]) return NO;
+
+    // -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
+    // Each pixel: u32 x + u32 y + u8 precision + u8 compression +
+    // u32 payload_length + payload_bytes where payload_bytes is
+    //   u32 nonzero_count + nonzero_count × { u32 channel + f64 intensity }.
+    // Always FLOAT64 (precision=1) uncompressed (compression=0) so
+    // the wire round-trip stays byte-exact with the cube. Nonzero is
+    // defined strictly as v != 0.0; NaN is preserved (NaN != 0.0
+    // counts as nonzero on the wire).
+    uint8_t precision = 1;       // FLOAT64
+    uint8_t compression = 0;     // NONE
+    uint64_t pixelIndex = 0;
+    const double *cubeP = (const double *)image.cube.bytes;
+    for (NSUInteger y = 0; y < height; y++) {
+        for (NSUInteger x = 0; x < width; x++) {
+            NSUInteger base = (y * width + x) * bins;
+            // First pass: count nonzeros (v != 0.0; NaN counts as
+            // nonzero because NaN != 0.0, preserving NaN on the wire).
+            uint32_t nonzero = 0;
+            for (NSUInteger k = 0; k < bins; k++) {
+                if (cubeP[base + k] != 0.0) nonzero++;
+            }
+            uint32_t payloadLen = (uint32_t)(4 + (NSUInteger)nonzero * (4 + 8));
+            NSMutableData *rec =
+                [NSMutableData dataWithCapacity:4 + 4 + 1 + 1 + 4 + payloadLen];
+            appendU32LE(rec, (uint32_t)x);
+            appendU32LE(rec, (uint32_t)y);
+            [rec appendBytes:&precision length:1];
+            [rec appendBytes:&compression length:1];
+            appendU32LE(rec, payloadLen);
+            appendU32LE(rec, nonzero);
+            for (NSUInteger k = 0; k < bins; k++) {
+                double v = cubeP[base + k];
+                if (v != 0.0) {
+                    appendU32LE(rec, (uint32_t)k);
+                    appendF64LE(rec, v);
+                }
+            }
+            if (![self emitPacketType:TTIOTransportPacketImagePixel
+                               payload:rec
+                             datasetId:0
+                            auSequence:(uint32_t)pixelIndex
+                                 error:error]) return NO;
+            pixelIndex++;
+        }
+    }
+
+    // -- END_OF_IMAGE (0x15) -----------------------------------------
+    NSMutableData *eoi = [NSMutableData dataWithCapacity:4];
+    appendU32LE(eoi, (uint32_t)(pixelIndex & 0xFFFFFFFFull));
+    return [self emitPacketType:TTIOTransportPacketEndOfImage
+                         payload:eoi
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.16 (5.3)
+
+// Helper: emit a continuous-mode IMAGE_PIXEL stream for an arbitrary
+// image cube (Raman / IR). Shared loop for modalities 1 and 2 — each
+// pixel rides as `x + y + precision(=1 FLOAT64) + compression(=0) +
+// payload_length(=bins*8) + dense intensity vector`.
+- (BOOL)emitImagePixelsForCubeBytes:(const double *)cubeP
+                              width:(NSUInteger)width
+                             height:(NSUInteger)height
+                               bins:(NSUInteger)bins
+                              error:(NSError **)error
+{
+    uint8_t precision = 1;       // FLOAT64
+    uint8_t compression = 0;     // NONE
+    uint32_t payloadLen = (uint32_t)(bins * sizeof(double));
+    uint64_t pixelIndex = 0;
+    for (NSUInteger y = 0; y < height; y++) {
+        for (NSUInteger x = 0; x < width; x++) {
+            NSMutableData *rec =
+                [NSMutableData dataWithCapacity:4 + 4 + 1 + 1 + 4 + payloadLen];
+            appendU32LE(rec, (uint32_t)x);
+            appendU32LE(rec, (uint32_t)y);
+            [rec appendBytes:&precision length:1];
+            [rec appendBytes:&compression length:1];
+            appendU32LE(rec, payloadLen);
+            NSUInteger base = (y * width + x) * bins;
+            [rec appendBytes:&cubeP[base] length:payloadLen];
+            if (![self emitPacketType:TTIOTransportPacketImagePixel
+                               payload:rec
+                             datasetId:0
+                            auSequence:(uint32_t)pixelIndex
+                                 error:error]) return NO;
+            pixelIndex++;
+        }
+    }
+    NSMutableData *eoi = [NSMutableData dataWithCapacity:4];
+    appendU32LE(eoi, (uint32_t)(pixelIndex & 0xFFFFFFFFull));
+    return [self emitPacketType:TTIOTransportPacketEndOfImage
+                         payload:eoi
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeRamanImage:(TTIORamanImage *)image
+                  error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeRamanImage: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *wavenumbers = image.wavenumbers;
+
+    // Raman modality_extras: 8B excitation_wavelength_nm + 8B laser_power_mw.
+    NSMutableData *extras = [NSMutableData dataWithCapacity:16];
+    appendF64LE(extras, image.excitationWavelengthNm);
+    appendF64LE(extras, image.laserPowerMw);
+
+    if (![self emitImageHeaderWithModality:1
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:1       // wavenumber
+                                      axis:wavenumbers
+                              isContinuous:1
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:extras
+                                     error:error]) return NO;
+    return [self emitImagePixelsForCubeBytes:(const double *)image.cube.bytes
+                                       width:width
+                                      height:height
+                                        bins:bins
+                                       error:error];
+}
+
+- (BOOL)writeIRImage:(TTIOIRImage *)image
+               error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeIRImage: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *wavenumbers = image.wavenumbers;
+
+    // IR modality_extras: u8 ir_mode (0=transmittance, 1=absorbance)
+    // + f64 resolution_cm_inv. Total 9 bytes.
+    uint8_t irModeByte = (image.mode == TTIOIRModeAbsorbance) ? 1 : 0;
+    NSMutableData *extras = [NSMutableData dataWithCapacity:9];
+    [extras appendBytes:&irModeByte length:1];
+    appendF64LE(extras, image.resolutionCmInv);
+
+    if (![self emitImageHeaderWithModality:2
+                                     width:width
+                                    height:height
+                                      bins:bins
+                                pixelSizeX:image.pixelSizeX
+                                pixelSizeY:image.pixelSizeY
+                           scanPatternByte:scanPatternToWireByte(image.scanPattern)
+                                  axisKind:1       // wavenumber
+                                      axis:wavenumbers
+                              isContinuous:1
+                                     title:image.title
+                                     isaId:image.isaInvestigationId
+                                    extras:extras
+                                     error:error]) return NO;
+    return [self emitImagePixelsForCubeBytes:(const double *)image.cube.bytes
+                                       width:width
+                                      height:height
+                                        bins:bins
+                                       error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.19 / §4.20
+
+- (BOOL)writeIdentificationsTable:(NSArray<TTIOIdentification *> *)rows
+                              error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeIdentificationsTable: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        // §5.4 step 6 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeIdentifications:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeIdentificationsTable: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketIdentificationsTable
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeQuantificationsTable:(NSArray<TTIOQuantification *> *)rows
+                              error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeQuantificationsTable: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        // §5.4 step 6 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeQuantifications:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeQuantificationsTable: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketQuantificationsTable
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+// ---------------------------------------------------------------- v0.11 §4.22 / Stage 6
+
+- (BOOL)writeSubjectMetadata:(NSArray<TTIOSubject *> *)rows
+                       error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSubjectMetadata: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        // §5.4 step 5 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeSubjects:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSubjectMetadata: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketSubjectMetadata
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeSampleMetadata:(NSArray<TTIOSample *> *)rows
+                      error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSampleMetadata: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeSamples:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSampleMetadata: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketSampleMetadata
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
 // ---------------------------------------------------------------- writeDataset
 
 static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
@@ -364,8 +1187,7 @@ static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
         @"serial_number": cfg.serialNumber ?: @"",
         @"source_type": cfg.sourceType ?: @"",
     };
-    NSData *json = [NSJSONSerialization dataWithJSONObject:d options:TTIO_JSON_SORTED_KEYS error:nil];
-    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    return TTIOSortedKeysJSON(d);
 }
 
 static NSData *zlibDeflate(NSData *input)
@@ -455,10 +1277,7 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
         @"reference_uri": run.referenceUri  ?: @"",
         @"sample_name":   run.sampleName    ?: @"",
     };
-    NSData *json = [NSJSONSerialization dataWithJSONObject:d
-                                                    options:TTIO_JSON_SORTED_KEYS
-                                                      error:nil];
-    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    return TTIOSortedKeysJSON(d);
 }
 
 // encode a UINT8 channel slice with the requested wire codec.
@@ -634,12 +1453,145 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     if (_useBulkMode && genomicNames.count > 0) {
         [features addObject:TTIOTransportBulkModeV2BlobsFeature];
     }
+
+    // v0.11 Tasks 3.4 + 3.5 + 3.9: detect v0.11 content for ALL six
+    // first-class accessors — encryption algorithm, dataset provenance,
+    // references, image, identifications, quantifications. Each non-
+    // empty section both (a) sets the TTIOTransportV011Feature flag in
+    // the StreamHeader and (b) emits its packet(s) in §5.4 order in
+    // the prelude block below. Java parity: TransportWriter.writeDataset
+    // (commits 530a5833 + 563e09c3 + a6b1e5d9 + a6faab16 + dc0de926).
+    // Python parity: TransportWriter.write_dataset (commits bf38bdc9 +
+    // 434d45a6 + 1f619ced + 150552b6 + 6f51e81b).
+    NSArray *datasetProvenance = dataset.provenanceRecords ?: @[];
+    NSDictionary<NSString *, TTIOReferenceImport *> *datasetRefs =
+        dataset.references ?: @{};
+    // -msImage / -ramanImage / -irImage return non-nil placeholders
+    // (width=0, height=0) when their cube group is absent — guard
+    // with a dimension check so v0.10 image-less datasets don't
+    // trigger an image branch. Java + Python return null/None
+    // directly because their getters don't allocate a placeholder.
+    TTIOMSImage *datasetImage = dataset.msImage;
+    BOOL hasImage = (datasetImage != nil
+                     && datasetImage.width  > 0
+                     && datasetImage.height > 0);
+    if (!hasImage) datasetImage = nil;
+    TTIORamanImage *datasetRamanImage = dataset.ramanImage;
+    BOOL hasRamanImage = (datasetRamanImage != nil
+                          && datasetRamanImage.width  > 0
+                          && datasetRamanImage.height > 0);
+    if (!hasRamanImage) datasetRamanImage = nil;
+    TTIOIRImage *datasetIRImage = dataset.irImage;
+    BOOL hasIRImage = (datasetIRImage != nil
+                       && datasetIRImage.width  > 0
+                       && datasetIRImage.height > 0);
+    if (!hasIRImage) datasetIRImage = nil;
+    NSArray<TTIOIdentification *> *datasetIdentifications =
+        dataset.identifications ?: @[];
+    NSArray<TTIOQuantification *> *datasetQuantifications =
+        dataset.quantifications ?: @[];
+    // Stage 6 (Task 6.4): subject + sample lists ride the wire as
+    // SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) in §5.4 slot 3.
+    // The -subjects / -samples lazy accessors return @[] on pre-Stage-6
+    // files, so this is a no-op for them.
+    NSArray<TTIOSubject *> *datasetSubjects =
+        dataset.subjects ?: @[];
+    NSArray<TTIOSample *> *datasetSamples =
+        dataset.samples ?: @[];
+    BOOL hasEncryptionAlgo =
+        dataset.isEncrypted && dataset.encryptedAlgorithm.length > 0;
+    BOOL hasDatasetProv = datasetProvenance.count > 0;
+    BOOL hasRefs = datasetRefs.count > 0;
+    BOOL hasIdents = datasetIdentifications.count > 0;
+    BOOL hasQuants = datasetQuantifications.count > 0;
+    BOOL hasSubjects = datasetSubjects.count > 0;
+    BOOL hasSamples = datasetSamples.count > 0;
+    BOOL hasV011Content = hasEncryptionAlgo
+                       || hasDatasetProv
+                       || hasSubjects
+                       || hasSamples
+                       || hasRefs
+                       || hasImage
+                       || hasRamanImage
+                       || hasIRImage
+                       || hasIdents
+                       || hasQuants;
+    if (hasV011Content
+        && ![features containsObject:TTIOTransportV011Feature]) {
+        [features addObject:TTIOTransportV011Feature];
+    }
+
     if (![self writeStreamHeaderWithFormatVersion:@"1.2"
                                              title:(dataset.title ?: @"")
                                   isaInvestigation:(dataset.isaInvestigationId ?: @"")
                                           features:features
                                          nDatasets:(uint16_t)(runNames.count + genomicNames.count)
                                              error:error]) return NO;
+
+    // v0.11 §5.4 prelude — sub-sections in spec order:
+    //   §5.4.1 ENCRYPTION_ALGORITHM
+    //   §5.4.2 DATASET_PROVENANCE
+    //   §5.4.3 SUBJECT_METADATA (0x19) -> SAMPLE_METADATA (0x1A)
+    //          Stage 6 (Task 6.4): subjects emit first, then samples
+    //          so forward references resolve during streaming.
+    //   §5.4.4 reference groups
+    //   §5.4.5 image cubes
+    //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
+    // Sort reference URIs deterministically so cross-call output is
+    // reproducible (the dictionary iteration order is otherwise
+    // undefined; Java + Python use insertion order via LinkedHashMap /
+    // dict ordering, which for an embedded-on-open dataset is the
+    // on-disk lexicographic order from the references group children).
+    if (hasV011Content) {
+        if (hasEncryptionAlgo) {
+            if (![self writeEncryptionAlgorithm:dataset.encryptedAlgorithm
+                                            error:error]) return NO;
+        }
+        if (hasDatasetProv) {
+            if (![self writeDatasetProvenance:datasetProvenance
+                                          error:error]) return NO;
+        }
+        // §5.4.3 — subjects before samples (forward-ref convention).
+        if (hasSubjects) {
+            if (![self writeSubjectMetadata:datasetSubjects
+                                       error:error]) return NO;
+        }
+        if (hasSamples) {
+            if (![self writeSampleMetadata:datasetSamples
+                                      error:error]) return NO;
+        }
+        if (hasRefs) {
+            NSArray<NSString *> *refUris =
+                [datasetRefs.allKeys sortedArrayUsingSelector:@selector(compare:)];
+            for (NSString *uri in refUris) {
+                TTIOReferenceImport *ref = datasetRefs[uri];
+                if (![self writeReferenceGroup:ref error:error]) return NO;
+            }
+        }
+        // §5.4.5 image cubes: MS → Raman → IR (deterministic emission
+        // order when more than one modality is populated on the same
+        // dataset). Java parity: TransportWriter.writeDataset
+        // (commit f99ec47d). Python parity: TransportWriter.write_dataset
+        // (commit 6abead73).
+        if (hasImage) {
+            if (![self writeImage:datasetImage error:error]) return NO;
+        }
+        if (hasRamanImage) {
+            if (![self writeRamanImage:datasetRamanImage error:error]) return NO;
+        }
+        if (hasIRImage) {
+            if (![self writeIRImage:datasetIRImage error:error]) return NO;
+        }
+        // §5.4 step 6: identifications first, then quantifications.
+        if (hasIdents) {
+            if (![self writeIdentificationsTable:datasetIdentifications
+                                            error:error]) return NO;
+        }
+        if (hasQuants) {
+            if (![self writeQuantificationsTable:datasetQuantifications
+                                            error:error]) return NO;
+        }
+    }
 
     uint16_t did = 1;
     for (NSString *name in runNames) {

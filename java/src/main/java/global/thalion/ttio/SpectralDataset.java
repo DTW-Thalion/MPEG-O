@@ -58,9 +58,16 @@ public class SpectralDataset implements
     private final Map<String, global.thalion.ttio.genomics.ReferenceImport> references;
     private final MSImage image;  // null when /study/image_cube absent
     private final RamanImage ramanImage;  // null when /study/raman_image_cube absent
+    private final IRImage irImage;  // null when /study/ir_image_cube absent
     private final List<Identification> identifications;
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
+    // Stage 6 (transport-spec v0.11, Deferral 2): first-class
+    // Subject + Sample lists. Eagerly populated from
+    // /study/subjects/ + /study/samples/ on open(); empty by default
+    // for back-compat with pre-Stage-6 files.
+    private final List<Subject> subjects;
+    private final List<Sample> samples;
     // Encryptable conformance.
     private global.thalion.ttio.protection.AccessPolicy accessPolicy;
     // root-level encryption state that survives close/reopen.
@@ -77,9 +84,12 @@ public class SpectralDataset implements
                             Map<String, global.thalion.ttio.genomics.ReferenceImport> references,
                             MSImage image,
                             RamanImage ramanImage,
+                            IRImage irImage,
                             List<Identification> identifications,
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords,
+                            List<Subject> subjects,
+                            List<Sample> samples,
                             String encryptedAlgorithm) {
         this.provider = provider;
         this.file = file;
@@ -91,10 +101,35 @@ public class SpectralDataset implements
         this.references = references != null ? references : Map.of();
         this.image = image;
         this.ramanImage = ramanImage;
+        this.irImage = irImage;
         this.identifications = identifications;
         this.quantifications = quantifications;
         this.provenanceRecords = provenanceRecords;
+        this.subjects = subjects != null ? subjects : List.of();
+        this.samples = samples != null ? samples : List.of();
         this.encryptedAlgorithm = encryptedAlgorithm != null ? encryptedAlgorithm : "";
+    }
+
+    // Pre-Stage-6 long-form constructor (no subjects/samples). Kept for
+    // call-sites that have not yet been widened; forwards with empty
+    // Subject + Sample lists.
+    private SpectralDataset(StorageProvider provider, Hdf5File file,
+                            FeatureFlags featureFlags,
+                            String title, String isaInvestigationId,
+                            Map<String, AcquisitionRun> msRuns,
+                            Map<String, GenomicRun> genomicRuns,
+                            Map<String, global.thalion.ttio.genomics.ReferenceImport> references,
+                            MSImage image,
+                            RamanImage ramanImage,
+                            IRImage irImage,
+                            List<Identification> identifications,
+                            List<Quantification> quantifications,
+                            List<ProvenanceRecord> provenanceRecords,
+                            String encryptedAlgorithm) {
+        this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
+                genomicRuns, references, image, ramanImage, irImage,
+                identifications, quantifications, provenanceRecords,
+                List.of(), List.of(), encryptedAlgorithm);
     }
 
     // Forwarding constructor for callers that don't pass references (write
@@ -111,7 +146,7 @@ public class SpectralDataset implements
                             List<ProvenanceRecord> provenanceRecords,
                             String encryptedAlgorithm) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                genomicRuns, Map.of(), null, null, identifications, quantifications,
+                genomicRuns, Map.of(), null, null, null, identifications, quantifications,
                 provenanceRecords, encryptedAlgorithm);
     }
 
@@ -125,7 +160,7 @@ public class SpectralDataset implements
                             List<ProvenanceRecord> provenanceRecords,
                             String encryptedAlgorithm) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                Map.of(), Map.of(), null, null, identifications, quantifications, provenanceRecords,
+                Map.of(), Map.of(), null, null, null, identifications, quantifications, provenanceRecords,
                 encryptedAlgorithm);
     }
 
@@ -137,7 +172,7 @@ public class SpectralDataset implements
                             List<Quantification> quantifications,
                             List<ProvenanceRecord> provenanceRecords) {
         this(provider, file, featureFlags, title, isaInvestigationId, msRuns,
-                Map.of(), Map.of(), null, null, identifications, quantifications, provenanceRecords, "");
+                Map.of(), Map.of(), null, null, null, identifications, quantifications, provenanceRecords, "");
     }
 
     /** The absolute path of the underlying .tio file (null for in-memory datasets). */
@@ -189,6 +224,10 @@ public class SpectralDataset implements
     /** The embedded RamanImage when /study/raman_image_cube is present; null otherwise.
      *  @since 1.2.0 */
     public RamanImage ramanImage() { return ramanImage; }
+
+    /** The embedded IRImage when /study/ir_image_cube is present; null otherwise.
+     *  @since 1.2.0 */
+    public IRImage irImage() { return irImage; }
 
     // ── Phase 2 (post-M91) — canonical unified runs accessor ────────
 
@@ -282,6 +321,22 @@ public class SpectralDataset implements
     public List<Quantification> quantifications() { return quantifications; }
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
+    /** Stage 6 (transport-spec v0.11, Deferral 2): every {@link Subject}
+     *  persisted under {@code /study/subjects/} on this dataset, in
+     *  on-disk iteration order. Empty list when no Subjects were
+     *  written (which is most pre-Stage-6 files). Backed by an
+     *  eagerly-read snapshot taken when {@link #open} runs.
+     *  @since 1.4.0 */
+    public List<Subject> subjects() { return Collections.unmodifiableList(subjects); }
+
+    /** Stage 6 (transport-spec v0.11, Deferral 2): every {@link Sample}
+     *  persisted under {@code /study/samples/} on this dataset, in
+     *  on-disk iteration order. Empty list when no Samples were
+     *  written. Backed by an eagerly-read snapshot taken when
+     *  {@link #open} runs.
+     *  @since 1.4.0 */
+    public List<Sample> samples() { return Collections.unmodifiableList(samples); }
+
     /** {@code true} iff this dataset carries an {@code @encrypted} root
      *  attribute. Survives close/reopen because the value is read back
      *  from disk by {@link #open}. Mirrors Python
@@ -326,8 +381,11 @@ public class SpectralDataset implements
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
+            List<Subject> subjects = List.of();
+            List<Sample> samples = List.of();
             MSImage image = null;
             RamanImage ramanImage = null;
+            IRImage irImage = null;
 
             if (root.hasChild("study")) {
                 try (Hdf5Group study = root.openGroup("study")) {
@@ -401,14 +459,27 @@ public class SpectralDataset implements
                             global.thalion.ttio.providers.Hdf5Provider
                                 .adapterForGroup(study));
                     }
+                    // /study/ir_image_cube — eagerly materialise (1.2.0).
+                    if (study.hasChild("ir_image_cube")) {
+                        irImage = IRImage.readFrom(
+                            global.thalion.ttio.providers.Hdf5Provider
+                                .adapterForGroup(study));
+                    }
                     idents = readIdentifications(study);
                     quants = readQuantifications(study);
                     prov = readProvenance(study);
+                    // Stage 6: per-row subject + sample groups
+                    // ({@code /study/subjects/<external_id>/} +
+                    // {@code /study/samples/<sample_id>/}). Mirrors how
+                    // {@code /study/references/<uri>/} is read above.
+                    subjects = readSubjects(study);
+                    samples = readSamples(study);
                 }
             }
 
             return new SpectralDataset(provider, file, flags, title, isaId, runs,
-                    genomicRuns, references, image, ramanImage, idents, quants, prov, encryptedAlg);
+                    genomicRuns, references, image, ramanImage, irImage,
+                    idents, quants, prov, subjects, samples, encryptedAlg);
         }
     }
 
@@ -442,6 +513,8 @@ public class SpectralDataset implements
             List<Identification> idents = List.of();
             List<Quantification> quants = List.of();
             List<ProvenanceRecord> prov = List.of();
+            List<Subject> subjects = List.of();
+            List<Sample> samples = List.of();
 
             if (root.hasChild("study")) {
                 try (global.thalion.ttio.providers.StorageGroup study =
@@ -505,10 +578,14 @@ public class SpectralDataset implements
                     idents = readIdentificationsFromJson(study);
                     quants = readQuantificationsFromJson(study);
                     prov = readProvenanceFromJson(study);
+                    // Stage 6: per-row subject + sample groups.
+                    subjects = readSubjectsFromProvider(study);
+                    samples = readSamplesFromProvider(study);
                 }
             }
             return new SpectralDataset(provider, null, flags, title, isaId, runs,
-                    genomicRuns, references, null, null, idents, quants, prov, encryptedAlg);
+                    genomicRuns, references, null, null, null,
+                    idents, quants, prov, subjects, samples, encryptedAlg);
         }
     }
 
@@ -520,6 +597,8 @@ public class SpectralDataset implements
             List<Identification> identifications,
             List<Quantification> quantifications,
             List<ProvenanceRecord> provenanceRecords,
+            List<Subject> subjects,
+            List<Sample> samples,
             FeatureFlags featureFlags) {
         StorageProvider provider = global.thalion.ttio.providers
                 .ProviderRegistry.open(url, StorageProvider.Mode.CREATE);
@@ -588,12 +667,19 @@ public class SpectralDataset implements
                     }
                 }
 
+                // Stage 6: per-row subject + sample groups (provider-
+                // agnostic). Mirrors the HDF5 fast path; validation
+                // already ran upstream in createMixed.
+                writeSubjectsViaProvider(study, subjects);
+                writeSamplesViaProvider(study, samples);
+
                 SpectralDataset out = new SpectralDataset(provider, null,
                         featureFlags, title, isaInvestigationId, runMap,
-                        genomicMap,
+                        genomicMap, Map.of(), null, null, null,
                         identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
                         provenanceRecords != null ? provenanceRecords : List.of(),
+                        subjects, samples,
                         "");
                 provider.commitTransaction();
                 return out;
@@ -612,6 +698,47 @@ public class SpectralDataset implements
                                           List<ProvenanceRecord> provenanceRecords) {
         return create(path, title, isaInvestigationId, runs,
                 identifications, quantifications, provenanceRecords,
+                autoFeatureFlags(runs));
+    }
+
+    /** Stage 6 (transport-spec v0.11, Deferral 2): create a .tio file
+     *  with first-class {@link Subject} + {@link Sample} lists.
+     *  Subjects are persisted as {@code /study/subjects/<external_id>/}
+     *  per-row groups; Samples as {@code /study/samples/<sample_id>/}.
+     *  See {@code docs/superpowers/specs/2026-05-26-subjects-samples-design.md}
+     *  §4 and §5.
+     *
+     *  <p>Validation per spec §4.4:</p>
+     *  <ul>
+     *    <li>Duplicate {@code Subject.externalId} or
+     *        {@code Sample.sampleId} raises
+     *        {@link IllegalArgumentException}.</li>
+     *    <li>{@code Sample.subjectExternalId} that does not match any
+     *        Subject in the same dataset logs a WARNING but does not
+     *        fail (anonymous / cross-dataset samples are valid).</li>
+     *  </ul>
+     *
+     *  <p>{@code AcquisitionRun.sampleName} remains the canonical
+     *  run → sample link string. Adding Sample rows does not change
+     *  that contract.</p>
+     *
+     *  @since 1.4.0
+     */
+    public static SpectralDataset create(String path, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          List<Subject> subjects,
+                                          List<Sample> samples) {
+        return createMixed(path, title, isaInvestigationId,
+                runs != null ? runs : List.of(),
+                List.of(),
+                new java.util.ArrayList<String>(),
+                identifications, quantifications, provenanceRecords,
+                subjects != null ? subjects : List.of(),
+                samples != null ? samples : List.of(),
                 autoFeatureFlags(runs));
     }
 
@@ -762,13 +889,8 @@ public class SpectralDataset implements
                 featureFlags);
     }
 
-    /** Phase 2 (post-M91): names-aware backend used by both the
-     *  typed-list {@link #create(String, String, String, List, List,
-     *  List, List, List, FeatureFlags) create} (auto-named genomic
-     *  runs) and the mixed-Map {@link #create(String, String, String,
-     *  Map, List, List, List, FeatureFlags) create} (caller-supplied
-     *  genomic names). Kept private — callers go through one of the
-     *  public {@code create} overloads. */
+    /** Back-compat overload for callers that don't pass Subject /
+     *  Sample lists. Forwards with empty Stage-6 collections. */
     private static SpectralDataset createMixed(
             String pathOrUrl, String title, String isaInvestigationId,
             List<AcquisitionRun> runs,
@@ -777,6 +899,32 @@ public class SpectralDataset implements
             List<Identification> identifications,
             List<Quantification> quantifications,
             List<ProvenanceRecord> provenanceRecords,
+            FeatureFlags featureFlags) {
+        return createMixed(pathOrUrl, title, isaInvestigationId,
+                runs, genomicRuns, genomicRunNames,
+                identifications, quantifications, provenanceRecords,
+                List.of(), List.of(),
+                featureFlags);
+    }
+
+    /** Phase 2 (post-M91): names-aware backend used by both the
+     *  typed-list {@link #create(String, String, String, List, List,
+     *  List, List, List, FeatureFlags) create} (auto-named genomic
+     *  runs) and the mixed-Map {@link #create(String, String, String,
+     *  Map, List, List, List, FeatureFlags) create} (caller-supplied
+     *  genomic names). Stage 6 (transport-spec v0.11) widens with
+     *  {@code subjects} + {@code samples}. Kept private — callers go
+     *  through one of the public {@code create} overloads. */
+    private static SpectralDataset createMixed(
+            String pathOrUrl, String title, String isaInvestigationId,
+            List<AcquisitionRun> runs,
+            List<WrittenGenomicRun> genomicRuns,
+            java.util.Collection<String> genomicRunNames,
+            List<Identification> identifications,
+            List<Quantification> quantifications,
+            List<ProvenanceRecord> provenanceRecords,
+            List<Subject> subjects,
+            List<Sample> samples,
             FeatureFlags featureFlags) {
         // v1.0 single format-version stamp. Readers gate optional
         // features by the feature-flag list (opt_*), not by version
@@ -802,11 +950,19 @@ public class SpectralDataset implements
                 + ") does not match genomicRuns (" + genomicRuns.size() + ")");
         }
 
+        // Stage 6: normalise + validate Subject + Sample lists early so
+        // that the writer fails fast (before any HDF5 mutation) on
+        // duplicate IDs. Soft-FK warnings are emitted after both lists
+        // are known so we can compare them.
+        List<Subject> subjectsList = subjects != null ? subjects : List.of();
+        List<Sample> samplesList = samples != null ? samples : List.of();
+        validateSubjectsAndSamples(subjectsList, samplesList);
+
         if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
             return createViaProviderMixed(pathOrUrl, title, isaInvestigationId,
                     runs, genomicRuns, gNamesList,
                     identifications, quantifications,
-                    provenanceRecords, featureFlags);
+                    provenanceRecords, subjectsList, samplesList, featureFlags);
         }
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
                 .open(pathOrUrl, StorageProvider.Mode.CREATE);
@@ -874,11 +1030,20 @@ public class SpectralDataset implements
                     writeProvenance(study, provenanceRecords);
                 }
 
+                // Stage 6 (transport-spec v0.11, Deferral 2): per-row
+                // subject + sample groups under /study/subjects/ +
+                // /study/samples/. Validation already ran upstream
+                // (duplicate-ID raise + soft-FK warning), so the writer
+                // here just emits the typed attributes.
+                writeSubjects(study, subjectsList);
+                writeSamples(study, samplesList);
+
                 return new SpectralDataset(provider, file, featureFlags, title, isaInvestigationId,
-                        runMap, genomicMap,
+                        runMap, genomicMap, Map.of(), null, null, null,
                         identifications != null ? identifications : List.of(),
                         quantifications != null ? quantifications : List.of(),
                         provenanceRecords != null ? provenanceRecords : List.of(),
+                        subjectsList, samplesList,
                         "");
             }
         }
@@ -2325,6 +2490,254 @@ public class SpectralDataset implements
 
     private static String nonEmptyJson(String s, String fallback) {
         return s == null || s.isEmpty() ? fallback : s;
+    }
+
+    // ── Stage 6 (transport-spec v0.11, Deferral 2): Subjects + Samples ──
+
+    /** Logger for soft-FK warnings (Sample.subjectExternalId not in
+     *  Subject list). Spec §4.4: this is a WARNING, not an error. */
+    private static final java.util.logging.Logger STAGE6_LOG =
+        java.util.logging.Logger.getLogger(SpectralDataset.class.getName());
+
+    /** Pre-write validation per spec §4.4:
+     *  duplicate {@code Subject.externalId} or {@code Sample.sampleId}
+     *  raises {@link IllegalArgumentException}; soft-FK mismatch
+     *  ({@code Sample.subjectExternalId} not found in Subject list)
+     *  logs WARNING but does not fail. */
+    private static void validateSubjectsAndSamples(
+            List<Subject> subjects, List<Sample> samples) {
+        java.util.Set<String> seenSubjects = new java.util.HashSet<>();
+        for (Subject s : subjects) {
+            if (!seenSubjects.add(s.externalId())) {
+                throw new IllegalArgumentException(
+                    "duplicate Subject.externalId: " + s.externalId());
+            }
+        }
+        java.util.Set<String> seenSamples = new java.util.HashSet<>();
+        for (Sample s : samples) {
+            if (!seenSamples.add(s.sampleId())) {
+                throw new IllegalArgumentException(
+                    "duplicate Sample.sampleId: " + s.sampleId());
+            }
+        }
+        for (Sample s : samples) {
+            String fk = s.subjectExternalId();
+            if (fk == null || fk.isEmpty()) continue;
+            if (!seenSubjects.contains(fk)) {
+                STAGE6_LOG.warning(
+                    "Sample '" + s.sampleId() + "' references unknown "
+                    + "Subject.externalId '" + fk + "' — soft-FK "
+                    + "mismatch, writing anyway (spec §4.4).");
+            }
+        }
+    }
+
+    /** HDF5 fast path: write {@code /study/subjects/<external_id>/}
+     *  per-row groups with typed attributes. Absent group when the
+     *  list is empty (spec §5 empty-case rule). */
+    private static void writeSubjects(Hdf5Group study, List<Subject> subjects) {
+        if (subjects == null || subjects.isEmpty()) return;
+        try (Hdf5Group subjectsGroup = study.createGroup("subjects")) {
+            for (Subject s : subjects) {
+                try (Hdf5Group row = subjectsGroup.createGroup(s.externalId())) {
+                    row.setStringAttribute("external_id", s.externalId());
+                    if (!s.project().isEmpty())
+                        row.setStringAttribute("project", s.project());
+                    if (!s.sex().isEmpty())
+                        row.setStringAttribute("sex", s.sex());
+                    row.setIntegerAttribute("birth_year", s.birthYear());
+                    row.setStringAttribute("attributes_json", s.attributesJson());
+                }
+            }
+        }
+    }
+
+    /** HDF5 fast path: write {@code /study/samples/<sample_id>/}
+     *  per-row groups with typed attributes. Absent group when the
+     *  list is empty. */
+    private static void writeSamples(Hdf5Group study, List<Sample> samples) {
+        if (samples == null || samples.isEmpty()) return;
+        try (Hdf5Group samplesGroup = study.createGroup("samples")) {
+            for (Sample s : samples) {
+                try (Hdf5Group row = samplesGroup.createGroup(s.sampleId())) {
+                    row.setStringAttribute("sample_id", s.sampleId());
+                    if (!s.subjectExternalId().isEmpty())
+                        row.setStringAttribute(
+                            "subject_external_id", s.subjectExternalId());
+                    if (!s.sampleKind().isEmpty())
+                        row.setStringAttribute("sample_kind", s.sampleKind());
+                    row.setIntegerAttribute("collected_at", s.collectedAt());
+                    row.setStringAttribute("attributes_json", s.attributesJson());
+                }
+            }
+        }
+    }
+
+    /** Provider-agnostic mirror of {@link #writeSubjects}. */
+    private static void writeSubjectsViaProvider(
+            global.thalion.ttio.providers.StorageGroup study,
+            List<Subject> subjects) {
+        if (subjects == null || subjects.isEmpty()) return;
+        try (var subjectsGroup = study.createGroup("subjects")) {
+            for (Subject s : subjects) {
+                try (var row = subjectsGroup.createGroup(s.externalId())) {
+                    row.setAttribute("external_id", s.externalId());
+                    if (!s.project().isEmpty())
+                        row.setAttribute("project", s.project());
+                    if (!s.sex().isEmpty())
+                        row.setAttribute("sex", s.sex());
+                    row.setAttribute("birth_year", s.birthYear());
+                    row.setAttribute("attributes_json", s.attributesJson());
+                }
+            }
+        }
+    }
+
+    /** Provider-agnostic mirror of {@link #writeSamples}. */
+    private static void writeSamplesViaProvider(
+            global.thalion.ttio.providers.StorageGroup study,
+            List<Sample> samples) {
+        if (samples == null || samples.isEmpty()) return;
+        try (var samplesGroup = study.createGroup("samples")) {
+            for (Sample s : samples) {
+                try (var row = samplesGroup.createGroup(s.sampleId())) {
+                    row.setAttribute("sample_id", s.sampleId());
+                    if (!s.subjectExternalId().isEmpty())
+                        row.setAttribute(
+                            "subject_external_id", s.subjectExternalId());
+                    if (!s.sampleKind().isEmpty())
+                        row.setAttribute("sample_kind", s.sampleKind());
+                    row.setAttribute("collected_at", s.collectedAt());
+                    row.setAttribute("attributes_json", s.attributesJson());
+                }
+            }
+        }
+    }
+
+    /** HDF5 fast path: read {@code /study/subjects/<external_id>/}
+     *  groups back into {@link Subject} instances. Empty list when
+     *  the group is absent (pre-Stage-6 files). */
+    private static List<Subject> readSubjects(Hdf5Group study) {
+        if (!study.hasChild("subjects")) return List.of();
+        List<Subject> out = new ArrayList<>();
+        try (Hdf5Group subjectsGroup = study.openGroup("subjects")) {
+            for (String name : subjectsGroup.childNames()) {
+                try (Hdf5Group row = subjectsGroup.openGroup(name)) {
+                    String externalId = row.hasAttribute("external_id")
+                        ? row.readStringAttribute("external_id") : name;
+                    String project = row.hasAttribute("project")
+                        ? row.readStringAttribute("project") : "";
+                    String sex = row.hasAttribute("sex")
+                        ? row.readStringAttribute("sex") : "";
+                    long birthYear = row.readIntegerAttribute("birth_year", 0L);
+                    Map<String, String> attrs = row.hasAttribute("attributes_json")
+                        ? MiniJson.parseStringMap(row.readStringAttribute("attributes_json"))
+                        : Map.of();
+                    out.add(new Subject(externalId, project, sex, birthYear, attrs));
+                }
+            }
+        }
+        return out;
+    }
+
+    /** HDF5 fast path: read {@code /study/samples/<sample_id>/}
+     *  groups back into {@link Sample} instances. */
+    private static List<Sample> readSamples(Hdf5Group study) {
+        if (!study.hasChild("samples")) return List.of();
+        List<Sample> out = new ArrayList<>();
+        try (Hdf5Group samplesGroup = study.openGroup("samples")) {
+            for (String name : samplesGroup.childNames()) {
+                try (Hdf5Group row = samplesGroup.openGroup(name)) {
+                    String sampleId = row.hasAttribute("sample_id")
+                        ? row.readStringAttribute("sample_id") : name;
+                    String subjectExternalId = row.hasAttribute("subject_external_id")
+                        ? row.readStringAttribute("subject_external_id") : "";
+                    String sampleKind = row.hasAttribute("sample_kind")
+                        ? row.readStringAttribute("sample_kind") : "";
+                    long collectedAt = row.readIntegerAttribute("collected_at", 0L);
+                    Map<String, String> attrs = row.hasAttribute("attributes_json")
+                        ? MiniJson.parseStringMap(row.readStringAttribute("attributes_json"))
+                        : Map.of();
+                    out.add(new Sample(sampleId, subjectExternalId,
+                            sampleKind, collectedAt, attrs));
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Provider-agnostic mirror of {@link #readSubjects}. */
+    private static List<Subject> readSubjectsFromProvider(
+            global.thalion.ttio.providers.StorageGroup study) {
+        if (!study.hasChild("subjects")) return List.of();
+        List<Subject> out = new ArrayList<>();
+        try (var subjectsGroup = study.openGroup("subjects")) {
+            for (String name : subjectsGroup.childNames()) {
+                try (var row = subjectsGroup.openGroup(name)) {
+                    String externalId = readStringAttrOrDefault(
+                        row, "external_id", name);
+                    String project = readStringAttrOrDefault(row, "project", "");
+                    String sex = readStringAttrOrDefault(row, "sex", "");
+                    long birthYear = readLongAttrOrDefault(row, "birth_year", 0L);
+                    Map<String, String> attrs = row.hasAttribute("attributes_json")
+                        ? MiniJson.parseStringMap(
+                            readStringAttrOrDefault(row, "attributes_json", "{}"))
+                        : Map.of();
+                    out.add(new Subject(externalId, project, sex, birthYear, attrs));
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Provider-agnostic mirror of {@link #readSamples}. */
+    private static List<Sample> readSamplesFromProvider(
+            global.thalion.ttio.providers.StorageGroup study) {
+        if (!study.hasChild("samples")) return List.of();
+        List<Sample> out = new ArrayList<>();
+        try (var samplesGroup = study.openGroup("samples")) {
+            for (String name : samplesGroup.childNames()) {
+                try (var row = samplesGroup.openGroup(name)) {
+                    String sampleId = readStringAttrOrDefault(
+                        row, "sample_id", name);
+                    String subjectExternalId = readStringAttrOrDefault(
+                        row, "subject_external_id", "");
+                    String sampleKind = readStringAttrOrDefault(
+                        row, "sample_kind", "");
+                    long collectedAt = readLongAttrOrDefault(
+                        row, "collected_at", 0L);
+                    Map<String, String> attrs = row.hasAttribute("attributes_json")
+                        ? MiniJson.parseStringMap(
+                            readStringAttrOrDefault(row, "attributes_json", "{}"))
+                        : Map.of();
+                    out.add(new Sample(sampleId, subjectExternalId,
+                            sampleKind, collectedAt, attrs));
+                }
+            }
+        }
+        return out;
+    }
+
+    private static String readStringAttrOrDefault(
+            global.thalion.ttio.providers.StorageGroup g, String name,
+            String fallback) {
+        if (!g.hasAttribute(name)) return fallback;
+        Object v = g.getAttribute(name);
+        return v != null ? v.toString() : fallback;
+    }
+
+    private static long readLongAttrOrDefault(
+            global.thalion.ttio.providers.StorageGroup g, String name,
+            long fallback) {
+        if (!g.hasAttribute(name)) return fallback;
+        Object v = g.getAttribute(name);
+        if (v == null) return fallback;
+        if (v instanceof Number n) return n.longValue();
+        try {
+            return Long.parseLong(v.toString());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     // ---- Encryptable conformance ----
