@@ -323,14 +323,17 @@ typedef struct {
     NSMutableArray<TTIOProvenanceRecord *> *collectedProvenance =
         [NSMutableArray array];
 
-    // v0.11 Task 3.6: per-stream accumulator for the IMAGE_HEADER ->
-    // N x IMAGE_PIXEL -> END_OF_IMAGE packet sequence (transport-spec
-    // §4.16-§4.18). Mirrors Java TransportReader.currentImageBuilder /
-    // collectedImage (commit a6b1e5d9) and Python's reader (commit
-    // 1f619ced). The MSImage is finalised on END_OF_IMAGE and embedded
+    // v0.11 Task 3.6 / 5.1 (Deferral 1): per-stream accumulator for the
+    // IMAGE_HEADER -> N x IMAGE_PIXEL -> END_OF_IMAGE packet sequence
+    // (transport-spec §4.16-§4.18). Mirrors Java
+    // TransportReader.currentImageBuilder / collectedImage (commit
+    // a6b1e5d9 + 1889343e) and Python's reader (commit 1f619ced +
+    // 8eac605a). The MSImage is finalised on END_OF_IMAGE and embedded
     // into the materialised .tio after writeMinimalToPath: returns.
-    // Continuous-mode only at Task 3.6; processed-mode (per-pixel axis)
-    // raises on the IMAGE_HEADER packet itself, matching Java + Python.
+    // Both continuous-mode (is_continuous == 1) and processed-mode
+    // (is_continuous == 0, sparse {channel,intensity} pairs) are
+    // supported as of Task 5.1; the mode flag is cached in
+    // imgIsContinuous and read by the IMAGE_PIXEL branch.
     uint32_t imgWidth = 0, imgHeight = 0, imgBins = 0;
     double imgPxX = 0.0, imgPxY = 0.0;
     NSMutableString *imgScanPattern = [NSMutableString string];
@@ -342,6 +345,7 @@ typedef struct {
     uint64_t imgSeenCount = 0;
     BOOL imgHeaderSeen = NO;
     BOOL imgCollected = NO;
+    BOOL imgIsContinuous = YES;
 
     // v0.11 Task 3.7: per-stream accumulators for the
     // IDENTIFICATIONS_TABLE (0x16) and QUANTIFICATIONS_TABLE (0x17)
@@ -943,13 +947,13 @@ typedef struct {
             NSString *title = readLEString(bytes, len, &off, 2) ?: @"";
             NSString *isa = readLEString(bytes, len, &off, 2) ?: @"";
 
-            if (isCont != 1) {
+            if (isCont != 0 && isCont != 1) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                          code:TTIOTransportErrorUnexpectedPayload
                                                      userInfo:@{NSLocalizedDescriptionKey:
-                                     @"IMAGE_HEADER: processed-mode "
-                                     @"(is_continuous=0) not yet supported "
-                                     @"in ObjC; continuous-mode only at Task 3.6"}];
+                                     [NSString stringWithFormat:
+                                         @"IMAGE_HEADER: is_continuous must be "
+                                         @"0 or 1; got %u", (unsigned)isCont]}];
                 return NO;
             }
             if (modality != 0) {
@@ -982,6 +986,7 @@ typedef struct {
             memset(imgSeen.mutableBytes, 0, imgSeen.length);
             imgSeenCount = 0;
             imgHeaderSeen = YES;
+            imgIsContinuous = (isCont == 1);
             continue;
         }
         // v0.11 Task 3.6: IMAGE_PIXEL (0x14). Wire layout per
@@ -1042,42 +1047,7 @@ typedef struct {
             }
             NSUInteger base = pixelIdx * imgBins;
             double *cubeWrite = (double *)imgCube.mutableBytes;
-            if (precision == 1) {
-                // FLOAT64
-                NSUInteger n = payloadLen / 8;
-                if (n != imgBins) {
-                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                             code:TTIOTransportErrorUnexpectedPayload
-                                                         userInfo:@{NSLocalizedDescriptionKey:
-                                         [NSString stringWithFormat:
-                                             @"IMAGE_PIXEL intensity count %lu does not "
-                                             @"match IMAGE_HEADER.spectrum_bins=%u",
-                                             (unsigned long)n, (unsigned)imgBins]}];
-                    return NO;
-                }
-                for (NSUInteger k = 0; k < n; k++) {
-                    cubeWrite[base + k] = readF64(&bytes[off + 8 * k]);
-                }
-            } else if (precision == 0) {
-                // FLOAT32 — widen into the float64 cube.
-                NSUInteger n = payloadLen / 4;
-                if (n != imgBins) {
-                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
-                                                             code:TTIOTransportErrorUnexpectedPayload
-                                                         userInfo:@{NSLocalizedDescriptionKey:
-                                         [NSString stringWithFormat:
-                                             @"IMAGE_PIXEL intensity count %lu does not "
-                                             @"match IMAGE_HEADER.spectrum_bins=%u",
-                                             (unsigned long)n, (unsigned)imgBins]}];
-                    return NO;
-                }
-                for (NSUInteger k = 0; k < n; k++) {
-                    uint32_t bits = readU32(&bytes[off + 4 * k]);
-                    float f;
-                    memcpy(&f, &bits, 4);
-                    cubeWrite[base + k] = (double)f;
-                }
-            } else {
+            if (precision != 0 && precision != 1) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                          code:TTIOTransportErrorUnexpectedPayload
                                                      userInfo:@{NSLocalizedDescriptionKey:
@@ -1086,6 +1056,104 @@ typedef struct {
                                          @"(expected 0=float32 or 1=float64)",
                                          (unsigned)precision]}];
                 return NO;
+            }
+            if (imgIsContinuous) {
+                // Continuous mode: dense intensity vector
+                // (spec §4.17). One f32/f64 per channel; total
+                // bytes == bins * sizeof(precision).
+                if (precision == 1) {
+                    // FLOAT64
+                    NSUInteger n = payloadLen / 8;
+                    if (n != imgBins) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:
+                                                 @"IMAGE_PIXEL intensity count %lu does not "
+                                                 @"match IMAGE_HEADER.spectrum_bins=%u",
+                                                 (unsigned long)n, (unsigned)imgBins]}];
+                        return NO;
+                    }
+                    for (NSUInteger k = 0; k < n; k++) {
+                        cubeWrite[base + k] = readF64(&bytes[off + 8 * k]);
+                    }
+                } else {
+                    // FLOAT32 — widen into the float64 cube.
+                    NSUInteger n = payloadLen / 4;
+                    if (n != imgBins) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:
+                                                 @"IMAGE_PIXEL intensity count %lu does not "
+                                                 @"match IMAGE_HEADER.spectrum_bins=%u",
+                                                 (unsigned long)n, (unsigned)imgBins]}];
+                        return NO;
+                    }
+                    for (NSUInteger k = 0; k < n; k++) {
+                        uint32_t bits = readU32(&bytes[off + 4 * k]);
+                        float f;
+                        memcpy(&f, &bits, 4);
+                        cubeWrite[base + k] = (double)f;
+                    }
+                }
+            } else {
+                // v0.11 Task 5.1: processed-mode payload —
+                //   u32 nonzero_count
+                //   nonzero_count × { u32 channel + fXX intensity }.
+                // Cube was zero-initialised at IMAGE_HEADER time, so
+                // unmentioned channels stay 0.0.
+                if (payloadLen < 4) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         @"IMAGE_PIXEL (processed): payload < 4 bytes"}];
+                    return NO;
+                }
+                uint32_t nonzero = readU32(&bytes[off]);
+                NSUInteger entrySize = (precision == 1) ? (4 + 8) : (4 + 4);
+                if ((NSUInteger)payloadLen != 4 + (NSUInteger)nonzero * entrySize) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         [NSString stringWithFormat:
+                                             @"IMAGE_PIXEL (processed): payload_length "
+                                             @"%u does not match 4 + nonzero_count(%u)*"
+                                             @"entry_size(%lu)",
+                                             (unsigned)payloadLen,
+                                             (unsigned)nonzero,
+                                             (unsigned long)entrySize]}];
+                    return NO;
+                }
+                NSUInteger entryOff = off + 4;
+                for (uint32_t e = 0; e < nonzero; e++) {
+                    uint32_t ch = readU32(&bytes[entryOff]);
+                    entryOff += 4;
+                    if (ch >= imgBins) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:
+                                                 @"IMAGE_PIXEL (processed): channel_index "
+                                                 @"%u out of range [0, %u) at pixel "
+                                                 @"(x=%u, y=%u)",
+                                                 (unsigned)ch, (unsigned)imgBins,
+                                                 (unsigned)px, (unsigned)py]}];
+                        return NO;
+                    }
+                    double v;
+                    if (precision == 1) {
+                        v = readF64(&bytes[entryOff]);
+                        entryOff += 8;
+                    } else {
+                        uint32_t bits = readU32(&bytes[entryOff]);
+                        float f;
+                        memcpy(&f, &bits, 4);
+                        v = (double)f;
+                        entryOff += 4;
+                    }
+                    cubeWrite[base + ch] = v;
+                }
             }
             seenBytes[pixelIdx] = 1;
             imgSeenCount++;

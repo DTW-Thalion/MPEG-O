@@ -130,6 +130,7 @@ extern void testArrowIpcCodec(void);
 extern void testTransportEncryptionAlgorithm(void);
 extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
+extern void testTransportImageProcessed(void);
 extern void testTransportIdentificationsQuantifications(void);
 extern void testTransportWriteDatasetPrelude(void);
 extern void testAccessorMatrixConformance(void);
@@ -653,6 +654,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 3.6: IMAGE_HEADER + IMAGE_PIXEL + END_OF_IMAGE (0x13-0x15) writer + reader")
             testTransportImage();
         END_SET("transport v0.11 Task 3.6: IMAGE_HEADER + IMAGE_PIXEL + END_OF_IMAGE (0x13-0x15) writer + reader")
+
+        START_SET("transport v0.11 Task 5.1: IMAGE_PIXEL processed-mode (sparse) writer + reader")
+            testTransportImageProcessed();
+        END_SET("transport v0.11 Task 5.1: IMAGE_PIXEL processed-mode (sparse) writer + reader")
 
         START_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
             testTransportIdentificationsQuantifications();

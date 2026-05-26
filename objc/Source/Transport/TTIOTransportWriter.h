@@ -268,9 +268,9 @@ NS_ASSUME_NONNULL_BEGIN
  * uncompressed). The pixel index rides in the packet header's
  * <code>auSequence</code> field (<code>y * width + x</code>; 0-based).</p>
  *
- * <p>Processed-mode (per-pixel axis, signalled by
- * <code>is_continuous == 0</code>) is not yet emitted; the matching
- * decoder in <code>TTIOTransportReader</code> is also continuous-only.
+ * <p>Processed-mode (sparse <code>{channel,intensity}</code> pairs,
+ * signalled by <code>is_continuous == 0</code>) is emitted by the
+ * opt-in sibling <code>-writeImageProcessed:</code> below.
  * Java parity: <code>TransportWriter.writeImage</code> (commit
  * <code>a6b1e5d9</code>). Python parity:
  * <code>TransportWriter.write_image</code> (commit
@@ -278,6 +278,45 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeImage:(TTIOMSImage *)image
               error:(NSError * _Nullable *)error;
+
+/**
+ * v0.11 Task 5.1 (Deferral 1): emit a <code>TTIOMSImage</code> as
+ * the packet sequence
+ * <code>IMAGE_HEADER (0x13) -&gt; N x IMAGE_PIXEL (0x14) -&gt;
+ *  END_OF_IMAGE (0x15)</code> in <strong>processed mode</strong>
+ * (sparse), where each pixel carries only its nonzero
+ * <code>(channel_index, intensity)</code> pairs indexed into the
+ * shared <code>mzAxis</code>. The dense cube is reconstructed by
+ * the reader.
+ *
+ * <p>Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+ * IMAGE_HEADER is identical to <code>-writeImage:</code> except
+ * for <code>is_continuous == 0</code>; each IMAGE_PIXEL payload
+ * is:</p>
+ *
+ * <pre>
+ *   x(u32) + y(u32) + precision(u8) + compression(u8)
+ *     + payload_length(u32)
+ *     + payload_bytes = nonzero_count(u32)
+ *         + nonzero_count × { channel_index(u32) + intensity(f64) }
+ * </pre>
+ *
+ * <p>Nonzero is defined strictly as <code>v != 0.0</code>; NaN is
+ * preserved verbatim (NaN compares unequal to 0.0). The TTIOMSImage
+ * data model stays dense; processed mode is purely a wire
+ * optimisation for sparse cubes.</p>
+ *
+ * <p>This is an opt-in sibling of <code>-writeImage:</code>.
+ * Callers pick continuous vs processed mode explicitly today; an
+ * automatic heuristic (emit whichever is smaller) lands in a
+ * follow-up task. Java parity:
+ * <code>TransportWriter.writeImageProcessed</code> (commit
+ * <code>1889343e</code>). Python parity:
+ * <code>TransportWriter.write_image_processed</code> (commit
+ * <code>8eac605a</code>).</p>
+ */
+- (BOOL)writeImageProcessed:(TTIOMSImage *)image
+                      error:(NSError * _Nullable *)error;
 
 /**
  * v0.11 Task 3.7: emit an <code>IDENTIFICATIONS_TABLE</code> (0x16)

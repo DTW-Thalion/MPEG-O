@@ -806,6 +806,164 @@ static inline void appendF64LE(NSMutableData *buf, double v)
                            error:error];
 }
 
+// ---------------------------------------------------------------- v0.11 §4.17 (5.1)
+
+- (BOOL)writeImageProcessed:(TTIOMSImage *)image
+                      error:(NSError **)error
+{
+    if (image == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeImageProcessed: image must not be nil"}];
+        return NO;
+    }
+    NSUInteger width  = image.width;
+    NSUInteger height = image.height;
+    NSUInteger bins   = image.spectralPoints;
+    NSData *mzAxis = image.mzAxis;
+    NSUInteger axisLength = (mzAxis.length / sizeof(double));
+    if (mzAxis != nil && axisLength != bins) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: mz_axis length %lu does not match "
+                                 @"spectrum_bins %lu",
+                                 (unsigned long)axisLength,
+                                 (unsigned long)bins]}];
+        return NO;
+    }
+    uint8_t modality = 0;        // MS imaging
+    uint8_t axisKind = 0;        // mz
+    uint8_t isContinuous = 0;    // processed (sparse)
+    uint8_t scanPatternByte = scanPatternToWireByte(image.scanPattern);
+
+    NSData *titleBytes =
+        [(image.title ?: @"") dataUsingEncoding:NSUTF8StringEncoding] ?: [NSData data];
+    NSData *isaBytes =
+        [(image.isaInvestigationId ?: @"") dataUsingEncoding:NSUTF8StringEncoding]
+        ?: [NSData data];
+    if (titleBytes.length > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: title %lu bytes exceeds uint16 max",
+                                 (unsigned long)titleBytes.length]}];
+        return NO;
+    }
+    if (isaBytes.length > 0xFFFFu) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             [NSString stringWithFormat:
+                                 @"IMAGE_HEADER: isa_id %lu bytes exceeds uint16 max",
+                                 (unsigned long)isaBytes.length]}];
+        return NO;
+    }
+
+    // -- IMAGE_HEADER (0x13) — identical layout to writeImage:,
+    //    is_continuous=0 signals the sparse pixel payload below.
+    NSUInteger hdrSize = 1                       // modality
+                       + 4                       // width
+                       + 4                       // height
+                       + 4                       // spectrum_bins
+                       + 8                       // pixel_size_x
+                       + 8                       // pixel_size_y
+                       + 1                       // scan_pattern
+                       + 1                       // axis_kind
+                       + 4                       // axis_length
+                       + 8 * axisLength          // axis values (shared)
+                       + 1                       // is_continuous
+                       + 2 + titleBytes.length
+                       + 2 + isaBytes.length;
+    NSMutableData *hdr = [NSMutableData dataWithCapacity:hdrSize];
+    [hdr appendBytes:&modality length:1];
+    appendU32LE(hdr, (uint32_t)width);
+    appendU32LE(hdr, (uint32_t)height);
+    appendU32LE(hdr, (uint32_t)bins);
+    appendF64LE(hdr, image.pixelSizeX);
+    appendF64LE(hdr, image.pixelSizeY);
+    [hdr appendBytes:&scanPatternByte length:1];
+    [hdr appendBytes:&axisKind length:1];
+    appendU32LE(hdr, (uint32_t)axisLength);
+    if (axisLength > 0) {
+        const double *axisVals = (const double *)mzAxis.bytes;
+        for (NSUInteger i = 0; i < axisLength; i++) {
+            appendF64LE(hdr, axisVals[i]);
+        }
+    }
+    [hdr appendBytes:&isContinuous length:1];
+    appendU16LE(hdr, (uint16_t)titleBytes.length);
+    [hdr appendData:titleBytes];
+    appendU16LE(hdr, (uint16_t)isaBytes.length);
+    [hdr appendData:isaBytes];
+    NSAssert(hdr.length == hdrSize,
+        @"IMAGE_HEADER size mismatch: predicted %lu, actual %lu",
+        (unsigned long)hdrSize, (unsigned long)hdr.length);
+    if (![self emitPacketType:TTIOTransportPacketImageHeader
+                       payload:hdr
+                     datasetId:0
+                    auSequence:0
+                         error:error]) return NO;
+
+    // -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
+    // Each pixel: u32 x + u32 y + u8 precision + u8 compression +
+    // u32 payload_length + payload_bytes where payload_bytes is
+    //   u32 nonzero_count + nonzero_count × { u32 channel + f64 intensity }.
+    // Always FLOAT64 (precision=1) uncompressed (compression=0) so
+    // the wire round-trip stays byte-exact with the cube. Nonzero is
+    // defined strictly as v != 0.0; NaN is preserved (NaN != 0.0
+    // counts as nonzero on the wire).
+    uint8_t precision = 1;       // FLOAT64
+    uint8_t compression = 0;     // NONE
+    uint64_t pixelIndex = 0;
+    const double *cubeP = (const double *)image.cube.bytes;
+    for (NSUInteger y = 0; y < height; y++) {
+        for (NSUInteger x = 0; x < width; x++) {
+            NSUInteger base = (y * width + x) * bins;
+            // First pass: count nonzeros (v != 0.0; NaN counts as
+            // nonzero because NaN != 0.0, preserving NaN on the wire).
+            uint32_t nonzero = 0;
+            for (NSUInteger k = 0; k < bins; k++) {
+                if (cubeP[base + k] != 0.0) nonzero++;
+            }
+            uint32_t payloadLen = (uint32_t)(4 + (NSUInteger)nonzero * (4 + 8));
+            NSMutableData *rec =
+                [NSMutableData dataWithCapacity:4 + 4 + 1 + 1 + 4 + payloadLen];
+            appendU32LE(rec, (uint32_t)x);
+            appendU32LE(rec, (uint32_t)y);
+            [rec appendBytes:&precision length:1];
+            [rec appendBytes:&compression length:1];
+            appendU32LE(rec, payloadLen);
+            appendU32LE(rec, nonzero);
+            for (NSUInteger k = 0; k < bins; k++) {
+                double v = cubeP[base + k];
+                if (v != 0.0) {
+                    appendU32LE(rec, (uint32_t)k);
+                    appendF64LE(rec, v);
+                }
+            }
+            if (![self emitPacketType:TTIOTransportPacketImagePixel
+                               payload:rec
+                             datasetId:0
+                            auSequence:(uint32_t)pixelIndex
+                                 error:error]) return NO;
+            pixelIndex++;
+        }
+    }
+
+    // -- END_OF_IMAGE (0x15) -----------------------------------------
+    NSMutableData *eoi = [NSMutableData dataWithCapacity:4];
+    appendU32LE(eoi, (uint32_t)(pixelIndex & 0xFFFFFFFFull));
+    return [self emitPacketType:TTIOTransportPacketEndOfImage
+                         payload:eoi
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
 // ---------------------------------------------------------------- v0.11 §4.19 / §4.20
 
 - (BOOL)writeIdentificationsTable:(NSArray<TTIOIdentification *> *)rows
