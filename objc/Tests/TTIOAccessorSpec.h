@@ -1,5 +1,5 @@
 /*
- * TTIOAccessorSpec.h — Task 3.10 of transport-spec v0.11.
+ * TTIOAccessorSpec.h — Task 3.10 + Task 5.6 of transport-spec v0.11.
  *
  * Enumerates every first-class accessor on TTIOSpectralDataset that
  * is covered by v0.11's transport-spec round-trip. Each entry pairs
@@ -20,6 +20,12 @@
  * exist as first-class entities on TTIOSpectralDataset; the v0.11
  * spec mentions them but the data model still surfaces them only as
  * server-side cohort predicates.
+ *
+ * Stage 5 (Task 5.6, Deferral 1): MS_IMAGE_PROCESSED, RAMAN_IMAGE,
+ * IR_IMAGE. MS_IMAGE_PROCESSED supplies a custom `encodeBlock` that
+ * emits the §5.4 prelude with -writeImageProcessed: in place of
+ * -writeImage: (opt-in sparse wire mode). Raman + IR integrate via
+ * the §5.4.5 prelude image block and inherit the default encode.
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -43,15 +49,34 @@ typedef BOOL (^TTIOAccessorBuildBlock)(NSString *path,
 typedef NSString * _Nullable (^TTIOAccessorAssertBlock)(TTIOSpectralDataset *a,
                                                          TTIOSpectralDataset *b);
 
+/** Stage 5 (Task 5.6) — optional block that overrides the default
+ *  -writeDataset: encode step. Writes from `source` into a freshly
+ *  opened TransportWriter at `outputPath`. Returns YES on success.
+ *  When nil, the conformance test opens a TransportWriter at
+ *  `outputPath` and calls -writeDataset:source:. */
+typedef BOOL (^TTIOAccessorEncodeBlock)(TTIOSpectralDataset *source,
+                                          NSString *outputPath,
+                                          NSError * _Nullable * _Nullable error);
+
 /** One row of the conformance matrix. */
 @interface TTIOAccessorSpec : NSObject
 @property (nonatomic, readonly, copy) NSString *name;
 @property (nonatomic, readonly, copy) TTIOAccessorBuildBlock build;
 @property (nonatomic, readonly, copy) TTIOAccessorAssertBlock assertEqual;
+/** Optional Stage 5 / Task 5.6 encode override (e.g. processed-mode
+ *  IMAGE wire shape). Nil for accessors that use the default
+ *  -writeDataset: path. */
+@property (nonatomic, readonly, copy, nullable) TTIOAccessorEncodeBlock encodeBlock;
 
 - (instancetype)initWithName:(NSString *)name
                         build:(TTIOAccessorBuildBlock)build
                   assertEqual:(TTIOAccessorAssertBlock)assertEqual;
+
+/** Designated initialiser with optional Stage 5 encode override. */
+- (instancetype)initWithName:(NSString *)name
+                        build:(TTIOAccessorBuildBlock)build
+                  assertEqual:(TTIOAccessorAssertBlock)assertEqual
+                  encodeBlock:(nullable TTIOAccessorEncodeBlock)encodeBlock;
 @end
 
 /** Returns the canonical list of accessor specs in stable order.
