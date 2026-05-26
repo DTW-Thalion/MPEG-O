@@ -556,25 +556,48 @@ isa_id_utf8:         bytes[isa_id_length]
 
 ### 4.17 ImagePixel (`0x14`) — v0.11
 
-One per pixel. For continuous-mode cubes, intensities only. For
-processed-mode (signalled by `ImageHeader.is_continuous == 0`),
-intensities are followed by a per-pixel axis.
+One per pixel. The packet wraps a wire layout shared by both
+emission modes (continuous and processed); the mode is fixed for the
+entire image by `ImageHeader.is_continuous` and dictates how readers
+parse the `payload_bytes` field below.
 
-Continuous-mode payload:
+The fixed outer header (identical in both modes):
 ```
 x:                   uint32
 y:                   uint32
 precision:           uint8              # 0=float32, 1=float64
 compression:         uint8              # 0=none, 1=zstd, 2=zlib
-payload_length:      uint32
-intensities:         bytes[payload_length]
+payload_length:      uint32             # length of payload_bytes
+payload_bytes:       bytes[payload_length]
 ```
 
-Processed-mode payload appends a per-pixel axis after `intensities`:
+**Continuous mode** (`ImageHeader.is_continuous == 1`):
+`payload_bytes` is a dense array of `spectrum_bins` intensities at
+the declared `precision` (FLOAT32 or FLOAT64), in `mzAxis` order.
+No per-pixel axis — every pixel reuses the shared axis on the
+`ImageHeader`.
+
+**Processed mode** (`ImageHeader.is_continuous == 0`): each pixel
+carries a sparse list of nonzero entries indexed into the shared
+`mzAxis`. The MSImage data model remains a dense cube; readers
+expand the sparse payload into the cube at decode time (zero-filling
+unmentioned channels). `payload_bytes` carries:
 ```
-axis_length:         uint32
-axis_payload:        bytes[axis_length]
+nonzero_count:       uint32
+entries:             nonzero_count × {
+                       channel_index:  uint32  # 0 ≤ index < spectrum_bins
+                       intensity:      bytes[precision_size]
+                                               # FLOAT32 if precision=0
+                                               # FLOAT64 if precision=1
+                     }
 ```
+NaN intensities, if produced, are emitted verbatim (no filtering)
+so round-trips preserve them. Writers SHOULD pick processed mode
+when it produces a smaller payload than continuous mode (a typical
+heuristic: average nonzero count per pixel below
+`spectrum_bins / 4`). Readers MUST tolerate both modes invisibly —
+materialised MSImages look identical regardless of the mode chosen
+on the wire.
 
 ### 4.18 EndOfImage (`0x15`) — v0.11
 

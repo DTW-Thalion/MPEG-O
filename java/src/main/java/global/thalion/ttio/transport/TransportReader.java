@@ -674,11 +674,14 @@ public final class TransportReader implements AutoCloseable {
 
     // ---------------------------------------------------------- v0.11 §4.16-§4.18
 
-    /** v0.11 Task 1.7: decode an IMAGE_HEADER (0x13) payload and
-     *  prime the per-image accumulator. Wire layout matches
-     *  transport-spec §4.16. Only continuous-mode images
-     *  ({@code is_continuous == 1}) are supported at Task 1.7;
-     *  processed-mode (per-pixel axis) raises an exception.  */
+    /** v0.11 Task 1.7 / 5.1 (Deferral 1): decode an IMAGE_HEADER
+     *  (0x13) payload and prime the per-image accumulator. Wire
+     *  layout matches transport-spec §4.16. Both continuous-mode
+     *  ({@code is_continuous == 1}) and processed-mode
+     *  ({@code is_continuous == 0}, sparse {channel,intensity}
+     *  pairs indexed into the shared mzAxis) are supported as of
+     *  Task 5.1; the mode flag is cached on the builder and read by
+     *  {@link #appendPixel}. */
     private void startImage(byte[] payload) {
         ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
         int modality = bb.get() & 0xFF;
@@ -700,10 +703,10 @@ public final class TransportReader implements AutoCloseable {
         byte[] isaBytes = new byte[isaLen];
         bb.get(isaBytes);
 
-        if (isContinuous != 1) {
+        if (isContinuous != 0 && isContinuous != 1) {
             throw new IllegalStateException(
-                "IMAGE_HEADER: processed-mode (is_continuous=0) not yet "
-                + "supported in Java; continuous-mode only at Task 1.7");
+                "IMAGE_HEADER: is_continuous must be 0 or 1; got "
+                + isContinuous);
         }
         if (modality != 0) {
             // The materialiser writes /study/image_cube which is the
@@ -719,12 +722,22 @@ public final class TransportReader implements AutoCloseable {
             scanPatternFromByte(scanPat),
             axis,
             new String(titleBytes, StandardCharsets.UTF_8),
-            new String(isaBytes,   StandardCharsets.UTF_8));
+            new String(isaBytes,   StandardCharsets.UTF_8),
+            isContinuous == 1);
     }
 
-    /** v0.11 Task 1.7: decode a continuous-mode IMAGE_PIXEL (0x14)
-     *  payload per transport-spec §4.17 and stash the intensities at
-     *  the pixel's row/col slot. */
+    /** v0.11 Task 1.7 / 5.1: decode an IMAGE_PIXEL (0x14) payload
+     *  per transport-spec §4.17 and stash the intensities at the
+     *  pixel's row/col slot. The wire shape inside
+     *  {@code payload_bytes} branches on the cached
+     *  {@code isContinuous} from the IMAGE_HEADER:
+     *  <ul>
+     *    <li>continuous: dense {@code spectrum_bins} intensities</li>
+     *    <li>processed: {@code u32 nonzero_count} + that many
+     *        {@code u32 channel_index + fXX intensity} pairs;
+     *        unmentioned channels stay at 0.0</li>
+     *  </ul>
+     */
     private void appendPixel(byte[] payload) {
         if (currentImageBuilder == null) {
             throw new IllegalStateException(
@@ -746,25 +759,48 @@ public final class TransportReader implements AutoCloseable {
                 "IMAGE_PIXEL compression=" + compression
                 + " not yet supported (NONE only at Task 1.7)");
         }
-        double[] intensities;
-        if (precision == 1) {
-            // FLOAT64
-            int n = payloadLen / 8;
-            intensities = new double[n];
-            ByteBuffer ibuf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
-            for (int k = 0; k < n; k++) intensities[k] = ibuf.getDouble();
-        } else if (precision == 0) {
-            // FLOAT32 — widen to double for MSImage's double[] cube.
-            int n = payloadLen / 4;
-            intensities = new double[n];
-            ByteBuffer ibuf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
-            for (int k = 0; k < n; k++) intensities[k] = ibuf.getFloat();
-        } else {
+        if (precision != 0 && precision != 1) {
             throw new IllegalStateException(
                 "IMAGE_PIXEL precision=" + precision
                 + " not supported (expected 0=float32 or 1=float64)");
         }
-        currentImageBuilder.setPixel(x, y, intensities);
+        ByteBuffer ibuf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+        if (currentImageBuilder.isContinuous) {
+            int n;
+            double[] intensities;
+            if (precision == 1) {
+                // FLOAT64
+                n = payloadLen / 8;
+                intensities = new double[n];
+                for (int k = 0; k < n; k++) intensities[k] = ibuf.getDouble();
+            } else {
+                // FLOAT32 — widen to double for MSImage's double[] cube.
+                n = payloadLen / 4;
+                intensities = new double[n];
+                for (int k = 0; k < n; k++) intensities[k] = ibuf.getFloat();
+            }
+            currentImageBuilder.setPixel(x, y, intensities);
+        } else {
+            // Processed-mode (sparse) payload: u32 nonzero_count
+            // followed by nonzero_count × (u32 channel + fXX intensity).
+            // Cube remains dense; channels not listed stay 0.0.
+            int nonzero = ibuf.getInt();
+            int bins = currentImageBuilder.spectralPoints;
+            double[] intensities = new double[bins];
+            for (int k = 0; k < nonzero; k++) {
+                int ch = ibuf.getInt();
+                double v = (precision == 1) ? ibuf.getDouble()
+                                            : (double) ibuf.getFloat();
+                if (ch < 0 || ch >= bins) {
+                    throw new IllegalStateException(
+                        "IMAGE_PIXEL (processed) channel_index " + ch
+                        + " out of range [0, " + bins + ") at pixel ("
+                        + x + ", " + y + ")");
+                }
+                intensities[ch] = v;
+            }
+            currentImageBuilder.setPixel(x, y, intensities);
+        }
     }
 
     /** v0.11 Task 1.7: close out the current image cube on
@@ -827,11 +863,16 @@ public final class TransportReader implements AutoCloseable {
         // (catches duplicate (x,y) writes that would silently overwrite).
         final boolean[] seen;
         int seenCount;
+        // Wire-mode marker forwarded from the IMAGE_HEADER so
+        // appendPixel knows whether to parse a dense intensity vector
+        // (continuous) or sparse channel/intensity pairs (processed).
+        final boolean isContinuous;
 
         ImageBuilder(int width, int height, int spectralPoints,
                      double pixelSizeX, double pixelSizeY,
                      String scanPattern, double[] axis,
-                     String title, String isaInvestigationId) {
+                     String title, String isaInvestigationId,
+                     boolean isContinuous) {
             this.width = width;
             this.height = height;
             this.spectralPoints = spectralPoints;
@@ -846,6 +887,7 @@ public final class TransportReader implements AutoCloseable {
                 ? Integer.MAX_VALUE
                 : width * height * spectralPoints];
             this.seen = new boolean[width * height];
+            this.isContinuous = isContinuous;
         }
 
         void setPixel(int x, int y, double[] intensities) {
