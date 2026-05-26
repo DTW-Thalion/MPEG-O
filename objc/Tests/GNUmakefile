@@ -133,6 +133,7 @@ TTIOTests_OBJC_FILES = \
 	TestSubjectSample.m \
 	TestSpectralDatasetSubjectsSamples.m \
 	TestArrowIpcCodecSubjectsSamples.m \
+	TestTransportSubjectsSamples.m \
 	TTIOV011FixtureBuilder.m \
 	TTIOAccessorSpec.m \
 	TestAccessorMatrixConformance.m \

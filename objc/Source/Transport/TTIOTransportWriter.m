@@ -37,6 +37,8 @@
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
+#import "Dataset/TTIOSubject.h"
+#import "Dataset/TTIOSample.h"
 #import "Transport/TTIOArrowIpcCodec.h"
 #import <time.h>
 #import <string.h>
@@ -1108,6 +1110,71 @@ static inline void appendF64LE(NSMutableData *buf, double v)
                            error:error];
 }
 
+// ---------------------------------------------------------------- v0.11 §4.22 / Stage 6
+
+- (BOOL)writeSubjectMetadata:(NSArray<TTIOSubject *> *)rows
+                       error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSubjectMetadata: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        // §5.4 step 5 "zero or more" — emit nothing for empty input.
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeSubjects:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSubjectMetadata: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketSubjectMetadata
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
+- (BOOL)writeSampleMetadata:(NSArray<TTIOSample *> *)rows
+                      error:(NSError **)error
+{
+    if (rows == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSampleMetadata: rows must not be nil"}];
+        return NO;
+    }
+    if (rows.count == 0) {
+        return YES;
+    }
+    NSData *ipc = [TTIOArrowIpcCodec encodeSamples:rows];
+    if (ipc == nil) {
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                             @"writeSampleMetadata: Arrow IPC encode failed"}];
+        return NO;
+    }
+    NSMutableData *payload = [NSMutableData dataWithCapacity:4 + ipc.length];
+    appendU32LE(payload, (uint32_t)ipc.length);
+    [payload appendData:ipc];
+    return [self emitPacketType:TTIOTransportPacketSampleMetadata
+                         payload:payload
+                       datasetId:0
+                      auSequence:0
+                           error:error];
+}
+
 // ---------------------------------------------------------------- writeDataset
 
 static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
@@ -1428,14 +1495,26 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         dataset.identifications ?: @[];
     NSArray<TTIOQuantification *> *datasetQuantifications =
         dataset.quantifications ?: @[];
+    // Stage 6 (Task 6.4): subject + sample lists ride the wire as
+    // SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) in §5.4 slot 3.
+    // The -subjects / -samples lazy accessors return @[] on pre-Stage-6
+    // files, so this is a no-op for them.
+    NSArray<TTIOSubject *> *datasetSubjects =
+        dataset.subjects ?: @[];
+    NSArray<TTIOSample *> *datasetSamples =
+        dataset.samples ?: @[];
     BOOL hasEncryptionAlgo =
         dataset.isEncrypted && dataset.encryptedAlgorithm.length > 0;
     BOOL hasDatasetProv = datasetProvenance.count > 0;
     BOOL hasRefs = datasetRefs.count > 0;
     BOOL hasIdents = datasetIdentifications.count > 0;
     BOOL hasQuants = datasetQuantifications.count > 0;
+    BOOL hasSubjects = datasetSubjects.count > 0;
+    BOOL hasSamples = datasetSamples.count > 0;
     BOOL hasV011Content = hasEncryptionAlgo
                        || hasDatasetProv
+                       || hasSubjects
+                       || hasSamples
                        || hasRefs
                        || hasImage
                        || hasRamanImage
@@ -1457,7 +1536,9 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     // v0.11 §5.4 prelude — sub-sections in spec order:
     //   §5.4.1 ENCRYPTION_ALGORITHM
     //   §5.4.2 DATASET_PROVENANCE
-    //   §5.4.3 SUBJECT_METADATA / SAMPLE_METADATA   (future)
+    //   §5.4.3 SUBJECT_METADATA (0x19) -> SAMPLE_METADATA (0x1A)
+    //          Stage 6 (Task 6.4): subjects emit first, then samples
+    //          so forward references resolve during streaming.
     //   §5.4.4 reference groups
     //   §5.4.5 image cubes
     //   §5.4.6 IDENTIFICATIONS_TABLE / QUANTIFICATIONS_TABLE
@@ -1474,6 +1555,15 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
         if (hasDatasetProv) {
             if (![self writeDatasetProvenance:datasetProvenance
                                           error:error]) return NO;
+        }
+        // §5.4.3 — subjects before samples (forward-ref convention).
+        if (hasSubjects) {
+            if (![self writeSubjectMetadata:datasetSubjects
+                                       error:error]) return NO;
+        }
+        if (hasSamples) {
+            if (![self writeSampleMetadata:datasetSamples
+                                      error:error]) return NO;
         }
         if (hasRefs) {
             NSArray<NSString *> *refUris =

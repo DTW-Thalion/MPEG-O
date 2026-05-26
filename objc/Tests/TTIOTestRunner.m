@@ -140,6 +140,7 @@ extern void testTransportWriteDatasetPrelude(void);
 extern void testSubjectSample(void);
 extern void testSpectralDatasetSubjectsSamples(void);
 extern void testArrowIpcCodecSubjectsSamples(void);
+extern void testTransportSubjectsSamples(void);
 extern void testAccessorMatrixConformance(void);
 extern void testCoverageGapWatchdog(void);
 
@@ -701,6 +702,10 @@ int main(int argc, const char *argv[])
         START_SET("Stage 6.4: TTIOArrowIpcCodec subjects + samples encode/decode (0x19 + 0x1A null convention)")
             testArrowIpcCodecSubjectsSamples();
         END_SET("Stage 6.4: TTIOArrowIpcCodec subjects + samples encode/decode (0x19 + 0x1A null convention)")
+
+        START_SET("Stage 6.4: SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) writer + reader wire round-trip")
+            testTransportSubjectsSamples();
+        END_SET("Stage 6.4: SUBJECT_METADATA (0x19) + SAMPLE_METADATA (0x1A) writer + reader wire round-trip")
 
         START_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
             testAccessorMatrixConformance();
