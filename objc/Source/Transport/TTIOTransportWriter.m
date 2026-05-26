@@ -544,12 +544,11 @@ static NSString *provenanceParamsJSON(NSDictionary *params)
         }
         coerced[k] = v;
     }
-    NSData *json = [NSJSONSerialization dataWithJSONObject:coerced
-                                                    options:TTIO_JSON_SORTED_KEYS
-                                                      error:nil];
-    if (!json) return @"{}";
-    return [[NSString alloc] initWithData:json
-                                  encoding:NSUTF8StringEncoding] ?: @"{}";
+    // Use TTIOSortedKeysJSON for byte-equivalent emit with
+    // Python's `json.dumps(sort_keys=True, separators=(",", ":"))`
+    // and Java's TreeMap-walk on every Foundation we support, including
+    // GNUstep-base 1.31.1 where NSJSONWritingSortedKeys is a no-op.
+    return TTIOSortedKeysJSON(coerced);
 }
 
 // Comma-join an array of refs. No quoting/escaping — per spec §4.21,
@@ -1188,8 +1187,7 @@ static NSString *instrumentConfigJSON(TTIOInstrumentConfig *cfg)
         @"serial_number": cfg.serialNumber ?: @"",
         @"source_type": cfg.sourceType ?: @"",
     };
-    NSData *json = [NSJSONSerialization dataWithJSONObject:d options:TTIO_JSON_SORTED_KEYS error:nil];
-    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    return TTIOSortedKeysJSON(d);
 }
 
 static NSData *zlibDeflate(NSData *input)
@@ -1279,10 +1277,7 @@ static NSString *genomicRunMetadataJSON(TTIOGenomicRun *run)
         @"reference_uri": run.referenceUri  ?: @"",
         @"sample_name":   run.sampleName    ?: @"",
     };
-    NSData *json = [NSJSONSerialization dataWithJSONObject:d
-                                                    options:TTIO_JSON_SORTED_KEYS
-                                                      error:nil];
-    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    return TTIOSortedKeysJSON(d);
 }
 
 // encode a UINT8 channel slice with the requested wire codec.

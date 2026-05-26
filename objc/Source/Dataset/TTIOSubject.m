@@ -49,16 +49,12 @@
 
 - (NSString *)attributesJson
 {
-    if (_attributes.count == 0) return @"{}";
-    NSError *err = nil;
-    NSData *data = [NSJSONSerialization
-        dataWithJSONObject:_attributes
-                   options:TTIO_JSON_SORTED_KEYS
-                     error:&err];
-    if (data == nil) return @"{}";
-    NSString *s = [[NSString alloc] initWithData:data
-                                         encoding:NSUTF8StringEncoding];
-    return s ?: @"{}";
+    // TTIOSortedKeysJSON gives sort-keys + no-whitespace output that
+    // is byte-equivalent to Python's `json.dumps(sort_keys=True,
+    // separators=(",", ":"))` and Java's TreeMap-walk emit on every
+    // Foundation we support, including GNUstep-base 1.31.1 where
+    // NSJSONWritingSortedKeys is a no-op.
+    return TTIOSortedKeysJSON(_attributes);
 }
 
 - (BOOL)isEqual:(id)other
