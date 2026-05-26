@@ -7,6 +7,7 @@ package global.thalion.ttio.importers;
 import global.thalion.ttio.Feature;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.Quantification;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -80,10 +81,34 @@ public final class MzTabReader {
     private static final Pattern PEP_SV_RE = Pattern.compile("^peptide_abundance_study_variable\\[(\\d+)\\]$");
     private static final Pattern SMF_ASSAY_RE = Pattern.compile("^abundance_assay\\[(\\d+)\\]$");
 
+    /** Default emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during the row-parse phase. mzTab uses tabular rows (PRT / PEP /
+     *  PSM / SML / SMF / SME), not spectra; 500 rows balances visible
+     *  per-large-file updates against callback overhead. */
+    public static final int PROGRESS_INTERVAL_ROWS = 500;
+
     private MzTabReader() {}
 
     /** Parse an mzTab file. */
     public static MzTabImport read(Path path) throws IOException {
+        return read(path, ProgressSink.discard());
+    }
+
+    /**
+     * Parse an mzTab file, firing
+     * {@code progress.onProgress(rowsDone, -1L)} every
+     * {@link #PROGRESS_INTERVAL_ROWS} data rows (PRT / PEP / PSM / SML /
+     * SMF / SME) and a final {@code onProgress(total, total)} once the
+     * full row count is known. Total is reported as {@code -1L}
+     * mid-parse because mzTab gives no row count up front; the final
+     * fire stamps both {@code done} and {@code total} with the true
+     * count.
+     *
+     * @since 1.5.0
+     */
+    public static MzTabImport read(Path path, ProgressSink progress)
+            throws IOException {
+        if (progress == null) progress = ProgressSink.discard();
         if (!Files.isRegularFile(path)) {
             throw new MzTabParseException("mzTab file not found: " + path);
         }
@@ -107,6 +132,7 @@ public final class MzTabReader {
         List<String> smfHeader = null;
         List<String> smeHeader = null;
 
+        long rowsProcessed = 0L;
         try (BufferedReader br = Files.newBufferedReader(path)) {
             String raw;
             while ((raw = br.readLine()) != null) {
@@ -189,8 +215,21 @@ public final class MzTabReader {
                     default:
                         break;
                 }
+                // Count any data row (PSM/PRT/SML/PEP/SMF/SME) for the
+                // progress cadence. Header/MTD/COM lines don't move the
+                // user-visible work counter.
+                if (prefix.equals("PSM") || prefix.equals("PRT")
+                        || prefix.equals("SML") || prefix.equals("PEP")
+                        || prefix.equals("SMF") || prefix.equals("SME")) {
+                    rowsProcessed++;
+                    if (rowsProcessed % PROGRESS_INTERVAL_ROWS == 0) {
+                        progress.onProgress(rowsProcessed, -1L);
+                    }
+                }
             }
         }
+        // Final fire — total row count is now known.
+        progress.onProgress(rowsProcessed, rowsProcessed);
 
         if (version.isEmpty()) {
             throw new MzTabParseException(path + ": missing MTD mzTab-version line");
