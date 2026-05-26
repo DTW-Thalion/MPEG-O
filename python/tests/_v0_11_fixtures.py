@@ -24,11 +24,13 @@ from pathlib import Path
 import numpy as np
 
 from ttio import MSImage
-from ttio.enums import AcquisitionMode, Polarity
+from ttio.enums import AcquisitionMode, IRMode, Polarity
 from ttio.genomic.reference_import import ReferenceImport
 from ttio.identification import Identification
+from ttio.ir_image import IRImage
 from ttio.provenance import ProvenanceRecord
 from ttio.quantification import Quantification
+from ttio.raman_image import RamanImage
 from ttio.spectral_dataset import SpectralDataset, WrittenRun
 from ttio.written_genomic_run import WrittenGenomicRun
 
@@ -113,6 +115,100 @@ def build_image_ms_continuous(target: Path) -> Path:
         isa_investigation_id="",
         runs={},
         image=img,
+    )
+    return target
+
+
+# ── Stage 5 / Task 5.6 fixtures (Deferral 1) ────────────────────────
+
+
+def build_image_ms_processed_only(target: Path) -> Path:
+    """Mirror Java's ``FixtureBuilder.buildImageMsProcessedOnly``.
+
+    The on-disk .tio is identical to :func:`build_image_ms_continuous`
+    — the MS_IMAGE_PROCESSED accessor's encode override is the only
+    knob that changes (continuous → processed sparse wire mode)."""
+    return build_image_ms_continuous(target)
+
+
+def _build_raman_image() -> RamanImage:
+    """3x3x5 deterministic Raman cube shared with the Java + ObjC
+    fixtures. ``intensity[i] = i * 0.5`` over flat index 0..44;
+    wavenumbers = [1000, 1100, 1200, 1300, 1400] cm-1;
+    excitation = 785.0 nm; laser power = 50.0 mW; scan = raster;
+    pixel size = 10.0 x 10.0."""
+    w, h, sp = 3, 3, 5
+    cube = (np.arange(w * h * sp, dtype=np.float64) * 0.5).reshape(h, w, sp)
+    wn = np.array(
+        [1000.0, 1100.0, 1200.0, 1300.0, 1400.0], dtype=np.float64
+    )
+    return RamanImage(
+        width=w,
+        height=h,
+        spectral_points=sp,
+        intensity=cube,
+        wavenumbers=wn,
+        pixel_size_x=10.0,
+        pixel_size_y=10.0,
+        scan_pattern="raster",
+        excitation_wavelength_nm=785.0,
+        laser_power_mw=50.0,
+        title="raman_image_only",
+        isa_investigation_id="",
+    )
+
+
+def build_raman_image_only(target: Path) -> Path:
+    """Mirror Java's ``FixtureBuilder.buildRamanImageOnly`` — a 3x3x5
+    RamanImage and nothing else."""
+    img = _build_raman_image()
+    SpectralDataset.write_minimal(
+        target,
+        title="raman_image_only",
+        isa_investigation_id="",
+        runs={},
+        raman_image=img,
+    )
+    return target
+
+
+def _build_ir_image() -> IRImage:
+    """3x3x5 deterministic IR cube shared with the Java + ObjC
+    fixtures. ``intensity[i] = i * 0.5`` over flat index 0..44;
+    wavenumbers = [1000, 1100, 1200, 1300, 1400] cm-1;
+    mode = ABSORBANCE; resolution = 4.0 cm-1; scan = raster;
+    pixel size = 10.0 x 10.0."""
+    w, h, sp = 3, 3, 5
+    cube = (np.arange(w * h * sp, dtype=np.float64) * 0.5).reshape(h, w, sp)
+    wn = np.array(
+        [1000.0, 1100.0, 1200.0, 1300.0, 1400.0], dtype=np.float64
+    )
+    return IRImage(
+        width=w,
+        height=h,
+        spectral_points=sp,
+        intensity=cube,
+        wavenumbers=wn,
+        pixel_size_x=10.0,
+        pixel_size_y=10.0,
+        scan_pattern="raster",
+        mode=IRMode.ABSORBANCE,
+        resolution_cm_inv=4.0,
+        title="ir_image_only",
+        isa_investigation_id="",
+    )
+
+
+def build_ir_image_only(target: Path) -> Path:
+    """Mirror Java's ``FixtureBuilder.buildIrImageOnly`` — a 3x3x5
+    IRImage and nothing else."""
+    img = _build_ir_image()
+    SpectralDataset.write_minimal(
+        target,
+        title="ir_image_only",
+        isa_investigation_id="",
+        runs={},
+        ir_image=img,
     )
     return target
 

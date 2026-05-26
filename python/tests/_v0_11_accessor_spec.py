@@ -16,18 +16,30 @@ Stage 1 (Task 2.10): 8 first-class accessors covered. SUBJECTS +
 SAMPLES are deferred until they exist as first-class entities on
 ``SpectralDataset``.
 
+Stage 5 (Task 5.6, Deferral 1): MS_IMAGE_PROCESSED, RAMAN_IMAGE,
+IR_IMAGE. MS_IMAGE_PROCESSED shares the IMAGE fixture but supplies
+a custom ``encode_strategy`` callable that swaps the writer's
+``write_image`` for ``write_image_processed`` (opt-in sparse wire
+mode). The remaining two integrate via the §5.4.5 image-block
+prelude and use the default ``write_dataset`` encode path.
+
 SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
+import io
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable, Optional
 
 import numpy as np
 
 from ttio.spectral_dataset import SpectralDataset
+from ttio.transport.codec import (
+    TRANSPORT_V0_11_FEATURE,
+    TransportWriter,
+)
 
 from _v0_11_fixtures import (
     build_dataset_provenance_only,
@@ -35,10 +47,48 @@ from _v0_11_fixtures import (
     build_genomic_runs_only,
     build_identifications_only,
     build_image_ms_continuous,
+    build_image_ms_processed_only,
+    build_ir_image_only,
     build_ms_runs_only,
     build_quantifications_only,
+    build_raman_image_only,
     build_reference_only,
 )
+
+
+def _default_encode(
+    source: SpectralDataset, out: io.IOBase
+) -> None:
+    """Default encode: drop the whole dataset through
+    :meth:`TransportWriter.write_dataset`. Honoured by every
+    AccessorSpec entry whose ``encode_strategy`` is left as the
+    default."""
+    with TransportWriter(out) as w:
+        w.write_dataset(source)
+
+
+def _ms_image_processed_encode(
+    source: SpectralDataset, out: io.IOBase
+) -> None:
+    """Stage 5 / Task 5.6: MS_IMAGE_PROCESSED encode path.
+
+    Emits a minimal §5.4 prelude by hand with
+    :meth:`TransportWriter.write_image_processed` swapped in where
+    :meth:`write_image` would otherwise sit. The source fixture
+    carries only an MSImage, so the rest of the prelude collapses to
+    stream-header + image + EOS — matches the Java ordering exactly
+    so the materialised .tio carries a fully-formed dense intensity
+    cube on the other side."""
+    with TransportWriter(out) as w:
+        w.write_stream_header(
+            format_version="1.2",
+            title=source.title or "",
+            isa_investigation=source.isa_investigation_id or "",
+            features=[TRANSPORT_V0_11_FEATURE],
+            n_datasets=0,
+        )
+        w.write_image_processed(source.image)
+        w.write_end_of_stream()
 
 
 @dataclass(frozen=True)
@@ -59,11 +109,20 @@ class AccessorSpec:
         for this accessor. Comparators are field-by-field rather
         than ``__eq__``-based so the failure message points at the
         exact attribute that drifted.
+    encode_strategy
+        Optional callable ``(source: SpectralDataset, out) -> None``
+        that overrides the default
+        :meth:`TransportWriter.write_dataset` encode path. Used by
+        MS_IMAGE_PROCESSED to swap in ``write_image_processed``;
+        every other accessor inherits the default.
     """
 
     name: str
     build_fixture: Callable[[Path], Path]
     assert_content_equals: Callable[[SpectralDataset, SpectralDataset], None]
+    encode_strategy: Callable[[SpectralDataset, Any], None] = field(
+        default=_default_encode
+    )
 
 
 # ── per-accessor content-equality comparators ────────────────────────
@@ -379,6 +438,131 @@ def _encryption_algorithm_equals(a: SpectralDataset, b: SpectralDataset) -> None
         )
 
 
+# ── Stage 5 / Task 5.6 comparators (Deferral 1) ─────────────────────
+
+
+def _raman_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
+    """Mirror Java's ``RAMAN_IMAGE.assertContentEquals``: same shape +
+    excitation + laser power + scan pattern + element-wise wavenumbers
+    + element-wise intensity cube (all within 1e-9)."""
+    ra = a.raman_image
+    rb = b.raman_image
+    if ra is None or rb is None:
+        raise AssertionError(
+            f"RamanImage missing on at least one side: a={ra}, b={rb}"
+        )
+    if (ra.width, ra.height, ra.spectral_points) != (
+        rb.width, rb.height, rb.spectral_points
+    ):
+        raise AssertionError(
+            f"raman shape mismatch: {ra.width}x{ra.height}x"
+            f"{ra.spectral_points} vs {rb.width}x{rb.height}x"
+            f"{rb.spectral_points}"
+        )
+    if not math.isclose(
+        ra.excitation_wavelength_nm, rb.excitation_wavelength_nm,
+        abs_tol=1e-9,
+    ):
+        raise AssertionError(
+            f"excitation_wavelength_nm mismatch: "
+            f"{ra.excitation_wavelength_nm} vs {rb.excitation_wavelength_nm}"
+        )
+    if not math.isclose(ra.laser_power_mw, rb.laser_power_mw, abs_tol=1e-9):
+        raise AssertionError(
+            f"laser_power_mw mismatch: "
+            f"{ra.laser_power_mw} vs {rb.laser_power_mw}"
+        )
+    if ra.scan_pattern != rb.scan_pattern:
+        raise AssertionError(
+            f"raman scan_pattern mismatch: "
+            f"{ra.scan_pattern!r} vs {rb.scan_pattern!r}"
+        )
+    wn_a = np.asarray(ra.wavenumbers)
+    wn_b = np.asarray(rb.wavenumbers)
+    if wn_a.shape != wn_b.shape:
+        raise AssertionError(
+            f"wavenumbers length mismatch: {wn_a.shape} vs {wn_b.shape}"
+        )
+    if not np.allclose(wn_a, wn_b, atol=1e-9, rtol=0.0):
+        idx = int(np.argmax(np.abs(wn_a - wn_b)))
+        raise AssertionError(
+            f"wavenumbers[{idx}] mismatch: {wn_a[idx]} vs {wn_b[idx]}"
+        )
+    c_a = np.asarray(ra.intensity)
+    c_b = np.asarray(rb.intensity)
+    if c_a.shape != c_b.shape:
+        raise AssertionError(
+            f"raman intensity-cube shape mismatch: {c_a.shape} vs {c_b.shape}"
+        )
+    if not np.allclose(c_a, c_b, atol=1e-9, rtol=0.0):
+        diff = np.abs(c_a - c_b)
+        idx = np.unravel_index(int(np.argmax(diff)), diff.shape)
+        raise AssertionError(
+            f"raman intensity-cube mismatch at {idx}: "
+            f"{c_a[idx]} vs {c_b[idx]}"
+        )
+
+
+def _ir_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
+    """Mirror Java's ``IR_IMAGE.assertContentEquals``: same shape +
+    mode + resolution + scan pattern + element-wise wavenumbers +
+    element-wise intensity cube (all within 1e-9)."""
+    ia = a.ir_image
+    ib = b.ir_image
+    if ia is None or ib is None:
+        raise AssertionError(
+            f"IRImage missing on at least one side: a={ia}, b={ib}"
+        )
+    if (ia.width, ia.height, ia.spectral_points) != (
+        ib.width, ib.height, ib.spectral_points
+    ):
+        raise AssertionError(
+            f"ir shape mismatch: {ia.width}x{ia.height}x"
+            f"{ia.spectral_points} vs {ib.width}x{ib.height}x"
+            f"{ib.spectral_points}"
+        )
+    if int(ia.mode) != int(ib.mode):
+        raise AssertionError(
+            f"ir mode mismatch: {int(ia.mode)} vs {int(ib.mode)}"
+        )
+    if not math.isclose(
+        ia.resolution_cm_inv, ib.resolution_cm_inv, abs_tol=1e-9
+    ):
+        raise AssertionError(
+            f"ir resolution_cm_inv mismatch: "
+            f"{ia.resolution_cm_inv} vs {ib.resolution_cm_inv}"
+        )
+    if ia.scan_pattern != ib.scan_pattern:
+        raise AssertionError(
+            f"ir scan_pattern mismatch: "
+            f"{ia.scan_pattern!r} vs {ib.scan_pattern!r}"
+        )
+    wn_a = np.asarray(ia.wavenumbers)
+    wn_b = np.asarray(ib.wavenumbers)
+    if wn_a.shape != wn_b.shape:
+        raise AssertionError(
+            f"ir wavenumbers length mismatch: {wn_a.shape} vs {wn_b.shape}"
+        )
+    if not np.allclose(wn_a, wn_b, atol=1e-9, rtol=0.0):
+        idx = int(np.argmax(np.abs(wn_a - wn_b)))
+        raise AssertionError(
+            f"ir wavenumbers[{idx}] mismatch: {wn_a[idx]} vs {wn_b[idx]}"
+        )
+    c_a = np.asarray(ia.intensity)
+    c_b = np.asarray(ib.intensity)
+    if c_a.shape != c_b.shape:
+        raise AssertionError(
+            f"ir intensity-cube shape mismatch: {c_a.shape} vs {c_b.shape}"
+        )
+    if not np.allclose(c_a, c_b, atol=1e-9, rtol=0.0):
+        diff = np.abs(c_a - c_b)
+        idx = np.unravel_index(int(np.argmax(diff)), diff.shape)
+        raise AssertionError(
+            f"ir intensity-cube mismatch at {idx}: "
+            f"{c_a[idx]} vs {c_b[idx]}"
+        )
+
+
 # ── master list — order matches Java's enum declaration ──────────────
 
 
@@ -406,5 +590,21 @@ ACCESSOR_SPECS: list[AccessorSpec] = [
         "ENCRYPTION_ALGORITHM",
         build_encryption_algorithm_only,
         _encryption_algorithm_equals,
+    ),
+    AccessorSpec(
+        "MS_IMAGE_PROCESSED",
+        build_image_ms_processed_only,
+        _image_equals,
+        encode_strategy=_ms_image_processed_encode,
+    ),
+    AccessorSpec(
+        "RAMAN_IMAGE",
+        build_raman_image_only,
+        _raman_image_equals,
+    ),
+    AccessorSpec(
+        "IR_IMAGE",
+        build_ir_image_only,
+        _ir_image_equals,
     ),
 ]
