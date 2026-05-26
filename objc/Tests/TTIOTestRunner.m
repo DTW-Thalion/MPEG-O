@@ -132,6 +132,8 @@ extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
 extern void testTransportIdentificationsQuantifications(void);
 extern void testTransportWriteDatasetPrelude(void);
+extern void testAccessorMatrixConformance(void);
+extern void testCoverageGapWatchdog(void);
 
 int main(int argc, const char *argv[])
 {
@@ -659,6 +661,14 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
             testTransportWriteDatasetPrelude();
         END_SET("transport v0.11 Task 3.9: -writeDataset: emits full v0.11 prelude per §5.4")
+
+        START_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
+            testAccessorMatrixConformance();
+        END_SET("transport v0.11 Task 3.10: AccessorMatrixConformance (8 first-class accessors)")
+
+        START_SET("transport v0.11 Task 3.10: CoverageGapWatchdog (.tis >= 1% of .tio + every accessor preserved)")
+            testCoverageGapWatchdog();
+        END_SET("transport v0.11 Task 3.10: CoverageGapWatchdog (.tis >= 1% of .tio + every accessor preserved)")
     }
     return 0;
 }

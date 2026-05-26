@@ -124,7 +124,11 @@ TTIOTests_OBJC_FILES = \
 	TestTransportDatasetProvenance.m \
 	TestTransportImage.m \
 	TestTransportIdentificationsQuantifications.m \
-	TestTransportWriteDatasetPrelude.m
+	TestTransportWriteDatasetPrelude.m \
+	TTIOV011FixtureBuilder.m \
+	TTIOAccessorSpec.m \
+	TestAccessorMatrixConformance.m \
+	TestCoverageGapWatchdog.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
