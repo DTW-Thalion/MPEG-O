@@ -8,8 +8,10 @@ import global.thalion.ttio.MassSpectrum;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
 import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
+import global.thalion.ttio.Subject;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 
@@ -27,10 +29,7 @@ import java.util.Objects;
  *
  *  <p>Stage 1 (Task 1.10): REFERENCES, MS_RUNS, GENOMIC_RUNS, IMAGE,
  *  IDENTIFICATIONS, QUANTIFICATIONS, DATASET_PROVENANCE,
- *  ENCRYPTION_ALGORITHM. SUBJECTS + SAMPLES are deferred until they
- *  exist as first-class entities on {@link SpectralDataset}; the v0.11
- *  spec mentions them but the data model still surfaces them only as
- *  server-side cohort predicates.</p>
+ *  ENCRYPTION_ALGORITHM.</p>
  *
  *  <p>Stage 5 (Task 5.6, Deferral 1): MS_IMAGE_PROCESSED, RAMAN_IMAGE,
  *  IR_IMAGE. The MS_IMAGE_PROCESSED entry shares the MSImage fixture
@@ -38,7 +37,18 @@ import java.util.Objects;
  *  {@code writeImageProcessed} (opt-in sparse wire mode) instead of
  *  {@code writeImage} so the conformance suite exercises both wire
  *  shapes. RAMAN_IMAGE / IR_IMAGE use {@code writeDataset} unchanged
- *  because they integrate via the §5.4.5 prelude image block.</p> */
+ *  because they integrate via the §5.4.5 prelude image block.</p>
+ *
+ *  <p>Stage 6 (Task 6.6, Deferral 2): SUBJECTS, SAMPLES. Both flow
+ *  through {@code writeDataset} unchanged — the v0.11 prelude (§5.4.3)
+ *  emits SUBJECT_METADATA (0x19) before SAMPLE_METADATA (0x1A) when
+ *  the dataset carries either, and {@link TransportReader#materializeTo}
+ *  layers them back onto {@code /study/subjects/<external_id>/} +
+ *  {@code /study/samples/<sample_id>/} HDF5 groups. The comparators
+ *  walk the {@link SpectralDataset#subjects()} / {@code samples()}
+ *  lists element-wise, comparing every field including the
+ *  {@code attributes} {@link Map} for cross-language byte parity on
+ *  sort-keys JSON.</p> */
 public enum AccessorSpec {
 
     REFERENCES {
@@ -484,6 +494,74 @@ public enum AccessorSpec {
                 if (Math.abs(cA[i] - cB[i]) >= 1e-9) {
                     throw new AssertionError("ir intensity-cube[" + i
                         + "] mismatch: " + cA[i] + " vs " + cB[i]);
+                }
+            }
+        }
+    },
+
+    /** Stage 6 (Task 6.6, Deferral 2): SUBJECTS round-trip via the
+     *  v0.11 prelude SUBJECT_METADATA (0x19) packet. Fixture is the
+     *  2-row {@code buildSubjectsOnly} pair (minimal + fully populated
+     *  with multi-key attributes map). Comparator walks the
+     *  {@link SpectralDataset#subjects()} list element-wise and
+     *  compares every field including the {@code attributes} Map. */
+    SUBJECTS {
+        @Override public Path buildFixture(Path tmp) throws Exception {
+            return FixtureBuilder.buildSubjectsOnly(
+                tmp.resolve("subjects.tio"));
+        }
+
+        @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
+            List<Subject> la = a.subjects();
+            List<Subject> lb = b.subjects();
+            if (la.size() != lb.size()) {
+                throw new AssertionError("subject count mismatch: "
+                    + la.size() + " vs " + lb.size());
+            }
+            for (int i = 0; i < la.size(); i++) {
+                Subject sa = la.get(i);
+                Subject sb = lb.get(i);
+                if (!Objects.equals(sa.externalId(), sb.externalId())
+                        || !Objects.equals(sa.project(), sb.project())
+                        || !Objects.equals(sa.sex(), sb.sex())
+                        || sa.birthYear() != sb.birthYear()
+                        || !Objects.equals(sa.attributes(), sb.attributes())) {
+                    throw new AssertionError("subject[" + i + "] mismatch: "
+                        + sa + " vs " + sb);
+                }
+            }
+        }
+    },
+
+    /** Stage 6 (Task 6.6, Deferral 2): SAMPLES round-trip via the
+     *  v0.11 prelude SAMPLE_METADATA (0x1A) packet. Fixture is the
+     *  3-row {@code buildSamplesOnly} list (minimal, dangling soft-FK,
+     *  fully populated). Comparator walks the
+     *  {@link SpectralDataset#samples()} list element-wise. */
+    SAMPLES {
+        @Override public Path buildFixture(Path tmp) throws Exception {
+            return FixtureBuilder.buildSamplesOnly(
+                tmp.resolve("samples.tio"));
+        }
+
+        @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
+            List<Sample> la = a.samples();
+            List<Sample> lb = b.samples();
+            if (la.size() != lb.size()) {
+                throw new AssertionError("sample count mismatch: "
+                    + la.size() + " vs " + lb.size());
+            }
+            for (int i = 0; i < la.size(); i++) {
+                Sample sa = la.get(i);
+                Sample sb = lb.get(i);
+                if (!Objects.equals(sa.sampleId(), sb.sampleId())
+                        || !Objects.equals(
+                            sa.subjectExternalId(), sb.subjectExternalId())
+                        || !Objects.equals(sa.sampleKind(), sb.sampleKind())
+                        || sa.collectedAt() != sb.collectedAt()
+                        || !Objects.equals(sa.attributes(), sb.attributes())) {
+                    throw new AssertionError("sample[" + i + "] mismatch: "
+                        + sa + " vs " + sb);
                 }
             }
         }
