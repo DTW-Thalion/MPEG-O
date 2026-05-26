@@ -130,6 +130,8 @@ TTIOTests_OBJC_FILES = \
 	TestTransportIRImage.m \
 	TestTransportIdentificationsQuantifications.m \
 	TestTransportWriteDatasetPrelude.m \
+	TestSubjectSample.m \
+	TestSpectralDatasetSubjectsSamples.m \
 	TTIOV011FixtureBuilder.m \
 	TTIOAccessorSpec.m \
 	TestAccessorMatrixConformance.m \

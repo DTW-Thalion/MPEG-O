@@ -48,6 +48,8 @@ libTTIO_HEADER_FILES = \
 	Dataset/TTIOIdentification.h \
 	Dataset/TTIOQuantification.h \
 	Dataset/TTIOProvenanceRecord.h \
+	Dataset/TTIOSubject.h \
+	Dataset/TTIOSample.h \
 	Dataset/TTIOTransitionList.h \
 	Dataset/TTIOSpectralDataset.h \
 	Dataset/TTIOWrittenRun.h \
@@ -168,6 +170,8 @@ libTTIO_OBJC_FILES = \
 	Dataset/TTIOIdentification.m \
 	Dataset/TTIOQuantification.m \
 	Dataset/TTIOProvenanceRecord.m \
+	Dataset/TTIOSubject.m \
+	Dataset/TTIOSample.m \
 	Dataset/TTIOTransitionList.m \
 	Dataset/TTIOSpectralDataset.m \
 	Dataset/TTIOWrittenRun.m \
