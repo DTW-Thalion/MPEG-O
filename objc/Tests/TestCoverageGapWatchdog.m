@@ -6,11 +6,14 @@
  * type, this test fires immediately.
  *
  * Wired against the `everything.tio` fixture that exercises every
- * first-class v0.11 accessor at once (except SUBJECTS + SAMPLES,
- * which are deferred). A second test method additionally asserts the
- * .tis round-trips back to a .tio whose contents match the source
- * across every TTIOAccessorSpec — the strongest coverage guarantee
- * Task 3.10 can express.
+ * first-class v0.11 accessor at once. A second test method
+ * additionally asserts the .tis round-trips back to a .tio whose
+ * contents match the source across every TTIOAccessorSpec — the
+ * strongest coverage guarantee Task 3.10 can express.
+ *
+ * Stage 6 (Task 6.6, Deferral 2): SUBJECTS + SAMPLES are now
+ * populated by +buildEverythingAtPath: and exercised by both
+ * watchdog methods.
  *
  * Cross-language equivalents:
  *   Java   CoverageGapWatchdogTest  (commit 2d04e035)

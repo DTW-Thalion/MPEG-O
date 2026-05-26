@@ -16,16 +16,20 @@
  *
  * Stage 1 (Task 3.10): REFERENCES, MS_RUNS, GENOMIC_RUNS, IMAGE,
  * IDENTIFICATIONS, QUANTIFICATIONS, DATASET_PROVENANCE,
- * ENCRYPTION_ALGORITHM. SUBJECTS + SAMPLES are deferred until they
- * exist as first-class entities on TTIOSpectralDataset; the v0.11
- * spec mentions them but the data model still surfaces them only as
- * server-side cohort predicates.
+ * ENCRYPTION_ALGORITHM.
  *
  * Stage 5 (Task 5.6, Deferral 1): MS_IMAGE_PROCESSED, RAMAN_IMAGE,
  * IR_IMAGE. MS_IMAGE_PROCESSED supplies a custom `encodeBlock` that
  * emits the §5.4 prelude with -writeImageProcessed: in place of
  * -writeImage: (opt-in sparse wire mode). Raman + IR integrate via
  * the §5.4.5 prelude image block and inherit the default encode.
+ *
+ * Stage 6 (Task 6.6, Deferral 2): SUBJECTS, SAMPLES. Both flow through
+ * the default -writeDataset: path; the §5.4.3 prelude emits
+ * SUBJECT_METADATA (0x19) before SAMPLE_METADATA (0x1A) when present.
+ * Comparators walk the -subjects / -samples lists element-wise and
+ * compare every TTIOSubject / TTIOSample field including the
+ * attributes dict.
  *
  * SPDX-License-Identifier: Apache-2.0
  */

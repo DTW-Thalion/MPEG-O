@@ -17,6 +17,8 @@
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
 #import "Dataset/TTIOProvenanceRecord.h"
+#import "Dataset/TTIOSample.h"
+#import "Dataset/TTIOSubject.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Image/TTIOIRImage.h"
@@ -496,6 +498,94 @@ static NSString *spec_irImageEqual(TTIOSpectralDataset *a,
     return nil;
 }
 
+// ─────────── Stage 6 / Task 6.6 comparators (Deferral 2) ──────────
+
+static NSString *spec_subjectsEqual(TTIOSpectralDataset *a,
+                                      TTIOSpectralDataset *b)
+{
+    NSArray<TTIOSubject *> *la = a.subjects;
+    NSArray<TTIOSubject *> *lb = b.subjects;
+    if (la.count != lb.count) {
+        return [NSString stringWithFormat:
+            @"subject count mismatch: %lu vs %lu",
+            (unsigned long)la.count, (unsigned long)lb.count];
+    }
+    for (NSUInteger i = 0; i < la.count; i++) {
+        TTIOSubject *sa = la[i];
+        TTIOSubject *sb = lb[i];
+        if (![sa.externalId isEqualToString:sb.externalId]) {
+            return [NSString stringWithFormat:
+                @"subject[%lu].externalId: '%@' vs '%@'",
+                (unsigned long)i, sa.externalId, sb.externalId];
+        }
+        if (![sa.project isEqualToString:sb.project]) {
+            return [NSString stringWithFormat:
+                @"subject[%lu].project: '%@' vs '%@'",
+                (unsigned long)i, sa.project, sb.project];
+        }
+        if (![sa.sex isEqualToString:sb.sex]) {
+            return [NSString stringWithFormat:
+                @"subject[%lu].sex: '%@' vs '%@'",
+                (unsigned long)i, sa.sex, sb.sex];
+        }
+        if (sa.birthYear != sb.birthYear) {
+            return [NSString stringWithFormat:
+                @"subject[%lu].birthYear: %lld vs %lld",
+                (unsigned long)i,
+                (long long)sa.birthYear, (long long)sb.birthYear];
+        }
+        if (![sa.attributes isEqualToDictionary:sb.attributes]) {
+            return [NSString stringWithFormat:
+                @"subject[%lu].attributes: %@ vs %@",
+                (unsigned long)i, sa.attributes, sb.attributes];
+        }
+    }
+    return nil;
+}
+
+static NSString *spec_samplesEqual(TTIOSpectralDataset *a,
+                                     TTIOSpectralDataset *b)
+{
+    NSArray<TTIOSample *> *la = a.samples;
+    NSArray<TTIOSample *> *lb = b.samples;
+    if (la.count != lb.count) {
+        return [NSString stringWithFormat:
+            @"sample count mismatch: %lu vs %lu",
+            (unsigned long)la.count, (unsigned long)lb.count];
+    }
+    for (NSUInteger i = 0; i < la.count; i++) {
+        TTIOSample *sa = la[i];
+        TTIOSample *sb = lb[i];
+        if (![sa.sampleId isEqualToString:sb.sampleId]) {
+            return [NSString stringWithFormat:
+                @"sample[%lu].sampleId: '%@' vs '%@'",
+                (unsigned long)i, sa.sampleId, sb.sampleId];
+        }
+        if (![sa.subjectExternalId isEqualToString:sb.subjectExternalId]) {
+            return [NSString stringWithFormat:
+                @"sample[%lu].subjectExternalId: '%@' vs '%@'",
+                (unsigned long)i, sa.subjectExternalId, sb.subjectExternalId];
+        }
+        if (![sa.sampleKind isEqualToString:sb.sampleKind]) {
+            return [NSString stringWithFormat:
+                @"sample[%lu].sampleKind: '%@' vs '%@'",
+                (unsigned long)i, sa.sampleKind, sb.sampleKind];
+        }
+        if (sa.collectedAt != sb.collectedAt) {
+            return [NSString stringWithFormat:
+                @"sample[%lu].collectedAt: %lld vs %lld",
+                (unsigned long)i,
+                (long long)sa.collectedAt, (long long)sb.collectedAt];
+        }
+        if (![sa.attributes isEqualToDictionary:sb.attributes]) {
+            return [NSString stringWithFormat:
+                @"sample[%lu].attributes: %@ vs %@",
+                (unsigned long)i, sa.attributes, sb.attributes];
+        }
+    }
+    return nil;
+}
+
 // ────────────────────────── spec list ───────────────────────────────
 
 static NSArray<TTIOAccessorSpec *> *_ttioAccessorSpecsList = nil;
@@ -652,6 +742,30 @@ static void _ttioAccessorSpecsInit(void)
                  assertEqual:^NSString *(TTIOSpectralDataset *a,
                                           TTIOSpectralDataset *b) {
                      return spec_irImageEqual(a, b);
+                 }],
+            // Stage 6 / Task 6.6 (Deferral 2) — SUBJECTS + SAMPLES.
+            // Both inherit the default -writeDataset: encode path;
+            // the §5.4.3 prelude emits SUBJECT_METADATA (0x19) before
+            // SAMPLE_METADATA (0x1A) when present.
+            [[TTIOAccessorSpec alloc]
+                initWithName:@"SUBJECTS"
+                       build:^BOOL(NSString *path, NSError **error) {
+                           return [TTIOV011FixtureBuilder
+                               buildSubjectsOnlyAtPath:path error:error];
+                       }
+                 assertEqual:^NSString *(TTIOSpectralDataset *a,
+                                          TTIOSpectralDataset *b) {
+                     return spec_subjectsEqual(a, b);
+                 }],
+            [[TTIOAccessorSpec alloc]
+                initWithName:@"SAMPLES"
+                       build:^BOOL(NSString *path, NSError **error) {
+                           return [TTIOV011FixtureBuilder
+                               buildSamplesOnlyAtPath:path error:error];
+                       }
+                 assertEqual:^NSString *(TTIOSpectralDataset *a,
+                                          TTIOSpectralDataset *b) {
+                     return spec_samplesEqual(a, b);
                  }],
     ] retain];
 }

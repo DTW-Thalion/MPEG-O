@@ -11,6 +11,8 @@
 #include <unistd.h>
 
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOSubject.h"
+#import "Dataset/TTIOSample.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
@@ -335,6 +337,87 @@ static TTIOSpectralDataset *fb_makeWritableStub(NSString *path,
     if (provIvar == NULL) return nil;
     object_setIvar(ds, provIvar, p);
     return ds;
+}
+
+/** Task 6.6: layer Subject + Sample per-row groups under
+ *  /study/subjects/<external_id>/ and /study/samples/<sample_id>/ on
+ *  a freshly-created .tio. Mirrors the production write path
+ *  (writeSubjectsViaProvider / writeSamplesViaProvider on the Java
+ *  side, _write_subjects_h5 / _write_samples_h5 on the Python side)
+ *  exactly so the lazy -subjects / -samples accessors materialise
+ *  identical rows on every SDK.
+ *
+ *  The Subject + Sample lists may be nil/@[] independently — only
+ *  the populated side gets its parent group. */
+static BOOL fb_layerSubjectsAndSamples(NSString *path,
+                                         NSArray<TTIOSubject *> *subjects,
+                                         NSArray<TTIOSample *> *samples,
+                                         NSError **error)
+{
+    if (subjects.count == 0 && samples.count == 0) return YES;
+
+    TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:error];
+    if (f == nil) return NO;
+    TTIOHDF5Group *root = [f rootGroup];
+    TTIOHDF5Group *study = [root openGroupNamed:@"study" error:error];
+    if (study == nil) { [f close]; return NO; }
+
+    if (subjects.count > 0) {
+        TTIOHDF5Group *sg = [study createGroupNamed:@"subjects" error:error];
+        if (sg == nil) { [f close]; return NO; }
+        for (TTIOSubject *s in subjects) {
+            TTIOHDF5Group *row = [sg createGroupNamed:s.externalId error:error];
+            if (row == nil) { [f close]; return NO; }
+            if (![row setStringAttribute:@"external_id"
+                                    value:s.externalId
+                                    error:error]) { [f close]; return NO; }
+            if (s.project.length > 0) {
+                if (![row setStringAttribute:@"project"
+                                        value:s.project
+                                        error:error]) { [f close]; return NO; }
+            }
+            if (s.sex.length > 0) {
+                if (![row setStringAttribute:@"sex"
+                                        value:s.sex
+                                        error:error]) { [f close]; return NO; }
+            }
+            if (![row setIntegerAttribute:@"birth_year"
+                                      value:s.birthYear
+                                      error:error]) { [f close]; return NO; }
+            if (![row setStringAttribute:@"attributes_json"
+                                    value:[s attributesJson]
+                                    error:error]) { [f close]; return NO; }
+        }
+    }
+    if (samples.count > 0) {
+        TTIOHDF5Group *smg = [study createGroupNamed:@"samples" error:error];
+        if (smg == nil) { [f close]; return NO; }
+        for (TTIOSample *s in samples) {
+            TTIOHDF5Group *row = [smg createGroupNamed:s.sampleId error:error];
+            if (row == nil) { [f close]; return NO; }
+            if (![row setStringAttribute:@"sample_id"
+                                    value:s.sampleId
+                                    error:error]) { [f close]; return NO; }
+            if (s.subjectExternalId.length > 0) {
+                if (![row setStringAttribute:@"subject_external_id"
+                                        value:s.subjectExternalId
+                                        error:error]) { [f close]; return NO; }
+            }
+            if (s.sampleKind.length > 0) {
+                if (![row setStringAttribute:@"sample_kind"
+                                        value:s.sampleKind
+                                        error:error]) { [f close]; return NO; }
+            }
+            if (![row setIntegerAttribute:@"collected_at"
+                                      value:s.collectedAt
+                                      error:error]) { [f close]; return NO; }
+            if (![row setStringAttribute:@"attributes_json"
+                                    value:[s attributesJson]
+                                    error:error]) { [f close]; return NO; }
+        }
+    }
+    [f close];
+    return YES;
 }
 
 // ─────────────────────── public builders ────────────────────────────
@@ -678,6 +761,51 @@ static TTIOSpectralDataset *fb_makeWritableStub(NSString *path,
         if (!setOk) return NO;
     }
 
+    // 7. Task 6.6: layer 2 Subjects + 3 Samples exercising every
+    //    spec §8 cross-cardinality case (matched, unmatched Subject,
+    //    anonymous Sample, dangling soft-FK Sample). Same content as
+    //    the Java + Python siblings.
+    {
+        TTIOSubject *subjA = [[TTIOSubject alloc]
+            initWithExternalId:@"SUBJ-A"
+                        project:@"PROJ_A"
+                            sex:@"F"
+                      birthYear:1985
+                     attributes:@{@"notes": @"fully populated subject",
+                                  @"cohort": @"control"}];
+        TTIOSubject *subjB = [[TTIOSubject alloc]
+            initWithExternalId:@"SUBJ-B"
+                        project:nil
+                            sex:nil
+                      birthYear:0
+                     attributes:nil];
+        TTIOSample *smpl1 = [[TTIOSample alloc]
+            initWithSampleId:@"SMPL-1"
+           subjectExternalId:@"SUBJ-A"
+                  sampleKind:@"tissue"
+                 collectedAt:1700000000
+                  attributes:@{@"tissue": @"liver",
+                               @"notes": @"freshly collected"}];
+        TTIOSample *smpl2 = [[TTIOSample alloc]
+            initWithSampleId:@"SMPL-2"
+           subjectExternalId:nil
+                  sampleKind:@"plasma"
+                 collectedAt:0
+                  attributes:nil];
+        TTIOSample *smpl3 = [[TTIOSample alloc]
+            initWithSampleId:@"SMPL-3"
+           subjectExternalId:@"SUBJ-MISSING"
+                  sampleKind:nil
+                 collectedAt:0
+                  attributes:nil];
+        if (!fb_layerSubjectsAndSamples(path,
+                                          @[subjA, subjB],
+                                          @[smpl1, smpl2, smpl3],
+                                          error)) {
+            return NO;
+        }
+    }
+
     return YES;
 }
 
@@ -690,6 +818,84 @@ static TTIOSpectralDataset *fb_makeWritableStub(NSString *path,
     // encode-side override is the only knob that varies between
     // MS_IMAGE and MS_IMAGE_PROCESSED.
     return [self buildImageMsContinuousAtPath:path error:error];
+}
+
+// ─────────── Stage 6 / Task 6.6 fixtures (Deferral 2) ──────────────
+
++ (BOOL)buildSubjectsOnlyAtPath:(NSString *)path
+                            error:(NSError **)error
+{
+    unlink([path fileSystemRepresentation]);
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                  title:@"subjects_only"
+                                     isaInvestigationId:@""
+                                                 msRuns:@{}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:error];
+    if (!ok) return NO;
+
+    // Minimal: external_id only, all optionals at unset sentinel.
+    TTIOSubject *minimal = [[TTIOSubject alloc]
+        initWithExternalId:@"SUBJ-A"
+                    project:nil
+                        sex:nil
+                  birthYear:0
+                 attributes:nil];
+    // Fully populated, multi-key sort-keys attributes.
+    TTIOSubject *full = [[TTIOSubject alloc]
+        initWithExternalId:@"SUBJ-B"
+                    project:@"PROJ_A"
+                        sex:@"F"
+                  birthYear:1985
+                 attributes:@{@"notes": @"fully populated subject",
+                              @"cohort": @"control"}];
+    return fb_layerSubjectsAndSamples(path,
+                                       @[minimal, full],
+                                       @[],
+                                       error);
+}
+
++ (BOOL)buildSamplesOnlyAtPath:(NSString *)path
+                           error:(NSError **)error
+{
+    unlink([path fileSystemRepresentation]);
+    BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                  title:@"samples_only"
+                                     isaInvestigationId:@""
+                                                 msRuns:@{}
+                                        identifications:nil
+                                        quantifications:nil
+                                      provenanceRecords:nil
+                                                  error:error];
+    if (!ok) return NO;
+
+    TTIOSample *minimal = [[TTIOSample alloc]
+        initWithSampleId:@"SMPL-1"
+       subjectExternalId:nil
+              sampleKind:nil
+             collectedAt:0
+              attributes:nil];
+    // Soft-FK miss: subject_external_id refers to a Subject that
+    // doesn't exist in this fixture. Spec §4.4 allows it.
+    TTIOSample *danglingFk = [[TTIOSample alloc]
+        initWithSampleId:@"SMPL-2"
+       subjectExternalId:@"SUBJ-MISSING"
+              sampleKind:@"plasma"
+             collectedAt:0
+              attributes:nil];
+    TTIOSample *full = [[TTIOSample alloc]
+        initWithSampleId:@"SMPL-3"
+       subjectExternalId:nil
+              sampleKind:@"tissue"
+             collectedAt:1700000000
+              attributes:@{@"tissue": @"liver",
+                           @"notes": @"freshly collected"}];
+    return fb_layerSubjectsAndSamples(path,
+                                       @[],
+                                       @[minimal, danglingFk, full],
+                                       error);
 }
 
 + (BOOL)buildRamanImageOnlyAtPath:(NSString *)path
