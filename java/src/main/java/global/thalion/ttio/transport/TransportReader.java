@@ -6,11 +6,14 @@ package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.Enums.IRMode;
+import global.thalion.ttio.IRImage;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.MiniJson;
@@ -78,6 +81,18 @@ public final class TransportReader implements AutoCloseable {
     // IMAGE_HEADER and END_OF_IMAGE.
     private ImageBuilder currentImageBuilder;
     private MSImage collectedImage;
+    // v0.11 Task 5.3 (Deferral 1): per-modality image accumulators.
+    // The IMAGE_HEADER's modality byte selects which builder type is
+    // primed by startImage(); appendPixel + finishImage forward to the
+    // same builder. Unknown modalities prime `currentImageSkipping`
+    // (forward-compat skip-unknown path) and no image is materialised.
+    private RamanImageBuilder currentRamanBuilder;
+    private RamanImage collectedRamanImage;
+    private IRImageBuilder currentIrBuilder;
+    private IRImage collectedIrImage;
+    // True between IMAGE_HEADER (unknown modality) and END_OF_IMAGE.
+    // appendPixel + finishImage skip work; finishImage clears the flag.
+    private boolean currentImageSkipping;
     // v0.11 Task 1.8: identification/quantification rows decoded from
     // IDENTIFICATIONS_TABLE (0x16) / QUANTIFICATIONS_TABLE (0x17)
     // packets. Reset at the start of every materializeTo() call.
@@ -183,6 +198,11 @@ public final class TransportReader implements AutoCloseable {
         collectedProvenance.clear();
         currentImageBuilder = null;
         collectedImage = null;
+        currentRamanBuilder = null;
+        collectedRamanImage = null;
+        currentIrBuilder = null;
+        collectedIrImage = null;
+        currentImageSkipping = false;
         collectedIdentifications.clear();
         collectedQuantifications.clear();
 
@@ -452,10 +472,23 @@ public final class TransportReader implements AutoCloseable {
         // stream's IMAGE_* packets. MSImage.writeTo(StorageGroup)
         // requires the /study/ group of an open writable provider,
         // so this runs before the close+reopen dance below.
-        if (collectedImage != null) {
+        // Task 5.3 (Deferral 1): each modality lives in its own
+        // /study/{image_cube,raman_image_cube,ir_image_cube} sub-group,
+        // so all three can coexist on the same dataset.
+        if (collectedImage != null
+                || collectedRamanImage != null
+                || collectedIrImage != null) {
             try (var studyGrp =
                     created.provider().rootGroup().openGroup("study")) {
-                collectedImage.writeTo(studyGrp);
+                if (collectedImage != null) {
+                    collectedImage.writeTo(studyGrp);
+                }
+                if (collectedRamanImage != null) {
+                    collectedRamanImage.writeTo(studyGrp);
+                }
+                if (collectedIrImage != null) {
+                    collectedIrImage.writeTo(studyGrp);
+                }
             }
         }
         // v0.11 Task 1.5: persist the dataset-level @encrypted root
@@ -475,7 +508,9 @@ public final class TransportReader implements AutoCloseable {
         // the returned handle.
         if (genomicRuns.isEmpty()
                 && collectedEncryptionAlgorithm == null
-                && collectedImage == null) {
+                && collectedImage == null
+                && collectedRamanImage == null
+                && collectedIrImage == null) {
             return created;
         }
         created.close();
@@ -674,14 +709,32 @@ public final class TransportReader implements AutoCloseable {
 
     // ---------------------------------------------------------- v0.11 §4.16-§4.18
 
-    /** v0.11 Task 1.7 / 5.1 (Deferral 1): decode an IMAGE_HEADER
-     *  (0x13) payload and prime the per-image accumulator. Wire
-     *  layout matches transport-spec §4.16. Both continuous-mode
-     *  ({@code is_continuous == 1}) and processed-mode
-     *  ({@code is_continuous == 0}, sparse {channel,intensity}
-     *  pairs indexed into the shared mzAxis) are supported as of
-     *  Task 5.1; the mode flag is cached on the builder and read by
-     *  {@link #appendPixel}. */
+    /** v0.11 Task 1.7 / 5.1 / 5.3 (Deferral 1): decode an
+     *  IMAGE_HEADER (0x13) payload and prime the per-image
+     *  accumulator. Wire layout matches transport-spec §4.16. Both
+     *  continuous-mode ({@code is_continuous == 1}) and
+     *  processed-mode ({@code is_continuous == 0}, sparse
+     *  {channel,intensity} pairs indexed into the shared axis) are
+     *  supported; the mode flag is cached on the builder and read by
+     *  {@link #appendPixel}.
+     *
+     *  <p>Modality dispatch (Task 5.3): the IMAGE_HEADER ends with a
+     *  {@code u16 modality_extras_length + extras[length]} slot
+     *  carrying modality-specific fields. Layout per modality:</p>
+     *  <ul>
+     *    <li>{@code modality == 0} (MS): extras is empty.</li>
+     *    <li>{@code modality == 1} (Raman):
+     *        {@code f64 excitation_wavelength_nm + f64 laser_power_mw}
+     *        (16 bytes).</li>
+     *    <li>{@code modality == 2} (IR):
+     *        {@code u8 ir_mode + f64 resolution_cm_inv}
+     *        (9 bytes).</li>
+     *  </ul>
+     *  Unknown modalities are logged + skipped — the wire-format
+     *  {@code modality_extras_length} field is self-describing so the
+     *  reader still advances past the header, and a flag is set so
+     *  the following IMAGE_PIXEL + END_OF_IMAGE packets are dropped
+     *  without aborting the stream (forward compat per §4.16). */
     private void startImage(byte[] payload) {
         ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
         int modality = bb.get() & 0xFF;
@@ -702,28 +755,68 @@ public final class TransportReader implements AutoCloseable {
         int isaLen = bb.getShort() & 0xFFFF;
         byte[] isaBytes = new byte[isaLen];
         bb.get(isaBytes);
+        int extrasLen = bb.getShort() & 0xFFFF;
+        byte[] extras = new byte[extrasLen];
+        bb.get(extras);
 
         if (isContinuous != 0 && isContinuous != 1) {
             throw new IllegalStateException(
                 "IMAGE_HEADER: is_continuous must be 0 or 1; got "
                 + isContinuous);
         }
-        if (modality != 0) {
-            // The materialiser writes /study/image_cube which is the
-            // MSImage on-disk path. Non-MS modalities (Raman/IR/UV-Vis)
-            // need their own value type + writeTo path; defer.
-            throw new IllegalStateException(
-                "IMAGE_HEADER: only modality=0 (MS) materialises into "
-                + "an MSImage today; got modality=" + modality);
+        String title = new String(titleBytes, StandardCharsets.UTF_8);
+        String isa   = new String(isaBytes,   StandardCharsets.UTF_8);
+        String scanPattern = scanPatternFromByte(scanPat);
+
+        if (modality == 0) {
+            currentImageBuilder = new ImageBuilder(
+                width, height, bins,
+                pxX, pxY, scanPattern, axis,
+                title, isa,
+                isContinuous == 1);
+        } else if (modality == 1) {
+            // Raman extras: 16 bytes (f64 excitation + f64 laser power).
+            if (extrasLen != 16) {
+                throw new IllegalStateException(
+                    "IMAGE_HEADER (modality=1, Raman) expects 16-byte "
+                    + "modality_extras (excitation + laser_power); got "
+                    + extrasLen);
+            }
+            ByteBuffer eb = ByteBuffer.wrap(extras).order(ByteOrder.LITTLE_ENDIAN);
+            double exc = eb.getDouble();
+            double laser = eb.getDouble();
+            currentRamanBuilder = new RamanImageBuilder(
+                width, height, bins,
+                pxX, pxY, scanPattern, axis,
+                title, isa,
+                exc, laser,
+                isContinuous == 1);
+        } else if (modality == 2) {
+            // IR extras: 9 bytes (u8 ir_mode + f64 resolution).
+            if (extrasLen != 9) {
+                throw new IllegalStateException(
+                    "IMAGE_HEADER (modality=2, IR) expects 9-byte "
+                    + "modality_extras (ir_mode + resolution); got "
+                    + extrasLen);
+            }
+            ByteBuffer eb = ByteBuffer.wrap(extras).order(ByteOrder.LITTLE_ENDIAN);
+            int irModeByte = eb.get() & 0xFF;
+            double resolution = eb.getDouble();
+            IRMode mode = (irModeByte == 1) ? IRMode.ABSORBANCE
+                                            : IRMode.TRANSMITTANCE;
+            currentIrBuilder = new IRImageBuilder(
+                width, height, bins,
+                pxX, pxY, scanPattern, axis,
+                title, isa,
+                mode, resolution,
+                isContinuous == 1);
+        } else {
+            // Unknown modality — skip the entire image block.
+            LOG.warning("IMAGE_HEADER: unknown modality=" + modality
+                + "; skipping image block (extrasLen=" + extrasLen
+                + ", width=" + width + ", height=" + height + ")");
+            currentImageSkipping = true;
         }
-        currentImageBuilder = new ImageBuilder(
-            width, height, bins,
-            pxX, pxY,
-            scanPatternFromByte(scanPat),
-            axis,
-            new String(titleBytes, StandardCharsets.UTF_8),
-            new String(isaBytes,   StandardCharsets.UTF_8),
-            isContinuous == 1);
     }
 
     /** v0.11 Task 1.7 / 5.1: decode an IMAGE_PIXEL (0x14) payload
@@ -739,7 +832,11 @@ public final class TransportReader implements AutoCloseable {
      *  </ul>
      */
     private void appendPixel(byte[] payload) {
-        if (currentImageBuilder == null) {
+        // Task 5.3: unknown-modality stream — silently drop the pixel.
+        if (currentImageSkipping) return;
+        if (currentImageBuilder == null
+                && currentRamanBuilder == null
+                && currentIrBuilder == null) {
             throw new IllegalStateException(
                 "IMAGE_PIXEL received before IMAGE_HEADER");
         }
@@ -764,42 +861,58 @@ public final class TransportReader implements AutoCloseable {
                 "IMAGE_PIXEL precision=" + precision
                 + " not supported (expected 0=float32 or 1=float64)");
         }
+        // Resolve the active builder (one of MS/Raman/IR) and its
+        // wire-mode flag. Each builder exposes the same setPixel
+        // signature + spectralPoints field so the parse logic below
+        // is identical across modalities.
+        boolean isContinuous;
+        int specBins;
+        if (currentImageBuilder != null) {
+            isContinuous = currentImageBuilder.isContinuous;
+            specBins = currentImageBuilder.spectralPoints;
+        } else if (currentRamanBuilder != null) {
+            isContinuous = currentRamanBuilder.isContinuous;
+            specBins = currentRamanBuilder.spectralPoints;
+        } else {
+            isContinuous = currentIrBuilder.isContinuous;
+            specBins = currentIrBuilder.spectralPoints;
+        }
         ByteBuffer ibuf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
-        if (currentImageBuilder.isContinuous) {
+        double[] intensities;
+        if (isContinuous) {
             int n;
-            double[] intensities;
             if (precision == 1) {
-                // FLOAT64
                 n = payloadLen / 8;
                 intensities = new double[n];
                 for (int k = 0; k < n; k++) intensities[k] = ibuf.getDouble();
             } else {
-                // FLOAT32 — widen to double for MSImage's double[] cube.
                 n = payloadLen / 4;
                 intensities = new double[n];
                 for (int k = 0; k < n; k++) intensities[k] = ibuf.getFloat();
             }
-            currentImageBuilder.setPixel(x, y, intensities);
         } else {
-            // Processed-mode (sparse) payload: u32 nonzero_count
-            // followed by nonzero_count × (u32 channel + fXX intensity).
-            // Cube remains dense; channels not listed stay 0.0.
+            // Processed-mode (sparse): u32 nonzero_count + entries.
             int nonzero = ibuf.getInt();
-            int bins = currentImageBuilder.spectralPoints;
-            double[] intensities = new double[bins];
+            intensities = new double[specBins];
             for (int k = 0; k < nonzero; k++) {
                 int ch = ibuf.getInt();
                 double v = (precision == 1) ? ibuf.getDouble()
                                             : (double) ibuf.getFloat();
-                if (ch < 0 || ch >= bins) {
+                if (ch < 0 || ch >= specBins) {
                     throw new IllegalStateException(
                         "IMAGE_PIXEL (processed) channel_index " + ch
-                        + " out of range [0, " + bins + ") at pixel ("
+                        + " out of range [0, " + specBins + ") at pixel ("
                         + x + ", " + y + ")");
                 }
                 intensities[ch] = v;
             }
+        }
+        if (currentImageBuilder != null) {
             currentImageBuilder.setPixel(x, y, intensities);
+        } else if (currentRamanBuilder != null) {
+            currentRamanBuilder.setPixel(x, y, intensities);
+        } else {
+            currentIrBuilder.setPixel(x, y, intensities);
         }
     }
 
@@ -809,30 +922,74 @@ public final class TransportReader implements AutoCloseable {
      *  built {@link MSImage} for write-out after
      *  {@link SpectralDataset#create} returns. */
     private void finishImage(byte[] payload) {
-        if (currentImageBuilder == null) {
+        // Task 5.3: drain a skipped-modality block. The
+        // pixel_count_seen field is still consumed for stream
+        // hygiene but not validated against any per-pixel count
+        // (we never accumulated one).
+        if (currentImageSkipping) {
+            currentImageSkipping = false;
+            return;
+        }
+        if (currentImageBuilder == null
+                && currentRamanBuilder == null
+                && currentIrBuilder == null) {
             throw new IllegalStateException(
                 "END_OF_IMAGE without prior IMAGE_HEADER");
         }
         ByteBuffer bb = ByteBuffer.wrap(payload).order(ByteOrder.LITTLE_ENDIAN);
         long declared = bb.getInt() & 0xFFFFFFFFL;
-        long actual = currentImageBuilder.pixelsSeen();
-        if (declared != actual) {
-            throw new IllegalStateException(
-                "END_OF_IMAGE pixel_count_seen mismatch: declared="
-                + declared + ", actual=" + actual + " (width*height="
-                + ((long) currentImageBuilder.width
-                    * currentImageBuilder.height) + ")");
+        if (currentImageBuilder != null) {
+            long actual = currentImageBuilder.pixelsSeen();
+            long expected = (long) currentImageBuilder.width
+                          * currentImageBuilder.height;
+            if (declared != actual) {
+                throw new IllegalStateException(
+                    "END_OF_IMAGE pixel_count_seen mismatch: declared="
+                    + declared + ", actual=" + actual + " (width*height="
+                    + expected + ")");
+            }
+            if (actual != expected) {
+                throw new IllegalStateException(
+                    "END_OF_IMAGE pixel count " + actual
+                    + " does not equal width*height=" + expected);
+            }
+            collectedImage = currentImageBuilder.build();
+            currentImageBuilder = null;
+        } else if (currentRamanBuilder != null) {
+            long actual = currentRamanBuilder.pixelsSeen();
+            long expected = (long) currentRamanBuilder.width
+                          * currentRamanBuilder.height;
+            if (declared != actual) {
+                throw new IllegalStateException(
+                    "END_OF_IMAGE (Raman) pixel_count_seen mismatch: "
+                    + "declared=" + declared + ", actual=" + actual
+                    + " (width*height=" + expected + ")");
+            }
+            if (actual != expected) {
+                throw new IllegalStateException(
+                    "END_OF_IMAGE (Raman) pixel count " + actual
+                    + " does not equal width*height=" + expected);
+            }
+            collectedRamanImage = currentRamanBuilder.build();
+            currentRamanBuilder = null;
+        } else {
+            long actual = currentIrBuilder.pixelsSeen();
+            long expected = (long) currentIrBuilder.width
+                          * currentIrBuilder.height;
+            if (declared != actual) {
+                throw new IllegalStateException(
+                    "END_OF_IMAGE (IR) pixel_count_seen mismatch: "
+                    + "declared=" + declared + ", actual=" + actual
+                    + " (width*height=" + expected + ")");
+            }
+            if (actual != expected) {
+                throw new IllegalStateException(
+                    "END_OF_IMAGE (IR) pixel count " + actual
+                    + " does not equal width*height=" + expected);
+            }
+            collectedIrImage = currentIrBuilder.build();
+            currentIrBuilder = null;
         }
-        if (actual != (long) currentImageBuilder.width
-                * currentImageBuilder.height) {
-            throw new IllegalStateException(
-                "END_OF_IMAGE pixel count " + actual
-                + " does not equal width*height="
-                + ((long) currentImageBuilder.width
-                    * currentImageBuilder.height));
-        }
-        collectedImage = currentImageBuilder.build();
-        currentImageBuilder = null;
     }
 
     /** Inverse of {@link TransportWriter#scanPatternToByte}. */
@@ -918,6 +1075,166 @@ public final class TransportReader implements AutoCloseable {
         MSImage build() {
             return new MSImage(width, height, spectralPoints, 0,
                 pixelSizeX, pixelSizeY, scanPattern,
+                cube, axis,
+                title, isaInvestigationId,
+                List.of(), List.of(), List.of());
+        }
+    }
+
+    /** v0.11 Task 5.3 (Deferral 1): Raman counterpart to
+     *  {@link ImageBuilder}. The pixel-ingest logic is identical
+     *  (continuous or processed mode, same axis dispatch); the
+     *  only differences are the modality-specific extras
+     *  ({@code excitationWavelengthNm}, {@code laserPowerMw}) and
+     *  the {@link RamanImage} construction at build-time. */
+    private static final class RamanImageBuilder {
+        final int width;
+        final int height;
+        final int spectralPoints;
+        final double pixelSizeX;
+        final double pixelSizeY;
+        final String scanPattern;
+        final double[] axis;
+        final String title;
+        final String isaInvestigationId;
+        final double excitationWavelengthNm;
+        final double laserPowerMw;
+        final double[] cube;
+        final boolean[] seen;
+        int seenCount;
+        final boolean isContinuous;
+
+        RamanImageBuilder(int width, int height, int spectralPoints,
+                          double pixelSizeX, double pixelSizeY,
+                          String scanPattern, double[] axis,
+                          String title, String isaInvestigationId,
+                          double excitationWavelengthNm, double laserPowerMw,
+                          boolean isContinuous) {
+            this.width = width;
+            this.height = height;
+            this.spectralPoints = spectralPoints;
+            this.pixelSizeX = pixelSizeX;
+            this.pixelSizeY = pixelSizeY;
+            this.scanPattern = scanPattern;
+            this.axis = axis != null ? axis : new double[0];
+            this.title = title;
+            this.isaInvestigationId = isaInvestigationId;
+            this.excitationWavelengthNm = excitationWavelengthNm;
+            this.laserPowerMw = laserPowerMw;
+            this.cube = new double[width * height * spectralPoints];
+            this.seen = new boolean[width * height];
+            this.isContinuous = isContinuous;
+        }
+
+        void setPixel(int x, int y, double[] intensities) {
+            if (x < 0 || x >= width || y < 0 || y >= height) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL (Raman) coordinates out of bounds: x="
+                    + x + ", y=" + y);
+            }
+            if (intensities.length != spectralPoints) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL (Raman) intensity count "
+                    + intensities.length + " does not match spectrum_bins="
+                    + spectralPoints);
+            }
+            int pixelIdx = y * width + x;
+            if (seen[pixelIdx]) {
+                throw new IllegalStateException(
+                    "duplicate IMAGE_PIXEL (Raman) at (x=" + x + ", y="
+                    + y + ")");
+            }
+            seen[pixelIdx] = true;
+            seenCount++;
+            int base = (y * width + x) * spectralPoints;
+            System.arraycopy(intensities, 0, cube, base, spectralPoints);
+        }
+
+        long pixelsSeen() { return seenCount; }
+
+        RamanImage build() {
+            return new RamanImage(width, height, spectralPoints, 0,
+                pixelSizeX, pixelSizeY, scanPattern,
+                excitationWavelengthNm, laserPowerMw,
+                cube, axis,
+                title, isaInvestigationId,
+                List.of(), List.of(), List.of());
+        }
+    }
+
+    /** v0.11 Task 5.3 (Deferral 1): IR counterpart to
+     *  {@link ImageBuilder}. Modality-specific extras carried at
+     *  build time are {@code mode} (TRANSMITTANCE / ABSORBANCE)
+     *  and {@code resolutionCmInv}. */
+    private static final class IRImageBuilder {
+        final int width;
+        final int height;
+        final int spectralPoints;
+        final double pixelSizeX;
+        final double pixelSizeY;
+        final String scanPattern;
+        final double[] axis;
+        final String title;
+        final String isaInvestigationId;
+        final IRMode mode;
+        final double resolutionCmInv;
+        final double[] cube;
+        final boolean[] seen;
+        int seenCount;
+        final boolean isContinuous;
+
+        IRImageBuilder(int width, int height, int spectralPoints,
+                       double pixelSizeX, double pixelSizeY,
+                       String scanPattern, double[] axis,
+                       String title, String isaInvestigationId,
+                       IRMode mode, double resolutionCmInv,
+                       boolean isContinuous) {
+            this.width = width;
+            this.height = height;
+            this.spectralPoints = spectralPoints;
+            this.pixelSizeX = pixelSizeX;
+            this.pixelSizeY = pixelSizeY;
+            this.scanPattern = scanPattern;
+            this.axis = axis != null ? axis : new double[0];
+            this.title = title;
+            this.isaInvestigationId = isaInvestigationId;
+            this.mode = mode;
+            this.resolutionCmInv = resolutionCmInv;
+            this.cube = new double[width * height * spectralPoints];
+            this.seen = new boolean[width * height];
+            this.isContinuous = isContinuous;
+        }
+
+        void setPixel(int x, int y, double[] intensities) {
+            if (x < 0 || x >= width || y < 0 || y >= height) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL (IR) coordinates out of bounds: x="
+                    + x + ", y=" + y);
+            }
+            if (intensities.length != spectralPoints) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL (IR) intensity count "
+                    + intensities.length + " does not match spectrum_bins="
+                    + spectralPoints);
+            }
+            int pixelIdx = y * width + x;
+            if (seen[pixelIdx]) {
+                throw new IllegalStateException(
+                    "duplicate IMAGE_PIXEL (IR) at (x=" + x + ", y="
+                    + y + ")");
+            }
+            seen[pixelIdx] = true;
+            seenCount++;
+            int base = (y * width + x) * spectralPoints;
+            System.arraycopy(intensities, 0, cube, base, spectralPoints);
+        }
+
+        long pixelsSeen() { return seenCount; }
+
+        IRImage build() {
+            return new IRImage(width, height, spectralPoints, 0,
+                pixelSizeX, pixelSizeY, scanPattern,
+                mode, resolutionCmInv,
                 cube, axis,
                 title, isaInvestigationId,
                 List.of(), List.of(), List.of());

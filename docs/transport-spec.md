@@ -552,7 +552,35 @@ title_length:        uint16
 title_utf8:          bytes[title_length]
 isa_id_length:       uint16
 isa_id_utf8:         bytes[isa_id_length]
+modality_extras_length: uint16          # length of modality-specific tail (may be 0)
+modality_extras:     bytes[modality_extras_length]
+                                        # modality-specific fields; layout
+                                        # determined by `modality` (see below).
+                                        # Readers that don't recognise the
+                                        # modality MUST skip these bytes and
+                                        # the following IMAGE_PIXEL+EOI block
+                                        # rather than abort the stream.
 ```
+
+**Modality-specific extras** (v0.11):
+
+* `modality == 0` (MS): `modality_extras` is empty
+  (`modality_extras_length == 0`).
+* `modality == 1` (Raman):
+  ```
+  excitation_wavelength_nm: float64
+  laser_power_mw:           float64
+  ```
+  (`modality_extras_length == 16`).
+* `modality == 2` (IR):
+  ```
+  ir_mode:           uint8       # 0=transmittance, 1=absorbance
+  resolution_cm_inv: float64
+  ```
+  (`modality_extras_length == 9`).
+* `modality == 3` (UV-Vis): not defined in v0.11; readers MUST skip
+  the IMAGE block. Future modalities populate this slot without
+  breaking existing readers.
 
 ### 4.17 ImagePixel (`0x14`) — v0.11
 

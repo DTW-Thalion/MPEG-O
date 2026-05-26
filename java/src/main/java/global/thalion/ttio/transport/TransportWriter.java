@@ -6,11 +6,14 @@ package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.Enums.IRMode;
+import global.thalion.ttio.IRImage;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.MassSpectrum;
@@ -459,56 +462,18 @@ public final class TransportWriter implements AutoCloseable {
         int height = img.height();
         int bins   = img.spectralPoints();
         double[] axis = img.mzAxis();  // length 0 or == bins
-        int axisLength = axis != null ? axis.length : 0;
-        byte modality = 0;  // MS imaging
         byte axisKind = 0;  // mz
-        byte isContinuous = 1;  // shared axis
         byte scanPatternByte = scanPatternToByte(img.scanPattern());
-        byte[] titleBytes = (img.title() == null ? "" : img.title())
-            .getBytes(StandardCharsets.UTF_8);
-        byte[] isaBytes = (img.isaInvestigationId() == null
-            ? "" : img.isaInvestigationId())
-            .getBytes(StandardCharsets.UTF_8);
-        if (titleBytes.length > 0xFFFF) {
-            throw new IOException("IMAGE_HEADER: title " + titleBytes.length
-                + " bytes exceeds uint16 max");
-        }
-        if (isaBytes.length > 0xFFFF) {
-            throw new IOException("IMAGE_HEADER: isa_id " + isaBytes.length
-                + " bytes exceeds uint16 max");
-        }
+        // Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        byte[] extras = new byte[0];
 
         // -- IMAGE_HEADER (0x13) -----------------------------------------
-        int hdrSize = 1                  // modality
-                    + 4                  // width
-                    + 4                  // height
-                    + 4                  // spectrum_bins
-                    + 8                  // pixel_size_x
-                    + 8                  // pixel_size_y
-                    + 1                  // scan_pattern
-                    + 1                  // axis_kind
-                    + 4                  // axis_length
-                    + 8 * axisLength     // axis values
-                    + 1                  // is_continuous
-                    + 2 + titleBytes.length
-                    + 2 + isaBytes.length;
-        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
-        hbuf.put(modality);
-        hbuf.putInt(width);
-        hbuf.putInt(height);
-        hbuf.putInt(bins);
-        hbuf.putDouble(img.pixelSizeX());
-        hbuf.putDouble(img.pixelSizeY());
-        hbuf.put(scanPatternByte);
-        hbuf.put(axisKind);
-        hbuf.putInt(axisLength);
-        for (int i = 0; i < axisLength; i++) hbuf.putDouble(axis[i]);
-        hbuf.put(isContinuous);
-        hbuf.putShort((short) (titleBytes.length & 0xFFFF));
-        hbuf.put(titleBytes);
-        hbuf.putShort((short) (isaBytes.length & 0xFFFF));
-        hbuf.put(isaBytes);
-        emit(PacketType.IMAGE_HEADER, hbuf.array(), 0, 0);
+        emitImageHeader((byte) 0, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 1,  // is_continuous = 1 (shared axis)
+            img.title(), img.isaInvestigationId(),
+            extras);
 
         // -- IMAGE_PIXEL (0x14) — one per pixel --------------------------
         // Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
@@ -542,6 +507,212 @@ public final class TransportWriter implements AutoCloseable {
         ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
         ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
         emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.3 (Deferral 1): emit a {@link RamanImage} as the
+     * packet sequence {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+     * (0x14) → END_OF_IMAGE (0x15)} with {@code modality=1}.
+     *
+     * <p>Wire layout per transport-spec §4.16. The shared axis on
+     * the IMAGE_HEADER carries the Raman wavenumbers vector
+     * ({@code axis_kind = 1 = wavenumber}). The
+     * {@code modality_extras} slot at the tail of the IMAGE_HEADER
+     * carries the Raman-specific fields:</p>
+     * <pre>
+     *   excitation_wavelength_nm:  float64
+     *   laser_power_mw:            float64
+     * </pre>
+     * <p>(16 bytes total.)</p>
+     *
+     * <p>Each pixel rides as a continuous-mode IMAGE_PIXEL whose
+     * {@code payload_bytes} is a dense vector of
+     * {@code spectrum_bins} FLOAT64 intensities at the shared
+     * wavenumber axis.</p>
+     */
+    public void writeRamanImage(RamanImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeRamanImage: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.wavenumbers();
+        byte axisKind = 1;  // wavenumber
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        // Raman modality_extras: 8B excitation_wavelength_nm + 8B laser_power_mw.
+        ByteBuffer extrasBuf = ByteBuffer.allocate(16)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        extrasBuf.putDouble(img.excitationWavelengthNm());
+        extrasBuf.putDouble(img.laserPowerMw());
+
+        emitImageHeader((byte) 1, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 1,
+            img.title(), img.isaInvestigationId(),
+            extrasBuf.array());
+
+        byte precision = 1;
+        byte compression = 0;
+        long pixelIndex = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int payloadLen = 8 * bins;
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                double[] spec = img.spectrumAt(y, x);
+                for (int k = 0; k < bins; k++) pbuf.putDouble(spec[k]);
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.3 (Deferral 1): emit an {@link IRImage} as the
+     * packet sequence {@code IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+     * (0x14) → END_OF_IMAGE (0x15)} with {@code modality=2}.
+     *
+     * <p>Wire layout per transport-spec §4.16. The shared axis on
+     * the IMAGE_HEADER carries the IR wavenumbers vector
+     * ({@code axis_kind = 1 = wavenumber}). The
+     * {@code modality_extras} slot at the tail of the IMAGE_HEADER
+     * carries the IR-specific fields:</p>
+     * <pre>
+     *   ir_mode:            uint8   # 0=transmittance, 1=absorbance
+     *   resolution_cm_inv:  float64
+     * </pre>
+     * <p>(9 bytes total.)</p>
+     */
+    public void writeIRImage(IRImage img) throws IOException {
+        if (img == null) {
+            throw new IllegalArgumentException(
+                "writeIRImage: image must not be null");
+        }
+        int width  = img.width();
+        int height = img.height();
+        int bins   = img.spectralPoints();
+        double[] axis = img.wavenumbers();
+        byte axisKind = 1;  // wavenumber
+        byte scanPatternByte = scanPatternToByte(img.scanPattern());
+        // IR modality_extras: u8 ir_mode + f64 resolution_cm_inv = 9B.
+        ByteBuffer extrasBuf = ByteBuffer.allocate(9)
+            .order(ByteOrder.LITTLE_ENDIAN);
+        extrasBuf.put((byte) (img.mode() == IRMode.ABSORBANCE ? 1 : 0));
+        extrasBuf.putDouble(img.resolutionCmInv());
+
+        emitImageHeader((byte) 2, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 1,
+            img.title(), img.isaInvestigationId(),
+            extrasBuf.array());
+
+        byte precision = 1;
+        byte compression = 0;
+        long pixelIndex = 0;
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int payloadLen = 8 * bins;
+                int recSize = 4 + 4 + 1 + 1 + 4 + payloadLen;
+                ByteBuffer pbuf = ByteBuffer.allocate(recSize)
+                    .order(ByteOrder.LITTLE_ENDIAN);
+                pbuf.putInt(x);
+                pbuf.putInt(y);
+                pbuf.put(precision);
+                pbuf.put(compression);
+                pbuf.putInt(payloadLen);
+                double[] spec = img.spectrumAt(y, x);
+                for (int k = 0; k < bins; k++) pbuf.putDouble(spec[k]);
+                emit(PacketType.IMAGE_PIXEL, pbuf.array(), 0, pixelIndex);
+                pixelIndex++;
+            }
+        }
+
+        ByteBuffer ebuf = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN);
+        ebuf.putInt((int) (pixelIndex & 0xFFFFFFFFL));
+        emit(PacketType.END_OF_IMAGE, ebuf.array(), 0, 0);
+    }
+
+    /**
+     * v0.11 Task 5.3: shared IMAGE_HEADER (0x13) packing routine.
+     * Used by {@link #writeImage}, {@link #writeRamanImage},
+     * {@link #writeIRImage} (and the processed-mode variant) so the
+     * common shape stays byte-stable across modalities and the
+     * {@code modality_extras} slot is appended once per call.
+     */
+    private void emitImageHeader(byte modality,
+                                 int width, int height, int bins,
+                                 double pixelSizeX, double pixelSizeY,
+                                 byte scanPatternByte, byte axisKind,
+                                 double[] axis,
+                                 byte isContinuous,
+                                 String title, String isaId,
+                                 byte[] extras) throws IOException {
+        if (axis == null) axis = new double[0];
+        if (extras == null) extras = new byte[0];
+        byte[] titleBytes = (title == null ? "" : title)
+            .getBytes(StandardCharsets.UTF_8);
+        byte[] isaBytes = (isaId == null ? "" : isaId)
+            .getBytes(StandardCharsets.UTF_8);
+        if (titleBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: title " + titleBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        if (isaBytes.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: isa_id " + isaBytes.length
+                + " bytes exceeds uint16 max");
+        }
+        if (extras.length > 0xFFFF) {
+            throw new IOException("IMAGE_HEADER: modality_extras "
+                + extras.length + " bytes exceeds uint16 max");
+        }
+        int axisLength = axis.length;
+        int hdrSize = 1                  // modality
+                    + 4                  // width
+                    + 4                  // height
+                    + 4                  // spectrum_bins
+                    + 8                  // pixel_size_x
+                    + 8                  // pixel_size_y
+                    + 1                  // scan_pattern
+                    + 1                  // axis_kind
+                    + 4                  // axis_length
+                    + 8 * axisLength     // axis values
+                    + 1                  // is_continuous
+                    + 2 + titleBytes.length
+                    + 2 + isaBytes.length
+                    + 2 + extras.length;  // modality_extras
+        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
+        hbuf.put(modality);
+        hbuf.putInt(width);
+        hbuf.putInt(height);
+        hbuf.putInt(bins);
+        hbuf.putDouble(pixelSizeX);
+        hbuf.putDouble(pixelSizeY);
+        hbuf.put(scanPatternByte);
+        hbuf.put(axisKind);
+        hbuf.putInt(axisLength);
+        for (int i = 0; i < axisLength; i++) hbuf.putDouble(axis[i]);
+        hbuf.put(isContinuous);
+        hbuf.putShort((short) (titleBytes.length & 0xFFFF));
+        hbuf.put(titleBytes);
+        hbuf.putShort((short) (isaBytes.length & 0xFFFF));
+        hbuf.put(isaBytes);
+        hbuf.putShort((short) (extras.length & 0xFFFF));
+        hbuf.put(extras);
+        emit(PacketType.IMAGE_HEADER, hbuf.array(), 0, 0);
     }
 
     /**
@@ -583,56 +754,18 @@ public final class TransportWriter implements AutoCloseable {
         int height = img.height();
         int bins   = img.spectralPoints();
         double[] axis = img.mzAxis();
-        int axisLength = axis != null ? axis.length : 0;
-        byte modality = 0;  // MS imaging
         byte axisKind = 0;  // mz
-        byte isContinuous = 0;  // processed
         byte scanPatternByte = scanPatternToByte(img.scanPattern());
-        byte[] titleBytes = (img.title() == null ? "" : img.title())
-            .getBytes(StandardCharsets.UTF_8);
-        byte[] isaBytes = (img.isaInvestigationId() == null
-            ? "" : img.isaInvestigationId())
-            .getBytes(StandardCharsets.UTF_8);
-        if (titleBytes.length > 0xFFFF) {
-            throw new IOException("IMAGE_HEADER: title " + titleBytes.length
-                + " bytes exceeds uint16 max");
-        }
-        if (isaBytes.length > 0xFFFF) {
-            throw new IOException("IMAGE_HEADER: isa_id " + isaBytes.length
-                + " bytes exceeds uint16 max");
-        }
+        // Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        byte[] extras = new byte[0];
 
-        // -- IMAGE_HEADER (0x13) — identical layout, is_continuous=0 ----
-        int hdrSize = 1                  // modality
-                    + 4                  // width
-                    + 4                  // height
-                    + 4                  // spectrum_bins
-                    + 8                  // pixel_size_x
-                    + 8                  // pixel_size_y
-                    + 1                  // scan_pattern
-                    + 1                  // axis_kind
-                    + 4                  // axis_length
-                    + 8 * axisLength     // axis values (still the shared axis)
-                    + 1                  // is_continuous
-                    + 2 + titleBytes.length
-                    + 2 + isaBytes.length;
-        ByteBuffer hbuf = ByteBuffer.allocate(hdrSize).order(ByteOrder.LITTLE_ENDIAN);
-        hbuf.put(modality);
-        hbuf.putInt(width);
-        hbuf.putInt(height);
-        hbuf.putInt(bins);
-        hbuf.putDouble(img.pixelSizeX());
-        hbuf.putDouble(img.pixelSizeY());
-        hbuf.put(scanPatternByte);
-        hbuf.put(axisKind);
-        hbuf.putInt(axisLength);
-        for (int i = 0; i < axisLength; i++) hbuf.putDouble(axis[i]);
-        hbuf.put(isContinuous);
-        hbuf.putShort((short) (titleBytes.length & 0xFFFF));
-        hbuf.put(titleBytes);
-        hbuf.putShort((short) (isaBytes.length & 0xFFFF));
-        hbuf.put(isaBytes);
-        emit(PacketType.IMAGE_HEADER, hbuf.array(), 0, 0);
+        // -- IMAGE_HEADER (0x13) — shared layout, is_continuous=0 -------
+        emitImageHeader((byte) 0, width, height, bins,
+            img.pixelSizeX(), img.pixelSizeY(),
+            scanPatternByte, axisKind, axis != null ? axis : new double[0],
+            (byte) 0,  // is_continuous = 0 (processed)
+            img.title(), img.isaInvestigationId(),
+            extras);
 
         // -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
         // We always emit FLOAT64 (precision=1) uncompressed
@@ -792,6 +925,8 @@ public final class TransportWriter implements AutoCloseable {
                     || dataset.isEncrypted()
                     || !dataset.provenanceRecords().isEmpty()
                     || dataset.image() != null
+                    || dataset.ramanImage() != null
+                    || dataset.irImage() != null
                     || !dataset.identifications().isEmpty()
                     || !dataset.quantifications().isEmpty();
         if (v011 && !features.contains(PacketType.TRANSPORT_V0_11_FEATURE)) {
@@ -821,8 +956,17 @@ public final class TransportWriter implements AutoCloseable {
             for (ReferenceImport ref : dataset.references().values()) {
                 writeReferenceGroup(ref);
             }
+            // Task 5.3 (Deferral 1): image cubes emit in MS → Raman → IR
+            // order so a downstream reader sees a deterministic sequence
+            // when more than one modality is present on the same dataset.
             if (dataset.image() != null) {
                 writeImage(dataset.image());
+            }
+            if (dataset.ramanImage() != null) {
+                writeRamanImage(dataset.ramanImage());
+            }
+            if (dataset.irImage() != null) {
+                writeIRImage(dataset.irImage());
             }
             // §5.4 step 6: identifications first, then quantifications.
             // Empty lists emit NO packet (spec says "zero or more").
