@@ -2,6 +2,7 @@
 package global.thalion.ttio.exporters;
 
 import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -37,6 +38,20 @@ public final class NmrMLWriter {
      * @param path output file path
      */
     public static void write(AcquisitionRun run, String path) {
+        write(run, path, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of {@link #write(AcquisitionRun, String)} that
+     * fires a single {@code progress.onProgress(1, 1)} once the file
+     * is on disk. nmrML stores a single 1-D spectrum per file, so the
+     * per-spectrum cadence collapses to a single done fire.
+     *
+     * @since 1.5.0
+     */
+    public static void write(AcquisitionRun run, String path,
+                              ProgressSink progress) {
+        if (progress == null) progress = ProgressSink.discard();
         String nucleus = run.nucleusType() != null ? run.nucleusType() : "1H";
         // Internal frequency is MHz; nmrML expects Hz
         double freqHz = run.spectrometerFrequencyMHz() * 1.0e6;
@@ -151,6 +166,7 @@ public final class NmrMLWriter {
         } catch (IOException e) {
             throw new UncheckedIOException("Failed to write nmrML: " + path, e);
         }
+        progress.onProgress(1L, 1L);
     }
 
     // ── Encoding helpers ───────────────────────────────────────────

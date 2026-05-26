@@ -8,6 +8,7 @@ package global.thalion.ttio.exporters;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.importers.BamReader;
+import global.thalion.ttio.io.ProgressSink;
 
 import htsjdk.samtools.SAMFileHeader;
 import htsjdk.samtools.SAMFileWriter;
@@ -68,6 +69,11 @@ public class BamWriter {
      */
     protected static final long DEFAULT_SQ_LENGTH = 2147483647L;
 
+    /** Stage D: emit-every-N cadence for {@link ProgressSink}
+     *  callbacks during BAM/CRAM record serialisation. Mirrors
+     *  {@code BamReader.PROGRESS_INTERVAL_READS = 1000}. */
+    public static final int PROGRESS_INTERVAL_READS = 1000;
+
     private final Path path;
 
     /**
@@ -104,15 +110,43 @@ public class BamWriter {
      */
     public void write(WrittenGenomicRun run, List<ProvenanceRecord> provenance,
                       boolean sort) throws IOException {
+        write(run, provenance, sort, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of
+     * {@link #write(WrittenGenomicRun, List, boolean)} that fires
+     * {@code progress.onProgress(readsDone, totalReads)} every
+     * {@link #PROGRESS_INTERVAL_READS} records during the alignment
+     * write loop and a final {@code onProgress(total, total)} once
+     * the writer closes.
+     *
+     * <p>{@code total} is known up front (= {@code run.readNames().size()})
+     * so every mid-emit callback already passes the determinate total —
+     * listeners can drive a determinate progress bar from the first
+     * fire.</p>
+     *
+     * @since 1.5.0
+     */
+    public void write(WrittenGenomicRun run, List<ProvenanceRecord> provenance,
+                      boolean sort, ProgressSink progress) throws IOException {
         Objects.requireNonNull(run, "run");
         if (provenance == null) provenance = List.of();
+        if (progress == null) progress = ProgressSink.discard();
         SAMFileHeader header = buildHeader(run, provenance, sort);
         try (SAMFileWriter writer = makeWriter(header, sort)) {
             int n = run.readNames().size();
+            long total = n;
             for (int i = 0; i < n; i++) {
                 SAMRecord rec = buildSamRecord(run, header, i);
                 writer.addAlignment(rec);
+                long done = (long) (i + 1);
+                if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
+                    progress.onProgress(done, total);
+                }
             }
+            // Final fire always — even for empty / sub-cadence runs.
+            progress.onProgress(total, total);
         }
     }
 
