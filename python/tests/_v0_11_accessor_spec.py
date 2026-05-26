@@ -12,9 +12,7 @@ round-trip in isolation; the coverage-gap watchdog
 against the all-in-one ``everything.tio`` fixture so a silent drop
 of any single accessor fires a clear assertion.
 
-Stage 1 (Task 2.10): 8 first-class accessors covered. SUBJECTS +
-SAMPLES are deferred until they exist as first-class entities on
-``SpectralDataset``.
+Stage 1 (Task 2.10): 8 first-class accessors covered.
 
 Stage 5 (Task 5.6, Deferral 1): MS_IMAGE_PROCESSED, RAMAN_IMAGE,
 IR_IMAGE. MS_IMAGE_PROCESSED shares the IMAGE fixture but supplies
@@ -22,6 +20,12 @@ a custom ``encode_strategy`` callable that swaps the writer's
 ``write_image`` for ``write_image_processed`` (opt-in sparse wire
 mode). The remaining two integrate via the §5.4.5 image-block
 prelude and use the default ``write_dataset`` encode path.
+
+Stage 6 (Task 6.6, Deferral 2): SUBJECTS, SAMPLES. Both flow through
+``write_dataset`` unchanged — the §5.4.3 prelude emits
+SUBJECT_METADATA (0x19) before SAMPLE_METADATA (0x1A) when present,
+and the reader layers them back as ``/study/subjects/<external_id>/``
++ ``/study/samples/<sample_id>/`` HDF5 groups.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -53,6 +57,8 @@ from _v0_11_fixtures import (
     build_quantifications_only,
     build_raman_image_only,
     build_reference_only,
+    build_samples_only,
+    build_subjects_only,
 )
 
 
@@ -563,6 +569,88 @@ def _ir_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
         )
 
 
+# ── Stage 6 / Task 6.6 comparators (Deferral 2) ─────────────────────
+
+
+def _subjects_equals(a: SpectralDataset, b: SpectralDataset) -> None:
+    """Mirror Java's ``SUBJECTS.assertContentEquals``: same row count
+    and each row's external_id / project / sex / birth_year /
+    attributes (dict-equal — key order doesn't matter; the sort-keys
+    JSON serialisation is the cross-language byte-parity contract,
+    not the in-memory dict)."""
+    la = a.subjects
+    lb = b.subjects
+    if len(la) != len(lb):
+        raise AssertionError(
+            f"subject count mismatch: {len(la)} vs {len(lb)}"
+        )
+    for i, (sa, sb) in enumerate(zip(la, lb)):
+        if sa.external_id != sb.external_id:
+            raise AssertionError(
+                f"subject[{i}].external_id mismatch: "
+                f"{sa.external_id!r} vs {sb.external_id!r}"
+            )
+        if sa.project != sb.project:
+            raise AssertionError(
+                f"subject[{i}].project mismatch: "
+                f"{sa.project!r} vs {sb.project!r}"
+            )
+        if sa.sex != sb.sex:
+            raise AssertionError(
+                f"subject[{i}].sex mismatch: "
+                f"{sa.sex!r} vs {sb.sex!r}"
+            )
+        if sa.birth_year != sb.birth_year:
+            raise AssertionError(
+                f"subject[{i}].birth_year mismatch: "
+                f"{sa.birth_year} vs {sb.birth_year}"
+            )
+        if dict(sa.attributes) != dict(sb.attributes):
+            raise AssertionError(
+                f"subject[{i}].attributes mismatch: "
+                f"{dict(sa.attributes)!r} vs {dict(sb.attributes)!r}"
+            )
+
+
+def _samples_equals(a: SpectralDataset, b: SpectralDataset) -> None:
+    """Mirror Java's ``SAMPLES.assertContentEquals``: same row count
+    and each row's sample_id / subject_external_id / sample_kind /
+    collected_at / attributes."""
+    la = a.samples
+    lb = b.samples
+    if len(la) != len(lb):
+        raise AssertionError(
+            f"sample count mismatch: {len(la)} vs {len(lb)}"
+        )
+    for i, (sa, sb) in enumerate(zip(la, lb)):
+        if sa.sample_id != sb.sample_id:
+            raise AssertionError(
+                f"sample[{i}].sample_id mismatch: "
+                f"{sa.sample_id!r} vs {sb.sample_id!r}"
+            )
+        if sa.subject_external_id != sb.subject_external_id:
+            raise AssertionError(
+                f"sample[{i}].subject_external_id mismatch: "
+                f"{sa.subject_external_id!r} vs "
+                f"{sb.subject_external_id!r}"
+            )
+        if sa.sample_kind != sb.sample_kind:
+            raise AssertionError(
+                f"sample[{i}].sample_kind mismatch: "
+                f"{sa.sample_kind!r} vs {sb.sample_kind!r}"
+            )
+        if sa.collected_at != sb.collected_at:
+            raise AssertionError(
+                f"sample[{i}].collected_at mismatch: "
+                f"{sa.collected_at} vs {sb.collected_at}"
+            )
+        if dict(sa.attributes) != dict(sb.attributes):
+            raise AssertionError(
+                f"sample[{i}].attributes mismatch: "
+                f"{dict(sa.attributes)!r} vs {dict(sb.attributes)!r}"
+            )
+
+
 # ── master list — order matches Java's enum declaration ──────────────
 
 
@@ -606,5 +694,16 @@ ACCESSOR_SPECS: list[AccessorSpec] = [
         "IR_IMAGE",
         build_ir_image_only,
         _ir_image_equals,
+    ),
+    # Stage 6 / Task 6.6 (Deferral 2)
+    AccessorSpec(
+        "SUBJECTS",
+        build_subjects_only,
+        _subjects_equals,
+    ),
+    AccessorSpec(
+        "SAMPLES",
+        build_samples_only,
+        _samples_equals,
     ),
 ]
