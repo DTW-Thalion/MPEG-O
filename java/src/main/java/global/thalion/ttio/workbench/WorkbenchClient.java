@@ -130,6 +130,23 @@ public final class WorkbenchClient implements AutoCloseable {
                                           null, progress);
     }
 
+    /** Convenience: one-shot streaming upload from a file on disk.
+     *
+     *  <p>Reads the payload in {@code chunkSize}-bounded slices via
+     *  {@link WorkbenchTransportClient#upload(String, String,
+     *  java.nio.file.Path, global.thalion.ttio.workbench.transport
+     *  .ResumeState, TransferProgress)} — peak heap during the
+     *  upload is O({@code chunkSize}), independent of file size.
+     *  Prefer this entry point over the {@code byte[]} overload for
+     *  multi-MB payloads.</p>
+     */
+    public WorkbenchTransportClient.UploadResult upload(
+            String project, String containerUri, Path payloadFile,
+            TransferProgress progress) throws IOException {
+        return transportClient().upload(project, containerUri,
+                                          payloadFile, null, progress);
+    }
+
     /** Convenience: one-shot download via the transport client. */
     public WorkbenchTransportClient.DownloadResult download(
             String containerUri) {

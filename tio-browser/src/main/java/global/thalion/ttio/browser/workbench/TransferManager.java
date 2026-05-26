@@ -235,20 +235,23 @@ public final class TransferManager {
             // stream (StreamHeader + DatasetHeader + AccessUnit + ...
             // + EndOfStream). The server rejects raw .tio HDF5 bytes
             // with "binary frame outside ReceivingAU". Encode .tio to
-            // .tis up front, send the .tis bytes, then clean up.
+            // .tis up front, then stream the .tis file (TTI-O #130 —
+            // we no longer Files.readAllBytes the .tis into a heap
+            // byte[], so multi-GB uploads no longer pin heap to
+            // payload size).
             setState(t, TransferState.RUNNING, "Encoding .tio → .tis...");
             System.err.println("[TransferManager.runUpload] encoding "
                 + source + " → .tis temp file");
             tis = global.thalion.ttio.browser.transport
                 .TisEncoder.encodeToTempFile(source.toString(), false);
-            byte[] payload = Files.readAllBytes(tis);
+            long tisSize = Files.size(tis);
             System.err.println("[TransferManager.runUpload] tis size="
-                + payload.length + " bytes; uploading to " + containerUri);
+                + tisSize + " bytes; streaming to " + containerUri);
             setState(t, TransferState.RUNNING, "Uploading...");
             WorkbenchTransportClient.UploadResult result =
-                client.upload(project, containerUri, payload,
+                client.upload(project, containerUri, tis,
                               progressFor(t, "Uploading", "uploading"));
-            setBytes(t, payload.length);
+            setBytes(t, tisSize);
             setState(t, TransferState.COMPLETED,
                 "Uploaded " + result.containerUri()
                 + " (au_seq=" + result.lastAckedAuSequence() + ")");
