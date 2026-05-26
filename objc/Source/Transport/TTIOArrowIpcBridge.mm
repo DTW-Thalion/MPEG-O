@@ -7,6 +7,8 @@
  *
  *   - IDENTIFICATIONS_TABLE (packet 0x16)
  *   - QUANTIFICATIONS_TABLE (packet 0x17)
+ *   - SUBJECT_METADATA      (packet 0x19, Stage 6)
+ *   - SAMPLE_METADATA       (packet 0x1A, Stage 6)
  *
  * Boundary contract
  * -----------------
@@ -104,11 +106,77 @@ std::shared_ptr<arrow::Schema> QuantificationSchema()
     });
 }
 
+/* Build the SUBJECT_METADATA (0x19) schema — Stage 6 (transport-spec
+ * §4.22). Cross-language parity with Java's
+ * ArrowIpcCodec.SUBJECT_SCHEMA + Python's _SUBJECT_SCHEMA. external_id
+ * is notNullable; every other field is nullable so the spec §11
+ * "empty-string <-> Arrow null" + "sentinel 0 <-> Arrow null"
+ * conventions can be encoded directly on the wire. */
+std::shared_ptr<arrow::Schema> SubjectSchema()
+{
+    return arrow::schema({
+        arrow::field("external_id",     arrow::utf8(),    /*nullable=*/false),
+        arrow::field("project",         arrow::utf8(),    /*nullable=*/true),
+        arrow::field("sex",             arrow::utf8(),    /*nullable=*/true),
+        arrow::field("birth_year",      arrow::int32(),   /*nullable=*/true),
+        arrow::field("attributes_json", arrow::utf8(),    /*nullable=*/true),
+    });
+}
+
+/* Build the SAMPLE_METADATA (0x1A) schema — Stage 6. sample_id
+ * notNullable; collected_at is int64 (not int32). */
+std::shared_ptr<arrow::Schema> SampleSchema()
+{
+    return arrow::schema({
+        arrow::field("sample_id",           arrow::utf8(),  /*nullable=*/false),
+        arrow::field("subject_external_id", arrow::utf8(),  /*nullable=*/true),
+        arrow::field("sample_kind",         arrow::utf8(),  /*nullable=*/true),
+        arrow::field("collected_at",        arrow::int64(), /*nullable=*/true),
+        arrow::field("attributes_json",     arrow::utf8(),  /*nullable=*/true),
+    });
+}
+
 std::shared_ptr<arrow::Schema> SchemaForName(NSString *name)
 {
     if ([name isEqualToString:@"identifications"]) return IdentificationSchema();
     if ([name isEqualToString:@"quantifications"]) return QuantificationSchema();
+    if ([name isEqualToString:@"subjects"])         return SubjectSchema();
+    if ([name isEqualToString:@"samples"])          return SampleSchema();
     return nullptr;
+}
+
+/* Stage 6 null convention (spec §11): for SUBJECT_METADATA /
+ * SAMPLE_METADATA optional string columns, an empty source string
+ * encodes to Arrow null. Java's setOptionalString + Python's
+ * _str_or_null mirror this. The notNullable primary keys
+ * (external_id / sample_id) plus the always-present attributes_json
+ * column are exempt — they never null on the wire. */
+bool ShouldNullOnEmptyString(NSString *schemaName, NSString *key)
+{
+    if ([schemaName isEqualToString:@"subjects"]) {
+        if ([key isEqualToString:@"external_id"])     return false;
+        if ([key isEqualToString:@"attributes_json"]) return false;
+        return true;
+    }
+    if ([schemaName isEqualToString:@"samples"]) {
+        if ([key isEqualToString:@"sample_id"])       return false;
+        if ([key isEqualToString:@"attributes_json"]) return false;
+        return true;
+    }
+    return false;
+}
+
+/* Stage 6 null convention for the optional integer columns
+ * (birth_year, collected_at): sentinel 0 encodes to Arrow null.
+ * Mirrors Java's `by == 0L` / `ts == 0L` checks and Python's
+ * _int_or_null. */
+bool ShouldNullOnZero(NSString *schemaName, NSString *key)
+{
+    if ([schemaName isEqualToString:@"subjects"]
+        && [key isEqualToString:@"birth_year"]) return true;
+    if ([schemaName isEqualToString:@"samples"]
+        && [key isEqualToString:@"collected_at"]) return true;
+    return false;
 }
 
 /* Pull an NSString from a dict, treating missing / NSNull as empty. */
@@ -138,6 +206,17 @@ int32_t PickInt32(NSDictionary *d, NSString *key)
     return 0;
 }
 
+/* Pull an int64. Stage 6 collected_at uses int64. */
+int64_t PickInt64(NSDictionary *d, NSString *key)
+{
+    id v = d[key];
+    if (!v || v == [NSNull null]) return 0;
+    if ([v respondsToSelector:@selector(longLongValue)])
+        return (int64_t)[v longLongValue];
+    if ([v respondsToSelector:@selector(intValue)]) return (int64_t)[v intValue];
+    return 0;
+}
+
 /* Append a string column value, propagating any builder error. */
 arrow::Status AppendUtf8(arrow::StringBuilder *b, NSString *s)
 {
@@ -145,23 +224,57 @@ arrow::Status AppendUtf8(arrow::StringBuilder *b, NSString *s)
     return b->Append(c, static_cast<int32_t>(strlen(c)));
 }
 
-/* Append a typed column from an NSArray of NSDictionary rows. */
+/* Append a typed column from an NSArray of NSDictionary rows. The
+ * schemaName + key are used to honour the Stage 6 null conventions
+ * (empty-string ↔ null + sentinel-0 ↔ null). For other schemas the
+ * conventions are no-ops. */
 arrow::Status BuildStringColumn(arrow::StringBuilder *b,
                                 NSArray<NSDictionary *> *rows,
+                                NSString *schemaName,
                                 NSString *key)
 {
+    const bool nullEmpty = ShouldNullOnEmptyString(schemaName, key);
     for (NSDictionary *r in rows) {
-        ARROW_RETURN_NOT_OK(AppendUtf8(b, PickString(r, key)));
+        NSString *s = PickString(r, key);
+        if (nullEmpty && s.length == 0) {
+            ARROW_RETURN_NOT_OK(b->AppendNull());
+        } else {
+            ARROW_RETURN_NOT_OK(AppendUtf8(b, s));
+        }
     }
     return arrow::Status::OK();
 }
 
 arrow::Status BuildInt32Column(arrow::Int32Builder *b,
                                NSArray<NSDictionary *> *rows,
+                               NSString *schemaName,
                                NSString *key)
 {
+    const bool nullZero = ShouldNullOnZero(schemaName, key);
     for (NSDictionary *r in rows) {
-        ARROW_RETURN_NOT_OK(b->Append(PickInt32(r, key)));
+        int32_t v = PickInt32(r, key);
+        if (nullZero && v == 0) {
+            ARROW_RETURN_NOT_OK(b->AppendNull());
+        } else {
+            ARROW_RETURN_NOT_OK(b->Append(v));
+        }
+    }
+    return arrow::Status::OK();
+}
+
+arrow::Status BuildInt64Column(arrow::Int64Builder *b,
+                               NSArray<NSDictionary *> *rows,
+                               NSString *schemaName,
+                               NSString *key)
+{
+    const bool nullZero = ShouldNullOnZero(schemaName, key);
+    for (NSDictionary *r in rows) {
+        int64_t v = PickInt64(r, key);
+        if (nullZero && v == 0) {
+            ARROW_RETURN_NOT_OK(b->AppendNull());
+        } else {
+            ARROW_RETURN_NOT_OK(b->Append(v));
+        }
     }
     return arrow::Status::OK();
 }
@@ -193,6 +306,14 @@ id BoxInt32(const std::shared_ptr<arrow::Array> &a, int64_t i)
     if (a->IsNull(i)) return @(0);
     auto ia = std::static_pointer_cast<arrow::Int32Array>(a);
     return @(ia->Value(i));
+}
+
+id BoxInt64(const std::shared_ptr<arrow::Array> &a, int64_t i)
+{
+    // Stage 6 null convention: null decodes to sentinel 0.
+    if (a->IsNull(i)) return @((long long)0);
+    auto ia = std::static_pointer_cast<arrow::Int64Array>(a);
+    return @((long long)ia->Value(i));
 }
 
 id BoxDouble(const std::shared_ptr<arrow::Array> &a, int64_t i)
@@ -240,13 +361,19 @@ NSData *TTIOArrowIpcEncode(NSString *schemaName, NSString *rowsJson)
             switch (field->type()->id()) {
                 case arrow::Type::STRING: {
                     arrow::StringBuilder b(pool);
-                    st = BuildStringColumn(&b, rows, key);
+                    st = BuildStringColumn(&b, rows, schemaName, key);
                     if (st.ok()) st = b.Finish(&arr);
                     break;
                 }
                 case arrow::Type::INT32: {
                     arrow::Int32Builder b(pool);
-                    st = BuildInt32Column(&b, rows, key);
+                    st = BuildInt32Column(&b, rows, schemaName, key);
+                    if (st.ok()) st = b.Finish(&arr);
+                    break;
+                }
+                case arrow::Type::INT64: {
+                    arrow::Int64Builder b(pool);
+                    st = BuildInt64Column(&b, rows, schemaName, key);
                     if (st.ok()) st = b.Finish(&arr);
                     break;
                 }
@@ -376,6 +503,7 @@ NSString *TTIOArrowIpcDecode(NSString *schemaName, NSData *ipc)
                     switch (field->type()->id()) {
                         case arrow::Type::STRING: boxed = BoxString(cols[idx], r); break;
                         case arrow::Type::INT32:  boxed = BoxInt32(cols[idx], r);  break;
+                        case arrow::Type::INT64:  boxed = BoxInt64(cols[idx], r);  break;
                         case arrow::Type::DOUBLE: boxed = BoxDouble(cols[idx], r); break;
                         default:
                             NSLog(@"TTIOArrowIpcDecode: unsupported type for %@", key);
