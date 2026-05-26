@@ -8,6 +8,7 @@ package global.thalion.ttio.exporters;
 import global.thalion.ttio.importers.ImzMLReader;
 import global.thalion.ttio.importers.ImzMLReader.ImzMLImport;
 import global.thalion.ttio.importers.ImzMLReader.PixelSpectrum;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -55,6 +56,11 @@ public final class ImzMLWriter {
         int nPixels
     ) {}
 
+    /** Stage D: emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during imzML pixel serialisation. Mirrors
+     *  {@code ImzMLReader.PROGRESS_INTERVAL_SPECTRA = 100}. */
+    public static final int PROGRESS_INTERVAL_SPECTRA = 100;
+
     private ImzMLWriter() {}
 
     /**
@@ -79,6 +85,33 @@ public final class ImzMLWriter {
             String scanPattern,
             String uuidHex
     ) {
+        return write(pixels, imzmlPath, ibdPath, mode,
+            gridMaxX, gridMaxY, gridMaxZ,
+            pixelSizeX, pixelSizeY,
+            scanPattern, uuidHex, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload of the main {@link #write} entry that fires
+     * {@code progress.onProgress(pixelsDone, totalPixels)} every
+     * {@link #PROGRESS_INTERVAL_SPECTRA} pixels during the .ibd
+     * encode loop and a final fire once both .imzML + .ibd are
+     * flushed to disk.
+     *
+     * @since 1.5.0
+     */
+    public static WriteResult write(
+            List<PixelSpectrum> pixels,
+            Path imzmlPath,
+            Path ibdPath,
+            String mode,
+            int gridMaxX, int gridMaxY, int gridMaxZ,
+            double pixelSizeX, double pixelSizeY,
+            String scanPattern,
+            String uuidHex,
+            ProgressSink progress
+    ) {
+        if (progress == null) progress = ProgressSink.discard();
         if (!"continuous".equals(mode) && !"processed".equals(mode)) {
             throw new IllegalArgumentException(
                     "mode must be 'continuous' or 'processed', got: " + mode);
@@ -109,6 +142,7 @@ public final class ImzMLWriter {
         long cursor = 16;
 
         int[][] offsets = new int[pixels.size()][4];  // {mzOff, mzLen, inOff, inLen}
+        long totalPixels = pixels.size();
 
         if ("continuous".equals(mode)) {
             double[] sharedMz = pixels.get(0).mz();
@@ -132,6 +166,10 @@ public final class ImzMLWriter {
                     (int) mzOffset, mzLen,
                     (int) intOffset, p.intensity().length
                 };
+                long done = (long) (i + 1);
+                if (done % PROGRESS_INTERVAL_SPECTRA == 0 && done < totalPixels) {
+                    progress.onProgress(done, totalPixels);
+                }
             }
         } else {
             for (int i = 0; i < pixels.size(); i++) {
@@ -153,6 +191,10 @@ public final class ImzMLWriter {
                     (int) mzOffset, p.mz().length,
                     (int) intOffset, p.intensity().length
                 };
+                long done = (long) (i + 1);
+                if (done % PROGRESS_INTERVAL_SPECTRA == 0 && done < totalPixels) {
+                    progress.onProgress(done, totalPixels);
+                }
             }
         }
 
@@ -176,6 +218,7 @@ public final class ImzMLWriter {
             throw new UncheckedIOException("Failed to write .imzML: " + imzmlPath, e);
         }
 
+        progress.onProgress(totalPixels, totalPixels);
         return new WriteResult(imzmlPath, ibd, uuid, mode, pixels.size());
     }
 

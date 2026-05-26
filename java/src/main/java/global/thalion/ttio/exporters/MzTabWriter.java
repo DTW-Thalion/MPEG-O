@@ -8,6 +8,7 @@ package global.thalion.ttio.exporters;
 import global.thalion.ttio.Feature;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.Quantification;
+import global.thalion.ttio.io.ProgressSink;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -47,6 +48,11 @@ public final class MzTabWriter {
         int nSMERows
     ) {}
 
+    /** Stage D: emit-every-N cadence for {@link ProgressSink} callbacks
+     *  during mzTab row emission. Mirrors
+     *  {@code MzTabReader.PROGRESS_INTERVAL_ROWS = 500}. */
+    public static final int PROGRESS_INTERVAL_ROWS = 500;
+
     private MzTabWriter() {}
 
     /** Backwards-compat overload (no features). */
@@ -59,7 +65,7 @@ public final class MzTabWriter {
         String description
     ) {
         return write(path, identifications, quantifications, List.of(),
-                     version, title, description);
+                     version, title, description, ProgressSink.discard());
     }
 
     public static WriteResult write(
@@ -71,6 +77,34 @@ public final class MzTabWriter {
         String title,
         String description
     ) {
+        return write(path, identifications, quantifications, features,
+                     version, title, description, ProgressSink.discard());
+    }
+
+    /**
+     * Stage D overload that fires
+     * {@code progress.onProgress(rowsDone, totalRows)} every
+     * {@link #PROGRESS_INTERVAL_ROWS} data rows (PRT / PEP / PSM /
+     * SML / SMF / SME) emitted and a final fire once the file is
+     * flushed to disk. {@code totalRows} is reported as
+     * {@code -1L} mid-emit because the writer accumulates rows across
+     * multiple sections before knowing the final count, and the
+     * final fire stamps both done and total with the exact row count.
+     *
+     * @since 1.5.0
+     */
+    public static WriteResult write(
+        Path path,
+        List<Identification> identifications,
+        List<Quantification> quantifications,
+        List<Feature> features,
+        String version,
+        String title,
+        String description,
+        ProgressSink progress
+    ) {
+        if (progress == null) progress = ProgressSink.discard();
+        final ProgressSink sink = progress;
         if (!"1.0".equals(version) && !"2.0.0-M".equals(version)) {
             throw new IllegalArgumentException(
                 "unsupported mzTab version: " + version);
@@ -145,6 +179,7 @@ public final class MzTabWriter {
         lines.add("");  // blank separator
 
         int nPSM = 0, nPRT = 0, nSML = 0, nPEP = 0, nSMF = 0, nSME = 0;
+        long rowsEmitted = 0L;
 
         if ("1.0".equals(version)) {
             // ── PSH + PSM ────────────────────────────────────────
@@ -169,6 +204,10 @@ public final class MzTabWriter {
                         runIdx.get(id.runName()),
                         id.spectrumIndex()));
                     nPSM++;
+                    rowsEmitted++;
+                    if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                        sink.onProgress(rowsEmitted, -1L);
+                    }
                 }
                 lines.add("");
             }
@@ -202,6 +241,10 @@ public final class MzTabWriter {
                     }
                     lines.add(row.toString());
                     nPRT++;
+                    rowsEmitted++;
+                    if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                        sink.onProgress(rowsEmitted, -1L);
+                    }
                 }
                 lines.add("");
             }
@@ -238,6 +281,10 @@ public final class MzTabWriter {
                     }
                     lines.add(row.toString());
                     nPEP++;
+                    rowsEmitted++;
+                    if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                        sink.onProgress(rowsEmitted, -1L);
+                    }
                 }
                 lines.add("");
             }
@@ -287,6 +334,10 @@ public final class MzTabWriter {
                     }
                     lines.add(row.toString());
                     nSML++;
+                    rowsEmitted++;
+                    if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                        sink.onProgress(rowsEmitted, -1L);
+                    }
                 }
                 lines.add("");
             }
@@ -324,6 +375,10 @@ public final class MzTabWriter {
                     }
                     lines.add(row.toString());
                     nSMF++;
+                    rowsEmitted++;
+                    if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                        sink.onProgress(rowsEmitted, -1L);
+                    }
                 }
                 lines.add("");
 
@@ -353,12 +408,20 @@ public final class MzTabWriter {
                         lines.add(buildSmeRow(smeId, id, runIdx));
                         emitted++;
                         nSME++;
+                        rowsEmitted++;
+                        if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                            sink.onProgress(rowsEmitted, -1L);
+                        }
                     }
                     for (Identification id : plainIdents) {
                         String smeId = "sme_" + (emitted + 1);
                         lines.add(buildSmeRow(smeId, id, runIdx));
                         emitted++;
                         nSME++;
+                        rowsEmitted++;
+                        if (rowsEmitted % PROGRESS_INTERVAL_ROWS == 0) {
+                            sink.onProgress(rowsEmitted, -1L);
+                        }
                     }
                     lines.add("");
                 }
@@ -372,6 +435,7 @@ public final class MzTabWriter {
             throw new UncheckedIOException("Failed to write mzTab: " + path, e);
         }
 
+        sink.onProgress(rowsEmitted, rowsEmitted);
         return new WriteResult(path, version, nPSM, nPRT, nSML, nPEP, nSMF, nSME);
     }
 
