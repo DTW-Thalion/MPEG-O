@@ -12,6 +12,26 @@ public final class ProgressFormatter {
     private static final String ELL  = "…";
 
     public static String line(ProgressReport r, long nowEpochMs) {
+        // Terminal phase — synthesized on COMPLETED / FAILED state
+        // transitions (see TransferManager.setState). The op is
+        // actually done at this point; render a final summary instead
+        // of the "finalizing…" placeholder that the >=99% branch below
+        // would otherwise apply.
+        if ("complete".equals(r.phase())) {
+            String pair = r.bytesTotal() > 0L
+                ? Units.humanBytes(r.bytesTotal())
+                : Units.humanCount(r.unitsTotal()) + " AUs";
+            return "complete " + DOT + " " + pair;
+        }
+        if ("failed".equals(r.phase())) {
+            String pair = r.bytesTotal() > 0L
+                ? Units.humanBytes(r.bytesDone()) + " / "
+                  + Units.humanBytes(r.bytesTotal())
+                : Units.humanCount(r.unitsDone()) + " / "
+                  + Units.humanCount(r.unitsTotal()) + " AUs";
+            return "failed " + DOT + " " + pair;
+        }
+
         if (r.isStalled(nowEpochMs)) {
             long quietSec = (nowEpochMs - r.lastActivityEpochMs()) / 1000L;
             return "stalled " + DASH + " last activity "
