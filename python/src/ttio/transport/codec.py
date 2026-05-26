@@ -526,6 +526,70 @@ class TransportWriter:
         )
 
     # ------------------------------------------------ v0.11 §4.16-§4.18
+    def _emit_image_header(
+        self,
+        *,
+        modality: int,
+        width: int,
+        height: int,
+        bins: int,
+        pixel_size_x: float,
+        pixel_size_y: float,
+        scan_pattern_byte: int,
+        axis_kind: int,
+        axis: np.ndarray,
+        is_continuous: int,
+        title: str,
+        isa_id: str,
+        extras: bytes,
+    ) -> None:
+        """v0.11 Task 5.3: shared IMAGE_HEADER (0x13) packing routine.
+
+        Mirrors Java's ``emitImageHeader`` helper so the common
+        header shape stays byte-stable across modalities (MS / Raman
+        / IR) and the ``modality_extras`` slot is appended once per
+        call. The continuous-mode bit and the modality-specific tail
+        come from the caller.
+        """
+        axis = np.asarray(axis, dtype=np.float64)
+        title_bytes = (title or "").encode("utf-8")
+        isa_bytes = (isa_id or "").encode("utf-8")
+        if len(title_bytes) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: title {len(title_bytes)} bytes exceeds "
+                f"uint16 max"
+            )
+        if len(isa_bytes) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: isa_id {len(isa_bytes)} bytes exceeds "
+                f"uint16 max"
+            )
+        if len(extras) > 0xFFFF:
+            raise ValueError(
+                f"IMAGE_HEADER: modality_extras {len(extras)} bytes "
+                f"exceeds uint16 max"
+            )
+        header_payload = b"".join((
+            struct.pack("<B", modality & 0xFF),
+            struct.pack("<I", width & 0xFFFFFFFF),
+            struct.pack("<I", height & 0xFFFFFFFF),
+            struct.pack("<I", bins & 0xFFFFFFFF),
+            struct.pack("<d", float(pixel_size_x)),
+            struct.pack("<d", float(pixel_size_y)),
+            struct.pack("<B", scan_pattern_byte & 0xFF),
+            struct.pack("<B", axis_kind & 0xFF),
+            struct.pack("<I", int(axis.size) & 0xFFFFFFFF),
+            axis.astype("<f8", copy=False).tobytes(),
+            struct.pack("<B", is_continuous & 0xFF),
+            struct.pack("<H", len(title_bytes) & 0xFFFF),
+            title_bytes,
+            struct.pack("<H", len(isa_bytes) & 0xFFFF),
+            isa_bytes,
+            struct.pack("<H", len(extras) & 0xFFFF),
+            bytes(extras),
+        ))
+        self._emit(PacketType.IMAGE_HEADER, header_payload)
+
     def write_image(self, image) -> None:
         """v0.11 Task 2.6: emit an :class:`~ttio.MSImage` as the packet
         sequence
@@ -539,10 +603,10 @@ class TransportWriter:
 
         Continuous-mode only — the shared m/z axis rides on the
         IMAGE_HEADER and every IMAGE_PIXEL carries only its
-        intensities (FLOAT64, uncompressed). Processed-mode
-        (per-pixel axis) and non-MS modalities (Raman / IR / UV-Vis)
-        are deferred — the matching reader decode path raises a
-        clear ``ValueError`` if it encounters such a stream.
+        intensities (FLOAT64, uncompressed). For sparse cubes the
+        opt-in :meth:`write_image_processed` sibling emits the same
+        packet sequence with ``is_continuous=0`` and per-pixel
+        ``(channel_index, intensity)`` pairs (spec §4.17).
 
         :param image: :class:`ttio.MSImage` to emit. ``image`` must
             not be ``None`` (caller's responsibility to gate on
@@ -555,43 +619,25 @@ class TransportWriter:
         height = int(image.height)
         bins = int(image.spectral_points)
         axis = np.asarray(image.mz_axis, dtype=np.float64)
-        axis_length = int(axis.size)
-        modality = 0  # MS imaging
-        axis_kind = 0  # mz
-        is_continuous = 1  # shared axis
         scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
-        title_bytes = (image.title or "").encode("utf-8")
-        isa_bytes = (image.isa_investigation_id or "").encode("utf-8")
-        if len(title_bytes) > 0xFFFF:
-            raise ValueError(
-                f"IMAGE_HEADER: title {len(title_bytes)} bytes exceeds "
-                f"uint16 max"
-            )
-        if len(isa_bytes) > 0xFFFF:
-            raise ValueError(
-                f"IMAGE_HEADER: isa_id {len(isa_bytes)} bytes exceeds "
-                f"uint16 max"
-            )
 
         # -- IMAGE_HEADER (0x13) ----------------------------------------
-        header_payload = b"".join((
-            struct.pack("<B", modality & 0xFF),
-            struct.pack("<I", width & 0xFFFFFFFF),
-            struct.pack("<I", height & 0xFFFFFFFF),
-            struct.pack("<I", bins & 0xFFFFFFFF),
-            struct.pack("<d", float(image.pixel_size_x)),
-            struct.pack("<d", float(image.pixel_size_y)),
-            struct.pack("<B", scan_pattern_byte & 0xFF),
-            struct.pack("<B", axis_kind & 0xFF),
-            struct.pack("<I", axis_length & 0xFFFFFFFF),
-            axis.astype("<f8", copy=False).tobytes(),
-            struct.pack("<B", is_continuous & 0xFF),
-            struct.pack("<H", len(title_bytes) & 0xFFFF),
-            title_bytes,
-            struct.pack("<H", len(isa_bytes) & 0xFFFF),
-            isa_bytes,
-        ))
-        self._emit(PacketType.IMAGE_HEADER, header_payload)
+        # Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        self._emit_image_header(
+            modality=0,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=0,  # mz
+            axis=axis,
+            is_continuous=1,
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=b"",
+        )
 
         # -- IMAGE_PIXEL (0x14) — one per pixel -------------------------
         # Continuous-mode payload: x(u32) + y(u32) + precision(u8) +
@@ -624,6 +670,116 @@ class TransportWriter:
 
         # -- END_OF_IMAGE (0x15) ----------------------------------------
         # pixel_count_seen: uint32 per spec §4.18.
+        self._emit(
+            PacketType.END_OF_IMAGE,
+            struct.pack("<I", pixel_index & 0xFFFFFFFF),
+        )
+
+    def write_image_processed(self, image) -> None:
+        """v0.11 Task 5.1 (Deferral 1): emit an :class:`~ttio.MSImage`
+        as the packet sequence
+        ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+        (0x15)`` in **processed mode** (sparse), where each pixel
+        carries only its nonzero ``(channel_index, intensity)`` pairs
+        indexed into the shared ``mz_axis``. The dense cube is
+        reconstructed by the reader.
+
+        Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+        IMAGE_HEADER is identical to :meth:`write_image` except for
+        ``is_continuous=0``; each IMAGE_PIXEL payload is::
+
+          x(u32) + y(u32) + precision(u8) + compression(u8)
+            + payload_length(u32)
+            + payload_bytes = nonzero_count(u32)
+                + nonzero_count × { channel_index(u32) + intensity(f64) }
+
+        Nonzero is defined strictly as ``v != 0.0``; NaN is preserved
+        verbatim (NaN compares unequal to 0.0). The MSImage data model
+        stays dense; processed mode is purely a wire optimisation for
+        sparse cubes.
+
+        This is an opt-in sibling of :meth:`write_image`. Callers pick
+        continuous vs processed mode explicitly today; an automatic
+        heuristic (emit whichever is smaller) is a follow-up. Java
+        parity: :meth:`TransportWriter.writeImageProcessed` (commit
+        ``1889343e``).
+
+        :param image: :class:`ttio.MSImage` to emit. ``image`` must
+            not be ``None``.
+        """
+        if image is None:
+            raise ValueError("write_image_processed: image must not be None")
+
+        width = int(image.width)
+        height = int(image.height)
+        bins = int(image.spectral_points)
+        axis = np.asarray(image.mz_axis, dtype=np.float64)
+        scan_pattern_byte = _scan_pattern_to_byte(image.scan_pattern)
+
+        # -- IMAGE_HEADER (0x13) — shared layout, is_continuous=0 -------
+        # Modality=0 (MS) has no modality-specific extras (spec §4.16).
+        self._emit_image_header(
+            modality=0,
+            width=width,
+            height=height,
+            bins=bins,
+            pixel_size_x=float(image.pixel_size_x),
+            pixel_size_y=float(image.pixel_size_y),
+            scan_pattern_byte=scan_pattern_byte,
+            axis_kind=0,  # mz
+            axis=axis,
+            is_continuous=0,  # processed
+            title=image.title or "",
+            isa_id=image.isa_investigation_id or "",
+            extras=b"",
+        )
+
+        # -- IMAGE_PIXEL (0x14) — sparse per spec §4.17 -----------------
+        # Always FLOAT64 (precision=1) uncompressed (compression=0) —
+        # mirrors write_image above so the wire round-trip stays
+        # byte-exact with the cube.
+        precision = 1  # FLOAT64
+        compression = 0  # NONE
+        cube = np.ascontiguousarray(image.intensity, dtype=np.float64)
+        pixel_index = 0
+        for y in range(height):
+            for x in range(width):
+                spec = cube[y, x]
+                # Nonzero mask (v != 0.0); NaN preserved verbatim.
+                nz_mask = spec != 0.0
+                nz_indices = np.nonzero(nz_mask)[0]
+                nz_count = int(nz_indices.size)
+                payload_len = 4 + nz_count * (4 + 8)
+                # Pack sparse entries: nonzero_count(u32) + repeating
+                # (channel_index u32 + intensity f64). Match Java's
+                # ascending-channel iteration order (numpy.nonzero
+                # returns sorted indices for rank-1 input).
+                if nz_count > 0:
+                    fmt = "<" + ("Id" * nz_count)
+                    pairs: list = []
+                    for ch in nz_indices:
+                        pairs.append(int(ch))
+                        pairs.append(float(spec[int(ch)]))
+                    entries = struct.pack(fmt, *pairs)
+                else:
+                    entries = b""
+                pixel_payload = b"".join((
+                    struct.pack("<I", x & 0xFFFFFFFF),
+                    struct.pack("<I", y & 0xFFFFFFFF),
+                    struct.pack("<B", precision & 0xFF),
+                    struct.pack("<B", compression & 0xFF),
+                    struct.pack("<I", payload_len & 0xFFFFFFFF),
+                    struct.pack("<I", nz_count & 0xFFFFFFFF),
+                    entries,
+                ))
+                self._emit(
+                    PacketType.IMAGE_PIXEL,
+                    pixel_payload,
+                    au_sequence=pixel_index,
+                )
+                pixel_index += 1
+
+        # -- END_OF_IMAGE (0x15) ----------------------------------------
         self._emit(
             PacketType.END_OF_IMAGE,
             struct.pack("<I", pixel_index & 0xFFFFFFFF),
@@ -1694,13 +1850,17 @@ class TransportReader:
                 current_chrom_names = []
                 current_chrom_seqs = []
             elif ptype == int(PacketType.IMAGE_HEADER):
-                # v0.11 Task 2.6: decode an IMAGE_HEADER (0x13)
-                # payload and prime the per-image accumulator. Wire
-                # layout matches transport-spec §4.16. Only
-                # continuous-mode images (is_continuous == 1) and
-                # modality == 0 (MS) are supported at Task 2.6;
-                # processed-mode / non-MS modalities raise with a
-                # clear deferral message (matches Java's a6b1e5d9).
+                # v0.11 Task 2.6 / 5.1 (Deferral 1): decode an
+                # IMAGE_HEADER (0x13) payload and prime the per-image
+                # accumulator. Wire layout matches transport-spec
+                # §4.16. Both continuous-mode (is_continuous == 1) and
+                # processed-mode (is_continuous == 0, sparse
+                # {channel,intensity} pairs indexed into the shared
+                # axis) are supported; the mode flag is cached on the
+                # builder and read by the IMAGE_PIXEL branch. Only
+                # modality == 0 (MS) materialises today;
+                # Raman/IR/UV-Vis modalities are handled by the
+                # Task 5.3 modality-dispatch follow-up.
                 pl = payload
                 off = 0
                 modality = pl[off]; off += 1
@@ -1723,11 +1883,21 @@ class TransportReader:
                 (isa_len,) = struct.unpack_from("<H", pl, off); off += 2
                 img_isa = pl[off:off + isa_len].decode("utf-8")
                 off += isa_len
-                if img_continuous != 1:
+                # v0.11 Task 5.3: optional modality_extras slot at the
+                # tail. v0.10 streams emitted no such field, so older
+                # fixtures may end at `isa_id`. Probe length to stay
+                # backwards-compatible.
+                if off + 2 <= len(pl):
+                    (extras_len,) = struct.unpack_from("<H", pl, off)
+                    off += 2
+                    img_extras = bytes(pl[off:off + extras_len])
+                    off += extras_len
+                else:
+                    img_extras = b""
+                if img_continuous not in (0, 1):
                     raise ValueError(
-                        "IMAGE_HEADER: processed-mode (is_continuous=0) "
-                        "not yet supported in Python; continuous-mode "
-                        "only at Task 2.6"
+                        f"IMAGE_HEADER: is_continuous must be 0 or 1; "
+                        f"got {img_continuous}"
                     )
                 if modality != 0:
                     raise ValueError(
@@ -1745,6 +1915,7 @@ class TransportReader:
                     "mz_axis": img_axis,
                     "title": img_title,
                     "isa_investigation_id": img_isa,
+                    "is_continuous": bool(img_continuous),
                     "cube": np.zeros(
                         (int(img_height), int(img_width), int(img_bins)),
                         dtype=np.float64,
@@ -1755,10 +1926,18 @@ class TransportReader:
                     "seen_count": 0,
                 }
             elif ptype == int(PacketType.IMAGE_PIXEL):
-                # v0.11 Task 2.6: decode a continuous-mode IMAGE_PIXEL
-                # (0x14) payload per §4.17 and stash the intensities at
-                # the pixel's (y, x) slot. Java parity:
-                # TransportReader.appendPixel.
+                # v0.11 Task 2.6 / 5.1 (Deferral 1): decode an
+                # IMAGE_PIXEL (0x14) payload per §4.17 and stash the
+                # intensities at the pixel's (y, x) slot. The wire
+                # shape inside ``payload_bytes`` branches on the
+                # cached ``is_continuous`` from the IMAGE_HEADER:
+                #
+                #   * continuous: dense ``spectrum_bins`` intensities
+                #   * processed:  ``u32 nonzero_count`` + that many
+                #                 ``u32 channel_index + fXX intensity``
+                #                 pairs; unmentioned channels stay 0.0.
+                #
+                # Java parity: TransportReader.appendPixel.
                 if current_image_builder is None:
                     raise ValueError(
                         "IMAGE_PIXEL received before IMAGE_HEADER"
@@ -1776,15 +1955,7 @@ class TransportReader:
                         f"IMAGE_PIXEL compression={compression} not yet "
                         "supported (NONE only at Task 2.6)"
                     )
-                if precision == 1:
-                    intensities = np.frombuffer(
-                        raw, dtype="<f8"
-                    ).astype(np.float64, copy=True)
-                elif precision == 0:
-                    intensities = np.frombuffer(
-                        raw, dtype="<f4"
-                    ).astype(np.float64, copy=True)
-                else:
+                if precision not in (0, 1):
                     raise ValueError(
                         f"IMAGE_PIXEL precision={precision} not supported "
                         "(expected 0=float32 or 1=float64)"
@@ -1792,16 +1963,62 @@ class TransportReader:
                 w_img = current_image_builder["width"]
                 h_img = current_image_builder["height"]
                 sp_img = current_image_builder["spectral_points"]
+                is_cont = current_image_builder["is_continuous"]
                 if px_x >= w_img or px_y >= h_img:
                     raise ValueError(
                         f"IMAGE_PIXEL coordinates out of bounds: x={px_x}, "
                         f"y={px_y} (width={w_img}, height={h_img})"
                     )
-                if intensities.size != sp_img:
-                    raise ValueError(
-                        f"IMAGE_PIXEL intensity count {intensities.size} "
-                        f"does not match IMAGE_HEADER.spectrum_bins={sp_img}"
-                    )
+                if is_cont:
+                    if precision == 1:
+                        intensities = np.frombuffer(
+                            raw, dtype="<f8"
+                        ).astype(np.float64, copy=True)
+                    else:
+                        intensities = np.frombuffer(
+                            raw, dtype="<f4"
+                        ).astype(np.float64, copy=True)
+                    if intensities.size != sp_img:
+                        raise ValueError(
+                            f"IMAGE_PIXEL intensity count {intensities.size} "
+                            f"does not match IMAGE_HEADER.spectrum_bins={sp_img}"
+                        )
+                else:
+                    # Processed-mode: u32 nonzero_count + entries.
+                    intensities = np.zeros(sp_img, dtype=np.float64)
+                    if payload_len < 4:
+                        raise ValueError(
+                            "IMAGE_PIXEL (processed) payload too short to "
+                            "carry nonzero_count"
+                        )
+                    (nonzero_count,) = struct.unpack_from("<I", raw, 0)
+                    entry_off = 4
+                    val_size = 8 if precision == 1 else 4
+                    val_fmt = "<d" if precision == 1 else "<f"
+                    expected_payload_len = 4 + nonzero_count * (4 + val_size)
+                    if payload_len != expected_payload_len:
+                        raise ValueError(
+                            f"IMAGE_PIXEL (processed) payload_length "
+                            f"{payload_len} does not match nonzero_count="
+                            f"{nonzero_count} (expected "
+                            f"{expected_payload_len})"
+                        )
+                    for _ in range(nonzero_count):
+                        (ch,) = struct.unpack_from(
+                            "<I", raw, entry_off
+                        )
+                        entry_off += 4
+                        (v,) = struct.unpack_from(
+                            val_fmt, raw, entry_off
+                        )
+                        entry_off += val_size
+                        if ch >= sp_img:
+                            raise ValueError(
+                                f"IMAGE_PIXEL (processed) channel_index "
+                                f"{ch} out of range [0, {sp_img}) at "
+                                f"pixel (x={px_x}, y={px_y})"
+                            )
+                        intensities[int(ch)] = float(v)
                 pixel_idx = int(px_y) * w_img + int(px_x)
                 if current_image_builder["seen"][pixel_idx]:
                     raise ValueError(
