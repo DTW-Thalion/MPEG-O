@@ -131,6 +131,7 @@ extern void testTransportEncryptionAlgorithm(void);
 extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
 extern void testTransportImageProcessed(void);
+extern void testSpectralDatasetIRImage(void);
 extern void testTransportIdentificationsQuantifications(void);
 extern void testTransportWriteDatasetPrelude(void);
 extern void testAccessorMatrixConformance(void);
@@ -658,6 +659,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 5.1: IMAGE_PIXEL processed-mode (sparse) writer + reader")
             testTransportImageProcessed();
         END_SET("transport v0.11 Task 5.1: IMAGE_PIXEL processed-mode (sparse) writer + reader")
+
+        START_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
+            testSpectralDatasetIRImage();
+        END_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
 
         START_SET("transport v0.11 Task 3.7: IDENTIFICATIONS_TABLE (0x16) + QUANTIFICATIONS_TABLE (0x17) writer + reader")
             testTransportIdentificationsQuantifications();
