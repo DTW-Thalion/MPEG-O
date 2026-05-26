@@ -11,9 +11,16 @@ accessor ``everything.tio`` fixture consumed by
 
 Stage 1 (Task 2.10): REFERENCES, MS_RUNS, GENOMIC_RUNS, IMAGE,
 IDENTIFICATIONS, QUANTIFICATIONS, DATASET_PROVENANCE,
-ENCRYPTION_ALGORITHM. SUBJECTS + SAMPLES are deferred — the v0.11
-spec mentions them, but the data model still surfaces them only as
-server-side cohort predicates.
+ENCRYPTION_ALGORITHM.
+
+Stage 6 (Task 6.6, Deferral 2): SUBJECTS + SAMPLES. Built from the
+first-class :class:`ttio.subject.Subject` / :class:`ttio.sample.Sample`
+entities introduced in Stage 6.1-6.5 and persisted by
+``SpectralDataset.write_minimal`` as
+``/study/subjects/<external_id>/`` + ``/study/samples/<sample_id>/``
+HDF5 groups. The fixture content matches the Java +
+ObjC builders so the cross-language matrix exercises identical row
+contents on every SDK.
 
 SPDX-License-Identifier: Apache-2.0
 """
@@ -31,7 +38,9 @@ from ttio.ir_image import IRImage
 from ttio.provenance import ProvenanceRecord
 from ttio.quantification import Quantification
 from ttio.raman_image import RamanImage
+from ttio.sample import Sample
 from ttio.spectral_dataset import SpectralDataset, WrittenRun
+from ttio.subject import Subject
 from ttio.written_genomic_run import WrittenGenomicRun
 
 
@@ -465,14 +474,108 @@ def build_genomic_runs_only(target: Path) -> Path:
     return target
 
 
-# ── everything (8 accessors populated) ───────────────────────────────
+# ── Stage 6 / Task 6.6: subjects + samples ───────────────────────────
+
+
+def _subjects_two_rows() -> list[Subject]:
+    """Mirror Java's ``FixtureBuilder.buildSubjectsOnly`` two-row shape:
+
+    * ``SUBJ-A`` — minimal (external_id only, all optionals at unset
+      sentinel).
+    * ``SUBJ-B`` — fully populated (every optional set, multi-key
+      sort-keys attributes map). The multi-key attributes exercise the
+      cross-language byte-parity contract on
+      :meth:`Subject.attributes_json`.
+
+    The shape is identical across Python/Java/ObjC so the cross-
+    language matrix sees the same row contents on every SDK.
+    """
+    minimal = Subject(
+        external_id="SUBJ-A",
+        project="",
+        sex="",
+        birth_year=0,
+        attributes={},
+    )
+    full = Subject(
+        external_id="SUBJ-B",
+        project="PROJ_A",
+        sex="F",
+        birth_year=1985,
+        attributes={"notes": "fully populated subject", "cohort": "control"},
+    )
+    return [minimal, full]
+
+
+def _samples_three_rows() -> list[Sample]:
+    """Mirror Java's ``FixtureBuilder.buildSamplesOnly`` three-row shape:
+
+    * ``SMPL-1`` — minimal (sample_id only, all optionals at unset).
+    * ``SMPL-2`` — soft-FK pointing at a Subject that does not exist
+      in this fixture (``subject_external_id = "SUBJ-MISSING"``);
+      spec §4.4 allows this and only logs a WARNING.
+    * ``SMPL-3`` — fully populated, multi-key attributes map.
+    """
+    minimal = Sample(
+        sample_id="SMPL-1",
+        subject_external_id="",
+        sample_kind="",
+        collected_at=0,
+        attributes={},
+    )
+    dangling_fk = Sample(
+        sample_id="SMPL-2",
+        subject_external_id="SUBJ-MISSING",
+        sample_kind="plasma",
+        collected_at=0,
+        attributes={},
+    )
+    full = Sample(
+        sample_id="SMPL-3",
+        subject_external_id="",
+        sample_kind="tissue",
+        collected_at=1_700_000_000,
+        attributes={"tissue": "liver", "notes": "freshly collected"},
+    )
+    return [minimal, dangling_fk, full]
+
+
+def build_subjects_only(target: Path) -> Path:
+    """Mirror Java's ``FixtureBuilder.buildSubjectsOnly``."""
+    SpectralDataset.write_minimal(
+        target,
+        title="subjects_only",
+        isa_investigation_id="",
+        runs={},
+        subjects=_subjects_two_rows(),
+    )
+    return target
+
+
+def build_samples_only(target: Path) -> Path:
+    """Mirror Java's ``FixtureBuilder.buildSamplesOnly``.
+
+    The soft-FK mismatch on the second row triggers a WARNING from
+    :func:`_validate_subjects_and_samples` during write; that's spec
+    §4.4 behaviour and not an error.
+    """
+    SpectralDataset.write_minimal(
+        target,
+        title="samples_only",
+        isa_investigation_id="",
+        runs={},
+        samples=_samples_three_rows(),
+    )
+    return target
+
+
+# ── everything (10 accessors populated) ──────────────────────────────
 
 
 def build_everything(target: Path) -> Path:
     """Mirror Java's ``FixtureBuilder.buildEverything``.
 
-    Populates every first-class v0.11 accessor at once (except
-    SUBJECTS + SAMPLES, deferred):
+    Populates every first-class v0.11 accessor at once:
 
     * 1 reference (3 contigs)
     * 1 MSImage (3x3x4 continuous)
@@ -482,11 +585,69 @@ def build_everything(target: Path) -> Path:
     * @encrypted = "aes-256-gcm"
     * 1 MS run (5 spectra x 4 m/z points)
     * 1 genomic run (4 reads)
+    * Task 6.6: 2 subjects + 3 samples exercising every spec §8
+      cross-cardinality case:
+
+      - SUBJ-A — matched (SMPL-1 soft-FK points at it)
+      - SUBJ-B — unmatched (no sample references it)
+      - SMPL-1 — fully linked to SUBJ-A (full attributes map)
+      - SMPL-2 — anonymous (subject_external_id = "")
+      - SMPL-3 — soft-FK points at SUBJ-MISSING (not in this fixture)
     """
     # Image at 3x3x4 (smaller than the IMAGE-only fixture which uses
     # 4x4x5 — both mirror their Java counterparts).
     img = _build_image_cube(3, 3, 4, "everything")
-    # MS + genomic + ids + quants + provenance in a single write_minimal.
+    # Task 6.6: Subjects + Samples list. Same row IDs as the Java +
+    # ObjC siblings so the cross-language matrix exercises identical
+    # row content.
+    subjects = [
+        Subject(
+            external_id="SUBJ-A",
+            project="PROJ_A",
+            sex="F",
+            birth_year=1985,
+            attributes={
+                "notes": "fully populated subject",
+                "cohort": "control",
+            },
+        ),
+        Subject(
+            external_id="SUBJ-B",
+            project="",
+            sex="",
+            birth_year=0,
+            attributes={},
+        ),
+    ]
+    samples = [
+        Sample(
+            sample_id="SMPL-1",
+            subject_external_id="SUBJ-A",
+            sample_kind="tissue",
+            collected_at=1_700_000_000,
+            attributes={
+                "tissue": "liver",
+                "notes": "freshly collected",
+            },
+        ),
+        Sample(
+            sample_id="SMPL-2",
+            subject_external_id="",
+            sample_kind="plasma",
+            collected_at=0,
+            attributes={},
+        ),
+        Sample(
+            sample_id="SMPL-3",
+            subject_external_id="SUBJ-MISSING",
+            sample_kind="",
+            collected_at=0,
+            attributes={},
+        ),
+    ]
+    # MS + genomic + ids + quants + provenance + subjects + samples in
+    # a single write_minimal. The validator emits a WARNING for the
+    # SMPL-3 soft-FK miss; spec §4.4 design — not an error.
     SpectralDataset.write_minimal(
         target,
         title="everything",
@@ -497,6 +658,8 @@ def build_everything(target: Path) -> Path:
         quantifications=_quants_two_rows(),
         provenance=_provenance_two_records(),
         image=img,
+        subjects=subjects,
+        samples=samples,
     )
     # Layer the reference + the @encrypted root attribute through
     # writable re-open (mirrors the Java path which uses
