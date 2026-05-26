@@ -4,12 +4,14 @@
 # Plan §4.2 — for each (writer_lang, reader_lang) ∈ {java, python, objc}²
 # and each first-class accessor (REFERENCES, MS_RUNS, GENOMIC_RUNS,
 # IMAGE, IDENTIFICATIONS, QUANTIFICATIONS, DATASET_PROVENANCE,
-# ENCRYPTION_ALGORITHM), encode .tio → .tis via the writer's CLI,
-# decode .tis → .tio via the reader's CLI, and verify the per-
-# accessor comparator passes (logical content equivalence).
+# ENCRYPTION_ALGORITHM, plus Stage 5 / Task 5.6 entries
+# MS_IMAGE_PROCESSED, RAMAN_IMAGE, IR_IMAGE, plus Stage 6 / Task 6.6
+# entries SUBJECTS, SAMPLES), encode .tio → .tis via the writer's
+# CLI, decode .tis → .tio via the reader's CLI, and verify the
+# per-accessor comparator passes (logical content equivalence).
 #
-# 8 accessors × 9 directional pairs = 72 cells per run; plus 3
-# bytes-equal-across-decoders cells = 75 total.
+# 13 accessors × 9 directional pairs = 117 cells per run; plus 3
+# bytes-equal-across-decoders cells = 120 total.
 #
 # Drives the Python pytest harness at
 # ``python/tests/conformance/test_transport_v0_11_xlang.py`` (Option B

@@ -3,8 +3,9 @@
 For every first-class v0.11 accessor (REFERENCES, MS_RUNS, GENOMIC_RUNS,
 IMAGE, IDENTIFICATIONS, QUANTIFICATIONS, DATASET_PROVENANCE,
 ENCRYPTION_ALGORITHM, plus the Stage 5 / Task 5.6 entries
-MS_IMAGE_PROCESSED, RAMAN_IMAGE, IR_IMAGE) and every directional pair
-of language implementations (Python, Java, ObjC), this test:
+MS_IMAGE_PROCESSED, RAMAN_IMAGE, IR_IMAGE, plus the Stage 6 /
+Task 6.6 entries SUBJECTS, SAMPLES) and every directional pair of
+language implementations (Python, Java, ObjC), this test:
 
 1. Builds an isolation fixture ``.tio`` in Python via the same
    :mod:`_v0_11_fixtures` builders used by
@@ -59,6 +60,15 @@ accessors. MS_IMAGE_PROCESSED is routed through each CLI's
 ``write_image_processed`` (sparse wire mode) on every SDK; the
 decode side is unchanged because each reader auto-dispatches on the
 ``is_continuous`` byte in the IMAGE_HEADER.
+
+Stage 6 / Task 6.6 (Deferral 2) — extends the matrix from 11 → 13
+accessors. SUBJECTS + SAMPLES both flow through the default
+``write_dataset`` encode path on every CLI; the §5.4.3 prelude
+emits SUBJECT_METADATA (0x19) before SAMPLE_METADATA (0x1A) when
+present. Comparators are field-by-field on every Subject / Sample
+attribute including the ``attributes`` dict; the cross-language
+``attributes_json`` byte parity (sort-keys order) is already
+exercised by the multi-key fixture rows.
 
 SPDX-License-Identifier: Apache-2.0
 """
