@@ -8,12 +8,15 @@ import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
 import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.Enums.IRMode;
 import global.thalion.ttio.FeatureFlags;
+import global.thalion.ttio.IRImage;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.InstrumentConfig;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.ProvenanceRecord;
 import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.SpectrumIndex;
 import global.thalion.ttio.genomics.ReferenceImport;
@@ -139,6 +142,116 @@ public final class FixtureBuilder {
              Hdf5Group root = f.rootGroup();
              Hdf5Group study = root.openGroup("study")) {
             image.writeTo(Hdf5Provider.adapterForGroup(study));
+        }
+        return target;
+    }
+
+    /**
+     * Stage 5 / Task 5.6: Produce a {@code .tio} containing the same
+     * MSImage fixture as {@link #buildImageMsContinuous}. The on-disk
+     * .tio is identical — only the encode path differs: the
+     * MS_IMAGE_PROCESSED accessor's {@code encode} override emits via
+     * {@link TransportWriter#writeImageProcessed} so the conformance
+     * suite exercises the opt-in sparse wire mode against the dense
+     * cube.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildImageMsProcessedOnly(Path target) throws Exception {
+        // Same fixture shape as buildImageMsContinuous — the encode-
+        // side override is the only knob that varies between
+        // MS_IMAGE and MS_IMAGE_PROCESSED.
+        return buildImageMsContinuous(target);
+    }
+
+    /**
+     * Stage 5 / Task 5.6: Produce a {@code .tio} containing a single
+     * small {@link RamanImage} (3x3x5 cube) and nothing else. The
+     * fixture mirrors the Python and ObjC equivalents so the cross-
+     * language matrix produces byte-identical content on each SDK's
+     * write path.
+     *
+     * <p>Field values: width=3, height=3, spectralPoints=5,
+     * intensityCube[i] = i*0.5 (flat index, 45 entries),
+     * wavenumbers = [1000, 1100, 1200, 1300, 1400],
+     * excitation=785.0nm, laserPower=50.0mW, scanPattern="raster",
+     * pixelSize=10.0x10.0.</p>
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildRamanImageOnly(Path target) throws Exception {
+        final int w = 3;
+        final int h = 3;
+        final int s = 5;
+        double[] cube = new double[w * h * s];
+        for (int i = 0; i < cube.length; i++) {
+            cube[i] = i * 0.5;
+        }
+        double[] wn = new double[]{1000.0, 1100.0, 1200.0, 1300.0, 1400.0};
+        RamanImage img = new RamanImage(
+            w, h, s, 0,
+            10.0, 10.0, "raster",
+            785.0, 50.0,
+            cube, wn,
+            "raman_image_only", "",
+            List.of(), List.of(), List.of());
+
+        try (SpectralDataset ignore = SpectralDataset.create(
+                target.toString(), "raman_image_only", "",
+                List.of(), List.of(), List.of(), List.of())) {
+            // create() persists /study/; image layered on next.
+        }
+        try (Hdf5File f = Hdf5File.open(target.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study")) {
+            img.writeTo(Hdf5Provider.adapterForGroup(study));
+        }
+        return target;
+    }
+
+    /**
+     * Stage 5 / Task 5.6: Produce a {@code .tio} containing a single
+     * small {@link IRImage} (3x3x5 cube) and nothing else. Mirrors
+     * the Python and ObjC equivalents so the cross-language matrix
+     * produces byte-identical content on each SDK's write path.
+     *
+     * <p>Field values: width=3, height=3, spectralPoints=5,
+     * intensityCube[i] = i*0.5 (flat index, 45 entries),
+     * wavenumbers = [1000, 1100, 1200, 1300, 1400],
+     * mode=ABSORBANCE, resolution=4.0cm-1, scanPattern="raster",
+     * pixelSize=10.0x10.0.</p>
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildIrImageOnly(Path target) throws Exception {
+        final int w = 3;
+        final int h = 3;
+        final int s = 5;
+        double[] cube = new double[w * h * s];
+        for (int i = 0; i < cube.length; i++) {
+            cube[i] = i * 0.5;
+        }
+        double[] wn = new double[]{1000.0, 1100.0, 1200.0, 1300.0, 1400.0};
+        IRImage img = new IRImage(
+            w, h, s, 0,
+            10.0, 10.0, "raster",
+            IRMode.ABSORBANCE, 4.0,
+            cube, wn,
+            "ir_image_only", "",
+            List.of(), List.of(), List.of());
+
+        try (SpectralDataset ignore = SpectralDataset.create(
+                target.toString(), "ir_image_only", "",
+                List.of(), List.of(), List.of(), List.of())) {
+            // create() persists /study/; image layered on next.
+        }
+        try (Hdf5File f = Hdf5File.open(target.toString());
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group study = root.openGroup("study")) {
+            img.writeTo(Hdf5Provider.adapterForGroup(study));
         }
         return target;
     }
