@@ -43,10 +43,20 @@ public final class ProgressFormatter {
         // file close is still flushing). Show "finalizing…" instead of
         // a misleading rate/ETA that would compute to 0 B/s.
         if (r.isDeterminate() && r.percent() >= 0.99) {
+            // Prefer the units pair when present so PhaseProgress
+            // doesn't surface a synthesised "9999 B / 10000 B" near
+            // 100%; fall back to raw bytes only when no units total
+            // is known.
             String pair;
-            if (r.bytesTotal() > 0L) pair = rawBytesPair(r);
-            else pair = Units.humanCount(r.unitsDone()) + " / "
-                      + Units.humanCount(r.unitsTotal()) + " AUs";
+            if (r.unitsTotal() > 0L) {
+                pair = Units.humanCount(r.unitsDone()) + " / "
+                     + Units.humanCount(r.unitsTotal()) + " AUs";
+            } else if (r.bytesTotal() > 0L) {
+                pair = rawBytesPair(r);
+            } else {
+                pair = Units.humanCount(r.unitsDone()) + " / "
+                     + Units.humanCount(r.unitsTotal()) + " AUs";
+            }
             return String.format(Locale.ROOT, "%.1f%% %s %s %s finalizing%s",
                 r.percent() * 100.0, DOT, pair, DOT, ELL);
         }
@@ -63,8 +73,16 @@ public final class ProgressFormatter {
                 sb.append(' ').append(DOT).append(' ');
             }
             if (haveBytesTotal && haveUnitsTotal) {
-                sb.append(rawBytesPair(r)).append(' ').append(DOT).append(' ')
-                  .append(Units.humanCount(r.unitsDone())).append(" AUs");
+                // Two-phase progress (PhaseProgress drives the bytes
+                // channel as a synthesised 0..PHASE_SCALE percent
+                // source while the units channel tracks the
+                // current phase's actual records count). Show the
+                // user-visible records pair rather than the raw
+                // synthesised bytes count.
+                sb.append(Units.humanCount(r.unitsDone()))
+                  .append(" / ")
+                  .append(Units.humanCount(r.unitsTotal()))
+                  .append(" AUs");
             } else if (haveBytesTotal) {
                 sb.append(rawBytesPair(r));
             } else {

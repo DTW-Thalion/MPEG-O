@@ -150,8 +150,9 @@ public final class ExportPanel {
 
         // Hidden until an export starts. ProgressDisplay (bar + numeric
         // line) is driven by ProgressReport listeners on both DatasetOpenTask
-        // and ExportTask; ExportTask's heartbeat ticker polls the target
-        // file's size so the user sees continuous bytes-processed + rate.
+        // and ExportTask; ExportTask drives a two-phase PhaseProgress
+        // (read 0..50%, write 50..100%) so the user sees a monotonic
+        // percent + per-record numeric line as the writer SDK emits.
         progressDisplay.node().setVisible(false);
         progressDisplay.node().setManaged(false);
         progressDisplay.node().setPrefWidth(220);
