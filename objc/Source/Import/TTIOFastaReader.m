@@ -24,6 +24,9 @@
 
 NSString *const TTIOFastaReaderErrorDomain = @"TTIOFastaReaderErrorDomain";
 
+// Mirrors Java FastaReader.PROGRESS_INTERVAL_READS (1000).
+const NSUInteger TTIOFastaReaderProgressIntervalReads = 1000;
+
 
 // Forward declaration — exported helper defined below (also reused by
 // TTIOFastqReader.m via the same symbol).
@@ -230,6 +233,24 @@ static NSString *derive_uri(NSString *path)
                                   acquisitionMode:(TTIOAcquisitionMode)mode
                                             error:(NSError **)error
 {
+    return [self readUnalignedFromPath:path
+                            sampleName:sampleName
+                              platform:platform
+                          referenceUri:referenceUri
+                       acquisitionMode:mode
+                              progress:nil
+                                 error:error];
+}
+
++ (TTIOWrittenGenomicRun *)readUnalignedFromPath:(NSString *)path
+                                       sampleName:(NSString *)sampleName
+                                         platform:(NSString *)platform
+                                     referenceUri:(NSString *)referenceUri
+                                  acquisitionMode:(TTIOAcquisitionMode)mode
+                                         progress:(TTIOProgressBlock)progress
+                                            error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
         if (error) {
             *error = [NSError errorWithDomain:TTIOFastaReaderErrorDomain
@@ -271,6 +292,10 @@ static NSString *derive_uri(NSString *path)
             free(fill);
         }
         running += (uint64_t)seq.length;
+        // Per-N progress fire; total unknown mid-parse.
+        if ((readNames.count % TTIOFastaReaderProgressIntervalReads) == 0) {
+            progress((int64_t)readNames.count, (int64_t)-1);
+        }
     });
     gzclose(fh);
     if (!ok) return nil;
@@ -284,6 +309,9 @@ static NSString *derive_uri(NSString *path)
         }
         return nil;
     }
+
+    // Final fire: true count known.
+    progress((int64_t)readNames.count, (int64_t)readNames.count);
 
     return TTIOFastaReaderBuildUnalignedRun(
         readNames, seqBuf, qualBuf, offsetsArr, lengthsArr,

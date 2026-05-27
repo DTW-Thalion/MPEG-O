@@ -111,6 +111,7 @@ extern void testTask30MSProviderURL(void);
 extern void testTask31InstanceWriterParity(void);
 extern void testFastaFastqIo(void);
 extern void testFastaFastqTioRoundTrip(void);
+extern void testProgressSink(void);
 extern void testReferencesAccessor(void);
 extern void testReferenceImportWriteToDataset(void);
 extern void testMSImageMzAxis(void);
@@ -600,6 +601,10 @@ int main(int argc, const char *argv[])
         START_SET("FASTA / FASTQ I/O")
             testFastaFastqIo();
         END_SET("FASTA / FASTQ I/O")
+
+        START_SET("TTIOProgressSink + Stage B reader hooks")
+            testProgressSink();
+        END_SET("TTIOProgressSink + Stage B reader hooks")
 
         START_SET("FASTA / FASTQ -> .tio -> FASTA / FASTQ round-trip")
             testFastaFastqTioRoundTrip();
