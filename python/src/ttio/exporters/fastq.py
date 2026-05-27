@@ -42,14 +42,18 @@ import os
 from pathlib import Path
 
 from ..genomic_run import GenomicRun
+from ..io.progress import ProgressSinkLike, _fire
 from ..written_genomic_run import WrittenGenomicRun
 
 
-__all__ = ["FastqWriter"]
+__all__ = ["FastqWriter", "PROGRESS_INTERVAL_READS"]
 
 
 _QUAL_UNKNOWN_BYTE = 0xFF
 _PHRED33_FILL = ord("!")  # Phred 0 in Phred+33
+
+#: Mirror Java's ``FastqWriter.PROGRESS_INTERVAL_READS``.
+PROGRESS_INTERVAL_READS = 1000
 
 
 class FastqWriter:
@@ -63,6 +67,7 @@ class FastqWriter:
         *,
         gzip_output: bool | None = None,
         phred_offset: int = 33,
+        progress: ProgressSinkLike | None = None,
     ) -> None:
         """Serialise ``run`` to a FASTQ file.
 
@@ -91,7 +96,9 @@ class FastqWriter:
         if gzip_output is None:
             gzip_output = out_path.name.lower().endswith(".gz")
 
+        total = len(run.read_names) if isinstance(run, WrittenGenomicRun) else len(run)
         buf = io.BytesIO()
+        n = 0
         for name, seq, qual in _iter_records(run, phred_offset=phred_offset):
             buf.write(b"@")
             buf.write(name.encode("utf-8"))
@@ -100,6 +107,10 @@ class FastqWriter:
             buf.write(b"\n+\n")
             buf.write(qual)
             buf.write(b"\n")
+            n += 1
+            if n % PROGRESS_INTERVAL_READS == 0:
+                _fire(progress, n, total)
+        _fire(progress, n, n)
         body = buf.getvalue()
 
         if gzip_output:

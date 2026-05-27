@@ -27,7 +27,12 @@ import numpy as np
 
 from ..enums import ActivationMethod
 from ..importers.cv_term_mapper import activation_accession_for
+from ..io.progress import ProgressSinkLike, _fire
 from ..spectral_dataset import SpectralDataset
+
+
+#: Mirror Java's ``MzMLWriter.PROGRESS_INTERVAL_SPECTRA``.
+PROGRESS_INTERVAL_SPECTRA = 100
 
 
 _PRELUDE_HEAD = (
@@ -125,6 +130,7 @@ def write_dataset(
     path: str | Path,
     *,
     zlib_compression: bool = False,
+    progress: ProgressSinkLike | None = None,
 ) -> Path:
     """Serialize ``dataset`` to ``path`` as indexed mzML.
 
@@ -132,8 +138,13 @@ def write_dataset(
     exported. Additional runs, NMR runs, MSImage cubes, and chromatograms
     are deliberately skipped for M19; extending the writer to cover them
     is straightforward.
+
+    ``progress`` fires every :data:`PROGRESS_INTERVAL_SPECTRA` spectra
+    and once more at the end with ``(n_spectra, n_spectra)``.
     """
-    blob = dataset_to_bytes(dataset, zlib_compression=zlib_compression)
+    blob = dataset_to_bytes(
+        dataset, zlib_compression=zlib_compression, progress=progress,
+    )
     out = Path(path)
     out.write_bytes(blob)
     return out
@@ -143,6 +154,7 @@ def dataset_to_bytes(
     dataset: SpectralDataset,
     *,
     zlib_compression: bool = False,
+    progress: ProgressSinkLike | None = None,
 ) -> bytes:
     """Build an indexed-mzML byte blob from ``dataset``."""
     runs = dataset.ms_runs
@@ -281,6 +293,10 @@ def dataset_to_bytes(
         emit('          </binaryDataArrayList>\n')
         emit('        </spectrum>\n')
 
+        if (i + 1) % PROGRESS_INTERVAL_SPECTRA == 0:
+            _fire(progress, i + 1, n)
+
+    _fire(progress, n, n)
     emit('      </spectrumList>\n')
 
     # chromatogramList

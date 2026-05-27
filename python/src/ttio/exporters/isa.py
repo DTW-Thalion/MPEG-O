@@ -27,6 +27,7 @@ import json
 from pathlib import Path
 from typing import Mapping
 
+from ..io.progress import ProgressSinkLike, _fire
 from ..spectral_dataset import SpectralDataset
 
 
@@ -327,11 +328,21 @@ def bundle_for_dataset(dataset: SpectralDataset) -> dict[str, bytes]:
 
 
 def write_bundle_for_dataset(
-    dataset: SpectralDataset, directory: str | Path
+    dataset: SpectralDataset, directory: str | Path,
+    *,
+    progress: ProgressSinkLike | None = None,
 ) -> Path:
-    """Write the ISA bundle to ``directory`` (creating it if needed)."""
+    """Write the ISA bundle to ``directory`` (creating it if needed).
+
+    Fires ``progress`` after each file is written; total = number of
+    files in the bundle (one investigation + one study + one JSON +
+    one per MS run).
+    """
     out_dir = Path(directory)
     out_dir.mkdir(parents=True, exist_ok=True)
-    for name, blob in bundle_for_dataset(dataset).items():
+    bundle = bundle_for_dataset(dataset)
+    total = len(bundle)
+    for idx, (name, blob) in enumerate(bundle.items(), 1):
         (out_dir / name).write_bytes(blob)
+        _fire(progress, idx, total)
     return out_dir

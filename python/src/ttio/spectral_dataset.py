@@ -23,6 +23,7 @@ import numpy as np
 from . import _hdf5_io as io
 from ._rwlock import RWLock
 from .access_policy import AccessPolicy
+from .io.progress import ProgressSinkLike, _fire
 from .acquisition_run import AcquisitionRun
 from .genomic.reference_import import ReferenceImport  # tio-browser Phase 0
 from .genomic_run import GenomicRun  # M82
@@ -866,6 +867,7 @@ class SpectralDataset:
         ir_image: "IRImage | None" = None,
         subjects: list[Subject] | None = None,
         samples: list[Sample] | None = None,
+        progress: "ProgressSinkLike | None" = None,
     ) -> Path:
         """Write a minimal v1.1 ``.tio`` file from in-memory data.
 
@@ -933,6 +935,36 @@ class SpectralDataset:
             feature_list = feature_list + ["opt_genomic"]
         format_version = "1.0"
 
+        # ------------------------------------------------------------------
+        # Progress: emit one tick per non-empty section in §5.4 order:
+        #   encryption -> provenance -> subjects -> samples ->
+        #   references -> image -> identifications ->
+        #   quantifications -> runs (MS + NMR + Genomic combined).
+        # We start with a baseline (0, total) so consumers can show
+        # an immediate determinate bar.
+        # ------------------------------------------------------------------
+        _section_flags: list[tuple[str, bool]] = [
+            ("encryption", False),  # write_minimal never encrypts; placeholder
+            ("provenance", bool(provenance)),
+            ("subjects", bool(subjects_list)),
+            ("samples", bool(samples_list)),
+            # references are embedded as part of genomic runs; gate on those
+            ("references", has_genomic),
+            ("image", image is not None or raman_image is not None
+                or ir_image is not None),
+            ("identifications", bool(identifications)),
+            ("quantifications", bool(quantifications)),
+            ("runs", bool(runs) or bool(genomic_runs)),
+        ]
+        _progress_total = sum(1 for _, present in _section_flags if present)
+        _progress_done = 0
+        _fire(progress, _progress_done, _progress_total)
+
+        def _section_done(name: str) -> None:
+            nonlocal _progress_done
+            _progress_done += 1
+            _fire(progress, _progress_done, _progress_total)
+
         # HDF5 fast path keeps the legacy byte layout (fixed-length
         # string attrs, padded compound types) so existing tests and
         # cross-language readers continue to round-trip bit-for-bit.
@@ -942,6 +974,20 @@ class SpectralDataset:
                 study = f.create_group("study")
                 io.write_fixed_string_attr(study, "title", title)
                 io.write_fixed_string_attr(study, "isa_investigation_id", isa_investigation_id)
+
+                # §5.4 ordering: provenance first, then subjects/samples,
+                # then references, then image, then identifications /
+                # quantifications, then runs (last because they tend to
+                # be the largest payload).
+                if provenance:
+                    _write_provenance(study, provenance)
+                    _section_done("provenance")
+                if subjects_list:
+                    _write_subjects_h5(study, subjects_list)
+                    _section_done("subjects")
+                if samples_list:
+                    _write_samples_h5(study, samples_list)
+                    _section_done("samples")
 
                 ms_group = study.create_group("ms_runs")
                 io.write_fixed_string_attr(ms_group, "_run_names", ",".join(runs.keys()))
@@ -957,6 +1003,7 @@ class SpectralDataset:
                     # so the writer's REF_DIFF dispatch can resolve the
                     # md5 attribute back from disk if needed.
                     _embed_references_for_runs(study, genomic_runs)
+                    _section_done("references")
                     g_group = study.create_group("genomic_runs")
                     io.write_fixed_string_attr(
                         g_group, "_run_names", ",".join(genomic_runs.keys())
@@ -964,12 +1011,6 @@ class SpectralDataset:
                     for gname, grun in genomic_runs.items():
                         _write_genomic_run(g_group, gname, grun)
 
-                if identifications:
-                    _write_identifications(study, identifications)
-                if quantifications:
-                    _write_quantifications(study, quantifications)
-                if provenance:
-                    _write_provenance(study, provenance)
                 if (image is not None or raman_image is not None
                         or ir_image is not None):
                     # Wrap the raw h5py.Group in the package-private adapter
@@ -982,14 +1023,16 @@ class SpectralDataset:
                         raman_image.write_to(_Hdf5Group(study))
                     if ir_image is not None:
                         ir_image.write_to(_Hdf5Group(study))
-                # Stage 6 (transport-spec v0.11, Deferral 2): per-row
-                # subject + sample groups at /study/subjects/<external_id>/
-                # and /study/samples/<sample_id>/. Validation already ran
-                # upstream (duplicate-ID raise + soft-FK WARNING).
-                if subjects_list:
-                    _write_subjects_h5(study, subjects_list)
-                if samples_list:
-                    _write_samples_h5(study, samples_list)
+                    _section_done("image")
+
+                if identifications:
+                    _write_identifications(study, identifications)
+                    _section_done("identifications")
+                if quantifications:
+                    _write_quantifications(study, quantifications)
+                    _section_done("quantifications")
+                if runs or genomic_runs:
+                    _section_done("runs")
             return p
 
         # Provider-driven write path — Memory / SQLite / Zarr / future.
@@ -1010,6 +1053,19 @@ class SpectralDataset:
             io.write_fixed_string_attr(study, "title", title)
             io.write_fixed_string_attr(study, "isa_investigation_id", isa_investigation_id)
 
+            # §5.4 ordering: provenance first, then subjects/samples,
+            # then references, then image, then identifications /
+            # quantifications, then runs.
+            if provenance:
+                _write_provenance(study, provenance)
+                _section_done("provenance")
+            if subjects_list:
+                _write_subjects_provider(study, subjects_list)
+                _section_done("subjects")
+            if samples_list:
+                _write_samples_provider(study, samples_list)
+                _section_done("samples")
+
             ms_group = study.create_group("ms_runs")
             io.write_fixed_string_attr(ms_group, "_run_names", ",".join(runs.keys()))
             for rname, run in runs.items():
@@ -1022,6 +1078,7 @@ class SpectralDataset:
                 # M93 v1.2: embed referenced chromosome sequences before
                 # writing the runs (provider path mirror of the HDF5 path).
                 _embed_references_for_runs(study, genomic_runs)
+                _section_done("references")
                 g_group = study.create_group("genomic_runs")
                 io.write_fixed_string_attr(
                     g_group, "_run_names", ",".join(genomic_runs.keys())
@@ -1029,24 +1086,24 @@ class SpectralDataset:
                 for gname, grun in genomic_runs.items():
                     _write_genomic_run(g_group, gname, grun)
 
-            if identifications:
-                _write_identifications(study, identifications)
-            if quantifications:
-                _write_quantifications(study, quantifications)
-            if provenance:
-                _write_provenance(study, provenance)
             if image is not None:
                 image.write_to(study)   # study is already a StorageGroup here
             if raman_image is not None:
                 raman_image.write_to(study)   # study is already a StorageGroup here
             if ir_image is not None:
                 ir_image.write_to(study)   # study is already a StorageGroup here
-            # Stage 6 (transport-spec v0.11, Deferral 2): provider-path
-            # mirror of the HDF5 fast path.
-            if subjects_list:
-                _write_subjects_provider(study, subjects_list)
-            if samples_list:
-                _write_samples_provider(study, samples_list)
+            if (image is not None or raman_image is not None
+                    or ir_image is not None):
+                _section_done("image")
+
+            if identifications:
+                _write_identifications(study, identifications)
+                _section_done("identifications")
+            if quantifications:
+                _write_quantifications(study, quantifications)
+                _section_done("quantifications")
+            if runs or genomic_runs:
+                _section_done("runs")
         finally:
             if owns_provider:
                 sp.close()

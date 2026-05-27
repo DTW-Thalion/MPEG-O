@@ -49,13 +49,17 @@ from typing import Iterable
 
 from ..genomic.reference_import import ReferenceImport
 from ..genomic_run import GenomicRun
+from ..io.progress import ProgressSinkLike, _fire
 from ..written_genomic_run import WrittenGenomicRun
 
 
-__all__ = ["FastaWriter", "DEFAULT_LINE_WIDTH"]
+__all__ = ["FastaWriter", "DEFAULT_LINE_WIDTH", "PROGRESS_INTERVAL_READS"]
 
 
 DEFAULT_LINE_WIDTH = 60
+
+#: Mirror Java's ``FastaWriter.PROGRESS_INTERVAL_READS``.
+PROGRESS_INTERVAL_READS = 1000
 
 
 class FastaWriter:
@@ -73,6 +77,7 @@ class FastaWriter:
         line_width: int = DEFAULT_LINE_WIDTH,
         gzip_output: bool | None = None,
         write_fai: bool = True,
+        progress: ProgressSinkLike | None = None,
     ) -> None:
         """Write a :class:`ReferenceImport` to a FASTA file.
 
@@ -107,6 +112,7 @@ class FastaWriter:
             line_width=line_width,
             gzip_output=gzip_output,
             write_fai=write_fai,
+            progress=progress,
         )
 
     @classmethod
@@ -118,6 +124,7 @@ class FastaWriter:
         line_width: int = DEFAULT_LINE_WIDTH,
         gzip_output: bool | None = None,
         write_fai: bool = True,
+        progress: ProgressSinkLike | None = None,
     ) -> None:
         """Write a genomic run to a FASTA file.
 
@@ -135,6 +142,7 @@ class FastaWriter:
             line_width=line_width,
             gzip_output=gzip_output,
             write_fai=write_fai,
+            progress=progress,
         )
 
     # ------------------------------------------------------------------
@@ -150,6 +158,7 @@ class FastaWriter:
         line_width: int,
         gzip_output: bool | None,
         write_fai: bool,
+        progress: ProgressSinkLike | None = None,
     ) -> None:
         if line_width < 1:
             raise ValueError(f"line_width must be >= 1 (got {line_width})")
@@ -160,9 +169,10 @@ class FastaWriter:
         # in the same pass as writing. For very large references this
         # could be streamed; for v1.0 we accept the in-memory cost
         # (chr22 reference is ~50 MB, well within RAM).
+        total = len(records)
         buf = io.BytesIO()
         fai_lines: list[str] = []
-        for name, seq in records:
+        for idx, (name, seq) in enumerate(records, 1):
             hdr = ">" + name + "\n"
             buf.write(hdr.encode("utf-8"))
             seq_offset = buf.tell()
@@ -174,6 +184,9 @@ class FastaWriter:
             fai_lines.append(
                 f"{name}\t{length}\t{seq_offset}\t{line_width}\t{line_width + 1}"
             )
+            if idx % PROGRESS_INTERVAL_READS == 0:
+                _fire(progress, idx, total)
+        _fire(progress, total, total)
         body = buf.getvalue()
 
         if gzip_output:

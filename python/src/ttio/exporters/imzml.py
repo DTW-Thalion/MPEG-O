@@ -36,9 +36,14 @@ from typing import Iterable
 import numpy as np
 
 from ..importers.imzml import ImzMLImport, ImzMLPixelSpectrum
+from ..io.progress import ProgressSinkLike, _fire
 
 
-__all__ = ["write", "write_from_import", "WriteResult"]
+__all__ = ["write", "write_from_import", "WriteResult", "PROGRESS_INTERVAL_SPECTRA"]
+
+
+#: Mirror Java's ``ImzMLWriter.PROGRESS_INTERVAL_SPECTRA``.
+PROGRESS_INTERVAL_SPECTRA = 100
 
 
 @dataclass(slots=True)
@@ -65,6 +70,7 @@ def write(
     pixel_size_y: float = 0.0,
     scan_pattern: str = "flyback",
     uuid_hex: str | None = None,
+    progress: ProgressSinkLike | None = None,
 ) -> WriteResult:
     """Write ``pixels`` as an imzML + .ibd pair.
 
@@ -140,6 +146,7 @@ def write(
         mz_len = int(shared_mz.size)
         ibd_parts.append(shared_mz_bytes)
         cursor += len(shared_mz_bytes)
+        n_pixels = len(pixel_list)
         for i, pix in enumerate(pixel_list):
             mz_i = np.ascontiguousarray(pix.mz, dtype="<f8")
             if mz_i.size != mz_len or not np.array_equal(mz_i, shared_mz):
@@ -153,8 +160,11 @@ def write(
             ibd_parts.append(inten_bytes)
             cursor += len(inten_bytes)
             offsets.append((mz_offset, mz_len, int_offset, int(inten.size)))
+            if (i + 1) % PROGRESS_INTERVAL_SPECTRA == 0:
+                _fire(progress, i + 1, n_pixels)
     else:  # processed
-        for pix in pixel_list:
+        n_pixels = len(pixel_list)
+        for i, pix in enumerate(pixel_list):
             mz_i = np.ascontiguousarray(pix.mz, dtype="<f8")
             inten = np.ascontiguousarray(pix.intensity, dtype="<f8")
             if mz_i.size != inten.size:
@@ -172,6 +182,8 @@ def write(
             cursor += len(inten_bytes)
             offsets.append((mz_offset, int(mz_i.size),
                             int_offset, int(inten.size)))
+            if (i + 1) % PROGRESS_INTERVAL_SPECTRA == 0:
+                _fire(progress, i + 1, n_pixels)
 
     ibd_bytes = b"".join(ibd_parts)
     ibd.write_bytes(ibd_bytes)
@@ -195,6 +207,7 @@ def write(
     )
     imzml.write_text(xml, encoding="utf-8")
 
+    _fire(progress, len(pixel_list), len(pixel_list))
     return WriteResult(
         imzml_path=imzml,
         ibd_path=ibd,
@@ -208,6 +221,8 @@ def write_from_import(
     import_result: ImzMLImport,
     imzml_path: str | Path,
     ibd_path: str | Path | None = None,
+    *,
+    progress: ProgressSinkLike | None = None,
 ) -> WriteResult:
     """Re-emit an :class:`ImzMLImport` to disk.
 
@@ -226,6 +241,7 @@ def write_from_import(
         pixel_size_y=import_result.pixel_size_y,
         scan_pattern=import_result.scan_pattern,
         uuid_hex=import_result.uuid_hex,
+        progress=progress,
     )
 
 
