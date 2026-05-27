@@ -10,6 +10,15 @@
 @class TTIOSpectralDataset;
 @class TTIOAUFilter;
 @class TTIODatasetWalker;
+@class TTIOReferenceImport;
+@class TTIOProvenanceRecord;
+@class TTIOSubject;
+@class TTIOSample;
+@class TTIOMSImage;
+@class TTIORamanImage;
+@class TTIOIRImage;
+@class TTIOIdentification;
+@class TTIOQuantification;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -76,6 +85,52 @@ visitEndOfDatasetWithDatasetId:(uint16_t)datasetId
                 finalAUSequence:(uint32_t)finalAUSequence;
 
 - (void)walkerVisitEndOfStream:(TTIODatasetWalker *)walker;
+
+/* ────────────────────────────────────────────────────────────────
+ * v0.11 prelude visitor methods. Emitted (when the corresponding
+ * accessor is non-empty / non-nil on the dataset) between the
+ * StreamHeader and the first DatasetHeader, in transport-spec §5.4
+ * order:
+ *   §5.4.1 encryption_algorithm
+ *   §5.4.2 dataset_provenance
+ *   §5.4.3 subjects  → samples
+ *   §5.4.4 reference groups (one call per import)
+ *   §5.4.5 images   (MS → Raman → IR)
+ *   §5.4.6 identifications → quantifications
+ * Mirrors the emission order in TTIOTransportWriter writeDataset:.
+ * Filed as #140 — walker previously emitted only MS AUs and dropped
+ * every v0.11 accessor on the workbench daemon's download path.
+ * ──────────────────────────────────────────────────────────────── */
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitEncryptionAlgorithm:(NSString *)algorithm;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitDatasetProvenance:(NSArray<TTIOProvenanceRecord *> *)records;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitSubjectMetadata:(NSArray<TTIOSubject *> *)rows;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitSampleMetadata:(NSArray<TTIOSample *> *)rows;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitReferenceGroup:(TTIOReferenceImport *)reference;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitImage:(TTIOMSImage *)image;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitRamanImage:(TTIORamanImage *)image;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitIRImage:(TTIOIRImage *)image;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitIdentificationsTable:(NSArray<TTIOIdentification *> *)rows;
+
+- (void)walker:(TTIODatasetWalker *)walker
+visitQuantificationsTable:(NSArray<TTIOQuantification *> *)rows;
 @end
 
 

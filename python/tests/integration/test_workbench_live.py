@@ -551,20 +551,6 @@ def test_per_au_encrypted_genomic_upload_round_trip(client, tmp_path):
 
 # ---------------------------------------------------- v0.11 full-accessor round-trip
 
-@pytest.mark.xfail(
-    reason=(
-        "TTI-O #140: with #139's per-dataset AU monotonicity fix in "
-        "place, upload now succeeds — but the daemon's download path "
-        "re-encodes via TTIODatasetWalker, which iterates MS/genomic "
-        "AUs only and never emits reference, subject, sample, "
-        "identifications, quantifications, image, or dataset_provenance "
-        "events. Round-tripped .tio drops every v0.11 accessor; the "
-        "test fails on the first one (references: 1 vs 0). Test stays "
-        "in-tree as canary; will reactivate once the daemon walker + "
-        "WS download visitor learn the v0.11 event vocabulary."
-    ),
-    strict=True,
-)
 def test_v011_full_accessor_round_trip(client, tmp_path):
     """Upload a .tio populated with every v0.11 first-class accessor
     via the live workbench daemon and verify the server-side
