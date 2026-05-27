@@ -11,6 +11,19 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-05-27
+
+Patch release. Closes the v0.11 silent-drop pattern in the two non-daemon transport servers, surfaced by writing end-to-end round-trip tests against the new live coverage from v1.6.0.
+
+- **#144 — Python `transport.serving` framing.** `_emit_stream` packed every multi-packet writer call (`write_reference_group` = HEADER + N × CHROMOSOME + FOOTER, `write_image` = HEADER + N × PIXEL + FOOTER, etc.) into a single WebSocket frame, but the client parses one packet per frame. Every packet after the first of each multi-packet emitter was silently dropped. Fix: per-packet reframing on the server side.
+- **#145 — Java `TransportServer` walker delegation.** The Java reference server hand-rolled its emission loop and walked only `msRuns()`, so every v0.11 prelude accessor + every genomic AU was silently dropped on the wire — same shape as the now-fixed ObjC daemon walker (#140) and Python framing bug (#144), in a third location. Fix: delegate to `DatasetWalker` via a `WriterDispatchVisitor` with the same per-packet reframing as the Python fix.
+
+Both fixes are validated by new end-to-end round-trip tests (`TestV011RoundTrip` in Python, `v011FullAccessorRoundTrip` in Java) mirroring the workbench-live coverage from v1.6.0.
+
+PRs: #188 #144 · #189 #145.
+
+Paired server CI tightening (in tti-workbench-server #61): server CI now runs the TTI-O Python live-smoke against the built daemon, so a server PR that breaks the WS visitor / handshake / framing fails its own CI instead of waiting for a TTI-O PR to surface it.
+
 ### Fixed — Java `TransportServer` walks the dataset (#145)
 
 `TransportServer.streamDataset` hand-rolled its emission loop and walked only `dataset.msRuns()`, so every v0.11 prelude accessor (references, subjects, samples, identifications, quantifications, image cubes, dataset_provenance, encryption_algorithm) plus all genomic AUs were silently dropped on the wire — same root cause as the now-fixed ObjC daemon walker (#140) and the Python framing bug (#144), in a third location.
