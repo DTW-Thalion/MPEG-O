@@ -7,6 +7,7 @@ package global.thalion.ttio.browser.shell.workspaces;
 import global.thalion.ttio.browser.progress.ProgressFormatter;
 import global.thalion.ttio.browser.progress.ProgressReport;
 import global.thalion.ttio.browser.shell.Workspace;
+import global.thalion.ttio.browser.util.Units;
 import global.thalion.ttio.browser.workbench.ConnectionManager;
 import global.thalion.ttio.browser.workbench.Transfer;
 import global.thalion.ttio.browser.workbench.TransferKind;
@@ -163,6 +164,23 @@ public final class TransfersWorkspace implements Workspace {
         });
         progCol.setPrefWidth(260);
 
+        TableColumn<Transfer, String> sizeCol = new TableColumn<>("Size");
+        sizeCol.setCellValueFactory(c -> {
+            Transfer t = c.getValue();
+            long done = t.bytesTransferred();
+            long total = t.sizeBytes();
+            String text;
+            if (total > 0L) {
+                text = Units.humanBytes(done) + " / " + Units.humanBytes(total);
+            } else if (done > 0L) {
+                text = Units.humanBytes(done);
+            } else {
+                text = "—";
+            }
+            return new ReadOnlyStringWrapper(text);
+        });
+        sizeCol.setPrefWidth(140);
+
         TableColumn<Transfer, String> stateCol = new TableColumn<>("State");
         stateCol.setCellValueFactory(c ->
             new ReadOnlyStringWrapper(c.getValue().state().name()));
@@ -178,7 +196,7 @@ public final class TransfersWorkspace implements Workspace {
             new ReadOnlyStringWrapper(Transfer.formatTimestamp(c.getValue().finishedAtEpochMs())));
         finishedCol.setPrefWidth(90);
 
-        table.getColumns().setAll(dirCol, nameCol, uriCol, progCol, stateCol, startedCol, finishedCol);
+        table.getColumns().setAll(dirCol, nameCol, uriCol, progCol, sizeCol, stateCol, startedCol, finishedCol);
     }
 
     private static String basename(String path) {
