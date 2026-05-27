@@ -6,17 +6,29 @@ package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.Enums;
+import global.thalion.ttio.IRImage;
+import global.thalion.ttio.Identification;
+import global.thalion.ttio.MSImage;
+import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.Subject;
+import global.thalion.ttio.genomics.ReferenceImport;
 
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -105,83 +117,175 @@ public final class TransportServer {
 
     // ---------------------------------------------------------- streaming
 
+    /**
+     * Delegate to {@link DatasetWalker}; relay every event through a
+     * {@link TransportWriter} sinked at a per-event byte buffer, then
+     * split the buffer back into individual packets and send each as
+     * its own WebSocket binary frame.
+     *
+     * <p>Previously this method hand-rolled the emission loop and
+     * walked only {@code msRuns()}, so every v0.11 prelude accessor
+     * (references, subjects, samples, identifications, quantifications,
+     * image cubes, dataset_provenance, encryption_algorithm) plus all
+     * genomic AUs were silently dropped on the wire (#145). Walker
+     * delegation matches the Python reference server ({@code
+     * ttio.transport.server._emit_stream}) and the workbench daemon's
+     * Objective-C download visitor.</p>
+     *
+     * <p>The per-packet framing matters: {@link TransportWriter#writeReferenceGroup}
+     * and its siblings emit MULTIPLE packets per call
+     * (HEADER + N × CHROMOSOME + FOOTER, etc.). {@link TransportClient}
+     * parses one packet per frame, so the per-call buffer is re-split
+     * into individual frames before sending. Same shape as #144's
+     * Python framing fix.</p>
+     */
     private static void streamDataset(WebSocket conn, SpectralDataset dataset,
                                         AUFilter filter) throws Exception {
-        Map<String, AcquisitionRun> runs = dataset.msRuns();
-        List<String> features = new ArrayList<>();
-        for (String f : dataset.featureFlags().features()) features.add(f);
+        DatasetWalker walker = new DatasetWalker();
+        WriterDispatchVisitor visitor = new WriterDispatchVisitor(conn);
+        walker.walk(dataset, filter, visitor);
+        if (visitor.failure != null) throw visitor.failure;
+    }
 
-        // StreamHeader
-        sendBinary(conn, packetBytes(
-                PacketType.STREAM_HEADER, 0, 0,
-                streamHeaderPayload(
-                        dataset.title(), dataset.isaInvestigationId(),
-                        features, runs.size())));
+    /**
+     * AccessUnitVisitor that dispatches every event into a fresh
+     * TransportWriter sinked at a ByteArrayOutputStream, then ships
+     * each produced packet as its own binary frame.
+     */
+    private static final class WriterDispatchVisitor
+            implements AccessUnitVisitor {
+        private final WebSocket conn;
+        Exception failure;
 
-        // DatasetHeaders
-        int did = 1;
-        for (Map.Entry<String, AcquisitionRun> e : runs.entrySet()) {
-            if (filter.datasetId != null && did != filter.datasetId) {
-                did++;
-                continue;
+        WriterDispatchVisitor(WebSocket conn) { this.conn = conn; }
+
+        /**
+         * Encode {@code emit} via a fresh TransportWriter, split the
+         * concatenated packets into per-packet slices, and send each
+         * as its own WS binary frame.
+         */
+        private void dispatch(WriterCall emit) {
+            if (failure != null) return;
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
+            try (TransportWriter w = new TransportWriter(buf)) {
+                emit.invoke(w);
+            } catch (IOException ex) {
+                failure = ex;
+                return;
+            } catch (RuntimeException ex) {
+                failure = ex;
+                return;
             }
-            AcquisitionRun run = e.getValue();
-            List<String> channelNames = new ArrayList<>(run.channels().keySet());
-            String instrumentJson = TransportWriter.instrumentConfigJson(run.instrumentConfig());
-            sendBinary(conn, packetBytes(PacketType.DATASET_HEADER, did, 0,
-                    datasetHeaderPayload(did, e.getKey(),
-                            run.acquisitionMode().ordinal(),
-                            run.spectrumClassName(),
-                            channelNames, instrumentJson,
-                            run.spectrumCount())));
-            did++;
+            byte[] raw = buf.toByteArray();
+            int off = 0;
+            while (off + PacketHeader.HEADER_SIZE <= raw.length) {
+                PacketHeader h = PacketHeader.decode(
+                    Arrays.copyOfRange(raw, off,
+                                       off + PacketHeader.HEADER_SIZE));
+                boolean hasCrc = (h.flags & PacketHeader.FLAG_HAS_CHECKSUM) != 0;
+                int packetLen = PacketHeader.HEADER_SIZE
+                              + (int) h.payloadLength
+                              + (hasCrc ? 4 : 0);
+                conn.send(Arrays.copyOfRange(raw, off, off + packetLen));
+                off += packetLen;
+            }
         }
 
-        // AccessUnits with filter evaluation.
-        int emitted = 0;
-        did = 1;
-        outer:
-        for (Map.Entry<String, AcquisitionRun> e : runs.entrySet()) {
-            if (filter.datasetId != null && did != filter.datasetId) {
-                did++;
-                continue;
-            }
-            AcquisitionRun run = e.getValue();
-            int count = run.spectrumCount();
-            List<String> channelNames = new ArrayList<>(run.channels().keySet());
-            for (int i = 0; i < count; i++) {
-                AccessUnit au = TransportWriter.spectrumToAccessUnit(run, i, channelNames);
-                if (!filter.matches(au, did)) continue;
-                if (filter.maxAu != null && emitted >= filter.maxAu) break outer;
-                sendBinary(conn, packetBytes(
-                        PacketType.ACCESS_UNIT, did, i, au.encode()));
-                emitted++;
-            }
-            did++;
+        @FunctionalInterface
+        private interface WriterCall { void invoke(TransportWriter w) throws IOException; }
+
+        @Override
+        public void visitStreamHeader(DatasetWalker walker,
+                                        String formatVersion,
+                                        String title,
+                                        String isaInvestigation,
+                                        List<String> features,
+                                        int nDatasets) {
+            dispatch(w -> w.writeStreamHeader(formatVersion, title,
+                    isaInvestigation, features, nDatasets));
         }
 
-        // EndOfDataset per run.
-        did = 1;
-        for (Map.Entry<String, AcquisitionRun> e : runs.entrySet()) {
-            if (filter.datasetId != null && did != filter.datasetId) {
-                did++;
-                continue;
-            }
-            AcquisitionRun run = e.getValue();
-            ByteBuffer buf = ByteBuffer.allocate(6).order(ByteOrder.LITTLE_ENDIAN);
-            buf.putShort((short) (did & 0xFFFF));
-            buf.putInt(run.spectrumCount());
-            sendBinary(conn, packetBytes(PacketType.END_OF_DATASET, did, 0,
-                    buf.array()));
-            did++;
+        @Override
+        public void visitDatasetHeader(DatasetWalker walker,
+                                         int datasetId, String name,
+                                         int acquisitionMode,
+                                         String spectrumClass,
+                                         List<String> channelNames,
+                                         String instrumentJson,
+                                         int expectedAUCount) {
+            dispatch(w -> w.writeDatasetHeader(datasetId, name,
+                    acquisitionMode, spectrumClass, channelNames,
+                    instrumentJson, expectedAUCount));
         }
 
-        // EndOfStream. Don't call conn.close() here — Java-WebSocket's
-        // close() can drop buffered outgoing frames before they
-        // flush. Let the client close the connection after it
-        // observes EndOfStream (which is what every language's
-        // TransportClient does by design).
-        sendBinary(conn, packetBytes(PacketType.END_OF_STREAM, 0, 0, new byte[0]));
+        @Override
+        public void visitAccessUnit(DatasetWalker walker, AccessUnit au,
+                                      int datasetId, int auSequence) {
+            dispatch(w -> w.writeAccessUnit(datasetId, auSequence, au));
+        }
+
+        @Override
+        public void visitEndOfDataset(DatasetWalker walker, int datasetId,
+                                       int finalAUSequence) {
+            dispatch(w -> w.writeEndOfDataset(datasetId, finalAUSequence));
+        }
+
+        @Override
+        public void visitEndOfStream(DatasetWalker walker) {
+            dispatch(TransportWriter::writeEndOfStream);
+        }
+
+        // v0.11 §5.4 prelude
+
+        @Override
+        public void visitEncryptionAlgorithm(DatasetWalker walker, String algorithm) {
+            dispatch(w -> w.writeEncryptionAlgorithm(algorithm));
+        }
+
+        @Override
+        public void visitDatasetProvenance(DatasetWalker walker, List<ProvenanceRecord> records) {
+            dispatch(w -> w.writeDatasetProvenance(records));
+        }
+
+        @Override
+        public void visitSubjectMetadata(DatasetWalker walker, List<Subject> rows) {
+            dispatch(w -> w.writeSubjectMetadata(rows));
+        }
+
+        @Override
+        public void visitSampleMetadata(DatasetWalker walker, List<Sample> rows) {
+            dispatch(w -> w.writeSampleMetadata(rows));
+        }
+
+        @Override
+        public void visitReferenceGroup(DatasetWalker walker, ReferenceImport reference) {
+            dispatch(w -> w.writeReferenceGroup(reference));
+        }
+
+        @Override
+        public void visitImage(DatasetWalker walker, MSImage image) {
+            dispatch(w -> w.writeImage(image));
+        }
+
+        @Override
+        public void visitRamanImage(DatasetWalker walker, RamanImage image) {
+            dispatch(w -> w.writeRamanImage(image));
+        }
+
+        @Override
+        public void visitIRImage(DatasetWalker walker, IRImage image) {
+            dispatch(w -> w.writeIRImage(image));
+        }
+
+        @Override
+        public void visitIdentificationsTable(DatasetWalker walker, List<Identification> rows) {
+            dispatch(w -> w.writeIdentifications(rows));
+        }
+
+        @Override
+        public void visitQuantificationsTable(DatasetWalker walker, List<Quantification> rows) {
+            dispatch(w -> w.writeQuantifications(rows));
+        }
     }
 
     private static void sendBinary(WebSocket conn, byte[] data) {

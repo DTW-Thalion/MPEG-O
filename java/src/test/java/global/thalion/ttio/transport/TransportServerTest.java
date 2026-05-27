@@ -166,6 +166,42 @@ class TransportServerTest {
         }
     }
 
+    /**
+     * #145: end-to-end v0.11 round-trip through the Java reference
+     * server. Mirrors the Python {@code TestV011RoundTrip} (#144)
+     * and the ObjC daemon's {@code test_v011_full_accessor_round_trip}
+     * (#140). Pre-#145 the server hand-rolled its emission and walked
+     * only {@code msRuns()}, so every v0.11 prelude accessor + every
+     * genomic AU was silently dropped on the wire — references would
+     * round-trip as zero contigs, subjects as zero rows, etc.
+     *
+     * <p>The server now delegates to {@link DatasetWalker} via
+     * {@code WriterDispatchVisitor}, with the same per-packet reframing
+     * applied as the Python fix (#144). This test asserts every
+     * {@link AccessorSpec} round-trips byte-equivalent.</p>
+     */
+    @Test
+    void v011FullAccessorRoundTrip(@TempDir Path dir) throws Exception {
+        Path src = FixtureBuilder.buildEverything(dir.resolve("v011_everything.tio"));
+
+        TransportServer server = new TransportServer(
+                src.toString(), "127.0.0.1", 0);
+        server.start();
+        try {
+            TransportClient client = new TransportClient(
+                    "ws://127.0.0.1:" + server.port());
+            Path out = dir.resolve("v011_rt.tio");
+            try (SpectralDataset a = SpectralDataset.open(src.toString());
+                 SpectralDataset b = client.streamToFile(out.toString(), null)) {
+                for (AccessorSpec spec : AccessorSpec.values()) {
+                    spec.assertContentEquals(a, b);
+                }
+            }
+        } finally {
+            server.stop();
+        }
+    }
+
     @Test
     void streamToFileWithListenerReportsMonotonicByteCounts(@TempDir Path dir) throws Exception {
         try (SpectralDataset src = buildFixture(dir, "src.tio")) { /* close */ }

@@ -382,6 +382,10 @@ public enum AccessorSpec {
         @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
             RamanImage ra = a.ramanImage();
             RamanImage rb = b.ramanImage();
+            // Both absent: trivially equal — the accessor isn't populated
+            // on either fixture, so there's nothing to compare. Matches
+            // the Python sibling comparator (#140 follow-up).
+            if (ra == null && rb == null) return;
             if (ra == null || rb == null) {
                 throw new AssertionError("RamanImage missing on at least "
                     + "one side: a=" + ra + ", b=" + rb);
@@ -448,6 +452,9 @@ public enum AccessorSpec {
         @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
             IRImage ia = a.irImage();
             IRImage ib = b.irImage();
+            // Both absent: trivially equal — see RAMAN_IMAGE comparator
+            // for rationale.
+            if (ia == null && ib == null) return;
             if (ia == null || ib == null) {
                 throw new AssertionError("IRImage missing on at least one "
                     + "side: a=" + ia + ", b=" + ib);
