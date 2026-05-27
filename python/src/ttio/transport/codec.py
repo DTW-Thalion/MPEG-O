@@ -153,6 +153,94 @@ def _decode_wire_codec(payload: bytes, codec: int) -> bytes:
 # ---------------------------------------------------------- TransportWriter
 
 
+def _iter_genomic_run_access_units(run) -> Iterator[tuple[int, "AccessUnit"]]:
+    """Yield ``(au_sequence, AccessUnit)`` tuples for every AlignedRead
+    in ``run``.
+
+    Body extracted from :meth:`TransportWriter._emit_genomic_run_access_units`
+    in #141 so :func:`ttio.transport.walker.walk_dataset` can emit
+    genomic AUs without duplicating the per-read construction. Both
+    callers see byte-identical AUs.
+    """
+    index = run.index
+    n_reads = index.count
+    # Bulk-read sequences and qualities once; slice per AU.
+    if n_reads > 0:
+        total_bases = int(index.offsets[-1]) + int(index.lengths[-1])
+        seq_full = run._byte_channel_slice("sequences", 0, total_bases)
+        qual_full = run._byte_channel_slice("qualities", 0, total_bases)
+    else:
+        seq_full = b""
+        qual_full = b""
+    chromosomes = index.chromosomes
+    positions = index.positions
+    mqs = index.mapping_qualities
+    flags_arr = index.flags
+    offsets = index.offsets
+    lengths = index.lengths
+    precision_uint8 = int(Precision.UINT8) & 0xFF
+    compression_none = int(Compression.NONE) & 0xFF
+    acq_mode = int(run.acquisition_mode) & 0xFF
+    seq_codec = qual_codec = compression_none
+    try:
+        sig_group = run.group.open_group("signal_channels")
+        if sig_group.has_child("sequences"):
+            seq_ds = sig_group.open_dataset("sequences")
+            seq_codec = (io_attr_int(seq_ds, "compression",
+                                        default=0) or 0) & 0xFF
+        if sig_group.has_child("qualities"):
+            qual_ds = sig_group.open_dataset("qualities")
+            qual_codec = (io_attr_int(qual_ds, "compression",
+                                         default=0) or 0) & 0xFF
+    except Exception:
+        seq_codec = qual_codec = compression_none
+
+    for i in range(n_reads):
+        start = int(offsets[i])
+        length = int(lengths[i])
+        stop = start + length
+        seq_bytes = seq_full[start:stop]
+        qual_bytes = qual_full[start:stop]
+        seq_payload = _apply_wire_codec(bytes(seq_bytes), seq_codec)
+        qual_payload = _apply_wire_codec(bytes(qual_bytes), qual_codec)
+        r = run[i]
+        cigar_bytes = (r.cigar or "").encode("utf-8")
+        name_bytes = (r.read_name or "").encode("utf-8")
+        mate_chr_bytes = (r.mate_chromosome or "").encode("utf-8")
+        channels = [
+            ChannelData("sequences", precision_uint8,
+                        seq_codec, length, seq_payload),
+            ChannelData("qualities", precision_uint8,
+                        qual_codec, length, qual_payload),
+            ChannelData("cigar", precision_uint8,
+                        compression_none, len(cigar_bytes), cigar_bytes),
+            ChannelData("read_name", precision_uint8,
+                        compression_none, len(name_bytes), name_bytes),
+            ChannelData("mate_chromosome", precision_uint8,
+                        compression_none, len(mate_chr_bytes),
+                        mate_chr_bytes),
+        ]
+        au = AccessUnit(
+            spectrum_class=5,
+            acquisition_mode=acq_mode,
+            ms_level=0,
+            polarity=2,
+            retention_time=0.0,
+            precursor_mz=0.0,
+            precursor_charge=0,
+            ion_mobility=0.0,
+            base_peak_intensity=0.0,
+            channels=channels,
+            chromosome=chromosomes[i],
+            position=int(positions[i]),
+            mapping_quality=int(mqs[i]),
+            flags=int(flags_arr[i]) & 0xFFFF,
+            mate_position=int(r.mate_position),
+            template_length=int(r.template_length),
+        )
+        yield i, au
+
+
 class TransportWriter:
     """Serialize a :class:`SpectralDataset` as a transport byte stream."""
 
@@ -1362,93 +1450,12 @@ class TransportWriter:
         writer re-encodes each per-AU slice with the same codec on
         the wire. The wire ChannelData.compression byte tells the
         reader which decoder to dispatch.
-        """
-        index = run.index
-        n_reads = index.count
-        # Bulk-read sequences and qualities once; slice per AU.
-        if n_reads > 0:
-            total_bases = int(index.offsets[-1]) + int(index.lengths[-1])
-            seq_full = run._byte_channel_slice("sequences", 0, total_bases)
-            qual_full = run._byte_channel_slice("qualities", 0, total_bases)
-        else:
-            seq_full = b""
-            qual_full = b""
-        chromosomes = index.chromosomes
-        positions = index.positions
-        mqs = index.mapping_qualities
-        flags_arr = index.flags
-        offsets = index.offsets
-        lengths = index.lengths
-        precision_uint8 = int(Precision.UINT8) & 0xFF
-        compression_none = int(Compression.NONE) & 0xFF
-        acq_mode = int(run.acquisition_mode) & 0xFF
-        # probe source @compression on sequences + qualities
-        # so the wire codec mirrors the file's codec choice. The
-        # string channels (cigar/read_name/mate_chromosome) always
-        # ride uncompressed — they're per-AU short strings where
-        # codec framing overhead would dominate.
-        seq_codec = qual_codec = compression_none
-        try:
-            sig_group = run.group.open_group("signal_channels")
-            if sig_group.has_child("sequences"):
-                seq_ds = sig_group.open_dataset("sequences")
-                seq_codec = (io_attr_int(seq_ds, "compression",
-                                            default=0) or 0) & 0xFF
-            if sig_group.has_child("qualities"):
-                qual_ds = sig_group.open_dataset("qualities")
-                qual_codec = (io_attr_int(qual_ds, "compression",
-                                             default=0) or 0) & 0xFF
-        except Exception:
-            seq_codec = qual_codec = compression_none
 
-        for i in range(n_reads):
-            start = int(offsets[i])
-            length = int(lengths[i])
-            stop = start + length
-            seq_bytes = seq_full[start:stop]
-            qual_bytes = qual_full[start:stop]
-            # re-encode per-AU slice with the M86 codec when
-            # the source channel had an @compression attribute set.
-            seq_payload = _apply_wire_codec(bytes(seq_bytes), seq_codec)
-            qual_payload = _apply_wire_codec(bytes(qual_bytes), qual_codec)
-            # pull the per-read compound fields off the lazy
-            # AlignedRead. read_name / cigar / mate_* go on the wire
-            # so a transport round-trip preserves SAM-level fidelity.
-            r = run[i]
-            cigar_bytes = (r.cigar or "").encode("utf-8")
-            name_bytes = (r.read_name or "").encode("utf-8")
-            mate_chr_bytes = (r.mate_chromosome or "").encode("utf-8")
-            channels = [
-                ChannelData("sequences", precision_uint8,
-                            seq_codec, length, seq_payload),
-                ChannelData("qualities", precision_uint8,
-                            qual_codec, length, qual_payload),
-                ChannelData("cigar", precision_uint8,
-                            compression_none, len(cigar_bytes), cigar_bytes),
-                ChannelData("read_name", precision_uint8,
-                            compression_none, len(name_bytes), name_bytes),
-                ChannelData("mate_chromosome", precision_uint8,
-                            compression_none, len(mate_chr_bytes),
-                            mate_chr_bytes),
-            ]
-            au = AccessUnit(
-                spectrum_class=5,
-                acquisition_mode=acq_mode,
-                ms_level=0,
-                polarity=2,
-                retention_time=0.0,
-                precursor_mz=0.0,
-                precursor_charge=0,
-                ion_mobility=0.0,
-                base_peak_intensity=0.0,
-                channels=channels,
-                chromosome=chromosomes[i],
-                position=int(positions[i]),
-                mapping_quality=int(mqs[i]),
-                flags=int(flags_arr[i]) & 0xFFFF,
-                mate_position=int(r.mate_position),
-                template_length=int(r.template_length),
-            )
+        Body now delegates to :func:`_iter_genomic_run_access_units`
+        so the walker (#141) can yield the same AUs without
+        re-implementing the construction.
+        """
+        for i, au in _iter_genomic_run_access_units(run):
             self.write_access_unit(
                 dataset_id=dataset_id, au_sequence=i, au=au
             )
