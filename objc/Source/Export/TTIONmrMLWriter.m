@@ -38,6 +38,19 @@ static NSString *fmtD(double v) { return [NSString stringWithFormat:@"%.15g", v]
               sweepWidthPPM:(double)sweepWidthPPM
                       error:(NSError **)error
 {
+    return [self dataForSpectrum:spectrum
+                             fid:fid
+                   sweepWidthPPM:sweepWidthPPM
+                        progress:nil
+                           error:error];
+}
+
++ (NSData *)dataForSpectrum:(TTIONMRSpectrum *)spectrum
+                        fid:(TTIOFreeInductionDecay *)fid
+              sweepWidthPPM:(double)sweepWidthPPM
+                   progress:(TTIOProgressBlock)progress
+                      error:(NSError **)error
+{
     if (!spectrum) {
         if (error) *error = [NSError errorWithDomain:@"TTIONmrMLWriter"
                                                   code:1
@@ -179,6 +192,8 @@ static NSString *fmtD(double v) { return [NSString stringWithFormat:@"%.15g", v]
     emit(out, @"  </spectrumList>\n");
     emit(out, @"</nmrML>\n");
 
+    // nmrML is a single-spectrum format. One (1, 1) fire on success.
+    if (progress) progress((int64_t)1, (int64_t)1);
     return out;
 }
 
@@ -188,8 +203,26 @@ static NSString *fmtD(double v) { return [NSString stringWithFormat:@"%.15g", v]
                toPath:(NSString *)path
                 error:(NSError **)error
 {
-    NSData *data = [self dataForSpectrum:spectrum fid:fid
-                           sweepWidthPPM:sweepWidthPPM error:error];
+    return [self writeSpectrum:spectrum
+                           fid:fid
+                 sweepWidthPPM:sweepWidthPPM
+                        toPath:path
+                      progress:nil
+                         error:error];
+}
+
++ (BOOL)writeSpectrum:(TTIONMRSpectrum *)spectrum
+                  fid:(TTIOFreeInductionDecay *)fid
+        sweepWidthPPM:(double)sweepWidthPPM
+               toPath:(NSString *)path
+             progress:(TTIOProgressBlock)progress
+                error:(NSError **)error
+{
+    NSData *data = [self dataForSpectrum:spectrum
+                                     fid:fid
+                           sweepWidthPPM:sweepWidthPPM
+                                progress:progress
+                                   error:error];
     if (!data) return NO;
     return [data writeToFile:path options:NSDataWritingAtomic error:error];
 }

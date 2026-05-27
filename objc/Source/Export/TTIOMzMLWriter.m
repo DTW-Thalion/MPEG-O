@@ -33,6 +33,9 @@
 #import "Import/TTIOBase64.h"
 #import "Import/TTIOCVTermMapper.h"
 
+// Mirrors Java MzMLWriter.PROGRESS_INTERVAL_SPECTRA (100).
+const NSUInteger TTIOMzMLWriterProgressIntervalSpectra = 100;
+
 #pragma mark - Helpers
 
 /**
@@ -100,6 +103,18 @@ static NSString *precisionName(BOOL useFloat32)
            zlibCompression:(BOOL)zlibCompression
                      error:(NSError **)error
 {
+    return [self dataForDataset:dataset
+                zlibCompression:zlibCompression
+                       progress:nil
+                          error:error];
+}
+
++ (NSData *)dataForDataset:(TTIOSpectralDataset *)dataset
+           zlibCompression:(BOOL)zlibCompression
+                  progress:(TTIOProgressBlock)progress
+                     error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (!dataset) {
         if (error) *error = [NSError errorWithDomain:@"TTIOMzMLWriter"
                                                   code:1
@@ -376,7 +391,14 @@ static NSString *precisionName(BOOL useFloat32)
 
         appendUTF8(body, @"          </binaryDataArrayList>\n");
         appendUTF8(body, @"        </spectrum>\n");
+
+        // Per-N progress fire. Total = nSpectra.
+        if (((i + 1) % TTIOMzMLWriterProgressIntervalSpectra) == 0) {
+            progress((int64_t)(i + 1), (int64_t)nSpectra);
+        }
     }
+    // Final fire on spectrum count.
+    progress((int64_t)nSpectra, (int64_t)nSpectra);
 
     appendUTF8(body, @"      </spectrumList>\n");
 
@@ -516,8 +538,22 @@ static NSString *precisionName(BOOL useFloat32)
      zlibCompression:(BOOL)zlibCompression
                 error:(NSError **)error
 {
+    return [self writeDataset:dataset
+                       toPath:path
+              zlibCompression:zlibCompression
+                     progress:nil
+                        error:error];
+}
+
++ (BOOL)writeDataset:(TTIOSpectralDataset *)dataset
+              toPath:(NSString *)path
+     zlibCompression:(BOOL)zlibCompression
+            progress:(TTIOProgressBlock)progress
+               error:(NSError **)error
+{
     NSData *data = [self dataForDataset:dataset
                          zlibCompression:zlibCompression
+                                progress:progress
                                    error:error];
     if (!data) return NO;
     return [data writeToFile:path options:NSDataWritingAtomic error:error];

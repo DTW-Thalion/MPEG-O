@@ -24,6 +24,9 @@
 // fixed value (Python's _DEFAULT_SQ_LENGTH).
 static const int64_t kTTIODefaultSqLength = 2147483647;
 
+// Mirrors Java BamWriter.PROGRESS_INTERVAL_READS (1000).
+const NSUInteger TTIOBamWriterProgressIntervalReads = 1000;
+
 static NSString *const kTTIOWriterSamtoolsHelp =
     @"samtools is required by TTIOBamWriter but was not found on PATH. "
     @"Install it via your platform's package manager:\n"
@@ -161,6 +164,13 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
 // Mirrors Python BamWriter._iter_alignment_lines in bam.py.
 - (NSString *)buildAlignmentLinesForRun:(TTIOWrittenGenomicRun *)run
 {
+    return [self buildAlignmentLinesForRun:run progress:nil];
+}
+
+- (NSString *)buildAlignmentLinesForRun:(TTIOWrittenGenomicRun *)run
+                                progress:(TTIOProgressBlock)progress
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     NSUInteger n = run.readNames.count;
     NSMutableString *out = [NSMutableString string];
 
@@ -254,7 +264,14 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
                           qname, (unsigned)flag, rname, (long long)p,
                           (unsigned)mq, cigar, rnext, (long long)pnext,
                           (int)tlen, seqStr, qualStr];
+
+        // Per-N progress fire. Total = n.
+        if (((i + 1) % TTIOBamWriterProgressIntervalReads) == 0) {
+            progress((int64_t)(i + 1), (int64_t)n);
+        }
     }
+    // Final fire.
+    progress((int64_t)n, (int64_t)n);
     return out;
 }
 
@@ -400,6 +417,19 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
                 sort:(BOOL)sort
                error:(NSError **)error
 {
+    return [self writeRun:run
+        provenanceRecords:provenance
+                     sort:sort
+                 progress:nil
+                    error:error];
+}
+
+- (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
+   provenanceRecords:(NSArray<TTIOProvenanceRecord *> *)provenance
+                sort:(BOOL)sort
+            progress:(TTIOProgressBlock)progress
+               error:(NSError **)error
+{
     NSString *samtoolsBin = nil;
     if (!bamWriterSamtoolsAvailable(&samtoolsBin, error)) {
         return NO;
@@ -415,7 +445,7 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
     NSString *header = [self buildHeaderForRun:run
                              provenanceRecords:provs
                                           sort:sort];
-    NSString *aligns = [self buildAlignmentLinesForRun:run];
+    NSString *aligns = [self buildAlignmentLinesForRun:run progress:progress];
     NSString *sam = [header stringByAppendingString:aligns];
     NSData *samBytes = [sam dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data];
 

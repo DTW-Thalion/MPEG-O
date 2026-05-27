@@ -139,7 +139,8 @@ TTIOTests_OBJC_FILES = \
 	TestAccessorMatrixConformance.m \
 	TestCoverageGapWatchdog.m \
 	TestProgressSink.m \
-	TestProgressSinkStageC.m
+	TestProgressSinkStageC.m \
+	TestProgressSinkStageD.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
