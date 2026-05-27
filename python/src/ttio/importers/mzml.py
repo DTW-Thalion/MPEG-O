@@ -22,9 +22,14 @@ from xml.etree.ElementTree import iterparse
 import numpy as np
 
 from ..enums import ActivationMethod, Polarity, Precision
+from ..io.progress import ProgressSinkLike, _fire
 from . import cv_term_mapper as cv
 from ._base64_zlib import decode as decode_base64
 from .import_result import ImportResult, ImportedChromatogram, ImportedSpectrum
+
+
+#: Mirror Java's ``MzMLReader.PROGRESS_INTERVAL_SPECTRA``.
+PROGRESS_INTERVAL_SPECTRA = 100
 
 
 class MzMLParseError(ValueError):
@@ -39,16 +44,25 @@ _PRECISION_NUMPY = {
 }
 
 
-def read(path: str | Path) -> ImportResult:
+def read(
+    path: str | Path,
+    *,
+    progress: ProgressSinkLike | None = None,
+) -> ImportResult:
     """Parse an mzML file and return an :class:`ImportResult`.
 
     Supports the indexed (``<indexedmzML>``) and non-indexed wrappers. Only
     spectrum-level binary arrays are materialized; chromatograms are
     ignored in this minimal port (they will be added by M19).
+
+    ``progress`` fires every :data:`PROGRESS_INTERVAL_SPECTRA` spectra
+    (``total = -1``) and once more at the end with ``(n_spectra,
+    n_spectra)``.
     """
     path = Path(path)
     state = _State(source_file=str(path))
 
+    last_emitted = 0
     for event, elem in iterparse(str(path), events=("start", "end")):
         tag = _local(elem.tag)
         if event == "start":
@@ -56,9 +70,18 @@ def read(path: str | Path) -> ImportResult:
         else:
             _handle_end(state, tag, elem)
             elem.clear()
+            # Fire after each </spectrum> close, every N spectra.
+            n = len(state.spectra)
+            if n >= last_emitted + PROGRESS_INTERVAL_SPECTRA:
+                _fire(progress, n, -1)
+                last_emitted = n
 
     if not state.spectra and not state.chromatograms:
         raise MzMLParseError(f"{path}: no usable spectra or chromatograms parsed")
+
+    # Final fire — total is now known.
+    n_total = len(state.spectra)
+    _fire(progress, n_total, n_total)
 
     return ImportResult(
         title=state.run_id or "mzml_import",
