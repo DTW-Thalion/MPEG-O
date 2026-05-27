@@ -453,6 +453,13 @@ def _raman_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
     + element-wise intensity cube (all within 1e-9)."""
     ra = a.raman_image
     rb = b.raman_image
+    # Both sides absent: trivially equal — the accessor isn't populated
+    # on either fixture, so there's nothing to compare. (build_everything
+    # exercises every required v0.11 accessor; the optional Raman/IR
+    # cubes have their own dedicated build_raman_image_only /
+    # build_ir_image_only fixtures.)
+    if ra is None and rb is None:
+        return
     if ra is None or rb is None:
         raise AssertionError(
             f"RamanImage missing on at least one side: a={ra}, b={rb}"
@@ -515,6 +522,10 @@ def _ir_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
     element-wise intensity cube (all within 1e-9)."""
     ia = a.ir_image
     ib = b.ir_image
+    # Both sides absent: trivially equal — see _raman_image_equals
+    # for rationale.
+    if ia is None and ib is None:
+        return
     if ia is None or ib is None:
         raise AssertionError(
             f"IRImage missing on at least one side: a={ia}, b={ib}"
