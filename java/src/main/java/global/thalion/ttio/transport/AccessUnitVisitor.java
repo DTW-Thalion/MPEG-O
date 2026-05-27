@@ -4,6 +4,16 @@
  */
 package global.thalion.ttio.transport;
 
+import global.thalion.ttio.IRImage;
+import global.thalion.ttio.Identification;
+import global.thalion.ttio.MSImage;
+import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.Quantification;
+import global.thalion.ttio.RamanImage;
+import global.thalion.ttio.Sample;
+import global.thalion.ttio.Subject;
+import global.thalion.ttio.genomics.ReferenceImport;
+
 import java.util.List;
 
 /**
@@ -15,6 +25,17 @@ import java.util.List;
  * <p>Event order:
  * <ol>
  *   <li>{@link #visitStreamHeader} once.</li>
+ *   <li>v0.11 §5.4 prelude events (when populated):
+ *       {@link #visitEncryptionAlgorithm},
+ *       {@link #visitDatasetProvenance},
+ *       {@link #visitSubjectMetadata},
+ *       {@link #visitSampleMetadata},
+ *       {@link #visitReferenceGroup} (one per reference, sorted by URI key),
+ *       {@link #visitImage},
+ *       {@link #visitRamanImage},
+ *       {@link #visitIRImage},
+ *       {@link #visitIdentificationsTable},
+ *       {@link #visitQuantificationsTable}.</li>
  *   <li>{@link #visitDatasetHeader} per matched dataset.</li>
  *   <li>{@link #visitAccessUnit} per matched AU.</li>
  *   <li>{@link #visitEndOfDataset} per matched dataset.</li>
@@ -56,4 +77,48 @@ public interface AccessUnitVisitor {
                                     int finalAUSequence) {}
 
     default void visitEndOfStream(DatasetWalker walker) {}
+
+    // ── v0.11 §5.4 prelude callbacks (#141) ─────────────────────────
+
+    /** §5.4.1 — dataset-level {@code @encrypted} algorithm name. */
+    default void visitEncryptionAlgorithm(DatasetWalker walker,
+                                            String algorithm) {}
+
+    /** §5.4.2 — dataset-level provenance chain. */
+    default void visitDatasetProvenance(DatasetWalker walker,
+                                          List<ProvenanceRecord> records) {}
+
+    /** §5.4.3 — {@link Subject} rows (subjects emit BEFORE samples
+     *  so a soft-FK target is visible ahead of any sample row that
+     *  references it). */
+    default void visitSubjectMetadata(DatasetWalker walker,
+                                        List<Subject> rows) {}
+
+    /** §5.4.3 — {@link Sample} rows. */
+    default void visitSampleMetadata(DatasetWalker walker,
+                                       List<Sample> rows) {}
+
+    /** §5.4.4 — one embedded {@link ReferenceImport} per call. */
+    default void visitReferenceGroup(DatasetWalker walker,
+                                       ReferenceImport reference) {}
+
+    /** §5.4.5 — embedded {@link MSImage} cube. */
+    default void visitImage(DatasetWalker walker,
+                              MSImage image) {}
+
+    /** §5.4.5 — embedded {@link RamanImage} cube. */
+    default void visitRamanImage(DatasetWalker walker,
+                                   RamanImage image) {}
+
+    /** §5.4.5 — embedded {@link IRImage} cube. */
+    default void visitIRImage(DatasetWalker walker,
+                                IRImage image) {}
+
+    /** §5.4.6 — {@link Identification} rows. */
+    default void visitIdentificationsTable(DatasetWalker walker,
+                                             List<Identification> rows) {}
+
+    /** §5.4.6 — {@link Quantification} rows. */
+    default void visitQuantificationsTable(DatasetWalker walker,
+                                             List<Quantification> rows) {}
 }

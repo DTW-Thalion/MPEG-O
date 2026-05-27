@@ -1179,6 +1179,20 @@ public final class TransportWriter implements AutoCloseable {
      */
     private void emitGenomicRunAccessUnits(int datasetId, GenomicRun run)
             throws IOException {
+        // Delegate to the package-private helper so DatasetWalker (#141)
+        // can yield the same AUs without re-implementing per-read
+        // construction. Both callers see byte-identical AUs.
+        List<AccessUnit> aus = genomicRunAccessUnits(run);
+        for (int i = 0; i < aus.size(); i++) {
+            writeAccessUnit(datasetId, i, aus.get(i));
+        }
+    }
+
+    /** Build the per-read {@link AccessUnit} list for {@code run},
+     *  matching the layout {@link #emitGenomicRunAccessUnits} writes
+     *  to the wire. Extracted in #141 so {@link DatasetWalker} can
+     *  emit identical AUs without duplicating the construction. */
+    static List<AccessUnit> genomicRunAccessUnits(GenomicRun run) {
         int n = run.readCount();
         int precisionUint8 = Enums.Precision.UINT8.ordinal();
         int compressionNone = Enums.Compression.NONE.ordinal();
@@ -1199,6 +1213,7 @@ public final class TransportWriter implements AutoCloseable {
         byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];
         java.util.List<String> namesAll = run.readNamesAll();
         global.thalion.ttio.genomics.GenomicIndex idx = run.index();
+        List<AccessUnit> out = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             long offset = idx.offsetAt(i);
             int length = idx.lengthAt(i);
@@ -1260,8 +1275,9 @@ public final class TransportWriter implements AutoCloseable {
                     flagsValue & 0xFFFF,
                     matePos,
                     tlen);
-            writeAccessUnit(datasetId, i, au);
+            out.add(au);
         }
+        return out;
     }
 
     /** encode {@code plaintext} with the given wire codec id.

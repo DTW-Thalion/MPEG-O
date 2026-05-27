@@ -11,6 +11,14 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed — Python + Java walker v0.11 parity (#141)
+
+Follow-up to #140 (ObjC walker). The Python `walk_dataset` generator and Java `DatasetWalker` previously emitted only MS access units, so every workbench-daemon download routed through the Python/Java reference servers silently dropped v0.11 accessor content — same root cause as #140 but in the other two SDKs.
+
+Python: `walker.py` gains `EncryptionAlgorithmEvent`, `DatasetProvenanceEvent`, `SubjectMetadataEvent`, `SampleMetadataEvent`, `ReferenceGroupEvent`, `ImageEvent`, `RamanImageEvent`, `IRImageEvent`, `IdentificationsTableEvent`, `QuantificationsTableEvent`. The v0.11 §5.4 prelude (encryption → provenance → subjects → samples → references → image → identifications → quantifications) is yielded between `StreamHeaderEvent` and the first `DatasetHeaderEvent`, gated on each accessor being populated. Genomic AUs now iterate via a shared `_iter_genomic_run_access_units(run)` helper extracted from `_emit_genomic_run_access_units`. `server._emit_stream` dispatches each new event through the matching `TransportWriter.write_*` method.
+
+Java: `AccessUnitVisitor` gains 10 optional default-method callbacks (`visitEncryptionAlgorithm`, `visitDatasetProvenance`, `visitSubjectMetadata`, `visitSampleMetadata`, `visitReferenceGroup`, `visitImage`, `visitRamanImage`, `visitIRImage`, `visitIdentificationsTable`, `visitQuantificationsTable`). `DatasetWalker.walk` emits the same §5.4 prelude block plus per-read genomic AUs via a shared `TransportWriter.genomicRunAccessUnits(run)` helper. AU + EOD events now interleave per-dataset (matching `TransportWriter.writeDataset`).
+
 ### Fixed — multi-accessor AU sequence ingest (#139)
 
 Walker emits AU sequences that reset per dataset (`for j, spectrum in enumerate(run)`), but TransportIngest in all three SDKs enforced a single stream-wide monotonicity counter. v0.11 multi-accessor `.tio` uploads (the first to exercise more than one dataset over the workbench daemon) hit `AU sequence regressed: got 0, last seen N` mid-upload on the second accessor.
