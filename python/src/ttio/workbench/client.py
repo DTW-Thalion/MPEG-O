@@ -34,8 +34,10 @@ and TLS-or-no-TLS for both planes -- the SDK assumes this.
 from __future__ import annotations
 
 import dataclasses
+import os
 import urllib.parse
-from typing import Any, Iterable, Mapping, Optional
+from pathlib import Path
+from typing import Any, Callable, Iterable, Mapping, Optional
 
 from ttio.workbench.auth import Session
 from ttio.workbench.auth_providers import AuthProvider
@@ -203,6 +205,29 @@ class WorkbenchClient:
         async with self.upload_client(
                 project=project, container_uri=container_uri) as up:
             return await up.upload_bytes(data, resume=resume)
+
+    async def upload_path(
+        self,
+        *,
+        project: str,
+        container_uri: str,
+        path: str | os.PathLike[str],
+        resume: Optional[ResumeState] = None,
+        progress: Optional[Callable[[int, int], None]] = None,
+        chunk_size: Optional[int] = None,
+    ) -> UploadResult:
+        """Stream a ``.tis`` file from disk to the server in
+        chunkSize-bounded slices. Peak memory is O(``chunk_size``);
+        the file is **never** fully buffered in RAM.
+
+        Mirrors Java's ``WorkbenchClient.upload(Path)``.
+        """
+        async with self.upload_client(
+                project=project, container_uri=container_uri,
+                chunk_size=chunk_size) as up:
+            return await up.upload_path(
+                path, resume=resume, progress=progress,
+            )
 
     async def download_bytes(
         self,
