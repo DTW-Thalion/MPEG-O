@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed — Java `TransportServer` walks the dataset (#145)
+
+`TransportServer.streamDataset` hand-rolled its emission loop and walked only `dataset.msRuns()`, so every v0.11 prelude accessor (references, subjects, samples, identifications, quantifications, image cubes, dataset_provenance, encryption_algorithm) plus all genomic AUs were silently dropped on the wire — same root cause as the now-fixed ObjC daemon walker (#140) and the Python framing bug (#144), in a third location.
+
+The server now delegates to `DatasetWalker` via a `WriterDispatchVisitor` that pipes every event through a per-call `TransportWriter` sinked at a `ByteArrayOutputStream`, then splits the writer's concatenated output (`writeReferenceGroup` etc. emit multiple packets per call) back into individual packets via `PacketHeader.decode` and sends each as its own WebSocket binary frame — same per-packet reframing the Python fix introduced.
+
+New `TransportServerTest.v011FullAccessorRoundTrip` builds `FixtureBuilder.buildEverything`, serves it, downloads via `TransportClient.streamToFile`, and asserts every `AccessorSpec` round-trips byte-equivalent. Mirrors the Python `TestV011RoundTrip` (#144) and the ObjC daemon's `test_v011_full_accessor_round_trip` (#140).
+
+Java `AccessorSpec.RAMAN_IMAGE` / `IR_IMAGE` comparators now treat "both null" as trivially equal — `buildEverything` populates only the MS image cube, and the strict-non-null check was tripping immediately on otherwise-correct round-trips. Matches the Python comparator polish from the v1.6.0 release.
+
 ### Fixed — Python transport server frames v0.11 prelude packets individually (#144)
 
 `_emit_stream` invoked `TransportWriter.write_reference_group` / `write_image` / `write_subject_metadata` / etc. into a single `BytesIO`, then sent the concatenated bytes as one WebSocket binary frame. Each of those writer methods emits **multiple** packets (e.g. `REFERENCE_GROUP_HEADER + N × REFERENCE_CHROMOSOME + END_OF_REFERENCE_GROUP`). `TransportClient._split_packet` only parses one packet per frame, so every chromosome / pixel / subject row after the first packet of each multi-packet emitter was silently dropped on download.
