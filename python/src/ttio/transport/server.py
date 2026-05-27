@@ -166,14 +166,40 @@ async def _emit_stream(
     event onto the WebSocket as a transport packet. Iteration logic
     is owned by the walker; this function is just the
     event-to-packet adapter."""
+    import io
+    from .codec import TransportWriter
     from .walker import (
         AccessUnitEvent,
         DatasetHeaderEvent,
+        DatasetProvenanceEvent,
+        EncryptionAlgorithmEvent,
         EndOfDatasetEvent,
         EndOfStreamEvent,
+        IRImageEvent,
+        IdentificationsTableEvent,
+        ImageEvent,
+        QuantificationsTableEvent,
+        RamanImageEvent,
+        ReferenceGroupEvent,
+        SampleMetadataEvent,
         StreamHeaderEvent,
+        SubjectMetadataEvent,
         walk_dataset,
     )
+
+    # v0.11 §5.4 prelude events use TransportWriter.write_X helpers
+    # that emit a full packet (header + payload) into a temporary
+    # buffer. We then forward the raw bytes via the websocket. This
+    # avoids duplicating the per-packet payload encoders (which can be
+    # complex, e.g. write_reference_group spans hundreds of lines).
+    def _encode_via_writer(call):
+        """Invoke ``call(writer)`` with a fresh writer targeting a
+        BytesIO, return the produced raw bytes (one or more packets).
+        """
+        buf = io.BytesIO()
+        w = TransportWriter(buf)
+        call(w)
+        return buf.getvalue()
 
     for event in walk_dataset(dataset, query):
         if isinstance(event, StreamHeaderEvent):
@@ -226,6 +252,58 @@ async def _emit_stream(
             )
         elif isinstance(event, EndOfStreamEvent):
             await _send_packet(websocket, PacketType.END_OF_STREAM, b"")
+        # v0.11 §5.4 prelude — re-use TransportWriter helpers to keep
+        # the wire layout in lock-step with TransportWriter.write_dataset.
+        elif isinstance(event, EncryptionAlgorithmEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_encryption_algorithm(event.algorithm)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, DatasetProvenanceEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_dataset_provenance(event.records)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, SubjectMetadataEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_subject_metadata(event.rows)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, SampleMetadataEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_sample_metadata(event.rows)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, ReferenceGroupEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_reference_group(event.reference)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, ImageEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_image(event.image)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, RamanImageEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_raman_image(event.image)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, IRImageEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_ir_image(event.image)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, IdentificationsTableEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_identifications_table(event.rows)
+            )
+            await websocket.send(raw)
+        elif isinstance(event, QuantificationsTableEvent):
+            raw = _encode_via_writer(
+                lambda w: w.write_quantifications_table(event.rows)
+            )
+            await websocket.send(raw)
 
 
 async def _send_packet(

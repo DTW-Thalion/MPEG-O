@@ -184,4 +184,218 @@ class DatasetWalkerTest {
                 "AU-only visitor: 5 AU callbacks, other events skipped via defaults");
         }
     }
+
+    // ── v0.11 §5.4 prelude parity (#141) ───────────────────────────
+
+    /** Visitor that records every v0.11 prelude event in the order
+     *  it sees the call. Captures the marker string AND a quick
+     *  payload snapshot so tests can spot-check content alongside
+     *  ordering. */
+    private static final class V011Recording implements AccessUnitVisitor {
+        final List<String> events = new ArrayList<>();
+        String encryptionAlgorithm;
+        int provenanceCount;
+        int subjectsCount;
+        int samplesCount;
+        int referencesCount;
+        boolean sawImage, sawRaman, sawIR;
+        int identificationsCount;
+        int quantificationsCount;
+        final List<AccessUnit> aus = new ArrayList<>();
+
+        @Override public void visitStreamHeader(DatasetWalker w, String fv,
+                                                  String t, String isa,
+                                                  List<String> f, int n) {
+            events.add("stream:" + n);
+        }
+        @Override public void visitDatasetHeader(DatasetWalker w, int did,
+                                                   String name, int am,
+                                                   String sc, List<String> ch,
+                                                   String j, int cnt) {
+            events.add("dsh:" + did + "/" + name);
+        }
+        @Override public void visitAccessUnit(DatasetWalker w, AccessUnit au,
+                                                int did, int seq) {
+            aus.add(au);
+            events.add("au:" + did + "/" + seq);
+        }
+        @Override public void visitEndOfDataset(DatasetWalker w, int did,
+                                                  int finalSeq) {
+            events.add("eod:" + did);
+        }
+        @Override public void visitEndOfStream(DatasetWalker w) {
+            events.add("eos");
+        }
+        @Override public void visitEncryptionAlgorithm(DatasetWalker w,
+                                                        String algorithm) {
+            encryptionAlgorithm = algorithm;
+            events.add("encryption");
+        }
+        @Override public void visitDatasetProvenance(DatasetWalker w,
+                                                      List<global.thalion.ttio.ProvenanceRecord> records) {
+            provenanceCount = records.size();
+            events.add("provenance");
+        }
+        @Override public void visitSubjectMetadata(DatasetWalker w,
+                                                     List<global.thalion.ttio.Subject> rows) {
+            subjectsCount = rows.size();
+            events.add("subjects");
+        }
+        @Override public void visitSampleMetadata(DatasetWalker w,
+                                                    List<global.thalion.ttio.Sample> rows) {
+            samplesCount = rows.size();
+            events.add("samples");
+        }
+        @Override public void visitReferenceGroup(DatasetWalker w,
+                                                    global.thalion.ttio.genomics.ReferenceImport reference) {
+            referencesCount++;
+            events.add("reference:" + reference.uri());
+        }
+        @Override public void visitImage(DatasetWalker w,
+                                           global.thalion.ttio.MSImage image) {
+            sawImage = true;
+            events.add("image");
+        }
+        @Override public void visitRamanImage(DatasetWalker w,
+                                                global.thalion.ttio.RamanImage image) {
+            sawRaman = true;
+            events.add("raman");
+        }
+        @Override public void visitIRImage(DatasetWalker w,
+                                             global.thalion.ttio.IRImage image) {
+            sawIR = true;
+            events.add("ir");
+        }
+        @Override public void visitIdentificationsTable(DatasetWalker w,
+                                                          List<global.thalion.ttio.Identification> rows) {
+            identificationsCount = rows.size();
+            events.add("identifications");
+        }
+        @Override public void visitQuantificationsTable(DatasetWalker w,
+                                                          List<global.thalion.ttio.Quantification> rows) {
+            quantificationsCount = rows.size();
+            events.add("quantifications");
+        }
+    }
+
+    @Test
+    void walkerEmitsV011PreludeInSpecOrder(@TempDir Path dir) throws Exception {
+        // FixtureBuilder.buildEverything covers all v0.11 accessors
+        // EXCEPT Raman/IR images (which live only in the standalone
+        // _only fixtures — same as the Python fixture builder).
+        Path target = dir.resolve("everything.tio");
+        FixtureBuilder.buildEverything(target);
+        try (SpectralDataset ds = SpectralDataset.open(target.toString())) {
+            V011Recording v = new V011Recording();
+            new DatasetWalker().walk(ds, null, v);
+
+            // Filter the v0.11 prelude window: everything between the
+            // StreamHeader (events[0]) and the first DatasetHeader.
+            int firstDsh = -1;
+            for (int i = 0; i < v.events.size(); i++) {
+                if (v.events.get(i).startsWith("dsh:")) {
+                    firstDsh = i;
+                    break;
+                }
+            }
+            assertTrue(firstDsh > 0, "DatasetHeader must follow prelude");
+            List<String> prelude = v.events.subList(1, firstDsh);
+            // §5.4 ordering: ENCRYPTION → PROVENANCE → SUBJECTS →
+            // SAMPLES → REFERENCES (1 in everything) → IMAGE → IDS →
+            // QUANTS. Raman/IR are NOT in everything.
+            assertEquals(List.of(
+                "encryption",
+                "provenance",
+                "subjects",
+                "samples",
+                "reference:fixture-everything-v1",
+                "image",
+                "identifications",
+                "quantifications"
+            ), prelude, "v0.11 prelude order does not match §5.4");
+
+            // Spot-check payloads — ensures the visitor saw real data
+            // rather than placeholder calls.
+            assertEquals("aes-256-gcm", v.encryptionAlgorithm);
+            assertEquals(2, v.provenanceCount);
+            assertEquals(2, v.subjectsCount);
+            assertEquals(3, v.samplesCount);
+            assertEquals(1, v.referencesCount);
+            assertTrue(v.sawImage);
+            assertFalse(v.sawRaman);
+            assertFalse(v.sawIR);
+            assertEquals(2, v.identificationsCount);
+            assertEquals(2, v.quantificationsCount);
+        }
+    }
+
+    @Test
+    void walkerSkipsUnpopulatedPreludeEvents(@TempDir Path dir) throws Exception {
+        // Bare MS-only fixture: NONE of the v0.11 prelude visitor
+        // methods should be called.
+        try (SpectralDataset src = buildFixture(dir, "src.tio")) { /* close */ }
+        try (SpectralDataset ds = SpectralDataset.open(
+                dir.resolve("src.tio").toString())) {
+            V011Recording v = new V011Recording();
+            new DatasetWalker().walk(ds, null, v);
+            assertNull(v.encryptionAlgorithm);
+            assertEquals(0, v.provenanceCount);
+            assertEquals(0, v.subjectsCount);
+            assertEquals(0, v.samplesCount);
+            assertEquals(0, v.referencesCount);
+            assertFalse(v.sawImage);
+            assertFalse(v.sawRaman);
+            assertFalse(v.sawIR);
+            assertEquals(0, v.identificationsCount);
+            assertEquals(0, v.quantificationsCount);
+        }
+    }
+
+    @Test
+    void walkerEmitsRamanAndIrImageEvents(@TempDir Path dir) throws Exception {
+        Path ramanTarget = dir.resolve("raman.tio");
+        FixtureBuilder.buildRamanImageOnly(ramanTarget);
+        try (SpectralDataset ds = SpectralDataset.open(ramanTarget.toString())) {
+            V011Recording v = new V011Recording();
+            new DatasetWalker().walk(ds, null, v);
+            assertTrue(v.sawRaman, "Raman fixture must trigger visitRamanImage");
+            assertFalse(v.sawImage);
+            assertFalse(v.sawIR);
+        }
+
+        Path irTarget = dir.resolve("ir.tio");
+        FixtureBuilder.buildIrImageOnly(irTarget);
+        try (SpectralDataset ds = SpectralDataset.open(irTarget.toString())) {
+            V011Recording v = new V011Recording();
+            new DatasetWalker().walk(ds, null, v);
+            assertTrue(v.sawIR, "IR fixture must trigger visitIRImage");
+            assertFalse(v.sawImage);
+            assertFalse(v.sawRaman);
+        }
+    }
+
+    @Test
+    void walkerEmitsGenomicAccessUnits(@TempDir Path dir) throws Exception {
+        Path target = dir.resolve("genomic.tio");
+        FixtureBuilder.buildGenomicRunsOnly(target);
+        try (SpectralDataset ds = SpectralDataset.open(target.toString())) {
+            V011Recording v = new V011Recording();
+            new DatasetWalker().walk(ds, null, v);
+            // synthGenomicRun emits 4 reads.
+            assertEquals(4, v.aus.size(),
+                "genomic-only walk: one AccessUnit per read");
+            // Each genomic AU has the 5-channel layout
+            // (sequences, qualities, cigar, read_name, mate_chromosome).
+            for (AccessUnit au : v.aus) {
+                assertEquals(5, au.channels.size());
+                assertEquals("sequences", au.channels.get(0).name);
+                assertEquals("qualities", au.channels.get(1).name);
+                assertEquals("cigar", au.channels.get(2).name);
+                assertEquals("read_name", au.channels.get(3).name);
+                assertEquals("mate_chromosome", au.channels.get(4).name);
+                // GenomicRead wire class = 5.
+                assertEquals(5, au.spectrumClass);
+            }
+        }
+    }
 }
