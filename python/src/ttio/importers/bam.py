@@ -35,11 +35,16 @@ from typing import Iterable
 import numpy as np
 
 from ..enums import AcquisitionMode
+from ..io.progress import ProgressSinkLike, _fire
 from ..provenance import ProvenanceRecord
 from ..written_genomic_run import WrittenGenomicRun
 
 
-__all__ = ["BamReader", "SamtoolsNotFoundError"]
+__all__ = ["BamReader", "SamtoolsNotFoundError", "PROGRESS_INTERVAL_READS"]
+
+
+#: Mirror Java's ``BamReader.PROGRESS_INTERVAL_READS``.
+PROGRESS_INTERVAL_READS = 1000
 
 
 _INSTALL_HELP = (
@@ -126,6 +131,8 @@ class BamReader:
         name: str = "genomic_0001",
         region: str | None = None,
         sample_name: str | None = None,
+        *,
+        progress: ProgressSinkLike | None = None,
     ) -> WrittenGenomicRun:
         """Read the BAM/SAM and return a :class:`WrittenGenomicRun`.
 
@@ -299,6 +306,11 @@ class BamReader:
                 qual_chunks.append(qual_bytes)
                 running_offset += length
 
+                if len(read_names) % PROGRESS_INTERVAL_READS == 0:
+                    # samtools subprocess doesn't pre-count, so total
+                    # stays -1 until the final fire below.
+                    _fire(progress, len(read_names), -1)
+
             proc.wait()
             if proc.returncode != 0:
                 stderr_text = (proc.stderr.read()
@@ -324,6 +336,9 @@ class BamReader:
                     proc.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+
+        # Final progress fire: total is now known.
+        _fire(progress, len(read_names), len(read_names))
 
         # Apply sample_name override .
         effective_sample = sample_name if sample_name is not None else rg_sample

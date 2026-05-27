@@ -37,6 +37,7 @@ from pathlib import Path
 from typing import Iterator
 
 from ..enums import AcquisitionMode
+from ..io.progress import ProgressSinkLike, _fire
 from ..written_genomic_run import WrittenGenomicRun
 from .fasta import (
     FastaParseError,
@@ -45,7 +46,16 @@ from .fasta import (
 )
 
 
-__all__ = ["FastqReader", "FastqParseError", "detect_phred_offset"]
+__all__ = [
+    "FastqReader",
+    "FastqParseError",
+    "detect_phred_offset",
+    "PROGRESS_INTERVAL_READS",
+]
+
+
+#: Mirror Java's ``FastqReader.PROGRESS_INTERVAL_READS``.
+PROGRESS_INTERVAL_READS = 1000
 
 
 # Re-export under the FASTQ name so callers can catch a parser-
@@ -137,6 +147,7 @@ class FastqReader:
         platform: str = "",
         reference_uri: str = "",
         acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
+        progress: ProgressSinkLike | None = None,
     ) -> WrittenGenomicRun:
         """Parse the file and return a :class:`WrittenGenomicRun`.
 
@@ -161,19 +172,35 @@ class FastqReader:
         WrittenGenomicRun
             Unaligned run ready for ``SpectralDataset.write_minimal``.
         """
+        # Parse phase: stream records, firing progress every
+        # PROGRESS_INTERVAL_READS records with total=-1 (unknown).
+        triples: list[tuple[str, bytes, bytes]] = []
+        n = 0
+        for rec in self._iter_records_raw():
+            triples.append(rec)
+            n += 1
+            if n % PROGRESS_INTERVAL_READS == 0:
+                _fire(progress, n, -1)
+
         if self._forced is not None:
             offset = self._forced
-            triples = list(self._iter_with_offset(offset))
+            if offset == 64:
+                triples = [
+                    (name, seq, bytes((b - 31) & 0xFF for b in qual))
+                    for (name, seq, qual) in triples
+                ]
         else:
-            triples = list(self._iter_records_raw())
             qual_concat = b"".join(q for _, _, q in triples)
             offset = detect_phred_offset(qual_concat)
             if offset == 64:
                 triples = [
-                    (n, s, bytes((b - 31) & 0xFF for b in q))
-                    for (n, s, q) in triples
+                    (name, seq, bytes((b - 31) & 0xFF for b in qual))
+                    for (name, seq, qual) in triples
                 ]
         self._detected = offset
+
+        # Final fire: total is now known.
+        _fire(progress, n, n)
 
         def _iter():
             yield from triples
