@@ -553,14 +553,15 @@ def test_per_au_encrypted_genomic_upload_round_trip(client, tmp_path):
 
 @pytest.mark.xfail(
     reason=(
-        "TTI-O #139: walker/encoder emits AU sequences that reset per "
-        "dataset/accessor, but ingester enforces stream-wide monotonicity "
-        "via seenFirstAU && hdr.auSequence <= _lastAUSequence. Multi-"
-        "accessor v0.11 fixtures hit `AU sequence regressed: got 0, last "
-        "seen N` mid-upload. Single-MS-run fixtures don't trip it because "
-        "AUs come from one dataset. Fix needs either (a) per-dataset "
-        "ingester tracking, or (b) stream-wide AU counter in encoder + "
-        "wire-format minor bump. Test stays in-tree to canary the fix."
+        "TTI-O #140: with #139's per-dataset AU monotonicity fix in "
+        "place, upload now succeeds — but the daemon's download path "
+        "re-encodes via TTIODatasetWalker, which iterates MS/genomic "
+        "AUs only and never emits reference, subject, sample, "
+        "identifications, quantifications, image, or dataset_provenance "
+        "events. Round-tripped .tio drops every v0.11 accessor; the "
+        "test fails on the first one (references: 1 vs 0). Test stays "
+        "in-tree as canary; will reactivate once the daemon walker + "
+        "WS download visitor learn the v0.11 event vocabulary."
     ),
     strict=True,
 )

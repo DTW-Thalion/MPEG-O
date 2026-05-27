@@ -289,3 +289,71 @@ def test_first_au_at_sequence_zero_is_accepted():
     assert rec.failure is None
     assert len([p for p in rec.packets
                 if p.header.packet_type == int(PacketType.ACCESS_UNIT)]) == 2
+
+
+def test_au_sequence_resets_per_dataset(monkeypatch):
+    """v0.11 multi-dataset streams interleave AUs from independent
+    datasets (e.g. an MS_run followed by a genomic_run). Each
+    dataset's ``au_sequence`` indexes its own AUs from 0; the
+    ingester must scope monotonicity per ``dataset_id`` rather than
+    enforcing a single stream-wide counter. (#139)
+    """
+    flags = int(PacketFlag.HAS_CHECKSUM)
+    out = bytearray()
+    out += _craft_packet(
+        packet_type=PacketType.STREAM_HEADER,
+        flags=flags, dataset_id=0, au_sequence=0, payload=b"v0",
+    )
+    # Dataset 1: AU seq 0, 1, 2
+    for seq in (0, 1, 2):
+        out += _craft_packet(
+            packet_type=PacketType.ACCESS_UNIT,
+            flags=flags, dataset_id=1, au_sequence=seq,
+            payload=b"d1au" + bytes([seq]),
+        )
+    # Dataset 2: AU seq 0, 1 — pre-fix this hits "regressed: got 0,
+    # last seen 2"; post-fix the per-dataset tracker has no prior
+    # entry for dataset 2 and accepts seq=0 cleanly.
+    for seq in (0, 1):
+        out += _craft_packet(
+            packet_type=PacketType.ACCESS_UNIT,
+            flags=flags, dataset_id=2, au_sequence=seq,
+            payload=b"d2au" + bytes([seq]),
+        )
+
+    ingest, rec = _new_ingest()
+    ingest.feed(bytes(out))
+    assert rec.failure is None, (
+        f"multi-dataset AU sequence should be accepted; got: {rec.failure}"
+    )
+    aus = [p for p in rec.packets
+           if p.header.packet_type == int(PacketType.ACCESS_UNIT)]
+    assert len(aus) == 5
+    assert [(p.header.dataset_id, p.header.au_sequence) for p in aus] == [
+        (1, 0), (1, 1), (1, 2), (2, 0), (2, 1),
+    ]
+
+
+def test_au_sequence_regression_within_dataset_still_fails():
+    """Per-dataset tracking must still catch monotonicity violations
+    within a single dataset — the relaxation in #139 only loosens the
+    check across datasets, not within one."""
+    flags = int(PacketFlag.HAS_CHECKSUM)
+    out = bytearray()
+    out += _craft_packet(
+        packet_type=PacketType.STREAM_HEADER,
+        flags=flags, dataset_id=0, au_sequence=0, payload=b"v0",
+    )
+    out += _craft_packet(
+        packet_type=PacketType.ACCESS_UNIT,
+        flags=flags, dataset_id=7, au_sequence=4, payload=b"a",
+    )
+    # Backwards within dataset 7 — must still fail.
+    out += _craft_packet(
+        packet_type=PacketType.ACCESS_UNIT,
+        flags=flags, dataset_id=7, au_sequence=2, payload=b"b",
+    )
+
+    ingest, rec = _new_ingest()
+    with pytest.raises(TransportIngestError, match="regressed"):
+        ingest.feed(bytes(out))

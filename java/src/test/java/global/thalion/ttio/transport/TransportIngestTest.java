@@ -276,6 +276,65 @@ class TransportIngestTest {
         assertEquals(2L, auCount);
     }
 
+    /**
+     * #139: v0.11 multi-dataset streams interleave AUs from independent
+     * datasets (e.g. an MS_run followed by a genomic_run). Each
+     * dataset's auSequence starts at 0; the ingester must scope
+     * monotonicity per datasetId.
+     */
+    @Test
+    void auSequenceResetsPerDataset() throws IOException {
+        int flags = PacketHeader.FLAG_HAS_CHECKSUM;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(craftPacket(PacketType.STREAM_HEADER, flags, 0, 0,
+                              "v0".getBytes(StandardCharsets.UTF_8)));
+        // Dataset 1: AU seq 0, 1, 2
+        for (int seq = 0; seq < 3; seq++) {
+            out.write(craftPacket(PacketType.ACCESS_UNIT, flags, 1, seq,
+                                  new byte[] {(byte) seq}));
+        }
+        // Dataset 2: AU seq 0, 1 — pre-#139 this rejects with
+        // "regressed: got 0, last seen 2".
+        for (int seq = 0; seq < 2; seq++) {
+            out.write(craftPacket(PacketType.ACCESS_UNIT, flags, 2, seq,
+                                  new byte[] {(byte) seq}));
+        }
+
+        Recorder rec = new Recorder();
+        TransportIngest ingest = new TransportIngest(rec);
+        ingest.feed(out.toByteArray());
+        assertNull(rec.failure,
+            "multi-dataset AU sequence should be accepted");
+        long auCount = rec.packets.stream()
+            .filter(p -> p.header.packetType == PacketType.ACCESS_UNIT)
+            .count();
+        assertEquals(5L, auCount);
+    }
+
+    /**
+     * Per-dataset tracking must still catch monotonicity violations
+     * within a single dataset — #139 only loosens the check across
+     * datasets, not within one.
+     */
+    @Test
+    void auSequenceRegressionWithinDatasetStillFails() throws IOException {
+        int flags = PacketHeader.FLAG_HAS_CHECKSUM;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write(craftPacket(PacketType.STREAM_HEADER, flags, 0, 0,
+                              "v0".getBytes(StandardCharsets.UTF_8)));
+        out.write(craftPacket(PacketType.ACCESS_UNIT, flags, 7, 4,
+                              "a".getBytes(StandardCharsets.UTF_8)));
+        out.write(craftPacket(PacketType.ACCESS_UNIT, flags, 7, 2,
+                              "b".getBytes(StandardCharsets.UTF_8)));
+
+        Recorder rec = new Recorder();
+        TransportIngest ingest = new TransportIngest(rec);
+        TransportIngest.IngestException err = assertThrows(
+            TransportIngest.IngestException.class,
+            () -> ingest.feed(out.toByteArray()));
+        assertTrue(err.getMessage().contains("regressed"));
+    }
+
     @Test
     void emptyFeedIsNoOp() {
         Recorder rec = new Recorder();
