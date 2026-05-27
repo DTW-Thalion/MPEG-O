@@ -23,6 +23,9 @@
 
 NSString *const TTIOImzMLReaderErrorDomain = @"TTIOImzMLReaderErrorDomain";
 
+// Mirrors Java ImzMLReader.PROGRESS_INTERVAL_PIXELS (100).
+const NSUInteger TTIOImzMLReaderProgressIntervalPixels = 100;
+
 #pragma mark - Pixel spectrum
 
 @implementation TTIOImzMLPixelSpectrum
@@ -210,6 +213,14 @@ static NSString *normaliseUUID(NSString *value) {
                                          ibdPath:(nullable NSString *)ibdPath
                                            error:(NSError **)error
 {
+    return [self readFromImzMLPath:imzmlPath ibdPath:ibdPath progress:nil error:error];
+}
+
++ (nullable TTIOImzMLImport *)readFromImzMLPath:(NSString *)imzmlPath
+                                         ibdPath:(nullable NSString *)ibdPath
+                                        progress:(nullable TTIOProgressBlock)progress
+                                           error:(NSError **)error
+{
     NSFileManager *fm = [NSFileManager defaultManager];
     if (![fm fileExistsAtPath:imzmlPath]) {
         if (error) *error = [self errorWithCode:TTIOImzMLReaderErrorMissingFile
@@ -285,7 +296,10 @@ static NSString *normaliseUUID(NSString *value) {
 
     NSError *materialiseError = nil;
     NSArray<TTIOImzMLPixelSpectrum *> *pixels =
-        [reader materialiseSpectraWithIBD:ibdData ibdPath:resolvedIbd error:&materialiseError];
+        [reader materialiseSpectraWithIBD:ibdData
+                                   ibdPath:resolvedIbd
+                                  progress:progress
+                                     error:&materialiseError];
     if (!pixels) {
         if (error) *error = materialiseError;
         return nil;
@@ -413,12 +427,14 @@ static NSString *normaliseUUID(NSString *value) {
 
 - (NSArray<TTIOImzMLPixelSpectrum *> *)materialiseSpectraWithIBD:(NSData *)ibdData
                                                           ibdPath:(NSString *)ibdPath
+                                                         progress:(TTIOProgressBlock)progress
                                                             error:(NSError **)error
 {
     NSMutableArray<TTIOImzMLPixelSpectrum *> *pixels = [NSMutableArray array];
     NSData *sharedMz = nil;
     BOOL continuous = [_state.mode isEqualToString:@"continuous"];
     NSUInteger ibdSize = ibdData.length;
+    NSUInteger total = _state.stubs.count;
 
     for (NSDictionary *stub in _state.stubs) {
         NSData *mzData = [self readArrayFromIBD:ibdData
@@ -458,7 +474,17 @@ static NSString *normaliseUUID(NSString *value) {
                                                                                mz:effectiveMz
                                                                         intensity:intData];
         [pixels addObject:pixel];
+
+        // Per-N progress fire INSIDE the materialisation loop. imzML
+        // total pixel count IS known (from <spectrum> stubs), so emit
+        // a real total rather than -1.
+        if (progress &&
+            (pixels.count % TTIOImzMLReaderProgressIntervalPixels) == 0) {
+            progress((int64_t)pixels.count, (int64_t)total);
+        }
     }
+    // Final fire.
+    if (progress) progress((int64_t)pixels.count, (int64_t)total);
     return pixels;
 }
 

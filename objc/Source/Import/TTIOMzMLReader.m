@@ -37,7 +37,12 @@
 
 NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
 
+// Mirrors Java MzMLReader.PROGRESS_INTERVAL_SPECTRA (100).
+const NSUInteger TTIOMzMLReaderProgressIntervalSpectra = 100;
+
 @interface TTIOMzMLReader () <NSXMLParserDelegate>
+@property (nonatomic, copy) TTIOProgressBlock progressBlock;
+@property (nonatomic) NSUInteger progressSpectraSeen;
 @end
 
 @implementation TTIOMzMLReader
@@ -117,7 +122,14 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
 
 + (TTIOSpectralDataset *)readFromFilePath:(NSString *)path error:(NSError **)error
 {
-    TTIOMzMLReader *r = [self parseFilePath:path error:error];
+    return [self readFromFilePath:path progress:nil error:error];
+}
+
++ (TTIOSpectralDataset *)readFromFilePath:(NSString *)path
+                                 progress:(TTIOProgressBlock)progress
+                                    error:(NSError **)error
+{
+    TTIOMzMLReader *r = [self parseFilePath:path progress:progress error:error];
     return r.dataset;
 }
 
@@ -142,6 +154,13 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
 
 + (instancetype)parseFilePath:(NSString *)path error:(NSError **)error
 {
+    return [self parseFilePath:path progress:nil error:error];
+}
+
++ (instancetype)parseFilePath:(NSString *)path
+                     progress:(TTIOProgressBlock)progress
+                        error:(NSError **)error
+{
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (!data) {
         if (error) {
@@ -152,10 +171,17 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
         }
         return nil;
     }
-    return [self parseData:data error:error];
+    return [self parseData:data progress:progress error:error];
 }
 
 + (instancetype)parseData:(NSData *)data error:(NSError **)error
+{
+    return [self parseData:data progress:nil error:error];
+}
+
++ (instancetype)parseData:(NSData *)data
+                 progress:(TTIOProgressBlock)progress
+                    error:(NSError **)error
 {
     if (!data) {
         if (error) {
@@ -166,6 +192,7 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
         return nil;
     }
     TTIOMzMLReader *r = [[self alloc] init];
+    r.progressBlock = progress ?: TTIOProgressDiscard();
     if (![r parseData:data error:error]) {
         return nil;
     }
@@ -186,6 +213,7 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
         _currentGroupId = nil;
         _inRefGroup = NO;
         _binText = [NSMutableString string];
+        _progressBlock = TTIOProgressDiscard();
     }
     return self;
 }
@@ -219,6 +247,11 @@ NSString *const TTIOMzMLReaderErrorDomain = @"TTIOMzMLReaderErrorDomain";
         }
         return NO;
     }
+
+    // Final fire: parse complete, spectrum count is now known.
+    // (_runSpectra is cleared by finishRun once the dataset is built,
+    // so use the parser-lifetime counter.)
+    _progressBlock((int64_t)_progressSpectraSeen, (int64_t)_progressSpectraSeen);
     return YES;
 }
 
@@ -674,6 +707,15 @@ didStartElement:(NSString *)elementName
     }
     [_runSpectra addObject:spec];
     [self resetSpectrumState];
+
+    // Per-N progress fire. Total unknown mid-parse (mzML's
+    // spectrumList count attribute is unreliable). _progressSpectraSeen
+    // is a parser-lifetime counter so we can fire a final (n, n) even
+    // after finishRun clears _runSpectra.
+    _progressSpectraSeen++;
+    if ((_progressSpectraSeen % TTIOMzMLReaderProgressIntervalSpectra) == 0) {
+        _progressBlock((int64_t)_progressSpectraSeen, (int64_t)-1);
+    }
 }
 
 - (void)finishChromatogram

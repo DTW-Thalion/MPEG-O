@@ -7,12 +7,18 @@
 #define TTIO_MZTAB_READER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOFeature;
 @class TTIOIdentification;
 @class TTIOQuantification;
 
 NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for {@link TTIOProgressBlock} callbacks
+ *  during mzTab row processing. Mirrors Java's
+ *  {@code MzTabReader.PROGRESS_INTERVAL_ROWS}. */
+FOUNDATION_EXPORT const NSUInteger TTIOMzTabReaderProgressIntervalRows;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -99,6 +105,15 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TTIOMzTabReader : NSObject
 
 + (nullable TTIOMzTabImport *)readFromFilePath:(NSString *)path
+                                          error:(NSError **)error;
+
+/** Progress-aware overload. Fires {@code progress(rowsDone, -1)}
+ *  every {@link TTIOMzTabReaderProgressIntervalRows} parsed rows
+ *  (PSM + PRT + SML combined) and a final
+ *  {@code progress(total, total)} once the file is fully parsed.
+ *  Pass nil for {@code progress} to skip all callbacks. */
++ (nullable TTIOMzTabImport *)readFromFilePath:(NSString *)path
+                                       progress:(nullable TTIOProgressBlock)progress
                                           error:(NSError **)error;
 
 @end
