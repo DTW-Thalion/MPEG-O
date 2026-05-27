@@ -17,9 +17,11 @@ Walker emits AU sequences that reset per dataset (`for j, spectrum in enumerate(
 
 Per-dataset tracking in the ingester. `PacketHeader.datasetId` is already on the wire, so no format change — each dataset's monotonicity is checked against its own last-seen sequence (`Map<datasetId, lastSeq>` / `dict[int, int]` / `NSMutableDictionary`). Within-dataset regression still fails loudly.
 
-### Known issue — daemon download drops every v0.11 accessor (#140)
+### Fixed — daemon download emits v0.11 accessors (#140)
 
-With #139's fix in place, multi-accessor `.tio` uploads now ingest cleanly through the workbench daemon — but the download path re-encodes via `TTIODatasetWalker`, which only iterates MS/genomic AUs. Reference, subject, sample, identifications, quantifications, image, and `dataset_provenance` events are never emitted, so a round-tripped `.tio` is stripped of every v0.11 accessor. `test_v011_full_accessor_round_trip` stays in-tree under `xfail-strict` pending the walker + WS download visitor extension. Pairs with #139 to make the full v0.11 round-trip work end-to-end.
+Pairs with #139 to close the full v0.11 round-trip end-to-end. `TTIODatasetWalker` previously walked only MS access units; the workbench daemon's download path re-encodes through that walker, so every reference, subject, sample, identifications, quantifications, image, encryption-algorithm, and `dataset_provenance` row was silently dropped on the way back to the client. Genomic AU emission was also gated off behind an "intentionally not yet wired" comment.
+
+Walker now emits the v0.11 §5.4 prelude (encryption → provenance → subjects → samples → references → image → identifications → quantifications) between the StreamHeader and the first DatasetHeader, and iterates each genomic run's reads as five-channel AccessUnits with the GenomicRead suffix (chromosome / position / mappingQuality / flags / matePosition / templateLength). `TTIOTransportEventVisitor` gained the matching optional `walker:visit*:` methods. The workbench daemon's `TTIOWBDownloadWriterVisitor` + `TTIOWBDownloadComboVisitor` implement each new event by dispatching to the corresponding `TTIOTransportWriter` method, with structured logging on per-event failure so a single bad accessor doesn't abort the whole download. `test_v011_full_accessor_round_trip` is now an active gate (xfail-strict removed).
 
 ## [1.5.0] - 2026-05-27
 
