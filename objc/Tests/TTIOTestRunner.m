@@ -56,6 +56,7 @@ extern void testNdDatasetCrossBackend(void);
 extern void testTransportCodec(void);
 extern void testTransportWriterSink(void);
 extern void testDatasetWalker(void);
+extern void testDatasetWalkerV011Prelude(void);
 extern void testTransportIngest(void);
 extern void testTransportClient(void);
 extern void testAcquisitionSimulator(void);
@@ -366,6 +367,10 @@ int main(int argc, const char *argv[])
         START_SET("S3: dataset walker + visitor protocol")
             testDatasetWalker();
         END_SET("S3: dataset walker + visitor protocol")
+
+        START_SET("#140: dataset walker emits v0.11 prelude + genomic AUs")
+            testDatasetWalkerV011Prelude();
+        END_SET("#140: dataset walker emits v0.11 prelude + genomic AUs")
 
         START_SET("M67.5: transport ingest (incremental parser)")
             testTransportIngest();
