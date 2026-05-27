@@ -47,9 +47,14 @@ from typing import Iterator
 
 from ..feature import Feature
 from ..identification import Identification
+from ..io.progress import ProgressSinkLike, _fire
 from ..provenance import ProvenanceRecord
 from ..quantification import Quantification
 from ..spectral_dataset import SpectralDataset
+
+
+#: Mirror Java's ``MzTabReader.PROGRESS_INTERVAL_ROWS``.
+PROGRESS_INTERVAL_ROWS = 500
 
 
 class MzTabParseError(ValueError):
@@ -167,13 +172,24 @@ class MzTabImport:
         )
 
 
-def read(path: str | Path) -> MzTabImport:
-    """Parse an mzTab file and return an :class:`MzTabImport`."""
+def read(
+    path: str | Path,
+    *,
+    progress: ProgressSinkLike | None = None,
+) -> MzTabImport:
+    """Parse an mzTab file and return an :class:`MzTabImport`.
+
+    ``progress`` fires every :data:`PROGRESS_INTERVAL_ROWS` data rows
+    (PRT/PEP/PSM/SML/SMF/SME) with ``total = -1`` and once more at the
+    end with ``(n_rows, n_rows)``.
+    """
     p = Path(path)
     if not p.is_file():
         raise FileNotFoundError(f"mzTab file not found: {p}")
 
     state = _ParserState()
+    rows_processed = 0
+    last_emitted = 0
     with p.open("r", encoding="utf-8") as fh:
         for raw_line in fh:
             line = raw_line.rstrip("\n").rstrip("\r")
@@ -189,29 +205,41 @@ def read(path: str | Path) -> MzTabImport:
                 state.prt_header = cols
             elif prefix == "PRT" and state.prt_header is not None:
                 _handle_prt(state, cols)
+                rows_processed += 1
             elif prefix == "PSH":
                 state.psm_header = cols
             elif prefix == "PSM" and state.psm_header is not None:
                 _handle_psm(state, cols)
+                rows_processed += 1
             elif prefix == "SMH":
                 state.sml_header = cols
             elif prefix == "SML" and state.sml_header is not None:
                 _handle_sml(state, cols)
+                rows_processed += 1
             elif prefix == "PEH":
                 state.pep_header = cols
             elif prefix == "PEP" and state.pep_header is not None:
                 _handle_pep(state, cols)
+                rows_processed += 1
             elif prefix == "SFH":
                 state.smf_header = cols
             elif prefix == "SMF" and state.smf_header is not None:
                 _handle_smf(state, cols)
+                rows_processed += 1
             elif prefix == "SEH":
                 state.sme_header = cols
             elif prefix == "SME" and state.sme_header is not None:
                 _handle_sme(state, cols)
+                rows_processed += 1
+
+            if rows_processed >= last_emitted + PROGRESS_INTERVAL_ROWS:
+                _fire(progress, rows_processed, -1)
+                last_emitted = rows_processed
 
     if not state.version:
         raise MzTabParseError(f"{p}: missing MTD mzTab-version line")
+
+    _fire(progress, rows_processed, rows_processed)
 
     prov = _build_provenance(state, p)
     return MzTabImport(

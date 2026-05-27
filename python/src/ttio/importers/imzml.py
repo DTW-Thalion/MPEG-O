@@ -44,8 +44,13 @@ from xml.etree.ElementTree import iterparse
 
 import numpy as np
 
+from ..io.progress import ProgressSinkLike, _fire
 from ..provenance import ProvenanceRecord
 from ..spectral_dataset import SpectralDataset, WrittenRun
+
+
+#: Mirror Java's ``ImzMLReader.PROGRESS_INTERVAL_SPECTRA``.
+PROGRESS_INTERVAL_SPECTRA = 100
 
 
 class ImzMLParseError(ValueError):
@@ -223,7 +228,12 @@ class _SpectrumStub:
     int_precision: str = "64"
 
 
-def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImport:
+def read(
+    imzml_path: str | Path,
+    ibd_path: str | Path | None = None,
+    *,
+    progress: "ProgressSinkLike | None" = None,
+) -> ImzMLImport:
     """Parse an imzML + .ibd pair and return an :class:`ImzMLImport`.
 
     Parameters
@@ -234,6 +244,12 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
         Optional explicit path to the binary file. When ``None``, the
         sibling ``<stem>.ibd`` is used. UUID matching is still
         enforced regardless of how the .ibd was located.
+    progress
+        Optional :class:`~ttio.io.progress.ProgressSink` (or bare
+        callable). Fires every :data:`PROGRESS_INTERVAL_SPECTRA` pixels
+        during .ibd materialisation with ``total = -1`` and once more
+        at the end with ``(n_pixels, n_pixels)``. The hook is inside
+        the materialise loop, not at the boundary.
     """
     imzml = Path(imzml_path)
     if not imzml.is_file():
@@ -374,7 +390,9 @@ def read(imzml_path: str | Path, ibd_path: str | Path | None = None) -> ImzMLImp
         )
 
     ibd_size = ibd.stat().st_size
-    pixels = _materialise_spectra(spectra_stubs, ibd, ibd_size, mode=state_mode)
+    pixels = _materialise_spectra(
+        spectra_stubs, ibd, ibd_size, mode=state_mode, progress=progress,
+    )
 
     return ImzMLImport(
         mode=state_mode,
@@ -411,13 +429,18 @@ def _materialise_spectra(
     ibd_size: int,
     *,
     mode: str,
+    progress: ProgressSinkLike | None = None,
 ) -> list[ImzMLPixelSpectrum]:
-    """Read every pixel's mz + intensity arrays from the .ibd."""
+    """Read every pixel's mz + intensity arrays from the .ibd.
+
+    Fires ``progress`` every :data:`PROGRESS_INTERVAL_SPECTRA` pixels
+    with ``total = -1`` and once more at the end with the true total.
+    """
     pixels: list[ImzMLPixelSpectrum] = []
     shared_mz: np.ndarray | None = None
 
     with ibd.open("rb") as fh:
-        for stub in stubs:
+        for idx, stub in enumerate(stubs, 1):
             mz_array = _read_external_array(
                 fh, stub.mz_offset, stub.mz_length, stub.mz_precision,
                 ibd_size, ibd, label="m/z",
@@ -441,6 +464,10 @@ def _materialise_spectra(
                 x=stub.x, y=stub.y, z=stub.z,
                 mz=effective_mz, intensity=int_array,
             ))
+            if idx % PROGRESS_INTERVAL_SPECTRA == 0:
+                _fire(progress, idx, -1)
+    # Final fire — total is now known.
+    _fire(progress, len(pixels), len(pixels))
     return pixels
 
 

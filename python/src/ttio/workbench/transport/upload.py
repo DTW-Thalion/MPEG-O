@@ -23,6 +23,8 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
+from pathlib import Path
 from typing import AsyncIterator, Callable, Iterable, Optional
 
 import websockets
@@ -259,6 +261,48 @@ class UploadClient:
             offset = end
             _report_progress(progress, offset, total)
             await self._drain_acks(non_blocking=True)
+
+        return await self._wait_for_done()
+
+    async def upload_path(
+        self,
+        path: str | os.PathLike[str],
+        *,
+        resume: Optional[ResumeState] = None,
+        progress: Optional[Callable[[int, int], None]] = None,
+    ) -> UploadResult:
+        """Upload a ``.tis`` file directly from disk in chunkSize-bounded
+        slices. Peak memory is O(``chunk_size``) -- the file is **never**
+        fully buffered into RAM via :meth:`Path.read_bytes`.
+
+        Mirrors Java's ``WorkbenchTransportClient.upload(Path)``.
+
+        Args:
+            path: filesystem path to the ``.tis`` file.
+            resume: see :meth:`upload_bytes`.
+            progress: see :meth:`upload_bytes` -- fires
+                ``(bytes_sent, bytes_total)`` per chunk plus a final
+                ``(total, total)``. ``total`` is the file size from
+                :meth:`Path.stat`.
+
+        Returns:
+            :class:`UploadResult` on success.
+        """
+        p = Path(path)
+        total = p.stat().st_size
+        await self._handshake(resume)
+
+        offset = 0
+        _report_progress(progress, 0, total)
+        with p.open("rb") as fh:
+            while True:
+                chunk = fh.read(self._chunk_size)
+                if not chunk:
+                    break
+                await self._ws.send(chunk)
+                offset += len(chunk)
+                _report_progress(progress, offset, total)
+                await self._drain_acks(non_blocking=True)
 
         return await self._wait_for_done()
 

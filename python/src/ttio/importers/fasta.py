@@ -28,10 +28,15 @@ import numpy as np
 
 from ..enums import AcquisitionMode
 from ..genomic.reference_import import ReferenceImport
+from ..io.progress import ProgressSinkLike, _fire
 from ..written_genomic_run import WrittenGenomicRun
 
 
-__all__ = ["FastaReader", "FastaParseError"]
+__all__ = ["FastaReader", "FastaParseError", "PROGRESS_INTERVAL_READS"]
+
+
+#: Mirror Java's ``FastaReader.PROGRESS_INTERVAL_READS``.
+PROGRESS_INTERVAL_READS = 1000
 
 
 # SAM unmapped sentinel values for unaligned reads imported from FASTA.
@@ -167,6 +172,7 @@ class FastaReader:
         platform: str = "",
         reference_uri: str = "",
         acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
+        progress: ProgressSinkLike | None = None,
     ) -> WrittenGenomicRun:
         """Parse the file as a set of unaligned reads.
 
@@ -203,6 +209,7 @@ class FastaReader:
             platform=platform,
             reference_uri=reference_uri,
             acquisition_mode=acquisition_mode,
+            progress=progress,
         )
 
     def _iter_record_pairs(
@@ -241,9 +248,14 @@ def _build_unaligned_run(
     platform: str,
     reference_uri: str,
     acquisition_mode: AcquisitionMode,
+    progress: ProgressSinkLike | None = None,
 ) -> WrittenGenomicRun:
     """Build a :class:`WrittenGenomicRun` from a (name, seq, qual)
     iterator. Shared between FASTA and FASTQ unaligned imports.
+
+    ``progress`` fires every :data:`PROGRESS_INTERVAL_READS` records
+    with ``total = -1`` (unknown) and once more at the end with
+    ``(n_reads, n_reads)``.
     """
     read_names: list[str] = []
     seq_chunks: list[bytes] = []
@@ -265,10 +277,14 @@ def _build_unaligned_run(
         qual_chunks.append(qual)
         running += len(seq)
         n_reads += 1
+        if n_reads % PROGRESS_INTERVAL_READS == 0:
+            _fire(progress, n_reads, -1)
     if n_reads == 0:
         raise FastaParseError(
             "input contains zero records; cannot build a genomic run"
         )
+    # Final fire: total now known.
+    _fire(progress, n_reads, n_reads)
 
     chromosomes = [_UNMAPPED_CHROM] * n_reads
     cigars = [_UNMAPPED_CIGAR] * n_reads

@@ -20,17 +20,30 @@ from xml.etree.ElementTree import iterparse
 
 import numpy as np
 
+from ..io.progress import ProgressSinkLike, _fire
 from . import cv_term_mapper as cv
 from ._base64_zlib import decode as decode_base64
 from .import_result import ImportResult, ImportedSpectrum
+
+
+#: Mirror Java's ``NmrMLReader.PROGRESS_INTERVAL_SPECTRA`` — single-spectrum format.
+PROGRESS_INTERVAL_SPECTRA = 1
 
 
 class NmrMLParseError(ValueError):
     pass
 
 
-def read(path: str | Path) -> ImportResult:
-    """Parse an nmrML file and return an :class:`ImportResult`."""
+def read(
+    path: str | Path,
+    *,
+    progress: ProgressSinkLike | None = None,
+) -> ImportResult:
+    """Parse an nmrML file and return an :class:`ImportResult`.
+
+    Single-spectrum format; ``progress`` fires once with ``(n, n)`` at
+    completion (no mid-parse fires).
+    """
     path = Path(path)
     state = _State()
 
@@ -44,6 +57,9 @@ def read(path: str | Path) -> ImportResult:
 
     # A file with only FID data and no processed spectrum1D is valid; the
     # caller can still inspect ``nucleus_type`` and the empty spectra list.
+    n = len(state.spectra)
+    _fire(progress, n, n)
+
     return ImportResult(
         title="nmrml_import",
         isa_investigation_id="",

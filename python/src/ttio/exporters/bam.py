@@ -37,11 +37,16 @@ from pathlib import Path
 from typing import Iterable
 
 from ..importers.bam import _check_samtools
+from ..io.progress import ProgressSinkLike, _fire
 from ..provenance import ProvenanceRecord
 from ..written_genomic_run import WrittenGenomicRun
 
 
-__all__ = ["BamWriter"]
+__all__ = ["BamWriter", "PROGRESS_INTERVAL_READS"]
+
+
+#: Mirror Java's ``BamWriter.PROGRESS_INTERVAL_READS``.
+PROGRESS_INTERVAL_READS = 1000
 
 
 # Default @SQ length when the writer doesn't know the true reference
@@ -86,6 +91,8 @@ class BamWriter:
         run: WrittenGenomicRun,
         provenance_records: list[ProvenanceRecord] | None = None,
         sort: bool = True,
+        *,
+        progress: "ProgressSinkLike | None" = None,
     ) -> None:
         """Serialise ``run`` to the configured output path.
 
@@ -114,7 +121,7 @@ class BamWriter:
             provenance_records = list(run.provenance_records)
 
         sam_text = self._build_sam_text(
-            run, provenance_records, sort=sort,
+            run, provenance_records, sort=sort, progress=progress,
         )
 
         self._invoke_samtools(sam_text, sort=sort)
@@ -129,11 +136,22 @@ class BamWriter:
         provenance_records: list[ProvenanceRecord],
         *,
         sort: bool,
+        progress: ProgressSinkLike | None = None,
     ) -> str:
-        """Build the full SAM text (header + alignment lines)."""
+        """Build the full SAM text (header + alignment lines).
+
+        Fires ``progress`` every :data:`PROGRESS_INTERVAL_READS` reads
+        with ``total = len(run.read_names)`` and once more at the end
+        with ``(total, total)``.
+        """
         parts: list[str] = []
         parts.append(self._build_header(run, provenance_records, sort=sort))
-        parts.extend(self._iter_alignment_lines(run))
+        total = len(run.read_names)
+        for idx, line in enumerate(self._iter_alignment_lines(run), 1):
+            parts.append(line)
+            if idx % PROGRESS_INTERVAL_READS == 0:
+                _fire(progress, idx, total)
+        _fire(progress, total, total)
         # Trailing newline keeps samtools happy on some platforms.
         return "".join(parts)
 

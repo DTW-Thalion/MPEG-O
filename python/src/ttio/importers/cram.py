@@ -38,6 +38,10 @@ from .bam import BamReader, _check_samtools
 __all__ = ["CramReader"]
 
 
+from ..io.progress import ProgressSinkLike, _fire
+from .bam import PROGRESS_INTERVAL_READS  # noqa: F401  re-export-friendly
+
+
 class CramReader(BamReader):
     """Read a CRAM file via the ``samtools view`` subprocess.
 
@@ -78,6 +82,8 @@ class CramReader(BamReader):
         name: str = "genomic_0001",
         region: str | None = None,
         sample_name: str | None = None,
+        *,
+        progress: ProgressSinkLike | None = None,
     ) -> WrittenGenomicRun:
         """Read the CRAM and return a :class:`WrittenGenomicRun`.
 
@@ -224,6 +230,9 @@ class CramReader(BamReader):
                 qual_chunks.append(qual_bytes)
                 running_offset += length
 
+                if len(read_names) % PROGRESS_INTERVAL_READS == 0:
+                    _fire(progress, len(read_names), -1)
+
             proc.wait()
             if proc.returncode != 0:
                 stderr_text = (proc.stderr.read()
@@ -249,6 +258,8 @@ class CramReader(BamReader):
                     proc.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     proc.kill()
+
+        _fire(progress, len(read_names), len(read_names))
 
         effective_sample = sample_name if sample_name is not None else rg_sample
         reference_uri = sq_names[0] if sq_names else ""
