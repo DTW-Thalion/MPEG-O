@@ -84,8 +84,11 @@ jobs:
       # libarrow-dev for TTIOArrowIpcBridge.mm (v0.11 transport).
       # Ubuntu noble's default repos don't ship it; install via Apache's
       # apt-source dance. Reuses the same composite action the main
-      # objc-build-test + cross-compat jobs use.
-      - uses: ./.github/actions/setup-libarrow
+      # objc-build-test + cross-compat jobs use. Path is TTI-O/.github/...
+      # because this workflow checks out TTI-O into a `TTI-O/` subdir
+      # (line 45 above) — composite-action paths are workspace-relative,
+      # not checkout-relative.
+      - uses: ./TTI-O/.github/actions/setup-libarrow
 
       - name: libobjc2 cache
         id: cache-libobjc2
