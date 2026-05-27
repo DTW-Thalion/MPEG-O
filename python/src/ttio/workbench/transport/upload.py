@@ -186,13 +186,44 @@ class UploadClient:
 
     @property
     def last_acked_au_sequence(self) -> int:
+        """Highest ``au_sequence`` the server has acknowledged.
+
+        Starts at ``-1`` before the handshake completes; advances as
+        the server emits per-AU ack frames during the upload. Useful
+        for progress reporting and as a resume hint.
+        """
         return self._last_ack
 
     @property
     def resume_handle(self) -> Optional[str]:
+        """Server-issued ``stg-...`` resume handle.
+
+        ``None`` until the handshake ack has been received, then a
+        non-empty string identifying the staged container on the
+        server. Stash it in a :class:`ResumeState` to resume a
+        subsequent attempt if this upload is interrupted.
+        """
         return self._resume_handle
 
     async def __aenter__(self) -> "UploadClient":
+        """Open the WebSocket to the ``/transport`` endpoint.
+
+        Connects with the ``ttio-transport`` subprotocol negotiated
+        and the configured ``open_timeout``. The handshake JSON is
+        sent later by :meth:`upload_bytes` / :meth:`upload_path` /
+        :meth:`upload_iter` so the WS is open but the upload session
+        is not yet initiated on return.
+
+        Returns
+        -------
+        UploadClient
+            ``self``, ready for an ``upload_*`` call.
+
+        Raises
+        ------
+        HandshakeError
+            If the WS connect fails (timeout, refused, TLS error).
+        """
         url = f"{self._scheme}://{self._host}:{self._port}/transport"
         try:
             self._ws = await websockets.connect(
@@ -208,6 +239,13 @@ class UploadClient:
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """Close the WebSocket if still open.
+
+        Idempotent; safe to call after the connection has already
+        been closed by :meth:`_wait_for_done` or by a server-initiated
+        close. Suppresses close errors so an exception in the body of
+        the ``async with`` is not masked.
+        """
         if self._ws is not None:
             try:
                 await self._ws.close()

@@ -49,14 +49,26 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  */
 @protocol TTIOStorageDataset <NSObject>
 
+/** Leaf name of the dataset within its parent group. */
 - (NSString *)name;
-- (TTIOPrecision)precision;  ///< meaningful only for primitive datasets
-- (NSArray<NSNumber *> *)shape;   ///< full shape; 1-D returns @[@N]
-- (NSArray<NSNumber *> *)chunks;  ///< chunk shape, or nil for contiguous
-- (NSUInteger)length;             ///< convenience: shape[0]
-- (NSArray<TTIOCompoundField *> *)compoundFields;  ///< nil for primitives
 
-/** Full read.
+/** Element precision of a primitive dataset. Meaningful only when ``compoundFields`` returns ``nil``. */
+- (TTIOPrecision)precision;
+
+/** Full shape as an array of boxed integers. 1-D datasets return ``@[@N]``. */
+- (NSArray<NSNumber *> *)shape;
+
+/** Chunk shape as an array of boxed integers, or ``nil`` for a contiguously stored dataset. */
+- (NSArray<NSNumber *> *)chunks;
+
+/** Convenience accessor returning ``shape[0]`` (the count along the first axis). */
+- (NSUInteger)length;
+
+/** Compound field schema in declaration order, or ``nil`` for a primitive dataset. */
+- (NSArray<TTIOCompoundField *> *)compoundFields;
+
+/**
+ * Read the entire dataset.
  *
  *  Return type varies by backend:
  *    - Primitive datasets: <code>NSData</code> of
@@ -68,16 +80,41 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  *      providers, so callers do not need to branch on provider type.
  *      The universal helper <code>-readRows:</code> returns the same
  *      value and is provided for cross-language parity with Python
- *      and Java. */
+ *      and Java.
+ *
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Backend-specific value as documented above, or ``nil`` on failure.
+ */
 - (id)readAll:(NSError **)error;
 
-/** Hyperslab read. */
+/**
+ * Read a contiguous slice of the dataset.
+ *
+ * @param offset  Element index to start reading from (0-based).
+ * @param count   Number of elements (primitive) or rows (compound)
+ *                to return.
+ * @param error   On failure, populated with an ``NSError``. May be
+ *                ``NULL``.
+ *
+ * @return Slice in the same shape as ``-readAll:`` (NSData for
+ *         primitive, NSArray of NSDictionary for compound), or
+ *         ``nil`` on failure.
+ */
 - (id)readSliceAtOffset:(NSUInteger)offset
                   count:(NSUInteger)count
                   error:(NSError **)error;
 
-/** Write. For primitives, ``data`` is NSData of length * sizeof(element);
- *  for compound, an NSArray&lt;NSDictionary *&gt;. */
+/**
+ * Overwrite the dataset.
+ *
+ * @param data   For primitives, ``NSData`` of
+ *               ``length * sizeof(element)``. For compound, an
+ *               ``NSArray<NSDictionary *>`` matching the field
+ *               schema.
+ * @param error  On failure, populated with an ``NSError``. May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeAll:(id)data error:(NSError **)error;
 
 /** Backend-agnostic compound read. Returns
@@ -111,15 +148,52 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  */
 - (NSData *)readCanonicalBytes:(NSError **)error;
 
+/**
+ * Return ``YES`` when an attribute of that name exists on the dataset.
+ *
+ * @param name Attribute name to probe.
+ * @return ``YES`` if present, ``NO`` otherwise.
+ */
 - (BOOL)hasAttributeNamed:(NSString *)name;
+
+/**
+ * Return the value of a named attribute.
+ *
+ * @param name  Attribute name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Boxed attribute value, or ``nil`` on failure / missing key.
+ */
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error;
+
+/**
+ * Create or overwrite a named attribute.
+ *
+ * @param value  Scalar, NSData, NSArray, NSDictionary, or NSString
+ *               accepted by the backend.
+ * @param name   Attribute name.
+ * @param error  On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)setAttributeValue:(id)value
                   forName:(NSString *)name
                     error:(NSError **)error;
+
+/**
+ * Remove an attribute by name.
+ *
+ * Idempotent: missing names succeed silently.
+ *
+ * @param name  Attribute name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error;
+
+/** Return the list of attribute names defined on the dataset, in backend iteration order. */
 - (NSArray<NSString *> *)attributeNames;
 
 @optional
+/** Release the dataset's backend resources eagerly. Optional; not all providers maintain per-dataset state. */
 - (void)close;
 
 @end
@@ -147,18 +221,85 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  */
 @protocol TTIOStorageGroup <NSObject>
 
+/** Leaf name of the group within its parent, or ``"/"`` for the root group. */
 - (NSString *)name;
 
 // Children
+
+/** Return immediate child names (groups and datasets) in backend iteration order. */
 - (NSArray<NSString *> *)childNames;
+
+/**
+ * Return ``YES`` when a child of that name exists.
+ *
+ * @param name Immediate child name (not a slash-separated path).
+ */
 - (BOOL)hasChildNamed:(NSString *)name;
+
+/**
+ * Open an existing child group.
+ *
+ * @param name  Immediate child name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Child group adapter, or ``nil`` when the child is missing
+ *         or is a dataset.
+ */
 - (id<TTIOStorageGroup>)openGroupNamed:(NSString *)name error:(NSError **)error;
+
+/**
+ * Create a new child group.
+ *
+ * @param name  Immediate child name. Must not already exist.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Newly created group adapter, or ``nil`` on failure.
+ */
 - (id<TTIOStorageGroup>)createGroupNamed:(NSString *)name error:(NSError **)error;
+
+/**
+ * Remove a child group or dataset.
+ *
+ * Idempotent: missing names succeed silently.
+ *
+ * @param name  Immediate child name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)deleteChildNamed:(NSString *)name error:(NSError **)error;
 
 // Datasets
+
+/**
+ * Open an existing child as a dataset.
+ *
+ * @param name  Immediate child name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Dataset adapter, or ``nil`` when the child is missing or
+ *         is a group.
+ */
 - (id<TTIOStorageDataset>)openDatasetNamed:(NSString *)name error:(NSError **)error;
 
+/**
+ * Create a 1-D primitive dataset.
+ *
+ * @param name              Immediate child name. Must not already
+ *                          exist.
+ * @param precision         Element type.
+ * @param length            Number of elements to allocate.
+ * @param chunkSize         Chunk size along the axis. ``0`` disables
+ *                          chunking (and therefore compression).
+ *                          Honored only by providers whose
+ *                          ``-supportsChunking`` returns ``YES``.
+ * @param compression       Compression algorithm. Honored only by
+ *                          providers whose ``-supportsCompression``
+ *                          returns ``YES``.
+ * @param compressionLevel  Codec-specific level (e.g. zlib 1..9).
+ *                          Ignored by codecs that don't take a
+ *                          level.
+ * @param error             On failure, populated with an
+ *                          ``NSError``. May be ``NULL``.
+ *
+ * @return Newly created dataset adapter, or ``nil`` on failure.
+ */
 - (id<TTIOStorageDataset>)createDatasetNamed:(NSString *)name
                                     precision:(TTIOPrecision)precision
                                        length:(NSUInteger)length
@@ -167,8 +308,25 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
                              compressionLevel:(int)compressionLevel
                                         error:(NSError **)error;
 
-/** Create an N-D dataset. Returns nil + ``TTIOErrorDatasetCreate`` when
- *  the provider does not support the requested rank. */
+/**
+ * Create an N-D primitive dataset.
+ *
+ * Used for image cubes and 2-D NMR cubes.
+ *
+ * @param name              Immediate child name. Must not already exist.
+ * @param precision         Element type.
+ * @param shape             Per-dimension lengths.
+ * @param chunks            Per-dimension chunk shape, or ``nil`` for
+ *                          contiguous storage.
+ * @param compression       Compression algorithm.
+ * @param compressionLevel  Codec-specific level.
+ * @param error             On failure, populated with an
+ *                          ``NSError``. May be ``NULL``.
+ *
+ * @return Newly created dataset adapter, or ``nil`` with
+ *         ``TTIOErrorDatasetCreate`` when the provider does not
+ *         support the requested rank.
+ */
 - (id<TTIOStorageDataset>)createDatasetNDNamed:(NSString *)name
                                       precision:(TTIOPrecision)precision
                                           shape:(NSArray<NSNumber *> *)shape
@@ -177,21 +335,61 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
                                compressionLevel:(int)compressionLevel
                                           error:(NSError **)error;
 
+/**
+ * Create a compound-record dataset.
+ *
+ * @param name   Immediate child name. Must not already exist.
+ * @param fields Field schema in declaration order.
+ * @param count  Number of records (rows) to allocate.
+ * @param error  On failure, populated with an ``NSError``. May be ``NULL``.
+ *
+ * @return Newly created dataset adapter, or ``nil`` on failure.
+ */
 - (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
                                                 fields:(NSArray<TTIOCompoundField *> *)fields
                                                  count:(NSUInteger)count
                                                  error:(NSError **)error;
 
 // Attributes
+
+/** Return ``YES`` when an attribute of that name exists on the group. */
 - (BOOL)hasAttributeNamed:(NSString *)name;
+
+/**
+ * Return the value of a named attribute on the group.
+ *
+ * @param name  Attribute name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Boxed attribute value, or ``nil`` on failure / missing key.
+ */
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error;
+
+/**
+ * Create or overwrite a named attribute on the group.
+ *
+ * @param value  Scalar, NSData, NSArray, NSDictionary, or NSString.
+ * @param name   Attribute name.
+ * @param error  On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)setAttributeValue:(id)value
                   forName:(NSString *)name
                     error:(NSError **)error;
+
+/**
+ * Remove an attribute on the group by name. Idempotent.
+ *
+ * @param name  Attribute name.
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error;
+
+/** Return the list of attribute names defined on the group. */
 - (NSArray<NSString *> *)attributeNames;
 
 @optional
+/** Release the group's backend resources eagerly. Optional; not all providers maintain per-group state. */
 - (void)close;
 
 @end
@@ -221,13 +419,43 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
  */
 @protocol TTIOStorageProvider <NSObject>
 
-- (NSString *)providerName;           ///< "hdf5", "memory", …
-- (BOOL)supportsURL:(NSString *)url;  ///< used for scheme-based routing
+/** Stable provider identifier string (``"hdf5"``, ``"memory"``, ``"sqlite"``, ``"zarr"``). */
+- (NSString *)providerName;
+
+/**
+ * Return ``YES`` when this provider can open ``url``.
+ *
+ * Used by ``TTIOProviderRegistry`` for scheme-based routing.
+ *
+ * @param url URL or filesystem path to probe.
+ */
+- (BOOL)supportsURL:(NSString *)url;
+
+/**
+ * Open the backing store at ``url`` in ``mode``.
+ *
+ * @param url    Filesystem path or scheme-qualified URL.
+ * @param mode   Read / read-write / create / append mode.
+ * @param error  On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)openURL:(NSString *)url
            mode:(TTIOStorageOpenMode)mode
           error:(NSError **)error;
+
+/**
+ * Return the root group of the open backing store.
+ *
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return Root group adapter, or ``nil`` when the provider is not
+ *         open.
+ */
 - (id<TTIOStorageGroup>)rootGroupWithError:(NSError **)error;
+
+/** Return ``YES`` when the provider currently has an open backing store. */
 - (BOOL)isOpen;
+
+/** Close the backing store. Idempotent; safe to call from cleanup paths. */
 - (void)close;
 
 /** Escape hatch returning the underlying native handle

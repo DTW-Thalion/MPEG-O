@@ -29,19 +29,40 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface TTIOTransportClient : NSObject
 
-/** ``url`` must be a ``ws://`` URL (``wss://`` is not yet supported). */
+/**
+ * Construct a client bound to a transport-server endpoint.
+ *
+ * The URL is stored verbatim; the WebSocket is opened on each call
+ * to -fetchPacketsWithFilters:timeout:error: or -streamToFilePath:...
+ *
+ * @param url Endpoint URL. Must be a ``ws://`` scheme (``wss://``
+ *            is not yet supported by this client).
+ * @return Initialised client instance.
+ */
 - (instancetype)initWithURL:(NSString *)url;
 
 /**
- * Connect, send the JSON query built from ``filters``, and collect
- * every packet through EndOfStream. Returns the packet list, or nil
- * on connect failure / protocol violation.
+ * Connect, send a filtered query, and collect every packet through EndOfStream.
  *
- * ``filters`` is an NSDictionary with string keys and NSNumber /
- * NSString values matching ``docs/transport-spec.md`` §7. Pass nil
- * or an empty dictionary for a full stream.
+ * Opens a fresh WebSocket to the configured URL, sends a JSON query
+ * frame built from ``filters``, and drains the binary packet stream
+ * into an array of TTIOTransportPacketRecord values. The call
+ * blocks until the server emits ``EndOfStream`` or the connection
+ * closes.
  *
- * ``timeoutSeconds <= 0`` means no timeout.
+ * @param filters         Optional filter dictionary with string
+ *                        keys and ``NSNumber`` / ``NSString`` values
+ *                        per ``docs/transport-spec.md`` §7. Pass
+ *                        ``nil`` or an empty dictionary for the
+ *                        full stream.
+ * @param timeoutSeconds  Connect / receive timeout. ``<= 0`` means
+ *                        no timeout (block indefinitely).
+ * @param error           On failure, populated with an ``NSError``
+ *                        describing the cause. May be ``NULL``.
+ *
+ * @return Ordered packet array on success, or ``nil`` on connect
+ *         failure or protocol violation (and ``*error`` is set if
+ *         non-NULL).
  */
 - (nullable NSArray<TTIOTransportPacketRecord *> *)
     fetchPacketsWithFilters:(nullable NSDictionary<NSString *, id> *)filters
