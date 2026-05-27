@@ -11,6 +11,14 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed — multi-accessor AU sequence ingest (#139)
+
+Walker emits AU sequences that reset per dataset (`for j, spectrum in enumerate(run)`), but TransportIngest in all three SDKs enforced a single stream-wide monotonicity counter. v0.11 multi-accessor `.tio` uploads (the first to exercise more than one dataset over the workbench daemon) hit `AU sequence regressed: got 0, last seen N` mid-upload on the second accessor.
+
+Per-dataset tracking in the ingester. `PacketHeader.datasetId` is already on the wire, so no format change — each dataset's monotonicity is checked against its own last-seen sequence (`Map<datasetId, lastSeq>` / `dict[int, int]` / `NSMutableDictionary`). Within-dataset regression still fails loudly.
+
+Removed the `xfail-strict` marker from `test_v011_full_accessor_round_trip` (added on PR #181) — the test now actively gates the fix on workbench-live CI.
+
 ## [1.5.0] - 2026-05-27
 
 Major SDK release. Three themes:

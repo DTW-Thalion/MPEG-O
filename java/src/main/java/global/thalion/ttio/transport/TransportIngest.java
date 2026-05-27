@@ -93,8 +93,17 @@ public final class TransportIngest {
     private final Listener listener;
     private byte[] buffer = new byte[0];
     private int bufferLen = 0;
-    private long lastAuSequence = 0L;
-    private boolean seenFirstAU = false;
+    /**
+     * #139: AU sequences are per-dataset, not stream-wide. Each
+     * dataset's AUs start at 0 (walker iterates {@code for j,
+     * spectrum in enumerate(run)}); enforcing a single stream-wide
+     * counter rejected legitimate multi-accessor v0.11 streams. The
+     * map tracks the last-seen sequence per {@code datasetId}; an
+     * absent entry means "first AU in this dataset — any value
+     * goes."
+     */
+    private final java.util.Map<Integer, Long> lastAuSequenceByDataset =
+        new java.util.HashMap<>();
     private boolean sawStreamHeader = false;
     private long packetCount = 0L;
     private boolean isFinished = false;
@@ -220,19 +229,18 @@ public final class TransportIngest {
             }
 
             if (header.packetType == PacketType.ACCESS_UNIT) {
-                // Use ``seenFirstAU`` rather than ``packetCount > 0`` so
-                // the first AccessUnit can have any ``auSequence`` value
-                // (including 0). The earlier check rejected writer-
-                // produced streams whose first AU had ``auSequence=0``
-                // because ``lastAuSequence`` was also 0 at init.
-                if (seenFirstAU
-                        && header.auSequence <= lastAuSequence) {
-                    throw fail("AU sequence regressed: got "
-                        + header.auSequence
-                        + ", last seen " + lastAuSequence);
+                // #139: monotonicity is per-dataset. An absent map
+                // entry encodes "first AU in this dataset" — any
+                // value goes, including 0 (the walker's natural
+                // starting point).
+                int dsid = header.datasetId;
+                Long last = lastAuSequenceByDataset.get(dsid);
+                if (last != null && header.auSequence <= last) {
+                    throw fail("AU sequence regressed in dataset "
+                        + dsid + ": got " + header.auSequence
+                        + ", last seen " + last);
                 }
-                lastAuSequence = header.auSequence;
-                seenFirstAU = true;
+                lastAuSequenceByDataset.put(dsid, header.auSequence);
             }
 
             if (header.packetType == PacketType.STREAM_HEADER) {

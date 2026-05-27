@@ -551,19 +551,6 @@ def test_per_au_encrypted_genomic_upload_round_trip(client, tmp_path):
 
 # ---------------------------------------------------- v0.11 full-accessor round-trip
 
-@pytest.mark.xfail(
-    reason=(
-        "TTI-O #139: walker/encoder emits AU sequences that reset per "
-        "dataset/accessor, but ingester enforces stream-wide monotonicity "
-        "via seenFirstAU && hdr.auSequence <= _lastAUSequence. Multi-"
-        "accessor v0.11 fixtures hit `AU sequence regressed: got 0, last "
-        "seen N` mid-upload. Single-MS-run fixtures don't trip it because "
-        "AUs come from one dataset. Fix needs either (a) per-dataset "
-        "ingester tracking, or (b) stream-wide AU counter in encoder + "
-        "wire-format minor bump. Test stays in-tree to canary the fix."
-    ),
-    strict=True,
-)
 def test_v011_full_accessor_round_trip(client, tmp_path):
     """Upload a .tio populated with every v0.11 first-class accessor
     via the live workbench daemon and verify the server-side

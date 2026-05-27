@@ -83,8 +83,7 @@ class TransportIngest:
         "_on_end_of_stream",
         "_on_error",
         "_buffer",
-        "_last_au_sequence",
-        "_seen_first_au",
+        "_last_au_sequence_by_dataset",
         "_saw_stream_header",
         "_packet_count",
         "_is_finished",
@@ -101,8 +100,13 @@ class TransportIngest:
         self._on_end_of_stream = on_end_of_stream
         self._on_error = on_error
         self._buffer = bytearray()
-        self._last_au_sequence = 0
-        self._seen_first_au = False
+        # #139: AU sequences are per-dataset, not stream-wide. Each
+        # dataset's AUs start at 0 (walker.py: ``for j, spectrum in
+        # enumerate(run)``); enforcing a single stream-wide counter
+        # rejected legitimate multi-accessor v0.11 streams. Track
+        # per ``dataset_id``; a dataset's first AU is "any value
+        # goes" (matched by ``dict.get -> None``).
+        self._last_au_sequence_by_dataset: dict[int, int] = {}
         self._saw_stream_header = False
         self._packet_count = 0
         self._is_finished = False
@@ -197,20 +201,21 @@ class TransportIngest:
                     )
 
             if header.packet_type == int(PacketType.ACCESS_UNIT):
-                # Use ``_seen_first_au`` rather than ``_packet_count > 0``
-                # so the first AccessUnit can have any ``au_sequence``
-                # value (including 0). The earlier check rejected
-                # writer-produced streams whose first AU had
-                # ``au_sequence=0`` because ``_last_au_sequence`` was also
-                # 0 at init.
-                if (self._seen_first_au
-                        and header.au_sequence <= self._last_au_sequence):
+                # #139: monotonicity is per-dataset. ``dict.get -> None``
+                # encodes "first AU in this dataset" — any value goes,
+                # including 0 (the walker's natural starting point).
+                last = self._last_au_sequence_by_dataset.get(
+                    header.dataset_id
+                )
+                if last is not None and header.au_sequence <= last:
                     raise self._fail(
-                        f"AU sequence regressed: got {header.au_sequence}, "
-                        f"last seen {self._last_au_sequence}"
+                        f"AU sequence regressed in dataset "
+                        f"{header.dataset_id}: got {header.au_sequence}, "
+                        f"last seen {last}"
                     )
-                self._last_au_sequence = header.au_sequence
-                self._seen_first_au = True
+                self._last_au_sequence_by_dataset[header.dataset_id] = (
+                    header.au_sequence
+                )
 
             if header.packet_type == int(PacketType.STREAM_HEADER):
                 self._saw_stream_header = True
