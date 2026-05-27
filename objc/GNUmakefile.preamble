@@ -9,9 +9,27 @@ HDF5_PREFIX ?= /usr/local
 # ---------------------------------------------------------------------------
 # Toolchain note
 # ---------------------------------------------------------------------------
-# TTI-O requires clang — gcc's gobjc lacks -fobjc-arc. Use the build.sh
-# wrapper, or invoke make with `CC=clang OBJC=clang` on the command line.
+# TTI-O requires clang — gcc's gobjc lacks -fobjc-arc, and g++ doesn't
+# understand -fobjc-runtime / -fblocks for our .mm Objective-C++ bridges
+# (TTIOArrowIpcBridge.mm). Use the build.sh wrapper, or invoke make with
+# `CC=clang OBJC=clang CXX=clang++ OBJCXX=clang++` on the command line.
 #
+# These defaults pin clang for every compiler GNUstep-make drives so callers
+# that forget to set them (e.g. the workbench-server live-smoke workflow,
+# which invokes our build via a parent script that hadn't yet learned about
+# the v0.11 .mm bridge) still get a working compile.
+#
+# `override` forces the assignment even when the caller pre-set CXX=g++ in
+# the environment (which is exactly what the workbench-live workflow does
+# via a parent script — `?=` was a no-op in that case). If you genuinely
+# need a non-clang toolchain, comment these out or use `make -e` to let
+# environment win, but TTI-O is not portable to gcc's gobjc / g++ here.
+override CC     := clang
+override OBJC   := clang
+override CXX    := clang++
+override OBJCXX := clang++
+override OBJCC  := clang
+
 # ---------------------------------------------------------------------------
 # Objective-C runtime auto-detection
 # ---------------------------------------------------------------------------
