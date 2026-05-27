@@ -114,7 +114,14 @@ public final class WorkbenchClient implements AutoCloseable {
             .build();
     }
 
-    /** Convenience: one-shot upload via the transport client. */
+    /** Convenience: one-shot upload via the transport client.
+     *
+     *  @deprecated since 1.5.0. Prefer
+     *      {@link #upload(String, String, Path, TransferProgress)}
+     *      which streams from disk — peak heap O({@code chunkSize})
+     *      instead of O({@code payload.length}).
+     */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public WorkbenchTransportClient.UploadResult upload(
             String project, String containerUri, byte[] payload) {
         return transportClient().upload(project, containerUri, payload);
@@ -122,12 +129,34 @@ public final class WorkbenchClient implements AutoCloseable {
 
     /** Convenience: one-shot upload reporting byte progress.
      *  {@code progress} receives {@code (bytesSent, payload.length)}
-     *  per chunk — a determinate fraction. */
+     *  per chunk — a determinate fraction.
+     *
+     *  @deprecated since 1.5.0. See
+     *      {@link #upload(String, String, byte[])}.
+     */
+    @Deprecated(since = "1.5.0", forRemoval = false)
     public WorkbenchTransportClient.UploadResult upload(
             String project, String containerUri, byte[] payload,
             TransferProgress progress) {
         return transportClient().upload(project, containerUri, payload,
                                           null, progress);
+    }
+
+    /** Convenience: one-shot streaming upload from a file on disk.
+     *
+     *  <p>Reads the payload in {@code chunkSize}-bounded slices via
+     *  {@link WorkbenchTransportClient#upload(String, String,
+     *  java.nio.file.Path, global.thalion.ttio.workbench.transport
+     *  .ResumeState, TransferProgress)} — peak heap during the
+     *  upload is O({@code chunkSize}), independent of file size.
+     *  Prefer this entry point over the {@code byte[]} overload for
+     *  multi-MB payloads.</p>
+     */
+    public WorkbenchTransportClient.UploadResult upload(
+            String project, String containerUri, Path payloadFile,
+            TransferProgress progress) throws IOException {
+        return transportClient().upload(project, containerUri,
+                                          payloadFile, null, progress);
     }
 
     /** Convenience: one-shot download via the transport client. */
