@@ -47,11 +47,18 @@ class FormatSpec:
 
 def _adapt_import_result(reader_module: str):
     """Adapter for importers exposing ``read(path) -> X`` where X has
-    ``to_ttio(output)`` (mzML / mzTab / imzML / nmrML / Thermo / Waters)."""
+    ``to_ttio(output)`` (mzML / mzTab / imzML / nmrML / Thermo / Waters).
+
+    A caller-supplied ``progress`` kwarg is threaded through to the
+    underlying reader when present.
+    """
     def _adapter(inputs, output, **opts):
         import importlib
         mod = importlib.import_module(f"ttio.importers.{reader_module}")
-        result = mod.read(inputs[0])
+        read_kwargs = {}
+        if "progress" in opts and opts["progress"] is not None:
+            read_kwargs["progress"] = opts["progress"]
+        result = mod.read(inputs[0], **read_kwargs)
         result.to_ttio(output)
     return _adapter
 
@@ -61,7 +68,10 @@ def _adapt_imzml(inputs, output, **opts):
     ibd = opts.get("ibd")
     if ibd is None and len(inputs) > 1:
         ibd = inputs[1]
-    imzml.read(inputs[0], ibd_path=ibd).to_ttio(output)
+    read_kwargs = {}
+    if "progress" in opts and opts["progress"] is not None:
+        read_kwargs["progress"] = opts["progress"]
+    imzml.read(inputs[0], ibd_path=ibd, **read_kwargs).to_ttio(output)
 
 
 def _adapt_bruker(inputs, output, **opts):
@@ -74,7 +84,10 @@ def _adapt_jcamp(inputs, output, **opts):
 
     from ttio.importers import jcamp_dx
     from ttio.spectral_dataset import SpectralDataset
-    spectrum = jcamp_dx.read_spectrum(inputs[0])
+    read_kwargs = {}
+    if "progress" in opts and opts["progress"] is not None:
+        read_kwargs["progress"] = opts["progress"]
+    spectrum = jcamp_dx.read_spectrum(inputs[0], **read_kwargs)
     run = jcamp_dx.build_written_run(spectrum)
     SpectralDataset.write_minimal(
         output, title=Path(inputs[0]).stem, isa_investigation_id="",
@@ -94,8 +107,11 @@ def _adapt_genomic(reader_attr: str):
             "CramReader": cram_mod.CramReader,
         }[reader_attr]
         name = opts.get("name", "genomic_0001")
+        read_kwargs = {}
+        if "progress" in opts and opts["progress"] is not None:
+            read_kwargs["progress"] = opts["progress"]
         run = reader_cls(inputs[0]).to_genomic_run(
-            name=name, sample_name=opts.get("sample"))
+            name=name, sample_name=opts.get("sample"), **read_kwargs)
         SpectralDataset.write_minimal(
             output, title="", isa_investigation_id="",
             runs={}, genomic_runs={name: run})
