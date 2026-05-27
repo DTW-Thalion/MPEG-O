@@ -547,3 +547,78 @@ def test_per_au_encrypted_genomic_upload_round_trip(client, tmp_path):
     np.testing.assert_array_equal(rt["sequences"], sequences)
     np.testing.assert_array_equal(rt["qualities"], qualities)
     assert is_per_au_encrypted(str(out))
+
+
+# ---------------------------------------------------- v0.11 full-accessor round-trip
+
+def test_v011_full_accessor_round_trip(client, tmp_path):
+    """Upload a .tio populated with every v0.11 first-class accessor
+    via the live workbench daemon and verify the server-side
+    materialised .tio (after re-download) preserves every accessor's
+    content.
+
+    Accessors exercised (from ``_v0_11_fixtures.build_everything``):
+    references (3 contigs), MS_runs (1 run x 5 spectra), genomic_runs
+    (1 run x 4 reads), MSImage (3x3x4 continuous), identifications
+    (2 rows), quantifications (2 rows), dataset_provenance
+    (2 records), subjects (2 rows), samples (3 rows),
+    @encryption_algorithm = "aes-256-gcm".
+
+    Guards task #138: future libTTIO regressions on the daemon's
+    v0.11 transport-reader code path would slip past the unit + cross-
+    language matrices (those exercise the SDK in isolation). This test
+    drives the end-to-end ingest path through tti-workbench-server.
+
+    Mirrors ``test_tis_upload_download_round_trip`` -- encodes the
+    fixture .tio to a .tis with ``transport_encode_cli``, uploads via
+    ``client.upload_bytes``, downloads via ``client.download_bytes``,
+    decodes back to .tio with ``transport_decode_cli``, and compares
+    accessor-by-accessor using the shared ``ACCESSOR_SPECS`` matrix.
+    """
+    import sys
+    from pathlib import Path
+
+    # The v0.11 fixture/spec helpers live in python/tests/ (one level up
+    # from this integration package); add that on sys.path so the late
+    # imports below resolve cleanly.
+    test_root = Path(__file__).resolve().parent.parent
+    if str(test_root) not in sys.path:
+        sys.path.insert(0, str(test_root))
+
+    from ttio import SpectralDataset
+    from ttio.tools import transport_decode_cli, transport_encode_cli
+
+    from _v0_11_accessor_spec import ACCESSOR_SPECS  # noqa: E402
+    from _v0_11_fixtures import build_everything  # noqa: E402
+
+    src = build_everything(tmp_path / "v011_everything.tio")
+
+    # Encode the source .tio to a valid .tis transport stream — daemon
+    # validates uploads as transport streams (see _live_tis_bytes /
+    # test_tis_upload_download_round_trip above).
+    src_tis = tmp_path / "v011_everything.tis"
+    assert transport_encode_cli.main([str(src), str(src_tis)]) == 0
+
+    uri = f"uri:tio:{PROJECT}-v011-{uuid.uuid4().hex[:8]}"
+    result = asyncio.run(client.upload_bytes(
+        project=PROJECT, container_uri=uri, data=src_tis.read_bytes()))
+
+    dl = asyncio.run(client.download_bytes(container_uri=result.container_uri))
+    assert dl.payload, "download returned no bytes"
+
+    # Daemon re-encodes a fresh .tis on download; decode to .tio for
+    # accessor-level comparison.
+    rt_tis = tmp_path / "v011_rt.tis"
+    rt_tis.write_bytes(dl.payload)
+    rt_tio = tmp_path / "v011_rt.tio"
+    assert transport_decode_cli.main([str(rt_tis), str(rt_tio)]) == 0
+
+    # Compare each accessor present in the fixture. Genomic-run
+    # comparison requires libttio_rans; if the runner can't decode the
+    # genomic transport packet, the .tio open or genomic_runs accessor
+    # itself will fail rather than this loop -- mirrors the conformance
+    # matrix's behaviour.
+    with SpectralDataset.open(str(src)) as a, \
+            SpectralDataset.open(str(rt_tio)) as b:
+        for spec in ACCESSOR_SPECS:
+            spec.assert_content_equals(a, b)
