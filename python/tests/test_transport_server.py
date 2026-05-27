@@ -211,3 +211,70 @@ class TestConcurrency:
             assert len(packets) > 0
         finally:
             await server.stop()
+
+
+# ────────────────────────────────────────────────────────────────────
+# v0.11 full-accessor round-trip
+#
+# Exercises the Python transport server end-to-end against a dataset
+# populated with every required v0.11 first-class accessor (references,
+# MS_runs, genomic_runs, MSImage, identifications, quantifications,
+# dataset_provenance, subjects, samples, encryption_algorithm). Mirrors
+# what the workbench-live test does for the ObjC daemon path — but for
+# Python's reference server (`ttio.transport.serving`).
+#
+# Validates the #141 walker fix at the level the unit tests in
+# test_dataset_walker.py can't reach: actual WS server emission +
+# `TransportClient` materialization back into a .tio.
+# ────────────────────────────────────────────────────────────────────
+
+class TestV011RoundTrip:
+
+    @pytest.fixture
+    def v011_everything(self, tmp_path):
+        """Build a v0.11-rich .tio via the shared fixture builder."""
+        # Late-import so the module-level `pytest.importorskip("websockets")`
+        # still gates: if websockets isn't installed we never reach this.
+        import sys
+        # _v0_11_fixtures lives in tests/, one dir above tests/integration/
+        # and at the same level as this file — make sure the test dir is
+        # on sys.path so the import resolves under both `pytest` and
+        # `python -m pytest`.
+        test_dir = str(Path(__file__).resolve().parent)
+        if test_dir not in sys.path:
+            sys.path.insert(0, test_dir)
+        from _v0_11_fixtures import build_everything
+        return build_everything(tmp_path / "v011_everything.tio")
+
+    @pytest.mark.asyncio
+    async def test_v011_full_accessor_round_trip(
+        self, v011_everything, tmp_path
+    ):
+        """Serve a v0.11-rich .tio, download via TransportClient,
+        and compare every accessor through ACCESSOR_SPECS.
+
+        Pre-#141 the Python walker emitted only MS dataset headers +
+        access units, so the round-tripped .tio would have lost every
+        v0.11 accessor — same shape as the now-fixed ObjC daemon bug
+        (#140).
+        """
+        import sys
+        test_dir = str(Path(__file__).resolve().parent)
+        if test_dir not in sys.path:
+            sys.path.insert(0, test_dir)
+        from _v0_11_accessor_spec import ACCESSOR_SPECS
+
+        rt_path = tmp_path / "v011_rt.tio"
+        async with serving(
+            str(v011_everything), host="127.0.0.1", port=0,
+        ) as srv:
+            client = TransportClient(f"ws://127.0.0.1:{srv.port}")
+            await client.stream_to_file(rt_path)
+
+        # Each AccessorSpec carries its own assert_content_equals
+        # comparator; iterate and let any first-mismatching accessor
+        # raise.
+        with SpectralDataset.open(str(v011_everything)) as a, \
+                SpectralDataset.open(str(rt_path)) as b:
+            for spec in ACCESSOR_SPECS:
+                spec.assert_content_equals(a, b)

@@ -11,6 +11,14 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed — Python transport server frames v0.11 prelude packets individually (#144)
+
+`_emit_stream` invoked `TransportWriter.write_reference_group` / `write_image` / `write_subject_metadata` / etc. into a single `BytesIO`, then sent the concatenated bytes as one WebSocket binary frame. Each of those writer methods emits **multiple** packets (e.g. `REFERENCE_GROUP_HEADER + N × REFERENCE_CHROMOSOME + END_OF_REFERENCE_GROUP`). `TransportClient._split_packet` only parses one packet per frame, so every chromosome / pixel / subject row after the first packet of each multi-packet emitter was silently dropped on download.
+
+Fix: split the writer's buffer back into per-packet slices on the server side and send each as its own binary frame.
+
+Added `tests/test_transport_server.py::TestV011RoundTrip` — builds `v0_11_fixtures.build_everything`, serves via `serving()`, downloads via `TransportClient.stream_to_file`, asserts every accessor round-trips byte-equivalent through `ACCESSOR_SPECS`. Mirrors the workbench-live coverage for the Python reference server path.
+
 ## [1.6.0] - 2026-05-27
 
 Patch release closing the v0.11 transport round-trip end-to-end through the workbench daemon. v1.5.0 shipped the v0.11 spec + per-SDK encode/decode parity; v1.6.0 wires the missing pieces so a multi-accessor `.tio` uploaded to the daemon and downloaded back is byte-equivalent across every populated accessor.
