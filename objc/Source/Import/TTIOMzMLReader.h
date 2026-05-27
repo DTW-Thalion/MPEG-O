@@ -9,9 +9,19 @@
 #define TTIO_MZML_READER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOSpectralDataset;
 @class TTIOChromatogram;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for {@link TTIOProgressBlock} callbacks
+ *  during mzML parsing. Mirrors Java's
+ *  {@code MzMLReader.PROGRESS_INTERVAL_SPECTRA}. */
+FOUNDATION_EXPORT const NSUInteger TTIOMzMLReaderProgressIntervalSpectra;
+
+NS_ASSUME_NONNULL_END
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -70,11 +80,30 @@
 + (TTIOSpectralDataset *)readFromData:(NSData *)data
                                 error:(NSError **)error;
 
+/** Progress-aware overload of {@link readFromFilePath:error:}. Fires
+ *  {@code progress(specsDone, -1)} every
+ *  {@link TTIOMzMLReaderProgressIntervalSpectra} spectra during the
+ *  parse phase and a final {@code progress(total, total)} once the
+ *  spectrum count is known. Pass nil for {@code progress} to skip
+ *  callbacks. */
++ (nullable TTIOSpectralDataset *)readFromFilePath:(NSString *)path
+                                          progress:(nullable TTIOProgressBlock)progress
+                                             error:(NSError **)error;
+
 /** Instance-returning variants that also expose chromatograms and
  *  parsed provenance separately, since v0.1 TTIOSpectralDataset has
  *  no chromatogram slot. Returns nil on failure. */
 + (instancetype)parseFilePath:(NSString *)path error:(NSError **)error;
 + (instancetype)parseData:(NSData *)data error:(NSError **)error;
+
+/** Progress-aware overloads of {@link parseFilePath:error:} +
+ *  {@link parseData:error:}. */
++ (nullable instancetype)parseFilePath:(NSString *)path
+                              progress:(nullable TTIOProgressBlock)progress
+                                 error:(NSError **)error;
++ (nullable instancetype)parseData:(NSData *)data
+                          progress:(nullable TTIOProgressBlock)progress
+                             error:(NSError **)error;
 
 @property (readonly, strong) TTIOSpectralDataset                *dataset;
 @property (readonly, copy)   NSArray<TTIOChromatogram *>        *chromatograms;

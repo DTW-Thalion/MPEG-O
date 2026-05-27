@@ -5,6 +5,7 @@
 #import "Protocols/TTIOEncryptable.h"
 #import "Protocols/TTIORun.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOAcquisitionRun;
 @class TTIOWrittenRun;
@@ -191,6 +192,28 @@
            identifications:(nullable NSArray *)identifications
            quantifications:(nullable NSArray *)quantifications
          provenanceRecords:(nullable NSArray *)provenance
+                     error:(NSError * _Nullable * _Nullable)error;
+
+/**
+ * Progress-aware overload of the canonical
+ * <code>+writeMinimalToPath:...mixedRuns:</code> write API.
+ *
+ * <p>Emits a baseline {@code (0, total)} fire + one {@code (idx, total)}
+ * fire per non-empty section in §5.4 order
+ * (encryption / provenance / subjects / samples / references /
+ * image / identifications / quantifications / runs). Empty sections
+ * are skipped. Pass {@code nil} for {@code progress} to skip
+ * callbacks. Mirrors Java + Python.</p>
+ */
++ (BOOL)writeMinimalToPath:(NSString *)path
+                     title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                 mixedRuns:(NSDictionary<NSString *, id> *)mixedRuns
+               genomicRuns:(nullable NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+           identifications:(nullable NSArray *)identifications
+           quantifications:(nullable NSArray *)quantifications
+         provenanceRecords:(nullable NSArray *)provenance
+                  progress:(nullable TTIOProgressBlock)progress
                      error:(NSError * _Nullable * _Nullable)error;
 
 /**

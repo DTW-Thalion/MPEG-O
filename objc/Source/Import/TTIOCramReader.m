@@ -140,7 +140,21 @@ static NSDictionary<NSString *, NSString *> *cramParseHeaderFields(NSString *lin
                                                sampleName:(nullable NSString *)sampleName
                                                     error:(NSError **)error
 {
+    return [self toGenomicRunWithName:name
+                                region:region
+                            sampleName:sampleName
+                              progress:nil
+                                 error:error];
+}
+
+- (nullable TTIOWrittenGenomicRun *)toGenomicRunWithName:(nullable NSString *)name
+                                                   region:(nullable NSString *)region
+                                               sampleName:(nullable NSString *)sampleName
+                                                 progress:(nullable TTIOProgressBlock)progress
+                                                    error:(NSError **)error
+{
     (void)name;
+    if (progress == nil) progress = TTIOProgressDiscard();
 
     NSString *samtoolsBin = nil;
     if (!cramSamtoolsAvailable(&samtoolsBin, error)) {
@@ -352,7 +366,15 @@ static NSDictionary<NSString *, NSString *> *cramParseHeaderFields(NSString *lin
         [sequencesData appendData:seqBytes];
         [qualitiesData appendData:qualBytes];
         runningOffset += length;
+
+        // Per-N progress fire; total = -1 (streaming subprocess).
+        if ((readNames.count % TTIOBamReaderProgressIntervalReads) == 0) {
+            progress((int64_t)readNames.count, (int64_t)-1);
+        }
     }
+
+    // Final fire with the true count.
+    progress((int64_t)readNames.count, (int64_t)readNames.count);
 
     self.provenanceRecords = provenance;
 

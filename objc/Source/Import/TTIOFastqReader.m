@@ -22,6 +22,11 @@
 
 NSString *const TTIOFastqReaderErrorDomain = @"TTIOFastqReaderErrorDomain";
 
+// Mirrors Java FastqReader.PROGRESS_INTERVAL_READS (1000). Small
+// enough that even small inputs get visible updates, large enough
+// that per-callback overhead stays well below 1% of parse time.
+const NSUInteger TTIOFastqReaderProgressIntervalReads = 1000;
+
 
 // Forward declaration of the helper exported from TTIOFastaReader.m.
 TTIOWrittenGenomicRun *TTIOFastaReaderBuildUnalignedRun(
@@ -98,6 +103,30 @@ static NSString *parse_at_header(NSData *line)
                             outDetected:(uint8_t *)outDetected
                                   error:(NSError **)error
 {
+    // Non-progress overload: forwards to the progress-aware variant
+    // with a nil block so existing callers see identical behaviour.
+    return [self readFromPath:path
+                  forcedPhred:forcedPhred
+                   sampleName:sampleName
+                     platform:platform
+                 referenceUri:referenceUri
+              acquisitionMode:mode
+                  outDetected:outDetected
+                     progress:nil
+                        error:error];
+}
+
++ (TTIOWrittenGenomicRun *)readFromPath:(NSString *)path
+                            forcedPhred:(uint8_t)forcedPhred
+                             sampleName:(NSString *)sampleName
+                               platform:(NSString *)platform
+                           referenceUri:(NSString *)referenceUri
+                        acquisitionMode:(TTIOAcquisitionMode)mode
+                            outDetected:(uint8_t *)outDetected
+                               progress:(TTIOProgressBlock)progress
+                                  error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (forcedPhred != 0 && forcedPhred != 33 && forcedPhred != 64) {
         [NSException raise:NSInvalidArgumentException
                     format:@"forcedPhred must be 0, 33, or 64 (got %u)",
@@ -235,6 +264,10 @@ static NSString *parse_at_header(NSData *line)
         [readNames addObject:name];
         [seqs addObject:[seqLine copy]];
         [quals addObject:[qualLine copy]];
+        // Fire per-N progress; total is unknown mid-parse so emit -1.
+        if ((readNames.count % TTIOFastqReaderProgressIntervalReads) == 0) {
+            progress((int64_t)readNames.count, (int64_t)-1);
+        }
         if (!more) break;
     }
     gzclose(fh);
@@ -249,6 +282,11 @@ static NSString *parse_at_header(NSData *line)
         }
         return nil;
     }
+
+    // Final fire once the true record count is known. Stamps both
+    // done + total so listeners can switch from indeterminate to
+    // completion state.
+    progress((int64_t)readNames.count, (int64_t)readNames.count);
 
     // Detect / apply Phred offset.
     uint8_t offset;

@@ -7,6 +7,7 @@
 #define TTIO_FASTA_WRITER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOReferenceImport;
 @class TTIOWrittenGenomicRun;
@@ -15,6 +16,9 @@
 NS_ASSUME_NONNULL_BEGIN
 
 extern const NSUInteger TTIOFastaWriterDefaultLineWidth;
+
+/** Emit-every-N cadence for FASTA-write progress callbacks. */
+FOUNDATION_EXPORT const NSUInteger TTIOFastaWriterProgressIntervalReads;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -58,6 +62,17 @@ extern const NSUInteger TTIOFastaWriterDefaultLineWidth;
               writeFai:(BOOL)writeFai
                  error:(NSError **)error;
 
+/** Progress-aware overload. Fires every
+ *  {@link TTIOFastaWriterProgressIntervalReads} chromosomes + a
+ *  final fire. */
++ (BOOL)writeReference:(TTIOReferenceImport *)reference
+                toPath:(NSString *)path
+             lineWidth:(NSUInteger)lineWidth
+            gzipOutput:(int)gzipOutput
+              writeFai:(BOOL)writeFai
+              progress:(nullable TTIOProgressBlock)progress
+                 error:(NSError **)error;
+
 /**
  * Write a write-side genomic run as FASTA. Each read becomes one
  * record (quality bytes are discarded).
@@ -69,6 +84,15 @@ extern const NSUInteger TTIOFastaWriterDefaultLineWidth;
         writeFai:(BOOL)writeFai
            error:(NSError **)error;
 
+/** Progress-aware overload. */
++ (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
+          toPath:(NSString *)path
+       lineWidth:(NSUInteger)lineWidth
+      gzipOutput:(int)gzipOutput
+        writeFai:(BOOL)writeFai
+        progress:(nullable TTIOProgressBlock)progress
+           error:(NSError **)error;
+
 /**
  * Write a read-side <code>TTIOGenomicRun</code> as FASTA. Used by
  * the FASTA-from-<code>.tio</code> export path.
@@ -78,6 +102,15 @@ extern const NSUInteger TTIOFastaWriterDefaultLineWidth;
                lineWidth:(NSUInteger)lineWidth
               gzipOutput:(int)gzipOutput
                 writeFai:(BOOL)writeFai
+                   error:(NSError **)error;
+
+/** Progress-aware overload. */
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+               lineWidth:(NSUInteger)lineWidth
+              gzipOutput:(int)gzipOutput
+                writeFai:(BOOL)writeFai
+                progress:(nullable TTIOProgressBlock)progress
                    error:(NSError **)error;
 
 @end

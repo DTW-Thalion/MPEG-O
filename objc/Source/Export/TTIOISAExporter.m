@@ -358,6 +358,18 @@ static NSData *buildIsaJson(TTIOSpectralDataset *dataset,
                   toDirectory:(NSString *)directoryPath
                         error:(NSError **)error
 {
+    return [self writeBundleForDataset:dataset
+                           toDirectory:directoryPath
+                              progress:nil
+                                 error:error];
+}
+
++ (BOOL)writeBundleForDataset:(TTIOSpectralDataset *)dataset
+                  toDirectory:(NSString *)directoryPath
+                     progress:(TTIOProgressBlock)progress
+                        error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     NSDictionary *bundle = [self bundleForDataset:dataset error:error];
     if (!bundle) return NO;
 
@@ -370,11 +382,15 @@ static NSData *buildIsaJson(TTIOSpectralDataset *dataset,
             return NO;
         }
     }
+    NSUInteger total = bundle.count;
+    NSUInteger written = 0;
     for (NSString *name in bundle) {
         NSString *path = [directoryPath stringByAppendingPathComponent:name];
         if (![bundle[name] writeToFile:path options:NSDataWritingAtomic error:error]) {
             return NO;
         }
+        written++;
+        progress((int64_t)written, (int64_t)total);
     }
     return YES;
 }

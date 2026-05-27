@@ -23,6 +23,9 @@
 
 NSString *const TTIOMzTabReaderErrorDomain = @"TTIOMzTabReaderErrorDomain";
 
+// Mirrors Java MzTabReader.PROGRESS_INTERVAL_ROWS (500).
+const NSUInteger TTIOMzTabReaderProgressIntervalRows = 500;
+
 #pragma mark - Import value object
 
 @implementation TTIOMzTabImport
@@ -87,6 +90,13 @@ NSString *const TTIOMzTabReaderErrorDomain = @"TTIOMzTabReaderErrorDomain";
 
 + (nullable TTIOMzTabImport *)readFromFilePath:(NSString *)path error:(NSError **)error
 {
+    return [self readFromFilePath:path progress:nil error:error];
+}
+
++ (nullable TTIOMzTabImport *)readFromFilePath:(NSString *)path
+                                       progress:(TTIOProgressBlock)progress
+                                          error:(NSError **)error
+{
     if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
         if (error) *error = [self errorWithCode:TTIOMzTabReaderErrorMissingFile
                                         message:[NSString stringWithFormat:@"mzTab file not found: %@", path]];
@@ -136,11 +146,29 @@ NSString *const TTIOMzTabReaderErrorDomain = @"TTIOMzTabReaderErrorDomain";
     NSRegularExpression *smfAssayRegex = [NSRegularExpression regularExpressionWithPattern:@"^abundance_assay\\[(\\d+)\\]$" options:0 error:NULL];
 
     NSArray<NSString *> *lines = [text componentsSeparatedByString:@"\n"];
+    NSUInteger progressDataRows = 0;
     for (NSString *raw in lines) {
         NSString *line = [raw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         if (line.length == 0 || [line hasPrefix:@"#"]) continue;
         NSArray<NSString *> *cols = [line componentsSeparatedByString:@"\t"];
         NSString *prefix = cols.firstObject;
+        // Count "data" rows (excluding MTD / COM / *H headers) for the
+        // progress callback. Matches Java's cadence.
+        if (prefix.length > 0 &&
+            ![prefix isEqualToString:@"MTD"] &&
+            ![prefix isEqualToString:@"COM"] &&
+            ![prefix isEqualToString:@"PSH"] &&
+            ![prefix isEqualToString:@"PRH"] &&
+            ![prefix isEqualToString:@"SMH"] &&
+            ![prefix isEqualToString:@"PEH"] &&
+            ![prefix isEqualToString:@"SFH"] &&
+            ![prefix isEqualToString:@"SEH"]) {
+            progressDataRows++;
+            if (progress &&
+                (progressDataRows % TTIOMzTabReaderProgressIntervalRows) == 0) {
+                progress((int64_t)progressDataRows, (int64_t)-1);
+            }
+        }
         if ([prefix isEqualToString:@"COM"]) continue;
         if ([prefix isEqualToString:@"MTD"]) {
             if (cols.count < 3) continue;
@@ -483,6 +511,9 @@ NSString *const TTIOMzTabReaderErrorDomain = @"TTIOMzTabReaderErrorDomain";
                                         message:[NSString stringWithFormat:@"%@: missing MTD mzTab-version line", path]];
         return nil;
     }
+
+    // Final fire after a successful parse.
+    if (progress) progress((int64_t)progressDataRows, (int64_t)progressDataRows);
 
     NSArray *sampleRefs = assayToSample.count > 0 ? assayToSample.allValues : studyVariables.allValues;
     return [[TTIOMzTabImport alloc] initWithVersion:version

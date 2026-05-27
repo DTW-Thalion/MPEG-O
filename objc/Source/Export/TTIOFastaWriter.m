@@ -25,6 +25,8 @@
 
 
 const NSUInteger TTIOFastaWriterDefaultLineWidth = 60;
+// Mirrors Java FastaWriter.PROGRESS_INTERVAL_READS (1000).
+const NSUInteger TTIOFastaWriterProgressIntervalReads = 1000;
 static NSString *const kErrDom = @"TTIOFastaWriterErrorDomain";
 
 
@@ -41,8 +43,10 @@ static BOOL write_records(NSArray<NSString *> *names,
                           NSUInteger lineWidth,
                           int gzipOutput,
                           BOOL writeFai,
+                          TTIOProgressBlock progress,
                           NSError **error)
 {
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (lineWidth < 1) {
         if (error) {
             *error = [NSError errorWithDomain:kErrDom code:1
@@ -84,7 +88,14 @@ static BOOL write_records(NSArray<NSString *> *names,
                               (unsigned long)seqOffset,
                               (unsigned long)lineWidth,
                               (unsigned long)(lineWidth + 1)]];
+
+        // Per-N progress fire. Total = names.count.
+        if (((i + 1) % TTIOFastaWriterProgressIntervalReads) == 0) {
+            progress((int64_t)(i + 1), (int64_t)names.count);
+        }
     }
+    // Final fire.
+    progress((int64_t)names.count, (int64_t)names.count);
 
     if (gz) {
         gzFile gf = gzopen([path fileSystemRepresentation], "wb");
@@ -137,8 +148,26 @@ static BOOL write_records(NSArray<NSString *> *names,
               writeFai:(BOOL)writeFai
                  error:(NSError **)error
 {
+    return [self writeReference:reference
+                         toPath:path
+                      lineWidth:lineWidth
+                     gzipOutput:gzipOutput
+                       writeFai:writeFai
+                       progress:nil
+                          error:error];
+}
+
++ (BOOL)writeReference:(TTIOReferenceImport *)reference
+                toPath:(NSString *)path
+             lineWidth:(NSUInteger)lineWidth
+            gzipOutput:(int)gzipOutput
+              writeFai:(BOOL)writeFai
+              progress:(TTIOProgressBlock)progress
+                 error:(NSError **)error
+{
     return write_records(reference.chromosomes, reference.sequences,
-                         path, lineWidth, gzipOutput, writeFai, error);
+                         path, lineWidth, gzipOutput, writeFai,
+                         progress, error);
 }
 
 + (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
@@ -146,6 +175,23 @@ static BOOL write_records(NSArray<NSString *> *names,
        lineWidth:(NSUInteger)lineWidth
       gzipOutput:(int)gzipOutput
         writeFai:(BOOL)writeFai
+           error:(NSError **)error
+{
+    return [self writeRun:run
+                   toPath:path
+                lineWidth:lineWidth
+               gzipOutput:gzipOutput
+                 writeFai:writeFai
+                 progress:nil
+                    error:error];
+}
+
++ (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
+          toPath:(NSString *)path
+       lineWidth:(NSUInteger)lineWidth
+      gzipOutput:(int)gzipOutput
+        writeFai:(BOOL)writeFai
+        progress:(TTIOProgressBlock)progress
            error:(NSError **)error
 {
     NSArray<NSString *> *readNames = run.readNames;
@@ -170,7 +216,7 @@ static BOOL write_records(NSArray<NSString *> *names,
         [outSeqs addObject:slice];
     }
     return write_records(outNames, outSeqs, path, lineWidth, gzipOutput,
-                         writeFai, error);
+                         writeFai, progress, error);
 }
 
 + (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
@@ -178,6 +224,23 @@ static BOOL write_records(NSArray<NSString *> *names,
                lineWidth:(NSUInteger)lineWidth
               gzipOutput:(int)gzipOutput
                 writeFai:(BOOL)writeFai
+                   error:(NSError **)error
+{
+    return [self writeReadSideRun:run
+                           toPath:path
+                        lineWidth:lineWidth
+                       gzipOutput:gzipOutput
+                         writeFai:writeFai
+                         progress:nil
+                            error:error];
+}
+
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+               lineWidth:(NSUInteger)lineWidth
+              gzipOutput:(int)gzipOutput
+                writeFai:(BOOL)writeFai
+                progress:(TTIOProgressBlock)progress
                    error:(NSError **)error
 {
     // Same bulk-fetch pattern as TTIOFastqWriter:
@@ -207,7 +270,7 @@ static BOOL write_records(NSArray<NSString *> *names,
         [outSeqs addObject:seq];
     }
     return write_records(outNames, outSeqs, path, lineWidth, gzipOutput,
-                         writeFai, error);
+                         writeFai, progress, error);
 }
 
 @end

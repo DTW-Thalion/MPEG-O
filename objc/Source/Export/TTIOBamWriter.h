@@ -9,11 +9,15 @@
 #define TTIO_BAM_WRITER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOWrittenGenomicRun;
 @class TTIOProvenanceRecord;
 
 NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for BAM-write progress callbacks. */
+FOUNDATION_EXPORT const NSUInteger TTIOBamWriterProgressIntervalReads;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -75,6 +79,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
    provenanceRecords:(nullable NSArray<TTIOProvenanceRecord *> *)provenance
                 sort:(BOOL)sort
+               error:(NSError **)error;
+
+/** Progress-aware overload. Fires per
+ *  {@link TTIOBamWriterProgressIntervalReads} reads during SAM
+ *  serialisation + a final fire. */
+- (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
+   provenanceRecords:(nullable NSArray<TTIOProvenanceRecord *> *)provenance
+                sort:(BOOL)sort
+            progress:(nullable TTIOProgressBlock)progress
                error:(NSError **)error;
 
 @end

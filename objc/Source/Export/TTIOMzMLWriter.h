@@ -9,9 +9,17 @@
 #define TTIO_MZML_WRITER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOSpectralDataset;
 @class TTIOAcquisitionRun;
+
+NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for mzML-write progress callbacks. */
+FOUNDATION_EXPORT const NSUInteger TTIOMzMLWriterProgressIntervalSpectra;
+
+NS_ASSUME_NONNULL_END
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -68,6 +76,12 @@
            zlibCompression:(BOOL)zlibCompression
                      error:(NSError **)error;
 
+/** Progress-aware overload. */
++ (nullable NSData *)dataForDataset:(TTIOSpectralDataset *)dataset
+                    zlibCompression:(BOOL)zlibCompression
+                           progress:(nullable TTIOProgressBlock)progress
+                              error:(NSError **)error;
+
 /**
  * Convenience wrapper that writes
  * <code>+dataForDataset:zlibCompression:error:</code> output to a
@@ -84,6 +98,13 @@
               toPath:(NSString *)path
      zlibCompression:(BOOL)zlibCompression
                 error:(NSError **)error;
+
+/** Progress-aware overload. */
++ (BOOL)writeDataset:(TTIOSpectralDataset *)dataset
+              toPath:(NSString *)path
+     zlibCompression:(BOOL)zlibCompression
+            progress:(nullable TTIOProgressBlock)progress
+               error:(NSError **)error;
 
 @end
 
