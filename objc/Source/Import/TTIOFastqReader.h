@@ -10,12 +10,18 @@
 
 #import <Foundation/Foundation.h>
 #import "ValueClasses/TTIOEnums.h"
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOWrittenGenomicRun;
 
 NS_ASSUME_NONNULL_BEGIN
 
 extern NSString *const TTIOFastqReaderErrorDomain;
+
+/** Emit-every-N cadence for {@link TTIOProgressBlock} callbacks
+ *  during FASTQ parsing. Mirrors Java's
+ *  {@code FastqReader.PROGRESS_INTERVAL_READS}. */
+FOUNDATION_EXPORT const NSUInteger TTIOFastqReaderProgressIntervalReads;
 
 typedef NS_ENUM(NSInteger, TTIOFastqReaderErrorCode) {
     TTIOFastqReaderErrorMissingFile      = 1,
@@ -75,6 +81,28 @@ typedef NS_ENUM(NSInteger, TTIOFastqReaderErrorCode) {
                                     referenceUri:(NSString *)referenceUri
                                  acquisitionMode:(TTIOAcquisitionMode)acquisitionMode
                                      outDetected:(nullable uint8_t *)outDetected
+                                           error:(NSError **)error;
+
+/**
+ * Progress-aware overload of
+ * {@link readFromPath:forcedPhred:sampleName:platform:referenceUri:acquisitionMode:outDetected:error:}.
+ *
+ * Fires {@code progress(readsDone, -1)} every
+ * {@link TTIOFastqReaderProgressIntervalReads} records during the
+ * parse phase, and a final {@code progress(total, total)} once the
+ * record count is known. Pass {@code nil} for {@code progress} to
+ * skip all callbacks; existing callers are unaffected.
+ *
+ * @param progress Optional progress block. {@code nil} = no callbacks.
+ */
++ (nullable TTIOWrittenGenomicRun *)readFromPath:(NSString *)path
+                                     forcedPhred:(uint8_t)forcedPhred
+                                      sampleName:(NSString *)sampleName
+                                        platform:(NSString *)platform
+                                    referenceUri:(NSString *)referenceUri
+                                 acquisitionMode:(TTIOAcquisitionMode)acquisitionMode
+                                     outDetected:(nullable uint8_t *)outDetected
+                                        progress:(nullable TTIOProgressBlock)progress
                                            error:(NSError **)error;
 
 @end

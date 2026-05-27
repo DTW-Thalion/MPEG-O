@@ -9,11 +9,17 @@
 #define TTIO_BAM_READER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOWrittenGenomicRun;
 @class TTIOProvenanceRecord;
 
 NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for {@link TTIOProgressBlock} callbacks
+ *  during BAM/SAM parsing. Mirrors Java's
+ *  {@code BamReader.PROGRESS_INTERVAL_READS}. */
+FOUNDATION_EXPORT const NSUInteger TTIOBamReaderProgressIntervalReads;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -93,6 +99,26 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable TTIOWrittenGenomicRun *)toGenomicRunWithName:(nullable NSString *)name
                                                    region:(nullable NSString *)region
                                                sampleName:(nullable NSString *)sampleName
+                                                    error:(NSError **)error;
+
+/**
+ * Progress-aware overload of
+ * {@link toGenomicRunWithName:region:sampleName:error:}.
+ *
+ * Fires {@code progress(readsDone, -1)} every
+ * {@link TTIOBamReaderProgressIntervalReads} alignment records during
+ * the parse phase (total is always {@code -1} because the samtools
+ * subprocess stream gives no record count up front), and a final
+ * {@code progress(total, total)} once the true count is known. Pass
+ * {@code nil} for {@code progress} to skip all callbacks; existing
+ * callers are unaffected.
+ *
+ * @param progress Optional progress block. {@code nil} = no callbacks.
+ */
+- (nullable TTIOWrittenGenomicRun *)toGenomicRunWithName:(nullable NSString *)name
+                                                   region:(nullable NSString *)region
+                                               sampleName:(nullable NSString *)sampleName
+                                                 progress:(nullable TTIOProgressBlock)progress
                                                     error:(NSError **)error;
 
 @end

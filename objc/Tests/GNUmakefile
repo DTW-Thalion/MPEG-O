@@ -137,7 +137,8 @@ TTIOTests_OBJC_FILES = \
 	TTIOV011FixtureBuilder.m \
 	TTIOAccessorSpec.m \
 	TestAccessorMatrixConformance.m \
-	TestCoverageGapWatchdog.m
+	TestCoverageGapWatchdog.m \
+	TestProgressSink.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
