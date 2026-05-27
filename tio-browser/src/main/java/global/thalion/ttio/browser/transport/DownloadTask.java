@@ -57,8 +57,15 @@ public final class DownloadTask extends Task<String> {
     protected String call() throws Exception {
         updateMessage("Connecting to " + url + " …");
         long startMs = System.currentTimeMillis();
+        // Neither the byte-total nor a unit-total is known up-front:
+        // the server doesn't advertise total payload size in the v0.11
+        // wire protocol, and the request is for a stream of N AUs that
+        // is also unknown until EndOfStream. Setting unitsTotal = 0
+        // (unknown) drives ProgressFormatter into its no-totals branch
+        // — "X.X MiB processed" — instead of the misleading "0 / 1 AUs"
+        // that an unitsTotal = 1 placeholder produced (#135).
         tracker = new ProgressTracker(
-            "downloading", -1L, 1L, startMs);
+            "downloading", -1L, 0L, startMs);
         emit(0L, 0L);
 
         TransportClient client = new TransportClient(url);
@@ -73,6 +80,10 @@ public final class DownloadTask extends Task<String> {
         long finalSize;
         try { finalSize = Files.size(Paths.get(outputPath)); }
         catch (Exception e) { finalSize = 0L; }
+        // Final emit signals completion via unitsDone = 1 even though
+        // unitsTotal stays 0 (the tracker exposes whatever the caller
+        // passes; TransferManager / tests only inspect unitsDone for
+        // the terminal beat).
         emit(finalSize, 1L);
         updateMessage("Done.");
         return outputPath;

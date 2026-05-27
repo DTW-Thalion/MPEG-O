@@ -194,11 +194,13 @@ public final class TransferManager {
                 fanOutProgress(r);
                 Platform.runLater(() -> {
                     t.setBytesTransferred(r.bytesDone());
-                    if (r.unitsTotal() > 0 && r.unitsDone() >= r.unitsTotal()) {
-                        t.setMessage("Downloaded " + r.bytesDone() + " bytes");
-                    } else {
-                        t.setMessage("Downloading...");
-                    }
+                    // Server doesn't advertise total payload size, so
+                    // surface raw human-readable bytes-processed rather
+                    // than the unconditional "Downloading…" the row
+                    // showed pre-#135.
+                    t.setMessage("Downloading… " +
+                        global.thalion.ttio.browser.util.Units.humanBytes(
+                            r.bytesDone()));
                 });
             };
             task.setProgressListener(forward);
@@ -453,6 +455,13 @@ public final class TransferManager {
     /** Visible for tests only. Force a Transfer into a given state from any thread. */
     public void fakeStateForTest(Transfer t, TransferState s) {
         Runnable r = () -> t.setState(s);
+        if (Platform.isFxApplicationThread()) r.run();
+        else Platform.runLater(r);
+    }
+
+    /** Visible for tests only. Force a Transfer's bytes-transferred from any thread. */
+    public void fakeBytesTransferredForTest(Transfer t, long n) {
+        Runnable r = () -> t.setBytesTransferred(n);
         if (Platform.isFxApplicationThread()) r.run();
         else Platform.runLater(r);
     }
