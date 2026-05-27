@@ -7,7 +7,7 @@
 
     <groupId>global.thalion</groupId>
     <artifactId>tio-browser</artifactId>
-    <version>1.5.0</version>
+    <version>1.6.0</version>
     <packaging>jar</packaging>
 
     <name>tio-browser</name>
@@ -33,7 +33,7 @@
         <maven.compiler.source>22</maven.compiler.source>
         <maven.compiler.target>22</maven.compiler.target>
         <javafx.version>21.0.5</javafx.version>
-        <ttio.version>1.5.0</ttio.version>
+        <ttio.version>1.6.0</ttio.version>
     </properties>
 
     <repositories>

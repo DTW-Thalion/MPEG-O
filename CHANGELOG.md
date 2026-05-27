@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-05-27
+
+Patch release closing the v0.11 transport round-trip end-to-end through the workbench daemon. v1.5.0 shipped the v0.11 spec + per-SDK encode/decode parity; v1.6.0 wires the missing pieces so a multi-accessor `.tio` uploaded to the daemon and downloaded back is byte-equivalent across every populated accessor.
+
+Theme: three layered bugs surfaced once a single live-smoke test (`test_v011_full_accessor_round_trip`) exercised the end-to-end path for the first time.
+
+1. **AU sequence ingest (#139)** — TransportIngest enforced stream-wide monotonicity, but walkers emit per-dataset sequences. Fix: per-`datasetId` tracking in all three ingesters. No wire-format change.
+2. **Daemon download walker (#140)** — `TTIODatasetWalker` and the WS download visitor only spoke MS access units; every v0.11 prelude packet + every genomic AU was silently dropped on the way back to the client. Fix: 10 new visitor methods + §5.4 prelude emission + per-read genomic AU iteration. Paired daemon-side fix shipped in tti-workbench-server #59.
+3. **Python + Java walker parity (#141)** — same bug shape as #140 in the two non-daemon walkers, so `ttio.transport.serving` (Python's reference WS server) had the same silent-drop. Fix: 10 new event types / visitor selectors in each SDK + shared `_iter_genomic_run_access_units` helper for byte-form equivalence with the writer.
+
+tio-browser polish: PR #183 adds a `Size` column to the Transfers workspace and a live MiB-counter on download progress (#135, #136).
+
+PRs in 1.6.0 (in order): #181 v0.11 round-trip live-smoke test · #183 tio-browser Download progress + Size column · #184 #139 · #185 #140 · #186 #141.
+
 ### Fixed — Python + Java walker v0.11 parity (#141)
 
 Follow-up to #140 (ObjC walker). The Python `walk_dataset` generator and Java `DatasetWalker` previously emitted only MS access units, so every workbench-daemon download routed through the Python/Java reference servers silently dropped v0.11 accessor content — same root cause as #140 but in the other two SDKs.
