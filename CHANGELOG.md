@@ -11,7 +11,19 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-### Added -- Transport-spec v0.11: complete `.tio` coverage across all 3 SDKs (2026-05-26)
+## [1.5.0] - 2026-05-27
+
+Major SDK release. Three themes:
+
+1. **Transport-spec v0.11** — complete `.tio` accessor coverage across Java/Python/ObjC (was: silent-drop on every accessor besides MS/genomic runs). 12 new packet types (0x10–0x1B), Subject + Sample as first-class TTI-O entities, IRImage promoted to first-class on SpectralDataset.
+2. **Progress reporting end-to-end** — `ProgressSink` callbacks throughout the SDK reader + writer chain in all three languages. tio-browser's ImportTask + ExportTask now show quantitative percent + ETA instead of an indeterminate spinner. PhaseProgress splits read (0..50%) and write (50..100%) cleanly.
+3. **Streaming upload** — `WorkbenchTransportClient.upload(Path)` + `UploadClient.upload_path` replace the `Files.readAllBytes` slurp; peak heap is now O(chunkSize) instead of O(payload size). 100 GB+ uploads no longer OOM client heap.
+
+PRs merged into 1.5.0 (in order): #172 transport v0.11 · #173 TransferRow refresh fix · #174 Stage B (per-read reader progress) · #175 Stage C (per-spectrum reader progress) · #176 Stage D (writer progress + per-section) · #177 Stage E (two-phase ImportTask/ExportTask + heartbeat removal) · #178 streaming upload Java · #179 Python parity · #180 ObjC parity.
+
+7 stage tags pinned on the v0.11 milestone history (`stage-0-transport-v0-11-foundation` through `stage-6-transport-v0-11-subjects-samples`).
+
+### Added — Transport-spec v0.11: complete `.tio` coverage across all 3 SDKs (2026-05-26)
 
 The transport (`.tis`) protocol now round-trips every first-class
 `SpectralDataset` accessor in Java / Python / Objective-C. Resolves
