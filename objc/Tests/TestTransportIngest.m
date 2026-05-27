@@ -326,6 +326,66 @@ static void test_first_au_at_sequence_zero_is_accepted(void)
     PASS(auCount == 2, "both AccessUnits delivered to the recorder");
 }
 
+static void test_au_sequence_resets_per_dataset(void)
+{
+    // #139: v0.11 multi-dataset streams interleave AUs from independent
+    // datasets (an MS_run followed by a genomic_run, etc.). Each
+    // dataset's auSequence starts at 0; the ingester scopes monotonicity
+    // per datasetId.
+    uint16_t flags = TTIOTransportPacketFlagHasChecksum;
+    NSMutableData *stream = [NSMutableData data];
+    [stream appendData:craftPacket(TTIOTransportPacketStreamHeader, flags, 0, 0,
+                                    [@"v0" dataUsingEncoding:NSUTF8StringEncoding])];
+    // Dataset 1: AU seq 0, 1, 2
+    for (uint32_t seq = 0; seq < 3; seq++) {
+        [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 1, seq,
+                                        [@"d1" dataUsingEncoding:NSUTF8StringEncoding])];
+    }
+    // Dataset 2: AU seq 0, 1 — pre-#139 rejects with
+    // "regressed: got 0, last seen 2".
+    for (uint32_t seq = 0; seq < 2; seq++) {
+        [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 2, seq,
+                                        [@"d2" dataUsingEncoding:NSUTF8StringEncoding])];
+    }
+
+    TTIOTransportIngest *ingest = [TTIOTransportIngest new];
+    IngestRecorder *rec = [IngestRecorder new];
+    ingest.delegate = rec;
+    NSError *err = nil;
+    BOOL ok = [ingest feedData:stream error:&err];
+    PASS(ok, "multi-dataset AU sequence accepted");
+    PASS(err == nil, "no parse error on per-dataset AU reset");
+    NSUInteger auCount = 0;
+    for (TTIOTransportPacketRecord *r in rec.packets) {
+        if (r.header.packetType == TTIOTransportPacketAccessUnit) auCount++;
+    }
+    PASS(auCount == 5, "all five AccessUnits delivered to the recorder");
+}
+
+static void test_au_sequence_regression_within_dataset_still_fails(void)
+{
+    // Per-dataset tracking must still catch monotonicity violations
+    // within a single dataset — #139 only loosens the check across
+    // datasets, not within one.
+    uint16_t flags = TTIOTransportPacketFlagHasChecksum;
+    NSMutableData *stream = [NSMutableData data];
+    [stream appendData:craftPacket(TTIOTransportPacketStreamHeader, flags, 0, 0,
+                                    [@"v0" dataUsingEncoding:NSUTF8StringEncoding])];
+    [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 7, 4,
+                                    [@"a" dataUsingEncoding:NSUTF8StringEncoding])];
+    [stream appendData:craftPacket(TTIOTransportPacketAccessUnit, flags, 7, 2,
+                                    [@"b" dataUsingEncoding:NSUTF8StringEncoding])];
+
+    TTIOTransportIngest *ingest = [TTIOTransportIngest new];
+    IngestRecorder *rec = [IngestRecorder new];
+    ingest.delegate = rec;
+    NSError *err = nil;
+    PASS(![ingest feedData:stream error:&err],
+         "backwards auSequence within dataset rejected");
+    PASS(err.code == TTIOTransportErrorNonMonotonicAU,
+         "error code is TTIOTransportErrorNonMonotonicAU");
+}
+
 #pragma mark - Entry point
 
 void testTransportIngest(void)
@@ -338,4 +398,6 @@ void testTransportIngest(void)
     test_missing_stream_header_fails();
     test_au_sequence_regression_fails();
     test_first_au_at_sequence_zero_is_accepted();
+    test_au_sequence_resets_per_dataset();
+    test_au_sequence_regression_within_dataset_still_fails();
 }

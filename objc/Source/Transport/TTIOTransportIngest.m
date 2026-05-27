@@ -17,8 +17,12 @@
 
 @interface TTIOTransportIngest ()
 @property (nonatomic, strong) NSMutableData *buffer;
-@property (nonatomic, assign) uint32_t lastAUSequence;
-@property (nonatomic, assign) BOOL seenFirstAU;
+// #139: AU sequences are per-dataset, not stream-wide. Each dataset's
+// AUs start at 0 (walker emits `for j, spectrum in enumerate(run)`);
+// enforcing a single stream-wide counter rejected legitimate multi-
+// accessor v0.11 streams. Map keyed on @(datasetId) -> @(lastSeq).
+// Missing key = "first AU in this dataset, any value goes."
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSNumber *> *lastAUSequenceByDataset;
 @property (nonatomic, assign) BOOL sawStreamHeader;
 @end
 
@@ -32,8 +36,7 @@
         _packetCount = 0;
         _bufferedBytes = 0;
         _isFinished = NO;
-        _lastAUSequence = 0;
-        _seenFirstAU = NO;
+        _lastAUSequenceByDataset = [NSMutableDictionary dictionary];
         _sawStreamHeader = NO;
     }
     return self;
@@ -157,24 +160,25 @@ static inline uint32_t readU32LE(const uint8_t *b)
             }
         }
 
-        // AU-sequence monotonicity check (only on AccessUnit packets).
-        // Use _seenFirstAU rather than _packetCount > 0 so the first
-        // AccessUnit can have any auSequence value (including 0). The
-        // earlier check rejected writer-produced streams whose first AU
-        // had auSequence=0 because _lastAUSequence was also 0 at init.
+        // #139: monotonicity is per-dataset. A missing dictionary entry
+        // encodes "first AU in this dataset" — any value goes,
+        // including 0 (the walker's natural starting point).
         if (hdr.packetType == TTIOTransportPacketAccessUnit) {
-            if (_seenFirstAU && hdr.auSequence <= _lastAUSequence) {
+            NSNumber *key = @(hdr.datasetId);
+            NSNumber *lastBox = _lastAUSequenceByDataset[key];
+            if (lastBox != nil
+                    && hdr.auSequence <= [lastBox unsignedIntValue]) {
                 NSError *err = [self errorWithCode:TTIOTransportErrorNonMonotonicAU
                                            message:[NSString stringWithFormat:
-                                               @"AU sequence regressed: got %u, "
-                                               @"last seen %u", hdr.auSequence,
-                                               _lastAUSequence]];
+                                               @"AU sequence regressed in dataset %u: "
+                                               @"got %u, last seen %u",
+                                               hdr.datasetId, hdr.auSequence,
+                                               [lastBox unsignedIntValue]]];
                 if (error) *error = err;
                 [self moveToFailedStateWithError:err];
                 return NO;
             }
-            _lastAUSequence = hdr.auSequence;
-            _seenFirstAU = YES;
+            _lastAUSequenceByDataset[key] = @(hdr.auSequence);
         }
 
         if (hdr.packetType == TTIOTransportPacketStreamHeader) {
