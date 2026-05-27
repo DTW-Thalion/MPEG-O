@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from ..enums import IRMode
+from ..io.progress import ProgressSinkLike, _fire
 from ..ir_spectrum import IRSpectrum
 from ..raman_spectrum import RamanSpectrum
 from ..uv_vis_spectrum import UVVisSpectrum
@@ -30,6 +31,9 @@ from ._jcamp_encode import choose_yfactor, encode_xydata
 
 
 _VALID_ENCODINGS = frozenset({"affn", "pac", "sqz", "dif"})
+
+#: Mirror Java's ``JcampDxWriter.PROGRESS_INTERVAL_SPECTRA`` — single-spectrum.
+PROGRESS_INTERVAL_SPECTRA = 1
 
 
 def _affn_xy(xs: np.ndarray, ys: np.ndarray) -> str:
@@ -95,6 +99,7 @@ def write_raman_spectrum(
     title: str = "",
     *,
     encoding: str = "affn",
+    progress: ProgressSinkLike | None = None,
 ) -> None:
     """Write ``spectrum`` to a JCAMP-DX 5.01 Raman file at ``path``.
 
@@ -132,6 +137,7 @@ def write_raman_spectrum(
     ]
     body = "\n".join(parts) + "\n" + xy_block + "##END=\n"
     Path(path).write_text(body, encoding="utf-8")
+    _fire(progress, 1, 1)
 
 
 def write_ir_spectrum(
@@ -140,6 +146,7 @@ def write_ir_spectrum(
     title: str = "",
     *,
     encoding: str = "affn",
+    progress: ProgressSinkLike | None = None,
 ) -> None:
     """Write ``spectrum`` to a JCAMP-DX 5.01 IR file at ``path``.
 
@@ -183,6 +190,7 @@ def write_ir_spectrum(
     ]
     body = "\n".join(parts) + "\n" + xy_block + "##END=\n"
     Path(path).write_text(body, encoding="utf-8")
+    _fire(progress, 1, 1)
 
 
 def write_uv_vis_spectrum(
@@ -191,6 +199,7 @@ def write_uv_vis_spectrum(
     title: str = "",
     *,
     encoding: str = "affn",
+    progress: ProgressSinkLike | None = None,
 ) -> None:
     """Write ``spectrum`` to a JCAMP-DX 5.01 UV/VIS file at ``path``.
 
@@ -227,6 +236,10 @@ def write_uv_vis_spectrum(
     ]
     body = "\n".join(parts) + "\n" + xy_block + "##END=\n"
     Path(path).write_text(body, encoding="utf-8")
+    _fire(progress, 1, 1)
 
 
-__all__ = ["write_raman_spectrum", "write_ir_spectrum", "write_uv_vis_spectrum"]
+__all__ = [
+    "write_raman_spectrum", "write_ir_spectrum", "write_uv_vis_spectrum",
+    "PROGRESS_INTERVAL_SPECTRA",
+]

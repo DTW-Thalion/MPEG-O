@@ -27,6 +27,7 @@ import numpy as np
 
 from ..axis_descriptor import AxisDescriptor
 from ..enums import IRMode
+from ..io.progress import ProgressSinkLike, _fire
 from ..ir_spectrum import IRSpectrum
 from ..raman_spectrum import RamanSpectrum
 from ..signal_array import SignalArray
@@ -35,6 +36,10 @@ from ._jcamp_decode import decode_xydata, has_compression
 
 
 Spectrum1D = Union[RamanSpectrum, IRSpectrum, UVVisSpectrum]
+
+
+#: Mirror Java's ``JcampDxReader.PROGRESS_INTERVAL_SPECTRA`` — single-spectrum.
+PROGRESS_INTERVAL_SPECTRA = 1
 
 
 def _make_signal(values: list[float], axis_name: str, unit: str) -> SignalArray:
@@ -124,8 +129,15 @@ def _parse_xy(ldrs: dict[str, str], body: str) -> tuple[list[float], list[float]
     return xs, ys
 
 
-def read_spectrum(path: str | Path) -> Spectrum1D:
+def read_spectrum(
+    path: str | Path,
+    *,
+    progress: ProgressSinkLike | None = None,
+) -> Spectrum1D:
     """Parse ``path`` and return an appropriate spectrum subclass.
+
+    Single-spectrum format; ``progress`` fires once with ``(1, 1)`` at
+    completion.
 
     Raises
     ------
@@ -141,12 +153,13 @@ def read_spectrum(path: str | Path) -> Spectrum1D:
         raise ValueError("JCAMP-DX: empty or mismatched XYDATA")
 
     data_type = ldrs.get("DATA TYPE", "").upper()
+    result: Spectrum1D
 
     # UV-Vis takes wavelength (nm) on the X axis, not wavenumber.
     if data_type in {"UV/VIS SPECTRUM", "UV-VIS SPECTRUM", "UV/VISIBLE SPECTRUM"}:
         x_signal = _make_signal(xs, "wavelength", "nm")
         y_signal = _make_signal(ys, "absorbance", "")
-        return UVVisSpectrum(
+        result = UVVisSpectrum(
             signal_arrays={
                 UVVisSpectrum.WAVELENGTH: x_signal,
                 UVVisSpectrum.ABSORBANCE: y_signal,
@@ -154,12 +167,14 @@ def read_spectrum(path: str | Path) -> Spectrum1D:
             path_length_cm=float(ldrs.get("$PATH LENGTH CM", "0") or 0),
             solvent=ldrs.get("$SOLVENT", "") or "",
         )
+        _fire(progress, 1, 1)
+        return result
 
     x_signal = _make_signal(xs, "wavenumber", "1/cm")
     y_signal = _make_signal(ys, "intensity", "")
 
     if data_type == "RAMAN SPECTRUM":
-        return RamanSpectrum(
+        result = RamanSpectrum(
             signal_arrays={
                 RamanSpectrum.WAVENUMBER: x_signal,
                 RamanSpectrum.INTENSITY: y_signal,
@@ -172,6 +187,8 @@ def read_spectrum(path: str | Path) -> Spectrum1D:
                 ldrs.get("$INTEGRATION TIME SEC", "0") or 0
             ),
         )
+        _fire(progress, 1, 1)
+        return result
 
     if data_type in {
         "INFRARED ABSORBANCE",
@@ -187,7 +204,7 @@ def read_spectrum(path: str | Path) -> Spectrum1D:
             mode = IRMode.ABSORBANCE if "ABSORB" in y_units else IRMode.TRANSMITTANCE
         resolution = float(ldrs.get("RESOLUTION", "0") or 0)
         scans = int(float(ldrs.get("$NUMBER OF SCANS", "0") or 0))
-        return IRSpectrum(
+        result = IRSpectrum(
             signal_arrays={
                 IRSpectrum.WAVENUMBER: x_signal,
                 IRSpectrum.INTENSITY: y_signal,
@@ -196,6 +213,8 @@ def read_spectrum(path: str | Path) -> Spectrum1D:
             resolution_cm_inv=resolution,
             number_of_scans=scans,
         )
+        _fire(progress, 1, 1)
+        return result
 
     raise ValueError(f"JCAMP-DX: unsupported DATA TYPE={ldrs.get('DATA TYPE', '')!r}")
 

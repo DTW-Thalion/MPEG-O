@@ -21,9 +21,15 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from ..io.progress import ProgressSinkLike, _fire
+
 if TYPE_CHECKING:
     from ..fid import FreeInductionDecay
     from ..nmr_spectrum import NMRSpectrum
+
+
+#: Mirror Java's ``NmrMLWriter.PROGRESS_INTERVAL_SPECTRA`` — single-spectrum.
+PROGRESS_INTERVAL_SPECTRA = 1
 
 
 def _encode(arr: np.ndarray) -> str:
@@ -42,6 +48,7 @@ def spectrum_to_bytes(
     fid: "FreeInductionDecay | None" = None,
     sweep_width_ppm: float = 0.0,
     spectrometer_frequency_mhz: float = 0.0,
+    progress: ProgressSinkLike | None = None,
 ) -> bytes:
     """Build an nmrML byte blob from ``spectrum`` + optional ``fid``.
 
@@ -204,6 +211,7 @@ def spectrum_to_bytes(
     emit('  </spectrumList>\n')
     emit('</nmrML>\n')
 
+    _fire(progress, 1, 1)
     return "".join(parts).encode("utf-8")
 
 
@@ -214,12 +222,14 @@ def write_spectrum(
     fid: "FreeInductionDecay | None" = None,
     sweep_width_ppm: float = 0.0,
     spectrometer_frequency_mhz: float = 0.0,
+    progress: ProgressSinkLike | None = None,
 ) -> Path:
     blob = spectrum_to_bytes(
         spectrum,
         fid=fid,
         sweep_width_ppm=sweep_width_ppm,
         spectrometer_frequency_mhz=spectrometer_frequency_mhz,
+        progress=progress,
     )
     out = Path(path)
     out.write_bytes(blob)

@@ -23,12 +23,20 @@ from typing import Iterable, Mapping
 
 from ..feature import Feature
 from ..identification import Identification
+from ..io.progress import ProgressSinkLike, _fire
 from ..provenance import ProvenanceRecord
 from ..quantification import Quantification
 from ..spectral_dataset import SpectralDataset
 
 
-__all__ = ["write_dataset", "write", "dataset_to_bytes", "WriteResult"]
+__all__ = [
+    "write_dataset", "write", "dataset_to_bytes", "WriteResult",
+    "PROGRESS_INTERVAL_ROWS",
+]
+
+
+#: Mirror Java's ``MzTabWriter.PROGRESS_INTERVAL_ROWS``.
+PROGRESS_INTERVAL_ROWS = 500
 
 
 @dataclass(slots=True)
@@ -56,6 +64,7 @@ def write_dataset(
     title: str = "",
     description: str = "",
     features: Iterable[Feature] | None = None,
+    progress: ProgressSinkLike | None = None,
 ) -> WriteResult:
     """Write ``dataset``'s identifications + quantifications as mzTab.
 
@@ -79,6 +88,7 @@ def write_dataset(
         version=version,
         title=title or getattr(dataset, "title", "") or "",
         description=description,
+        progress=progress,
     )
 
 
@@ -107,6 +117,7 @@ def write(
     title: str = "",
     description: str = "",
     ms_run_locations: Mapping[int, str] | None = None,
+    progress: ProgressSinkLike | None = None,
 ) -> WriteResult:
     """Write mzTab text to ``path``. See :func:`dataset_to_bytes` for
     the content-model details."""
@@ -119,6 +130,7 @@ def write(
         title=title,
         description=description,
         ms_run_locations=ms_run_locations,
+        progress=progress,
     )
     out = Path(path)
     out.write_bytes(blob)
@@ -147,6 +159,7 @@ def dataset_to_bytes(
     title: str = "",
     description: str = "",
     ms_run_locations: Mapping[int, str] | None = None,
+    progress: ProgressSinkLike | None = None,
 ) -> bytes:
     """Build the mzTab text blob.
 
@@ -252,6 +265,22 @@ def dataset_to_bytes(
     lines.append("")  # blank separator
 
     n_psm = n_prt = n_sml = n_pep = n_smf = n_sme = 0
+    rows_emitted = 0
+    last_progress_emit = 0
+    # Total rows we expect to emit (best-effort up-front estimate;
+    # used as the `total` for progress callbacks).
+    estimated_total = (
+        len(idents) + len(quants) + len(feats) + len(idents) + len(feats)
+        if False  # avoid double-count of SME / SMF — fall back to len(rows)
+        else len(idents) + len(quants) + len(feats)
+    )
+
+    def _bump() -> None:
+        nonlocal rows_emitted, last_progress_emit
+        rows_emitted += 1
+        if rows_emitted >= last_progress_emit + PROGRESS_INTERVAL_ROWS:
+            _fire(progress, rows_emitted, estimated_total)
+            last_progress_emit = rows_emitted
 
     if version == "1.0":
         # ── PSH + PSM (proteomics identifications) ─────────────────────
@@ -291,6 +320,7 @@ def dataset_to_bytes(
                 ]
                 lines.append("\t".join(row))
                 n_psm += 1
+                _bump()
             lines.append("")
 
         # ── PRH + PRT (proteomics quantifications) ─────────────────────
@@ -323,6 +353,7 @@ def dataset_to_bytes(
                     row.append(f"{abundances[k]:g}" if k in abundances else "null")
                 lines.append("\t".join(row))
                 n_prt += 1
+                _bump()
             lines.append("")
 
         # ── PEH + PEP (proteomics peptide features, M78) ───────────────
@@ -366,6 +397,7 @@ def dataset_to_bytes(
                     row.append(f"{v:g}" if v is not None else "null")
                 lines.append("\t".join(row))
                 n_pep += 1
+                _bump()
             lines.append("")
 
     else:  # 2.0.0-M metabolomics
@@ -419,6 +451,7 @@ def dataset_to_bytes(
                     row.append("null")  # variation placeholder
                 lines.append("\t".join(row))
                 n_sml += 1
+                _bump()
             lines.append("")
 
         # ── SFH + SMF (small-molecule features, M78) ───────────────────
@@ -458,6 +491,7 @@ def dataset_to_bytes(
                     row.append(f"{v:g}" if v is not None else "null")
                 lines.append("\t".join(row))
                 n_smf += 1
+                _bump()
             lines.append("")
 
         # ── SEH + SME (small-molecule evidence, M78) ───────────────────
@@ -514,6 +548,7 @@ def dataset_to_bytes(
                 ]
                 lines.append("\t".join(row))
                 emitted += 1
+                _bump()
 
             for ident in sme_idents:
                 sme_id = next(
@@ -527,6 +562,9 @@ def dataset_to_bytes(
 
             n_sme = emitted
             lines.append("")
+
+    # Final progress fire: total now known exactly.
+    _fire(progress, rows_emitted, rows_emitted)
 
     # trailing newline after the last row for POSIX-clean files
     text = "\n".join(lines)
