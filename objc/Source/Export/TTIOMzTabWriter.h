@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOFeature;
 @class TTIOIdentification;
@@ -92,6 +93,19 @@ NS_ASSUME_NONNULL_BEGIN
                                          version:(NSString *)version
                                            title:(nullable NSString *)title
                                     description:(nullable NSString *)description
+                                          error:(NSError * _Nullable * _Nullable)error;
+
+/** Progress-aware overload. Fires once on success with
+ *  (totalRows, totalRows) where totalRows = sum of all section
+ *  counts (PSM + PRT + SML + PEP + SMF + SME). */
++ (nullable TTIOMzTabWriteResult *)writeToPath:(NSString *)path
+                                identifications:(nullable NSArray<TTIOIdentification *> *)idents
+                                quantifications:(nullable NSArray<TTIOQuantification *> *)quants
+                                        features:(nullable NSArray<TTIOFeature *> *)features
+                                         version:(NSString *)version
+                                           title:(nullable NSString *)title
+                                    description:(nullable NSString *)description
+                                        progress:(nullable TTIOProgressBlock)progress
                                           error:(NSError * _Nullable * _Nullable)error;
 
 @end

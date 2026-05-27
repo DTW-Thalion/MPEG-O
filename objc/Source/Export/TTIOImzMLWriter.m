@@ -18,6 +18,9 @@
 #import "Import/TTIOImzMLReader.h"
 #import <openssl/sha.h>
 
+// Mirrors Java ImzMLWriter.PROGRESS_INTERVAL_PIXELS (100).
+const NSUInteger TTIOImzMLWriterProgressIntervalPixels = 100;
+
 
 @implementation TTIOImzMLWriteResult {
     NSString *_imzmlPath;
@@ -134,6 +137,36 @@ static NSError *MakeError(NSInteger code, NSString *fmt, ...) {
                                        uuidHex:(nullable NSString *)uuidHex
                                          error:(NSError **)error
 {
+    return [self writePixels:pixels
+                 toImzMLPath:imzmlPath
+                     ibdPath:ibdPath
+                        mode:mode
+                    gridMaxX:gridMaxX
+                    gridMaxY:gridMaxY
+                    gridMaxZ:gridMaxZ
+                  pixelSizeX:pixelSizeX
+                  pixelSizeY:pixelSizeY
+                 scanPattern:scanPattern
+                     uuidHex:uuidHex
+                    progress:nil
+                       error:error];
+}
+
++ (nullable TTIOImzMLWriteResult *)writePixels:(NSArray<TTIOImzMLPixelSpectrum *> *)pixels
+                                   toImzMLPath:(NSString *)imzmlPath
+                                       ibdPath:(nullable NSString *)ibdPath
+                                          mode:(NSString *)mode
+                                     gridMaxX:(NSInteger)gridMaxX
+                                     gridMaxY:(NSInteger)gridMaxY
+                                     gridMaxZ:(NSInteger)gridMaxZ
+                                   pixelSizeX:(double)pixelSizeX
+                                   pixelSizeY:(double)pixelSizeY
+                                   scanPattern:(NSString *)scanPattern
+                                       uuidHex:(nullable NSString *)uuidHex
+                                       progress:(TTIOProgressBlock)progress
+                                         error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (![mode isEqualToString:@"continuous"] &&
         ![mode isEqualToString:@"processed"]) {
         if (error) *error = MakeError(1, @"mode must be 'continuous' or 'processed', got '%@'", mode);
@@ -391,7 +424,14 @@ static NSError *MakeError(NSInteger code, NSString *fmt, ...) {
         [xml appendString:@"          </binaryDataArray>\n"];
         [xml appendString:@"        </binaryDataArrayList>\n"];
         [xml appendString:@"      </spectrum>\n"];
+
+        // Per-N progress fire. Total = pixels.count.
+        if (((i + 1) % TTIOImzMLWriterProgressIntervalPixels) == 0) {
+            progress((int64_t)(i + 1), (int64_t)pixels.count);
+        }
     }
+    // Final fire.
+    progress((int64_t)pixels.count, (int64_t)pixels.count);
 
     [xml appendString:@"    </spectrumList>\n"];
     [xml appendString:@"  </run>\n"];
@@ -411,18 +451,32 @@ static NSError *MakeError(NSInteger code, NSString *fmt, ...) {
                                              ibdPath:(nullable NSString *)ibdPath
                                                error:(NSError **)error
 {
+    return [self writeFromImport:import
+                     toImzMLPath:imzmlPath
+                         ibdPath:ibdPath
+                        progress:nil
+                           error:error];
+}
+
++ (nullable TTIOImzMLWriteResult *)writeFromImport:(TTIOImzMLImport *)import
+                                         toImzMLPath:(NSString *)imzmlPath
+                                             ibdPath:(nullable NSString *)ibdPath
+                                            progress:(TTIOProgressBlock)progress
+                                               error:(NSError **)error
+{
     return [self writePixels:import.spectra
-                   toImzMLPath:imzmlPath
-                       ibdPath:ibdPath
-                          mode:import.mode
-                     gridMaxX:import.gridMaxX
-                     gridMaxY:import.gridMaxY
-                     gridMaxZ:import.gridMaxZ
-                   pixelSizeX:import.pixelSizeX
-                   pixelSizeY:import.pixelSizeY
-                   scanPattern:import.scanPattern
-                      uuidHex:import.uuidHex
-                        error:error];
+                 toImzMLPath:imzmlPath
+                     ibdPath:ibdPath
+                        mode:import.mode
+                    gridMaxX:import.gridMaxX
+                    gridMaxY:import.gridMaxY
+                    gridMaxZ:import.gridMaxZ
+                  pixelSizeX:import.pixelSizeX
+                  pixelSizeY:import.pixelSizeY
+                 scanPattern:import.scanPattern
+                     uuidHex:import.uuidHex
+                    progress:progress
+                       error:error];
 }
 
 @end

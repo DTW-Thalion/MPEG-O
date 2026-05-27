@@ -3,10 +3,13 @@
 
 #import <Foundation/Foundation.h>
 #import "TTIOJcampDxEncoding.h"
+#import "Core/TTIOProgressSink.h"
 
 @class TTIORamanSpectrum;
 @class TTIOIRSpectrum;
 @class TTIOUVVisSpectrum;
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -137,6 +140,35 @@
                   encoding:(TTIOJcampDxEncoding)encoding
                      error:(NSError **)error;
 
+#pragma mark - Progress-aware overloads
+
+/** Progress-aware overload. JCAMP-DX is single-spectrum, so the
+ *  block fires once with (1, 1) on a successful write. */
++ (BOOL)writeRamanSpectrum:(TTIORamanSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                  encoding:(TTIOJcampDxEncoding)encoding
+                  progress:(nullable TTIOProgressBlock)progress
+                     error:(NSError **)error;
+
+/** Progress-aware overload. */
++ (BOOL)writeIRSpectrum:(TTIOIRSpectrum *)spec
+                 toPath:(NSString *)path
+                  title:(NSString *)title
+               encoding:(TTIOJcampDxEncoding)encoding
+               progress:(nullable TTIOProgressBlock)progress
+                  error:(NSError **)error;
+
+/** Progress-aware overload. */
++ (BOOL)writeUVVisSpectrum:(TTIOUVVisSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                  encoding:(TTIOJcampDxEncoding)encoding
+                  progress:(nullable TTIOProgressBlock)progress
+                     error:(NSError **)error;
+
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif

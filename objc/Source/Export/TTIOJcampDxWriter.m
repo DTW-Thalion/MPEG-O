@@ -311,4 +311,56 @@ static NSString *buildCompressedDocument(const double *xs, const double *ys, NSU
     return writeStringToPath(doc, path, error);
 }
 
+// ── Progress-aware overloads ───────────────────────────────────
+// JCAMP-DX is single-spectrum: fire (1, 1) once on a successful
+// write. Mirrors Java + Python.
+
++ (BOOL)writeRamanSpectrum:(TTIORamanSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                  encoding:(TTIOJcampDxEncoding)encoding
+                  progress:(TTIOProgressBlock)progress
+                     error:(NSError **)error
+{
+    BOOL ok = [self writeRamanSpectrum:spec
+                                toPath:path
+                                 title:title
+                              encoding:encoding
+                                 error:error];
+    if (ok && progress) progress((int64_t)1, (int64_t)1);
+    return ok;
+}
+
++ (BOOL)writeIRSpectrum:(TTIOIRSpectrum *)spec
+                 toPath:(NSString *)path
+                  title:(NSString *)title
+               encoding:(TTIOJcampDxEncoding)encoding
+               progress:(TTIOProgressBlock)progress
+                  error:(NSError **)error
+{
+    BOOL ok = [self writeIRSpectrum:spec
+                             toPath:path
+                              title:title
+                           encoding:encoding
+                              error:error];
+    if (ok && progress) progress((int64_t)1, (int64_t)1);
+    return ok;
+}
+
++ (BOOL)writeUVVisSpectrum:(TTIOUVVisSpectrum *)spec
+                    toPath:(NSString *)path
+                     title:(NSString *)title
+                  encoding:(TTIOJcampDxEncoding)encoding
+                  progress:(TTIOProgressBlock)progress
+                     error:(NSError **)error
+{
+    BOOL ok = [self writeUVVisSpectrum:spec
+                                toPath:path
+                                 title:title
+                              encoding:encoding
+                                 error:error];
+    if (ok && progress) progress((int64_t)1, (int64_t)1);
+    return ok;
+}
+
 @end

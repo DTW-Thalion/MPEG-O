@@ -7,11 +7,15 @@
 #define TTIO_FASTQ_WRITER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOWrittenGenomicRun;
 @class TTIOGenomicRun;
 
 NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for FASTQ-write progress callbacks. */
+FOUNDATION_EXPORT const NSUInteger TTIOFastqWriterProgressIntervalReads;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -45,6 +49,18 @@ NS_ASSUME_NONNULL_BEGIN
      phredOffset:(uint8_t)phredOffset
            error:(NSError **)error;
 
+/** Progress-aware overload of
+ *  {@link writeRun:toPath:gzipOutput:phredOffset:error:}. Fires
+ *  {@code progress(written, total)} every
+ *  {@link TTIOFastqWriterProgressIntervalReads} records and a final
+ *  {@code progress(total, total)}. Pass nil to skip callbacks. */
++ (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
+          toPath:(NSString *)path
+      gzipOutput:(int)gzipOutput
+     phredOffset:(uint8_t)phredOffset
+        progress:(nullable TTIOProgressBlock)progress
+           error:(NSError **)error;
+
 /**
  * Write a read-side <code>TTIOGenomicRun</code> to FASTQ. Used by
  * the FASTQ-from-<code>.tio</code> export path.
@@ -53,6 +69,15 @@ NS_ASSUME_NONNULL_BEGIN
                   toPath:(NSString *)path
               gzipOutput:(int)gzipOutput
              phredOffset:(uint8_t)phredOffset
+                   error:(NSError **)error;
+
+/** Progress-aware overload of
+ *  {@link writeReadSideRun:toPath:gzipOutput:phredOffset:error:}. */
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+              gzipOutput:(int)gzipOutput
+             phredOffset:(uint8_t)phredOffset
+                progress:(nullable TTIOProgressBlock)progress
                    error:(NSError **)error;
 
 @end
