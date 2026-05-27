@@ -192,6 +192,13 @@ async def _emit_stream(
     # buffer. We then forward the raw bytes via the websocket. This
     # avoids duplicating the per-packet payload encoders (which can be
     # complex, e.g. write_reference_group spans hundreds of lines).
+    #
+    # IMPORTANT: write_reference_group / write_image / write_subject_metadata
+    # / etc. emit MULTIPLE packets per call (e.g. REFERENCE_GROUP_HEADER +
+    # N x REFERENCE_CHROMOSOME + END_OF_REFERENCE_GROUP). The client's
+    # `_split_packet` only parses one packet per WebSocket frame, so we
+    # have to split the concatenated buffer back into individual packets
+    # and send each as its own binary frame. (#144)
     def _encode_via_writer(call):
         """Invoke ``call(writer)`` with a fresh writer targeting a
         BytesIO, return the produced raw bytes (one or more packets).
@@ -200,6 +207,25 @@ async def _emit_stream(
         w = TransportWriter(buf)
         call(w)
         return buf.getvalue()
+
+    def _split_packets(raw: bytes) -> list[bytes]:
+        """Split a concatenated packet stream into per-packet slices
+        so each one can be sent as its own WebSocket frame."""
+        out: list[bytes] = []
+        off = 0
+        while off + HEADER_SIZE <= len(raw):
+            hdr = PacketHeader.from_bytes(raw[off:off + HEADER_SIZE])
+            has_crc = bool(hdr.flags & int(PacketFlag.HAS_CHECKSUM))
+            packet_len = HEADER_SIZE + hdr.payload_length + (4 if has_crc else 0)
+            out.append(raw[off:off + packet_len])
+            off += packet_len
+        return out
+
+    async def _send_writer_packets(call):
+        """Encode via TransportWriter, split into individual packets,
+        send each as its own binary frame."""
+        for packet_bytes in _split_packets(_encode_via_writer(call)):
+            await websocket.send(packet_bytes)
 
     for event in walk_dataset(dataset, query):
         if isinstance(event, StreamHeaderEvent):
@@ -255,55 +281,45 @@ async def _emit_stream(
         # v0.11 §5.4 prelude — re-use TransportWriter helpers to keep
         # the wire layout in lock-step with TransportWriter.write_dataset.
         elif isinstance(event, EncryptionAlgorithmEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_encryption_algorithm(event.algorithm)
             )
-            await websocket.send(raw)
         elif isinstance(event, DatasetProvenanceEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_dataset_provenance(event.records)
             )
-            await websocket.send(raw)
         elif isinstance(event, SubjectMetadataEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_subject_metadata(event.rows)
             )
-            await websocket.send(raw)
         elif isinstance(event, SampleMetadataEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_sample_metadata(event.rows)
             )
-            await websocket.send(raw)
         elif isinstance(event, ReferenceGroupEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_reference_group(event.reference)
             )
-            await websocket.send(raw)
         elif isinstance(event, ImageEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_image(event.image)
             )
-            await websocket.send(raw)
         elif isinstance(event, RamanImageEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_raman_image(event.image)
             )
-            await websocket.send(raw)
         elif isinstance(event, IRImageEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_ir_image(event.image)
             )
-            await websocket.send(raw)
         elif isinstance(event, IdentificationsTableEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_identifications_table(event.rows)
             )
-            await websocket.send(raw)
         elif isinstance(event, QuantificationsTableEvent):
-            raw = _encode_via_writer(
+            await _send_writer_packets(
                 lambda w: w.write_quantifications_table(event.rows)
             )
-            await websocket.send(raw)
 
 
 async def _send_packet(
