@@ -81,6 +81,12 @@ jobs:
               libgnutls28-dev libavahi-client-dev libicu-dev \
               libcurl4-openssl-dev make git bc
 
+      # libarrow-dev for TTIOArrowIpcBridge.mm (v0.11 transport).
+      # Ubuntu noble's default repos don't ship it; install via Apache's
+      # apt-source dance. Reuses the same composite action the main
+      # objc-build-test + cross-compat jobs use.
+      - uses: ./.github/actions/setup-libarrow
+
       - name: libobjc2 cache
         id: cache-libobjc2
         uses: actions/cache@v5
