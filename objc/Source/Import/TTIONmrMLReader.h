@@ -9,6 +9,7 @@
 #define TTIO_NMRML_READER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOSpectralDataset;
 @class TTIOFreeInductionDecay;
@@ -64,10 +65,24 @@
 + (TTIOSpectralDataset *)readFromData:(NSData *)data
                                 error:(NSError **)error;
 
+/** Progress-aware overload. nmrML is a single-spectrum format so the
+ *  block fires exactly once with {@code (1, 1)} after the parse
+ *  completes. Pass nil for {@code progress} to skip the callback. */
++ (nullable TTIOSpectralDataset *)readFromFilePath:(NSString *)path
+                                          progress:(nullable TTIOProgressBlock)progress
+                                             error:(NSError **)error;
+
 /** Instance-returning variant exposing the parsed FIDs (the
  *  TTIOSpectralDataset holds only processed spectra). */
 + (instancetype)parseFilePath:(NSString *)path error:(NSError **)error;
 + (instancetype)parseData:(NSData *)data error:(NSError **)error;
+
++ (nullable instancetype)parseFilePath:(NSString *)path
+                              progress:(nullable TTIOProgressBlock)progress
+                                 error:(NSError **)error;
++ (nullable instancetype)parseData:(NSData *)data
+                          progress:(nullable TTIOProgressBlock)progress
+                             error:(NSError **)error;
 
 @property (readonly, strong) TTIOSpectralDataset                  *dataset;
 @property (readonly, copy)   NSArray<TTIOFreeInductionDecay *>    *fids;

@@ -9,8 +9,14 @@
 #define TTIO_IMZML_READER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for {@link TTIOProgressBlock} callbacks
+ *  during imzML pixel materialisation. Mirrors Java's
+ *  {@code ImzMLReader.PROGRESS_INTERVAL_PIXELS}. */
+FOUNDATION_EXPORT const NSUInteger TTIOImzMLReaderProgressIntervalPixels;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -146,6 +152,18 @@ NS_ASSUME_NONNULL_BEGIN
  */
 + (nullable TTIOImzMLImport *)readFromImzMLPath:(NSString *)imzmlPath
                                          ibdPath:(nullable NSString *)ibdPath
+                                           error:(NSError **)error;
+
+/** Progress-aware overload of
+ *  {@link readFromImzMLPath:ibdPath:error:}. Fires
+ *  {@code progress(pixelsDone, totalPixels)} every
+ *  {@link TTIOImzMLReaderProgressIntervalPixels} pixels during the
+ *  ibd materialisation phase, and a final
+ *  {@code progress(total, total)} once all pixels are materialised.
+ *  Pass nil for {@code progress} to skip all callbacks. */
++ (nullable TTIOImzMLImport *)readFromImzMLPath:(NSString *)imzmlPath
+                                         ibdPath:(nullable NSString *)ibdPath
+                                        progress:(nullable TTIOProgressBlock)progress
                                            error:(NSError **)error;
 
 @end
