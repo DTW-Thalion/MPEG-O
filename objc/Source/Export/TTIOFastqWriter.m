@@ -28,6 +28,9 @@ static const uint8_t kPhred33Fill = '!';
 
 static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
 
+// Mirrors Java FastqWriter.PROGRESS_INTERVAL_READS (1000).
+const NSUInteger TTIOFastqWriterProgressIntervalReads = 1000;
+
 
 @implementation TTIOFastqWriter
 
@@ -37,6 +40,22 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
      phredOffset:(uint8_t)phredOffset
            error:(NSError **)error
 {
+    return [self writeRun:run
+                   toPath:path
+               gzipOutput:gzipOutput
+              phredOffset:phredOffset
+                 progress:nil
+                    error:error];
+}
+
++ (BOOL)writeRun:(TTIOWrittenGenomicRun *)run
+          toPath:(NSString *)path
+      gzipOutput:(int)gzipOutput
+     phredOffset:(uint8_t)phredOffset
+        progress:(TTIOProgressBlock)progress
+           error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (phredOffset != 33 && phredOffset != 64) {
         if (error) {
             *error = [NSError errorWithDomain:kErrDom code:1
@@ -108,7 +127,14 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
         [body appendBytes:&lf length:1];
         [body appendData:qualSlice];
         [body appendBytes:&lf length:1];
+
+        // Per-N progress fire. Total IS known (run.readNames.count).
+        if (((i + 1) % TTIOFastqWriterProgressIntervalReads) == 0) {
+            progress((int64_t)(i + 1), (int64_t)readNames.count);
+        }
     }
+    // Final fire — total = total.
+    progress((int64_t)readNames.count, (int64_t)readNames.count);
 
     if (gz) {
         gzFile gf = gzopen([path fileSystemRepresentation], "wb");
@@ -141,6 +167,22 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
              phredOffset:(uint8_t)phredOffset
                    error:(NSError **)error
 {
+    return [self writeReadSideRun:run
+                           toPath:path
+                       gzipOutput:gzipOutput
+                      phredOffset:phredOffset
+                         progress:nil
+                            error:error];
+}
+
++ (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+                  toPath:(NSString *)path
+              gzipOutput:(int)gzipOutput
+             phredOffset:(uint8_t)phredOffset
+                progress:(TTIOProgressBlock)progress
+                   error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (phredOffset != 33 && phredOffset != 64) {
         if (error) {
             *error = [NSError errorWithDomain:kErrDom code:1
@@ -215,7 +257,14 @@ static NSString *const kErrDom = @"TTIOFastqWriterErrorDomain";
         [body appendBytes:&lf length:1];
         [body appendData:qualSlice];
         [body appendBytes:&lf length:1];
+
+        // Per-N progress fire. Total = n.
+        if (((i + 1) % TTIOFastqWriterProgressIntervalReads) == 0) {
+            progress((int64_t)(i + 1), (int64_t)n);
+        }
     }
+    // Final fire.
+    progress((int64_t)n, (int64_t)n);
 
     if (gz) {
         gzFile gf = gzopen([path fileSystemRepresentation], "wb");

@@ -9,8 +9,11 @@
 #define TTIO_ISA_EXPORTER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOSpectralDataset;
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -79,6 +82,15 @@
                   toDirectory:(NSString *)directoryPath
                         error:(NSError **)error;
 
+/** Progress-aware overload. ISA bundle = 4 files; fires after each
+ *  file is written (and a final fire). */
++ (BOOL)writeBundleForDataset:(TTIOSpectralDataset *)dataset
+                  toDirectory:(NSString *)directoryPath
+                     progress:(nullable TTIOProgressBlock)progress
+                        error:(NSError **)error;
+
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif /* TTIO_ISA_EXPORTER_H */

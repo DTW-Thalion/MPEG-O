@@ -21,6 +21,9 @@
 #import "HDF5/TTIOHDF5Errors.h"
 #import <sys/stat.h>
 
+// Mirrors Java BamReader.PROGRESS_INTERVAL_READS (1000).
+const NSUInteger TTIOBamReaderProgressIntervalReads = 1000;
+
 // ── Install help text per Binding Decision §135.
 // Must contain the substrings "apt", "brew", "conda" so cross-language
 // tests can grep for at least one.
@@ -147,6 +150,20 @@ static NSDictionary<NSString *, NSString *> *bamParseHeaderFields(NSString *line
                                                sampleName:(nullable NSString *)sampleName
                                                     error:(NSError **)error
 {
+    return [self toGenomicRunWithName:name
+                                region:region
+                            sampleName:sampleName
+                              progress:nil
+                                 error:error];
+}
+
+- (nullable TTIOWrittenGenomicRun *)toGenomicRunWithName:(nullable NSString *)name
+                                                   region:(nullable NSString *)region
+                                               sampleName:(nullable NSString *)sampleName
+                                                 progress:(nullable TTIOProgressBlock)progress
+                                                    error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     NSString *runName = name ?: @"genomic_0001";
     (void)runName;  // used only for caller-side bookkeeping; not stored on WGR.
 
@@ -374,7 +391,16 @@ static NSDictionary<NSString *, NSString *> *bamParseHeaderFields(NSString *line
         [sequencesData appendData:seqBytes];
         [qualitiesData appendData:qualBytes];
         runningOffset += length;
+
+        // Per-N progress fire. Total stays -1 throughout the parse;
+        // samtools is a streaming subprocess with no record count.
+        if ((readNames.count % TTIOBamReaderProgressIntervalReads) == 0) {
+            progress((int64_t)readNames.count, (int64_t)-1);
+        }
     }
+
+    // Final fire with the true count.
+    progress((int64_t)readNames.count, (int64_t)readNames.count);
 
     self.provenanceRecords = provenance;
 

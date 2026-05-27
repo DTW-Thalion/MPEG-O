@@ -134,6 +134,7 @@ static NSString *BuildSmeRow(NSString *smeId,
                      version:version
                        title:title
                  description:description
+                    progress:nil
                        error:error];
 }
 
@@ -144,6 +145,27 @@ static NSString *BuildSmeRow(NSString *smeId,
                                          version:(NSString *)version
                                            title:(NSString *)title
                                     description:(NSString *)description
+                                          error:(NSError **)error
+{
+    return [self writeToPath:path
+             identifications:idents
+             quantifications:quants
+                    features:features
+                     version:version
+                       title:title
+                 description:description
+                    progress:nil
+                       error:error];
+}
+
++ (nullable TTIOMzTabWriteResult *)writeToPath:(NSString *)path
+                                identifications:(NSArray<TTIOIdentification *> *)idents
+                                quantifications:(NSArray<TTIOQuantification *> *)quants
+                                        features:(NSArray<TTIOFeature *> *)features
+                                         version:(NSString *)version
+                                           title:(NSString *)title
+                                    description:(NSString *)description
+                                        progress:(TTIOProgressBlock)progress
                                           error:(NSError **)error
 {
     if (![version isEqualToString:@"1.0"] && ![version isEqualToString:@"2.0.0-M"]) {
@@ -481,6 +503,12 @@ static NSString *BuildSmeRow(NSString *smeId,
     BOOL ok = [text writeToFile:path atomically:YES
                         encoding:NSUTF8StringEncoding error:&ioErr];
     if (!ok) { if (error) *error = ioErr; return nil; }
+
+    // Final fire on successful write. Mirrors Java + Python. mzTab is
+    // not iterated record-by-record because the writer assembles the
+    // whole document in memory; emit a single (total, total).
+    NSUInteger totalRows = nPSM + nPRT + nSML + nPEP + nSMF + nSME;
+    if (progress) progress((int64_t)totalRows, (int64_t)totalRows);
 
     return [[TTIOMzTabWriteResult alloc] initWithPath:path version:version
                                                    psm:nPSM prt:nPRT sml:nSML

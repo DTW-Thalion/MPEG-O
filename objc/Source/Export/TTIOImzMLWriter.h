@@ -2,11 +2,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOImzMLPixelSpectrum;
 @class TTIOImzMLImport;
 
 NS_ASSUME_NONNULL_BEGIN
+
+/** Emit-every-N cadence for imzML-write progress callbacks. */
+FOUNDATION_EXPORT const NSUInteger TTIOImzMLWriterProgressIntervalPixels;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -96,6 +100,32 @@ NS_ASSUME_NONNULL_BEGIN
 + (nullable TTIOImzMLWriteResult *)writeFromImport:(TTIOImzMLImport *)import
                                          toImzMLPath:(NSString *)imzmlPath
                                              ibdPath:(nullable NSString *)ibdPath
+                                               error:(NSError * _Nullable * _Nullable)error;
+
+/** Progress-aware overload of
+ *  {@link writePixels:toImzMLPath:ibdPath:mode:gridMaxX:gridMaxY:gridMaxZ:pixelSizeX:pixelSizeY:scanPattern:uuidHex:error:}.
+ *  Fires per
+ *  {@link TTIOImzMLWriterProgressIntervalPixels} pixels + a final
+ *  fire. */
++ (nullable TTIOImzMLWriteResult *)writePixels:(NSArray<TTIOImzMLPixelSpectrum *> *)pixels
+                                     toImzMLPath:(NSString *)imzmlPath
+                                         ibdPath:(nullable NSString *)ibdPath
+                                            mode:(NSString *)mode
+                                       gridMaxX:(NSInteger)gridMaxX
+                                       gridMaxY:(NSInteger)gridMaxY
+                                       gridMaxZ:(NSInteger)gridMaxZ
+                                     pixelSizeX:(double)pixelSizeX
+                                     pixelSizeY:(double)pixelSizeY
+                                     scanPattern:(NSString *)scanPattern
+                                        uuidHex:(nullable NSString *)uuidHex
+                                       progress:(nullable TTIOProgressBlock)progress
+                                          error:(NSError * _Nullable * _Nullable)error;
+
+/** Progress-aware overload of {@link writeFromImport:toImzMLPath:ibdPath:error:}. */
++ (nullable TTIOImzMLWriteResult *)writeFromImport:(TTIOImzMLImport *)import
+                                         toImzMLPath:(NSString *)imzmlPath
+                                             ibdPath:(nullable NSString *)ibdPath
+                                            progress:(nullable TTIOProgressBlock)progress
                                                error:(NSError * _Nullable * _Nullable)error;
 
 @end

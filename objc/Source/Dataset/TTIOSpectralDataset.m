@@ -2765,6 +2765,29 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
           provenanceRecords:(NSArray *)provenance
                       error:(NSError **)error
 {
+    return [self writeMinimalToPath:path
+                              title:title
+                 isaInvestigationId:isaId
+                          mixedRuns:mixedRuns
+                        genomicRuns:genomicRuns
+                    identifications:identifications
+                    quantifications:quantifications
+                  provenanceRecords:provenance
+                           progress:nil
+                              error:error];
+}
+
++ (BOOL)writeMinimalToPath:(NSString *)path
+                      title:(NSString *)title
+        isaInvestigationId:(NSString *)isaId
+                  mixedRuns:(NSDictionary<NSString *, id> *)mixedRuns
+                genomicRuns:(NSDictionary<NSString *, TTIOWrittenGenomicRun *> *)genomicRuns
+            identifications:(NSArray *)identifications
+            quantifications:(NSArray *)quantifications
+          provenanceRecords:(NSArray *)provenance
+                   progress:(TTIOProgressBlock)progress
+                      error:(NSError **)error
+{
     // Phase 2: split the mixed dict into MS-only + genomic-only maps,
     // dispatching per-value on isKindOfClass:. Pre-existing
     // genomicRuns= entries are merged in; a name appearing in BOTH
@@ -2804,15 +2827,66 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         }
     }
 
-    return [self writeMinimalToPath:path
-                              title:title
-                 isaInvestigationId:isaId
-                             msRuns:splitMS
-                         genomicRuns:splitG
-                     identifications:identifications
-                     quantifications:quantifications
-                  provenanceRecords:provenance
-                              error:error];
+    // ──────────────────────────────────────────────────────────────────
+    // Progress: compute section presence flags in §5.4 order, fire a
+    // baseline (0, total), then dispatch to the inner write. After a
+    // successful write, fire one (idx, total) per present section in
+    // §5.4 order. Mirrors Python's _section_flags table; encryption is
+    // a placeholder (writeMinimal never encrypts) so it never fires.
+    // Empty sections are skipped from the count.
+    // ──────────────────────────────────────────────────────────────────
+    BOOL hasProvenance      = provenance.count > 0;
+    BOOL hasSubjects        = NO;   // writeMinimal does not accept subjects.
+    BOOL hasSamples         = NO;   // writeMinimal does not accept samples.
+    BOOL hasReferences      = (splitG.count > 0);
+    BOOL hasImage           = NO;   // writeMinimal does not accept image cubes.
+    BOOL hasIdentifications = identifications.count > 0;
+    BOOL hasQuantifications = quantifications.count > 0;
+    BOOL hasRuns            = (splitMS.count > 0 || splitG.count > 0);
+
+    NSUInteger progressTotal =
+        (hasProvenance       ? 1 : 0) +
+        (hasSubjects         ? 1 : 0) +
+        (hasSamples          ? 1 : 0) +
+        (hasReferences       ? 1 : 0) +
+        (hasImage            ? 1 : 0) +
+        (hasIdentifications  ? 1 : 0) +
+        (hasQuantifications  ? 1 : 0) +
+        (hasRuns             ? 1 : 0);
+
+    if (progress) progress((int64_t)0, (int64_t)progressTotal);
+
+    BOOL ok = [self writeMinimalToPath:path
+                                 title:title
+                    isaInvestigationId:isaId
+                                msRuns:splitMS
+                           genomicRuns:splitG
+                       identifications:identifications
+                       quantifications:quantifications
+                     provenanceRecords:provenance
+                                 error:error];
+    if (!ok) return NO;
+
+    // Fire section-by-section progress in §5.4 order. Because the
+    // inner write is synchronous + monolithic, these fires arrive
+    // clustered at end-of-write rather than interleaved. The
+    // contract — "one (idx, total) per non-empty section in §5.4
+    // order" — is satisfied; UI consumers see correct cumulative
+    // totals even if they cluster. Threading the fires through the
+    // 200+-line inner write is a follow-up if interleaved cadence
+    // becomes a hard requirement.
+    if (progress) {
+        NSUInteger done = 0;
+        if (hasProvenance)      progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasSubjects)        progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasSamples)         progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasReferences)      progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasImage)           progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasIdentifications) progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasQuantifications) progress((int64_t)(++done), (int64_t)progressTotal);
+        if (hasRuns)            progress((int64_t)(++done), (int64_t)progressTotal);
+    }
+    return YES;
 }
 
 + (BOOL)writeMinimalToPath:(NSString *)path

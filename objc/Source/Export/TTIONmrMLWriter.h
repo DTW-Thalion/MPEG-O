@@ -9,9 +9,12 @@
 #define TTIO_NMRML_WRITER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIONMRSpectrum;
 @class TTIOFreeInductionDecay;
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -57,10 +60,18 @@
  * @param error         Out-parameter populated on failure.
  * @return UTF-8 nmrML data, or <code>nil</code> on failure.
  */
-+ (NSData *)dataForSpectrum:(TTIONMRSpectrum *)spectrum
-                        fid:(TTIOFreeInductionDecay *)fid
-              sweepWidthPPM:(double)sweepWidthPPM
-                      error:(NSError **)error;
++ (nullable NSData *)dataForSpectrum:(TTIONMRSpectrum *)spectrum
+                                  fid:(nullable TTIOFreeInductionDecay *)fid
+                        sweepWidthPPM:(double)sweepWidthPPM
+                                error:(NSError **)error;
+
+/** Progress-aware overload. nmrML is single-spectrum so the block
+ *  fires once with (1, 1) at the end of a successful serialisation. */
++ (nullable NSData *)dataForSpectrum:(TTIONMRSpectrum *)spectrum
+                                  fid:(nullable TTIOFreeInductionDecay *)fid
+                        sweepWidthPPM:(double)sweepWidthPPM
+                             progress:(nullable TTIOProgressBlock)progress
+                                error:(NSError **)error;
 
 /**
  * Convenience wrapper around <code>+dataForSpectrum:...</code> that
@@ -74,11 +85,21 @@
  * @return <code>YES</code> on success, <code>NO</code> on failure.
  */
 + (BOOL)writeSpectrum:(TTIONMRSpectrum *)spectrum
-                  fid:(TTIOFreeInductionDecay *)fid
+                  fid:(nullable TTIOFreeInductionDecay *)fid
         sweepWidthPPM:(double)sweepWidthPPM
                toPath:(NSString *)path
                 error:(NSError **)error;
 
+/** Progress-aware overload. Single (1, 1) fire at end of write. */
++ (BOOL)writeSpectrum:(TTIONMRSpectrum *)spectrum
+                  fid:(nullable TTIOFreeInductionDecay *)fid
+        sweepWidthPPM:(double)sweepWidthPPM
+               toPath:(NSString *)path
+             progress:(nullable TTIOProgressBlock)progress
+                error:(NSError **)error;
+
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif

@@ -94,7 +94,14 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
 
 + (TTIOSpectralDataset *)readFromFilePath:(NSString *)path error:(NSError **)error
 {
-    TTIONmrMLReader *r = [self parseFilePath:path error:error];
+    return [self readFromFilePath:path progress:nil error:error];
+}
+
++ (TTIOSpectralDataset *)readFromFilePath:(NSString *)path
+                                 progress:(TTIOProgressBlock)progress
+                                    error:(NSError **)error
+{
+    TTIONmrMLReader *r = [self parseFilePath:path progress:progress error:error];
     return r.dataset;
 }
 
@@ -118,6 +125,13 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
 
 + (instancetype)parseFilePath:(NSString *)path error:(NSError **)error
 {
+    return [self parseFilePath:path progress:nil error:error];
+}
+
++ (instancetype)parseFilePath:(NSString *)path
+                     progress:(TTIOProgressBlock)progress
+                        error:(NSError **)error
+{
     NSData *data = [NSData dataWithContentsOfFile:path];
     if (!data) {
         if (error) *error = [NSError errorWithDomain:TTIONmrMLReaderErrorDomain
@@ -126,10 +140,17 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
                             [NSString stringWithFormat:@"Cannot read %@", path]}];
         return nil;
     }
-    return [self parseData:data error:error];
+    return [self parseData:data progress:progress error:error];
 }
 
 + (instancetype)parseData:(NSData *)data error:(NSError **)error
+{
+    return [self parseData:data progress:nil error:error];
+}
+
++ (instancetype)parseData:(NSData *)data
+                 progress:(TTIOProgressBlock)progress
+                    error:(NSError **)error
 {
     if (!data) {
         if (error) *error = [NSError errorWithDomain:TTIONmrMLReaderErrorDomain
@@ -140,6 +161,9 @@ NSString *const TTIONmrMLReaderErrorDomain = @"TTIONmrMLReaderErrorDomain";
     }
     TTIONmrMLReader *r = [[self alloc] init];
     if (![r parseData:data error:error]) return nil;
+    // nmrML is a single-spectrum format: one fire after a successful
+    // parse. Mirrors Java + Python.
+    if (progress) progress((int64_t)1, (int64_t)1);
     return r;
 }
 

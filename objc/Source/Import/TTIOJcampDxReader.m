@@ -144,6 +144,13 @@ static BOOL parseXY(NSDictionary<NSString *, NSString *> *ldrs,
 
 + (TTIOSpectrum *)readSpectrumFromPath:(NSString *)path error:(NSError **)error
 {
+    return [self readSpectrumFromPath:path progress:nil error:error];
+}
+
++ (TTIOSpectrum *)readSpectrumFromPath:(NSString *)path
+                              progress:(TTIOProgressBlock)progress
+                                 error:(NSError **)error
+{
     NSString *text = [NSString stringWithContentsOfFile:path
                                                 encoding:NSUTF8StringEncoding
                                                    error:error];
@@ -164,6 +171,7 @@ static BOOL parseXY(NSDictionary<NSString *, NSString *> *ldrs,
     }
 
     NSString *dataType = [ldrs[@"DATA TYPE"] uppercaseString] ?: @"";
+    TTIOSpectrum *result = nil;
 
     if ([dataType isEqualToString:@"UV/VIS SPECTRUM"] ||
         [dataType isEqualToString:@"UV-VIS SPECTRUM"] ||
@@ -172,57 +180,60 @@ static BOOL parseXY(NSDictionary<NSString *, NSString *> *ldrs,
         TTIOSignalArray *abA = makeArr(ys);
         double pl = [ldrs[@"$PATH LENGTH CM"] doubleValue];
         NSString *solvent = ldrs[@"$SOLVENT"] ?: @"";
-        return [[TTIOUVVisSpectrum alloc] initWithWavelengthArray:wlA
-                                                   absorbanceArray:abA
-                                                      pathLengthCm:pl
-                                                           solvent:solvent
-                                                     indexPosition:0
-                                                   scanTimeSeconds:0
-                                                             error:error];
-    }
+        result = [[TTIOUVVisSpectrum alloc] initWithWavelengthArray:wlA
+                                                    absorbanceArray:abA
+                                                       pathLengthCm:pl
+                                                            solvent:solvent
+                                                      indexPosition:0
+                                                    scanTimeSeconds:0
+                                                              error:error];
+    } else {
+        TTIOSignalArray *xA = makeArr(xs);
+        TTIOSignalArray *yA = makeArr(ys);
 
-    TTIOSignalArray *xA = makeArr(xs);
-    TTIOSignalArray *yA = makeArr(ys);
-
-    if ([dataType isEqualToString:@"RAMAN SPECTRUM"]) {
-        double exc = [ldrs[@"$EXCITATION WAVELENGTH NM"] doubleValue];
-        double pow = [ldrs[@"$LASER POWER MW"] doubleValue];
-        double itm = [ldrs[@"$INTEGRATION TIME SEC"] doubleValue];
-        return [[TTIORamanSpectrum alloc] initWithWavenumberArray:xA
-                                                    intensityArray:yA
-                                            excitationWavelengthNm:exc
-                                                      laserPowerMw:pow
-                                                integrationTimeSec:itm
-                                                     indexPosition:0
-                                                   scanTimeSeconds:0
-                                                             error:error];
-    }
-    if ([dataType isEqualToString:@"INFRARED ABSORBANCE"] ||
-        [dataType isEqualToString:@"INFRARED TRANSMITTANCE"] ||
-        [dataType isEqualToString:@"INFRARED SPECTRUM"]) {
-        TTIOIRMode mode = [dataType isEqualToString:@"INFRARED ABSORBANCE"]
-            ? TTIOIRModeAbsorbance : TTIOIRModeTransmittance;
-        if ([dataType isEqualToString:@"INFRARED SPECTRUM"]) {
-            NSString *yU = [ldrs[@"YUNITS"] uppercaseString];
-            mode = [yU containsString:@"ABSORB"] ? TTIOIRModeAbsorbance
-                                                  : TTIOIRModeTransmittance;
+        if ([dataType isEqualToString:@"RAMAN SPECTRUM"]) {
+            double exc = [ldrs[@"$EXCITATION WAVELENGTH NM"] doubleValue];
+            double pow = [ldrs[@"$LASER POWER MW"] doubleValue];
+            double itm = [ldrs[@"$INTEGRATION TIME SEC"] doubleValue];
+            result = [[TTIORamanSpectrum alloc] initWithWavenumberArray:xA
+                                                         intensityArray:yA
+                                                 excitationWavelengthNm:exc
+                                                           laserPowerMw:pow
+                                                     integrationTimeSec:itm
+                                                          indexPosition:0
+                                                        scanTimeSeconds:0
+                                                                  error:error];
+        } else if ([dataType isEqualToString:@"INFRARED ABSORBANCE"] ||
+            [dataType isEqualToString:@"INFRARED TRANSMITTANCE"] ||
+            [dataType isEqualToString:@"INFRARED SPECTRUM"]) {
+            TTIOIRMode mode = [dataType isEqualToString:@"INFRARED ABSORBANCE"]
+                ? TTIOIRModeAbsorbance : TTIOIRModeTransmittance;
+            if ([dataType isEqualToString:@"INFRARED SPECTRUM"]) {
+                NSString *yU = [ldrs[@"YUNITS"] uppercaseString];
+                mode = [yU containsString:@"ABSORB"] ? TTIOIRModeAbsorbance
+                                                      : TTIOIRModeTransmittance;
+            }
+            double res    = [ldrs[@"RESOLUTION"] doubleValue];
+            NSUInteger ns = (NSUInteger)[ldrs[@"$NUMBER OF SCANS"] integerValue];
+            result = [[TTIOIRSpectrum alloc] initWithWavenumberArray:xA
+                                                      intensityArray:yA
+                                                                mode:mode
+                                                     resolutionCmInv:res
+                                                       numberOfScans:ns
+                                                       indexPosition:0
+                                                     scanTimeSeconds:0
+                                                               error:error];
+        } else {
+            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                [NSString stringWithFormat:@"JCAMP-DX: unsupported DATA TYPE='%@'",
+                                            ldrs[@"DATA TYPE"] ?: @""]);
+            return nil;
         }
-        double res    = [ldrs[@"RESOLUTION"] doubleValue];
-        NSUInteger ns = (NSUInteger)[ldrs[@"$NUMBER OF SCANS"] integerValue];
-        return [[TTIOIRSpectrum alloc] initWithWavenumberArray:xA
-                                                 intensityArray:yA
-                                                           mode:mode
-                                                resolutionCmInv:res
-                                                  numberOfScans:ns
-                                                  indexPosition:0
-                                                scanTimeSeconds:0
-                                                          error:error];
     }
 
-    if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
-        [NSString stringWithFormat:@"JCAMP-DX: unsupported DATA TYPE='%@'",
-                                    ldrs[@"DATA TYPE"] ?: @""]);
-    return nil;
+    // JCAMP-DX is single-spectrum: one (1, 1) fire on success.
+    if (result && progress) progress((int64_t)1, (int64_t)1);
+    return result;
 }
 
 @end

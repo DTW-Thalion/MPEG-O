@@ -2,8 +2,11 @@
 #define TTIO_JCAMP_DX_READER_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOSpectrum;
+
+NS_ASSUME_NONNULL_BEGIN
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -49,8 +52,17 @@
  *         <code>TTIOUVVisSpectrum</code>, or <code>nil</code> on
  *         failure.
  */
-+ (TTIOSpectrum *)readSpectrumFromPath:(NSString *)path error:(NSError **)error;
++ (nullable TTIOSpectrum *)readSpectrumFromPath:(NSString *)path error:(NSError **)error;
+
+/** Progress-aware overload. JCAMP-DX is a single-spectrum format so
+ *  the block fires exactly once with {@code (1, 1)} after the parse
+ *  completes. Pass nil for {@code progress} to skip the callback. */
++ (nullable TTIOSpectrum *)readSpectrumFromPath:(NSString *)path
+                                       progress:(nullable TTIOProgressBlock)progress
+                                          error:(NSError **)error;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif
