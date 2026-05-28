@@ -73,9 +73,40 @@ class PasswordTotpAuth(AuthProvider):
 
     @property
     def username(self) -> str:
+        """Username supplied at construction.
+
+        Returns
+        -------
+        str
+            The bearer username; used by the SDK as the upload
+            ``owner`` field on the WS handshake.
+        """
         return self.username_
 
     def authenticate(self, host: str, port: int, scheme: str) -> Session:
+        """Log in via password + TOTP and return a :class:`Session`.
+
+        Parameters
+        ----------
+        host : str
+            Workbench server hostname.
+        port : int
+            REST listener port.
+        scheme : str
+            ``"http"`` or ``"https"``.
+
+        Returns
+        -------
+        Session
+            Authenticated session with bearer token and capability
+            set populated from the server.
+
+        Raises
+        ------
+        WorkbenchAuthError
+            Subclass thereof on credential rejection, expired TOTP,
+            or transport failure.
+        """
         return login_password(host, port, self.username_,
                                 self.password, self.totp, scheme=scheme)
 
@@ -96,9 +127,36 @@ class BearerAuth(AuthProvider):
 
     @property
     def username(self) -> str:
+        """Username supplied at construction.
+
+        Returns
+        -------
+        str
+            The bearer username; used by the SDK as the upload
+            ``owner`` field on the WS handshake.
+        """
         return self.username_
 
     def authenticate(self, host: str, port: int, scheme: str) -> Session:
+        """Synthesise a :class:`Session` from the cached bearer.
+
+        Parameters
+        ----------
+        host : str
+            Unused; the bearer is presumed already valid.
+        port : int
+            Unused.
+        scheme : str
+            Unused.
+
+        Returns
+        -------
+        Session
+            Session built from the caller-supplied token, username,
+            projects, capabilities, and expiry. ``user_id`` and
+            ``session_id`` are empty because no login round-trip is
+            performed.
+        """
         return Session(
             token=self.token,
             username=self.username_,
@@ -128,11 +186,49 @@ class BootstrapAdminAuth(AuthProvider):
 
     @property
     def username(self) -> str:
+        """Read the bootstrap admin's username off disk.
+
+        Returns
+        -------
+        str
+            Username from ``<staging_root>/bootstrap-credentials.json``.
+
+        Raises
+        ------
+        OSError
+            If the credentials file is missing or unreadable.
+        KeyError
+            If the JSON file lacks a ``username`` field.
+        """
         path = os.path.join(self.staging_root, "bootstrap-credentials.json")
         with open(path) as f:
             return json.load(f)["username"]
 
     def authenticate(self, host: str, port: int, scheme: str) -> Session:
+        """Log in as the bootstrap admin using the on-disk credentials.
+
+        Parameters
+        ----------
+        host : str
+            Workbench server hostname.
+        port : int
+            REST listener port.
+        scheme : str
+            ``"http"`` or ``"https"``.
+
+        Returns
+        -------
+        Session
+            Authenticated session. The TOTP is computed on the fly
+            from the secret stored alongside the password.
+
+        Raises
+        ------
+        OSError
+            If the credentials file is missing or unreadable.
+        WorkbenchAuthError
+            On login rejection.
+        """
         path = os.path.join(self.staging_root, "bootstrap-credentials.json")
         with open(path) as f:
             creds = json.load(f)
@@ -154,6 +250,20 @@ class OIDCAuth(AuthProvider):
 
     def __init__(self, issuer: Optional[str] = None,
                   client_id: Optional[str] = None):
+        """Construct the OIDC placeholder.
+
+        Parameters
+        ----------
+        issuer : str, optional
+            OIDC issuer URL; retained for future use.
+        client_id : str, optional
+            OIDC client identifier; retained for future use.
+
+        Notes
+        -----
+        The constructor never contacts the issuer. The placeholder
+        only raises when ``authenticate`` or ``username`` is read.
+        """
         self._issuer = issuer
         self._client_id = client_id
 

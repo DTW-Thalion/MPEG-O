@@ -72,11 +72,37 @@ NS_ASSUME_NONNULL_END
  */
 @interface TTIOMzMLReader : NSObject
 
-/** One-shot class methods. Return only the dataset. */
+/**
+ * Parse an mzML file from a filesystem path.
+ *
+ * @param path   Filesystem path to the mzML document.
+ * @param error  On failure, populated with an ``NSError`` in
+ *               ``TTIOMzMLReaderErrorDomain``. May be ``NULL``.
+ * @return The populated dataset on success; ``nil`` on parse
+ *         failure or IO error.
+ */
 + (TTIOSpectralDataset *)readFromFilePath:(NSString *)path
                                     error:(NSError **)error;
+
+/**
+ * Parse an mzML file referenced by an ``NSURL``.
+ *
+ * @param url    File or data URL pointing at the mzML document.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return The populated dataset on success; ``nil`` on failure.
+ */
 + (TTIOSpectralDataset *)readFromURL:(NSURL *)url
                                error:(NSError **)error;
+
+/**
+ * Parse an mzML document from an in-memory byte buffer.
+ *
+ * @param data   Raw mzML XML bytes.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return The populated dataset on success; ``nil`` on failure.
+ */
 + (TTIOSpectralDataset *)readFromData:(NSData *)data
                                 error:(NSError **)error;
 
@@ -90,17 +116,56 @@ NS_ASSUME_NONNULL_END
                                           progress:(nullable TTIOProgressBlock)progress
                                              error:(NSError **)error;
 
-/** Instance-returning variants that also expose chromatograms and
- *  parsed provenance separately, since v0.1 TTIOSpectralDataset has
- *  no chromatogram slot. Returns nil on failure. */
+/**
+ * Parse an mzML file and return a reader instance that exposes the
+ * dataset plus the parsed chromatograms as a separate array.
+ *
+ * @param path   Filesystem path to the mzML document.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return A reader carrying the populated ``dataset`` and
+ *         ``chromatograms`` properties; ``nil`` on failure.
+ */
 + (instancetype)parseFilePath:(NSString *)path error:(NSError **)error;
+
+/**
+ * Parse an mzML document from an in-memory byte buffer and return a
+ * reader instance.
+ *
+ * @param data   Raw mzML XML bytes.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return A reader carrying the populated ``dataset`` and
+ *         ``chromatograms`` properties; ``nil`` on failure.
+ */
 + (instancetype)parseData:(NSData *)data error:(NSError **)error;
 
-/** Progress-aware overloads of {@link parseFilePath:error:} +
- *  {@link parseData:error:}. */
+/**
+ * Progress-aware overload of {@link parseFilePath:error:}.
+ *
+ * @param path      Filesystem path to the mzML document.
+ * @param progress  Optional block fired every
+ *                  {@link TTIOMzMLReaderProgressIntervalSpectra}
+ *                  spectra with ``total = -1``, and once at the end
+ *                  with the final count. May be ``nil``.
+ * @param error     On failure, populated with an ``NSError``. May be
+ *                  ``NULL``.
+ * @return A reader on success; ``nil`` on failure.
+ */
 + (nullable instancetype)parseFilePath:(NSString *)path
                               progress:(nullable TTIOProgressBlock)progress
                                  error:(NSError **)error;
+
+/**
+ * Progress-aware overload of {@link parseData:error:}.
+ *
+ * @param data      Raw mzML XML bytes.
+ * @param progress  Optional block fired during the parse. May be
+ *                  ``nil``.
+ * @param error     On failure, populated with an ``NSError``. May be
+ *                  ``NULL``.
+ * @return A reader on success; ``nil`` on failure.
+ */
 + (nullable instancetype)parseData:(NSData *)data
                           progress:(nullable TTIOProgressBlock)progress
                              error:(NSError **)error;

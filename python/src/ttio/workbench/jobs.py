@@ -75,10 +75,32 @@ class Job:
 
     @property
     def is_terminal(self) -> bool:
+        """Return True when the job has reached a terminal status.
+
+        Returns
+        -------
+        bool
+            True for ``completed``, ``failed``, or ``cancelled``;
+            False for ``queued``, ``starting``, or ``running``.
+        """
         return self.status in self.TERMINAL_STATUSES
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "Job":
+        """Construct a :class:`Job` from a parsed server JSON body.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object as returned by the ``/v1/jobs`` REST
+            surface.
+
+        Returns
+        -------
+        Job
+            Immutable snapshot. Missing optional fields collapse to
+            ``None`` / empty dict.
+        """
         return cls(
             job_id=body["job_id"],
             pipeline_id=body["pipeline_id"],
@@ -126,6 +148,20 @@ class JobsClient:
     """Job submit + tracking surface."""
 
     def __init__(self, host: str, port: int, *, scheme: str, token: str):
+        """Bind the client to a server endpoint and bearer token.
+
+        Parameters
+        ----------
+        host : str
+            Workbench server hostname.
+        port : int
+            TCP port the REST listener is bound to.
+        scheme : str
+            ``"http"`` or ``"https"``.
+        token : str
+            Bearer token (``ttiowbs_...``) used for ``Authorization``
+            headers on every REST call.
+        """
         self._host = host
         self._port = port
         self._scheme = scheme
@@ -138,6 +174,29 @@ class JobsClient:
         inputs: Mapping[str, JobInput],
         params: Optional[Mapping[str, Any]] = None,
     ) -> Job:
+        """Submit a new pipeline job to the server queue.
+
+        Parameters
+        ----------
+        pipeline_id : str
+            Registered pipeline identifier (server-assigned UUID).
+        inputs : Mapping[str, JobInput]
+            Per-slot inputs. Each value is either a container URI
+            string or a ``{"cohort_query": <query>}`` envelope built
+            via :func:`build_cohort_input`.
+        params : Mapping[str, Any], optional
+            Free-form pipeline parameters. Not validated by v1.0.
+
+        Returns
+        -------
+        Job
+            The newly queued job row (status ``queued``).
+
+        Raises
+        ------
+        WorkbenchHttpError
+            If the server returns anything other than 201.
+        """
         body: dict[str, Any] = {
             "pipeline_id": pipeline_id,
             "inputs":      dict(inputs),
@@ -159,6 +218,29 @@ class JobsClient:
         status_filter: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> list[Job]:
+        """List jobs visible to the caller's project scope.
+
+        Parameters
+        ----------
+        status_filter : str, optional
+            One of ``queued``, ``starting``, ``running``, ``completed``,
+            ``failed``, ``cancelled``. When None, all states are
+            returned.
+        limit : int, optional
+            Maximum row count. Server applies a default cap when
+            None.
+
+        Returns
+        -------
+        list[Job]
+            Jobs ordered as the server returns them (typically
+            newest-first by ``queued_at``).
+
+        Raises
+        ------
+        WorkbenchHttpError
+            On non-200 response.
+        """
         path = "/v1/jobs"
         query = []
         if status_filter:
@@ -177,6 +259,23 @@ class JobsClient:
         return [Job.from_json(j) for j in resp.get("jobs", [])]
 
     def get(self, job_id: str) -> Job:
+        """Fetch a single job by identifier.
+
+        Parameters
+        ----------
+        job_id : str
+            Server-assigned job identifier returned by :meth:`submit`.
+
+        Returns
+        -------
+        Job
+            Current snapshot of the job row.
+
+        Raises
+        ------
+        WorkbenchHttpError
+            On non-200 response (404 when the id is unknown).
+        """
         status, resp = http_json(
             "GET", self._host, self._port, f"/v1/jobs/{job_id}",
             scheme=self._scheme, token=self._token)
@@ -187,6 +286,25 @@ class JobsClient:
         return Job.from_json(resp)
 
     def cancel(self, job_id: str) -> None:
+        """Cancel a queued or running job.
+
+        Parameters
+        ----------
+        job_id : str
+            Server-assigned job identifier.
+
+        Raises
+        ------
+        WorkbenchHttpError
+            If the server returns anything other than 200 / 204.
+            409 indicates the job is already in a terminal state.
+
+        Notes
+        -----
+        Queued jobs transition directly to ``cancelled``; running
+        jobs receive SIGTERM and then SIGKILL after the configured
+        cancel-grace window before the row settles to ``cancelled``.
+        """
         status, resp = http_json(
             "DELETE", self._host, self._port, f"/v1/jobs/{job_id}",
             scheme=self._scheme, token=self._token)

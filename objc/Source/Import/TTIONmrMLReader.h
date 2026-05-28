@@ -58,10 +58,37 @@
  */
 @interface TTIONmrMLReader : NSObject
 
+/**
+ * Parse an nmrML file from a filesystem path.
+ *
+ * @param path   Filesystem path to the nmrML document.
+ * @param error  On failure, populated with an ``NSError`` in
+ *               ``TTIONmrMLReaderErrorDomain``. May be ``NULL``.
+ * @return The populated dataset on success; ``nil`` on parse
+ *         failure or IO error.
+ */
 + (TTIOSpectralDataset *)readFromFilePath:(NSString *)path
                                     error:(NSError **)error;
+
+/**
+ * Parse an nmrML file referenced by an ``NSURL``.
+ *
+ * @param url    File or data URL pointing at the nmrML document.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return The populated dataset on success; ``nil`` on failure.
+ */
 + (TTIOSpectralDataset *)readFromURL:(NSURL *)url
                                error:(NSError **)error;
+
+/**
+ * Parse an nmrML document from an in-memory byte buffer.
+ *
+ * @param data   Raw nmrML XML bytes.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return The populated dataset on success; ``nil`` on failure.
+ */
 + (TTIOSpectralDataset *)readFromData:(NSData *)data
                                 error:(NSError **)error;
 
@@ -72,14 +99,53 @@
                                           progress:(nullable TTIOProgressBlock)progress
                                              error:(NSError **)error;
 
-/** Instance-returning variant exposing the parsed FIDs (the
- *  TTIOSpectralDataset holds only processed spectra). */
+/**
+ * Parse an nmrML file and return a reader instance that exposes the
+ * parsed FIDs in addition to the dataset.
+ *
+ * @param path   Filesystem path to the nmrML document.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return A reader carrying the populated ``dataset`` and ``fids``
+ *         properties; ``nil`` on failure.
+ */
 + (instancetype)parseFilePath:(NSString *)path error:(NSError **)error;
+
+/**
+ * Parse an nmrML document from an in-memory byte buffer and return
+ * a reader instance that exposes the parsed FIDs.
+ *
+ * @param data   Raw nmrML XML bytes.
+ * @param error  On failure, populated with an ``NSError``. May be
+ *               ``NULL``.
+ * @return A reader carrying the populated ``dataset`` and ``fids``
+ *         properties; ``nil`` on failure.
+ */
 + (instancetype)parseData:(NSData *)data error:(NSError **)error;
 
+/**
+ * Progress-aware overload of {@link parseFilePath:error:}.
+ *
+ * @param path      Filesystem path to the nmrML document.
+ * @param progress  Optional block fired once with ``(1, 1)`` after
+ *                  parse completes. May be ``nil``.
+ * @param error     On failure, populated with an ``NSError``. May be
+ *                  ``NULL``.
+ * @return A reader on success; ``nil`` on failure.
+ */
 + (nullable instancetype)parseFilePath:(NSString *)path
                               progress:(nullable TTIOProgressBlock)progress
                                  error:(NSError **)error;
+
+/**
+ * Progress-aware overload of {@link parseData:error:}.
+ *
+ * @param data      Raw nmrML XML bytes.
+ * @param progress  Optional progress block. May be ``nil``.
+ * @param error     On failure, populated with an ``NSError``. May be
+ *                  ``NULL``.
+ * @return A reader on success; ``nil`` on failure.
+ */
 + (nullable instancetype)parseData:(NSData *)data
                           progress:(nullable TTIOProgressBlock)progress
                              error:(NSError **)error;

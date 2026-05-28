@@ -25,17 +25,42 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) uint32_t nElements;
 @property (nonatomic, readonly, strong) NSData *data;  // encoded bytes
 
+/**
+ * Designated initialiser.
+ *
+ * @param name          Channel name (e.g. ``mz``, ``intensity``).
+ * @param precision     Element precision; mirrors ``TTIOPrecision``.
+ * @param compression   Compression codec id; mirrors
+ *                      ``TTIOCompression``. Zero means uncompressed.
+ * @param nElements     Number of decoded elements the payload
+ *                      encodes.
+ * @param data          Encoded payload bytes. Treated as immutable.
+ * @return An initialised channel value object.
+ */
 - (instancetype)initWithName:(NSString *)name
                    precision:(uint8_t)precision
                  compression:(uint8_t)compression
                    nElements:(uint32_t)nElements
                         data:(NSData *)data;
 
-/** Append this channel's wire bytes onto ``buf``. */
+/**
+ * Append this channel's wire bytes onto ``buf``.
+ *
+ * @param buf  Destination buffer. The channel header and payload
+ *             are appended in-place; ``buf`` is grown as needed.
+ */
 - (void)appendToBuffer:(NSMutableData *)buf;
 
-/** Decode one channel starting at ``offset``; on return, ``*offset``
- *  is advanced past the channel. Returns nil on truncation. */
+/**
+ * Decode one channel starting at ``offset``.
+ *
+ * @param bytes    Pointer to the start of the enclosing AU payload.
+ * @param length   Total bytes available at ``bytes``.
+ * @param offset   In/out cursor. On entry, points at the channel's
+ *                 first byte; on success, advanced past the channel.
+ * @return The decoded channel, or ``nil`` if ``length - *offset`` is
+ *         too small for the channel header or its payload.
+ */
 + (nullable instancetype)decodeFromBytes:(const uint8_t *)bytes
                                    length:(NSUInteger)length
                                    offset:(NSUInteger *)offset;
@@ -110,6 +135,29 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) int64_t matePosition;
 @property (nonatomic, readonly) int32_t templateLength;
 
+/**
+ * MS-only / NMR-only / MSImage initialiser. Delegates to the mate-
+ * aware designated initialiser with empty genomic fields,
+ * ``position = -1``, ``matePosition = -1``, and
+ * ``templateLength = 0``.
+ *
+ * @param spectrumClass      Wire enum value (0 = MassSpectrum,
+ *                           1 = NMRSpectrum, etc.).
+ * @param acquisitionMode    Acquisition-mode tag.
+ * @param msLevel            MS level (0 when not applicable).
+ * @param polarity           Wire polarity value (0 / 1 / 2).
+ * @param retentionTime      Retention time in seconds.
+ * @param precursorMz        Precursor m/z (0 when not applicable).
+ * @param precursorCharge    Precursor charge.
+ * @param ionMobility        Ion mobility (0 when not applicable).
+ * @param basePeakIntensity  Base-peak intensity (0 when not
+ *                           applicable).
+ * @param channels           Signal channels carried by the AU.
+ * @param pixelX, pixelY, pixelZ  MSImage pixel coordinates;
+ *                           ignored unless
+ *                           ``spectrumClass == 4``.
+ * @return An initialised AU.
+ */
 - (instancetype)initWithSpectrumClass:(uint8_t)spectrumClass
                       acquisitionMode:(uint8_t)acquisitionMode
                               msLevel:(uint8_t)msLevel
@@ -171,8 +219,24 @@ NS_ASSUME_NONNULL_BEGIN
                          matePosition:(int64_t)matePosition
                        templateLength:(int32_t)templateLength;
 
+/**
+ * Serialise the AU to its on-wire byte form.
+ *
+ * @return Encoded payload bytes (excluding the enclosing packet
+ *         header).
+ */
 - (NSData *)encode;
 
+/**
+ * Decode an AU payload from a raw byte buffer.
+ *
+ * @param bytes   Pointer to the AU payload (after the packet header).
+ * @param length  Total bytes available at ``bytes``.
+ * @param error   On failure, populated with an ``NSError`` in the
+ *                ``TTIOTransportErrorDomain``. May be ``NULL``.
+ * @return A decoded ``TTIOAccessUnit`` on success; ``nil`` on
+ *         malformed input.
+ */
 + (nullable instancetype)decodeFromBytes:(const uint8_t *)bytes
                                    length:(NSUInteger)length
                                     error:(NSError * _Nullable *)error;

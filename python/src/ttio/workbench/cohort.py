@@ -95,19 +95,69 @@ class CohortPredicate:
     """
 
     def to_json(self) -> dict[str, Any]:
+        """Serialise the predicate to the server's JSON shape.
+
+        Returns
+        -------
+        dict[str, Any]
+            JSON-ready dict matching the wire contract documented
+            at the top of this module.
+
+        Raises
+        ------
+        NotImplementedError
+            Subclasses must override; the abstract base never
+            serialises directly.
+        """
         raise NotImplementedError
 
     def __and__(self, other: "CohortPredicate") -> "AndPredicate":
+        """Compose two predicates as an AND.
+
+        Parameters
+        ----------
+        other : CohortPredicate
+            Right-hand predicate.
+
+        Returns
+        -------
+        AndPredicate
+            New conjunction. When the left side is already an AND
+            the children are flattened in-place.
+        """
         if isinstance(self, AndPredicate):
             return AndPredicate([*self.children, other])
         return AndPredicate([self, other])
 
     def __or__(self, other: "CohortPredicate") -> "OrPredicate":
+        """Compose two predicates as an OR.
+
+        Parameters
+        ----------
+        other : CohortPredicate
+            Right-hand predicate.
+
+        Returns
+        -------
+        OrPredicate
+            New disjunction. When the left side is already an OR
+            the children are flattened in-place. Phenotype leaves
+            on either side trigger a ``ValueError`` (the server
+            rejects phenotype-under-OR with 422).
+        """
         if isinstance(self, OrPredicate):
             return OrPredicate([*self.children, other])
         return OrPredicate([self, other])
 
     def __invert__(self) -> "NotPredicate":
+        """Wrap the predicate in a logical NOT.
+
+        Returns
+        -------
+        NotPredicate
+            New negation. Phenotype leaves under NOT raise
+            ``ValueError`` (the server rejects with 422).
+        """
         return NotPredicate(self)
 
 
@@ -258,15 +308,84 @@ class NotPredicate(CohortPredicate):
 # (`subject("birth_year", "gt", 1950)`).
 
 def container(field: str, op: str = "eq", value: Any = None) -> ContainerFieldPredicate:
+    """Construct a container-field predicate leaf.
+
+    Parameters
+    ----------
+    field : str
+        One of the allow-listed container columns
+        (see :data:`ALLOWED_CONTAINER_FIELDS`).
+    op : str, optional
+        Comparison operator. Default ``"eq"``.
+    value : Any, optional
+        Right-hand value. Omitted when ``op == "exists"``.
+
+    Returns
+    -------
+    ContainerFieldPredicate
+        Validated leaf node.
+    """
     return ContainerFieldPredicate(field=field, op=op, value=value)
 
 def subject(field: str, op: str = "eq", value: Any = None) -> SubjectFieldPredicate:
+    """Construct a subject-field predicate leaf.
+
+    Parameters
+    ----------
+    field : str
+        One of the allow-listed subject columns
+        (see :data:`ALLOWED_SUBJECT_FIELDS`).
+    op : str, optional
+        Comparison operator. Default ``"eq"``.
+    value : Any, optional
+        Right-hand value. Omitted when ``op == "exists"``.
+
+    Returns
+    -------
+    SubjectFieldPredicate
+        Validated leaf node.
+    """
     return SubjectFieldPredicate(field=field, op=op, value=value)
 
 def sample(field: str, op: str = "eq", value: Any = None) -> SampleFieldPredicate:
+    """Construct a sample-field predicate leaf.
+
+    Parameters
+    ----------
+    field : str
+        One of the allow-listed sample columns
+        (see :data:`ALLOWED_SAMPLE_FIELDS`).
+    op : str, optional
+        Comparison operator. Default ``"eq"``.
+    value : Any, optional
+        Right-hand value. Omitted when ``op == "exists"``.
+
+    Returns
+    -------
+    SampleFieldPredicate
+        Validated leaf node.
+    """
     return SampleFieldPredicate(field=field, op=op, value=value)
 
 def phenotype(name: str, op: str = "eq", value: Any = None) -> PhenotypePredicate:
+    """Construct a phenotype-keyed predicate leaf.
+
+    Parameters
+    ----------
+    name : str
+        Phenotype name; joined server-side to the
+        ``subject_phenotypes`` table.
+    op : str, optional
+        Comparison operator. Default ``"eq"``.
+    value : Any, optional
+        Right-hand value. Omitted when ``op == "exists"``.
+
+    Returns
+    -------
+    PhenotypePredicate
+        Validated leaf node. Cannot appear under ``or`` / ``not``
+        composites.
+    """
     return PhenotypePredicate(name=name, op=op, value=value)
 
 
@@ -311,6 +430,16 @@ class CohortQuery:
                 f"limit must be in [1, 1000]; got {self.limit}")
 
     def to_json(self) -> dict[str, Any]:
+        """Serialise the query to the server's JSON request shape.
+
+        Returns
+        -------
+        dict[str, Any]
+            JSON-ready dict matching ``POST /v1/cohorts/query`` and
+            ``POST /v1/cohorts/preview-count``. Omits ``limit`` when
+            it equals the default (100) so the wire bytes stay
+            compact.
+        """
         out: dict[str, Any] = {"select": self.select}
         if self.predicate is not None:
             out["predicate"] = self.predicate.to_json()
@@ -350,6 +479,18 @@ class CohortResult:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "CohortResult":
+        """Build a :class:`CohortResult` from a parsed JSON body.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from ``POST /v1/cohorts/query``.
+
+        Returns
+        -------
+        CohortResult
+            Rows + optional ``next_cursor`` + echoed select.
+        """
         return cls(
             rows=tuple(body.get("rows", [])),
             next_cursor=body.get("next_cursor"),
@@ -358,7 +499,21 @@ class CohortResult:
         )
 
     def __iter__(self) -> Iterable[Mapping[str, Any]]:
+        """Iterate over result rows in their wire order.
+
+        Returns
+        -------
+        Iterable[Mapping[str, Any]]
+            Iterator over the parsed row dicts.
+        """
         return iter(self.rows)
 
     def __len__(self) -> int:
+        """Return the number of rows on this page.
+
+        Returns
+        -------
+        int
+            Row count. Does not include rows on subsequent pages.
+        """
         return len(self.rows)
