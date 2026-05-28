@@ -15,6 +15,22 @@ from ttio.transport.codec import transport_to_file
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Decode a ``.tis`` transport stream into a ``.tio`` file.
+
+    Parses positional arguments ``input`` and ``output``, then calls
+    :func:`ttio.transport.codec.transport_to_file` to materialise the
+    stream onto disk and close the resulting dataset.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success. Argparse exits with ``2`` on usage errors.
+    """
     parser = argparse.ArgumentParser(
         description="Decode an TTI-O transport stream into a .tio file."
     )

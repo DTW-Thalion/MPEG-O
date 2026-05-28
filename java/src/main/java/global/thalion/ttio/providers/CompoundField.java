@@ -29,8 +29,8 @@ public record CompoundField(String name, Kind kind) {
         FLOAT64,
         /** Variable-length UTF-8 string field. */
         VL_STRING,
-        /** Variable-length raw byte blob. v1.0: carries IV / tag /
-         *  ciphertext for opt_per_au_encryption. */
+        /** Variable-length raw byte blob; carries IV / tag / ciphertext
+         *  for {@code opt_per_au_encryption}. */
         VL_BYTES
     }
 }

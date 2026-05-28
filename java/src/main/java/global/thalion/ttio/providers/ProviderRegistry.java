@@ -13,7 +13,7 @@ import java.util.*;
  * {@code META-INF/services/global.thalion.ttio.providers.StorageProvider}).
  * In-process registration is also supported for tests.
  *
- * <p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+ * <p>API status: Stable.</p>
  *
  * <p>Cross-language equivalents:
  * <ul>

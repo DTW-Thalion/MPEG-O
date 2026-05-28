@@ -21,14 +21,23 @@ from ttio.transport.codec import (
 
 
 def _encode_image_processed(input_path: str, output_path: str) -> None:
-    """Stage 5 / Task 5.6 (Deferral 1): emit a v0.11 stream carrying
-    only the input's MSImage, encoded via ``write_image_processed``
-    (opt-in sparse wire mode) instead of ``write_image``. Used by the
-    cross-language conformance harness to exercise the processed-mode
-    wire shape end-to-end. Other content on the input is intentionally
-    ignored — this CLI flag is a focused affordance for the
-    MS_IMAGE_PROCESSED accessor matrix cell, not a general-purpose
-    encode override."""
+    """Emit a transport stream carrying only the input's MSImage.
+
+    Uses :func:`TransportWriter.write_image_processed` (opt-in sparse
+    wire mode) in place of :func:`write_image`. This helper exercises
+    the processed-mode wire shape end-to-end for the cross-language
+    conformance harness. Other content on the input is intentionally
+    ignored — this is a focused affordance for the
+    ``MS_IMAGE_PROCESSED`` accessor matrix cell, not a general-purpose
+    encode override.
+
+    Parameters
+    ----------
+    input_path : str
+        Path to the ``.tio`` source container.
+    output_path : str
+        Path to write the resulting ``.tis`` transport stream.
+    """
     with SpectralDataset.open(input_path) as ds:
         with open(output_path, "wb") as out:
             with TransportWriter(out) as w:
@@ -44,6 +53,23 @@ def _encode_image_processed(input_path: str, output_path: str) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Encode a ``.tio`` file as a ``.tis`` transport stream.
+
+    Parses positional ``input``/``output`` and the optional
+    ``--checksum``, ``--bulk``, ``--image-processed`` flags, then
+    dispatches to :func:`ttio.transport.codec.file_to_transport` (or
+    :func:`_encode_image_processed` when ``--image-processed`` is set).
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success. Argparse exits with ``2`` on usage errors.
+    """
     parser = argparse.ArgumentParser(
         description="Encode a .tio file as an TTI-O transport stream."
     )
@@ -53,19 +79,18 @@ def main(argv: list[str] | None = None) -> int:
                         help="emit per-packet CRC-32C checksums")
     parser.add_argument(
         "--bulk", action="store_true",
-        help="enable Phase 2c-T bulk mode: ship verbatim v2 codec "
-             "blobs (mate_info, read_names, refdiff_v2) for genomic "
-             "runs so transport round-trips preserve SAM mate "
-             "sentinels (=, '') byte-for-byte. No effect on "
-             "MS-only inputs.",
+        help="enable bulk mode: ship verbatim v2 codec blobs "
+             "(mate_info, read_names, refdiff_v2) for genomic runs "
+             "so transport round-trips preserve SAM mate sentinels "
+             "(=, '') byte-for-byte. No effect on MS-only inputs.",
     )
     parser.add_argument(
         "--image-processed", action="store_true",
-        help="Stage 5 / Task 5.6 (Deferral 1): emit the input's "
-             "MSImage via write_image_processed (sparse wire mode) "
-             "in place of write_image (continuous). Used by the "
-             "cross-language MS_IMAGE_PROCESSED accessor matrix cell. "
-             "Other dataset content is ignored when this flag is set.",
+        help="emit the input's MSImage via write_image_processed "
+             "(sparse wire mode) in place of write_image (continuous). "
+             "Used by the cross-language MS_IMAGE_PROCESSED accessor "
+             "matrix cell. Other dataset content is ignored when this "
+             "flag is set.",
     )
     args = parser.parse_args(argv)
     if args.image_processed:

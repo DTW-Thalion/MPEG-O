@@ -18,8 +18,7 @@ import java.util.Map;
 /**
  * One 1-D typed array or compound-record array.
  *
- * <p><b>API status:</b> Stable (Provisional per M39 — may change
- * before v1.0).</p>
+ * <p><b>API status:</b> Stable.</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOStorageDataset}, Python
@@ -29,6 +28,7 @@ import java.util.Map;
  */
 public interface StorageDataset extends AutoCloseable {
 
+    /** @return the short (last-path-segment) name of this dataset. */
     String name();
 
     /** Primitive precision, or {@code null} for compound datasets
@@ -77,6 +77,13 @@ public interface StorageDataset extends AutoCloseable {
      *  {@code offset}. Same return-type rules as {@link #readAll()}. */
     Object readSlice(long offset, long count);
 
+    /** Write all elements.
+     *
+     *  @param data  primitive array matching {@link #precision} for
+     *               primitive datasets, or a list of records for
+     *               compound datasets (shape matches the value returned
+     *               by {@link #readAll})
+     */
     void writeAll(Object data);
 
     /** Read a compound dataset as a uniform
@@ -84,10 +91,12 @@ public interface StorageDataset extends AutoCloseable {
      *  implementation converts the HDF5 {@code List<Object[]>} shape;
      *  SQLite and other map-backed providers pass through.
      *
-     *  <p>Throws {@link IllegalStateException} if called on a primitive
-     *  dataset.</p>
+     *  <p>Backend-agnostic compound access — callers do not need to
+     *  branch on provider type.</p>
      *
-     *  <p>— backend-agnostic compound access.</p> */
+     *  @return one map per record, keyed by field name
+     *  @throws IllegalStateException  when called on a primitive dataset
+     */
     @SuppressWarnings("unchecked")
     default List<Map<String, Object>> readRows() {
         List<CompoundField> fields = compoundFields();
@@ -152,8 +161,13 @@ public interface StorageDataset extends AutoCloseable {
         return canonicaliseCompoundRows(readRows(), fields);
     }
 
-    /** — helper exposed for providers that want to override
-     *  {@link #readCanonicalBytes()} but share the compound path. */
+    /** Helper exposed for providers that want to override
+     *  {@link #readCanonicalBytes()} but share the compound path.
+     *
+     *  @param rows    the records to serialise
+     *  @param fields  the field schema (drives encoding order and type)
+     *  @return the canonical byte serialisation
+     */
     static byte[] canonicaliseCompoundRows(List<Map<String, Object>> rows,
                                             List<CompoundField> fields) {
         java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
@@ -217,7 +231,12 @@ public interface StorageDataset extends AutoCloseable {
         }
     }
 
-    /** — helper for the primitive canonical path. */
+    /** Helper for the primitive canonical path.
+     *
+     *  @param raw  the array returned by {@link #readAll()}
+     *  @param p    the precision of {@code raw}
+     *  @return the canonical little-endian byte serialisation
+     */
     static byte[] canonicalisePrimitive(Object raw, Precision p) {
         if (p == null) {
             throw new IllegalStateException(
@@ -263,8 +282,8 @@ public interface StorageDataset extends AutoCloseable {
                 yield (byte[]) raw;
             }
             case UINT16 -> {
-                // L1 (Task #82 Phase B.1): genomic_index/chromosome_ids.
-                // Pack short[] as little-endian uint16.
+                // genomic_index/chromosome_ids: pack short[] as
+                // little-endian uint16.
                 short[] a = (short[]) raw;
                 ByteBuffer bb = ByteBuffer.allocate(a.length * 2)
                         .order(ByteOrder.LITTLE_ENDIAN);
@@ -288,15 +307,32 @@ public interface StorageDataset extends AutoCloseable {
 
     // ── Attributes ───────────────────────────────────────────────
 
+    /** @param name  the attribute name
+     *  @return {@code true} when the attribute is present on this dataset. */
     boolean hasAttribute(String name);
 
+    /** Read an attribute value.
+     *
+     *  @param name  the attribute name
+     *  @return the stored value boxed into a Java object, or {@code null}
+     *          if absent
+     */
     Object getAttribute(String name);
 
+    /** Write an attribute. Replaces any existing entry of the same name.
+     *
+     *  @param name   the attribute name
+     *  @param value  the value to store (string, boxed numeric, or
+     *                primitive array)
+     */
     void setAttribute(String name, Object value);
 
     /** Remove an attribute. No-op if the attribute does not exist.
-     *  — added for parity with Python ABC and ObjC
-     *  {@code -deleteAttributeNamed:error:}. */
+     *  Mirrors the Python ABC and ObjC
+     *  {@code -deleteAttributeNamed:error:} surfaces.
+     *
+     *  @param name  the attribute name
+     */
     void deleteAttribute(String name);
 
     /** List attribute names. Returns an empty list if there are no
@@ -305,6 +341,8 @@ public interface StorageDataset extends AutoCloseable {
 
     // ── Lifecycle ────────────────────────────────────────────────
 
+    /** Release per-dataset native handles. Default no-op for backends
+     *  that share lifetime with the owning provider. */
     @Override
     default void close() {}
 }

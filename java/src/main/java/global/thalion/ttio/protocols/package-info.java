@@ -8,9 +8,8 @@
  * (CV annotation, encryption, indexability, provenance, streamability).
  *
  * <p>Each interface mirrors the corresponding Objective-C
- * {@code @protocol} declaration in {@code objc/Source/Protocols/}.
- * See {@code docs/api-review-v0.6.md} for the three-language parity
- * table.</p>
+ * {@code @protocol} declaration in {@code objc/Source/Protocols/} and
+ * the Python class in {@code python/src/ttio/protocols/}.</p>
  *
  *
  */

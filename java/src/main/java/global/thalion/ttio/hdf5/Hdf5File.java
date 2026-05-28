@@ -17,7 +17,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Thin wrapper around an HDF5 file handle. Implements {@link AutoCloseable}
  * for try-with-resources support.
  *
- * <p>Thread-safety model (mirrors ObjC M23): each Hdf5File owns a
+ * <p>Thread-safety model: each Hdf5File owns a
  * {@link ReentrantReadWriteLock} that serialises access from derived
  * {@link Hdf5Group} and {@link Hdf5Dataset} instances. Readers do not
  * block readers; writers are exclusive. When the native HDF5 library is
@@ -119,7 +119,10 @@ public class Hdf5File implements AutoCloseable {
         }
     }
 
+    /** @return the filesystem path this file was opened from. */
     public String getPath() { return path; }
+
+    /** @return the underlying HDF5 file id. */
     public long getFileId() { return fileId; }
 
     /**
@@ -130,6 +133,9 @@ public class Hdf5File implements AutoCloseable {
         return libThreadSafe;
     }
 
+    /** Acquire the read lock for the duration of an HDF5 read call.
+     *  Promoted to the write (exclusive) lock when the linked libhdf5
+     *  is not thread-safe. Must be paired with {@link #unlockForReading}. */
     public void lockForReading() {
         if (libThreadSafe) {
             rwLock.readLock().lock();
@@ -138,6 +144,7 @@ public class Hdf5File implements AutoCloseable {
         }
     }
 
+    /** Release the lock acquired by {@link #lockForReading}. */
     public void unlockForReading() {
         if (libThreadSafe) {
             rwLock.readLock().unlock();
@@ -146,14 +153,19 @@ public class Hdf5File implements AutoCloseable {
         }
     }
 
+    /** Acquire the exclusive write lock for the duration of an HDF5
+     *  write call. Must be paired with {@link #unlockForWriting}. */
     public void lockForWriting() {
         rwLock.writeLock().lock();
     }
 
+    /** Release the lock acquired by {@link #lockForWriting}. */
     public void unlockForWriting() {
         rwLock.writeLock().unlock();
     }
 
+    /** Flush pending metadata to the OS buffer, then release the HDF5
+     *  file id. Idempotent. */
     @Override
     public void close() {
         if (closed) return;

@@ -20,8 +20,7 @@ package global.thalion.ttio.providers;
  * Unsupported capabilities raise
  * {@link UnsupportedOperationException} at the call site.</p>
  *
- * <p><b>API status:</b> Stable (Provisional per M39 — may change
- * before v1.0).</p>
+ * <p><b>API status:</b> Stable.</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIOStorageProvider}, Python
@@ -51,6 +50,8 @@ public interface StorageProvider extends AutoCloseable {
     /** Root group ("/"). Must be called after {@link #open}. */
     StorageGroup rootGroup();
 
+    /** @return {@code true} when the provider is currently open and
+     *  ready for read / write calls. */
     boolean isOpen();
 
     /** Return the underlying native storage handle — an
@@ -62,12 +63,11 @@ public interface StorageProvider extends AutoCloseable {
      *  the protocol. Any caller that invokes this is pinned to a
      *  specific backend.</p>
      *
-     *  @deprecated Scheduled for removal at v1.0. M43-M45 eliminated
-     *              every internal caller; external callers should
-     *              migrate to the StorageGroup / StorageDataset
-     *              protocol. See {@code docs/api-stability-v0.8.md} §6.
+     *  @deprecated Scheduled for removal. External callers should
+     *              migrate to the {@link StorageGroup} /
+     *              {@link StorageDataset} protocol.
      */
-    @Deprecated(since = "0.8", forRemoval = true)
+    @Deprecated(forRemoval = true)
     default Object nativeHandle() { return null; }
 
     // ── Capabilities ──────────────────────────
@@ -92,8 +92,7 @@ public interface StorageProvider extends AutoCloseable {
      *
      *  <p>Callers that wrap bulk loads in
      *  {@code beginTransaction() / commitTransaction()} get the SQLite
-     *  batch speedup without the ad-hoc per-provider convention the
-     *  M39 providers used before.</p> */
+     *  batch speedup without ad-hoc per-provider conventions.</p> */
     default void beginTransaction() {}
 
     /** Commit and end an open transaction started by
@@ -104,6 +103,9 @@ public interface StorageProvider extends AutoCloseable {
      *  {@link #beginTransaction()}. Default no-op. */
     default void rollbackTransaction() {}
 
+    /** Release backend resources. After this call {@link #isOpen} must
+     *  return {@code false}; calling {@code close} a second time is a
+     *  no-op. */
     @Override
     void close();
 }

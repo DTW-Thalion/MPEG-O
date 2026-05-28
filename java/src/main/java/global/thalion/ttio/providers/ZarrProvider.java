@@ -71,7 +71,7 @@ import java.util.stream.Stream;
  * TTIOZarrProvider}.</p>
  *
  *
- * @implNote Zarr v3 format (migrated from v2 in v0.9+).
+ * @implNote Zarr v3 format.
  */
 public final class ZarrProvider implements StorageProvider {
 

@@ -1,4 +1,4 @@
-"""``ttio-pqc`` — Python post-quantum crypto CLI (M75).
+"""``ttio-pqc`` — Python post-quantum crypto CLI.
 
 Python equivalent of the Objective-C ``TtioPQCTool`` (``objc/Tools/
 TtioPQCTool.m``) and Java ``global.thalion.ttio.tools.PQCTool``. The
@@ -57,10 +57,12 @@ USAGE = (
 
 
 def _read_bytes(path: str) -> bytes:
+    """Read every byte of ``path`` into memory and return it."""
     return Path(path).read_bytes()
 
 
 def _write_bytes(path: str, data: bytes) -> None:
+    """Atomically overwrite ``path`` with ``data``."""
     Path(path).write_bytes(data)
 
 
@@ -217,6 +219,24 @@ _DISPATCH = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch a ``ttio-pqc`` subcommand.
+
+    Reads the first positional argument as the subcommand name and
+    looks it up in the :data:`_DISPATCH` table; the remainder of
+    ``argv`` is forwarded to the per-subcommand handler.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        The handler's return code. ``0`` for success, ``1`` for an
+        invalid signature in the verify subcommands, ``2`` for usage
+        errors and unexpected exceptions.
+    """
     argv = sys.argv[1:] if argv is None else list(argv)
     if not argv or argv[0] in ("-h", "--help"):
         sys.stderr.write(USAGE)

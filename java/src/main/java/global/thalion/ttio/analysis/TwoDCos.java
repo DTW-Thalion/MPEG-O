@@ -188,6 +188,14 @@ public final class TwoDCos {
      * Return {@code |Φ| / (|Φ| + |Ψ|)} — synchronous dominance in
      * {@code [0, 1]}. Cells where both matrices vanish yield
      * {@code Double.NaN}.
+     *
+     * @param synchronous   the {@code Φ} matrix in row-major form
+     * @param asynchronous  the {@code Ψ} matrix in row-major form
+     *                      (must match {@code synchronous} in length)
+     * @return  a new row-major matrix of the same length carrying the
+     *          per-cell synchronous dominance ratio
+     * @throws IllegalArgumentException if either input is {@code null}
+     *         or their lengths differ
      */
     public static double[] disrelationSpectrum(double[] synchronous,
                                                double[] asynchronous) {

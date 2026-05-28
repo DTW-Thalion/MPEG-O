@@ -36,7 +36,10 @@ public class Hdf5Group implements AutoCloseable {
         this.closed = false;
     }
 
+    /** @return the underlying HDF5 group id. */
     public long getGroupId() { return groupId; }
+
+    /** @return the {@link Hdf5File} that owns this group. */
     public Hdf5File owningFile() { return file; }
 
     /** Short (last-path-segment) name of this group, or "/" for root. */
@@ -76,6 +79,13 @@ public class Hdf5Group implements AutoCloseable {
 
     // ── Sub-groups ──────────────────────────────────────────────────
 
+    /** Create a new sub-group with the given name.
+     *
+     *  @param name  the sub-group name (must not collide with an
+     *               existing child)
+     *  @return the newly-created group
+     *  @throws Hdf5Errors.GroupCreateException  if creation fails
+     */
     public Hdf5Group createGroup(String name) {
         file.lockForWriting();
         try {
@@ -92,6 +102,13 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Open an existing sub-group by name.
+     *
+     *  @param name  the sub-group name
+     *  @return the opened group
+     *  @throws Hdf5Errors.GroupOpenException  if the sub-group is absent
+     *          or cannot be opened
+     */
     public Hdf5Group openGroup(String name) {
         file.lockForReading();
         try {
@@ -105,6 +122,12 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Test whether a named link (sub-group or dataset) exists directly
+     *  under this group.
+     *
+     *  @param name  the child name
+     *  @return {@code true} when the link is present
+     */
     public boolean hasChild(String name) {
         file.lockForReading();
         try {
@@ -116,6 +139,11 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Delete a named link (sub-group or dataset) from this group.
+     *  No-op when the link is absent.
+     *
+     *  @param name  the child name
+     */
     public void deleteChild(String name) {
         file.lockForWriting();
         try {
@@ -200,19 +228,15 @@ public class Hdf5Group implements AutoCloseable {
     /**
      * Open a named dataset in this group.
      *
-     * <p><b>N-D dataset fix (Phase 3 / 2026-05-07):</b> the original implementation
-     * allocated {@code long[1]} for {@link H5#H5Sget_simple_extent_dims} and passed
-     * {@code dims[0]} as the element count. This worked for Java-written .tio files
-     * because the writer flattens every N-D array to a 1-D HDF5 dataset and records
-     * the true shape in a {@code __shape_<name>__} group attribute. Python-written
-     * files (h5py native N-D layout) store the intensity cube as a genuine 3-D dataset,
-     * e.g. shape {@code (height, width, spectral_points)}. The old code silently
-     * truncated the reported length to {@code dims[0] == height}, returning a buffer
-     * of 3 elements instead of 96 for a (3, 4, 8) cube. This broke
-     * {@link global.thalion.ttio.SpectralDataset#open} + {@code .image()} for every
-     * Python-written MSImage, corrupting pixel spectra in the tio-browser imzML export
-     * workflow. Fixed by querying the actual rank and computing the full element count
-     * as the product of all dimension extents.</p>
+     * <p>Both Java-written 1-D datasets and N-D datasets written by other
+     * languages (e.g. Python h5py native 3-D layout for MSImage intensity
+     * cubes) are supported. The reported length is the product of all
+     * dimension extents.</p>
+     *
+     * @param name  the dataset name
+     * @return the opened dataset
+     * @throws Hdf5Errors.DatasetOpenException  if the dataset is absent
+     *         or cannot be opened
      */
     public Hdf5Dataset openDataset(String name) {
         file.lockForReading();
@@ -247,13 +271,20 @@ public class Hdf5Group implements AutoCloseable {
 
     // ── Attributes ──────────────────────────────────────────────────
 
+    /** Write a UTF-8 string attribute on this group.
+     *
+     *  <p>Emits a VL_STRING with UTF-8 character set so other-language
+     *  readers (Python h5py, ObjC) consume the attribute byte-equivalently.
+     *  Replaces any existing attribute of the same name regardless of its
+     *  previous type.</p>
+     *
+     *  @param name   the attribute name
+     *  @param value  the UTF-8 string payload
+     */
     public void setStringAttribute(String name, String value) {
-        // write as VL_STRING with UTF-8 encoding (matches what
-        // h5py writes by default), so Python readers can verify
-        // signatures and other string attributes written by Java.
-        // The pre-M90.7 fixed-length path was ASCII-only and reported
-        // a non-VARIABLE type to other-language readers, breaking
-        // cross-language compat on @ttio_signature etc.
+        // Write as VL_STRING with UTF-8 encoding (matches what h5py
+        // writes by default), so Python readers can verify signatures
+        // and other string attributes written by Java.
         file.lockForWriting();
         long htype = -1, space = -1, aid = -1;
         try {
@@ -286,9 +317,18 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Read a UTF-8 string attribute from this group.
+     *
+     *  <p>Decodes both VL_STRING and fixed-length string attributes.</p>
+     *
+     *  @param name  the attribute name
+     *  @return the decoded string
+     *  @throws Hdf5Errors.AttributeException  when the attribute is
+     *          absent or the read fails
+     */
     public String readStringAttribute(String name) {
-        // read both VL_STRING (forward) and fixed-length
-        // (pre-M90.7 + cross-platform back-compat) string attributes.
+        // Decode both VL_STRING (forward) and fixed-length
+        // (cross-platform back-compat) string attributes.
         file.lockForReading();
         long aid = -1, htype = -1;
         try {
@@ -323,6 +363,13 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Write a scalar 64-bit integer attribute on this group. Replaces
+     *  any existing attribute of the same name regardless of its
+     *  previous type.
+     *
+     *  @param name   the attribute name
+     *  @param value  the int64 payload
+     */
     public void setIntegerAttribute(String name, long value) {
         file.lockForWriting();
         long space = -1, aid = -1;
@@ -423,6 +470,11 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Test whether a named attribute exists on this group.
+     *
+     *  @param name  the attribute name
+     *  @return {@code true} when the attribute is present
+     */
     public boolean hasAttribute(String name) {
         file.lockForReading();
         try {
@@ -434,6 +486,10 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Remove a named attribute. No-op when the attribute is absent.
+     *
+     *  @param name  the attribute name
+     */
     public void deleteAttribute(String name) {
         file.lockForWriting();
         try {
@@ -448,6 +504,7 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** @return every attribute name on this group in HDF5 storage order. */
     public java.util.List<String> attributeNames() {
         file.lockForReading();
         try {
@@ -472,6 +529,7 @@ public class Hdf5Group implements AutoCloseable {
         }
     }
 
+    /** Release the underlying group id. Idempotent. */
     @Override
     public void close() {
         if (closed) return;
@@ -499,7 +557,7 @@ public class Hdf5Group implements AutoCloseable {
             case INT32   -> HDF5Constants.H5T_NATIVE_INT32;
             case INT64   -> HDF5Constants.H5T_NATIVE_INT64;
             case UINT32  -> HDF5Constants.H5T_NATIVE_UINT32;
-            case UINT16  -> HDF5Constants.H5T_NATIVE_UINT16;  // L1: chromosome_ids
+            case UINT16  -> HDF5Constants.H5T_NATIVE_UINT16;  // chromosome_ids
             case UINT8   -> HDF5Constants.H5T_NATIVE_UINT8;
             case UINT64  -> HDF5Constants.H5T_NATIVE_UINT64;
             case _RESERVED_INT8 ->
@@ -527,16 +585,11 @@ public class Hdf5Group implements AutoCloseable {
             return Precision.INT64;
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT32))
             return Precision.UINT32;
-        // round-trip H5T_NATIVE_UINT64 as Precision.UINT64
-        // (was Precision.INT64 as a pre-M82 workaround when the enum
-        // value didn't exist). Pre-M82 spectrum_index/offsets files
-        // written as INT64 by the legacy ObjC writer continue to read
-        // back as INT64 — same on-disk bytes; only the precision
-        // metadata differs.
+        // Round-trip H5T_NATIVE_UINT64 as Precision.UINT64.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT64))
             return Precision.UINT64;
-        // L1 (Task #82 Phase B.1): H5T_NATIVE_UINT16 is the on-disk
-        // type for genomic_index/chromosome_ids.
+        // H5T_NATIVE_UINT16 is the on-disk type for
+        // genomic_index/chromosome_ids.
         if (H5.H5Tequal(htid, HDF5Constants.H5T_NATIVE_UINT16))
             return Precision.UINT16;
         // H5T_NATIVE_UINT8 is the on-disk type for genomic
