@@ -31,7 +31,8 @@ PROGRESS_INTERVAL_SPECTRA = 1
 
 
 class NmrMLParseError(ValueError):
-    pass
+    """Raised when an nmrML document cannot be decoded into an
+    :class:`ImportResult`."""
 
 
 def read(

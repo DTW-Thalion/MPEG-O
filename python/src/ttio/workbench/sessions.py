@@ -84,16 +84,43 @@ class Session:
 
     @property
     def is_terminal(self) -> bool:
+        """Return True when the session has reached a terminal status.
+
+        Returns
+        -------
+        bool
+            True for ``terminated`` or ``failed``; False for
+            ``starting``, ``running``, or ``terminating``.
+        """
         return self.status in TERMINAL_SESSION_STATUSES
 
     @property
     def is_attachable(self) -> bool:
-        """The WS proxy only accepts attach in the `running` state.
-        `starting` and `terminating` are not attachable."""
+        """Return True when the session accepts a WS attach.
+
+        Returns
+        -------
+        bool
+            True only when ``status == "running"``. The server's
+            session-proxy mount rejects attach in any other state.
+        """
         return self.status == "running"
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "Session":
+        """Construct a :class:`Session` from a parsed server JSON body.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from ``/v1/sessions{,/{id}}``.
+
+        Returns
+        -------
+        Session
+            Immutable snapshot. Optional fields not yet populated by
+            the server are set to ``None`` or their empty default.
+        """
         return cls(
             session_id=body["session_id"],
             status=body["status"],
@@ -171,6 +198,19 @@ class SessionsClient:
     """REST surface for interactive sessions."""
 
     def __init__(self, host: str, port: int, *, scheme: str, token: str):
+        """Bind the client to a server endpoint and bearer token.
+
+        Parameters
+        ----------
+        host : str
+            Workbench server hostname.
+        port : int
+            TCP port the REST listener is bound to.
+        scheme : str
+            ``"http"`` or ``"https"``.
+        token : str
+            Bearer token (``ttiowbs_...``).
+        """
         self._host = host
         self._port = port
         self._scheme = scheme
@@ -233,6 +273,27 @@ class SessionsClient:
         status_filter: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> list[Session]:
+        """List sessions visible to the caller's project scope.
+
+        Parameters
+        ----------
+        status_filter : str, optional
+            One of ``starting``, ``running``, ``terminating``,
+            ``terminated``, ``failed``. When None, all states are
+            returned.
+        limit : int, optional
+            Maximum row count.
+
+        Returns
+        -------
+        list[Session]
+            Sessions ordered as the server returns them.
+
+        Raises
+        ------
+        WorkbenchHttpError
+            On non-200 response.
+        """
         path = "/v1/sessions"
         query = []
         if status_filter:
@@ -251,6 +312,23 @@ class SessionsClient:
         return [Session.from_json(s) for s in resp.get("sessions", [])]
 
     def get(self, session_id: str) -> Session:
+        """Fetch a single session by identifier.
+
+        Parameters
+        ----------
+        session_id : str
+            Server-assigned session identifier.
+
+        Returns
+        -------
+        Session
+            Current snapshot of the session row.
+
+        Raises
+        ------
+        WorkbenchHttpError
+            On non-200 response (404 when the id is unknown).
+        """
         status, resp = http_json(
             "GET", self._host, self._port,
             f"/v1/sessions/{session_id}",

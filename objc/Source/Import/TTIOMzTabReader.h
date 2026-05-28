@@ -104,6 +104,15 @@ FOUNDATION_EXPORT const NSUInteger TTIOMzTabReaderProgressIntervalRows;
  */
 @interface TTIOMzTabReader : NSObject
 
+/**
+ * Parse an mzTab file from a filesystem path.
+ *
+ * @param path   Filesystem path to the mzTab document.
+ * @param error  On failure, populated with an ``NSError`` in
+ *               ``TTIOMzTabReaderErrorDomain``. May be ``NULL``.
+ * @return The populated ``TTIOMzTabImport`` on success; ``nil`` on
+ *         parse failure or IO error.
+ */
 + (nullable TTIOMzTabImport *)readFromFilePath:(NSString *)path
                                           error:(NSError **)error;
 

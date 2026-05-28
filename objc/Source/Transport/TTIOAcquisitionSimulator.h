@@ -47,6 +47,23 @@ NS_ASSUME_NONNULL_BEGIN
 /** Seed for deterministic runs. */
 @property (nonatomic, readonly) uint64_t seed;
 
+/**
+ * Designated initialiser.
+ *
+ * @param scanRate     Scans per second.
+ * @param duration     Total acquisition duration in seconds.
+ * @param ms1Fraction  Probability a generated scan is MS1; the
+ *                     complement are MS2.
+ * @param mzMin        Inclusive lower bound on the simulated m/z
+ *                     range.
+ * @param mzMax        Inclusive upper bound on the simulated m/z
+ *                     range.
+ * @param nPeaks       Mean peaks per spectrum; the actual count
+ *                     jitters by roughly +/-25%.
+ * @param seed         RNG seed; the same seed produces identical
+ *                     output within a single language.
+ * @return An initialised simulator ready to stream.
+ */
 - (instancetype)initWithScanRate:(double)scanRate
                           duration:(double)duration
                        ms1Fraction:(double)ms1Fraction

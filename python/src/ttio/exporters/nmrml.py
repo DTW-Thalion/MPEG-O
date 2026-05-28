@@ -224,6 +224,31 @@ def write_spectrum(
     spectrometer_frequency_mhz: float = 0.0,
     progress: ProgressSinkLike | None = None,
 ) -> Path:
+    """Serialize ``spectrum`` to ``path`` as an nmrML file.
+
+    Parameters
+    ----------
+    spectrum : NMRSpectrum
+        The NMR spectrum to encode.
+    path : str | Path
+        Destination file path. Overwritten if it already exists.
+    fid : FreeInductionDecay, optional
+        Time-domain FID payload to embed alongside the processed
+        spectrum. Omitted when None.
+    sweep_width_ppm : float, optional
+        Threaded into the nmrML acquisition parameters. Default
+        0.0 omits the value.
+    spectrometer_frequency_mhz : float, optional
+        Spectrometer frequency; nmrML stores in Hz so this is
+        scaled by 1e6 on emit. Default 0.0 omits the cvParam.
+    progress : ProgressSinkLike, optional
+        Optional sink fired by the underlying byte-blob builder.
+
+    Returns
+    -------
+    Path
+        The destination path (for fluent chaining).
+    """
     blob = spectrum_to_bytes(
         spectrum,
         fid=fid,
