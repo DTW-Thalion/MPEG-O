@@ -37,8 +37,23 @@ extern NSString * const TTIORefMissingErrorDomain;
  */
 @interface TTIOReferenceResolver : NSObject
 
-/** Initialize against an open HDF5 root group; embedded refs live at
- *  ``/study/references/<uri>/``. The external path may be nil. */
+/**
+ * Initialise a resolver bound to an open HDF5 root group plus an
+ * optional external FASTA path.
+ *
+ * Embedded references are looked up under
+ * `/study/references/<uri>/chromosomes/<chrom>/data` within
+ * `rootGroup`. When the embedded copy is absent, the resolver falls
+ * back to `externalReferencePath` (or `REF_PATH` env var) for a
+ * FASTA on disk.
+ *
+ * @param rootGroup              Open HDF5 root group of a `.tio`
+ *                               container.
+ * @param externalReferencePath  Optional fallback FASTA path. Pass
+ *                               `nil` to disable external fallback
+ *                               (embedded-only resolution).
+ * @return Initialised resolver instance.
+ */
 - (instancetype)initWithRootGroup:(TTIOHDF5Group *)rootGroup
           externalReferencePath:(nullable NSString *)externalReferencePath;
 

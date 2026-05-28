@@ -52,6 +52,19 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TTIOPQCKeyPair : NSObject
 @property (nonatomic, readonly, copy) NSData *publicKey;
 @property (nonatomic, readonly, copy) NSData *privateKey;
+/**
+ * Initialise a PQC keypair from raw public + private key bytes.
+ *
+ * Used by the keygen + key-load paths to package the two halves of a
+ * post-quantum keypair into a single value object.
+ *
+ * @param publicKey   Public-key bytes (1568 for ML-KEM-1024, 2592 for
+ *                    ML-DSA-87 verification key).
+ * @param privateKey  Private-key bytes (3168 for ML-KEM-1024, 4896 for
+ *                    ML-DSA-87 signing key).
+ * @return New `TTIOPQCKeyPair` instance holding the supplied byte
+ *         buffers (copied).
+ */
 - (instancetype)initWithPublicKey:(NSData *)publicKey
                         privateKey:(NSData *)privateKey;
 @end
@@ -62,6 +75,18 @@ NS_ASSUME_NONNULL_BEGIN
 @interface TTIOPQCKemEncapResult : NSObject
 @property (nonatomic, readonly, copy) NSData *ciphertext;
 @property (nonatomic, readonly, copy) NSData *sharedSecret;
+/**
+ * Initialise a KEM encapsulation result from its constituent fields.
+ *
+ * @param ciphertext    KEM ciphertext bytes (1568 for ML-KEM-1024).
+ *                      Persisted alongside the encrypted payload so a
+ *                      holder of the matching private key can recover
+ *                      `sharedSecret` later.
+ * @param sharedSecret  Newly-generated shared secret (32 bytes) used
+ *                      downstream as an AES-256 KEK.
+ * @return New `TTIOPQCKemEncapResult` instance holding the supplied
+ *         byte buffers (copied).
+ */
 - (instancetype)initWithCiphertext:(NSData *)ciphertext
                        sharedSecret:(NSData *)sharedSecret;
 @end
@@ -75,11 +100,31 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - ML-KEM-1024 (FIPS 203)
 
-/** Generate a fresh ML-KEM-1024 encapsulation keypair. */
+/**
+ * Generate a fresh ML-KEM-1024 (FIPS 203) encapsulation keypair.
+ *
+ * The returned keypair has `publicKey.length == 1568` and
+ * `privateKey.length == 3168`. Requires `+isAvailable == YES`;
+ * otherwise returns `nil` with `TTIOErrorPQCUnavailable`.
+ *
+ * @param error  Out-error on liboqs failure or unavailable backend.
+ * @return New `TTIOPQCKeyPair` on success, or `nil` with `*error` set.
+ */
 + (nullable TTIOPQCKeyPair *)kemKeygenWithError:(NSError **)error;
 
-/** Encapsulate a fresh 32-byte shared secret under ``publicKey``.
- *  ``publicKey`` must be 1568 bytes (ML-KEM-1024 pk length). */
+/**
+ * Encapsulate a fresh 32-byte shared secret under the recipient's
+ * ML-KEM-1024 public key.
+ *
+ * Standard FIPS 203 encapsulation: the result carries both the KEM
+ * ciphertext (to persist alongside the encrypted payload) and the
+ * shared secret used as an AES-256 KEK for downstream wrapping.
+ *
+ * @param publicKey  Recipient's 1568-byte ML-KEM-1024 public key.
+ * @param error      Out-error on bad key length or liboqs failure.
+ * @return `TTIOPQCKemEncapResult` carrying `(ciphertext, sharedSecret)`,
+ *         or `nil` with `*error` set.
+ */
 + (nullable TTIOPQCKemEncapResult *)kemEncapsulateWithPublicKey:(NSData *)publicKey
                                                             error:(NSError **)error;
 
@@ -93,11 +138,29 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - ML-DSA-87 (FIPS 204)
 
-/** Generate a fresh ML-DSA-87 signing keypair. */
+/**
+ * Generate a fresh ML-DSA-87 (FIPS 204) signing keypair.
+ *
+ * The returned keypair has `publicKey.length == 2592` (verification
+ * key) and `privateKey.length == 4896` (signing key). Requires
+ * `+isAvailable == YES`.
+ *
+ * @param error  Out-error on liboqs failure or unavailable backend.
+ * @return New `TTIOPQCKeyPair` on success, or `nil` with `*error` set.
+ */
 + (nullable TTIOPQCKeyPair *)sigKeygenWithError:(NSError **)error;
 
-/** Sign ``message`` with the 4896-byte ML-DSA-87 signing key.
- *  Returns the raw 4627-byte signature. */
+/**
+ * Sign `message` with an ML-DSA-87 (FIPS 204) signing key.
+ *
+ * Produces the raw 4627-byte signature. The signing key must be the
+ * private half of a `+sigKeygenWithError:` result.
+ *
+ * @param privateKey  4896-byte ML-DSA-87 signing key.
+ * @param message     Message bytes to sign (any length).
+ * @param error       Out-error on bad key length or liboqs failure.
+ * @return 4627-byte signature on success, or `nil` with `*error` set.
+ */
 + (nullable NSData *)sigSignWithPrivateKey:(NSData *)privateKey
                                     message:(NSData *)message
                                       error:(NSError **)error;

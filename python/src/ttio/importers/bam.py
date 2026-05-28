@@ -120,10 +120,26 @@ class BamReader:
     """
 
     def __init__(self, path: str | os.PathLike[str]):
+        """Configure the reader; does not invoke samtools.
+
+        Parameters
+        ----------
+        path : str or os.PathLike
+            Filesystem path to a SAM or BAM file. The path is stored
+            verbatim — existence is not checked until
+            :meth:`to_genomic_run` runs.
+        """
         self._path = Path(path)
 
     @property
     def path(self) -> Path:
+        """Return the SAM/BAM input path as a :class:`pathlib.Path`.
+
+        Returns
+        -------
+        pathlib.Path
+            The path supplied at construction, unchanged.
+        """
         return self._path
 
     def to_genomic_run(

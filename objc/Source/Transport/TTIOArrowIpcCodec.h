@@ -103,41 +103,110 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface TTIOArrowIpcCodec : NSObject
 
-/** Encode the given identification rows as an Arrow IPC stream. */
+/**
+ * Encode an array of identification rows as an Arrow IPC stream.
+ *
+ * Produces the IDENTIFICATION_SCHEMA-shaped payload bytes for the
+ * IDENTIFICATIONS_TABLE (packet 0x16) transport payload. An empty input
+ * still yields a valid Arrow IPC stream that decodes back to `@[]`.
+ *
+ * @param rows  Array of `TTIOIdentification` rows (may be empty, must be
+ *              non-`nil`).
+ * @return Arrow IPC stream bytes ready for transport framing. Caller is
+ *         responsible for the 24-byte transport-spec packet header.
+ */
 + (NSData *)encodeIdentifications:(NSArray<TTIOIdentification *> *)rows;
 
-/** Decode an Arrow IPC stream into identification rows. Returns
- *  <code>@[]</code> for empty / <code>nil</code> input. */
+/**
+ * Decode an Arrow IPC stream into `TTIOIdentification` rows.
+ *
+ * Inverse of `+encodeIdentifications:`. Tolerant of empty / `nil` input.
+ *
+ * @param ipc  Arrow IPC payload bytes (typically the body of a 0x16
+ *             IDENTIFICATIONS_TABLE packet), or `nil`.
+ * @return Decoded identification rows in source order. Returns `@[]` for
+ *         `nil` or empty input.
+ */
 + (NSArray<TTIOIdentification *> *)decodeIdentifications:(nullable NSData *)ipc;
 
-/** Encode the given quantification rows as an Arrow IPC stream. */
+/**
+ * Encode an array of quantification rows as an Arrow IPC stream.
+ *
+ * Produces the QUANTIFICATION_SCHEMA-shaped payload bytes for the
+ * QUANTIFICATIONS_TABLE (packet 0x17) transport payload. An empty input
+ * still yields a valid Arrow IPC stream that decodes back to `@[]`.
+ *
+ * @param rows  Array of `TTIOQuantification` rows (may be empty, must be
+ *              non-`nil`).
+ * @return Arrow IPC stream bytes ready for transport framing.
+ */
 + (NSData *)encodeQuantifications:(NSArray<TTIOQuantification *> *)rows;
 
-/** Decode an Arrow IPC stream into quantification rows. Returns
- *  <code>@[]</code> for empty / <code>nil</code> input. */
+/**
+ * Decode an Arrow IPC stream into `TTIOQuantification` rows.
+ *
+ * Inverse of `+encodeQuantifications:`. Tolerant of empty / `nil` input.
+ *
+ * @param ipc  Arrow IPC payload bytes (typically the body of a 0x17
+ *             QUANTIFICATIONS_TABLE packet), or `nil`.
+ * @return Decoded quantification rows in source order. Returns `@[]` for
+ *         `nil` or empty input.
+ */
 + (NSArray<TTIOQuantification *> *)decodeQuantifications:(nullable NSData *)ipc;
 
-/** Stage 6 (transport-spec §4.22 / 0x19): encode subject rows as an
- *  Arrow IPC stream. Empty input yields a valid empty IPC stream
- *  that round-trips back to an empty list. */
+/**
+ * Encode an array of subject rows as an Arrow IPC stream.
+ *
+ * Produces the SUBJECT_SCHEMA-shaped payload bytes for the
+ * SUBJECT_METADATA (packet 0x19) transport payload. Optional string
+ * columns (`project`, `sex`) emit Arrow null for empty `NSString`s;
+ * optional `birth_year` emits Arrow null for the `0` sentinel.
+ *
+ * @param rows  Array of `TTIOSubject` rows (may be empty, must be
+ *              non-`nil`).
+ * @return Arrow IPC stream bytes ready for transport framing.
+ */
 + (NSData *)encodeSubjects:(NSArray<TTIOSubject *> *)rows;
 
-/** Stage 6: decode an Arrow IPC stream into subject rows. Returns
- *  <code>@[]</code> for empty / <code>nil</code> input. Arrow null
- *  in <code>project</code> / <code>sex</code> decodes to
- *  <code>@""</code>; Arrow null in <code>birth_year</code> decodes
- *  to <code>0</code>. */
+/**
+ * Decode an Arrow IPC stream into `TTIOSubject` rows.
+ *
+ * Inverse of `+encodeSubjects:`. Arrow null in `project` / `sex`
+ * decodes back to `@""`; Arrow null in `birth_year` decodes back to `0`.
+ *
+ * @param ipc  Arrow IPC payload bytes (typically the body of a 0x19
+ *             SUBJECT_METADATA packet), or `nil`.
+ * @return Decoded subject rows in source order. Returns `@[]` for `nil`
+ *         or empty input.
+ */
 + (NSArray<TTIOSubject *> *)decodeSubjects:(nullable NSData *)ipc;
 
-/** Stage 6 (transport-spec §4.22 / 0x1A): encode sample rows as an
- *  Arrow IPC stream. */
+/**
+ * Encode an array of sample rows as an Arrow IPC stream.
+ *
+ * Produces the SAMPLE_SCHEMA-shaped payload bytes for the
+ * SAMPLE_METADATA (packet 0x1A) transport payload. Optional string
+ * columns (`subject_external_id`, `sample_kind`) emit Arrow null for
+ * empty strings; `collected_at` emits Arrow null for the `0` sentinel.
+ *
+ * @param rows  Array of `TTIOSample` rows (may be empty, must be
+ *              non-`nil`).
+ * @return Arrow IPC stream bytes ready for transport framing.
+ */
 + (NSData *)encodeSamples:(NSArray<TTIOSample *> *)rows;
 
-/** Stage 6: decode an Arrow IPC stream into sample rows. Returns
- *  <code>@[]</code> for empty / <code>nil</code> input. Arrow null
- *  in <code>subject_external_id</code> / <code>sample_kind</code>
- *  decodes to <code>@""</code>; Arrow null in
- *  <code>collected_at</code> decodes to <code>0</code>. */
+/**
+ * Decode an Arrow IPC stream into `TTIOSample` rows.
+ *
+ * Inverse of `+encodeSamples:`. Arrow null in `subject_external_id` /
+ * `sample_kind` decodes back to `@""`; Arrow null in `collected_at`
+ * decodes back to `0`.
+ *
+ * @param ipc  Arrow IPC payload bytes (typically the body of a 0x1A
+ *             SAMPLE_METADATA packet), or `nil`.
+ * @return Decoded sample rows in source order. Returns `@[]` for `nil`
+ *         or empty input.
+ */
 + (NSArray<TTIOSample *> *)decodeSamples:(nullable NSData *)ipc;
 
 @end

@@ -160,8 +160,39 @@ NS_ASSUME_NONNULL_BEGIN
                             chromosomes:(NSArray<NSString *> *)chromosomes
                       signalCompression:(TTIOCompression)signalCompression;
 
-/** Designated initialiser including the per-channel codec
- *  overrides dictionary. */
+/**
+ * Designated initialiser including the per-channel codec overrides
+ * dictionary.
+ *
+ * Populates every channel of a writeable genomic run from parallel
+ * arrays. `positions`, `mappingQualities`, `flags`, `offsets`,
+ * `lengths`, `matePositions`, and `templateLengths` are typed
+ * `NSData` buffers (int64, uint8, uint32, uint64, uint32, int64,
+ * int32 respectively); `sequences` and `qualities` are concatenated
+ * uint8 buffers sliced by `offsets` / `lengths`.
+ *
+ * @param mode                  Acquisition mode (`Genomic`, etc).
+ * @param referenceUri          Reference URI string.
+ * @param platform              Sequencing platform identifier.
+ * @param sampleName            Sample name.
+ * @param positions             Per-read int64 reference positions.
+ * @param mappingQualities      Per-read uint8 MAPQ values.
+ * @param flags                 Per-read uint32 SAM flags.
+ * @param sequences             Concatenated ACGTN sequence bytes.
+ * @param qualities             Concatenated Phred+33 quality bytes.
+ * @param offsets               Per-read uint64 offsets into sequences/qualities.
+ * @param lengths               Per-read uint32 read lengths.
+ * @param cigars                Per-read CIGAR strings.
+ * @param readNames             Per-read query names.
+ * @param mateChromosomes       Per-read mate chromosome names.
+ * @param matePositions         Per-read int64 mate positions.
+ * @param templateLengths       Per-read int32 template lengths.
+ * @param chromosomes           Per-read reference chromosome names.
+ * @param signalCompression     Default compression for signal channels.
+ * @param signalCodecOverrides  Per-channel-name codec id overrides
+ *                              (empty dict = use defaults).
+ * @return Initialised `TTIOWrittenGenomicRun`.
+ */
 - (instancetype)initWithAcquisitionMode:(TTIOAcquisitionMode)mode
                            referenceUri:(NSString *)referenceUri
                                platform:(NSString *)platform

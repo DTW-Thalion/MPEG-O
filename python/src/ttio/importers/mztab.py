@@ -87,6 +87,15 @@ class MzTabImport:
 
     @property
     def is_metabolomics(self) -> bool:
+        """Whether the parsed file is a metabolomics-dialect mzTab.
+
+        Returns
+        -------
+        bool
+            ``True`` if :attr:`version` ends with ``-M`` (i.e. the
+            ``2.0.0-M`` metabolomics dialect; SML rows), ``False`` for
+            the proteomics dialect (``1.0``; PSM + PRT rows).
+        """
         return self.version.endswith("-M")
 
     def to_ttio(

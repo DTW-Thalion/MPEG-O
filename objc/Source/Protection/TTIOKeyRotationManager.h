@@ -58,7 +58,17 @@
  */
 @interface TTIOKeyRotationManager : NSObject
 
-/** Create a manager bound to an open HDF5 file. */
+/**
+ * Create a key-rotation manager bound to an open HDF5 file.
+ *
+ * Subsequent calls operate on `/protection/key_info/` and the
+ * encryption group attributes within `file`.
+ *
+ * @param file  An open `TTIOHDF5File`. The manager retains the file
+ *              for its lifetime; the caller remains responsible for
+ *              closing it.
+ * @return New manager instance bound to `file`.
+ */
 + (instancetype)managerWithFile:(TTIOHDF5File *)file;
 
 /**
@@ -148,8 +158,6 @@
  * Unwrap the DEK under the given algorithm. For
  * ``algorithm="ml-kem-1024"``, ``kek`` is the 3168-byte decapsulation
  * <b>private</b> key.
- *
- * @since 0.8
  */
 - (NSData *)unwrapDEKWithKEK:(NSData *)kek
                     algorithm:(NSString *)algorithm
@@ -159,8 +167,6 @@
  * Rotate the wrapping key with optional algorithm migration
  * (AES-256-GCM ⇄ ML-KEM-1024). ``oldAlgorithm`` matches the algorithm
  * used to write the file; pass a different ``newAlgorithm`` to migrate.
- *
- * @since 0.8
  */
 - (BOOL)rotateToKEK:(NSData *)newKEK
               kekId:(NSString *)newKEKId
@@ -169,7 +175,14 @@
         newAlgorithm:(NSString *)newAlgorithm
               error:(NSError **)error;
 
-/** Returns YES if ``/protection/key_info/dek_wrapped`` is present. */
+/**
+ * Whether the bound file has envelope encryption enabled.
+ *
+ * Tests for the presence of `/protection/key_info/dek_wrapped`,
+ * which is created by `-enableEnvelopeEncryptionWithKEK:...`.
+ *
+ * @return YES iff the wrapped-DEK dataset is present in the file.
+ */
 - (BOOL)hasEnvelopeEncryption;
 
 /**

@@ -119,8 +119,54 @@ def write(
     ms_run_locations: Mapping[int, str] | None = None,
     progress: ProgressSinkLike | None = None,
 ) -> WriteResult:
-    """Write mzTab text to ``path``. See :func:`dataset_to_bytes` for
-    the content-model details."""
+    """Write mzTab text to ``path`` and return a count receipt.
+
+    Thin convenience around :func:`dataset_to_bytes`: serialises the
+    mzTab blob, writes it to ``path``, then tallies emitted row kinds
+    (PSM / PRT / SML / PEP / SMF / SME) for the returned
+    :class:`WriteResult`.
+
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        Destination file path. Written verbatim — no compression, no
+        suffix coercion.
+    identifications : Iterable[Identification], optional
+        Sequence of :class:`~ttio.identification.Identification` rows.
+        Become PSM rows in proteomics dialect.
+    quantifications : Iterable[Quantification], optional
+        Sequence of :class:`~ttio.quantification.Quantification` rows.
+        Become PRT rows in proteomics dialect.
+    provenance : Iterable[ProvenanceRecord], optional
+        Provenance records threaded into the MTD section as
+        ``software[N]`` lines.
+    features : Iterable[Feature], optional
+        Feature rows for metabolomics dialect (SML output).
+    version : str, optional
+        Either ``"1.0"`` (proteomics; PSM + PRT) or ``"2.0.0-M"``
+        (metabolomics; SML). Default ``"1.0"``.
+    title : str, optional
+        Free-text title embedded in the MTD header.
+    description : str, optional
+        Free-text description embedded in the MTD header.
+    ms_run_locations : Mapping[int, str] or None, optional
+        Optional explicit ``ms_run[N]-location`` overrides. When
+        ``None``, run names are auto-numbered from the input rows.
+    progress : ProgressSinkLike or None, optional
+        Optional progress sink fired every
+        :data:`PROGRESS_INTERVAL_ROWS` rows.
+
+    Returns
+    -------
+    WriteResult
+        Dialect emitted plus per-row-kind counts. The path field
+        echoes the destination as a :class:`pathlib.Path`.
+
+    Raises
+    ------
+    ValueError
+        If ``version`` is not one of the supported dialects.
+    """
     blob = dataset_to_bytes(
         identifications=identifications,
         quantifications=quantifications,
