@@ -29,6 +29,14 @@ public class FreeInductionDecay extends SignalArray {
     private final double dwellTimeSeconds;
     private final double receiverGain;
 
+    /**
+     * Construct an FID from interleaved real/imaginary samples.
+     *
+     * @param complexData      interleaved {@code [re0, im0, re1, im1, ...]} samples
+     * @param scanCount        number of complex samples; {@code complexData.length == 2 * scanCount}
+     * @param dwellTimeSeconds time between consecutive samples in seconds
+     * @param receiverGain     receiver gain factor recorded by the spectrometer
+     */
     public FreeInductionDecay(double[] complexData, int scanCount,
                               double dwellTimeSeconds, double receiverGain) {
         super(complexData, scanCount,
@@ -39,11 +47,27 @@ public class FreeInductionDecay extends SignalArray {
         this.receiverGain = receiverGain;
     }
 
+    /** @return Interleaved real/imaginary FID samples as {@code [re, im, re, im, ...]}. */
     public double[] complexData() { return asDoubles(); }
+
+    /** @return Number of complex samples in the FID. */
     public int scanCount() { return scanCount; }
+
+    /** @return Dwell time (sample spacing) in seconds. */
     public double dwellTimeSeconds() { return dwellTimeSeconds; }
+
+    /** @return Receiver gain factor recorded at acquisition time. */
     public double receiverGain() { return receiverGain; }
 
+    /**
+     * @param i sample index in {@code [0, scanCount)}
+     * @return  real component of complex sample {@code i}
+     */
     public double realAt(int i) { return ((double[]) buffer())[i * 2]; }
+
+    /**
+     * @param i sample index in {@code [0, scanCount)}
+     * @return  imaginary component of complex sample {@code i}
+     */
     public double imagAt(int i) { return ((double[]) buffer())[i * 2 + 1]; }
 }

@@ -131,6 +131,11 @@ public class AcquisitionRun implements
         this.uvvisPathLengthCm = pathLengthCm;
     }
 
+    /**
+     * Pre-modality overload retained for backward compatibility.
+     * Forwards to the full constructor with
+     * {@code modality = "mass_spectrometry"} and an empty solvent.
+     */
     public AcquisitionRun(String name, AcquisitionMode acquisitionMode,
                           SpectrumIndex spectrumIndex,
                           InstrumentConfig instrumentConfig,
@@ -181,14 +186,31 @@ public class AcquisitionRun implements
         this.solvent = solvent != null ? solvent : "";
     }
 
+    /** @return The run's identifier, unique within its parent {@link SpectralDataset}. */
     public String name() { return name; }
+
+    /** @return The mode used to acquire the spectra (DDA, DIA, NMR_1D, etc.). */
     public AcquisitionMode acquisitionMode() { return acquisitionMode; }
+
+    /** @return The per-spectrum index columns (offsets, retention times, MS levels, polarities). */
     public SpectrumIndex spectrumIndex() { return spectrumIndex; }
+
+    /** @return The instrument configuration that recorded this run. */
     public InstrumentConfig instrumentConfig() { return instrumentConfig; }
+
+    /** @return Unmodifiable view of the run's concatenated channel buffers keyed by channel name. */
     public Map<String, double[]> channels() { return channels; }
+
+    /** @return Unmodifiable list of chromatograms attached to this run. */
     public List<Chromatogram> chromatograms() { return chromatograms; }
+
+    /** @return Unmodifiable list of provenance records for the run-level processing chain. */
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
+
+    /** @return The NMR nucleus type (e.g. {@code "1H"}, {@code "13C"}); empty for non-NMR runs. */
     public String nucleusType() { return nucleusType; }
+
+    /** @return Spectrometer Larmor frequency in MHz for NMR runs; zero for non-NMR runs. */
     public double spectrometerFrequencyMHz() { return spectrometerFrequencyMHz; }
     /** omics modality (e.g. {@code "mass_spectrometry"}). */
     public String modality() { return modality; }
@@ -200,6 +222,11 @@ public class AcquisitionRun implements
      *  {@code -[TTIOAcquisitionRun solvent]}.</p> */
     public String solvent() { return solvent; }
 
+    /**
+     * @return Number of spectra in the run. Convenience over
+     *         {@code spectrumIndex().count()} for callers that don't
+     *         need the full index object.
+     */
     public int spectrumCount() { return spectrumIndex.count(); }
 
     /** Read a single spectrum's channel data by index (hyperslab). */
@@ -242,6 +269,19 @@ public class AcquisitionRun implements
 
     // ---- Indexable conformance ----
 
+    /**
+     * Materialize the spectrum at the given index.
+     *
+     * <p>Dispatches on the stored {@code @spectrum_class} override
+     * (IR/Raman/UV-Vis) and falls back to NMR when a
+     * {@code chemical_shift} channel is present; otherwise returns a
+     * {@link MassSpectrum}. Hyperslabs the run's concatenated channel
+     * buffers using {@link SpectrumIndex#offsetAt(int)} +
+     * {@link SpectrumIndex#lengthAt(int)}.</p>
+     *
+     * @param index spectrum index in {@code [0, count())}
+     * @return      newly constructed {@link Spectrum} of the appropriate subtype
+     */
     @Override
     public Spectrum objectAtIndex(int index) {
         long offset = spectrumIndex.offsetAt(index);
@@ -305,6 +345,10 @@ public class AcquisitionRun implements
             spectrumIndex.centroidedAt(index));
     }
 
+    /**
+     * @return Number of spectra in the run; equivalent to
+     *         {@link #spectrumCount()}.
+     */
     @Override
     public int count() { return spectrumIndex.count(); }
 
@@ -337,6 +381,13 @@ public class AcquisitionRun implements
 
     // ---- Streamable conformance ----
 
+    /**
+     * Advance the stream cursor and return the next spectrum.
+     *
+     * @return the next spectrum in iteration order
+     * @throws java.util.NoSuchElementException when the cursor has
+     *         already reached the end of the run
+     */
     @Override
     public Spectrum nextObject() {
         if (cursor >= count()) throw new java.util.NoSuchElementException();
@@ -345,12 +396,22 @@ public class AcquisitionRun implements
         return s;
     }
 
+    /** @return {@code true} when {@link #nextObject()} has further spectra to return. */
     @Override
     public boolean hasMore() { return cursor < count(); }
 
+    /** @return Current zero-based stream cursor position. */
     @Override
     public int currentPosition() { return cursor; }
 
+    /**
+     * Reposition the stream cursor.
+     *
+     * @param position zero-based target position in {@code [0, count()]};
+     *                 {@code count()} parks the cursor at end-of-stream
+     * @return         {@code true} when the position was accepted,
+     *                 {@code false} when out of range
+     */
     @Override
     public boolean seekToPosition(int position) {
         if (position < 0 || position > count()) return false;
@@ -358,22 +419,40 @@ public class AcquisitionRun implements
         return true;
     }
 
+    /** Reset the stream cursor to the beginning of the run. */
     @Override
     public void reset() { cursor = 0; }
 
     // ---- Provenanceable conformance ----
 
+    /**
+     * Append a processing step to the run's in-memory provenance chain.
+     *
+     * <p>Persisted to {@code /study/runs/<name>/@provenance_json} the
+     * next time the dataset is saved.</p>
+     *
+     * @param step provenance record describing the processing step
+     */
     @Override
     public void addProcessingStep(ProvenanceRecord step) {
         ensureProvenanceCache().add(step);
     }
 
+    /**
+     * @return Immutable view of the run's provenance chain — the
+     *         on-disk records concatenated with any
+     *         {@link #addProcessingStep} additions made in memory.
+     */
     @Override
     public java.util.List<ProvenanceRecord> provenanceChain() {
         if (provenanceCache != null) return java.util.List.copyOf(provenanceCache);
         return provenanceRecords;
     }
 
+    /**
+     * @return Deduplicated input entity URIs across every record in the
+     *         provenance chain, in first-seen order.
+     */
     @Override
     public java.util.List<String> inputEntities() {
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
@@ -381,6 +460,10 @@ public class AcquisitionRun implements
         return new java.util.ArrayList<>(seen);
     }
 
+    /**
+     * @return Deduplicated output entity URIs across every record in
+     *         the provenance chain, in first-seen order.
+     */
     @Override
     public java.util.List<String> outputEntities() {
         java.util.Set<String> seen = new java.util.LinkedHashSet<>();
@@ -406,6 +489,16 @@ public class AcquisitionRun implements
         this.persistenceRunName = runName;
     }
 
+    /**
+     * Encrypt this run's intensity channel in place on disk using
+     * AES-256-GCM.
+     *
+     * @param key   32-byte AES-256 key material
+     * @param level Encryption granularity hint (run/dataset/per-AU)
+     * @throws IllegalStateException when the run was not obtained from a
+     *         {@link SpectralDataset} (no persistence context)
+     * @throws Exception             on I/O or cipher failure
+     */
     @Override
     public void encryptWithKey(byte[] key, global.thalion.ttio.Enums.EncryptionLevel level)
             throws Exception {
@@ -418,6 +511,17 @@ public class AcquisitionRun implements
             .encryptIntensityChannelInRun(persistenceFilePath, persistenceRunName, key);
     }
 
+    /**
+     * In-process decrypt overlay: rehydrates the run's intensity
+     * channel into an in-memory buffer that subsequent
+     * {@link #objectAtIndex(int)} / {@link #channelSlice(String, int)}
+     * calls read from. The on-disk file is left untouched.
+     *
+     * @param key 32-byte AES-256 key matching the encrypt key
+     * @throws IllegalStateException when the run was not obtained from a
+     *         {@link SpectralDataset} (no persistence context)
+     * @throws Exception             on I/O failure or AES-GCM tag mismatch
+     */
     @Override
     public void decryptWithKey(byte[] key) throws Exception {
         // The protocol declares void return; plaintext is rehydrated into
@@ -443,9 +547,23 @@ public class AcquisitionRun implements
         decryptedChannels.put("intensity", intensity);
     }
 
+    /**
+     * @return The attached access policy, or {@code null} when none is
+     *         set. Typed as {@code Object} to keep the
+     *         {@code Encryptable} protocol free of the protection
+     *         package dependency.
+     */
     @Override
     public Object accessPolicy() { return accessPolicy; }
 
+    /**
+     * Attach an access policy to the run.
+     *
+     * @param policy a {@code global.thalion.ttio.protection.AccessPolicy}
+     *               instance, or {@code null} to clear
+     * @throws ClassCastException when {@code policy} is non-null and
+     *         not an {@code AccessPolicy}
+     */
     @Override
     public void setAccessPolicy(Object policy) {
         this.accessPolicy = (global.thalion.ttio.protection.AccessPolicy) policy;
@@ -898,6 +1016,12 @@ public class AcquisitionRun implements
         return g.hasAttribute(name) ? (String) g.getAttribute(name) : null;
     }
 
+    /**
+     * {@code AutoCloseable} hook. A no-op for {@link AcquisitionRun}:
+     * all storage handles are opened and closed inside the
+     * {@link #writeTo(StorageGroup)} / {@link #read(StorageGroup, String)}
+     * boundaries, so nothing remains to release.
+     */
     @Override
     public void close() {
         // No storage handles held — all closed after read/write

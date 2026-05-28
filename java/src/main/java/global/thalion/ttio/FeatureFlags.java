@@ -87,13 +87,29 @@ public final class FeatureFlags {
     private final String formatVersion;
     private final Set<String> features;
 
+    /**
+     * Build a {@code FeatureFlags} from a format version label and a
+     * collection of feature strings. The collection is copied into a
+     * {@link LinkedHashSet} preserving iteration order.
+     *
+     * @param formatVersion file format version label (e.g. {@code "1.5"})
+     * @param features      collection of feature flag names
+     */
     public FeatureFlags(String formatVersion, Collection<String> features) {
         this.formatVersion = formatVersion;
         this.features = new LinkedHashSet<>(features);
     }
 
+    /** @return The format version label (e.g. {@code "1.5"}). */
     public String formatVersion() { return formatVersion; }
+
+    /** @return Unmodifiable view of the feature flag set, iteration order preserved. */
     public Set<String> features() { return Collections.unmodifiableSet(features); }
+
+    /**
+     * @param flag feature flag name to test
+     * @return     {@code true} when the flag is present in this set
+     */
     public boolean has(String flag) { return features.contains(flag); }
 
     /** Check if this is a v0.1 file (no features attribute). */

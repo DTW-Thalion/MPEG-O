@@ -52,6 +52,33 @@ public class RamanImage {
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
 
+    /**
+     * Full constructor capturing every cube dimension, laser metadata,
+     * and study-level annotation.
+     *
+     * @param width                   image width in pixels
+     * @param height                  image height in pixels
+     * @param spectralPoints          points along the Raman shift axis
+     * @param tileSize                HDF5 chunk side; 0 means full-image
+     *                                chunking
+     * @param pixelSizeX              pixel pitch in micrometres along X
+     * @param pixelSizeY              pixel pitch in micrometres along Y
+     * @param scanPattern             free-form scan-pattern label
+     * @param excitationWavelengthNm  laser excitation wavelength in nm
+     * @param laserPowerMw            laser power at the sample in mW
+     * @param intensityCube           row-major flat cube of shape
+     *                                {@code [height, width, spectralPoints]}
+     * @param wavenumbers             per-band Raman-shift values
+     * @param title                   study title; null becomes empty
+     * @param isaInvestigationId      ISA investigation identifier; null
+     *                                becomes empty
+     * @param identifications         dataset-level identifications;
+     *                                null becomes empty
+     * @param quantifications         dataset-level quantifications;
+     *                                null becomes empty
+     * @param provenanceRecords       dataset-level provenance chain;
+     *                                null becomes empty
+     */
     public RamanImage(int width, int height, int spectralPoints, int tileSize,
                       double pixelSizeX, double pixelSizeY, String scanPattern,
                       double excitationWavelengthNm, double laserPowerMw,
@@ -90,22 +117,52 @@ public class RamanImage {
              "", "", List.of(), List.of(), List.of());
     }
 
+    /** @return Image width in pixels. */
     public int width() { return width; }
+
+    /** @return Image height in pixels. */
     public int height() { return height; }
+
+    /** @return Number of points along the Raman-shift axis. */
     public int spectralPoints() { return spectralPoints; }
+
+    /** @return HDF5 chunk side for storage; 0 means full-image chunking. */
     public int tileSize() { return tileSize; }
+
+    /** @return Pixel pitch in micrometres along X. */
     public double pixelSizeX() { return pixelSizeX; }
+
+    /** @return Pixel pitch in micrometres along Y. */
     public double pixelSizeY() { return pixelSizeY; }
+
+    /** @return Free-form scan-pattern label. */
     public String scanPattern() { return scanPattern; }
+
+    /** @return Laser excitation wavelength in nm. */
     public double excitationWavelengthNm() { return excitationWavelengthNm; }
+
+    /** @return Laser power at the sample in mW. */
     public double laserPowerMw() { return laserPowerMw; }
+
+    /** @return Row-major intensity cube of shape {@code [height, width, spectralPoints]}. */
     public double[] intensityCube() { return intensityCube; }
+
+    /** @return Per-band Raman-shift values in {@code cm^-1}. */
     public double[] wavenumbers() { return wavenumbers; }
 
+    /** @return Study title (may be empty). */
     public String title() { return title; }
+
+    /** @return ISA investigation identifier (may be empty). */
     public String isaInvestigationId() { return isaInvestigationId; }
+
+    /** @return Unmodifiable list of dataset-level identifications. */
     public List<Identification> identifications() { return identifications; }
+
+    /** @return Unmodifiable list of dataset-level quantifications. */
     public List<Quantification> quantifications() { return quantifications; }
+
+    /** @return Unmodifiable list of dataset-level provenance records. */
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
     /** Intensity at pixel ({@code row}, {@code col}), spectral index {@code s}. */

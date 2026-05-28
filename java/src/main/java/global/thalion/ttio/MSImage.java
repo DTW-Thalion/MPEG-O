@@ -113,21 +113,46 @@ public class MSImage {
              "", "", List.of(), List.of(), List.of());
     }
 
+    /** @return Image width in pixels. */
     public int width() { return width; }
+
+    /** @return Image height in pixels. */
     public int height() { return height; }
+
+    /** @return Number of points along the m/z axis. */
     public int spectralPoints() { return spectralPoints; }
+
+    /** @return HDF5 chunk side for storage; 0 means full-image chunking. */
     public int tileSize() { return tileSize; }
+
+    /** @return Pixel pitch in micrometres along X. */
     public double pixelSizeX() { return pixelSizeX; }
+
+    /** @return Pixel pitch in micrometres along Y. */
     public double pixelSizeY() { return pixelSizeY; }
+
+    /** @return Free-form scan-pattern label (e.g. {@code "raster"}, {@code "random"}). */
     public String scanPattern() { return scanPattern; }
+
+    /** @return Row-major intensity cube of shape {@code [height, width, spectralPoints]}. */
     public double[] intensityCube() { return intensityCube; }
+
     /** The shared m/z axis when present; empty array for legacy files. */
     public double[] mzAxis() { return mzAxis; }
 
+    /** @return Study title (may be empty). */
     public String title() { return title; }
+
+    /** @return ISA investigation identifier (may be empty). */
     public String isaInvestigationId() { return isaInvestigationId; }
+
+    /** @return Unmodifiable list of dataset-level identifications. */
     public List<Identification> identifications() { return identifications; }
+
+    /** @return Unmodifiable list of dataset-level quantifications. */
     public List<Quantification> quantifications() { return quantifications; }
+
+    /** @return Unmodifiable list of dataset-level provenance records. */
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
     /** Get intensity at pixel (row, col) for spectral index s. */

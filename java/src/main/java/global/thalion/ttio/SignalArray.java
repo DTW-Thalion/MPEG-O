@@ -34,6 +34,19 @@ public class SignalArray implements CVAnnotatable {
     private final AxisDescriptor axis;      // nullable
     private final ArrayList<CVParam> cvParams;
 
+    /**
+     * Primary constructor.
+     *
+     * @param buffer   backing array ({@code float[]}, {@code double[]},
+     *                 {@code int[]}, {@code long[]}, or {@code byte[]})
+     * @param length   logical element count (may be shorter than the
+     *                 raw backing array when the buffer is shared)
+     * @param encoding precision/compression/byte-order descriptor
+     * @param axis     optional axis descriptor for this array; may be
+     *                 {@code null} for unlabelled buffers
+     * @param cvParams optional CV annotations; null is treated as an
+     *                 empty list. Defensively copied.
+     */
     public SignalArray(Object buffer, int length, EncodingSpec encoding,
                        AxisDescriptor axis, List<CVParam> cvParams) {
         this.buffer = buffer;
@@ -67,29 +80,52 @@ public class SignalArray implements CVAnnotatable {
     // Accessors
     // ------------------------------------------------------------------
 
+    /** @return The raw backing array; caller must cast to the type matching {@link #encoding()}. */
     public Object buffer() { return buffer; }
+
+    /** @return Logical element count of the array. */
     public int length() { return length; }
+
+    /** @return The encoding descriptor (precision, compression, byte order). */
     public EncodingSpec encoding() { return encoding; }
+
+    /** @return Optional axis descriptor (label, unit, spacing); {@code null} when unlabelled. */
     public AxisDescriptor axis() { return axis; }
 
     /** @return an unmodifiable view of the CV annotations list. */
     public List<CVParam> cvParams() { return Collections.unmodifiableList(cvParams); }
 
+    /**
+     * @return The backing array typed as {@code double[]}.
+     * @throws ClassCastException when the buffer is not a {@code double[]}
+     */
     public double[] asDoubles() {
         if (buffer instanceof double[] d) return d;
         throw new ClassCastException("buffer is not double[]");
     }
 
+    /**
+     * @return The backing array typed as {@code float[]}.
+     * @throws ClassCastException when the buffer is not a {@code float[]}
+     */
     public float[] asFloats() {
         if (buffer instanceof float[] f) return f;
         throw new ClassCastException("buffer is not float[]");
     }
 
+    /**
+     * @return The backing array typed as {@code int[]}.
+     * @throws ClassCastException when the buffer is not an {@code int[]}
+     */
     public int[] asInts() {
         if (buffer instanceof int[] i) return i;
         throw new ClassCastException("buffer is not int[]");
     }
 
+    /**
+     * @return The backing array typed as {@code long[]}.
+     * @throws ClassCastException when the buffer is not a {@code long[]}
+     */
     public long[] asLongs() {
         if (buffer instanceof long[] l) return l;
         throw new ClassCastException("buffer is not long[]");
