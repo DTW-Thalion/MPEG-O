@@ -40,6 +40,19 @@ class Container:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "Container":
+        """Build a :class:`Container` from a parsed JSON row.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from the ``containers`` list array.
+
+        Returns
+        -------
+        Container
+            Immutable list-row snapshot. Missing fields collapse to
+            empty strings, ``False``, or ``0`` as appropriate.
+        """
         return cls(
             uri=body.get("uri") or "",
             project=body.get("project") or "",
@@ -68,6 +81,20 @@ class ContainerDetail:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "ContainerDetail":
+        """Build a :class:`ContainerDetail` from a parsed JSON row.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from
+            ``GET /v1/containers/{uri}``.
+
+        Returns
+        -------
+        ContainerDetail
+            Immutable detail snapshot including on-disk size and
+            mtime.
+        """
         return cls(
             uri=body.get("uri") or "",
             project=body.get("project") or "",
@@ -81,6 +108,15 @@ class ContainerDetail:
         )
 
     def as_container(self) -> Container:
+        """Project the detail row down to a list-shape :class:`Container`.
+
+        Returns
+        -------
+        Container
+            A :class:`Container` carrying only the fields shared with
+            the list endpoint. ``size_bytes`` and ``modified_at``
+            are dropped.
+        """
         return Container(
             uri=self.uri, project=self.project, owner=self.owner,
             encrypted=self.encrypted, storage_path=self.storage_path,
@@ -97,10 +133,30 @@ class ContainerListPage:
 
     @property
     def has_more(self) -> bool:
+        """Return True when another page of results follows.
+
+        Returns
+        -------
+        bool
+            True iff ``next_cursor`` is set, indicating the caller
+            should issue a follow-up ``list(cursor=...)`` call.
+        """
         return bool(self.next_cursor)
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "ContainerListPage":
+        """Build a :class:`ContainerListPage` from a parsed JSON page.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from ``GET /v1/containers``.
+
+        Returns
+        -------
+        ContainerListPage
+            Containers plus optional ``next_cursor``.
+        """
         rows = [Container.from_json(r) for r in body.get("containers") or []]
         cursor = body.get("next_cursor")
         return cls(
@@ -118,6 +174,19 @@ class ContainerLayer:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "ContainerLayer":
+        """Build a :class:`ContainerLayer` from a parsed JSON row.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from
+            ``GET /v1/containers/{uri}/layers``.
+
+        Returns
+        -------
+        ContainerLayer
+            One per-layer breakdown row.
+        """
         return cls(
             layer_type=body.get("layer_type") or "",
             layer_path=body.get("layer_path") or "",
@@ -137,6 +206,20 @@ class MsRunSummary:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "MsRunSummary":
+        """Build a :class:`MsRunSummary` from a parsed JSON row.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from the manifest's ``ms_runs``
+            array.
+
+        Returns
+        -------
+        MsRunSummary
+            Per-run summary including spectrum count and MS-level
+            histogram.
+        """
         dist = {str(k): int(v) for k, v in
                 (body.get("ms_level_distribution") or {}).items()}
         return cls(
@@ -156,6 +239,19 @@ class NmrRunSummary:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "NmrRunSummary":
+        """Build an :class:`NmrRunSummary` from a parsed JSON row.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from the manifest's ``nmr_runs``
+            array.
+
+        Returns
+        -------
+        NmrRunSummary
+            Per-run summary with spectrum count.
+        """
         return cls(
             name=body.get("name") or "",
             spectrum_count=int(body.get("spectrum_count") or 0),
@@ -170,6 +266,19 @@ class GenomicRunSummary:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "GenomicRunSummary":
+        """Build a :class:`GenomicRunSummary` from a parsed JSON row.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from the manifest's
+            ``genomic_runs`` array.
+
+        Returns
+        -------
+        GenomicRunSummary
+            Per-run summary with read count and platform label.
+        """
         return cls(
             name=body.get("name") or "",
             read_count=int(body.get("read_count") or 0),
@@ -193,6 +302,20 @@ class ContainerManifest:
 
     @classmethod
     def from_json(cls, body: Mapping[str, Any]) -> "ContainerManifest":
+        """Build a :class:`ContainerManifest` from a parsed JSON body.
+
+        Parameters
+        ----------
+        body : Mapping[str, Any]
+            Decoded JSON object from
+            ``GET /v1/containers/{uri}/manifest``.
+
+        Returns
+        -------
+        ContainerManifest
+            Full manifest snapshot including MS / NMR / genomic
+            run summaries and aggregate counts.
+        """
         return cls(
             uri=body.get("uri") or "",
             title=body.get("title") or "",
@@ -217,6 +340,19 @@ class ContainersClient:
     """
 
     def __init__(self, host: str, port: int, scheme: str, token: str) -> None:
+        """Bind the client to a server endpoint and bearer token.
+
+        Parameters
+        ----------
+        host : str
+            Workbench server hostname.
+        port : int
+            TCP port the REST listener is bound to.
+        scheme : str
+            ``"http"`` or ``"https"``.
+        token : str
+            Bearer token (``ttiowbs_...``).
+        """
         self.host = host
         self.port = port
         self.scheme = scheme

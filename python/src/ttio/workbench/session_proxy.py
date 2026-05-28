@@ -141,6 +141,32 @@ class SessionProxyAttach:
         ssl_context=None,
         connect_timeout: float = 10.0,
     ):
+        """Bind the helper to a session-proxy endpoint.
+
+        Parameters
+        ----------
+        host : str
+            Workbench server hostname.
+        port : int
+            WS listener port.
+        session_id : str
+            Target session identifier; the session must be in the
+            ``running`` state at attach time.
+        token : str
+            Workbench bearer (``ttiowbs_...``).
+        path : str, optional
+            Sub-path the proxy forwards to inside the engine.
+            Default ``"/"``.
+        scheme : str, optional
+            ``"ws"`` or ``"wss"``. Default ``"ws"``.
+        ssl_context : ssl.SSLContext, optional
+            Required when ``scheme == "wss"``. Pass a configured
+            context for cert pinning; None falls back to default
+            verification.
+        connect_timeout : float, optional
+            Max wall-clock seconds to wait for the WS open
+            handshake. Default 10.
+        """
         self._host = host
         self._port = port
         self._session_id = session_id
@@ -152,6 +178,19 @@ class SessionProxyAttach:
         self._ws: Optional[websockets.WebSocketClientProtocol] = None
 
     async def __aenter__(self) -> "SessionProxyAttach":
+        """Open the WS connection and send the attach handshake.
+
+        Returns
+        -------
+        SessionProxyAttach
+            Self, ready for :meth:`run`.
+
+        Raises
+        ------
+        RuntimeError
+            If the WS open fails for any reason (network, TLS,
+            timeout). The underlying exception is chained.
+        """
         url = session_proxy_url(
             host=self._host, port=self._port,
             session_id=self._session_id, scheme=self._scheme)
@@ -171,6 +210,14 @@ class SessionProxyAttach:
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """Close the WS connection on context exit.
+
+        Parameters
+        ----------
+        exc_type, exc, tb
+            Standard async context-manager exit triple. Exceptions
+            from the user block propagate after the WS is closed.
+        """
         if self._ws is not None:
             try:
                 await self._ws.close()

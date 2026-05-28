@@ -104,6 +104,24 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
 @property (nonatomic, readonly) uint32_t payloadLength;
 @property (nonatomic, readonly) uint64_t timestampNs;
 
+/**
+ * Designated initialiser. Builds an immutable header value.
+ *
+ * @param type            Known packet-type tag. The constructor stores
+ *                        ``type`` as both ``packetType`` and
+ *                        ``packetTypeByte``.
+ * @param flags           Combination of ``TTIOTransportPacketFlag``
+ *                        bits; zero is valid.
+ * @param datasetId       Dataset identifier the packet belongs to;
+ *                        zero is valid for stream-scoped packets.
+ * @param auSequence      Per-dataset monotonic access-unit counter;
+ *                        zero on packets that don't carry an AU.
+ * @param payloadLength   Length of the payload that follows this
+ *                        header on the wire.
+ * @param timestampNs     Wall-clock timestamp in nanoseconds; the
+ *                        emitter sets the epoch.
+ * @return An initialised header.
+ */
 - (instancetype)initWithPacketType:(TTIOTransportPacketType)type
                              flags:(uint16_t)flags
                          datasetId:(uint16_t)datasetId
@@ -111,8 +129,25 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
                      payloadLength:(uint32_t)payloadLength
                        timestampNs:(uint64_t)timestampNs;
 
+/**
+ * Serialise the header to its 24-byte little-endian wire form.
+ *
+ * @return An ``NSData`` of exactly ``TTIOTransportHeaderSize`` bytes.
+ */
 - (NSData *)encode;
 
+/**
+ * Decode a 24-byte header from a raw byte buffer.
+ *
+ * @param bytes   Pointer to the start of a packet (header + payload).
+ * @param length  Number of bytes available at ``bytes``. Must be at
+ *                least ``TTIOTransportHeaderSize``.
+ * @param error   On failure, populated with an ``NSError`` in the
+ *                ``TTIOTransportErrorDomain`` (``BadMagic``,
+ *                ``BadVersion``, ``Truncated``). May be ``NULL``.
+ * @return A decoded ``TTIOTransportPacketHeader`` on success;
+ *         ``nil`` on malformed input.
+ */
 + (nullable instancetype)decodeFromBytes:(const uint8_t *)bytes
                                    length:(NSUInteger)length
                                     error:(NSError * _Nullable *)error;
@@ -122,10 +157,14 @@ typedef NS_OPTIONS(uint16_t, TTIOTransportPacketFlag) {
 /**
  * Returns ``YES`` iff ``typeByte`` names a defined
  * ``TTIOTransportPacketType``. Used by the reader's forward-compat
- * skip-unknown path (transport-spec §6, v0.11 task 0.7) — decoded
- * headers whose ``packetTypeByte`` fails this check are length-prefix
- * skipped rather than rejected. Cross-language parity: Java
+ * skip-unknown path (transport-spec §6) — decoded headers whose
+ * ``packetTypeByte`` fails this check are length-prefix skipped
+ * rather than rejected. Cross-language parity: Java
  * ``PacketType.fromWireOrNull``, Python ``is_known_packet_type``.
+ *
+ * @param typeByte  Wire byte read out of the header's packet-type
+ *                  field.
+ * @return ``YES`` when the byte names a known type; ``NO`` otherwise.
  */
 BOOL TTIOTransportIsKnownPacketType(uint8_t typeByte);
 
@@ -133,6 +172,10 @@ BOOL TTIOTransportIsKnownPacketType(uint8_t typeByte);
  * CRC-32C (Castagnoli, reflected). Used when
  * TTIOTransportPacketFlagHasChecksum is set on a packet header.
  * Matches google-crc32c and java.util.zip.CRC32C output.
+ *
+ * @param data    Pointer to the bytes to hash.
+ * @param length  Number of bytes available at ``data``.
+ * @return The 32-bit CRC-32C value as a little-endian integer.
  */
 uint32_t TTIOTransportCRC32C(const uint8_t *data, NSUInteger length);
 
