@@ -280,11 +280,52 @@
 
 #pragma mark - TTIOEncryptable
 
+/**
+ * Encrypt the dataset's intensity payload in place under
+ * AES-256-GCM. After this call the dataset's HDF5 file holds
+ * ciphertext instead of plaintext intensity channels and
+ * <code>-isEncrypted</code> returns <code>YES</code>.
+ *
+ * @param key   32-byte AES-256 key material.
+ * @param level Granularity: per-dataset, per-run, or per-AU.
+ * @param error On failure, populated with an NSError describing the
+ *              cause. May be NULL.
+ * @return      <code>YES</code> on success, <code>NO</code> on
+ *              failure.
+ */
 - (BOOL)encryptWithKey:(NSData *)key
                  level:(TTIOEncryptionLevel)level
                  error:(NSError **)error;
+
+/**
+ * In-process decrypt overlay for an encrypted dataset. The plaintext
+ * intensity channels become visible to subsequent reads on this
+ * instance; the on-disk file is not modified (call
+ * <code>+decryptInPlaceAtPath:withKey:error:</code> for persistent
+ * decrypt).
+ *
+ * @param key   32-byte AES-256 key matching the one used at encrypt
+ *              time.
+ * @param error On failure (e.g. wrong key, tag mismatch), populated
+ *              with an NSError describing the cause. May be NULL.
+ * @return      <code>YES</code> on success, <code>NO</code> on
+ *              failure.
+ */
 - (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error;
+
+/**
+ * @return The dataset's access policy, or <code>nil</code> if none
+ *         is attached. Mirrors the policy embedded under
+ *         <code>/study/@access_policy</code> when present.
+ */
 - (TTIOAccessPolicy *)accessPolicy;
+
+/**
+ * Attach an access policy to the dataset for subsequent persistence.
+ *
+ * @param policy The access policy to attach, or <code>nil</code> to
+ *               clear the in-memory policy.
+ */
 - (void)setAccessPolicy:(TTIOAccessPolicy *)policy;
 
 /**

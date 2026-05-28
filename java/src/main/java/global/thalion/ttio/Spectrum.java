@@ -75,11 +75,27 @@ public class Spectrum {
         this(signalArrays, List.of(), indexPosition, scanTimeSeconds, 0.0, 0);
     }
 
+    /** @return Unmodifiable map of named signal arrays (e.g. {@code "mz"}, {@code "intensity"}). */
     public Map<String, SignalArray> signalArrays() { return signalArrays; }
+
+    /**
+     * @param name signal array name (e.g. {@code "intensity"})
+     * @return     the signal array under {@code name}, or {@code null} when absent
+     */
     public SignalArray signalArray(String name) { return signalArrays.get(name); }
+
+    /** @return Unmodifiable list of axis descriptors paired with the signal arrays. */
     public List<AxisDescriptor> axes() { return axes; }
+
+    /** @return Zero-based position of this spectrum in its parent {@link AcquisitionRun}. */
     public int indexPosition() { return indexPosition; }
+
+    /** @return Scan time in seconds since the start of the parent run; zero for non-time-resolved spectra. */
     public double scanTimeSeconds() { return scanTimeSeconds; }
+
+    /** @return Precursor m/z for MSn spectra; zero for MS1 / non-MS modalities. */
     public double precursorMz() { return precursorMz; }
+
+    /** @return Precursor charge state for MSn spectra; zero when unknown or non-MS. */
     public int precursorCharge() { return precursorCharge; }
 }

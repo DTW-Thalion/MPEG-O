@@ -72,9 +72,37 @@ class FeatureFlags:
 
     @classmethod
     def from_iterable(cls, version: str, features: Iterable[str]) -> "FeatureFlags":
+        """Build a :class:`FeatureFlags` from any iterable of feature strings.
+
+        Parameters
+        ----------
+        version : str
+            Format version label (e.g. ``"1.1"``, ``"1.5"``).
+        features : Iterable[str]
+            Feature flag names; consumed once and frozen into a tuple
+            preserving iteration order.
+
+        Returns
+        -------
+        FeatureFlags
+            Immutable feature flag set with the given version label.
+        """
         return cls(version=version, features=tuple(features))
 
     def has(self, name: str) -> bool:
+        """Return whether a feature flag is set.
+
+        Parameters
+        ----------
+        name : str
+            Feature flag string to test (e.g.
+            ``"opt_ms2_activation_detail"``).
+
+        Returns
+        -------
+        bool
+            True when ``name`` is present in :attr:`features`.
+        """
         return name in self.features
 
     def required(self) -> tuple[str, ...]:

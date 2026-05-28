@@ -389,6 +389,13 @@ class SpectralDataset:
         return self._lock.write() if self._lock is not None else _NULL_GUARD
 
     def close(self) -> None:
+        """Release the underlying HDF5 file, provider, and remote handles.
+
+        Idempotent: calling :meth:`close` on an already-closed dataset is
+        a no-op. Invoked automatically by the context-manager protocol
+        (``with SpectralDataset.open(...) as ds:``) and from ``__del__``
+        as a best-effort safety net.
+        """
         with self.write_lock():
             if not self._closed:
                 # Close via the provider when we have one — it owns the
@@ -427,6 +434,15 @@ class SpectralDataset:
 
     @property
     def is_encrypted(self) -> bool:
+        """Whether the dataset's signal payload is encrypted.
+
+        Returns
+        -------
+        bool
+            True when an ``@encrypted_algorithm`` attribute was recorded
+            on the root group at write time (regardless of which
+            channels carry ciphertext). False for plaintext datasets.
+        """
         return bool(self.encrypted_algorithm)
 
     @property
@@ -661,6 +677,18 @@ class SpectralDataset:
         return self.provider.root_group().open_group("study").has_child(name)
 
     def identifications(self) -> list[Identification]:
+        """Return the dataset's identification records.
+
+        Reads from the compound ``/study/identifications`` dataset when
+        present, falling back to the legacy ``@identifications_json``
+        attribute on ``/study`` for older files.
+
+        Returns
+        -------
+        list[Identification]
+            Identification records in stored order. Empty when no
+            identifications group or JSON attribute is present.
+        """
         with self.read_lock():
             study = self._study_target()
             if self._study_has_child("identifications"):
@@ -678,6 +706,20 @@ class SpectralDataset:
             return _decode_identifications_json(blob) if blob else []
 
     def quantifications(self) -> list[Quantification]:
+        """Return the dataset's quantification records.
+
+        Reads from the compound ``/study/quantifications`` dataset when
+        present (with optional per-row units from the
+        ``@quantification_units`` JSON sidecar attribute), falling back
+        to the legacy ``@quantifications_json`` attribute for older
+        files.
+
+        Returns
+        -------
+        list[Quantification]
+            Quantification records in stored order. Empty when no
+            quantifications group or JSON attribute is present.
+        """
         with self.read_lock():
             study = self._study_target()
             if self._study_has_child("quantifications"):
@@ -703,6 +745,19 @@ class SpectralDataset:
             return _decode_quantifications_json(blob) if blob else []
 
     def provenance(self) -> list[ProvenanceRecord]:
+        """Return the dataset-level provenance chain.
+
+        Reads from the compound ``/study/provenance`` dataset when
+        present, falling back to the legacy ``@provenance_json``
+        attribute on ``/study`` for older files. Per-run provenance is
+        exposed separately by :class:`AcquisitionRun.provenance_records`.
+
+        Returns
+        -------
+        list[ProvenanceRecord]
+            Provenance records in stored order. Empty when neither the
+            compound dataset nor the JSON attribute is present.
+        """
         with self.read_lock():
             study = self._study_target()
             if self._study_has_child("provenance"):

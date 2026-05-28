@@ -144,6 +144,15 @@ class SpectrumIndex:
 
     @property
     def count(self) -> int:
+        """Number of spectra indexed.
+
+        Returns
+        -------
+        int
+            Length of the parallel ``offsets`` array; equals the number
+            of spectra resolvable through :meth:`offset_at` /
+            :meth:`length_at`.
+        """
         return int(self.offsets.shape[0])
 
     # ------------------------------------------------------------------ #

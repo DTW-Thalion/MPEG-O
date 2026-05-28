@@ -107,12 +107,34 @@ public final class MiniJson {
         return sb.toString();
     }
 
+    /**
+     * Read a string field from a decoded JSON object with a default
+     * fallback.
+     *
+     * @param m            decoded JSON object
+     * @param key          field name
+     * @param defaultValue value returned when the key is absent or
+     *                     stored as {@code null}
+     * @return             the value as a string, or {@code defaultValue}
+     */
     public static String getString(Map<String, Object> m, String key, String defaultValue) {
         Object v = m.get(key);
         if (v == null) return defaultValue;
         return v.toString();
     }
 
+    /**
+     * Read a long field from a decoded JSON object with a default
+     * fallback. Strings that fail to parse as {@code long} also fall
+     * back.
+     *
+     * @param m            decoded JSON object
+     * @param key          field name
+     * @param defaultValue value returned when the key is absent or
+     *                     the value isn't number-like
+     * @return             the numeric value coerced to {@code long},
+     *                     or {@code defaultValue}
+     */
     public static long getLong(Map<String, Object> m, String key, long defaultValue) {
         Object v = m.get(key);
         if (v instanceof Number n) return n.longValue();
@@ -122,6 +144,18 @@ public final class MiniJson {
         return defaultValue;
     }
 
+    /**
+     * Read a double field from a decoded JSON object with a default
+     * fallback. Strings that fail to parse as {@code double} also
+     * fall back.
+     *
+     * @param m            decoded JSON object
+     * @param key          field name
+     * @param defaultValue value returned when the key is absent or
+     *                     the value isn't number-like
+     * @return             the numeric value coerced to {@code double},
+     *                     or {@code defaultValue}
+     */
     public static double getDouble(Map<String, Object> m, String key, double defaultValue) {
         Object v = m.get(key);
         if (v instanceof Number n) return n.doubleValue();

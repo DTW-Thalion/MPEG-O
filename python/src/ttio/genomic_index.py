@@ -107,6 +107,14 @@ class GenomicIndex:
 
     @property
     def count(self) -> int:
+        """Number of aligned reads indexed.
+
+        Returns
+        -------
+        int
+            Length of the parallel ``offsets`` array; equals the number
+            of reads accessible through this index.
+        """
         return int(self.offsets.shape[0])
 
     def indices_for_region(

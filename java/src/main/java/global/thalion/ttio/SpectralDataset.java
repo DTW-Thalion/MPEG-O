@@ -187,9 +187,16 @@ public class SpectralDataset implements
 
     // ── Accessors ───────────────────────────────────────────────────
 
+    /** @return The format feature flags advertised by the file (version + opt-in features). */
     public FeatureFlags featureFlags() { return featureFlags; }
+
+    /** @return The dataset's free-form title attribute; empty when unset. */
     public String title() { return title; }
+
+    /** @return The ISA investigation identifier linking this dataset to an ISA-Tab/JSON bundle; empty when unset. */
     public String isaInvestigationId() { return isaInvestigationId; }
+
+    /** @return Unmodifiable map of mass-spectrometry / vibrational / NMR acquisition runs keyed by run name. */
     public Map<String, AcquisitionRun> msRuns() { return msRuns; }
     /** zero or more named genomic runs. Empty for pre-M82
      *  files; populated when {@code /study/genomic_runs/} is present. */
@@ -318,8 +325,13 @@ public class SpectralDataset implements
         return out;
     }
 
+    /** @return Unmodifiable list of dataset-level identification records. */
     public List<Identification> identifications() { return identifications; }
+
+    /** @return Unmodifiable list of dataset-level quantification records. */
     public List<Quantification> quantifications() { return quantifications; }
+
+    /** @return Unmodifiable list of dataset-level provenance records (per-run provenance lives on each {@link AcquisitionRun}). */
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
     /** Stage 6 (transport-spec v0.11, Deferral 2): every {@link Subject}
@@ -2906,6 +2918,15 @@ public class SpectralDataset implements
 
     // ---- Encryptable conformance ----
 
+    /**
+     * Encrypt every MS run's intensity channel in place on disk under
+     * AES-256-GCM, then mark the root {@code @encrypted} attribute so
+     * the encrypted state survives close/reopen.
+     *
+     * @param key   32-byte AES-256 key material
+     * @param level Encryption granularity (per-run, per-dataset, per-AU)
+     * @throws Exception on I/O or cipher failure
+     */
     @Override
     public void encryptWithKey(byte[] key, global.thalion.ttio.Enums.EncryptionLevel level)
             throws Exception {
@@ -3010,14 +3031,34 @@ public class SpectralDataset implements
         }
     }
 
+    /**
+     * @return The dataset's attached access policy, or {@code null}
+     *         when none is set. Typed as {@code Object} to keep the
+     *         {@code Encryptable} protocol free of the protection
+     *         package dependency.
+     */
     @Override
     public Object accessPolicy() { return accessPolicy; }
 
+    /**
+     * Attach an access policy to the dataset.
+     *
+     * @param policy a {@code global.thalion.ttio.protection.AccessPolicy}
+     *               instance, or {@code null} to clear
+     * @throws ClassCastException when {@code policy} is non-null and
+     *         not an {@code AccessPolicy}
+     */
     @Override
     public void setAccessPolicy(Object policy) {
         this.accessPolicy = (global.thalion.ttio.protection.AccessPolicy) policy;
     }
 
+    /**
+     * Release the underlying storage handles ({@link StorageProvider}
+     * preferred, falling back to the {@link Hdf5File} for legacy
+     * callers). Idempotent. Wired through {@link AutoCloseable} so
+     * try-with-resources works.
+     */
     @Override
     public void close() {
         // Prefer closing via the provider (owns the native handle); fall

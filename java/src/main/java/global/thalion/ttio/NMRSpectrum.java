@@ -23,6 +23,21 @@ public class NMRSpectrum extends Spectrum {
     private final String nucleusType;
     private final double spectrometerFrequencyMHz;
 
+    /**
+     * Construct an NMR spectrum from parallel chemical-shift and
+     * intensity arrays.
+     *
+     * @param chemicalShiftValues    per-point chemical shifts in ppm
+     * @param intensityValues        per-point intensities parallel to
+     *                               {@code chemicalShiftValues}
+     * @param indexPosition          zero-based position in the parent
+     *                               {@link AcquisitionRun}
+     * @param scanTimeSeconds        scan time in seconds from run
+     *                               start
+     * @param nucleusType            nucleus label (e.g. {@code "1H"},
+     *                               {@code "13C"})
+     * @param spectrometerFrequencyMHz spectrometer Larmor frequency in MHz
+     */
     public NMRSpectrum(double[] chemicalShiftValues, double[] intensityValues,
                        int indexPosition, double scanTimeSeconds,
                        String nucleusType, double spectrometerFrequencyMHz) {
