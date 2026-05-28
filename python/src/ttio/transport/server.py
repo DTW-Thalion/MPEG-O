@@ -66,6 +66,22 @@ class TransportServer:
         host: str = "localhost",
         port: int = 9700,
     ):
+        """Construct an unstarted server bound to one dataset source.
+
+        Parameters
+        ----------
+        dataset_source : SpectralDataset, str, or pathlib.Path
+            The dataset to serve. A :class:`SpectralDataset` instance
+            is borrowed (not closed by the server); a string or
+            ``Path`` is opened per client connection and closed when
+            the connection ends.
+        host : str, optional
+            Interface to bind. Default ``"localhost"``.
+        port : int, optional
+            TCP port to bind. Pass ``0`` to let the OS pick a free
+            port; the chosen port is observable via :attr:`port`
+            after :meth:`start` returns. Default ``9700``.
+        """
         self._dataset_source = dataset_source
         self._host = host
         self._port = port
@@ -75,14 +91,39 @@ class TransportServer:
 
     @property
     def port(self) -> int:
+        """TCP port the server is bound to.
+
+        Reflects the port given at construction until :meth:`start`
+        runs, then the kernel-assigned port when ``port=0`` was
+        requested. Useful for tests that bind to ``port=0`` and need
+        to dial back in.
+        """
         return self._port
 
     @property
     def host(self) -> str:
+        """Bind interface for the listening socket.
+
+        Returns the host string given at construction (e.g.
+        ``"localhost"`` or ``"0.0.0.0"``). Not mutated by
+        :meth:`start`.
+        """
         return self._host
 
     async def start(self) -> None:
-        """Start serving. Returns once the socket is listening."""
+        """Start serving and return once the socket is listening.
+
+        Creates the WebSocket server, binds to ``(host, port)``, and
+        resolves :attr:`port` to the kernel-assigned value when
+        ``port=0`` was passed at construction. The coroutine
+        completes as soon as the listener is accepting connections;
+        client traffic is then handled in the background until
+        :meth:`stop` is called.
+
+        Returns
+        -------
+        None
+        """
         self._stop_event = asyncio.Event()
         self._ws_server = await websockets.serve(
             self._handle_client, self._host, self._port
@@ -93,10 +134,23 @@ class TransportServer:
             break
 
     async def wait_closed(self) -> None:
+        """Block until the listening socket has been fully closed.
+
+        Use after :meth:`stop` (or in a process-supervision loop
+        alongside an external cancel signal) to wait for in-flight
+        connections to drain. Asserts the server has been started.
+        """
         assert self._ws_server is not None
         await self._ws_server.wait_closed()
 
     async def stop(self) -> None:
+        """Stop serving and close all active client connections.
+
+        Sends a close frame (code ``1001`` — "server shutdown") to
+        every active client, closes the listening socket, and waits
+        for the server task to terminate. Idempotent: a second call
+        is a no-op once the server has been stopped.
+        """
         if self._ws_server is None:
             return
         # Close all active client connections gracefully.
