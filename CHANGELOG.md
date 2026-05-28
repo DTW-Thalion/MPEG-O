@@ -11,6 +11,24 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-05-28
+
+Documentation-only patch. Five-pass per-instance-method documentation completion across all three SDKs. Class-level OpenStep-style headers shipped in May 2026; this release fills the deferred per-method `/** */` blocks (ObjC), NumPy docstrings (Python), and Javadoc (Java) so the generated `autogsdoc` / Sphinx / Javadoc output now provides robust SDK reference for every public surface.
+
+~110 files touched, ~5892 lines of structured documentation added. No logic changes; tests green throughout.
+
+Coverage by pass:
+
+| Pass | PR | Surface |
+|---|---|---|
+| 1 | #191 | Python transport + workbench client + providers/hdf5; ObjC Transport core + Providers |
+| 2 | #192 | Workbench subsurface (jobs/sessions/containers/pipeline/cohort/auth/proxy); ObjC Transport Packet/AccessUnit + Import readers |
+| 3 | #193 | Importers + exporters; ObjC Protection, Genomics, Run, Codecs, CVTermMapper, ArrowIpcCodec |
+| 4 | #194 | Python core (spectral_dataset, signal_array, aligned_read); ObjC Dataset; **Java top-level 187 methods** (earlier audit measurement was broken) |
+| 5 | #195 | Java fringe subpackages (protocols, io, hdf5, analysis, providers); Python CLI tools |
+
+Drive-by milestone-reference scrub on touched files (M-numbers, `@since`, version-history prose) per DOC-AUDIT.md rules. Restored one `v1.0` reference in `cmd_provenance` runtime error message — that version reference is part of the user-facing contract a test exercises.
+
 ## [1.6.1] - 2026-05-27
 
 Patch release. Closes the v0.11 silent-drop pattern in the two non-daemon transport servers, surfaced by writing end-to-end round-trip tests against the new live coverage from v1.6.0.
