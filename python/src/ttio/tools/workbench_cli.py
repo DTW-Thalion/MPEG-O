@@ -672,9 +672,9 @@ def cmd_provenance(args) -> int:
     """
     print(
         f"{PROG}: `provenance` requires a server-side endpoint "
-        f"(`GET /v1/containers/{{uri}}/provenance`) that is not yet "
-        f"exposed. Workaround: query the `provenance_edges` table "
-        f"directly.",
+        f"(`GET /v1/containers/{{uri}}/provenance`) that v1.0 does "
+        f"not yet expose. Workaround: query the `provenance_edges` "
+        f"table directly.",
         file=sys.stderr)
     return 2
 
