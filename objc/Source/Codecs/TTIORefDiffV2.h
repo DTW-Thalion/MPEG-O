@@ -22,14 +22,36 @@ extern NSString *const TTIORefDiffV2ErrorDomain;
 
 @interface TTIORefDiffV2 : NSObject
 
-/// YES when libttio_rans is linked and the v2 codec functions are available.
+/**
+ * Whether the native `libttio_rans` ref-diff v2 entries are usable.
+ *
+ * Returns YES iff `libttio_rans` is linked and the
+ * `ttio_ref_diff_v2_encode` / `_decode` symbols are reachable. Tests
+ * guard on this before exercising the dispatch path.
+ *
+ * @return YES if the native codec is available, NO otherwise.
+ */
 + (BOOL)nativeAvailable;
 
-/// Encode a slice of reads to the refdiff_v2 blob.
-///
-/// All NSData inputs are interpreted as parallel typed arrays:
-/// sequences (uint8 ACGTN), offsets (uint64 LE, n+1 entries),
-/// positions (int64 LE, n entries), reference (uint8), referenceMd5 (16 bytes).
+/**
+ * Encode a slice of reads to the codec-14 refdiff-v2 blob.
+ *
+ * All `NSData` inputs are parallel typed arrays: `sequences` uint8
+ * (ACGTN), `offsets` uint64 LE (n+1 entries), `positions` int64 LE
+ * (n entries), `reference` uint8, `referenceMd5` 16 bytes. Reads are
+ * diffed against the reference and the remainder rANS-encoded.
+ *
+ * @param sequences      Concatenated read bases (uint8 ACGTN).
+ * @param offsets        Per-read offsets into `sequences` (n+1 uint64 LE).
+ * @param positions      Per-read reference positions (int64 LE).
+ * @param cigarStrings   Per-read CIGAR strings (used to skip soft-clips).
+ * @param reference      Reference-FASTA bytes for diffing.
+ * @param referenceMd5   16-byte MD5 of the reference (stored in the blob).
+ * @param referenceUri   Reference URI string (stored in the blob).
+ * @param readsPerSlice  Reads per slice (CRAM-style sub-block partition).
+ * @param error          Out-error on invalid input or native failure.
+ * @return Encoded refdiff-v2 blob bytes, or `nil` with `*error` set.
+ */
 + (nullable NSData *)encodeSequences:(NSData *)sequences
                               offsets:(NSData *)offsets
                             positions:(NSData *)positions
@@ -40,7 +62,25 @@ extern NSString *const TTIORefDiffV2ErrorDomain;
                        readsPerSlice:(NSUInteger)readsPerSlice
                                 error:(NSError **)error;
 
-/// Decode a refdiff_v2 blob to (sequences, offsets).
+/**
+ * Decode a refdiff-v2 blob back into the sequence + offset channels.
+ *
+ * Inverse of `+encodeSequences:...`. Requires the unencoded
+ * `positions`, CIGAR strings, and reference bytes — the codec stores
+ * only the diff, so the reference must be re-supplied at decode time.
+ *
+ * @param encoded       Refdiff-v2 blob produced by the encoder.
+ * @param positions     Per-read reference positions (int64 LE).
+ * @param cigarStrings  Per-read CIGAR strings.
+ * @param reference     Reference-FASTA bytes (same as at encode time).
+ * @param nReads        Expected read count (validated against frame).
+ * @param totalBases    Expected total decoded base count.
+ * @param outSequences  Out: concatenated read bases (uint8 ACGTN).
+ * @param outOffsets    Out: per-read offsets (n+1 uint64 LE).
+ * @param error         Out-error on bad input or decode failure.
+ * @return YES on success with both out-channels populated, NO on
+ *         failure with `*error` set.
+ */
 + (BOOL)decodeData:(NSData *)encoded
           positions:(NSData *)positions
        cigarStrings:(NSArray<NSString *> *)cigarStrings

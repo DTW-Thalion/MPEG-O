@@ -76,10 +76,25 @@ class BamWriter:
     """
 
     def __init__(self, path: str | os.PathLike[str]):
+        """Configure the writer with an output BAM path.
+
+        Parameters
+        ----------
+        path : str or os.PathLike
+            Destination BAM file path. The path is stored verbatim;
+            the file is not opened or created until :meth:`write` runs.
+        """
         self._path = Path(path)
 
     @property
     def path(self) -> Path:
+        """Return the configured output path as a :class:`pathlib.Path`.
+
+        Returns
+        -------
+        pathlib.Path
+            The destination path supplied at construction.
+        """
         return self._path
 
     # ------------------------------------------------------------------

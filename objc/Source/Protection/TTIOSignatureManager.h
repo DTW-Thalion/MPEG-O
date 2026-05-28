@@ -42,8 +42,17 @@
 
 #pragma mark - Low-level primitive
 
-/** Compute an HMAC-SHA256 of `data` with `key`. Returns the raw 32
- *  byte digest. Never returns nil for a well-formed input. */
+/**
+ * Compute an HMAC-SHA-256 of `data` with `key`.
+ *
+ * Standard RFC 2104 HMAC over the SHA-256 hash. Never returns `nil`
+ * for well-formed inputs (any key length is accepted; the HMAC spec
+ * folds long keys via SHA-256 and pads short ones with zeros).
+ *
+ * @param data  Message bytes to authenticate (any length).
+ * @param key   HMAC key (any length; 32 bytes recommended).
+ * @return 32-byte HMAC-SHA-256 digest.
+ */
 + (NSData *)hmacSHA256OfData:(NSData *)data withKey:(NSData *)key;
 
 #pragma mark - Dataset signing
@@ -152,7 +161,21 @@
                     withKey:(NSData *)hmacKey
                       error:(NSError **)error;
 
-/** Recompute the HMAC over the provenance JSON and compare. */
+/**
+ * Verify the HMAC stored on the `@provenance_json` attribute of a run group.
+ *
+ * Inverse of `+signProvenanceInRun:...`: recomputes HMAC-SHA-256 over
+ * the run's provenance JSON and constant-time-compares against the
+ * stored `@provenance_signature` attribute.
+ *
+ * @param runPath   HDF5 group path of the run, e.g.
+ *                  `@"/study/ms_runs/run_0001"`.
+ * @param filePath  Filesystem path to the `.tio` container.
+ * @param hmacKey   HMAC key (same key used at sign time).
+ * @param error     Out-error on missing attribute or HDF5 failure.
+ * @return YES on signature match, NO on mismatch / missing attribute
+ *         (with `*error` set when applicable).
+ */
 + (BOOL)verifyProvenanceInRun:(NSString *)runPath
                        inFile:(NSString *)filePath
                       withKey:(NSData *)hmacKey

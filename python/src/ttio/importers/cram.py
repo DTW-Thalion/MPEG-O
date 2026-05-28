@@ -70,11 +70,30 @@ class CramReader(BamReader):
         path: str | os.PathLike[str],
         reference_fasta: str | os.PathLike[str],
     ):
+        """Configure the reader with a CRAM file and its reference FASTA.
+
+        Parameters
+        ----------
+        path : str or os.PathLike
+            Filesystem path to a CRAM file.
+        reference_fasta : str or os.PathLike
+            Filesystem path to the reference FASTA the CRAM was aligned
+            against. Required — CRAM cannot be decoded without it.
+            samtools auto-builds a ``.fai`` index alongside the FASTA on
+            first use if one isn't already present.
+        """
         super().__init__(path)
         self._reference_fasta = Path(reference_fasta)
 
     @property
     def reference_fasta(self) -> Path:
+        """Return the reference-FASTA path.
+
+        Returns
+        -------
+        pathlib.Path
+            The reference path supplied at construction, unchanged.
+        """
         return self._reference_fasta
 
     def to_genomic_run(

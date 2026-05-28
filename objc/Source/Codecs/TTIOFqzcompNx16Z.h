@@ -143,7 +143,19 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                           revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
                                  error:(NSError * _Nullable *)error;
 
-/** Convenience: decode with all-zero (forward) revcomp flags. */
+/**
+ * Convenience decode with all-zero (forward) revcomp flags.
+ *
+ * Equivalent to calling the explicit-flags variant with `revcompFlags
+ * = nil`. Intended for callers that did not pass non-trivial revcomp
+ * flags at encode time.
+ *
+ * @param data   Encoded byte stream.
+ * @param error  Out-error on decode failure.
+ * @return Dictionary with `@"qualities"` (`NSData`) and
+ *         `@"readLengths"` (`NSArray<NSNumber *>`), or `nil` on
+ *         failure.
+ */
 + (nullable NSDictionary *)decodeData:(NSData *)data
                                  error:(NSError * _Nullable *)error;
 

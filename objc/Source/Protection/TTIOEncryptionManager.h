@@ -41,17 +41,41 @@
 
 #pragma mark - Low-level primitives
 
-/** Encrypt `plaintext` with a 32-byte key. Returns ciphertext and writes
- *  IV + tag into the out-NSData parameters. */
+/**
+ * AES-256-GCM encrypt `plaintext` with a freshly-generated IV.
+ *
+ * Generates a random 12-byte IV internally and writes it into `*outIv`;
+ * the 16-byte GCM authentication tag is written into `*outTag`. Both
+ * out-buffers must be persisted alongside the ciphertext so a later
+ * `+decryptData:...` call can authenticate.
+ *
+ * @param plaintext  Plaintext bytes (any length).
+ * @param key        32-byte AES-256 key.
+ * @param outIv      Out: freshly-generated 12-byte GCM nonce.
+ * @param outTag     Out: 16-byte GCM authentication tag.
+ * @param error      Out-error on bad key length or RNG failure.
+ * @return Ciphertext bytes on success, or `nil` with `*error` set.
+ */
 + (NSData *)encryptData:(NSData *)plaintext
                 withKey:(NSData *)key
                      iv:(NSData **)outIv
                 authTag:(NSData **)outTag
                   error:(NSError **)error;
 
-/** Decrypt `ciphertext` using the given key, IV, and auth tag. Returns
- *  nil with a populated NSError on tag-mismatch (wrong key) or any
- *  other authenticated-decryption failure — never returns partial bytes. */
+/**
+ * AES-256-GCM decrypt + authenticate `ciphertext`.
+ *
+ * Fails cleanly on wrong key / wrong IV / tampered ciphertext via
+ * the GCM authentication tag — never returns partial bytes.
+ *
+ * @param ciphertext  Encrypted bytes (output of `+encryptData:...`).
+ * @param key         32-byte AES-256 key (same as encrypt).
+ * @param iv          12-byte GCM nonce (same as encrypt).
+ * @param authTag     16-byte GCM authentication tag (same as encrypt).
+ * @param error       Out-error on tag mismatch or any other AEAD
+ *                    failure.
+ * @return Plaintext bytes on success, or `nil` with `*error` set.
+ */
 + (NSData *)decryptData:(NSData *)ciphertext
                 withKey:(NSData *)key
                      iv:(NSData *)iv
@@ -87,6 +111,19 @@
                                    error:(NSError **)error
     __attribute__((deprecated("Use -decryptWithKey_error_ on TTIOAcquisitionRun instead")));
 
+/**
+ * Whether the named run's intensity channel is currently encrypted in the
+ * on-disk container.
+ *
+ * Probes the `.tio` file for the presence of the
+ * `intensity_values_encrypted` dataset under the run group. Deprecated
+ * in favour of querying `TTIOAcquisitionRun.accessPolicy` directly.
+ *
+ * @param runName  Run name (subgroup under `/study/spectra_runs/`).
+ * @param path     Filesystem path to the `.tio` container.
+ * @return YES if the run's intensity channel is stored encrypted, NO
+ *         otherwise (including when the run does not exist).
+ */
 + (BOOL)isIntensityChannelEncryptedInRun:(NSString *)runName
                               atFilePath:(NSString *)path
     __attribute__((deprecated("Query via TTIOAcquisitionRun.accessPolicy instead")));
