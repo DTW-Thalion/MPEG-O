@@ -20,8 +20,7 @@ import java.util.List;
  * {@code TTIOCVAnnotatable}, Python
  * {@code ttio.protocols.CVAnnotatable}.</p>
  *
- * <p><b>API status:</b> Stable (conformers may change; the protocol
- * is frozen for v0.6).</p>
+ * <p><b>API status:</b> Stable.</p>
  *
  *
  */

@@ -54,6 +54,26 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Convert a FASTA file into a ``.tio`` container.
+
+    Two subcommands are exposed:
+
+    * ``reference`` — embed the FASTA as a reference genome under
+      ``/study/references/<uri>/``.
+    * ``unaligned`` — store the FASTA as an unaligned genomic run
+      under ``/study/genomic_runs/<name>/``.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success, ``2`` on FASTA parse / I/O failure.
+        Argparse exits with ``2`` on usage errors.
+    """
     args = _parser().parse_args(argv)
 
     try:

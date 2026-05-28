@@ -1,5 +1,6 @@
 /*
  * TTI-O Java Implementation
+ * Copyright (c) 2026 The Thalion Initiative
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 package global.thalion.ttio.io;
@@ -18,12 +19,6 @@ package global.thalion.ttio.io;
  * Producers fire at meaningful chunk boundaries (per chromosome,
  * per N reads, per spectrum) — not per byte — to keep the rate
  * manageable.</p>
- *
- * <p>Cross-language equivalents will mirror this surface in Python
- * (ttio.io.progress.ProgressSink) and ObjC (TTIOProgressSink) as
- * additive overloads in a future parity PR.</p>
- *
- * @since 1.3.0
  */
 @FunctionalInterface
 public interface ProgressSink {

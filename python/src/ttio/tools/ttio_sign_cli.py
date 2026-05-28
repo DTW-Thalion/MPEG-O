@@ -1,8 +1,8 @@
-"""``ttio-sign`` — HMAC-SHA256 signer for TTI-O datasets (M75).
+"""``ttio-sign`` — HMAC-SHA256 signer for TTI-O datasets.
 
 Python equivalent of the Objective-C ``TtioSign`` tool. Opens an
 ``.tio`` file, navigates to the HDF5 dataset path, and signs it in
-place with the v0.3 canonical HMAC-SHA256 path (``v2:`` prefix).
+place with the canonical HMAC-SHA256 path (``v2:`` prefix).
 
 Usage::
 
@@ -27,6 +27,11 @@ from .. import signatures
 
 
 def _parse_key_hex(key_hex: str) -> bytes:
+    """Decode a 64-character hex string into a 32-byte HMAC key.
+
+    Raises :class:`SystemExit` with an explanatory message when the
+    length is wrong or the string is not valid hex.
+    """
     if len(key_hex) != 64:
         raise SystemExit(
             f"ttio-sign: expected 64-character hex key, got {len(key_hex)}"
@@ -38,6 +43,23 @@ def _parse_key_hex(key_hex: str) -> bytes:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Sign one HDF5 dataset inside a ``.tio`` file with HMAC-SHA256.
+
+    Parses three positional arguments (``path``, ``dataset``,
+    ``key_hex``), opens the file ``r+``, navigates to the named
+    dataset, and writes a canonical HMAC-SHA256 signature attribute.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success, ``1`` on I/O failure or missing dataset.
+        Argparse exits with ``2`` on usage errors.
+    """
     parser = argparse.ArgumentParser(
         prog="ttio-sign",
         description="Sign an HDF5 dataset inside a .tio file with HMAC-SHA256.",

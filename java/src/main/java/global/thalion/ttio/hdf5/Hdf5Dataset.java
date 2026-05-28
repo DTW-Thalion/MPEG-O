@@ -38,8 +38,15 @@ public class Hdf5Dataset implements AutoCloseable {
         this.closed = false;
     }
 
+    /** @return the underlying HDF5 dataset id. */
     public long getDatasetId() { return datasetId; }
+
+    /** @return the precision (element type) the dataset was created with. */
     public Precision getPrecision() { return precision; }
+
+    /** @return the total element count along all axes. For a 1-D dataset
+     *  this equals the single dimension; for N-D datasets it is the
+     *  product of all extent values. */
     public long getLength() { return length; }
 
     /**
@@ -157,6 +164,7 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
+    /** Release the underlying dataset id. Idempotent. */
     @Override
     public void close() {
         if (closed) return;
@@ -166,15 +174,16 @@ public class Hdf5Dataset implements AutoCloseable {
         closed = true;
     }
 
-    // ── Dataset-level attributes (M86) ─────────────────────────────
+    // ── Dataset-level attributes ───────────────────────────────────
     //
     // Codec dispatch on signal_channels datasets needs an
-    // @compression attribute living on the dataset itself (Binding
-    // Decision §86). Hdf5Dataset previously had no attribute API; the
-    // helpers below add the minimum surface — uint8 integer write,
-    // any-int read with default — used by M86's read/write paths.
+    // @compression attribute living on the dataset itself.
 
-    /** Test whether a named attribute exists on this dataset. */
+    /** Test whether a named attribute exists on this dataset.
+     *
+     *  @param name  the attribute name
+     *  @return {@code true} when the attribute is present
+     */
     public boolean hasAttribute(String name) {
         file.lockForReading();
         try {
@@ -186,10 +195,15 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
-    /** write a UTF-8 string attribute on this dataset.
-     *  Mirrors {@link Hdf5Group#setStringAttribute}. M90.7 made this
-     *  emit VL_STRING with UTF-8 cset so Python and ObjC readers can
-     *  consume Java-written {@code @ttio_signature} attributes. */
+    /** Write a UTF-8 string attribute on this dataset.
+     *
+     *  <p>Emits a VL_STRING with UTF-8 character set so Python and ObjC
+     *  readers can consume the attribute byte-equivalently. Mirrors
+     *  {@link Hdf5Group#setStringAttribute}.</p>
+     *
+     *  @param name   the attribute name (replaces any existing entry)
+     *  @param value  the UTF-8 string payload
+     */
     public void setStringAttribute(String name, String value) {
         file.lockForWriting();
         long htype = -1, space = -1, aid = -1;
@@ -224,13 +238,18 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
-    /** read a UTF-8 string attribute from this dataset.
-     *  Returns {@code null} when the attribute is absent OR the
-     *  attribute's HDF5 type class is not {@code H5T_STRING}. The
-     *  caller is expected to dispatch on the return type ({@code null}
-     *  meaning "not a string-typed attribute, try a numeric reader").
-     *  M90.7 added the VL_STRING branch — both VL and fixed-length
-     *  attrs decode correctly. */
+    /** Read a UTF-8 string attribute from this dataset.
+     *
+     *  <p>Decodes both VL_STRING and fixed-length string attributes.
+     *  Returns {@code null} when the attribute is absent <em>or</em> the
+     *  attribute's HDF5 type class is not {@code H5T_STRING}. Callers
+     *  are expected to dispatch on the return type — {@code null}
+     *  indicates "not a string-typed attribute, try a numeric reader".</p>
+     *
+     *  @param name  the attribute name
+     *  @return the decoded string, or {@code null} when the attribute is
+     *          absent or non-string typed
+     */
     public String readStringAttribute(String name) {
         file.lockForReading();
         long aid = -1, htype = -1;
@@ -267,8 +286,15 @@ public class Hdf5Dataset implements AutoCloseable {
     }
 
     /** Write a uint8 (one-byte) integer attribute on this dataset.
-     *  M86's {@code @compression} attribute uses this datatype
-     *  (: H5T_NATIVE_UINT8). */
+     *
+     *  <p>The {@code @compression} attribute used for codec dispatch
+     *  on signal channels carries this datatype
+     *  ({@code H5T_NATIVE_UINT8}).</p>
+     *
+     *  @param name   the attribute name (replaces any existing entry)
+     *  @param value  the unsigned 8-bit integer payload (masked to
+     *                {@code 0x00..0xFF})
+     */
     public void setUint8Attribute(String name, int value) {
         file.lockForWriting();
         long space = -1, aid = -1;
@@ -293,7 +319,10 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
-    /** Remove a named attribute. No-op when the attribute is absent. */
+    /** Remove a named attribute. No-op when the attribute is absent.
+     *
+     *  @param name  the attribute name
+     */
     public void deleteAttribute(String name) {
         file.lockForWriting();
         try {
@@ -308,7 +337,7 @@ public class Hdf5Dataset implements AutoCloseable {
         }
     }
 
-    /** List attribute names on this dataset. */
+    /** @return every attribute name on this dataset in HDF5 storage order. */
     public java.util.List<String> attributeNames() {
         file.lockForReading();
         try {
@@ -335,7 +364,13 @@ public class Hdf5Dataset implements AutoCloseable {
 
     /** Read an integer attribute of any width (uint8 / int64 / …) and
      *  return its value as a long. Returns {@code defaultValue} when
-     *  the attribute is absent. */
+     *  the attribute is absent.
+     *
+     *  @param name          the attribute name
+     *  @param defaultValue  fallback value when the attribute is missing
+     *                       or the read fails
+     *  @return the attribute value widened to {@code long}
+     */
     public long readIntegerAttribute(String name, long defaultValue) {
         file.lockForReading();
         long aid = -1, htype = -1;
@@ -374,7 +409,7 @@ public class Hdf5Dataset implements AutoCloseable {
             case INT32, UINT32 -> new int[n];
             case INT64, UINT64 -> new long[n];  // UINT64 packs as long[]
             case COMPLEX128 -> new byte[n * 16];
-            case UINT16 -> new short[n];  // L1: chromosome_ids
+            case UINT16 -> new short[n];  // chromosome_ids
             case UINT8 -> new byte[n];
             case _RESERVED_INT8 ->
                 throw new UnsupportedOperationException(

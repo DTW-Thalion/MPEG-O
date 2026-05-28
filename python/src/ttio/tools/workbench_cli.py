@@ -126,6 +126,13 @@ def _add_auth_args(p: argparse.ArgumentParser) -> None:
 # ----------------------------------------------------------------
 
 def cmd_login(args) -> int:
+    """Handle ``ttio login`` — authenticate against a workbench server
+    and emit the resulting session token + project list as JSON on
+    stdout.
+
+    Returns ``0`` on success; raises :class:`WorkbenchAuthError` (caught
+    by :func:`main` for exit code ``1``) when auth fails.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
     out = {
@@ -147,6 +154,13 @@ def cmd_login(args) -> int:
 # ----------------------------------------------------------------
 
 def cmd_upload(args) -> int:
+    """Handle ``ttio upload`` — push a local ``.tio`` file to a
+    workbench project and report the new container URI + uploaded
+    byte count as JSON on stdout.
+
+    Returns ``0`` on success, ``1`` on transport failure, ``3`` when
+    the local input file is missing.
+    """
     if not os.path.isfile(args.file):
         print(f"{PROG}: --file not found: {args.file}", file=sys.stderr)
         return 3
@@ -182,6 +196,10 @@ def cmd_upload(args) -> int:
 # ----------------------------------------------------------------
 
 def cmd_download(args) -> int:
+    """Handle ``ttio download`` — materialise a remote container to a
+    local ``.tio`` file. Thin wrapper around :func:`_download_impl`
+    in binary, output-required mode.
+    """
     return _download_impl(args, output_mode=OutputModeLiteral.BINARY.value,
                             output_required=True)
 
@@ -191,13 +209,11 @@ def cmd_download(args) -> int:
 # ----------------------------------------------------------------
 
 def cmd_stream(args) -> int:
-    # Same wire as download; the only delta is the user signalled
-    # they want the raw .tis bytes on disk rather than a
-    # materialised .tio. Today both code paths write the received
-    # bytes verbatim -- the workbench server emits the .tis stream
-    # and the client never materialises locally in v1.0 (W6's
-    # materialise() helper handles that). `stream` is the operator-
-    # honest verb for "save the .tis as-is".
+    """Handle ``ttio stream`` — save a remote container's raw ``.tis``
+    bytes verbatim, without local materialisation. Same wire as
+    :func:`cmd_download`; the only delta is the user signals they
+    want the ``.tis`` stream as-is.
+    """
     return _download_impl(args, output_mode=OutputModeLiteral.BINARY.value,
                             output_required=True, stream_mode=True)
 
@@ -249,6 +265,12 @@ def _download_impl(args, *, output_mode: str, output_required: bool,
 # ----------------------------------------------------------------
 
 def cmd_inspect(args) -> int:
+    """Handle ``ttio inspect`` — request a stats-only download for the
+    container and print every stats frame plus the terminal frame as
+    JSON on stdout. No data bytes are written to disk.
+
+    Returns ``0`` on success, ``1`` on transport failure.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
 
@@ -280,9 +302,19 @@ def cmd_inspect(args) -> int:
 # ----------------------------------------------------------------
 
 def cmd_encode(args) -> int:
-    # fasta / fastq keep their richer dedicated CLIs (reference vs.
+    """Handle ``ttio encode`` — convert one or more input files of a
+    given source format into a ``.tio`` container.
+
+    FASTA and FASTQ delegate to their richer dedicated CLIs (which
+    surface reference/unaligned modes and PHRED options); other
+    formats dispatch through :mod:`ttio.importers.registry`.
+
+    Returns ``0`` on success, ``2`` on tool failure, ``3`` when the
+    requested format is unsupported.
+    """
+    # FASTA / FASTQ keep their richer dedicated CLIs (reference vs.
     # unaligned modes, PHRED options); everything else dispatches
-    # through the format registry (W6.4), which mirrors the GUI's
+    # through the format registry, which mirrors the GUI's
     # ImportFormatRegistry. The format set is the registry + the two
     # CLI-delegated formats.
     from ttio.importers import registry
@@ -320,9 +352,19 @@ def _encode_unsupported(fmt: str) -> int:
 
 
 def cmd_export(args) -> int:
-    # fasta / fastq keep their richer dedicated CLIs (reference vs.
+    """Handle ``ttio export`` — emit one layer of a ``.tio`` container
+    in a supported external format.
+
+    FASTA and FASTQ delegate to their richer dedicated CLIs (which
+    surface line-width / PHRED options); other formats dispatch
+    through :mod:`ttio.exporters.registry`.
+
+    Returns ``0`` on success, ``2`` on tool failure, ``3`` when the
+    requested format is unsupported.
+    """
+    # FASTA / FASTQ keep their richer dedicated CLIs (reference vs.
     # run modes, line-width / PHRED options); everything else
-    # dispatches through the export registry (W6.4b).
+    # dispatches through the export registry.
     from ttio.exporters import registry
     fmt = registry.normalize(args.format)
     if fmt == "fastq":
@@ -407,6 +449,18 @@ def _load_predicate_json(args) -> dict | None:
 
 
 def cmd_query(args) -> int:
+    """Handle ``ttio query`` — run a cohort query against a workbench
+    server and emit the JSON response.
+
+    The predicate is sourced from ``--predicate-json`` or
+    ``--predicate-file``; ``--no-predicate`` opts out of the predicate
+    requirement (used for unbounded counts). The optional
+    ``--count-only`` flag routes through the ``preview-count``
+    endpoint instead of the full cohort query.
+
+    Returns ``0`` on success, ``1`` on remote failure, ``2`` on bad
+    predicate or missing required arguments.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
     try:
@@ -445,6 +499,17 @@ def cmd_query(args) -> int:
 
 
 def cmd_submit(args) -> int:
+    """Handle ``ttio submit`` — enqueue a new pipeline job on a
+    workbench server.
+
+    Reads ``--inputs-file`` (required JSON map of pipeline-input
+    names to container URIs) and the optional ``--params-file``
+    (JSON map of free-form parameters), then calls
+    :meth:`Jobs.submit`.
+
+    Returns ``0`` on success, ``1`` on remote failure, ``2`` when
+    the inputs/params files are unreadable or invalid JSON.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
     try:
@@ -477,6 +542,14 @@ def cmd_submit(args) -> int:
 
 
 def cmd_jobs(args) -> int:
+    """Handle ``ttio jobs`` — list, inspect, cancel, or stream events
+    for pipeline jobs on a workbench server. Dispatches on
+    ``args.action`` (one of ``ls``, ``status``, ``cancel``,
+    ``events``).
+
+    Returns ``0`` on success, ``1`` on remote failure, ``2`` for an
+    unknown action.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
     jobs = client.jobs()
@@ -533,6 +606,13 @@ def _job_to_dict(job) -> dict:
 
 
 def cmd_pipelines(args) -> int:
+    """Handle ``ttio pipelines`` — list, inspect, or register
+    pipelines on a workbench server. Dispatches on ``args.action``
+    (one of ``ls``, ``get``, ``register``).
+
+    Returns ``0`` on success, ``1`` on remote failure, ``2`` for an
+    unknown action.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
     pipelines = client.pipelines()
@@ -584,17 +664,30 @@ def _pipeline_to_dict(p) -> dict:
 
 
 def cmd_provenance(args) -> int:
+    """Handle ``ttio provenance`` — provenance lookup for a container.
+
+    Today this requires a server-side endpoint that is not exposed;
+    the handler prints a workaround note (query the
+    ``provenance_edges`` table directly) and returns ``2``.
+    """
     print(
         f"{PROG}: `provenance` requires a server-side endpoint "
-        f"(`GET /v1/containers/{{uri}}/provenance`) that v1.0 does "
-        f"not expose. Workaround: query the `provenance_edges` "
-        f"table directly, OR wait for the v1.x server release that "
-        f"adds the endpoint. Tracked as a v1.0.x follow-up.",
+        f"(`GET /v1/containers/{{uri}}/provenance`) that is not yet "
+        f"exposed. Workaround: query the `provenance_edges` table "
+        f"directly.",
         file=sys.stderr)
     return 2
 
 
 def cmd_sessions(args) -> int:
+    """Handle ``ttio sessions`` — list, inspect, terminate, create, or
+    attach interactive analysis sessions on a workbench server.
+    Dispatches on ``args.action`` (one of ``ls``, ``status``,
+    ``terminate``, ``create``, ``attach``).
+
+    Returns ``0`` on success, ``1`` on remote failure, ``2`` for an
+    unknown action.
+    """
     auth = _resolve_auth(args)
     client = ttio.connect(args.server, auth=auth)
     sessions = client.sessions()
@@ -712,6 +805,16 @@ def _session_to_dict(s) -> dict:
 # ----------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
+    """Construct the top-level argparse tree for the ``ttio`` CLI.
+
+    Each subcommand is registered with its handler via
+    ``set_defaults(func=...)``; the dispatch happens in :func:`main`.
+
+    Returns
+    -------
+    argparse.ArgumentParser
+        A fully-configured parser ready to consume an argv list.
+    """
     p = argparse.ArgumentParser(
         prog=PROG,
         description="TTI-O Workbench client. Spec section 8.2 CLI "
@@ -945,6 +1048,24 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
+    """Dispatch a ``ttio`` umbrella-command invocation.
+
+    Builds the argparse tree via :func:`build_parser`, parses
+    ``argv``, then calls the subcommand handler stored under
+    ``args.func``.
+
+    Parameters
+    ----------
+    argv : Iterable[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        The subcommand handler's return code: ``0`` success, ``1``
+        remote / SDK failure (including auth), ``2`` usage error,
+        ``3`` local file / format error, ``130`` keyboard interrupt.
+    """
     parser = build_parser()
     args = parser.parse_args(argv)
     try:

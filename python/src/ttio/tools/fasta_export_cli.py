@@ -56,6 +56,31 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _load_embedded_reference(ds: SpectralDataset, uri: str) -> ReferenceImport:
+    """Read an embedded reference genome from a ``.tio`` container.
+
+    Requires the dataset to be HDF5-backed (the helper accesses the
+    raw ``h5py`` handle directly to avoid an extra copy of the
+    chromosome arrays).
+
+    Parameters
+    ----------
+    ds : SpectralDataset
+        Opened HDF5-backed dataset.
+    uri : str
+        Reference URI under ``/study/references/``.
+
+    Returns
+    -------
+    ReferenceImport
+        The reconstructed reference object.
+
+    Raises
+    ------
+    RuntimeError
+        If the dataset is not HDF5-backed.
+    KeyError
+        If no reference is embedded at ``uri``.
+    """
     h5 = ds.file
     if h5 is None:
         raise RuntimeError(
@@ -81,6 +106,27 @@ def _load_embedded_reference(ds: SpectralDataset, uri: str) -> ReferenceImport:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Emit an embedded reference or a genomic run as a FASTA file.
+
+    Two subcommands are exposed:
+
+    * ``reference`` — write an embedded reference genome to FASTA.
+    * ``run`` — write an unaligned genomic run to FASTA.
+
+    Both subcommands emit a samtools-style ``.fai`` index alongside
+    the FASTA unless ``--no-fai`` is set.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success, ``2`` on I/O / lookup failure. Argparse
+        exits with ``2`` on usage errors.
+    """
     args = _parser().parse_args(argv)
     write_fai = not args.no_fai
 
