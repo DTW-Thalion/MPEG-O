@@ -132,31 +132,69 @@ class WorkbenchClient:
 
     def __init__(self, endpoint: _Endpoint, session: Session,
                   auth: AuthProvider):
+        """Construct a workbench client from a resolved endpoint + session.
+
+        Instances are normally produced by :func:`connect`, which does
+        the URL parse, runs the auth round-trip via ``auth``, then
+        passes both into this constructor. Direct construction is
+        valid when the caller already holds a :class:`Session` (e.g.
+        when adopting a token-paste session).
+
+        Parameters
+        ----------
+        endpoint : _Endpoint
+            Resolved host / port / WS scheme / HTTP scheme tuple.
+        session : Session
+            Authenticated session backing every outbound request.
+        auth : AuthProvider
+            Provider stored for use by :meth:`reauth`.
+        """
         self._endpoint = endpoint
         self._session = session
         self._auth = auth
 
     @property
     def session(self) -> Session:
-        """The current authenticated Session. Re-login via
-        `reauth()` rather than mutating this property."""
+        """The current authenticated :class:`Session`.
+
+        Read-only from the caller's perspective. Use :meth:`reauth`
+        rather than mutating this property when the session expires.
+        """
         return self._session
 
     @property
-    def host(self) -> str: return self._endpoint.host
+    def host(self) -> str:
+        """Server hostname resolved from the connect URL."""
+        return self._endpoint.host
 
     @property
-    def port(self) -> int: return self._endpoint.port
+    def port(self) -> int:
+        """Server TCP port (default ``8443`` when the URL omits one)."""
+        return self._endpoint.port
 
     @property
-    def ws_scheme(self) -> str: return self._endpoint.ws_scheme
+    def ws_scheme(self) -> str:
+        """WebSocket URL scheme — ``"ws"`` or ``"wss"``."""
+        return self._endpoint.ws_scheme
 
     @property
-    def http_scheme(self) -> str: return self._endpoint.http_scheme
+    def http_scheme(self) -> str:
+        """REST URL scheme — ``"http"`` or ``"https"``."""
+        return self._endpoint.http_scheme
 
     def reauth(self) -> None:
-        """Re-authenticate using the stored auth provider. Use when
-        `session.expired` flips True mid-script."""
+        """Re-authenticate using the stored auth provider.
+
+        Calls ``auth.authenticate`` against the same endpoint and
+        replaces :attr:`session` with the result. Use when
+        :attr:`Session.expired` flips ``True`` mid-script (e.g.
+        long-running ingest loops outliving the token TTL).
+
+        Raises
+        ------
+        WorkbenchAuthError
+            From the underlying provider, e.g. on bad credentials.
+        """
         self._session = self._auth.authenticate(
             self._endpoint.host, self._endpoint.port,
             self._endpoint.http_scheme)
@@ -170,8 +208,26 @@ class WorkbenchClient:
         container_uri: str,
         chunk_size: Optional[int] = None,
     ) -> UploadClient:
-        """Construct a (not-yet-opened) `UploadClient` bound to this
-        session + endpoint. Caller drives `async with`."""
+        """Construct an unopened :class:`UploadClient` for one transfer.
+
+        Parameters
+        ----------
+        project : str
+            Project the container belongs to.
+        container_uri : str
+            Client-minted container URI (e.g.
+            ``"uri:tio:demo-001"``).
+        chunk_size : int, optional
+            Per-WS-frame byte budget. ``None`` (default) lets
+            :class:`UploadClient` pick its built-in default
+            (64 KiB).
+
+        Returns
+        -------
+        UploadClient
+            The client is *not* yet opened; the caller drives
+            ``async with`` to perform the handshake and upload.
+        """
         kwargs: dict[str, Any] = dict(
             host=self._endpoint.host,
             port=self._endpoint.port,
@@ -185,7 +241,14 @@ class WorkbenchClient:
         return UploadClient(**kwargs)
 
     def download_client(self) -> DownloadClient:
-        """Construct a (not-yet-opened) `DownloadClient`."""
+        """Construct an unopened :class:`DownloadClient` for one transfer.
+
+        Returns
+        -------
+        DownloadClient
+            Bound to this session and endpoint. The caller drives
+            ``async with`` to perform the handshake and download.
+        """
         return DownloadClient(
             host=self._endpoint.host,
             port=self._endpoint.port,
@@ -201,7 +264,35 @@ class WorkbenchClient:
         data: bytes,
         resume: Optional[ResumeState] = None,
     ) -> UploadResult:
-        """Convenience: one-shot upload of a buffered byte string."""
+        """Upload a fully-buffered ``.tis`` byte string in one call.
+
+        Convenience wrapper that opens an :class:`UploadClient` and
+        calls :meth:`UploadClient.upload_bytes`.
+
+        Parameters
+        ----------
+        project : str
+            Project the container belongs to.
+        container_uri : str
+            Client-minted container URI.
+        data : bytes
+            Complete transport stream to upload.
+        resume : ResumeState, optional
+            Continue a previously-interrupted upload of the same
+            container; the server skips bytes it has already
+            acknowledged.
+
+        Returns
+        -------
+        UploadResult
+
+        Raises
+        ------
+        HandshakeError
+            On handshake-time failures.
+        UploadError
+            On mid-stream failures.
+        """
         async with self.upload_client(
                 project=project, container_uri=container_uri) as up:
             return await up.upload_bytes(data, resume=resume)
@@ -237,7 +328,30 @@ class WorkbenchClient:
         output_mode: OutputMode = OutputModeLiteral.BINARY.value,
         max_au: int = 0,
     ) -> DownloadResult:
-        """Convenience: one-shot download to a buffered byte string."""
+        """Download a container into a fully-buffered byte string in one call.
+
+        Convenience wrapper that opens a :class:`DownloadClient` and
+        calls :meth:`DownloadClient.download`.
+
+        Parameters
+        ----------
+        container_uri : str
+            URI of the container to fetch.
+        filters : FilterDict, optional
+            Server-side filter dictionary (e.g. ``{"chromosome":
+            "chr6"}``). ``None`` (default) downloads the full
+            container.
+        output_mode : OutputMode, optional
+            Wire output mode. Default is binary (``.tis`` bytes).
+        max_au : int, optional
+            Cap on the number of access units to return. ``0``
+            (default) means no cap.
+
+        Returns
+        -------
+        DownloadResult
+            Bytes plus any post-transfer metadata.
+        """
         async with self.download_client() as dn:
             return await dn.download(
                 container_uri=container_uri,
@@ -639,12 +753,25 @@ class WorkbenchClient:
     # ----------------------------------------------- control plane (W3)
 
     def query(self, query) -> "CohortResult":  # noqa: F821 -- forward ref
-        """Run a cohort query. POSTs `/v1/cohorts/query`; returns
-        a `CohortResult`.
+        """Run a cohort query against the workbench control plane.
 
-        Args:
-            query: a `CohortQuery` instance, or a dict in the
-                server's JSON shape.
+        POSTs to ``/v1/cohorts/query`` with the session's bearer
+        token and parses the JSON reply into a :class:`CohortResult`.
+
+        Parameters
+        ----------
+        query : CohortQuery or dict
+            A :class:`CohortQuery` instance, or a dict already in the
+            server's JSON request shape.
+
+        Returns
+        -------
+        CohortResult
+
+        Raises
+        ------
+        WorkbenchHttpError
+            If the server returns a non-200 status code.
         """
         from ttio.workbench.cohort import CohortQuery, CohortResult
         from ttio.workbench._http import WorkbenchHttpError, http_json
@@ -662,9 +789,27 @@ class WorkbenchClient:
         return CohortResult.from_json(resp)
 
     def preview_count(self, query) -> int:
-        """POST `/v1/cohorts/preview-count`; return the predicted row
-        count. Lets the GUI / CLI show "this will return N rows" before
-        a full query."""
+        """Return the predicted row count for a cohort query.
+
+        POSTs to ``/v1/cohorts/preview-count`` and returns the
+        server's ``count`` field. Lets the GUI / CLI show "this will
+        return N rows" before committing to a full :meth:`query`.
+
+        Parameters
+        ----------
+        query : CohortQuery or dict
+            Same shape accepted by :meth:`query`.
+
+        Returns
+        -------
+        int
+            Predicted row count (``0`` when the field is absent).
+
+        Raises
+        ------
+        WorkbenchHttpError
+            On non-200 responses.
+        """
         from ttio.workbench.cohort import CohortQuery
         from ttio.workbench._http import WorkbenchHttpError, http_json
 
@@ -681,14 +826,24 @@ class WorkbenchClient:
         return int(resp.get("count", 0))
 
     def containers(self):
-        """Return a `ContainersClient` bound to this session."""
+        """Return a :class:`ContainersClient` bound to this session.
+
+        The returned client exposes the ``/v1/containers`` REST
+        surface (list, fetch metadata, delete). Each call constructs
+        a fresh client; there is no shared state to manage.
+        """
         from ttio.workbench.containers import ContainersClient
         return ContainersClient(
             self._endpoint.host, self._endpoint.port,
             scheme=self._endpoint.http_scheme, token=self._session.token)
 
     def pipelines(self):
-        """Return a `PipelinesClient` bound to this session."""
+        """Return a :class:`PipelinesClient` bound to this session.
+
+        Exposes the ``/v1/pipelines`` REST surface (list available
+        pipelines, fetch pipeline definitions). Used by the GUI's
+        pipeline picker and by :meth:`submit_pipeline`.
+        """
         from ttio.workbench.pipeline import PipelinesClient
         return PipelinesClient(
             self._endpoint.host, self._endpoint.port,
@@ -696,34 +851,59 @@ class WorkbenchClient:
 
     def submit_pipeline(self, *, pipeline_id: str,
                           inputs, params=None):
-        """Convenience: submit a job. Returns a `Job` handle.
+        """Submit a pipeline job and return its handle.
 
-        For more control (status filter on list, SSE long-poll),
-        use `client.jobs()` directly.
+        Convenience over :meth:`jobs` for the common
+        single-pipeline-submit case. For richer control (status
+        filtering on list, SSE long-poll for completion), call
+        :meth:`jobs` and drive the :class:`JobsClient` directly.
+
+        Parameters
+        ----------
+        pipeline_id : str
+            Identifier of the registered pipeline to run.
+        inputs : Any
+            Input specification accepted by the pipeline (usually a
+            list or dict of container URIs).
+        params : Any, optional
+            Pipeline parameter overrides.
+
+        Returns
+        -------
+        Job
         """
         return self.jobs().submit(
             pipeline_id=pipeline_id, inputs=inputs, params=params)
 
     def jobs(self):
-        """Return a `JobsClient` bound to this session."""
+        """Return a :class:`JobsClient` bound to this session.
+
+        Exposes the ``/v1/jobs`` REST surface (submit, list, fetch,
+        cancel, SSE long-poll for status).
+        """
         from ttio.workbench.jobs import JobsClient
         return JobsClient(
             self._endpoint.host, self._endpoint.port,
             scheme=self._endpoint.http_scheme, token=self._session.token)
 
     def sessions(self):
-        """Return a `SessionsClient` bound to this session."""
+        """Return a :class:`SessionsClient` bound to this session.
+
+        Exposes the ``/v1/sessions`` REST surface (start, list,
+        attach to, terminate interactive analysis sessions).
+        """
         from ttio.workbench.sessions import SessionsClient
         return SessionsClient(
             self._endpoint.host, self._endpoint.port,
             scheme=self._endpoint.http_scheme, token=self._session.token)
 
     def federation(self):
-        """Return a `FederationClient` bound to this session.
+        """Return a :class:`FederationClient` bound to this session.
 
-        Federation is a v1.1+ server feature; the client degrades
-        gracefully against a v1.0 single-node server (an empty peer
-        list rather than an error)."""
+        Exposes the federation peer list / health endpoints. The
+        client degrades gracefully against a single-node server: an
+        empty peer list rather than an error.
+        """
         from ttio.workbench.federation import FederationClient
         return FederationClient(
             self._endpoint.host, self._endpoint.port,
@@ -733,8 +913,35 @@ class WorkbenchClient:
                          image=None, command=None, env=None,
                          bind_mounts=None,
                          container_storage_root=None):
-        """Convenience: POST /v1/sessions. Returns a `Session`
-        handle in `starting` state."""
+        """Create a new interactive analysis session.
+
+        Convenience over :meth:`sessions`: POSTs ``/v1/sessions``
+        with the given project + engine + container spec and returns
+        a :class:`Session` handle in ``starting`` state.
+
+        Parameters
+        ----------
+        project : str
+            Project the session belongs to.
+        engine_pin : str
+            Pinned engine version identifier the session must run.
+        image : str, optional
+            Container image override.
+        command : list of str, optional
+            Custom entry-point command.
+        env : dict, optional
+            Environment variables to inject.
+        bind_mounts : list, optional
+            Bind-mount specifications passed through to the runtime.
+        container_storage_root : str, optional
+            Root path for the session's storage volume.
+
+        Returns
+        -------
+        Session
+            Handle in ``starting`` state; poll via the sessions
+            client for readiness.
+        """
         return self.sessions().create(
             project=project, engine_pin=engine_pin,
             image=image, command=command, env=env,
@@ -743,8 +950,23 @@ class WorkbenchClient:
         )
 
     def session_proxy(self, session_id: str, *, path: str = "/"):
-        """Return an unopened `SessionProxyAttach` bound to this
-        session + endpoint. Caller drives the async context manager.
+        """Return an unopened :class:`SessionProxyAttach` for a session.
+
+        The proxy lets the caller open a WebSocket directly to the
+        running session (e.g. for JupyterLab attach). The caller
+        drives ``async with`` to open the connection.
+
+        Parameters
+        ----------
+        session_id : str
+            Identifier of the running session.
+        path : str, optional
+            Path prefix forwarded into the session's HTTP server.
+            Default ``"/"``.
+
+        Returns
+        -------
+        SessionProxyAttach
         """
         from ttio.workbench.session_proxy import SessionProxyAttach
         return SessionProxyAttach(

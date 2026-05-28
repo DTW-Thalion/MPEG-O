@@ -46,7 +46,15 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @protocol TTIOTransportIngestDelegate <NSObject>
 
-/// Fired once per complete packet as it lands in the rolling buffer.
+/**
+ * Fired once per complete packet as it lands in the rolling buffer.
+ *
+ * The callback runs synchronously on the thread that invoked
+ * ``-feedBytes:length:error:``.
+ *
+ * @param ingest  The ingest delivering the packet.
+ * @param record  Parsed packet (header + payload).
+ */
 - (void)ingest:(TTIOTransportIngest *)ingest
     didReceivePacket:(TTIOTransportPacketRecord *)record;
 
@@ -83,6 +91,7 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface TTIOTransportIngest : NSObject
 
+/** Delegate receiving per-packet, end-of-stream, and failure callbacks. Weak; set before feeding bytes. */
 @property (nonatomic, weak, nullable) id<TTIOTransportIngestDelegate> delegate;
 
 /// Total packets emitted so far. Useful for resumable-upload
@@ -97,25 +106,56 @@ NS_ASSUME_NONNULL_BEGIN
 /// Further -feed calls on a finished ingest return NO.
 @property (nonatomic, readonly) BOOL isFinished;
 
+/**
+ * Designated initialiser. Returns a ready-to-feed ingest with an
+ * empty rolling buffer, no delegate, and ``isFinished == NO``.
+ */
 - (instancetype)init NS_DESIGNATED_INITIALIZER;
 
-/// Feed a chunk of transport bytes. As packets complete, delivers
-/// each to the delegate synchronously on the calling thread.
-/// Returns NO + populates `error` on the first parse error; the
-/// delegate's `-ingest:didFailWithError:` is also invoked in that
-/// case (so callers may choose either failure-handling style).
+/**
+ * Feed a chunk of transport bytes into the rolling buffer.
+ *
+ * As packets become complete they are delivered to the delegate
+ * synchronously on the calling thread. A parse error halts the
+ * ingest permanently: subsequent ``-feed*`` calls return ``NO``
+ * immediately.
+ *
+ * @param bytes   Pointer to the chunk to ingest. Borrowed; may be
+ *                released as soon as the call returns.
+ * @param length  Number of bytes pointed to by ``bytes``.
+ * @param error   On the first parse error, populated with an
+ *                ``NSError`` in ``TTIOTransportErrorDomain``. May
+ *                be ``NULL``. (The delegate's
+ *                ``-ingest:didFailWithError:`` is also invoked.)
+ *
+ * @return ``YES`` when the chunk was fully buffered/dispatched
+ *         without error; ``NO`` on parse failure.
+ */
 - (BOOL)feedBytes:(const void *)bytes
            length:(NSUInteger)length
             error:(NSError * _Nullable *)error;
 
-/// Convenience wrapper around `-feedBytes:length:error:`.
+/**
+ * Convenience wrapper around ``-feedBytes:length:error:`` for ``NSData``.
+ *
+ * @param data   Chunk of transport bytes.
+ * @param error  See ``-feedBytes:length:error:``.
+ * @return ``YES`` on success, ``NO`` on parse failure.
+ */
 - (BOOL)feedData:(NSData *)data error:(NSError * _Nullable *)error;
 
-/// Signal end-of-input. If the rolling buffer contains a partial
-/// packet (header without payload, payload without CRC, ...) this
-/// returns NO with TTIOTransportErrorTruncated and fires the
-/// delegate's error callback. If the last successfully parsed
-/// packet was EndOfStream this returns YES.
+/**
+ * Signal end-of-input from the producer side.
+ *
+ * If the rolling buffer contains a partial packet (header without
+ * payload, payload without CRC, etc.) returns ``NO`` with
+ * ``TTIOTransportErrorTruncated`` and fires the delegate's
+ * ``-ingest:didFailWithError:``. If the last successfully parsed
+ * packet was ``END_OF_STREAM`` returns ``YES``.
+ *
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` when the stream ended cleanly, ``NO`` otherwise.
+ */
 - (BOOL)finishWithError:(NSError * _Nullable *)error;
 
 @end

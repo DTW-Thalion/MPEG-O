@@ -41,6 +41,15 @@ NS_ASSUME_NONNULL_BEGIN
  * between calls.</p>
  */
 @protocol TTIOTransportWriterSink <NSObject>
+/**
+ * Forward one encoded packet to the underlying byte destination.
+ *
+ * Called once per emitted packet by ``TTIOTransportWriter``. The
+ * implementation should forward synchronously — the writer does
+ * not coalesce or retry between calls.
+ *
+ * @param data The fully-encoded packet bytes (header + payload + optional CRC).
+ */
 - (void)writeData:(NSData *)data;
 @end
 
@@ -56,8 +65,24 @@ NS_ASSUME_NONNULL_BEGIN
  * sink-based initialiser without writing their own wrapper.</p>
  */
 @interface TTIOMutableDataSink : NSObject <TTIOTransportWriterSink>
+/** The underlying mutable buffer that received every emitted packet. */
 @property (nonatomic, readonly) NSMutableData *data;
+
+/**
+ * Create a sink backed by a fresh empty ``NSMutableData``.
+ *
+ * @return A new sink ready to receive packets.
+ */
 + (instancetype)sink;
+
+/**
+ * Create a sink backed by a caller-owned mutable buffer.
+ *
+ * Packets are appended to ``data`` in emission order.
+ *
+ * @param data Buffer to append into. Must not be ``nil``.
+ * @return Initialised sink instance.
+ */
 - (instancetype)initWithData:(NSMutableData *)data;
 @end
 
@@ -109,21 +134,83 @@ NS_ASSUME_NONNULL_BEGIN
  *  See docs/transport-spec.md §6.4. Default NO. */
 @property (nonatomic) BOOL useBulkMode;
 
+/**
+ * Initialise a writer that emits packets to a file on disk.
+ *
+ * The file is opened (creating or truncating) and closed by
+ * ``-close``. Each emitted packet is appended in order.
+ *
+ * @param path Filesystem path of the ``.tis`` file to write.
+ * @return Initialised writer instance.
+ */
 - (instancetype)initWithOutputPath:(NSString *)path;
+
+/**
+ * Initialise a writer that appends packets to a caller-owned buffer.
+ *
+ * Convenience over ``-initWithSink:`` that wraps ``data`` in a
+ * fresh ``TTIOMutableDataSink``. The buffer is borrowed; the
+ * writer never reads from or shrinks it.
+ *
+ * @param data Mutable buffer to append packets into.
+ * @return Initialised writer instance.
+ */
 - (instancetype)initWithMutableData:(NSMutableData *)data;
 
-/** Designated streaming initialiser. The writer calls
- *  <code>-[sink writeData:]</code> once per encoded packet — use
- *  this for WebSocket / pipe / custom sinks where intermediate
- *  buffering is undesirable. */
+/**
+ * Designated streaming initialiser.
+ *
+ * The writer calls ``-[sink writeData:]`` once per encoded packet.
+ * Use this for WebSocket / pipe / custom sinks where intermediate
+ * buffering is undesirable.
+ *
+ * @param sink Conforming sink to forward packets to. Borrowed.
+ * @return Initialised writer instance.
+ */
 - (instancetype)initWithSink:(id<TTIOTransportWriterSink>)sink;
 
-/** Full-dataset convenience. Emits the entire packet sequence. */
+/**
+ * Walk ``dataset`` and emit the complete transport packet sequence.
+ *
+ * Emits ``StreamHeader``, the optional v0.11 prelude (encryption
+ * algorithm, dataset provenance, subjects, samples, reference
+ * groups, image cubes, identifications, quantifications), then
+ * per-dataset ``DatasetHeader`` + access units + ``EndOfDataset``,
+ * finishing with ``EndOfStream``. Spectral runs are emitted with
+ * dataset ids ``1..N`` and genomic runs with ``N+1..N+M``.
+ *
+ * @param dataset Source container to serialise. Borrowed.
+ * @param error   On failure, populated with an ``NSError``
+ *                describing the cause. May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure (and ``*error`` is
+ *         set if non-NULL).
+ */
 - (BOOL)writeDataset:(TTIOSpectralDataset *)dataset
                error:(NSError * _Nullable *)error;
 
 // --- Fine-grained API ---
 
+/**
+ * Emit the leading ``StreamHeader`` packet.
+ *
+ * Must be the first packet on the wire (transport-spec §5.4).
+ * The ``features`` list declares opt-in wire-format extensions
+ * present in the stream (e.g. ``BULK_MODE_V2_BLOBS_FEATURE``).
+ *
+ * @param formatVersion     Container format version string (e.g.
+ *                          ``@"1.2"``).
+ * @param title             Free-form container title.
+ * @param isaInvestigation  ISA-Tab investigation identifier (may
+ *                          be empty).
+ * @param features          Feature flag strings.
+ * @param nDatasets         Number of dataset blocks the stream
+ *                          contains.
+ * @param error             On failure, populated with an
+ *                          ``NSError``. May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeStreamHeaderWithFormatVersion:(NSString *)formatVersion
                                       title:(NSString *)title
                            isaInvestigation:(NSString *)isaInvestigation
@@ -131,6 +218,30 @@ NS_ASSUME_NONNULL_BEGIN
                                  nDatasets:(uint16_t)nDatasets
                                       error:(NSError * _Nullable *)error;
 
+/**
+ * Emit a ``DatasetHeader`` packet announcing a dataset's schema.
+ *
+ * One ``DatasetHeader`` precedes every dataset's access units;
+ * the packet declares the dataset's identity, schema, and
+ * instrument metadata so the reader can allocate per-dataset
+ * buffers before AU ingest.
+ *
+ * @param datasetId        1-based dataset identifier within the
+ *                         stream (``uint16``).
+ * @param name             Dataset (run) name.
+ * @param acquisitionMode  Wire encoding of the acquisition mode.
+ * @param spectrumClass    ObjC class name for the spectrum type
+ *                         (e.g. ``@"TTIOMassSpectrum"``).
+ * @param channelNames     Ordered signal-channel names.
+ * @param instrumentJSON   JSON-encoded instrument config or
+ *                         genomic-run metadata.
+ * @param expectedAUCount  Total AU count for the dataset; ``0``
+ *                         when unknown.
+ * @param error            On failure, populated with an
+ *                         ``NSError``. May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeDatasetHeaderWithDatasetId:(uint16_t)datasetId
                                     name:(NSString *)name
                          acquisitionMode:(uint8_t)acquisitionMode
@@ -140,28 +251,102 @@ NS_ASSUME_NONNULL_BEGIN
                         expectedAUCount:(uint32_t)expectedAUCount
                                    error:(NSError * _Nullable *)error;
 
+/**
+ * Emit one ``ACCESS_UNIT`` packet.
+ *
+ * The ``TTIOAccessUnit`` is serialised via its own ``toBytes``
+ * routine and framed with the dataset id + AU sequence in the
+ * packet header.
+ *
+ * @param au          Access unit to emit.
+ * @param datasetId   Owning dataset id (matches the prior
+ *                    ``DatasetHeader``).
+ * @param auSequence  0-based monotonically increasing AU index
+ *                    within the dataset.
+ * @param error       On failure, populated with an ``NSError``.
+ *                    May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeAccessUnit:(TTIOAccessUnit *)au
               datasetId:(uint16_t)datasetId
              auSequence:(uint32_t)auSequence
                   error:(NSError * _Nullable *)error;
 
+/**
+ * Emit an ``END_OF_DATASET`` sentinel packet.
+ *
+ * Terminates a dataset's access-unit run. The reader uses
+ * ``finalAUSequence`` to verify it observed every expected AU.
+ *
+ * @param datasetId        Owning dataset id.
+ * @param finalAUSequence  One past the last ``au_sequence``
+ *                         emitted for the dataset (i.e. the AU
+ *                         count).
+ * @param error            On failure, populated with an
+ *                         ``NSError``. May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeEndOfDatasetWithDatasetId:(uint16_t)datasetId
                        finalAUSequence:(uint32_t)finalAUSequence
                                   error:(NSError * _Nullable *)error;
 
-/** Phase 2c-T (transport-spec §4.10). */
+/**
+ * Phase 2c-T: emit a ``BLOB_V2_MATE_INFO`` packet (transport-spec §4.10).
+ *
+ * Carries the verbatim ``mate_info/inline_v2`` blob plus its
+ * accompanying chromosome-name table so the reader can write the
+ * blob back without re-running the v2 codec encoder. Emitted only
+ * in bulk mode (``useBulkMode == YES``) for runs whose source has
+ * a v2 ``mate_info`` group.
+ *
+ * @param datasetId   Genomic dataset id the blob belongs to.
+ * @param chromNames  Chromosome names ordered by row index.
+ * @param blob        Verbatim mate-info blob bytes.
+ * @param error       On failure, populated with an ``NSError``.
+ *                    May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeBlobV2MateInfoWithDatasetId:(uint16_t)datasetId
                               chromNames:(NSArray<NSString *> *)chromNames
                                     blob:(NSData *)blob
                                     error:(NSError * _Nullable *)error;
 
-/** Phase 2c-T (transport-spec §4.11). */
+/**
+ * Phase 2c-T: emit a ``BLOB_V2_REF_DIFF`` packet (transport-spec §4.11).
+ *
+ * Carries the verbatim ``sequences/refdiff_v2`` blob keyed by its
+ * source reference URI so the reader can rebuild the per-AU
+ * sequences without re-encoding.
+ *
+ * @param datasetId     Genomic dataset id.
+ * @param referenceUri  Source reference URI for the diff blob.
+ * @param blob          Verbatim ref-diff blob bytes.
+ * @param error         On failure, populated with an ``NSError``.
+ *                      May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeBlobV2RefDiffWithDatasetId:(uint16_t)datasetId
                             referenceUri:(NSString *)referenceUri
                                     blob:(NSData *)blob
                                     error:(NSError * _Nullable *)error;
 
-/** Phase 2c-T (transport-spec §4.12). */
+/**
+ * Phase 2c-T: emit a ``BLOB_V2_NAME_TOK`` packet (transport-spec §4.12).
+ *
+ * Carries the verbatim tokenised-read-names blob so the reader can
+ * write the blob back without re-running the v2 name codec encoder.
+ *
+ * @param datasetId  Genomic dataset id.
+ * @param blob       Verbatim name-tok blob bytes.
+ * @param error      On failure, populated with an ``NSError``.
+ *                   May be ``NULL``.
+ *
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeBlobV2NameTokWithDatasetId:(uint16_t)datasetId
                                     blob:(NSData *)blob
                                     error:(NSError * _Nullable *)error;
@@ -462,6 +647,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)writeSampleMetadata:(NSArray<TTIOSample *> *)rows
                       error:(NSError * _Nullable *)error;
 
+/**
+ * Emit the trailing ``END_OF_STREAM`` sentinel packet.
+ *
+ * Marks the end of the transport stream. The reader stops
+ * ingesting after this packet.
+ *
+ * @param error On failure, populated with an ``NSError``. May be ``NULL``.
+ * @return ``YES`` on success, ``NO`` on failure.
+ */
 - (BOOL)writeEndOfStreamWithError:(NSError * _Nullable *)error;
 
 /** Emits a single GenomicRun as a stream segment.
@@ -483,6 +677,13 @@ NS_ASSUME_NONNULL_BEGIN
                    name:(NSString *)name
                   error:(NSError * _Nullable *)error;
 
+/**
+ * Close the underlying file sink, if any.
+ *
+ * No-op when the writer was constructed with ``-initWithSink:`` or
+ * ``-initWithMutableData:`` (no file is owned). Safe to call more
+ * than once.
+ */
 - (void)close;
 
 @end

@@ -252,6 +252,32 @@ class TransportWriter:
         use_compression: bool = False,
         use_bulk_mode: bool = False,
     ):
+        """Construct a writer targeting ``output``.
+
+        Parameters
+        ----------
+        output : BinaryIO, str, or pathlib.Path
+            Destination. A path is opened in ``"wb"`` mode and
+            closed by :meth:`close`; a file-like object is borrowed
+            (not closed by the writer).
+        use_checksum : bool, optional
+            When ``True``, every emitted packet carries a trailing
+            CRC-32C of its payload and the ``HAS_CHECKSUM`` flag is
+            set on the header. Default ``False``.
+        use_compression : bool, optional
+            When ``True``, signal channels in spectral access units
+            are zlib-compressed before emission. The reader detects
+            the per-channel compression byte and decompresses
+            transparently. Default ``False``.
+        use_bulk_mode : bool, optional
+            When ``True``, the writer probes each genomic run for
+            v2 codec blobs on disk and emits ``BlobV2*`` packets
+            carrying them verbatim, preserving SAM mate sentinels
+            byte-for-byte. Adds the
+            :data:`BULK_MODE_V2_BLOBS_FEATURE` to the
+            ``StreamHeader`` feature list when any blob is emitted.
+            Default ``False``.
+        """
         self._owns_stream = isinstance(output, (str, Path))
         if self._owns_stream:
             self._stream: BinaryIO = open(output, "wb")  # noqa: SIM115
@@ -270,15 +296,23 @@ class TransportWriter:
 
     @property
     def use_compression(self) -> bool:
+        """Whether per-channel zlib compression is enabled for signal data."""
         return self._use_compression
 
     def __enter__(self) -> "TransportWriter":
+        """Return ``self`` so the writer can be used as a context manager."""
         return self
 
     def __exit__(self, *exc: object) -> None:
+        """Close the writer on context exit (delegates to :meth:`close`)."""
         self.close()
 
     def close(self) -> None:
+        """Close the underlying stream if the writer opened it.
+
+        No-op when the caller passed an externally-managed file-like
+        object at construction. Safe to call more than once.
+        """
         if self._owns_stream and not self._stream.closed:
             self._stream.close()
 
@@ -317,6 +351,27 @@ class TransportWriter:
         features: list[str],
         n_datasets: int,
     ) -> None:
+        """Emit the leading :data:`PacketType.STREAM_HEADER` packet.
+
+        Must be the first packet on the wire (transport-spec §5.4).
+        The reader uses :paramref:`features` to enable opt-in wire
+        modes such as ``BULK_MODE_V2_BLOBS_FEATURE``.
+
+        Parameters
+        ----------
+        format_version : str
+            Container format version string (e.g. ``"1.2"``).
+        title : str
+            Free-form container title.
+        isa_investigation : str
+            ISA-Tab investigation identifier (may be empty).
+        features : list of str
+            Feature flag strings declaring optional wire-format
+            extensions present in the stream.
+        n_datasets : int
+            Number of dataset blocks (spectral + genomic) the
+            stream contains.
+        """
         payload = (
             pack_string(format_version, width=2)
             + pack_string(title, width=2)
@@ -339,6 +394,35 @@ class TransportWriter:
         instrument_json: str,
         expected_au_count: int = 0,
     ) -> None:
+        """Emit a :data:`PacketType.DATASET_HEADER` packet.
+
+        One :data:`DATASET_HEADER` precedes every dataset's access
+        units. The packet declares the dataset's identity, schema,
+        and instrument metadata so the reader can allocate
+        per-dataset buffers before AU ingest.
+
+        Parameters
+        ----------
+        dataset_id : int
+            1-based dataset identifier within the stream
+            (``uint16``).
+        name : str
+            Dataset name (run name) as exposed by the source
+            container.
+        acquisition_mode : int
+            Wire encoding of :class:`ttio.AcquisitionMode`.
+        spectrum_class : str
+            ObjC class name for the spectrum type (e.g.
+            ``"TTIOMassSpectrum"``).
+        channel_names : list of str
+            Ordered signal-channel names.
+        instrument_json : str
+            JSON-encoded instrument configuration (mass-spectrum
+            runs) or genomic-run metadata.
+        expected_au_count : int, optional
+            Total AU count for the dataset (``uint32``). ``0``
+            (default) when unknown.
+        """
         payload = (
             struct.pack("<H", dataset_id & 0xFFFF)
             + pack_string(name)
@@ -358,6 +442,25 @@ class TransportWriter:
         au_sequence: int,
         au: AccessUnit,
     ) -> None:
+        """Emit one :data:`PacketType.ACCESS_UNIT` packet.
+
+        The :class:`AccessUnit` is serialised via
+        :meth:`AccessUnit.to_bytes`. The hot per-spectrum path is in
+        :meth:`_emit_run_access_units`; this method is the
+        general-purpose entry point used by genomic runs and by
+        callers driving emission manually.
+
+        Parameters
+        ----------
+        dataset_id : int
+            Owning dataset id (matches the prior
+            ``DATASET_HEADER``).
+        au_sequence : int
+            0-based monotonically increasing AU index within the
+            dataset.
+        au : AccessUnit
+            The unit to emit.
+        """
         self._emit(
             PacketType.ACCESS_UNIT,
             au.to_bytes(),
@@ -1166,20 +1269,50 @@ class TransportWriter:
     def write_end_of_dataset(
         self, *, dataset_id: int, final_au_sequence: int
     ) -> None:
+        """Emit a :data:`PacketType.END_OF_DATASET` sentinel packet.
+
+        Terminates a dataset's access-unit run. The reader uses
+        :paramref:`final_au_sequence` to verify it observed every
+        expected AU.
+
+        Parameters
+        ----------
+        dataset_id : int
+            Owning dataset id.
+        final_au_sequence : int
+            One past the last ``au_sequence`` emitted for the
+            dataset (i.e. the dataset's AU count).
+        """
         payload = struct.pack(
             "<HI", dataset_id & 0xFFFF, final_au_sequence & 0xFFFFFFFF
         )
         self._emit(PacketType.END_OF_DATASET, payload, dataset_id=dataset_id)
 
     def write_end_of_stream(self) -> None:
+        """Emit a :data:`PacketType.END_OF_STREAM` sentinel packet.
+
+        Marks the end of the transport stream. The reader stops
+        ingesting after this packet.
+        """
         self._emit(PacketType.END_OF_STREAM, b"")
 
     def write_dataset(self, dataset: SpectralDataset) -> None:
-        """Walk ``dataset`` and emit the full packet sequence.
+        """Walk ``dataset`` and emit the complete transport packet sequence.
 
-        Spectral runs are emitted first (dataset_ids 1..N), then
-        genomic runs (dataset_ids N+1..N+M). M89.2 added the genomic
-        flow.
+        The emission order follows the v0.11 prelude rules:
+        ``StreamHeader`` then the optional v0.11 prelude
+        (encryption algorithm, dataset provenance, subjects,
+        samples, reference groups, image cubes, identifications,
+        quantifications) then per-dataset
+        ``DatasetHeader`` / access-unit run /
+        ``EndOfDataset``, finishing with ``EndOfStream``.
+        Spectral runs are emitted with dataset ids ``1..N`` and
+        genomic runs with ``N+1..N+M``.
+
+        Parameters
+        ----------
+        dataset : SpectralDataset
+            Source container to serialise. Borrowed; not closed.
         """
         runs = list(dataset.all_runs.items())
         genomic_runs = list(getattr(dataset, "genomic_runs", {}).items())
@@ -1772,6 +1905,15 @@ class TransportReader:
     """
 
     def __init__(self, source: BinaryIO | str | Path):
+        """Construct a reader sourcing from a path or file-like object.
+
+        Parameters
+        ----------
+        source : BinaryIO, str, or pathlib.Path
+            A path is opened in ``"rb"`` mode and closed by
+            :meth:`close`; a file-like object is borrowed (not
+            closed by the reader).
+        """
         self._owns_stream = isinstance(source, (str, Path))
         if self._owns_stream:
             self._stream: BinaryIO = open(source, "rb")  # noqa: SIM115
@@ -1779,16 +1921,41 @@ class TransportReader:
             self._stream = source  # type: ignore[assignment]
 
     def __enter__(self) -> "TransportReader":
+        """Return ``self`` so the reader can be used as a context manager."""
         return self
 
     def __exit__(self, *exc: object) -> None:
+        """Close the reader on context exit (delegates to :meth:`close`)."""
         self.close()
 
     def close(self) -> None:
+        """Close the underlying stream if the reader opened it.
+
+        No-op when the caller passed an externally-managed file-like
+        object at construction. Safe to call more than once.
+        """
         if self._owns_stream and not self._stream.closed:
             self._stream.close()
 
     def iter_packets(self) -> Iterator[tuple[PacketHeader, bytes]]:
+        """Yield ``(header, payload)`` for every packet in the stream.
+
+        Reads sequentially, verifying any CRC-32C trailer when the
+        ``HAS_CHECKSUM`` flag is set. Unknown packet types are
+        logged at DEBUG level and still yielded (forward-compat per
+        transport-spec §6). Iteration terminates after an
+        ``END_OF_STREAM`` packet or when the stream is exhausted.
+
+        Yields
+        ------
+        tuple of (PacketHeader, bytes)
+
+        Raises
+        ------
+        ValueError
+            On truncated header, truncated payload, missing CRC, or
+            CRC mismatch.
+        """
         while True:
             header_bytes = self._stream.read(HEADER_SIZE)
             if not header_bytes:
@@ -1849,7 +2016,36 @@ class TransportReader:
         output_path: str | Path,
         provider: str = "hdf5",
     ) -> SpectralDataset:
-        """Materialize the stream into a ``.tio`` file at ``output_path``."""
+        """Materialise the stream into a ``.tio`` file.
+
+        Drains :meth:`iter_packets`, accumulates per-dataset state
+        (spectral runs, genomic runs, references, images,
+        identifications, quantifications, subjects, samples,
+        provenance, encryption algorithm), then materialises the
+        result via :meth:`SpectralDataset.write_minimal`. The
+        returned dataset is freshly opened on the written file.
+
+        Parameters
+        ----------
+        output_path : str or pathlib.Path
+            Destination ``.tio`` path. Created if absent; truncated
+            if present.
+        provider : str, optional
+            Storage provider name. Default ``"hdf5"``.
+
+        Returns
+        -------
+        SpectralDataset
+            Reopened on the freshly written container.
+
+        Raises
+        ------
+        ValueError
+            On duplicate ``StreamHeader``, missing ``StreamHeader``,
+            non-monotonic ``au_sequence``, malformed prelude
+            packets, or a ``bulk_v2_blobs`` feature declaration
+            without matching ``BlobV2*`` packets.
+        """
         stream_meta: dict = {}
         dataset_metas: dict[int, dict] = {}
         run_data: dict[int, dict] = {}
