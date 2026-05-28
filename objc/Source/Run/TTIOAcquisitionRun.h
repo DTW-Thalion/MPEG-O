@@ -215,18 +215,97 @@
 
 #pragma mark - TTIOProvenanceable
 
+/**
+ * Append a processing-step record to the run's provenance chain.
+ *
+ * Concrete implementation of `-[TTIOProvenanceable
+ * addProcessingStep:]` — see that protocol for the full contract.
+ *
+ * @param step  Record to append (input entities, activity, outputs).
+ */
 - (void)addProcessingStep:(TTIOProvenanceRecord *)step;
+
+/**
+ * Return the run's full provenance chain in insertion order.
+ *
+ * Concrete implementation of `-[TTIOProvenanceable provenanceChain]`.
+ *
+ * @return Records in insertion order; empty array if none recorded.
+ */
 - (NSArray<TTIOProvenanceRecord *> *)provenanceChain;
+
+/**
+ * Return every input-entity identifier referenced in the run's chain.
+ *
+ * Concrete implementation of `-[TTIOProvenanceable inputEntities]`.
+ *
+ * @return Input-entity identifiers in chain order; duplicates preserved.
+ */
 - (NSArray<NSString *> *)inputEntities;
+
+/**
+ * Return every output-entity identifier referenced in the run's chain.
+ *
+ * Concrete implementation of `-[TTIOProvenanceable outputEntities]`.
+ *
+ * @return Output-entity identifiers in chain order; duplicates preserved.
+ */
 - (NSArray<NSString *> *)outputEntities;
 
 #pragma mark - TTIOEncryptable
 
+/**
+ * Encrypt the run in place at the requested granularity.
+ *
+ * Concrete implementation of `-[TTIOEncryptable
+ * encryptWithKey:level:error:]`. Requires that
+ * `-setPersistenceFilePath:runName:` has previously bound the run to
+ * an on-disk container.
+ *
+ * @param key    32-byte AES-256-GCM key.
+ * @param level  Granularity (`Channel`, `PerAU`, etc.) — see
+ *               `TTIOEncryptionLevel`.
+ * @param error  Out-error on missing persistence path, wrong key
+ *               length, or HDF5 write failure.
+ * @return YES on success, NO with `*error` set on failure.
+ */
 - (BOOL)encryptWithKey:(NSData *)key
                  level:(TTIOEncryptionLevel)level
                  error:(NSError **)error;
+
+/**
+ * Decrypt the run in place, restoring plaintext channels.
+ *
+ * Concrete implementation of `-[TTIOEncryptable
+ * decryptWithKey:error:]`. Idempotent — returns YES with no error if
+ * the run is already plaintext.
+ *
+ * @param key    32-byte AES-256-GCM key matching the one used to
+ *               encrypt.
+ * @param error  Out-error on GCM tag mismatch (wrong key), missing
+ *               envelope, or HDF5 write failure.
+ * @return YES on success, NO with `*error` set on failure.
+ */
 - (BOOL)decryptWithKey:(NSData *)key error:(NSError **)error;
+
+/**
+ * Return the access policy currently associated with the run.
+ *
+ * Concrete implementation of `-[TTIOEncryptable accessPolicy]`.
+ *
+ * @return The active `TTIOAccessPolicy`, or `nil` if none has been
+ *         set.
+ */
 - (TTIOAccessPolicy *)accessPolicy;
+
+/**
+ * Replace the access policy associated with the run.
+ *
+ * Concrete implementation of `-[TTIOEncryptable setAccessPolicy:]`.
+ *
+ * @param policy  New access policy. Pass `nil` to clear an existing
+ *                policy.
+ */
 - (void)setAccessPolicy:(TTIOAccessPolicy *)policy;
 
 @end

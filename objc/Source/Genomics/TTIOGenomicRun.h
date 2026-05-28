@@ -162,20 +162,52 @@
 // writer. Each returns nil when the channel is absent / not in the
 // expected v2 layout (e.g. read_names with @compression != 15).
 
-/// Phase 2c-T: read the verbatim ``mate_info/inline_v2`` blob.
-/// Returns nil when the run has no inline_v2 layout.
+/**
+ * Read the verbatim `mate_info/inline_v2` codec blob for transport
+ * bulk-mode forwarding.
+ *
+ * Bypasses the codec-13 decode path so the transport writer can stream
+ * the on-disk bytes directly without re-encoding. Returns `nil` when
+ * the run does not use the inline-v2 layout.
+ *
+ * @return Raw inline-v2 blob bytes, or `nil` when the layout is absent.
+ */
 - (nullable NSData *)readMateInfoInlineV2BlobBytes;
 
-/// Phase 2c-T: read the ``mate_info/chrom_names`` sidecar table.
-/// Returns an empty array when the table is missing.
+/**
+ * Read the `mate_info/chrom_names` sidecar table.
+ *
+ * Companion to `-readMateInfoInlineV2BlobBytes`: gives the transport
+ * writer the chromosome-name dictionary it needs to reassemble mate
+ * coordinates on the receiver side. Returns an empty array when the
+ * table is missing.
+ *
+ * @return Ordered chromosome names, or `@[]` when the sidecar is absent.
+ */
 - (NSArray<NSString *> *)readMateInfoChromNamesTable;
 
-/// Phase 2c-T: read the verbatim ``read_names`` blob when
-/// ``@compression == NAME_TOKENIZED_V2 (15)``. Returns nil otherwise.
+/**
+ * Read the verbatim `read_names` codec blob.
+ *
+ * Returns the on-disk bytes only when the channel is stored with
+ * `@compression == NAME_TOKENIZED_V2 (15)`; returns `nil` for any
+ * other layout so the transport writer can fall through to its
+ * encode path.
+ *
+ * @return Raw NAME_TOKENIZED_V2 blob bytes, or `nil` when the channel
+ *         is not stored in that layout.
+ */
 - (nullable NSData *)readNameTokV2BlobBytes;
 
-/// Phase 2c-T: read the verbatim ``sequences/refdiff_v2`` blob when
-/// sequences is a group containing refdiff_v2. Returns nil otherwise.
+/**
+ * Read the verbatim `sequences/refdiff_v2` codec blob.
+ *
+ * Returns the on-disk bytes only when `sequences` is a group
+ * containing the `refdiff_v2` dataset; returns `nil` for any other
+ * layout.
+ *
+ * @return Raw refdiff-v2 blob bytes, or `nil` when the layout is absent.
+ */
 - (nullable NSData *)readRefDiffV2BlobBytes;
 
 // ── Bulk accessors for hot serialization paths ────────────────────
@@ -189,18 +221,39 @@
 // in-memory is dramatically faster — Python's FastqWriter saw a
 // 24× speedup at 1M reads from this exact pattern.
 
-/// Return the full ``signal_channels/sequences`` byte buffer.
-/// Decoded once and cached for codec-compressed channels;
-/// read once for uncompressed channels. Empty NSData for
-/// zero-read runs.
+/**
+ * Return the full `signal_channels/sequences` byte buffer.
+ *
+ * Bulk accessor for hot serialization paths (FASTQ / FASTA / transport
+ * writers). Decoded once and cached for codec-compressed channels;
+ * read once for uncompressed channels. Returns an empty `NSData` for
+ * zero-read runs.
+ *
+ * @return Concatenated sequence bytes for every read in the run, in
+ *         record order.
+ */
 - (NSData *)wholeSequencesData;
 
-/// Return the full ``signal_channels/qualities`` byte buffer.
-/// Same caching semantics as ``wholeSequencesData``.
+/**
+ * Return the full `signal_channels/qualities` byte buffer.
+ *
+ * Same caching semantics as `-wholeSequencesData`. Returns an empty
+ * `NSData` for zero-read runs.
+ *
+ * @return Concatenated Phred+33 quality bytes for every read in the
+ *         run, in record order.
+ */
 - (NSData *)wholeQualitiesData;
 
-/// Return the full read-names list, forcing the one-shot
-/// NAME_TOKENIZED_V2 decode + cache.
+/**
+ * Return the full read-names list.
+ *
+ * Forces the one-shot NAME_TOKENIZED_V2 decode + cache when the
+ * channel is tokenised, so subsequent per-read lookups become O(1)
+ * array indexing rather than re-decoding the blob.
+ *
+ * @return Read names in record order; empty array for zero-read runs.
+ */
 - (NSArray<NSString *> *)allReadNames;
 
 @end

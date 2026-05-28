@@ -44,11 +44,30 @@ class CramWriter(BamWriter):
         path: str | os.PathLike[str],
         reference_fasta: str | os.PathLike[str],
     ):
+        """Configure the writer with a CRAM output path and a reference FASTA.
+
+        Parameters
+        ----------
+        path : str or os.PathLike
+            Destination CRAM file path.
+        reference_fasta : str or os.PathLike
+            Reference FASTA used to compute reference-relative deltas.
+            CRAM cannot be encoded without it; samtools is invoked with
+            ``--reference`` on both the ``view -CS`` and ``sort -O cram``
+            stages.
+        """
         super().__init__(path)
         self._reference_fasta = Path(reference_fasta)
 
     @property
     def reference_fasta(self) -> Path:
+        """Return the reference-FASTA path.
+
+        Returns
+        -------
+        pathlib.Path
+            The reference path supplied at construction, unchanged.
+        """
         return self._reference_fasta
 
     def _build_samtools_commands(
