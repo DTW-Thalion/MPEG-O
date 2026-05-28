@@ -38,6 +38,22 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Emit a genomic run from a ``.tio`` container as a FASTQ file.
+
+    The output Phred offset defaults to ``33`` and may be overridden
+    with ``--phred``.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success, ``2`` on I/O / lookup failure. Argparse
+        exits with ``2`` on usage errors.
+    """
     args = _parser().parse_args(argv)
 
     try:

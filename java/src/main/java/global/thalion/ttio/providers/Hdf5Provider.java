@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
  * change; callers that used those directly can switch to
  * {@code Hdf5Provider.open(path, Mode.READ)} and continue.
  *
- * <p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+ * <p>API status: Stable.</p>
  *
  * <p>Cross-language equivalents:
  * <ul>
@@ -94,12 +94,17 @@ public final class Hdf5Provider implements StorageProvider {
         return new Hdf5DatasetAdapter(dataset, name, null, /*ownsNative=*/false);
     }
 
-    /** Phase 2 (post-M91): if {@code group} is an HDF5-backed
-     *  {@link StorageGroup}, return the underlying {@link Hdf5Group};
-     *  otherwise return {@code null}. Lets cross-modality code paths
-     *  (per-run provenance, etc.) write a native HDF5 compound dataset
-     *  on the fast path while still falling back to the protocol API
-     *  for memory/sqlite/zarr providers. */
+    /** If {@code group} is an HDF5-backed {@link StorageGroup}, return
+     *  the underlying {@link Hdf5Group}; otherwise return {@code null}.
+     *  Lets cross-modality code paths (per-run provenance, etc.) write
+     *  a native HDF5 compound dataset on the fast path while still
+     *  falling back to the protocol API for memory/sqlite/zarr
+     *  providers.
+     *
+     *  @param group  the protocol-level group to unwrap
+     *  @return the native {@link Hdf5Group}, or {@code null} when
+     *          {@code group} is not HDF5-backed
+     */
     public static Hdf5Group tryUnwrapHdf5Group(StorageGroup group) {
         return group instanceof Hdf5GroupAdapter a ? a.unwrap() : null;
     }
@@ -210,8 +215,7 @@ public final class Hdf5Provider implements StorageProvider {
          *  plus a {@code @shape_json} attribute recording the original
          *  rank and per-axis lengths. This matches the SqliteProvider
          *  layout so canonical bytes stay bit-identical across
-         *  backends; native H5Screate_simple(rank, dims, null) storage
-         *  is a v0.8 optimisation (MSImage refactor scope). */
+         *  backends. */
         @Override
         public StorageDataset createDatasetND(String name, Precision precision,
                                                 long[] shape, long[] chunks,
@@ -251,10 +255,9 @@ public final class Hdf5Provider implements StorageProvider {
             }
             sb.append(']');
             delegate.openGroup("."); // no-op; placeholder for future
-            // Store on the dataset itself (Hdf5Dataset doesn't expose
-            // attribute setters today; store on the PARENT group under
-            // a __shape_<name>__ key). v0.8 will migrate to native
-            // H5Screate_simple once MSImage-native-read is deprecated.
+            // Store the shape on the parent group under a
+            // __shape_<name>__ key so the read-side adapter can
+            // reconstruct rank and dims without reopening the dataset.
             delegate.setStringAttribute("__shape_" + name + "__", sb.toString());
             return new Hdf5DatasetAdapter(ds, name, shape);
         }
@@ -360,9 +363,7 @@ public final class Hdf5Provider implements StorageProvider {
         /** N-D variant. {@code ndShape} preserves the full
          *  rank through the adapter; the underlying HDF5 dataset is
          *  stored as a flat 1-D BLOB for maximum backend compatibility
-         *  (matches SqliteProvider's layout). Full-rank HDF5
-         *  {@code H5Screate_simple(rank, dims, null)} storage is a
-         *  v0.8 optimisation — see M44's MSImage refactor. */
+         *  (matches SqliteProvider's layout). */
         Hdf5DatasetAdapter(Hdf5Dataset delegate, String name, long[] ndShape) {
             this(delegate, name, ndShape, /*ownsNative=*/true);
         }

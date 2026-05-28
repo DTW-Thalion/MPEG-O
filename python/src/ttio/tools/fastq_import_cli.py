@@ -40,6 +40,23 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Convert a FASTQ file into an unaligned genomic run.
+
+    Writes the resulting run under ``/study/genomic_runs/<name>/``
+    inside a freshly created ``.tio`` container. The Phred offset is
+    auto-detected unless ``--phred`` is supplied.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success, ``2`` on FASTQ parse / I/O failure.
+        Argparse exits with ``2`` on usage errors.
+    """
     args = _parser().parse_args(argv)
 
     try:

@@ -1,4 +1,4 @@
-"""``ttio-verify`` — HMAC-SHA256 signature verifier (M75).
+"""``ttio-verify`` — HMAC-SHA256 signature verifier.
 
 Python CLI frontend for :class:`ttio.verifier.Verifier`. Opens a
 ``.tio`` file, navigates to the given HDF5 dataset, reads the
@@ -34,6 +34,11 @@ from ..verifier import Verifier, VerificationStatus
 
 
 def _parse_key_hex(key_hex: str) -> bytes:
+    """Decode a 64-character hex string into a 32-byte HMAC key.
+
+    Raises :class:`SystemExit` with an explanatory message when the
+    length is wrong or the string is not valid hex.
+    """
     if len(key_hex) != 64:
         raise SystemExit(
             f"ttio-verify: expected 64-character hex key, got {len(key_hex)}"
@@ -45,6 +50,23 @@ def _parse_key_hex(key_hex: str) -> bytes:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Verify the HMAC-SHA256 signature on one HDF5 dataset.
+
+    Parses three positional arguments (``path``, ``dataset``,
+    ``key_hex``), reads the ``@ttio_signature`` attribute, and prints
+    the resulting :class:`VerificationStatus` name to stdout.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        Mirrors :class:`VerificationStatus` integer values: ``0`` valid,
+        ``1`` invalid, ``2`` not signed, ``3`` error.
+    """
     parser = argparse.ArgumentParser(
         prog="ttio-verify",
         description="Verify a canonical HMAC-SHA256 signature on an HDF5 "

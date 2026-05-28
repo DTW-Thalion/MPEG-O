@@ -1,11 +1,11 @@
-"""v1.0 per-AU encryption CLI for cross-language conformance testing.
+"""Per-AU encryption CLI for cross-language conformance testing.
 
 Provides encrypt/decrypt and transport-stream encrypt/decrypt
 subcommands that mirror the Java ``global.thalion.ttio.tools.PerAUCli``
-and Objective-C ``TtioPerAU`` tool. All three implementations MUST
-produce byte-equivalent outputs given identical inputs; the
-cross-language conformance harness (``tests/integration/
-test_per_au_cross_language.py``) drives this via subprocess.
+and Objective-C ``TtioPerAU`` tool. All three implementations produce
+byte-equivalent outputs given identical inputs; the cross-language
+conformance harness (``tests/integration/test_per_au_cross_language.py``)
+drives this via subprocess.
 
 Usage:
     python -m ttio.tools.per_au_cli encrypt   <in.tio> <out.tio> <key-file> [--headers]
@@ -39,9 +39,9 @@ from ttio.transport.encrypted import (
 _MPAD_MAGIC = b"MPA1"  # bumped from MPAD to MPA1 (uint8-aware)
 
 
-# per-entry dtype codes mirror the existing Precision enum.
-# Reader infers element-byte width from the dtype code instead of
-# the pre-M90.12 behaviour of casting everything to float64.
+# Per-entry dtype codes mirror the existing Precision enum.
+# Reader infers element-byte width from the dtype code so genomic
+# uint8 channels stay 1 byte/element.
 _MPAD_DTYPE_FLOAT32 = 0
 _MPAD_DTYPE_FLOAT64 = 1
 _MPAD_DTYPE_INT32 = 2
@@ -53,9 +53,12 @@ _MPAD_DTYPE_BYTES = 0xFF  # opaque (e.g. JSON-encoded au_headers)
 
 
 def _ndarray_to_mpad_entry(arr) -> tuple[int, bytes]:
-    """Map a numpy array dtype to (mpad_dtype_code, raw_bytes).
-    Falls back to float64 for unrecognised dtypes (preserves the
-    pre-M90.12 behaviour for any unanticipated array shape)."""
+    """Map a numpy array dtype to ``(mpad_dtype_code, raw_bytes)``.
+
+    Recognises every dtype enumerated in the ``_MPAD_DTYPE_*``
+    constants; falls back to ``FLOAT64`` for any unanticipated array
+    shape.
+    """
     np_arr = np.asarray(arr)
     dtype_str = np_arr.dtype.str
     if dtype_str in ("<f8", ">f8", "=f8", "float64"):
@@ -72,8 +75,7 @@ def _ndarray_to_mpad_entry(arr) -> tuple[int, bytes]:
         return _MPAD_DTYPE_FLOAT32, np_arr.astype("<f4", copy=False).tobytes()
     if dtype_str in ("<u8", ">u8", "=u8", "uint64"):
         return _MPAD_DTYPE_UINT64, np_arr.astype("<u8", copy=False).tobytes()
-    # Fallback: float64 (backward-compat with pre-M90.12 behaviour
-    # on unanticipated dtypes).
+    # Fallback: float64 for any unanticipated dtype.
     return _MPAD_DTYPE_FLOAT64, np_arr.astype("<f8", copy=False).tobytes()
 
 
@@ -123,9 +125,8 @@ def _headers_json(rows) -> str:
 
 def _do_decrypt(args: argparse.Namespace) -> int:
     plain = decrypt_per_au(args.input, _read_key(args.key))
-    # each entry now carries its own dtype code so genomic
-    # uint8 channels stay 1 byte/element (pre-M90.12 cast everything
-    # to float64, mangling sequences/qualities).
+    # Each entry carries its own dtype code so genomic uint8 channels
+    # stay 1 byte/element instead of being cast to float64.
     entries: dict[str, tuple[int, bytes]] = {}
     for run_name, run in plain.items():
         for ch, arr in run.items():
@@ -165,13 +166,18 @@ def _do_recv(args: argparse.Namespace) -> int:
 
 
 def _do_transcode(args: argparse.Namespace) -> int:
-    """Migrate a file to opt_per_au_encryption. Three sources supported:
+    """Migrate a file to ``opt_per_au_encryption``.
 
-    1. Plaintext .tio (no encryption): copies + calls encrypt_per_au.
-    2. opt_per_au_encryption already present: decrypts then re-encrypts
-       (useful for rotating the DEK via --rekey or toggling --headers).
-    3. v0.x opt_dataset_encryption: prints a migration hint and exits
-       non-zero; users must first decrypt channels via the v0.x API.
+    Three source shapes are supported:
+
+    1. Plaintext ``.tio`` (no encryption): copies + calls
+       :func:`encrypt_per_au`.
+    2. ``opt_per_au_encryption`` already present: decrypts then
+       re-encrypts (useful for rotating the DEK via ``--rekey`` or
+       toggling ``--headers``).
+    3. Legacy ``opt_dataset_encryption``: prints a migration hint and
+       exits non-zero; users must first decrypt channels via the
+       legacy API.
     """
     from ttio.feature_flags import OPT_DATASET_ENCRYPTION
     from ttio.providers.registry import open_provider
@@ -186,9 +192,10 @@ def _do_transcode(args: argparse.Namespace) -> int:
 
     if OPT_DATASET_ENCRYPTION in features:
         raise SystemExit(
-            f"{args.input} carries opt_dataset_encryption (v0.x). "
-            "Decrypt channels via v0.x `SpectralDataset.decrypt()` first, "
-            "then transcode the plaintext result."
+            f"{args.input} carries opt_dataset_encryption (legacy). "
+            "Decrypt channels via the legacy "
+            "`SpectralDataset.decrypt()` API first, then transcode "
+            "the plaintext result."
         )
 
     shutil.copyfile(args.input, args.output)
@@ -210,7 +217,8 @@ def _do_transcode(args: argparse.Namespace) -> int:
                     if f"{ch}_values" in sig:
                         del sig[f"{ch}_values"]
                     sig.create_dataset(f"{ch}_values", data=data)
-                    # Drop the per-channel metadata left by the v1.0 writer.
+                    # Drop the per-channel metadata left by the
+                    # opt_per_au_encryption writer.
                     for attr in (f"{ch}_algorithm", f"{ch}_wrapped_dek",
                                   f"{ch}_kek_algorithm"):
                         if attr in sig.attrs:
@@ -241,7 +249,8 @@ def _do_transcode(args: argparse.Namespace) -> int:
                     idx.create_dataset("base_peak_intensities",
                         data=np.array([h["base_peak_intensity"] for h in hdrs],
                                       dtype="<f8"))
-            # Drop v1.0 feature flags so encrypt_per_au reintroduces them.
+            # Drop the encryption feature flags so encrypt_per_au
+            # reintroduces them.
             current = bytes(f.attrs["ttio_features"]).decode("utf-8")
             kept = [x for x in json.loads(current)
                      if x not in ("opt_per_au_encryption",
@@ -253,6 +262,26 @@ def _do_transcode(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Dispatch a ``ttio-per-au`` subcommand.
+
+    The subcommand grammar mirrors the Java and Objective-C peer
+    tools verbatim so the cross-language conformance harness can
+    drive any of the three implementations with identical argument
+    strings. Each subcommand handler is registered via
+    ``set_defaults(func=...)`` and dispatched on parsed ``args.func``.
+
+    Parameters
+    ----------
+    argv : list[str], optional
+        Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns
+    -------
+    int
+        ``0`` on success. The transcode handler raises
+        :class:`SystemExit` with a migration hint when given a legacy
+        ``opt_dataset_encryption`` source.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest="cmd", required=True)
 

@@ -5,10 +5,10 @@
  */
 
 /**
- * Analysis primitives (v0.12.0+).
+ * Analysis primitives.
  *
  * <ul>
- *   <li>M77: 2D-COS generalised synchronous / asynchronous decomposition
+ *   <li>2D-COS generalised synchronous / asynchronous decomposition
  *       via Noda's Hilbert-transform approach
  *       ({@link global.thalion.ttio.analysis.TwoDCos}).</li>
  * </ul>

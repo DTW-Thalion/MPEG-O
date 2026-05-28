@@ -59,6 +59,9 @@ public final class Hdf5CompoundIO {
 
     private Hdf5CompoundIO() {}
 
+    /** Field kinds covered by the compound-IO helper. The byte width and
+     *  native HDF5 type id pair determine the in-memory and on-disk
+     *  representation of a single field. */
     public enum FieldKind {
         UINT32(4, HDF5Constants.H5T_NATIVE_UINT32),
         INT64(8, HDF5Constants.H5T_NATIVE_INT64),
@@ -76,13 +79,24 @@ public final class Hdf5CompoundIO {
         }
     }
 
+    /** One field in a compound schema, paired with its on-disk kind. */
     public record Field(String name, FieldKind kind) {}
 
+    /** Immutable layout description for a compound dataset. Carries the
+     *  ordered field list, the per-field byte offsets, and the total
+     *  byte size of one record. */
     public static final class Schema {
         public final List<Field> fields;
         public final int[] offsets;
         public final int totalSize;
 
+        /**
+         * Build a schema from an ordered list of fields. Byte offsets are
+         * computed by accumulating {@link FieldKind#byteSize} entries in
+         * field order.
+         *
+         * @param fields  the ordered list of fields (defensively copied)
+         */
         public Schema(List<Field> fields) {
             this.fields = List.copyOf(fields);
             this.offsets = new int[fields.size()];
@@ -112,6 +126,13 @@ public final class Hdf5CompoundIO {
 
     // -- Standard schemas (format-spec section 6.1-6.3) ----------------
 
+    /**
+     * Schema for the {@code identifications} compound dataset as defined
+     * in format-spec section 6.1: run name, spectrum index, chemical
+     * entity, confidence score, and a JSON-encoded evidence chain.
+     *
+     * @return  a fresh {@link Schema} instance describing the layout
+     */
     public static Schema identificationSchema() {
         return new Schema(List.of(
                 new Field("run_name", FieldKind.VL_STRING),
@@ -121,6 +142,13 @@ public final class Hdf5CompoundIO {
                 new Field("evidence_chain_json", FieldKind.VL_STRING)));
     }
 
+    /**
+     * Schema for the {@code quantifications} compound dataset as defined
+     * in format-spec section 6.2: chemical entity, sample reference,
+     * abundance value, and normalisation method.
+     *
+     * @return  a fresh {@link Schema} instance describing the layout
+     */
     public static Schema quantificationSchema() {
         return new Schema(List.of(
                 new Field("chemical_entity", FieldKind.VL_STRING),
@@ -129,6 +157,13 @@ public final class Hdf5CompoundIO {
                 new Field("normalization_method", FieldKind.VL_STRING)));
     }
 
+    /**
+     * Schema for the {@code provenance} compound dataset as defined in
+     * format-spec section 6.3: Unix timestamp, software identifier, and
+     * JSON-encoded parameters / input refs / output refs.
+     *
+     * @return  a fresh {@link Schema} instance describing the layout
+     */
     public static Schema provenanceSchema() {
         return new Schema(List.of(
                 new Field("timestamp_unix", FieldKind.INT64),
@@ -439,6 +474,18 @@ public final class Hdf5CompoundIO {
 
     // -- Read (primitive fields only; VL fields decode as "") ----------
 
+    /**
+     * Read a compound dataset returning only the primitive (non-VL)
+     * fields. VL_STRING fields are returned as empty strings and
+     * VL_BYTES fields as empty byte arrays. Use {@link #readCompoundFull}
+     * to also decode the VL fields.
+     *
+     * @param parent       the group that owns the dataset
+     * @param datasetName  the dataset name inside {@code parent}
+     * @param schema       the full schema describing the on-disk layout
+     * @return  one {@code Object[]} per record, in field order; an
+     *          empty list if the dataset is missing or empty
+     */
     public static List<Object[]> readCompoundPrimitives(Hdf5Group parent,
                                                           String datasetName,
                                                           Schema schema) {

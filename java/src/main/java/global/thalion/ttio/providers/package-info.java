@@ -1,23 +1,24 @@
 /**
- * Storage/transport provider abstraction — .
+ * Storage/transport provider abstraction.
  *
- * The TTI-O data model and API are the standard; the storage
+ * <p>The TTI-O data model and API are the standard; the storage
  * backend is a pluggable implementation detail. Providers register
  * via {@link java.util.ServiceLoader} (service interface:
  * {@link global.thalion.ttio.providers.StorageProvider}) and are
- * resolved by URL scheme or explicit name.
+ * resolved by URL scheme or explicit name.</p>
  *
- * Two providers ship with v0.6:
+ * <p>Four providers ship in the box:</p>
  * <ul>
  *   <li>{@link global.thalion.ttio.providers.Hdf5Provider} — wraps
- *   the existing {@link global.thalion.ttio.hdf5.Hdf5File}.</li>
+ *   {@link global.thalion.ttio.hdf5.Hdf5File} for HDF5 containers.</li>
  *   <li>{@link global.thalion.ttio.providers.MemoryProvider} —
  *   in-memory tree for tests and transient pipelines.</li>
+ *   <li>{@link global.thalion.ttio.providers.SqliteProvider} —
+ *   SQLite-backed containers.</li>
+ *   <li>{@link global.thalion.ttio.providers.ZarrProvider} —
+ *   Zarr v3 stores.</li>
  * </ul>
  *
- * <p><b>API status:</b> Stable (Provisional per M39 — may change
- * before v1.0).</p>
- *
- *
+ * <p><b>API status:</b> Stable.</p>
  */
 package global.thalion.ttio.providers;

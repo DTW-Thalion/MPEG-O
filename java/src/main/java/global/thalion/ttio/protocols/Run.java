@@ -28,7 +28,7 @@ import java.util.List;
  * this interface. Java is nominal-typed so explicit {@code implements}
  * is required (unlike Python's structural Protocol).</p>
  *
- * <p><b>API status:</b> Provisional (Phase 1 abstraction polish, post-M91).</p>
+ * <p><b>API status:</b> Provisional.</p>
  *
  * <p><b>Cross-language equivalents:</b> Objective-C
  * {@code TTIORun}, Python {@code ttio.protocols.run.Run}.</p>

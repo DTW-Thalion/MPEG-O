@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * {@link Hdf5Provider} and {@code MemoryProvider}, the interface is
  * correct.</p>
  *
- * <p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+ * <p>API status: Stable.</p>
  *
  * <p>Cross-language equivalents:
  * <ul>
