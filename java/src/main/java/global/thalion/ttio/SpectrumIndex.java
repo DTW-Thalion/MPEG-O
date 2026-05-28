@@ -128,30 +128,69 @@ public class SpectrumIndex {
         this.centroideds = centroideds;
     }
 
+    /** @return Number of spectra indexed; equals the length of every parallel column. */
     public int count() { return count; }
+
+    /** @return Per-spectrum element offsets into the run's concatenated channel buffers. */
     public long[] offsets() { return offsets; }
+
+    /** @return Per-spectrum element counts (peaks) parallel to {@link #offsets()}. */
     public int[] lengths() { return lengths; }
+
+    /** @return Per-spectrum retention times in seconds. */
     public double[] retentionTimes() { return retentionTimes; }
+
+    /** @return Per-spectrum MS levels (1 for MS1, 2 for MS2, ...). */
     public int[] msLevels() { return msLevels; }
+
+    /** @return Per-spectrum polarity codes; decode via {@link Polarity#fromInt(int)}. */
     public int[] polarities() { return polarities; }
+
+    /** @return Per-spectrum precursor m/z; 0.0 for MS1 entries. */
     public double[] precursorMzs() { return precursorMzs; }
+
+    /** @return Per-spectrum precursor charge states; 0 for MS1 entries. */
     public int[] precursorCharges() { return precursorCharges; }
+
+    /** @return Per-spectrum base-peak intensities. */
     public double[] basePeakIntensities() { return basePeakIntensities; }
 
+    /** @param i spectrum index. @return element offset of spectrum {@code i} into the channel buffers. */
     public long offsetAt(int i) { return offsets[i]; }
+
+    /** @param i spectrum index. @return element count (peaks) of spectrum {@code i}. */
     public int lengthAt(int i) { return lengths[i]; }
+
+    /** @param i spectrum index. @return retention time of spectrum {@code i} in seconds. */
     public double retentionTimeAt(int i) { return retentionTimes[i]; }
+
+    /** @param i spectrum index. @return MS level of spectrum {@code i}. */
     public int msLevelAt(int i) { return msLevels[i]; }
+
+    /** @param i spectrum index. @return polarity enum value of spectrum {@code i}. */
     public Polarity polarityAt(int i) { return Polarity.fromInt(polarities[i]); }
+
+    /** @param i spectrum index. @return precursor m/z of spectrum {@code i} (0.0 for MS1). */
     public double precursorMzAt(int i) { return precursorMzs[i]; }
+
+    /** @param i spectrum index. @return precursor charge state of spectrum {@code i} (0 for MS1). */
     public int precursorChargeAt(int i) { return precursorCharges[i]; }
+
+    /** @param i spectrum index. @return base-peak intensity of spectrum {@code i}. */
     public double basePeakIntensityAt(int i) { return basePeakIntensities[i]; }
 
-    /** (M74) Optional parallel columns; {@code null} when the file
-     *  was written without {@code opt_ms2_activation_detail}. */
+    /** Optional parallel columns; {@code null} when the file was
+     *  written without {@code opt_ms2_activation_detail}.
+     *  @return per-spectrum activation method codes, or {@code null} */
     public int[] activationMethods() { return activationMethods; }
+
+    /** @return per-spectrum precursor isolation target m/z, or {@code null} when absent. */
     public double[] isolationTargetMzs() { return isolationTargetMzs; }
+
+    /** @return per-spectrum lower-side isolation offset in m/z, or {@code null} when absent. */
     public double[] isolationLowerOffsets() { return isolationLowerOffsets; }
+
+    /** @return per-spectrum upper-side isolation offset in m/z, or {@code null} when absent. */
     public double[] isolationUpperOffsets() { return isolationUpperOffsets; }
 
     /** Optional per-spectrum centroided column; {@code null} when the

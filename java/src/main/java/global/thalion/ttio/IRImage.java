@@ -50,6 +50,35 @@ public class IRImage {
     private final List<Quantification> quantifications;
     private final List<ProvenanceRecord> provenanceRecords;
 
+    /**
+     * Full constructor capturing every cube dimension and study-level
+     * annotation.
+     *
+     * @param width              image width in pixels
+     * @param height             image height in pixels
+     * @param spectralPoints     points along the wavenumber axis
+     * @param tileSize           chunk side for HDF5 storage; 0 means
+     *                           use full-image chunking
+     * @param pixelSizeX         pixel pitch in micrometres along X
+     * @param pixelSizeY         pixel pitch in micrometres along Y
+     * @param scanPattern        free-form scan pattern label
+     * @param mode               IR acquisition mode (TRANSMITTANCE /
+     *                           ABSORBANCE); null defaults to
+     *                           TRANSMITTANCE
+     * @param resolutionCmInv    spectral resolution in {@code cm^-1}
+     * @param intensityCube      row-major flat cube of shape
+     *                           {@code [height, width, spectralPoints]}
+     * @param wavenumbers        per-band wavenumber axis values
+     * @param title              study title; null becomes empty
+     * @param isaInvestigationId ISA investigation identifier; null
+     *                           becomes empty
+     * @param identifications    dataset-level identifications; null
+     *                           becomes empty
+     * @param quantifications    dataset-level quantifications; null
+     *                           becomes empty
+     * @param provenanceRecords  dataset-level provenance chain; null
+     *                           becomes empty
+     */
     public IRImage(int width, int height, int spectralPoints, int tileSize,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
                    IRMode mode, double resolutionCmInv,
@@ -76,6 +105,10 @@ public class IRImage {
         this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
     }
 
+    /**
+     * Convenience constructor that omits study-level annotation lists
+     * (title, identifications, etc.) and uses full-image chunking.
+     */
     public IRImage(int width, int height, int spectralPoints,
                    double pixelSizeX, double pixelSizeY, String scanPattern,
                    IRMode mode, double resolutionCmInv,
@@ -87,28 +120,71 @@ public class IRImage {
              "", "", List.of(), List.of(), List.of());
     }
 
+    /** @return Image width in pixels. */
     public int width() { return width; }
+
+    /** @return Image height in pixels. */
     public int height() { return height; }
+
+    /** @return Number of points along the wavenumber axis. */
     public int spectralPoints() { return spectralPoints; }
+
+    /** @return HDF5 chunk side for storage; 0 means full-image chunking. */
     public int tileSize() { return tileSize; }
+
+    /** @return Pixel pitch in micrometres along X. */
     public double pixelSizeX() { return pixelSizeX; }
+
+    /** @return Pixel pitch in micrometres along Y. */
     public double pixelSizeY() { return pixelSizeY; }
+
+    /** @return Free-form scan-pattern label (e.g. {@code "raster"}). */
     public String scanPattern() { return scanPattern; }
+
+    /** @return IR acquisition mode (TRANSMITTANCE or ABSORBANCE). */
     public IRMode mode() { return mode; }
+
+    /** @return Spectral resolution in {@code cm^-1}. */
     public double resolutionCmInv() { return resolutionCmInv; }
+
+    /** @return Row-major intensity cube of shape {@code [height, width, spectralPoints]}. */
     public double[] intensityCube() { return intensityCube; }
+
+    /** @return Per-band wavenumber axis values. */
     public double[] wavenumbers() { return wavenumbers; }
 
+    /** @return Study title (may be empty). */
     public String title() { return title; }
+
+    /** @return ISA investigation identifier (may be empty). */
     public String isaInvestigationId() { return isaInvestigationId; }
+
+    /** @return Unmodifiable list of dataset-level identifications. */
     public List<Identification> identifications() { return identifications; }
+
+    /** @return Unmodifiable list of dataset-level quantifications. */
     public List<Quantification> quantifications() { return quantifications; }
+
+    /** @return Unmodifiable list of dataset-level provenance records. */
     public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
 
+    /**
+     * @param row pixel row in {@code [0, height)}
+     * @param col pixel column in {@code [0, width)}
+     * @param s   spectral index in {@code [0, spectralPoints)}
+     * @return    intensity at pixel {@code (row, col)} for spectral band {@code s}
+     */
     public double valueAt(int row, int col, int s) {
         return intensityCube[(row * width + col) * spectralPoints + s];
     }
 
+    /**
+     * Materialize the full spectrum at a single pixel as a fresh array.
+     *
+     * @param row pixel row in {@code [0, height)}
+     * @param col pixel column in {@code [0, width)}
+     * @return    newly allocated array of length {@link #spectralPoints()}
+     */
     public double[] spectrumAt(int row, int col) {
         int base = (row * width + col) * spectralPoints;
         double[] result = new double[spectralPoints];
@@ -116,6 +192,12 @@ public class IRImage {
         return result;
     }
 
+    /**
+     * Persist the image and its annotations under the {@code ir_image}
+     * subgroup of {@code studyGroup}.
+     *
+     * @param studyGroup the {@code /study} group of an open dataset
+     */
     public void writeTo(StorageGroup studyGroup) {
         try (StorageGroup ic = studyGroup.createGroup(GROUP_NAME)) {
             ic.setAttribute("width", (long) width);
@@ -152,6 +234,15 @@ public class IRImage {
         }
     }
 
+    /**
+     * Load an {@code IRImage} from the {@code ir_image} subgroup of
+     * {@code studyGroup}.
+     *
+     * @param studyGroup the {@code /study} group of an open dataset
+     * @return           newly constructed {@code IRImage}, or
+     *                   {@code null} when no {@code ir_image} child is
+     *                   present
+     */
     public static IRImage readFrom(StorageGroup studyGroup) {
         if (!studyGroup.hasChild(GROUP_NAME)) return null;
         try (StorageGroup ic = studyGroup.openGroup(GROUP_NAME)) {

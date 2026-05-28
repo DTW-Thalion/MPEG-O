@@ -88,6 +88,30 @@ class SignalArray:
         axis: AxisDescriptor | None = None,
         encoding: EncodingSpec | None = None,
     ) -> "SignalArray":
+        """Wrap a NumPy array as a :class:`SignalArray`.
+
+        Parameters
+        ----------
+        array : numpy.ndarray
+            1-D NumPy array carrying the signal values. Made contiguous
+            via :func:`numpy.ascontiguousarray` before storage.
+        axis : AxisDescriptor, optional
+            Optional descriptor for the array's axis (label, unit,
+            spacing). Default ``None``.
+        encoding : EncodingSpec, optional
+            Optional encoding hint (compression, precision). Defaults
+            to a fresh :class:`EncodingSpec` when omitted.
+
+        Returns
+        -------
+        SignalArray
+            Newly constructed signal array wrapping ``array``.
+
+        Raises
+        ------
+        ValueError
+            If ``array.ndim != 1``.
+        """
         if array.ndim != 1:
             raise ValueError(f"SignalArray expects a 1-D ndarray, got shape={array.shape}")
         return cls(

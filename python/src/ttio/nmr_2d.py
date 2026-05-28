@@ -54,8 +54,24 @@ class NMR2DSpectrum(Spectrum):
 
     @property
     def matrix_height(self) -> int:
+        """Number of rows (F1 dimension) in the intensity matrix.
+
+        Returns
+        -------
+        int
+            ``intensity_matrix.shape[0]``; corresponds to the F1 axis
+            (indirect dimension).
+        """
         return int(self.intensity_matrix.shape[0])
 
     @property
     def matrix_width(self) -> int:
+        """Number of columns (F2 dimension) in the intensity matrix.
+
+        Returns
+        -------
+        int
+            ``intensity_matrix.shape[1]``; corresponds to the F2 axis
+            (direct dimension).
+        """
         return int(self.intensity_matrix.shape[1])

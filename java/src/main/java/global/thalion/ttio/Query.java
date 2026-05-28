@@ -30,30 +30,69 @@ public final class Query {
         this.index = index;
     }
 
+    /**
+     * Start a new query against a spectrum index.
+     *
+     * @param index the index to query
+     * @return      a fresh {@code Query} with no predicates set
+     */
     public static Query onIndex(SpectrumIndex index) {
         return new Query(index);
     }
 
+    /**
+     * Restrict matches to spectra whose retention time lies inside
+     * {@code range} (inclusive).
+     *
+     * @param range retention-time range in seconds
+     * @return      {@code this} for fluent chaining
+     */
     public Query withRetentionTimeRange(ValueRange range) {
         this.rtRange = range;
         return this;
     }
 
+    /**
+     * Restrict matches to spectra with the given MS level.
+     *
+     * @param level MS level (1, 2, 3, ...)
+     * @return      {@code this} for fluent chaining
+     */
     public Query withMsLevel(int level) {
         this.msLevel = level;
         return this;
     }
 
+    /**
+     * Restrict matches to spectra with the given polarity.
+     *
+     * @param polarity polarity enum value
+     * @return         {@code this} for fluent chaining
+     */
     public Query withPolarity(Polarity polarity) {
         this.polarity = polarity;
         return this;
     }
 
+    /**
+     * Restrict matches to spectra whose precursor m/z lies inside
+     * {@code range} (inclusive).
+     *
+     * @param range precursor m/z range
+     * @return      {@code this} for fluent chaining
+     */
     public Query withPrecursorMzRange(ValueRange range) {
         this.precursorMzRange = range;
         return this;
     }
 
+    /**
+     * Restrict matches to spectra whose base-peak intensity is at
+     * least {@code threshold}.
+     *
+     * @param threshold inclusive lower bound on base-peak intensity
+     * @return          {@code this} for fluent chaining
+     */
     public Query withBasePeakIntensityAtLeast(double threshold) {
         this.basePeakThreshold = threshold;
         return this;

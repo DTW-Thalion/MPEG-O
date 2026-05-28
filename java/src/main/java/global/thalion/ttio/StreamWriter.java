@@ -37,6 +37,17 @@ public final class StreamWriter implements AutoCloseable {
     private final InstrumentConfig instrumentConfig;
     private final List<MassSpectrum> spectra = new ArrayList<>();
 
+    /**
+     * Construct a writer targeting a new or existing {@code .tio}
+     * file.
+     *
+     * @param filePath         absolute path to the target file
+     * @param runName          MS-run name to use inside
+     *                         {@code /study/ms_runs/}
+     * @param acquisitionMode  acquisition mode label persisted on the
+     *                         run group
+     * @param instrumentConfig instrument config to persist with the run
+     */
     public StreamWriter(String filePath, String runName,
                         AcquisitionMode acquisitionMode,
                         InstrumentConfig instrumentConfig) {
@@ -46,10 +57,17 @@ public final class StreamWriter implements AutoCloseable {
         this.instrumentConfig = instrumentConfig;
     }
 
+    /**
+     * Append a spectrum to the in-memory buffer. The buffer is flushed
+     * to disk by {@link #flush()} / {@link #flushAndClose()}.
+     *
+     * @param spectrum spectrum to append
+     */
     public void appendSpectrum(MassSpectrum spectrum) {
         spectra.add(spectrum);
     }
 
+    /** @return Number of spectra currently buffered in memory. */
     public int spectrumCount() { return spectra.size(); }
 
     /**
@@ -125,10 +143,16 @@ public final class StreamWriter implements AutoCloseable {
         }
     }
 
+    /**
+     * Convenience wrapper that calls {@link #flush()} and leaves the
+     * writer in a closeable state. The buffer is not cleared — call
+     * {@link #close()} for that.
+     */
     public void flushAndClose() {
         flush();
     }
 
+    /** Clear the in-memory buffer. Does not write or remove the file. */
     @Override
     public void close() {
         spectra.clear();

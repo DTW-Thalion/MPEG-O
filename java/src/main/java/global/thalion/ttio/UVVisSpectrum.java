@@ -23,6 +23,20 @@ public class UVVisSpectrum extends Spectrum {
     private final double pathLengthCm;
     private final String solvent;
 
+    /**
+     * Construct a UV-Vis spectrum from parallel wavelength and
+     * absorbance arrays.
+     *
+     * @param wavelengthValues per-point wavelengths in nm
+     * @param absorbanceValues per-point absorbance parallel to
+     *                         {@code wavelengthValues}
+     * @param indexPosition    zero-based position in the parent
+     *                         {@link AcquisitionRun}
+     * @param scanTimeSeconds  scan time in seconds from run start
+     * @param pathLengthCm     optical path length in cm
+     * @param solvent          solvent label (e.g. {@code "water"});
+     *                         null becomes empty
+     */
     public UVVisSpectrum(double[] wavelengthValues, double[] absorbanceValues,
                          int indexPosition, double scanTimeSeconds,
                          double pathLengthCm, String solvent) {

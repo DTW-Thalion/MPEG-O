@@ -26,6 +26,22 @@ public class IRSpectrum extends Spectrum {
     private final double resolutionCmInv;
     private final long numberOfScans;
 
+    /**
+     * Construct an IR spectrum from parallel wavenumber and intensity
+     * arrays.
+     *
+     * @param wavenumberValues per-point wavenumbers in {@code cm^-1}
+     * @param intensityValues  per-point intensities or absorbances,
+     *                         parallel to {@code wavenumberValues}
+     * @param indexPosition    zero-based position in the parent
+     *                         {@link AcquisitionRun}
+     * @param scanTimeSeconds  scan time in seconds from run start
+     * @param mode             IR acquisition mode (TRANSMITTANCE or
+     *                         ABSORBANCE); null defaults to
+     *                         TRANSMITTANCE
+     * @param resolutionCmInv  spectral resolution in {@code cm^-1}
+     * @param numberOfScans    number of co-added scans
+     */
     public IRSpectrum(double[] wavenumberValues, double[] intensityValues,
                       int indexPosition, double scanTimeSeconds,
                       IRMode mode,

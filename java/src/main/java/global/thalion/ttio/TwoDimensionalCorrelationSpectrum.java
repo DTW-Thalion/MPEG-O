@@ -30,6 +30,29 @@ public class TwoDimensionalCorrelationSpectrum extends Spectrum {
     private final String perturbationUnit;
     private final String sourceModality;
 
+    /**
+     * Construct a 2D-COS spectrum from synchronous and asynchronous
+     * correlation matrices computed by {@link
+     * global.thalion.ttio.analysis.TwoDCos}.
+     *
+     * @param synchronousMatrix  row-major {@code size × size} matrix
+     *                           of synchronous correlations
+     * @param asynchronousMatrix row-major {@code size × size} matrix
+     *                           of asynchronous correlations
+     * @param size               side length of both matrices
+     * @param variableAxis       axis descriptor for the shared
+     *                           variable dimension
+     * @param perturbation       perturbation name (e.g.
+     *                           {@code "temperature"}); null becomes
+     *                           empty
+     * @param perturbationUnit   perturbation unit (e.g. {@code "K"});
+     *                           null becomes empty
+     * @param sourceModality     source modality label (e.g.
+     *                           {@code "IR"}, {@code "Raman"}); null
+     *                           becomes empty
+     * @throws IllegalArgumentException when either matrix is null or
+     *         the matrix lengths don't equal {@code size*size}
+     */
     public TwoDimensionalCorrelationSpectrum(double[] synchronousMatrix,
                                              double[] asynchronousMatrix,
                                              int size,
@@ -61,15 +84,25 @@ public class TwoDimensionalCorrelationSpectrum extends Spectrum {
         this.sourceModality = sourceModality == null ? "" : sourceModality;
     }
 
+    /** @return Row-major synchronous correlation matrix. */
     public double[] synchronousMatrix() { return synchronousMatrix; }
+
+    /** @return Row-major asynchronous correlation matrix. */
     public double[] asynchronousMatrix() { return asynchronousMatrix; }
 
     /** Length of the shared variable axis; both matrices are {@code size × size}. */
     public int matrixSize() { return size; }
 
+    /** @return Axis descriptor for the shared variable dimension. */
     public AxisDescriptor variableAxis() { return variableAxis; }
+
+    /** @return Perturbation label (e.g. {@code "temperature"}); empty when unspecified. */
     public String perturbation() { return perturbation; }
+
+    /** @return Perturbation unit (e.g. {@code "K"}); empty when unspecified. */
     public String perturbationUnit() { return perturbationUnit; }
+
+    /** @return Source modality label (e.g. {@code "IR"}, {@code "Raman"}); empty when unspecified. */
     public String sourceModality() { return sourceModality; }
 
     /** Synchronous-matrix value at {@code (row, col)}. */
