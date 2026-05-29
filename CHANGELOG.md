@@ -39,6 +39,36 @@ Both `EnvelopeRecipient` and `ServerRecipient` are re-exported from
 `python/tests/workbench/test_fd1_pf6_wrap_for_server.py` (daemon mocked via
 `patch("ttio.workbench._http.http_json")`).
 
+### Added -- FD-1-PF-7: unwrap-for-server SDK helper + download_via_server (Python)
+
+Python SDK complement to `tti-workbench-server` #81 (FD-1-PF-7 unwrap
+endpoint). Closes the FD-1 client round-trip started by #80 (PF-6 SDK upload)
+and #77 (PF-4 daemon wrap): callers can now download and decrypt containers
+that were uploaded via `ServerRecipient` without ever holding KEK bytes.
+
+New public surface (`python/src/ttio/workbench/client.py`):
+
+- **`WorkbenchClient.unwrap_for_server(*, wrapped_dek, kek_id) -> bytes`** --
+  inverse of `wrap_for_server`. POSTs the wrapped blob to
+  `/v1/key-custody/unwrap-for-server`; daemon returns the 32-byte DEK.
+  Raises `WorkbenchHttpError` on 401/403 (auth), 404 (unknown `kek_id`), or
+  422 (AEAD authentication failure / tampered blob). Raises `ValueError` if
+  the daemon returns a non-32-byte DEK (defensive guard).
+- **`WorkbenchClient.download_via_server(*, container_uri, out_tio_path,
+  filters=None, max_au=0)`** -- full server-mediated download. Downloads the
+  `.tis`, materialises the encrypted `.tio` to disk, reads `wrapped_dek` and
+  `server_kek_id` from `ProtectionMetadata`, calls `unwrap_for_server` to
+  recover the DEK, then performs per-AU AES-256-GCM decryption client-side.
+  Raises `ValueError` with explicit guidance ("use download_decrypted_multi
+  instead") when the container has no server-recipient.
+
+6 new unit tests extend `python/tests/workbench/test_fd1_pf6_wrap_for_server.py`
+(daemon mocked via `patch("ttio.workbench._http.http_json")`); total in that
+file is now 17.  The happy-path test exercises the full download round-trip by
+uploading with a parallel `EnvelopeRecipient` to recover the actual DEK for
+mock injection.
+
+
 ## [1.6.2] - 2026-05-28
 
 Documentation-only patch. Five-pass per-instance-method documentation completion across all three SDKs. Class-level OpenStep-style headers shipped in May 2026; this release fills the deferred per-method `/** */` blocks (ObjC), NumPy docstrings (Python), and Javadoc (Java) so the generated `autogsdoc` / Sphinx / Javadoc output now provides robust SDK reference for every public surface.

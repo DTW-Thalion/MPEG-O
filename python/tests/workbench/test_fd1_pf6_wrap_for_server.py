@@ -1,4 +1,4 @@
-﻿"""FD-1 PF-6 -- wrap-for-server client SDK (Python).
+"""FD-1 PF-6 -- wrap-for-server client SDK (Python).
 
 Covers :meth:`WorkbenchClient.wrap_for_server` and the
 :class:`ServerRecipient` integration into
@@ -300,3 +300,168 @@ def test_existing_envelope_recipient_path_unchanged(tmp_path):
             ]))
 
     assert not any("/v1/key-custody" in p for p in http_calls)
+
+
+# ================================================================ PF-7: unwrap_for_server
+
+
+KNOWN_DEK = bytes(range(32))
+
+
+def _unwrap_ok_response():
+    return (200, {"dek": base64.b64encode(KNOWN_DEK).decode("ascii"),
+                  "kek_id": SERVER_KEK_ID})
+
+
+def test_unwrap_for_server_happy_path():
+    """Happy path: stubbed 200 response; method returns the decoded 32-byte DEK."""
+    client = _fake_client()
+    wrapped = bytes([0xAB] * 48)
+
+    with patch("ttio.workbench._http.http_json",
+               return_value=_unwrap_ok_response()):
+        result = asyncio.run(
+            client.unwrap_for_server(wrapped_dek=wrapped, kek_id=SERVER_KEK_ID))
+
+    assert result == KNOWN_DEK
+    assert isinstance(result, bytes)
+    assert len(result) == 32
+
+
+def test_unwrap_for_server_wrong_size_dek_raises():
+    """If daemon returns a non-32-byte DEK the method raises ValueError."""
+    client = _fake_client()
+    wrapped = bytes([0xAB] * 48)
+    short_dek = bytes(16)
+
+    with patch("ttio.workbench._http.http_json",
+               return_value=(200, {
+                   "dek": base64.b64encode(short_dek).decode("ascii"),
+                   "kek_id": SERVER_KEK_ID,
+               })):
+        with pytest.raises(ValueError, match="non-32-byte DEK"):
+            asyncio.run(client.unwrap_for_server(
+                wrapped_dek=wrapped, kek_id=SERVER_KEK_ID))
+
+
+def test_unwrap_for_server_4xx_raises():
+    """404 and 422 from the daemon raise WorkbenchHttpError with correct status."""
+    client = _fake_client()
+    wrapped = bytes([0xAB] * 48)
+
+    # 404 -- unknown kek_id
+    with patch("ttio.workbench._http.http_json",
+               return_value=(404, {"error": "kek not found"})):
+        with pytest.raises(WorkbenchHttpError) as exc:
+            asyncio.run(client.unwrap_for_server(
+                wrapped_dek=wrapped, kek_id="server:nope"))
+    assert exc.value.status == 404
+
+    # 422 -- tampered wrapped blob
+    with patch("ttio.workbench._http.http_json",
+               return_value=(422, {"error": "AEAD authentication failed"})):
+        with pytest.raises(WorkbenchHttpError) as exc:
+            asyncio.run(client.unwrap_for_server(
+                wrapped_dek=bytes([0xFF] * 48), kek_id=SERVER_KEK_ID))
+    assert exc.value.status == 422
+
+
+def test_unwrap_for_server_sends_correct_path_and_body():
+    """Method POSTs to /v1/key-custody/unwrap-for-server with base64 wrapped_dek."""
+    client = _fake_client()
+    wrapped = bytes([0xAB] * 48)
+    calls = []
+
+    def _mock_http(method, host, port, path, *, scheme, token, body, **kw):
+        calls.append((method, path, body))
+        return _unwrap_ok_response()
+
+    with patch("ttio.workbench._http.http_json", side_effect=_mock_http):
+        asyncio.run(client.unwrap_for_server(
+            wrapped_dek=wrapped, kek_id=SERVER_KEK_ID))
+
+    assert len(calls) == 1
+    method, path, body = calls[0]
+    assert method == "POST"
+    assert path == "/v1/key-custody/unwrap-for-server"
+    assert body["kek_id"] == SERVER_KEK_ID
+    assert base64.b64decode(body["wrapped_dek"]) == wrapped
+
+
+# ========================================================== PF-7: download_via_server
+
+
+def test_download_via_server_happy_path(tmp_path):
+    """Full round-trip: upload with ServerRecipient + parallel researcher key,
+    mock unwrap to return the researcher DEK, verify decrypt recovers data.
+
+    Strategy: include both a ServerRecipient (primary) and an EnvelopeRecipient
+    (researcher) holding OTHER_KEK.  The researcher recipient lets us recover the
+    actual DEK via a local unwrap -- that same DEK is returned by the mock
+    unwrap-for-server so download_via_server decrypts correctly.
+    """
+    import io
+
+    from ttio.key_rotation import _unwrap_dek
+    from ttio.transport.encrypted import (
+        read_encrypted_to_file,
+        read_transport_recipients,
+        read_transport_server_kek_id,
+    )
+
+    src_path = _make_plain_tio(tmp_path)
+    client = _fake_client()
+
+    # Upload: ServerRecipient (primary, mock wrap) + EnvelopeRecipient (extra).
+    with patch("ttio.workbench._http.http_json",
+               return_value=(200, {
+                   "wrapped_dek": base64.b64encode(KNOWN_WRAPPED).decode("ascii"),
+               })):
+        asyncio.run(client.upload_encrypted_multi(
+            project="p", container_uri="srv", tio_path=str(src_path),
+            recipients=[
+                ServerRecipient("", SERVER_KEK_ID),
+                EnvelopeRecipient("researcher", OTHER_KEK, "aes-256-gcm"),
+            ]))
+
+    # Recover the actual DEK from the researcher recipient (local unwrap).
+    stage_path = str(tmp_path / "stage.tio")
+    read_encrypted_to_file(io.BytesIO(client._store["srv"]), stage_path)
+    recips = read_transport_recipients(stage_path)
+    researcher = next(r for r in recips if r[0] == "researcher")
+    _rid, algo, wrapped_researcher = researcher
+    actual_dek = _unwrap_dek(wrapped_researcher, OTHER_KEK, algorithm=algo)
+    assert len(actual_dek) == 32
+
+    # download_via_server: mock unwrap returns the actual DEK.
+    out_path = str(tmp_path / "out.tio")
+    with patch("ttio.workbench._http.http_json",
+               return_value=(200, {
+                   "dek": base64.b64encode(actual_dek).decode("ascii"),
+               })):
+        result = asyncio.run(client.download_via_server(
+            container_uri="srv", out_tio_path=out_path))
+
+    assert result is not None
+    assert isinstance(result, dict)
+    assert len(result) > 0
+    run_data = next(iter(result.values()))
+    assert "mz" in run_data
+    assert "intensity" in run_data
+
+
+def test_download_via_server_no_server_recipient_raises(tmp_path):
+    """Container without server-recipient must raise ValueError with clear message."""
+    src = _make_plain_tio(tmp_path)
+    client = _fake_client()
+    local_kek = bytes([0x22] * 32)
+
+    # Upload with a plain EnvelopeRecipient (no ServerRecipient, no server_kek_id).
+    asyncio.run(client.upload_encrypted_multi(
+        project="p", container_uri="plain", tio_path=str(src),
+        recipients=[EnvelopeRecipient("", local_kek, "aes-256-gcm")]))
+
+    out_path = str(tmp_path / "out.tio")
+    with pytest.raises(ValueError, match="no server-recipient"):
+        asyncio.run(client.download_via_server(
+            container_uri="plain", out_tio_path=out_path))
