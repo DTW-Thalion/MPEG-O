@@ -715,6 +715,179 @@ class WorkbenchClient:
         wrapped_b64 = resp["wrapped_dek"]
         return base64.b64decode(wrapped_b64)
 
+
+    async def unwrap_for_server(
+        self,
+        *,
+        wrapped_dek: bytes,
+        kek_id: str,
+    ) -> bytes:
+        """Recover the plaintext DEK from a server-wrapped blob via the
+        daemon's HSM-backed key custody (FD-1-PF-7 endpoint).
+
+        The inverse of :meth:`wrap_for_server`. Returns the 32-byte DEK
+        bytes -- equivalent to what
+        ``ttio.key_rotation._unwrap_dek(wrapped, kek_bytes, "aes-256-gcm")``
+        would produce locally if the caller had the KEK bytes (which they
+        won't, since the KEK is HSM-resident).
+
+        POSTs to ``/v1/key-custody/unwrap-for-server`` using the current
+        session's bearer token. The ``wrapped_dek`` is base64-encoded on
+        the wire; the daemon returns the plaintext DEK as a base64-encoded
+        ``dek`` field in the JSON response body.
+
+        Parameters
+        ----------
+        wrapped_dek : bytes
+            Wrapped DEK blob (produced by a previous :meth:`wrap_for_server`
+            call or by an :meth:`upload_encrypted_multi` with a
+            :class:`ServerRecipient`).
+        kek_id : str
+            Opaque identifier for the PKCS#11 key the daemon should use to
+            unwrap.  Must match the ``server_kek_id`` stamped into the
+            ``ProtectionMetadata`` at upload time.
+
+        Returns
+        -------
+        bytes
+            32-byte plaintext DEK.
+
+        Raises
+        ------
+        ValueError
+            If the daemon returns a DEK that is not exactly 32 bytes (should
+            never happen with a conformant daemon -- fail loud if it does).
+        WorkbenchHttpError
+            * status 401/403 -- authentication failed or token lacks the
+              ``key_custody.unwrap`` capability.
+            * status 404 -- ``kek_id`` is not registered on the daemon.
+            * status 422 -- ``wrapped_dek`` fails authentication under the
+              configured KEK (tampered blob or wrong ``kek_id``).
+            * Any other non-200 status from the daemon.
+        """
+        import base64
+
+        from ttio.workbench._http import WorkbenchHttpError, http_json
+
+        body: dict[str, Any] = {
+            "wrapped_dek": base64.b64encode(wrapped_dek).decode("ascii"),
+            "kek_id": kek_id,
+        }
+        status, resp = http_json(
+            "POST", self._endpoint.host, self._endpoint.port,
+            "/v1/key-custody/unwrap-for-server",
+            scheme=self._endpoint.http_scheme,
+            token=self._session.token, body=body)
+        if status != 200:
+            raise WorkbenchHttpError(
+                f"POST /v1/key-custody/unwrap-for-server failed: {status}",
+                status=status, body=resp)
+        dek_b64 = resp["dek"]
+        dek = base64.b64decode(dek_b64)
+        if len(dek) != 32:
+            raise ValueError(
+                f"server returned non-32-byte DEK ({len(dek)} bytes); "
+                "daemon response is malformed")
+        return dek
+
+    async def download_via_server(
+        self,
+        *,
+        container_uri: str,
+        out_tio_path: str,
+        filters: "Optional[FilterDict]" = None,
+        max_au: int = 0,
+    ):
+        """Download a server-recipient container and decrypt it via the
+        daemon's server-side DEK unwrap (FD-1-PF-7).
+
+        For containers uploaded with :class:`ServerRecipient` (FD-1-PF-6)
+        -- the client never held the KEK bytes, so it cannot decrypt locally.
+        This method:
+
+        1. Downloads the container's ``.tis`` bytes via
+           :meth:`download_bytes`.
+        2. Materialises the still-encrypted ``.tio`` to ``out_tio_path``
+           (same pattern as :meth:`download_decrypted_envelope`).
+        3. Reads the server-recipient's ``wrapped_dek`` and ``server_kek_id``
+           from the ``ProtectionMetadata`` (via
+           :func:`~ttio.transport.encrypted.read_transport_recipients` and
+           :func:`~ttio.transport.encrypted.read_transport_server_kek_id`).
+        4. Calls :meth:`unwrap_for_server` to recover the plaintext DEK.
+        5. Decrypts each access unit's payload client-side with the
+           recovered DEK (via
+           :func:`~ttio.encryption_per_au.decrypt_per_au`).
+
+        Use this method when the container's primary recipient is a
+        :class:`ServerRecipient` and the caller does **not** hold the KEK
+        bytes.  If the container uses BYOK or a researcher-held key, use
+        :meth:`download_decrypted_envelope` or
+        :meth:`download_decrypted_multi` instead.
+
+        Parameters
+        ----------
+        container_uri : str
+            URI of the container to fetch.
+        out_tio_path : str
+            File path where the decrypted-in-place ``.tio`` will be written.
+        filters : FilterDict, optional
+            Server-side filter dictionary (e.g.
+            ``{"chromosome": "chr6"}``).
+        max_au : int, optional
+            Cap on the number of access units to return.  ``0`` (default)
+            means no cap.
+
+        Returns
+        -------
+        dict
+            Decrypted channel values as
+            ``{run_name: {channel_name: ndarray}}``, as returned by
+            :func:`~ttio.encryption_per_au.decrypt_per_au`.
+
+        Raises
+        ------
+        ValueError
+            If the container carries no server-recipient entry (operator
+            error -- wrong download method for this container type).  The
+            error message explicitly names the alternative methods to use.
+        WorkbenchHttpError
+            From :meth:`unwrap_for_server` when the daemon rejects the
+            unwrap request (auth failure, unknown ``kek_id``, tampered blob).
+        """
+        import io as _io
+
+        from ttio.encryption_per_au import decrypt_per_au
+        from ttio.transport.encrypted import (
+            read_encrypted_to_file,
+            read_transport_recipients,
+            read_transport_server_kek_id,
+        )
+
+        dl = await self.download_bytes(
+            container_uri=container_uri, filters=filters, max_au=max_au)
+        read_encrypted_to_file(_io.BytesIO(dl.payload), out_tio_path)
+
+        recipients = read_transport_recipients(out_tio_path)
+        server_kek_id = read_transport_server_kek_id(out_tio_path)
+        if not recipients or server_kek_id is None:
+            raise ValueError(
+                "container has no server-recipient; the daemon cannot unwrap "
+                "its DEK.  If this is a BYOK upload, use "
+                "download_decrypted_envelope(kek=...) instead.  If this is a "
+                "multi-recipient upload with a researcher key, use "
+                "download_decrypted_multi(key=..., recipient_id=...)")
+
+        primary = next((r for r in recipients if r[0] == ""), None)
+        if primary is None:
+            raise ValueError(
+                "container has a server_kek_id but no primary recipient slot; "
+                "protection metadata is malformed")
+        _rid, _algo, wrapped = primary
+
+        dek = await self.unwrap_for_server(
+            wrapped_dek=wrapped, kek_id=server_kek_id)
+        return decrypt_per_au(out_tio_path, dek)
+
     # --------------------------------- multi-recipient variant (FD-1 Phase B)
 
     async def upload_encrypted_multi(
