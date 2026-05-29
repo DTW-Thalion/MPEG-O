@@ -49,6 +49,7 @@ from ttio.workbench.auth_providers import (
 )
 from ttio.workbench.client import (
     EnvelopeRecipient,
+    ServerRecipient,
     WorkbenchClient,
     connect,
     parse_filter_kv,
@@ -71,6 +72,7 @@ __all__ = [
     "PasswordTotpAuth",
     # client / SDK
     "EnvelopeRecipient",
+    "ServerRecipient",
     "WorkbenchClient",
     "connect",
     "parse_filter_kv",

@@ -11,6 +11,34 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added — FD-1-PF-6: wrap-for-server client SDK + `ServerRecipient`
+
+Python SDK half of FD-1-PF-6. Complements `tti-workbench-server` #77
+(FD-1-PF-4), which ships the daemon-side `/v1/key-custody/wrap-for-server`
+endpoint. Together they allow the client to ask the daemon to wrap a DEK under
+an HSM-resident PKCS#11 key without the KEK ever leaving the server.
+
+New public surface (`python/src/ttio/workbench/client.py`):
+
+- **`ServerRecipient(recipient_id, kek_id, algorithm="aes-256-gcm")`** —
+  frozen dataclass mirroring `EnvelopeRecipient`, but the caller holds no KEK
+  bytes; the daemon wraps on its behalf.
+- **`WorkbenchClient.wrap_for_server(*, dek, kek_id) -> bytes`** — thin async
+  method that POSTs `{"dek": <b64>, "kek_id": <str>}` to
+  `/v1/key-custody/wrap-for-server` and returns the wrapped blob. Raises
+  `ValueError` for non-32-byte DEK; raises `WorkbenchHttpError` on 401/403/404/409.
+- **`upload_encrypted_multi`** now accepts `list[EnvelopeRecipient |
+  ServerRecipient]`. When a `ServerRecipient` is present it calls
+  `wrap_for_server` instead of `_wrap_dek`, and auto-stamps `server_kek_id`
+  from the first `ServerRecipient`'s `kek_id`. Passing both explicitly with
+  inconsistent values raises `ValueError`. Pure-`EnvelopeRecipient` callers are
+  unaffected.
+
+Both `EnvelopeRecipient` and `ServerRecipient` are re-exported from
+`ttio.workbench`. 11 new unit tests in
+`python/tests/workbench/test_fd1_pf6_wrap_for_server.py` (daemon mocked via
+`patch("ttio.workbench._http.http_json")`).
+
 ## [1.6.2] - 2026-05-28
 
 Documentation-only patch. Five-pass per-instance-method documentation completion across all three SDKs. Class-level OpenStep-style headers shipped in May 2026; this release fills the deferred per-method `/** */` blocks (ObjC), NumPy docstrings (Python), and Javadoc (Java) so the generated `autogsdoc` / Sphinx / Javadoc output now provides robust SDK reference for every public surface.
