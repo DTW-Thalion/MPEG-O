@@ -797,7 +797,7 @@ class WorkbenchClient:
         out_tio_path: str,
         filters: "Optional[FilterDict]" = None,
         max_au: int = 0,
-    ):
+    ) -> dict:
         """Download a server-recipient container and decrypt it via the
         daemon's server-side DEK unwrap (FD-1-PF-7).
 
