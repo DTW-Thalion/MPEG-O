@@ -34,10 +34,11 @@ and TLS-or-no-TLS for both planes -- the SDK assumes this.
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import urllib.parse
 from pathlib import Path
-from typing import Any, Callable, Iterable, Mapping, Optional
+from typing import Any, Callable, Iterable, Mapping, Optional, Union
 
 from ttio.workbench.auth import Session
 from ttio.workbench.auth_providers import AuthProvider
@@ -70,6 +71,33 @@ class EnvelopeRecipient:
     """
     recipient_id: str
     key: bytes
+    algorithm: str = "aes-256-gcm"
+
+
+@dataclasses.dataclass(frozen=True)
+class ServerRecipient:
+    """A recipient that delegates the DEK wrap to the daemon's
+    server-side key custody (FD-1-PF-4).
+
+    Instead of the caller supplying the KEK bytes (which they won't
+    have, since the KEK is HSM-resident), the daemon wraps the DEK on
+    the client's behalf via the ``/v1/key-custody/wrap-for-server``
+    REST endpoint. The resulting wrapped blob is indistinguishable at
+    the packet level from an :class:`EnvelopeRecipient` with
+    ``algorithm="aes-256-gcm"``.
+
+    ``recipient_id`` follows the same convention as
+    :class:`EnvelopeRecipient`: ``""`` for the primary (first)
+    recipient; non-empty unique strings for additional ones.
+
+    ``kek_id`` is an opaque string naming the PKCS#11 key on the
+    daemon; the daemon resolves it to the actual key material. The
+    same ``kek_id`` is stamped into the ``server_kek_id`` field of
+    ``ProtectionMetadata`` so the daemon can identify which key to
+    use on the re-processing path.
+    """
+    recipient_id: str
+    kek_id: str
     algorithm: str = "aes-256-gcm"
 
 
@@ -619,6 +647,74 @@ class WorkbenchClient:
                           algorithm=kek_algorithm or "aes-256-gcm")
         return decrypt_per_au(out_tio_path, dek)
 
+    # -------------------- server-side key custody (FD-1-PF-4 / PF-6)
+
+    async def wrap_for_server(
+        self,
+        *,
+        dek: bytes,
+        kek_id: str,
+    ) -> bytes:
+        """Wrap a DEK under a server-controlled KEK via the daemon's
+        PKCS#11-backed key custody (FD-1-PF-4 endpoint).
+
+        Returns the wrapped DEK blob — byte-equivalent to what
+        ``ttio.key_rotation._wrap_dek(dek, kek_bytes, "aes-256-gcm")``
+        would produce locally if the caller had the KEK bytes (which
+        they won't, since the KEK is HSM-resident).
+
+        POSTs to ``/v1/key-custody/wrap-for-server`` using the current
+        session's bearer token. The ``dek`` is base64-encoded on the
+        wire; the daemon returns the wrapped blob as a base64-encoded
+        ``wrapped_dek`` field in the JSON response body.
+
+        Parameters
+        ----------
+        dek : bytes
+            32-byte Data Encryption Key to wrap.
+        kek_id : str
+            Opaque identifier for the PKCS#11 key the daemon should use.
+
+        Returns
+        -------
+        bytes
+            Wrapped DEK blob (the daemon's AES-256-GCM ciphertext over
+            the DEK, same format as a local ``_wrap_dek`` call).
+
+        Raises
+        ------
+        ValueError
+            If ``dek`` is not exactly 32 bytes.
+        WorkbenchHttpError
+            * status 401/403 — authentication failed or token lacks the
+              ``key_custody.wrap`` capability.
+            * status 404 — ``kek_id`` is not registered on the daemon.
+            * status 409 — ``kek_id`` is on the read-only list (cannot
+              be used for new wraps).
+            * Any other non-200 status from the daemon.
+        """
+        import base64
+
+        from ttio.workbench._http import WorkbenchHttpError, http_json
+
+        if len(dek) != 32:
+            raise ValueError(f"DEK must be 32 bytes; got {len(dek)}")
+        body: dict[str, Any] = {
+            "dek": base64.b64encode(dek).decode("ascii"),
+            "kek_id": kek_id,
+        }
+        status, resp = http_json(
+            "POST", self._endpoint.host, self._endpoint.port,
+            "/v1/key-custody/wrap-for-server",
+            scheme=self._endpoint.http_scheme,
+            token=self._session.token, body=body)
+        if status != 200:
+            raise WorkbenchHttpError(
+                f"POST /v1/key-custody/wrap-for-server failed: {status}",
+                status=status, body=resp)
+        wrapped_b64 = resp["wrapped_dek"]
+        return base64.b64decode(wrapped_b64)
+
     # --------------------------------- multi-recipient variant (FD-1 Phase B)
 
     async def upload_encrypted_multi(
@@ -627,7 +723,7 @@ class WorkbenchClient:
         project: str,
         container_uri: str,
         tio_path: str,
-        recipients: "list[EnvelopeRecipient]",
+        recipients: "list[Union[EnvelopeRecipient, ServerRecipient]]",
         server_kek_id: Optional[str] = None,
         encrypt_headers: bool = False,
         resume: Optional[ResumeState] = None,
@@ -636,18 +732,32 @@ class WorkbenchClient:
         """Per-AU encrypt a `.tio` with a fresh DEK, wrap that DEK under
         *each* recipient's key, and upload (FD-1 Phase B).
 
-        One per-run DEK is generated and wrapped once per recipient
-        (symmetric ``aes-256-gcm`` KEK or ``ml-kem-1024`` public key, per
-        :class:`EnvelopeRecipient`). ``recipients[0]`` becomes the packet's
-        primary (its id is ``""`` on the wire); the rest travel in the
-        append-only trailing block. Any holder of a recipient's key
-        recovers the DEK via :meth:`download_decrypted_multi`; the daemon
-        never holds a key.
+        One per-run DEK is generated and wrapped once per recipient.
+        Each recipient is either an :class:`EnvelopeRecipient` (caller
+        supplies the KEK bytes: symmetric ``aes-256-gcm`` or
+        ``ml-kem-1024`` public key) or a :class:`ServerRecipient`
+        (the daemon wraps the DEK via the
+        ``/v1/key-custody/wrap-for-server`` endpoint so the KEK can
+        be HSM-resident — see :meth:`wrap_for_server`).
+
+        ``recipients[0]`` becomes the packet's primary (its id is
+        ``""`` on the wire); the rest travel in the append-only
+        trailing block. Any holder of a recipient's key recovers the
+        DEK via :meth:`download_decrypted_multi`; the daemon never
+        holds a key in plaintext form.
+
+        ``server_kek_id`` is stamped into ``ProtectionMetadata`` to
+        identify the primary-recipient's KEK on the daemon's
+        re-processing path. If any :class:`ServerRecipient` is present
+        in ``recipients``, its ``kek_id`` is used automatically — the
+        caller need not pass ``server_kek_id`` separately. Passing
+        both is allowed only when they are consistent; a mismatch
+        raises :exc:`ValueError`.
 
         This is the FD-1 output shape: wrap for both a server KEK
         (re-processable) and the researcher's key (client-side
-        decryptable). Preview-gated iff any recipient uses ``ml-kem-1024``,
-        mirroring the server's ``opt_pqc_preview``.
+        decryptable). Preview-gated iff any recipient uses
+        ``ml-kem-1024``, mirroring the server's ``opt_pqc_preview``.
         """
         import io as _io
         import os
@@ -670,8 +780,21 @@ class WorkbenchClient:
             raise ValueError(
                 "additional recipient_ids must be unique and non-empty "
                 "(the empty id is reserved for the primary recipient)")
-        if any(r.algorithm == ML_KEM_1024 for r in recipients):
+        if any(isinstance(r, EnvelopeRecipient) and r.algorithm == ML_KEM_1024
+               for r in recipients):
             _require_preview(preview)
+
+        # Derive server_kek_id from the first ServerRecipient when present.
+        server_recipients = [r for r in recipients
+                             if isinstance(r, ServerRecipient)]
+        if server_recipients:
+            auto_kek_id = server_recipients[0].kek_id
+            if server_kek_id is not None and server_kek_id != auto_kek_id:
+                raise ValueError(
+                    f"server_kek_id={server_kek_id!r} conflicts with the "
+                    f"first ServerRecipient's kek_id={auto_kek_id!r}; "
+                    "pass only one or ensure they are identical")
+            server_kek_id = auto_kek_id
 
         dek = os.urandom(32)
         with tempfile.TemporaryDirectory() as d:
@@ -680,15 +803,28 @@ class WorkbenchClient:
             encrypt_per_au(enc_tio, dek, encrypt_headers=encrypt_headers)
 
             primary = recipients[0]
-            primary_wrapped = _wrap_dek(dek, primary.key,
-                                        algorithm=primary.algorithm)
-            additional = [
-                (r.recipient_id, r.algorithm,
-                 _wrap_dek(dek, r.key, algorithm=r.algorithm))
-                for r in recipients[1:]
-            ]
+            if isinstance(primary, ServerRecipient):
+                primary_wrapped = await self.wrap_for_server(
+                    dek=dek, kek_id=primary.kek_id)
+                primary_algorithm = primary.algorithm
+            else:
+                primary_wrapped = _wrap_dek(dek, primary.key,
+                                            algorithm=primary.algorithm)
+                primary_algorithm = primary.algorithm
+
+            additional = []
+            for r in recipients[1:]:
+                if isinstance(r, ServerRecipient):
+                    wrapped = await self.wrap_for_server(
+                        dek=dek, kek_id=r.kek_id)
+                    additional.append((r.recipient_id, r.algorithm, wrapped))
+                else:
+                    additional.append(
+                        (r.recipient_id, r.algorithm,
+                         _wrap_dek(dek, r.key, algorithm=r.algorithm)))
+
             stamp_transport_wrapped_dek(
-                enc_tio, primary_wrapped, primary.algorithm,
+                enc_tio, primary_wrapped, primary_algorithm,
                 additional_recipients=additional, server_kek_id=server_kek_id)
             stream = _io.BytesIO()
             with TransportWriter(stream) as tw:
