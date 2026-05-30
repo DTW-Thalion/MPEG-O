@@ -64,12 +64,18 @@ test = ["pytest>=7", "pytest-asyncio>=0.23", "pytest-cov>=4", "hypothesis>=6", "
 # user who installs ONLY this extra (not paired with `[test]`)
 # should still be able to run the full integration suite.
 #
+# psims provides the PSI-MS controlled vocabulary that pyteomics 5.x
+# hard-requires to parse mzML (`PyteomicsError: Parsing PSI formats
+# requires psims`). It ships alongside pyteomics so the two never
+# install apart (a fresh, offline CI env has no cached CV otherwise).
+#
 # CI installs `[test,integration]` together (see ci.yml
 # python-validation job); `[test]` already includes lxml, so the
 # duplicate listing is intentional defensive redundancy, not a leak.
 integration = [
     "pyimzml>=1.5",
     "pyteomics>=4.6",
+    "psims>=1.2",
     "pymzml>=2.5",
     "isatools>=0.14,<1",
     "lxml",
