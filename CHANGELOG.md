@@ -11,6 +11,24 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed — TTI-O#199: Python encrypted reader dropped per-spectrum metadata
+
+`read_encrypted_to_file` (Python) discarded the MS per-spectrum metadata
+columns — `retention_times`, `ms_levels`, `polarities`, `precursor_mzs`,
+`precursor_charges`, `base_peak_intensities` — when reconstructing a `.tio`
+from an encrypted transport stream produced with the default
+`encrypt_headers=False`. The data was present on the wire (in the plaintext
+AU filter header) but `_ingest_encrypted_au` decoded and then dropped it, and
+the `spectrum_index` reconstruction wrote only `offsets`/`lengths`. The Java
+and ObjC readers already reconstruct these columns, so this was a Python-only
+data-loss bug **and** a 3-language parity violation: every encrypted download
+path (`download_via_server`, `download_decrypted`, `download_decrypted_envelope`,
+`download_decrypted_pqc`, `download_decrypted_multi`) silently lost per-spectrum
+metadata. The reader now accumulates the AU header fields (reversing the wire
+polarity encoding) and writes them back, mirroring the Java/ObjC readers.
+Regression test: `test_encrypted_transport.py::TestEncryptedChannelRoundTrip::
+test_full_roundtrip_preserves_spectrum_metadata`.
+
 ### Added — FD-1-PF-6: wrap-for-server client SDK + `ServerRecipient`
 
 Python SDK half of FD-1-PF-6. Complements `tti-workbench-server` #77

@@ -404,6 +404,14 @@ def _wire_polarity(raw: int) -> int:
     return 2                   # UNKNOWN
 
 
+def _storage_polarity(wire: int) -> int:
+    """Inverse of :func:`_wire_polarity`: map the on-the-wire polarity
+    encoding back to the stored ``spectrum_index/polarities`` form."""
+    if wire == 0: return 1     # POSITIVE
+    if wire == 1: return -1    # NEGATIVE
+    return 0                   # UNKNOWN
+
+
 def _encode_recipient_block(
     additional_recipients: "list[tuple[str, str, bytes]]",
 ) -> bytes:
@@ -604,6 +612,17 @@ def read_encrypted_to_file(
                 "channel_segments": {c: [] for c in meta["channel_names"]},
                 "header_segments": [],
                 "used_encrypted_headers": False,
+                # MS per-spectrum metadata carried in the plaintext AU
+                # filter header (encrypt_headers=False path). Accumulated by
+                # _ingest_encrypted_au and written back to spectrum_index so
+                # the round-trip preserves it -- mirrors the Java/ObjC
+                # readers (TTI-O#199).
+                "plain_rts": [],
+                "plain_ms_levels": [],
+                "plain_polarities": [],
+                "plain_precursor_mzs": [],
+                "plain_precursor_charges": [],
+                "plain_base_peaks": [],
                 # genomic-only accumulator, populated by
                 # _ingest_encrypted_au when spectrum_class == 5.
                 "is_genomic": meta["spectrum_class"] == "TTIOGenomicRead",
@@ -705,6 +724,25 @@ def read_encrypted_to_file(
             if d["used_encrypted_headers"]:
                 io.write_au_header_segments(idx, "au_header_segments",
                                               d["header_segments"])
+            elif d["plain_rts"]:
+                # Restore the per-spectrum metadata carried in the plaintext
+                # AU filter header (TTI-O#199), mirroring the Java/ObjC
+                # readers so the encrypted round-trip is lossless.
+                n_idx = len(first_segs)
+                _idx_cols = (
+                    ("retention_times", Precision.FLOAT64, d["plain_rts"], "<f8"),
+                    ("ms_levels", Precision.INT32, d["plain_ms_levels"], "<i4"),
+                    ("polarities", Precision.INT32, d["plain_polarities"], "<i4"),
+                    ("precursor_mzs", Precision.FLOAT64,
+                     d["plain_precursor_mzs"], "<f8"),
+                    ("precursor_charges", Precision.INT32,
+                     d["plain_precursor_charges"], "<i4"),
+                    ("base_peak_intensities", Precision.FLOAT64,
+                     d["plain_base_peaks"], "<f8"),
+                )
+                for _name, _prec, _vals, _dt in _idx_cols:
+                    _ds = idx.create_dataset(_name, _prec, n_idx)
+                    _ds.write(np.array(_vals, dtype=_dt))
 
         # write genomic_runs/ if any genomic datasets came
         # through the stream.
@@ -885,6 +923,17 @@ def _ingest_encrypted_au(d: dict, *, header, payload: bytes,
             d["genomic_positions"].append(int(au.position))
             d["genomic_mapqs"].append(int(au.mapping_quality))
             d["genomic_flags"].append(int(au.flags) & 0xFFFFFFFF)
+        else:
+            # MS per-spectrum metadata rides in the plaintext filter
+            # header; accumulate it so spectrum_index round-trips
+            # (TTI-O#199). Reverse the wire polarity encoding back to
+            # storage form -- the inverse of _wire_polarity.
+            d["plain_rts"].append(float(au.retention_time))
+            d["plain_ms_levels"].append(int(au.ms_level))
+            d["plain_polarities"].append(_storage_polarity(int(au.polarity)))
+            d["plain_precursor_mzs"].append(float(au.precursor_mz))
+            d["plain_precursor_charges"].append(int(au.precursor_charge))
+            d["plain_base_peaks"].append(float(au.base_peak_intensity))
         # AccessUnit.from_bytes already parsed channels; retrieve
         # them directly.
         for cname in list(d["channel_segments"].keys()):
