@@ -135,6 +135,44 @@ class TestEncryptedChannelRoundTrip:
         for cname in ("mz", "intensity"):
             np.testing.assert_array_equal(originals[cname], rt_values[cname])
 
+    def test_full_roundtrip_preserves_spectrum_metadata(self, tmp_path):
+        """encrypt_headers=False: the per-spectrum metadata columns must
+        survive the transport round-trip.
+
+        retention_times / ms_levels / polarities / precursor_mzs /
+        precursor_charges / base_peak_intensities travel in the plaintext
+        AU filter header on the wire. The Python reader decoded them and
+        then dropped them (Java's and ObjC's readers reconstruct them),
+        silently losing per-spectrum metadata on download. Regression for
+        TTI-O#199.
+        """
+        import h5py
+
+        src = _make_plaintext(tmp_path / "src.tio")
+        idx = "study/ms_runs/run_0001/spectrum_index"
+        cols = ("retention_times", "ms_levels", "polarities",
+                "precursor_mzs", "precursor_charges", "base_peak_intensities")
+        # Ground truth captured from the plaintext, before encryption.
+        with h5py.File(str(src), "r") as f:
+            want = {c: f[f"{idx}/{c}"][...] for c in cols}
+
+        encrypt_per_au_file(str(src), KEY)
+        stream = io.BytesIO()
+        with TransportWriter(stream) as tw:
+            write_encrypted_dataset(tw, str(src))
+        stream.seek(0)
+
+        rt_path = tmp_path / "rt.tio"
+        read_encrypted_to_file(stream, rt_path)
+
+        with h5py.File(str(rt_path), "r") as f:
+            for c in cols:
+                assert f"{idx}/{c}" in f, \
+                    f"{c!r} dropped from reconstructed .tio (TTI-O#199)"
+                np.testing.assert_array_equal(
+                    f[f"{idx}/{c}"][...], want[c],
+                    err_msg=f"{c!r} differs after round-trip")
+
 
 class TestEncryptedHeaderRoundTrip:
     """ENCRYPTED | ENCRYPTED_HEADER mode."""
