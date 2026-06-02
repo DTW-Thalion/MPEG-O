@@ -10,10 +10,17 @@ import global.thalion.ttio.Enums.Precision;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Behavioural tests for SqliteProvider.
@@ -509,17 +516,100 @@ class SqliteProviderTest {
         }
     }
 
-    // ── Cross-language compat (TODO) ─────────────────────────────────────
+    // ── Cross-language compat (Python writes → Java reads) ───────────────
 
+    private static final Path REPO_ROOT =
+            Paths.get(System.getProperty("user.dir")).getParent();
+
+    /** Repo venv Python if present, else system {@code python3}. */
+    private static String pythonBin() {
+        Path venv = REPO_ROOT.resolve("python/.venv/bin/python");
+        return Files.isExecutable(venv) ? venv.toString() : "python3";
+    }
+
+    /** True when the {@code ttio} SQLite provider is importable from {@link #pythonBin()}. */
+    private static boolean pythonTtioAvailable() {
+        try {
+            Process probe = new ProcessBuilder(pythonBin(), "-c",
+                    "import ttio.providers.sqlite")
+                    .redirectErrorStream(true).start();
+            return probe.waitFor(10, TimeUnit.SECONDS) && probe.exitValue() == 0;
+        } catch (IOException | InterruptedException e) {
+            return false;
+        }
+    }
+
+    /**
+     * Cross-language compatibility: a {@code .tio.sqlite} file written by the
+     * Python {@code ttio.providers.sqlite} provider must read back identically
+     * through the Java {@link SqliteProvider}. The Python side builds the same
+     * tree as {@link #mpegOShapedTreeRoundTrip} (via
+     * {@code python/tests/fixtures/make_sqlite_fixture.py}); this test asserts
+     * the exact same values on read.
+     *
+     * <p>Skipped (not failed) when the Python {@code ttio} package isn't
+     * importable — e.g. the Java-only CI runner. The cross-language parity CI
+     * job installs both runtimes and exercises it.</p>
+     */
     @Test
-    void crossLanguageCompatNote(@TempDir Path tmp) {
-        // TODO: shell-out to Python to create a .tio.sqlite fixture, read it via Java.
-        // The byte layout (little-endian BLOBs, JSON compound, same DDL) is designed to
-        // be cross-compat, but automated verification from within the Java test suite
-        // requires Python to be invokable via ProcessBuilder. This is left as a manual
-        // check: run python/tests/test_sqlite_provider.py to create a file, then
-        // open it with SqliteProvider and verify. Tracked as a cross-compat gap.
-        assertTrue(true, "placeholder — see task report for cross-compat verification plan");
+    void crossLanguagePythonWrittenFileReadback(@TempDir Path tmp) throws Exception {
+        assumeTrue(pythonTtioAvailable(),
+                "ttio Python package not importable — skipping cross-language SQLite compat test");
+        Path script = REPO_ROOT.resolve("python/tests/fixtures/make_sqlite_fixture.py");
+        assumeTrue(Files.isRegularFile(script), "fixture generator missing: " + script);
+
+        Path out = tmp.resolve("py_written.tio.sqlite");
+        Process proc = new ProcessBuilder(pythonBin(), script.toString(), out.toString())
+                .redirectErrorStream(true).start();
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        proc.getInputStream().transferTo(buf);
+        if (!proc.waitFor(60, TimeUnit.SECONDS)) {
+            proc.destroyForcibly();
+            fail("python fixture generator timed out");
+        }
+        assertEquals(0, proc.exitValue(),
+                "python fixture generator failed:\n" + buf.toString(StandardCharsets.UTF_8));
+        assertTrue(Files.isRegularFile(out), "fixture not created at " + out);
+
+        // ── Read the Python-written file via Java and verify the tree ──
+        try (SqliteProvider p = new SqliteProvider()) {
+            p.open(out.toString(), StorageProvider.Mode.READ);
+            StorageGroup root = p.rootGroup();
+            assertEquals("0.6-sqlite", root.getAttribute("ttio_format_version"));
+
+            StorageGroup study = root.openGroup("study");
+            assertEquals("End-to-end", study.getAttribute("title"));
+
+            StorageGroup run0 = study.openGroup("ms_runs").openGroup("run_0001");
+            assertEquals(0L, run0.getAttribute("acquisition_mode"));
+            assertEquals("TTIOMassSpectrum", run0.getAttribute("spectrum_class"));
+
+            StorageGroup idx = run0.openGroup("spectrum_index");
+            assertArrayEquals(new double[]{1.0, 2.0, 3.0},
+                    (double[]) idx.openDataset("retention_times").readAll(), 1e-12);
+            assertArrayEquals(new int[]{1, 1, 1},
+                    (int[]) idx.openDataset("ms_levels").readAll());
+
+            StorageGroup sig = run0.openGroup("signal_channels");
+            assertEquals("mz,intensity", sig.getAttribute("channel_names"));
+            assertArrayEquals(linspace(100.0, 400.0, 12),
+                    (double[]) sig.openDataset("mz_values").readAll(), 1e-10);
+            assertArrayEquals(linspace(1.0, 12.0, 12),
+                    (double[]) sig.openDataset("intensity_values").readAll(), 1e-10);
+
+            StorageGroup cfg = run0.openGroup("instrument_config");
+            assertEquals("Thermo", cfg.getAttribute("manufacturer"));
+            assertEquals("Orbitrap Eclipse", cfg.getAttribute("model"));
+
+            @SuppressWarnings("unchecked")
+            List<Map<String, Object>> idBack =
+                    (List<Map<String, Object>>) study.openDataset("identifications").readAll();
+            assertEquals(1, idBack.size());
+            assertEquals("run_0001", idBack.get(0).get("run_name"));
+            assertEquals("CHEBI:17234", idBack.get(0).get("chemical_entity"));
+            assertEquals(0.95,
+                    ((Number) idBack.get(0).get("confidence_score")).doubleValue(), 1e-12);
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

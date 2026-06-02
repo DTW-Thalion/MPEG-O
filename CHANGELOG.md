@@ -11,6 +11,24 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed — Java SQLite provider couldn't read Python-written compound datasets
+
+The Java `SqliteProvider` failed to open a `.tio.sqlite` compound dataset
+written by the Python `ttio.providers.sqlite` provider: its hand-rolled JSON
+parser for compound field descriptors (`extractJsonString`) searched for the
+literal token `"key":"` with no whitespace, but Python's `json.dumps` emits a
+space after the colon (`"key": "value"`). The lookup returned `null`, and
+reading the field kind threw `NullPointerException`. Java read its own
+(whitespace-free) output fine and Python reads Java's via standard
+`json.loads`, so only the Python→Java direction was broken — a silent
+cross-language compatibility gap, since no test exercised it. `extractJsonString`
+now tolerates optional whitespace around the colon (spec-valid JSON is
+whitespace-insensitive). New regression test
+`SqliteProviderTest::crossLanguagePythonWrittenFileReadback` writes a fixture
+via the Python provider (`python/tests/fixtures/make_sqlite_fixture.py`) and
+reads it back through the Java provider; it is skipped when the Python `ttio`
+package isn't importable and runs in the cross-language parity CI job.
+
 ## [1.6.3] - 2026-06-02
 
 Patch release bundling the post-v1.6.2 Python fixes and FD-1 client SDK
