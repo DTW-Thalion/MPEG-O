@@ -242,8 +242,8 @@ static BOOL psSamtoolsAvailable(void)
     NSTask *t = [[NSTask alloc] init];
     t.launchPath = @"/usr/bin/env";
     t.arguments = @[@"samtools", @"--version"];
-    t.standardOutput = [NSPipe pipe];
-    t.standardError = [NSPipe pipe];
+    t.standardOutput = [NSFileHandle fileHandleWithNullDevice];
+    t.standardError = [NSFileHandle fileHandleWithNullDevice];
     @try { [t launch]; [t waitUntilExit]; }
     @catch (NSException *e) { return NO; }
     return t.terminationStatus == 0;
@@ -267,8 +267,10 @@ static void testBamReaderProgressFires(void)
     psWriteFile(samPath, sam);
 
     NSMutableArray<NSNumber *> *doneVals = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *totalVals = [NSMutableArray array];
     TTIOProgressBlock cb = ^(int64_t done, int64_t total) {
         [doneVals addObject:@(done)];
+        [totalVals addObject:@(total)];
     };
 
     NSError *err = nil;
@@ -280,6 +282,8 @@ static void testBamReaderProgressFires(void)
     PASS(doneVals.count >= 1, "BAM reader progress: at least one fire");
     PASS([doneVals.lastObject longLongValue] == (int64_t)n,
          "BAM reader progress: final fire reports total read count");
+    PASS([totalVals.lastObject longLongValue] == (int64_t)n,
+         "BAM reader progress: final fire stamps total == read count");
 }
 
 
