@@ -35,12 +35,6 @@ import java.util.List;
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.importers.fastq.FastqReader}, Objective-C
  * {@code TTIOFastqReader}.</p>
- *
- * <p>TODO (parity): Python {@code ttio.importers.fastq.FastqReader} and
- * Objective-C {@code TTIOFastqReader} should grow a matching
- * {@code ProgressSink}-style callback in a future cross-language parity
- * PR so all three implementations expose the same per-read progress
- * hook.</p>
  */
 public class FastqReader {
 
