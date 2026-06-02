@@ -56,12 +56,6 @@ import java.util.Map;
  * by the {@code cross-compat} CI job.</p>
  *
  * (M87, v1.5.0 htsjdk swap)
- *
- * <p>TODO (parity): Python {@code ttio.importers.bam.BamReader} and
- * Objective-C {@code TTIOBamReader} should grow a matching
- * {@code ProgressSink}-style callback in a future cross-language
- * parity PR so all three implementations expose the same per-read
- * progress hook.</p>
  */
 public class BamReader {
 

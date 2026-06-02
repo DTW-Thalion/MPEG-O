@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:  # pragma: no cover
     from pathlib import Path
 
+    from ..io.progress import ProgressSinkLike
     from ..providers.base import StorageGroup
     from ..spectral_dataset import SpectralDataset
 
@@ -215,6 +216,7 @@ class ReferenceImport:
         dataset: "SpectralDataset",
         *,
         overwrite: bool = False,
+        progress: "ProgressSinkLike | None" = None,
     ) -> None:
         """Embed this reference at ``/study/references/<uri>/``
         inside ``dataset``'s open HDF5 file.
@@ -249,6 +251,13 @@ class ReferenceImport:
         overwrite : bool
             If ``True``, replace any existing reference under the same
             URI; if ``False``, raise on collision.
+        progress : ProgressSinkLike or None
+            Optional runtime progress callback. Fires ``(0, N)`` before
+            the embed loop then ``(i+1, N)`` after each contig (N =
+            sorted contig count), mirroring Java's
+            ``ReferenceImport.writeToDataset(..., ProgressSink)``. A
+            bare ``(done, total) -> None`` callable is also accepted.
+            Progress is a runtime callback only -- no on-disk change.
 
         Raises
         ------
@@ -266,6 +275,7 @@ class ReferenceImport:
         from ..enums import Compression as _Compression
         from ..enums import Precision as _Precision
         from ..providers.hdf5 import _Group as _H5Group
+        from ..io.progress import _fire
 
         h5 = getattr(dataset, "file", None)
         if h5 is None:
@@ -295,7 +305,12 @@ class ReferenceImport:
         # Sort alphabetically so the on-disk child order matches what
         # the canonical writer emits (read_from_group surfaces names in
         # on-disk order).
-        for name in sorted(self.chromosomes):
+        sorted_names = sorted(self.chromosomes)
+        total = len(sorted_names)
+        # Mirror Java ReferenceImport.writeToDataset: (0, N) then
+        # (i+1, N) per contig. Progress is a runtime callback only.
+        _fire(progress, 0, total)
+        for i, name in enumerate(sorted_names):
             seq = self.chromosome(name)
             c = chroms_grp.create_group(name)
             io.write_int_attr(c, "length", len(seq))
@@ -309,3 +324,4 @@ class ReferenceImport:
                 compression_level=6,
             )
             ds.write(arr)
+            _fire(progress, i + 1, total)
