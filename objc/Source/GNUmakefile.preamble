@@ -31,11 +31,12 @@ endif
 # the native library is absent — TTIOFqzcompNx16Z then reports
 # backendName == "pure-objc". When present, backendName is "native-<kernel>".
 #
-# We do NOT wire the native library into the V1 encode/decode dispatch:
-# the C library produces a different multi-block container format than
-# the existing pure-ObjC M94.Z wire format, so swapping it in would break
-# byte-exact wire compatibility. Full integration awaits V2 container
-# support (TODO in TTIOFqzcompNx16Z.m).
+# When present, the native library is wired into the encode/decode
+# dispatch: V4 (CRAM 3.1 fqzcomp_qual) is the encoder's default, V2
+# streams ("preferNative") route through ttio_rans_encode_block, and an
+# opt-in native streaming V2 decode path exists (gated on
+# TTIO_M94Z_USE_NATIVE_STREAMING). V1 is the pure-ObjC fallback used
+# only when the library is absent. See TTIOFqzcompNx16Z.m for details.
 TTIO_RANS_NATIVE_LIB := ../../native/_build/libttio_rans.so
 TTIO_RANS_NATIVE_HDR := ../../native/include/ttio_rans.h
 ifeq ($(shell test -f $(TTIO_RANS_NATIVE_LIB) && test -f $(TTIO_RANS_NATIVE_HDR) && echo yes),yes)
