@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.6.4] - 2026-06-02
+
+Patch release bundling two cross-language SDK fixes. (1) The Java
+`SqliteProvider` could not read `.tio.sqlite` compound datasets written by
+the Python provider — a whitespace-intolerant JSON parser broke the
+Python→Java direction; fixed, with a new cross-language round-trip test.
+(2) Reference-embed progress reached cross-language parity: Python
+`ReferenceImport.write_to_dataset` and ObjC `TTIOReferenceImport` gained
+per-contig `progress` support matching Java, the three stale Java importer
+parity TODOs were removed, and the previously-untested ObjC `TTIOBamReader`
+progress sink got a test. No wire/on-disk format change.
+
+PRs: #205 (Java SQLite cross-language read) · #206 (reference-embed progress parity).
+
 ### Added — Reference-embed progress parity (Python + ObjC)
 
 `ReferenceImport.write_to_dataset` (Python) gains a keyword-only
