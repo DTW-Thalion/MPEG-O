@@ -11,6 +11,21 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Added — Reference-embed progress parity (Python + ObjC)
+
+`ReferenceImport.write_to_dataset` (Python) gains a keyword-only
+`progress` parameter, and `TTIOReferenceImport` (ObjC) gains a
+`-writeToDataset:overwrite:progress:error:` overload, both firing
+per-contig progress (`(0, N)` then `(i+1, N)` ending at `(N, N)`) to
+match Java's `ReferenceImport.writeToDataset(..., ProgressSink)`
+(`@since 1.3.0`). Closes the last cross-language gap in the importer
+progress-sink surface; the three stale "future parity PR" TODOs in the
+Java importers are removed (the reader sinks they described already
+shipped in all three SDKs). Added an ObjC test for the existing
+`TTIOBamReader` progress sink (was untested). No wire/on-disk format
+change. New tests: `test_reference_import_progress.py` (Python),
+`writeToDataset…progress:` + BAM-reader cases (ObjC).
+
 ### Fixed — Java SQLite provider couldn't read Python-written compound datasets
 
 The Java `SqliteProvider` failed to open a `.tio.sqlite` compound dataset
