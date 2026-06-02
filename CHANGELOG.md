@@ -11,6 +11,23 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Performance: vectorized `GenomicIndex.indices_for_region` (Python)
+
+`GenomicIndex.indices_for_region` (Python) scanned the per-read
+`chromosomes` Python list on every call — an O(N) name comparison that
+dominated region queries on deep WGS indexes. The interned `chromosome_ids`
+(uint16) + `chromosome_names` lookup table is now retained on the dataclass
+when an index is loaded from disk via `GenomicIndex.read`, and the region
+lookup resolves the chromosome name to its id once (O(unique)) then compares
+the id column with a vectorized NumPy operation. In-memory construction
+(without an id table) keeps the original list-scan fallback, so behaviour is
+unchanged for every existing caller. Measured ~17× faster on a 2 M-read
+index; results are byte-identical to the previous path. No on-disk format
+change. New fields `chromosome_ids` / `chromosome_names` (both default
+`None`) are additive. Regression tests:
+`test_m82_genomic_run.py::test_genomic_index_read_retains_interned_chromosomes`
+and `::test_genomic_index_indices_for_region_disk_loaded`.
+
 ### Fixed — TTI-O#199: Python encrypted reader dropped per-spectrum metadata
 
 `read_encrypted_to_file` (Python) discarded the MS per-spectrum metadata

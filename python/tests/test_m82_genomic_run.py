@@ -324,6 +324,69 @@ def test_genomic_index_disk_roundtrip(tmp_path: Path):
     assert loaded.chromosomes == original.chromosomes
 
 
+def test_genomic_index_read_retains_interned_chromosomes(tmp_path: Path):
+    """read() keeps the on-disk uint16 chromosome_ids + name table so region
+    lookups can vectorize instead of scanning the Python name list."""
+    from ttio.genomic_index import GenomicIndex
+    from ttio.providers.hdf5 import Hdf5Provider
+
+    original = _make_index(6)  # chromosomes: chr1 chr1 chr2 chr2 chrX chr1
+
+    p = tmp_path / "index.h5"
+    sp = Hdf5Provider.open(str(p), mode="w")
+    try:
+        original.write(sp.root_group().create_group("genomic_index"))
+    finally:
+        sp.close()
+
+    sp = Hdf5Provider.open(str(p), mode="r")
+    try:
+        loaded = GenomicIndex.read(sp.root_group().open_group("genomic_index"))
+    finally:
+        sp.close()
+
+    # Encounter-order id assignment: chr1 -> 0, chr2 -> 1, chrX -> 2.
+    assert loaded.chromosome_names == ["chr1", "chr2", "chrX"]
+    assert loaded.chromosome_ids.dtype == np.uint16
+    np.testing.assert_array_equal(
+        loaded.chromosome_ids, np.array([0, 0, 1, 1, 2, 0], dtype=np.uint16)
+    )
+    # The retained id table must reconstruct the public chromosomes list.
+    assert [
+        loaded.chromosome_names[i] for i in loaded.chromosome_ids
+    ] == loaded.chromosomes
+
+
+def test_genomic_index_indices_for_region_disk_loaded(tmp_path: Path):
+    """The vectorized (disk-loaded) lookup path matches the in-memory path,
+    including the absent-chromosome case which must return []."""
+    from ttio.genomic_index import GenomicIndex
+    from ttio.providers.hdf5 import Hdf5Provider
+
+    in_memory = _make_index(6)
+
+    p = tmp_path / "index.h5"
+    sp = Hdf5Provider.open(str(p), mode="w")
+    try:
+        in_memory.write(sp.root_group().create_group("genomic_index"))
+    finally:
+        sp.close()
+
+    sp = Hdf5Provider.open(str(p), mode="r")
+    try:
+        loaded = GenomicIndex.read(sp.root_group().open_group("genomic_index"))
+    finally:
+        sp.close()
+
+    # Disk-loaded index carries the interned id column -> fast path.
+    assert loaded.chromosome_ids is not None
+    assert loaded.indices_for_region("chr1", 10000, 20000) == [1]
+    assert loaded.indices_for_region("chr1", 10000, 20000) == \
+        in_memory.indices_for_region("chr1", 10000, 20000)
+    # Absent chromosome on the fast path must not raise.
+    assert loaded.indices_for_region("chrY", 0, 1_000_000) == []
+
+
 def test_write_minimal_creates_genomic_runs_group(tmp_path: Path):
     """write_minimal with genomic_runs creates the expected HDF5 layout."""
     from ttio.spectral_dataset import SpectralDataset
