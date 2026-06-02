@@ -104,6 +104,12 @@ class GenomicIndex:
     positions: np.ndarray          # int64 — 0-based mapping position
     mapping_qualities: np.ndarray  # uint8
     flags: np.ndarray              # uint32
+    # Interned chromosome table, populated by read() from the on-disk uint16
+    # id column. None for in-memory construction (region lookup falls back to
+    # scanning the chromosomes list). When present, indices_for_region uses a
+    # vectorized id comparison instead of an O(N) Python name scan.
+    chromosome_ids: np.ndarray | None = None       # uint16 — one per read
+    chromosome_names: list[str] | None = None      # unique names, id order
 
     @property
     def count(self) -> int:
@@ -121,11 +127,21 @@ class GenomicIndex:
         self, chromosome: str, start: int, end: int
     ) -> list[int]:
         """Return read indices on ``chromosome`` with start <= pos < end."""
-        # TODO(M82): chromosome lookup is O(N) Python; vectorize once an
-        # interned chromosome_ids column lands (BAM/CRAM-style id table).
-        chrom_mask = np.array(
-            [c == chromosome for c in self.chromosomes], dtype=bool
-        )
+        if self.chromosome_ids is not None and self.chromosome_names is not None:
+            # Disk-loaded index: resolve the name to its interned id once
+            # (O(unique)), then compare the uint16 id column in C — instead of
+            # an O(N) per-read scan of the Python chromosomes list.
+            try:
+                target_id = self.chromosome_names.index(chromosome)
+            except ValueError:
+                return []
+            chrom_mask = self.chromosome_ids == target_id
+        else:
+            # In-memory construction without an interned table: fall back to
+            # scanning the name list.
+            chrom_mask = np.array(
+                [c == chromosome for c in self.chromosomes], dtype=bool
+            )
         mask = chrom_mask & (self.positions >= start) & (self.positions < end)
         return np.where(mask)[0].tolist()
 
@@ -175,6 +191,8 @@ class GenomicIndex:
             positions=positions,
             mapping_qualities=mapping_qualities,
             flags=flags,
+            chromosome_ids=ids,
+            chromosome_names=name_table,
         )
 
     def write(self, idx_group: "StorageGroup") -> None:
