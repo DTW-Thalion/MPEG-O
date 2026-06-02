@@ -571,13 +571,23 @@ public final class SqliteProvider implements StorageProvider {
     }
 
     private static String extractJsonString(String obj, String key) {
-        String search = "\"" + key + "\":\"";
-        int idx = obj.indexOf(search);
+        // Locate the key token, then tolerate optional whitespace around the
+        // colon and before the opening quote. Java's own writer emits compact
+        // JSON ("k":"v"), but Python's json.dumps emits spaces ("k": "v"); a
+        // spec-valid JSON consumer must accept both (cross-language compat).
+        String keyToken = "\"" + key + "\"";
+        int idx = obj.indexOf(keyToken);
         if (idx < 0) return null;
-        idx += search.length();
+        int i = idx + keyToken.length();
+        while (i < obj.length() && Character.isWhitespace(obj.charAt(i))) i++;
+        if (i >= obj.length() || obj.charAt(i) != ':') return null;
+        i++;
+        while (i < obj.length() && Character.isWhitespace(obj.charAt(i))) i++;
+        if (i >= obj.length() || obj.charAt(i) != '"') return null;  // value is not a string
+        i++;
         StringBuilder sb = new StringBuilder();
         boolean escape = false;
-        for (int i = idx; i < obj.length(); i++) {
+        for (; i < obj.length(); i++) {
             char c = obj.charAt(i);
             if (escape) { sb.append(c); escape = false; continue; }
             if (c == '\\') { escape = true; continue; }
