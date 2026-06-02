@@ -15,6 +15,7 @@
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Import/TTIOFastqReader.h"
 #import "Import/TTIOFastaReader.h"
+#import "Import/TTIOBamReader.h"
 #import "ValueClasses/TTIOEnums.h"
 
 
@@ -234,6 +235,54 @@ static void testFastaUnalignedProgressFires(void)
 }
 
 
+// -- BAM reader progress hook (samtools-gated) ---------------------------
+
+static BOOL psSamtoolsAvailable(void)
+{
+    NSTask *t = [[NSTask alloc] init];
+    t.launchPath = @"/usr/bin/env";
+    t.arguments = @[@"samtools", @"--version"];
+    t.standardOutput = [NSPipe pipe];
+    t.standardError = [NSPipe pipe];
+    @try { [t launch]; [t waitUntilExit]; }
+    @catch (NSException *e) { return NO; }
+    return t.terminationStatus == 0;
+}
+
+static void testBamReaderProgressFires(void)
+{
+    if (!psSamtoolsAvailable()) {
+        PASS(YES, "BAM reader progress: samtools unavailable (skipped)");
+        return;
+    }
+    NSString *tmp = psMakeTempDir();
+    NSUInteger n = 5000;
+    NSMutableString *sam = [NSMutableString string];
+    [sam appendString:@"@HD\tVN:1.6\tSO:unsorted\n@SQ\tSN:chr1\tLN:1000\n"];
+    for (NSUInteger i = 0; i < n; i++) {
+        [sam appendFormat:@"r%06lu\t4\t*\t0\t0\t*\t*\t0\t0\tACGTACGT\tIIIIIIII\n",
+                          (unsigned long)i];
+    }
+    NSString *samPath = [tmp stringByAppendingPathComponent:@"synth.sam"];
+    psWriteFile(samPath, sam);
+
+    NSMutableArray<NSNumber *> *doneVals = [NSMutableArray array];
+    TTIOProgressBlock cb = ^(int64_t done, int64_t total) {
+        [doneVals addObject:@(done)];
+    };
+
+    NSError *err = nil;
+    TTIOBamReader *reader = [[TTIOBamReader alloc] initWithPath:samPath];
+    TTIOWrittenGenomicRun *run =
+        [reader toGenomicRunWithName:nil region:nil sampleName:nil
+                            progress:cb error:&err];
+    PASS(run != nil, "BAM reader progress: SAM parses via samtools");
+    PASS(doneVals.count >= 1, "BAM reader progress: at least one fire");
+    PASS([doneVals.lastObject longLongValue] == (int64_t)n,
+         "BAM reader progress: final fire reports total read count");
+}
+
+
 // Public entry point — called from TTIOTestRunner.m.
 void testProgressSink(void)
 {
@@ -242,4 +291,5 @@ void testProgressSink(void)
     testFastqProgressFires();
     testFastqProgressCadence();
     testFastaUnalignedProgressFires();
+    testBamReaderProgressFires();
 }
