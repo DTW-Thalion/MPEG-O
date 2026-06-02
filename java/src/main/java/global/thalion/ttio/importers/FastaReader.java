@@ -40,11 +40,6 @@ import java.util.zip.GZIPInputStream;
  * <p><b>Cross-language equivalents:</b> Python
  * {@code ttio.importers.fasta.FastaReader}, Objective-C
  * {@code TTIOFastaReader}.</p>
- *
- * <p>TODO (parity): the per-contig progress hook on {@code readReference}
- * is mirrored by Python's {@code ReferenceImport} sink wiring; the
- * {@code readUnaligned} sink added here should grow Python +
- * Objective-C equivalents in a future cross-language parity PR.</p>
  */
 public class FastaReader {
 

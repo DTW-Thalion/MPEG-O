@@ -24,6 +24,7 @@
 #import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #import "Testing.h"
+#import "Core/TTIOProgressSink.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Providers/TTIOHDF5Provider.h"
@@ -208,10 +209,60 @@ static void testWriteToDatasetOverwriteReplacesExistingReference(void)
     unlink([path fileSystemRepresentation]);
 }
 
+static void testWriteToDatasetProgressFires(void)
+{
+    NSError *err = nil;
+    NSString *path = makeTempPathW(@"progress");
+    TTIOSpectralDataset *ds = makeWritableDatasetForPath(path, &err);
+    PASS(ds != nil, "progress: writable dataset created");
+
+    TTIOReferenceImport *ri = [[TTIOReferenceImport alloc]
+        initWithUri:@"prog-v1"
+        chromosomes:@[@"chr1", @"chr2", @"chr3"]
+          sequences:@[[@"ACGT" dataUsingEncoding:NSUTF8StringEncoding],
+                      [@"GGGG" dataUsingEncoding:NSUTF8StringEncoding],
+                      [@"TTTT" dataUsingEncoding:NSUTF8StringEncoding]]];
+
+    NSMutableArray<NSNumber *> *doneVals = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *totalVals = [NSMutableArray array];
+    TTIOProgressBlock cb = ^(int64_t done, int64_t total) {
+        [doneVals addObject:@(done)];
+        [totalVals addObject:@(total)];
+    };
+
+    BOOL ok = [ri writeToDataset:ds overwrite:NO progress:cb error:&err];
+    PASS(ok, "progress: writeToDataset:overwrite:progress:error: succeeds");
+    // (0,3),(1,3),(2,3),(3,3): N+1 fires, total always 3.
+    PASS(doneVals.count == 4, "progress: N+1 (=4) callbacks fired");
+    PASS([doneVals.firstObject longLongValue] == 0
+         && [totalVals.firstObject longLongValue] == 3,
+         "progress: first fire is (0, N)");
+    PASS([doneVals.lastObject longLongValue] == 3
+         && [totalVals.lastObject longLongValue] == 3,
+         "progress: last fire is (N, N)");
+
+    // Legacy (no-progress) overload still works.
+    NSString *path2 = makeTempPathW(@"legacy");
+    NSError *err2 = nil;
+    TTIOSpectralDataset *ds2 = makeWritableDatasetForPath(path2, &err2);
+    TTIOReferenceImport *ri2 = [[TTIOReferenceImport alloc]
+        initWithUri:@"legacy-v1"
+        chromosomes:@[@"chr1"]
+          sequences:@[[@"ACGT" dataUsingEncoding:NSUTF8StringEncoding]]];
+    PASS([ri2 writeToDataset:ds2 overwrite:NO error:&err2],
+         "progress: legacy writeToDataset:overwrite:error: still works");
+
+    [ds closeFile];
+    [ds2 closeFile];
+    unlink([path fileSystemRepresentation]);
+    unlink([path2 fileSystemRepresentation]);
+}
+
 void testReferenceImportWriteToDataset(void);
 void testReferenceImportWriteToDataset(void)
 {
     testWriteToDatasetRoundTripsThroughReferences();
     testWriteToDatasetRejectsDuplicateUriWithoutOverwrite();
     testWriteToDatasetOverwriteReplacesExistingReference();
+    testWriteToDatasetProgressFires();
 }

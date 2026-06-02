@@ -9,6 +9,7 @@
 #define TTIO_REFERENCE_IMPORT_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 #import "Providers/TTIOStorageProtocols.h"
 
 @class TTIOSpectralDataset;
@@ -151,6 +152,21 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
              overwrite:(BOOL)overwrite
+                 error:(NSError **)error;
+
+/**
+ * Overload of <code>-writeToDataset:overwrite:error:</code> that fires
+ * <code>progress(i+1, totalChromosomes)</code> after each chromosome is
+ * written (and <code>progress(0, total)</code> once before the loop),
+ * mirroring Java's <code>writeToDataset(..., ProgressSink)</code> and
+ * Python's <code>write_to_dataset(..., progress=...)</code>.
+ *
+ * @param progress Progress block; pass <code>nil</code> for none.
+ * @since 1.6.4
+ */
+- (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
+             overwrite:(BOOL)overwrite
+              progress:(nullable TTIOProgressBlock)progress
                  error:(NSError **)error;
 
 /**

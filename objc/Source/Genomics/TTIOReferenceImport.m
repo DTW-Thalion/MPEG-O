@@ -211,6 +211,16 @@ static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
              overwrite:(BOOL)overwrite
                  error:(NSError **)error
 {
+    return [self writeToDataset:dataset overwrite:overwrite
+                       progress:TTIOProgressDiscard() error:error];
+}
+
+- (BOOL)writeToDataset:(TTIOSpectralDataset *)dataset
+             overwrite:(BOOL)overwrite
+              progress:(nullable TTIOProgressBlock)progress
+                 error:(NSError **)error
+{
+    if (progress == nil) progress = TTIOProgressDiscard();
     if (dataset == nil) {
         if (error) *error = [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2200
@@ -285,6 +295,9 @@ static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
     NSArray<NSString *> *sortedNames =
         [byName.allKeys sortedArrayUsingSelector:@selector(compare:)];
 
+    int64_t total = (int64_t)sortedNames.count;
+    int64_t done = 0;
+    progress(0, total);  // mirror Java: (0, N) before the embed loop
     for (NSString *cname in sortedNames) {
         NSData *seq = byName[cname];
         id<TTIOStorageGroup> cg =
@@ -303,6 +316,7 @@ static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
                               error:error];
         if (ds == nil) return NO;
         if (![ds writeAll:seq error:error]) return NO;
+        progress(++done, total);  // (i+1, N) per contig
     }
     return YES;
 }
