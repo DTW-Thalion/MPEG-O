@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.6.3] - 2026-06-02
+
+Patch release bundling the post-v1.6.2 Python fixes and FD-1 client SDK
+additions. Three threads: (1) the encrypted-reader per-spectrum metadata
+data-loss fix and 3-language parity restoration (#199); (2) the
+wrap-for-server / unwrap-for-server client SDK helpers + `ServerRecipient`
+and `download_via_server`, completing the HSM server-side key-custody
+round-trip from the client side (FD-1-PF-6, FD-1-PF-7; paired with
+`tti-workbench-server` #77/#78); (3) a ~17× speedup of `GenomicIndex`
+region lookups via the interned chromosome id column. No on-disk format
+change; the Java and ObjC reference implementations are unchanged.
+
+PRs: #200 (#199) · #197 (FD-1-PF-6) · #198 (FD-1-PF-7) · #202 (perf).
+
 ### Changed — Performance: vectorized `GenomicIndex.indices_for_region` (Python)
 
 `GenomicIndex.indices_for_region` (Python) scanned the per-read
