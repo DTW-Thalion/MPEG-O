@@ -20,14 +20,18 @@
 // We probe with __has_include so this translation unit still compiles
 // when the header is absent; +backendName then returns "pure-objc".
 //
+// Encode default (Stage 3): when the native library is present the
+// encoder always emits V4 (CRAM 3.1 fqzcomp_qual, via libttio_rans);
+// V1 (pure-ObjC) is the fallback used only when the library is absent.
+//
 // V2 dispatch (Task 23): when the encode-options dictionary specifies
 // "preferNative":@YES (or env var TTIO_M94Z_USE_NATIVE is set), encode
 // emits a V2 wire-format stream (version byte = 2) whose body is
-// produced by ttio_rans_encode_block. V1 streams remain the default
-// and round-trip via the existing pure-ObjC path. V2 decode is also
-// pure-ObjC because contexts in M94.Z are derived from previously-
-// decoded symbols, which the C library's pre-computed-contexts API
-// cannot supply (option E).
+// produced by ttio_rans_encode_block. V2 decode is pure-ObjC by
+// default — contexts in M94.Z are derived from previously-decoded
+// symbols, which the C library's pre-computed-contexts API cannot
+// supply (option E) — with an opt-in native streaming decode path
+// (Task 26c) gated on TTIO_M94Z_USE_NATIVE_STREAMING.
 #if __has_include("ttio_rans.h")
 #  include "ttio_rans.h"
 #  define TTIO_HAS_NATIVE_RANS 1
