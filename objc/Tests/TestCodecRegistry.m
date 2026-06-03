@@ -6,6 +6,7 @@
 #import "Codecs/Registry/TTIOCodecContext.h"
 #import "Codecs/Registry/TTIOCodecRegistry.h"
 #import "Codecs/Registry/TTIOCodec.h"
+#import "Genomics/TTIOGenomicRun.h"
 
 void testCodecRegistry(void)
 {
@@ -85,5 +86,9 @@ void testCodecRegistry(void)
         PASS([[TTIOCodecRegistry codecForId:TTIOCompressionMateInlineV2] isContextAware], "mate context-aware");
         PASS([[TTIOCodecRegistry codecForId:TTIOCompressionRefDiffV2] needsEmbeddedReference], "refdiff needs embed");
         PASS(![[TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z] needsEmbeddedReference], "fqzcomp no embed");
+
+        // Task 5: GenomicRun exposes a cached codec-context builder.
+        PASS([TTIOGenomicRun instancesRespondToSelector:@selector(_codecContext)],
+             "GenomicRun exposes -_codecContext");
     }
 }

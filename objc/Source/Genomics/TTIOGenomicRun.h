@@ -9,6 +9,7 @@
 @class TTIOAlignedRead;
 @class TTIOGenomicIndex;
 @class TTIOProvenanceRecord;
+@class TTIOCodecContext;
 @protocol TTIOStorageGroup;
 
 /**
@@ -67,6 +68,15 @@
 
 /** @return <code>readCount</code> (TTIOIndexable conformance). */
 - (NSUInteger)count;
+
+/**
+ * Internal SPI (Task 5): builds and caches the
+ * <code>TTIOCodecContext</code> handed to the codec-registry decode
+ * adapters. All fields are derived from the run's index exactly as the
+ * bespoke inline decode paths built them, so registry-routed decode is
+ * byte-identical. Cached for the lifetime of this run instance.
+ */
+- (TTIOCodecContext *)_codecContext;
 
 /**
  * @param index Zero-based read position.
