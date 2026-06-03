@@ -127,3 +127,12 @@ def test_genomic_run_has_codec_context():
     """GenomicRun exposes a _codec_context() builder (decode routing depends on it)."""
     from ttio.genomic_run import GenomicRun
     assert hasattr(GenomicRun, "_codec_context")
+
+
+def test_delta_rans_encode_via_registry_matches_direct():
+    from ttio.codecs import delta_rans
+    data = np.arange(256, dtype="<u4").tobytes()
+    direct = delta_rans.encode(data, 4)
+    via = CODEC_REGISTRY[Compression.DELTA_RANS_ORDER0].encode(
+        DecodedChannel.of_bytes(data), CodecContext(element_size=4)).dataset_bytes
+    assert via == direct
