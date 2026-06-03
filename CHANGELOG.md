@@ -11,6 +11,22 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.6.5] - 2026-06-03
+
+Refactor-only release completing the **3-SDK codec-registry parity**. Genomic
+codec dispatch in all three reference SDKs — Python, Java, and Objective-C — now
+routes through a single `Codec` registry keyed by the `Compression` id, fronted
+by a uniform codec interface, a `CodecContext` value object, and closed
+`DecodedChannel`/`EncodedChannel`/`ChannelPayload` unions, replacing the former
+decode ladders, encode switches, and per-codec side-paths. Adding a genomic
+codec is now one registry entry per language. Codecs expose two distinct flags,
+`isContextAware` (needs run context) and `needsEmbeddedReference` (the
+reference-embed predicate, REF_DIFF_V2 only) — the latter is parity metadata and
+does not alter the embed decision. No wire/on-disk format change; every
+byte-equality and cross-language fixture is unchanged.
+
+PRs: #209 (Python registry) · #210 (Java port) · #211 (Objective-C port).
+
 ### Changed — Codec dispatch unified behind a registry (Objective-C)
 
 ObjC's genomic codec dispatch (the decode switch + five bespoke
