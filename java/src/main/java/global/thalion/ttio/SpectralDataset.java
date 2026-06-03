@@ -2216,20 +2216,14 @@ public class SpectralDataset implements
             writeSignalChannel(sc, name, Enums.Precision.UINT8, data, defaultCodec);
             return;
         }
-        byte[] encoded;
-        switch (codecOverride) {
-            case RANS_ORDER0 -> encoded =
-                global.thalion.ttio.codecs.Rans.encode(data, 0);
-            case RANS_ORDER1 -> encoded =
-                global.thalion.ttio.codecs.Rans.encode(data, 1);
-            case BASE_PACK   -> encoded =
-                global.thalion.ttio.codecs.BasePack.encode(data);
-            case QUALITY_BINNED -> encoded =
-                global.thalion.ttio.codecs.Quality.encode(data);
-            default -> throw new IllegalArgumentException(
-                "writeByteChannelWithCodec: unsupported codec "
-                + codecOverride);
+        var codec = global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY.get(codecOverride);
+        if (codec == null) {
+            throw new IllegalArgumentException(
+                "writeByteChannelWithCodec: unsupported codec " + codecOverride);
         }
+        byte[] encoded = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+            codec.encode(new global.thalion.ttio.codecs.registry.DecodedChannel.Bytes(data),
+                global.thalion.ttio.codecs.registry.CodecContext.empty())).bytes();
         // Unfiltered uint8 dataset; codec output already entropy-coded.
         // Force a chunked layout (chunkSize > 0) so HDF5 honours our
         // explicit Compression.NONE choice rather than the legacy
