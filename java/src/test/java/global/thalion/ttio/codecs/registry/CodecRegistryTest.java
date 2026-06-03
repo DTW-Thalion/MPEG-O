@@ -9,6 +9,13 @@ import org.junit.jupiter.api.Test;
 class CodecRegistryTest {
 
     @Test
+    void genomicRunHasCodecContextHelper() throws Exception {
+        var m = global.thalion.ttio.genomics.GenomicRun.class
+            .getDeclaredMethod("codecContext");
+        assertNotNull(m);
+    }
+
+    @Test
     void decodedChannelBytesVariant() {
         DecodedChannel d = new DecodedChannel.Bytes(new byte[]{1, 2, 3});
         assertInstanceOf(DecodedChannel.Bytes.class, d);
