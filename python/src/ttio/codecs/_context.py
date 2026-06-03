@@ -30,7 +30,17 @@ class CodecContext:
     own_chrom_ids: "np.ndarray | None" = None         # mate_info
     own_positions: "np.ndarray | None" = None         # mate_info
     n_records: "int | None" = None                    # mate_info
-    reference_resolver: "ReferenceResolver | None" = None  # ref_diff
+    reference_resolver: "ReferenceResolver | None" = None  # ref_diff (decode)
+    # ref_diff ENCODE-only inputs (Task 5c). The decode path resolves
+    # the reference lazily via reference_resolver + the blob header; the
+    # encode path needs them up front because they are written *into*
+    # the blob header. All optional — only the writer populates them.
+    offsets: "np.ndarray | None" = None               # ref_diff encode; uint64, n_reads+1
+    cigar_strings: "list[str] | None" = None          # ref_diff encode; per-read CIGAR
+    reference: "bytes | None" = None                  # ref_diff encode; chrom sequence
+    reference_md5: "bytes | None" = None              # ref_diff encode; 16 raw bytes
+    reference_uri: "str | None" = None                # ref_diff encode
+    reads_per_slice: "int | None" = None              # ref_diff encode; slice granularity
 
     @staticmethod
     def empty() -> "CodecContext":

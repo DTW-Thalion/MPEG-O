@@ -167,11 +167,39 @@ class _RefDiffV2Codec:
         return DecodedChannel.of_bytes(bytes(out_seq))
 
     def encode(self, value, ctx):
-        # ref_diff encode is performed by the writer path (Task 5); the registry
-        # adapter currently supports decode only.
-        raise NotImplementedError(
-            "REF_DIFF_V2 encode is performed by the writer path (see Task 5); "
-            "the registry adapter currently supports decode only.")
+        # Task 5c: encode a single-chromosome refdiff_v2 blob. The
+        # reference inputs (offsets/reference/md5/uri/cigars/positions)
+        # live on the encode-only CodecContext fields because they are
+        # written *into* the blob header. Returns a GROUP layout: the
+        # writer materialises a ``sequences`` group with one
+        # ``refdiff_v2`` child carrying these bytes + @compression. The
+        # bytes are byte-identical to the prior direct ref_diff_v2.encode
+        # call (same args, same order).
+        if (
+            ctx.offsets is None
+            or ctx.positions is None
+            or ctx.cigar_strings is None
+            or ctx.reference is None
+            or ctx.reference_md5 is None
+            or ctx.reference_uri is None
+        ):
+            raise ValueError(
+                "REF_DIFF_V2 encode requires CodecContext.offsets/positions/"
+                "cigar_strings/reference/reference_md5/reference_uri")
+        import numpy as _np
+        blob = ref_diff_v2.encode(
+            _np.frombuffer(value.as_bytes(), dtype=_np.uint8),
+            _np.asarray(ctx.offsets, dtype=_np.uint64),
+            _np.asarray(ctx.positions, dtype=_np.int64),
+            list(ctx.cigar_strings),
+            ctx.reference,
+            ctx.reference_md5,
+            ctx.reference_uri,
+            reads_per_slice=(
+                ctx.reads_per_slice if ctx.reads_per_slice is not None else 10_000
+            ),
+        )
+        return EncodedChannel.of_group({"refdiff_v2": blob}, {})
 
 
 CODEC_REGISTRY: "dict[Compression, Codec]" = {

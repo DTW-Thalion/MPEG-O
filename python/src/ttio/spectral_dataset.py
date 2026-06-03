@@ -1556,6 +1556,8 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
     runs raise :class:`ValueError`.
     """
     from .codecs import ref_diff_v2 as _rdv2
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     from .codecs.base_pack import encode as _base_pack_encode
     from .enums import Compression as _Compression, Precision as _Precision
 
@@ -1608,27 +1610,38 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
 
         md5 = _reference_md5_for_run(run)
         sequences_arr = np.asarray(run.sequences, dtype=np.uint8)
-        encoded = _rdv2.encode(
-            sequences_arr,
-            offsets_arr,
-            positions,
-            list(run.cigars),
-            chrom_seq,
-            md5,
-            run.reference_uri,
-            reads_per_slice=10_000,
+        # Codec-registry refactor (Task 5c): route REF_DIFF_V2 encode
+        # through the registry. Inputs that get written into the blob
+        # header (offsets/reference/md5/uri/cigars/positions) ride on the
+        # encode-only CodecContext fields. The codec returns a GROUP
+        # layout ({"refdiff_v2": blob}); we materialise the `sequences`
+        # group + child + @compression below — byte-identical to the
+        # prior direct ref_diff_v2.encode call.
+        encoded_channel = CODEC_REGISTRY[_Compression.REF_DIFF_V2].encode(
+            DecodedChannel.of_bytes(bytes(sequences_arr.tobytes())),
+            CodecContext(
+                offsets=offsets_arr,
+                positions=positions,
+                cigar_strings=list(run.cigars),
+                reference=chrom_seq,
+                reference_md5=md5,
+                reference_uri=run.reference_uri,
+                reads_per_slice=10_000,
+            ),
         )
-        arr = np.frombuffer(encoded, dtype=np.uint8)
         seq_group = sc.create_group("sequences")
-        ds = seq_group.create_dataset(
-            "refdiff_v2",
-            _Precision.UINT8,
-            length=int(arr.shape[0]),
-            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-            compression=_Compression.NONE,
-        )
-        ds.write(arr)
-        io.write_int_attr(ds, "compression", int(_Compression.REF_DIFF_V2), dtype="<u1")
+        for child_name, blob in encoded_channel.group_children.items():
+            arr = np.frombuffer(blob, dtype=np.uint8)
+            ds = seq_group.create_dataset(
+                child_name,
+                _Precision.UINT8,
+                length=int(arr.shape[0]),
+                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+                compression=_Compression.NONE,
+            )
+            ds.write(arr)
+            io.write_int_attr(
+                ds, "compression", int(_Compression.REF_DIFF_V2), dtype="<u1")
         return
 
     # Fallback: flat dataset with BASE_PACK (Q5b = C).
