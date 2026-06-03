@@ -35,7 +35,7 @@ Adding one codec ripples through ~3 enums + 6 ladders + 3 meta sets + the blob-p
 ## Goals
 
 1. Replace the scattered per-language codec dispatch with a single **codec registry** keyed by `Compression` id, fronted by a uniform **`Codec`** interface and a **`CodecContext`** value object — the full "all codecs via CodecContext" unification.
-2. Eliminate the four bespoke side-paths and the parallel `_codec_meta` set; the codec object becomes the single source of truth for *which* codec handles an id, whether it is context-aware, and what domain it produces.
+2. Eliminate the four bespoke side-paths and the parallel `_codec_meta` set; the codec object becomes the single source of truth for *which* codec handles an id, whether it is context-aware (`is_context_aware`), whether it needs an embedded reference (`needs_embedded_reference`, == legacy `_CONTEXT_AWARE`), and what domain it produces.
 3. Make "add a codec" a one-place change (a registry entry + a thin adapter) per language.
 4. **Python-first as the reference proof**, then Java and ObjC as follow-on plans reusing this exact interface shape.
 
@@ -72,11 +72,23 @@ Five small new units under `python/src/ttio/codecs/_registry.py` (split into `_c
 ```python
 class Codec(Protocol):
     id: Compression
-    is_context_aware: bool          # replaces _codec_meta._CONTEXT_AWARE
+    is_context_aware: bool          # needs sibling-channel context via CodecContext
+    needs_embedded_reference: bool  # the reference-embed predicate (== legacy _CONTEXT_AWARE)
 
     def decode(self, payload: ChannelPayload, ctx: CodecContext) -> DecodedChannel: ...
     def encode(self, value: DecodedChannel, ctx: CodecContext) -> EncodedChannel: ...
 ```
+
+> **Two distinct flags (do not conflate).** `is_context_aware` means the codec
+> needs run-derived sibling context (`CodecContext`) to encode/decode — True for
+> REF_DIFF_V2, FQZCOMP_NX16_Z, MATE_INLINE_V2. `needs_embedded_reference` means
+> the codec requires a reference resource embedded at `/study/references/...` —
+> True **only** for REF_DIFF_V2. The legacy `_codec_meta._CONTEXT_AWARE` frozenset
+> (`{REF_DIFF_V2}`) is the *reference-embed* predicate despite its name, consumed
+> by `spectral_dataset._embed_references_for_runs` to decide whether to embed a
+> reference; it maps to `needs_embedded_reference`, **not** `is_context_aware`.
+> Conflating them would embed references for FQZCOMP/MATE runs and change on-disk
+> output.
 
 - **Plain codecs** (rans O0/O1, base_pack, quality, delta_rans): `is_context_aware = False`; `decode` = `payload.as_bytes()` → existing `decode()` → `DecodedChannel.of_bytes(...)`; `encode` consults `ctx.element_size` only where needed (delta).
 - **Context-aware** (ref_diff, fqzcomp, name_tok, mate_info): pull `reference` / `read_lengths` / `revcomp_flags` from `ctx`; ref_diff uses `payload.group()` and returns `EncodedChannel.group_layout(...)`.
@@ -113,7 +125,7 @@ enc   = codec.encode(DecodedChannel.of_bytes(raw) | of_str_list(names), ctx)
 
 - `DecodedChannel` / `EncodedChannel` are **closed** unions — exactly 3 decode variants (`bytes`, `str-list`, `mate-info`) and 2 encode variants (`dataset-bytes`, `group-layout`). They map to **Java sealed interfaces / ObjC class clusters** with typed accessors — **no `Any`-typed returns**. The proof must confirm these 3+2 variants cover every current codec; a new domain later means a new variant in all three languages (so keep them minimal — YAGNI).
 - `CodecContext` → Java `record` / ObjC value object with nullable fields; no Python-specific types leak (`reference` is the already-shared `ReferenceImport`).
-- `Codec` → Java `interface` / ObjC `@protocol`; `CODEC_REGISTRY` → `Map<Compression, Codec>` / `NSDictionary<NSNumber*, id<TTIOCodec>>`. `is_context_aware` is a property on the codec, replacing the parallel meta sets.
+- `Codec` → Java `interface` / ObjC `@protocol`; `CODEC_REGISTRY` → `Map<Compression, Codec>` / `NSDictionary<NSNumber*, id<TTIOCodec>>`. `is_context_aware` and `needs_embedded_reference` are properties on the codec; `needs_embedded_reference` replaces the parallel `_codec_meta._CONTEXT_AWARE` / `CodecMeta` / `TTIOCodecMeta` reference-embed sets.
 - The codec algorithm modules are unchanged; only thin adapters + dispatch are added.
 
 ## Testing strategy
@@ -124,7 +136,7 @@ enc   = codec.encode(DecodedChannel.of_bytes(raw) | of_str_list(names), ctx)
   - **Completeness guard:** every `Compression` id that names a real TTI-O codec has a `CODEC_REGISTRY` entry, and every entry's `id` matches its key.
   - `DecodedChannel`/`EncodedChannel` accessor-mismatch raises a clear error (e.g. calling `as_str_list()` on a bytes variant).
   - `CodecContext`-None / missing-field safety for plain codecs.
-  - `is_context_aware` on each codec matches the old `_codec_meta._CONTEXT_AWARE` membership.
+  - `needs_embedded_reference` on each codec matches the old `_codec_meta._CONTEXT_AWARE` membership (`{REF_DIFF_V2}`); `is_context_aware` is the broader "needs CodecContext" flag (REF_DIFF/FQZCOMP/MATE).
 - TDD: write the registry + round-trip test first; watch fail; implement adapters; collapse dispatch sites one at a time keeping the suite green.
 
 ## File structure

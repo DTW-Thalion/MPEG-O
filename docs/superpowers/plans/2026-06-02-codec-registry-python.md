@@ -745,42 +745,77 @@ git -C ~/TTI-O commit -m "refactor(codecs): route genomic encode through codec r
 
 ---
 
-## Task 6: Remove `_codec_meta`; fold `is_context_aware` onto codecs
+## Task 6: Add `needs_embedded_reference`; drop `_codec_meta`
 
-**Files:** Modify `python/src/ttio/codecs/_codec_meta.py` (remove or reduce), and its importers; extend `python/tests/test_codec_registry.py`.
+**IMPORTANT (corrected after T6 BLOCK):** the legacy `_codec_meta._CONTEXT_AWARE`
+frozenset is `{REF_DIFF_V2}` and — despite its name — means **"needs an embedded
+reference"**, NOT "needs CodecContext". Its sole consumer,
+`spectral_dataset._embed_references_for_runs`, uses it to decide whether to embed
+a reference at `/study/references/...`. The registry's `is_context_aware` is a
+*different, broader* predicate (REF_DIFF + FQZCOMP + MATE_INLINE). Replacing the
+consumer's check with `is_context_aware` would embed references for FQZCOMP/MATE
+runs and **change on-disk output** — a wire change. So introduce a distinct
+`needs_embedded_reference` flag (True only for REF_DIFF_V2) and wire the consumer
+to that; keep `is_context_aware` unchanged.
 
-- [ ] **Step 1: Add a parity test** — append:
+**Files:** Modify `python/src/ttio/codecs/_registry.py`, `python/src/ttio/spectral_dataset.py`, delete `python/src/ttio/codecs/_codec_meta.py`; extend `python/tests/test_codec_registry.py`.
+
+- [ ] **Step 1: Add `needs_embedded_reference` to every codec adapter + the protocol.** In `codecs/_registry.py`:
+  - Add `needs_embedded_reference: bool` to the `Codec` Protocol.
+  - On every adapter set `needs_embedded_reference = False`, EXCEPT `_RefDiffV2Codec` which sets `needs_embedded_reference = True`. (For `_RansCodec`, set it in `__init__` like `is_context_aware`.)
+
+- [ ] **Step 2: Add the parity test** — append to `python/tests/test_codec_registry.py`:
 
 ```python
-def test_is_context_aware_matches_legacy_meta():
-    """Each codec's is_context_aware matches the legacy _CONTEXT_AWARE set."""
+def test_needs_embedded_reference_matches_legacy_meta():
+    """needs_embedded_reference matches the legacy _CONTEXT_AWARE set ({REF_DIFF_V2})."""
     import importlib
     try:
         meta = importlib.import_module("ttio.codecs._codec_meta")
         legacy = set(getattr(meta, "_CONTEXT_AWARE"))
     except (ModuleNotFoundError, AttributeError):
-        legacy = {Compression.REF_DIFF_V2}  # documented legacy membership
+        legacy = {Compression.REF_DIFF_V2}  # legacy membership (verified in T6)
+    assert legacy == {Compression.REF_DIFF_V2}  # guard: pin the expected legacy set
     for cid, codec in CODEC_REGISTRY.items():
-        assert codec.is_context_aware == (cid in legacy), cid
+        assert codec.needs_embedded_reference == (cid in legacy), cid
+
+
+def test_is_context_aware_is_broader_than_embed():
+    """is_context_aware (needs CodecContext) is the broader flag."""
+    aware = {cid for cid, c in CODEC_REGISTRY.items() if c.is_context_aware}
+    embed = {cid for cid, c in CODEC_REGISTRY.items() if c.needs_embedded_reference}
+    assert embed == {Compression.REF_DIFF_V2}
+    assert {Compression.REF_DIFF_V2, Compression.FQZCOMP_NX16_Z,
+            Compression.MATE_INLINE_V2} <= aware
 ```
 
-- [ ] **Step 2: Run** — Expected: PASS if the registry's `is_context_aware` flags match the legacy set. If the legacy set contains more than `{REF_DIFF_V2}` (e.g. it also lists FQZCOMP/MATE), align the registry flags to match exactly, then re-run.
+Run: `... python -m pytest tests/test_codec_registry.py -v` — expect PASS (with `_codec_meta` still present, `legacy == {REF_DIFF_V2}`).
 
-Run: `... python -m pytest tests/test_codec_registry.py::test_is_context_aware_matches_legacy_meta -v`
-
-- [ ] **Step 3: Replace `_codec_meta` consumers with the registry.** Find every importer of `_codec_meta` / `_CONTEXT_AWARE`:
+- [ ] **Step 3: Find the `_codec_meta` consumer(s) and rewire to `needs_embedded_reference`.**
 ```
-wsl -d Ubuntu -- bash -c 'grep -rn "_codec_meta\|_CONTEXT_AWARE" ~/TTI-O/python/src'
+wsl -d Ubuntu -- bash -c 'grep -rn "_codec_meta\|_CONTEXT_AWARE\|is_context_aware" ~/TTI-O/python/src ~/TTI-O/python/tests'
 ```
-Replace each `codec_id in _CONTEXT_AWARE` check with `CODEC_REGISTRY[Compression(codec_id)].is_context_aware`. Then delete `_codec_meta.py` (or reduce it to a thin re-export if external code imports it — grep tests too).
+The production consumer is `spectral_dataset._embed_references_for_runs` (it calls the legacy `is_context_aware(...)`/`_CONTEXT_AWARE` membership to gate reference embed). READ it first, then replace ONLY the membership check with:
+```python
+from .codecs._registry import CODEC_REGISTRY
+from .enums import Compression as _Compression
+... CODEC_REGISTRY[_Compression(c)].needs_embedded_reference ...
+```
+preserving the surrounding `any(...)`/validity-guard logic exactly. Do not change the embed behavior — the predicate result must be identical (True only when a `sequences` override is REF_DIFF_V2).
 
-- [ ] **Step 4: Run** the codec/genomic suites again (Task 5 Step 4 command). Expected: all pass.
+- [ ] **Step 4: Delete `_codec_meta.py`** once no `python/src` code imports it. If any TEST imports it, rewire that test to the registry too (the parity test in Step 2 already falls back to `{REF_DIFF_V2}`).
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Run the codec/genomic suites — MUST stay green** (the embed-decision byte-equality is the key invariant):
+```
+... python -m pytest tests/test_m82_genomic_run.py tests/test_m86_genomic_codec_wiring.py tests/test_m90_10_genomic_wire_codec.py tests/test_transport_codec.py tests/test_codec_registry.py -q
+```
+Plus any reference-embed test (grep `embed_reference` / `references` in tests). Expected: all pass; on-disk reference-embed behavior unchanged.
+
+- [ ] **Step 6: Commit**
 
 ```bash
 git -C ~/TTI-O add -A
-git -C ~/TTI-O commit -m "refactor(codecs): fold context-aware metadata onto codec objects; drop _codec_meta"
+git -C ~/TTI-O commit -m "refactor(codecs): add needs_embedded_reference; drop _codec_meta"
 ```
 
 ---
