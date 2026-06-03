@@ -9,6 +9,7 @@ from typing import Protocol
 
 from ..enums import Compression
 from . import base_pack, delta_rans, quality, rans
+from . import fqzcomp_nx16_z, mate_info_v2, name_tokenizer_v2, ref_diff_v2
 from ._context import ChannelPayload, CodecContext, DecodedChannel, EncodedChannel
 
 
@@ -71,10 +72,116 @@ class _DeltaRansCodec:
         )
 
 
+class _NameTokenizedV2Codec:
+    id = Compression.NAME_TOKENIZED_V2
+    is_context_aware = False  # str-list domain, but no run context needed
+
+    def decode(self, payload, ctx):
+        return DecodedChannel.of_str_list(name_tokenizer_v2.decode(payload.as_bytes()))
+
+    def encode(self, value, ctx):
+        return EncodedChannel.of_dataset(name_tokenizer_v2.encode(value.as_str_list()))
+
+
+class _FqzcompNx16ZCodec:
+    id = Compression.FQZCOMP_NX16_Z
+    is_context_aware = True
+
+    def decode(self, payload, ctx):
+        flags = None
+        if ctx.revcomp_flags is not None:
+            flags = [int(x) for x in ctx.revcomp_flags]
+        qualities, _read_lengths, _rc = fqzcomp_nx16_z.decode_with_metadata(
+            payload.as_bytes(), flags
+        )
+        return DecodedChannel.of_bytes(qualities)
+
+    def encode(self, value, ctx):
+        if ctx.read_lengths is None or ctx.revcomp_flags is None:
+            raise ValueError(
+                "FQZCOMP_NX16_Z encode requires CodecContext.read_lengths + revcomp_flags"
+            )
+        blob = fqzcomp_nx16_z.encode(
+            value.as_bytes(),
+            [int(x) for x in ctx.read_lengths],
+            [int(x) for x in ctx.revcomp_flags],
+        )
+        return EncodedChannel.of_dataset(blob)
+
+
+class _MateInlineV2Codec:
+    id = Compression.MATE_INLINE_V2
+    is_context_aware = True
+
+    def decode(self, payload, ctx):
+        if ctx.own_chrom_ids is None or ctx.own_positions is None or ctx.n_records is None:
+            raise ValueError(
+                "MATE_INLINE_V2 decode requires CodecContext.own_chrom_ids/own_positions/n_records"
+            )
+        mc, mp, tl = mate_info_v2.decode(
+            payload.as_bytes(), ctx.own_chrom_ids, ctx.own_positions, ctx.n_records
+        )
+        return DecodedChannel.of_mate_info(
+            {"mate_chrom_ids": mc, "mate_positions": mp, "template_lengths": tl}
+        )
+
+    def encode(self, value, ctx):
+        if ctx.own_chrom_ids is None or ctx.own_positions is None:
+            raise ValueError(
+                "MATE_INLINE_V2 encode requires CodecContext.own_chrom_ids/own_positions"
+            )
+        d = value.as_mate_info()
+        blob = mate_info_v2.encode(
+            d["mate_chrom_ids"], d["mate_positions"], d["template_lengths"],
+            ctx.own_chrom_ids, ctx.own_positions,
+        )
+        return EncodedChannel.of_dataset(blob)
+
+
+class _RefDiffV2Codec:
+    id = Compression.REF_DIFF_V2
+    is_context_aware = True
+
+    def decode(self, payload, ctx):
+        # Relocated from GenomicRun._decode_ref_diff_v2_sequences: parse the blob
+        # header, resolve the reference via ctx, then decode.
+        ds = payload.group().open_dataset("refdiff_v2")
+        blob = bytes(ds.read(offset=0, count=int(ds.length)))
+        header = ref_diff_v2.parse_blob_header(blob)
+        if ctx.reference_resolver is None or ctx.chromosomes is None:
+            raise ValueError("REF_DIFF_V2 decode requires CodecContext.reference_resolver + chromosomes")
+        unique = set(ctx.chromosomes)
+        if len(unique) == 0:
+            chrom = ""
+        elif len(unique) > 1:
+            raise RuntimeError(
+                "REF_DIFF_V2 supports single-chromosome runs only; "
+                f"this run carries {sorted(unique)}.")
+        else:
+            chrom = next(iter(unique))
+        chrom_seq = ctx.reference_resolver.resolve(
+            uri=header.reference_uri, expected_md5=header.reference_md5, chromosome=chrom)
+        cigars = ctx.cigars_provider() if ctx.cigars_provider else []
+        out_seq, _off = ref_diff_v2.decode(
+            blob, ctx.positions, cigars, chrom_seq, ctx.read_count, ctx.total_bases)
+        return DecodedChannel.of_bytes(bytes(out_seq))
+
+    def encode(self, value, ctx):
+        # ref_diff encode is performed by the writer path (Task 5); the registry
+        # adapter currently supports decode only.
+        raise NotImplementedError(
+            "REF_DIFF_V2 encode is performed by the writer path (see Task 5); "
+            "the registry adapter currently supports decode only.")
+
+
 CODEC_REGISTRY: "dict[Compression, Codec]" = {
     Compression.RANS_ORDER0: _RansCodec(Compression.RANS_ORDER0, 0),
     Compression.RANS_ORDER1: _RansCodec(Compression.RANS_ORDER1, 1),
     Compression.BASE_PACK: _BasePackCodec(),
     Compression.QUALITY_BINNED: _QualityBinnedCodec(),
     Compression.DELTA_RANS_ORDER0: _DeltaRansCodec(),
+    Compression.NAME_TOKENIZED_V2: _NameTokenizedV2Codec(),
+    Compression.FQZCOMP_NX16_Z: _FqzcompNx16ZCodec(),
+    Compression.MATE_INLINE_V2: _MateInlineV2Codec(),
+    Compression.REF_DIFF_V2: _RefDiffV2Codec(),
 }

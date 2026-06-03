@@ -103,3 +103,21 @@ def test_delta_rans_registry_roundtrip_needs_element_size():
 def test_registry_entry_id_matches_key():
     for cid, codec in CODEC_REGISTRY.items():
         assert codec.id == cid
+
+
+def test_name_tokenized_registry_roundtrip():
+    codec = CODEC_REGISTRY[Compression.NAME_TOKENIZED_V2]
+    assert codec.is_context_aware is False
+    names = [f"read{i}" for i in range(200)]
+    enc = codec.encode(DecodedChannel.of_str_list(names), CodecContext.empty())
+    dec = codec.decode(ChannelPayload.of_bytes(enc.dataset_bytes), CodecContext.empty())
+    assert dec.as_str_list() == names
+
+
+def test_context_aware_codecs_registered():
+    for cid in (Compression.FQZCOMP_NX16_Z, Compression.MATE_INLINE_V2,
+                Compression.REF_DIFF_V2, Compression.NAME_TOKENIZED_V2):
+        assert cid in CODEC_REGISTRY
+    assert CODEC_REGISTRY[Compression.REF_DIFF_V2].is_context_aware is True
+    assert CODEC_REGISTRY[Compression.FQZCOMP_NX16_Z].is_context_aware is True
+    assert CODEC_REGISTRY[Compression.MATE_INLINE_V2].is_context_aware is True
