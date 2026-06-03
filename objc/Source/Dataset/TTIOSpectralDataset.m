@@ -442,6 +442,44 @@ static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
     return ((TTIOEncodedDatasetBytes *)enc).bytes;
 }
 
+/** Encode read-names through the NAME_TOKENIZED_V2 codec via the
+ *  registry. Byte-identical to [TTIONameTokenizerV2 encodeNames:]. */
+static NSData *_TTIO_M86_EncodeNamesViaRegistry(NSArray<NSString *> *names)
+{
+    id<TTIOCodec> c =
+        [TTIOCodecRegistry codecForId:TTIOCompressionNameTokenizedV2];
+    if (c == nil) return nil;
+    NSError *e = nil;
+    TTIOEncodedChannel *enc =
+        [c encode:[[TTIODecodedStringList alloc] initWithNames:names]
+           context:[TTIOCodecContext emptyContext]
+             error:&e];
+    return ((TTIOEncodedDatasetBytes *)enc).bytes;
+}
+
+/** Encode mate-info through the MATE_INLINE_V2 codec via the registry.
+ *  Byte-identical to [TTIOMateInfoV2 encodeMateChromIds:...]. */
+static NSData *_TTIO_M86_EncodeMateInfoViaRegistry(NSData *mateChromIds,
+                                                   NSData *matePositions,
+                                                   NSData *templateLengths,
+                                                   NSData *ownChromIds,
+                                                   NSData *ownPositions,
+                                                   NSError **error)
+{
+    id<TTIOCodec> c =
+        [TTIOCodecRegistry codecForId:TTIOCompressionMateInlineV2];
+    if (c == nil) return nil;
+    TTIOCodecContext *ctx = [TTIOCodecContext emptyContext];
+    ctx.ownChromIds = ownChromIds;
+    ctx.ownPositions = ownPositions;
+    TTIODecodedMateInfo *mi =
+        [[TTIODecodedMateInfo alloc] initWithMateChromIds:mateChromIds
+                                            matePositions:matePositions
+                                          templateLengths:templateLengths];
+    TTIOEncodedChannel *enc = [c encode:mi context:ctx error:error];
+    return ((TTIOEncodedDatasetBytes *)enc).bytes;
+}
+
 // unsigned LEB128 varint writer for the cigars rANS path.
 // The serialisation contract is `varint(asciiLen) + asciiBytes` per
 // CIGAR (§2.5 of the Phase C plan; mirrors NAME_TOKENIZED's verbatim
@@ -1163,12 +1201,12 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2HDF5(TTIOHDF5Group *sc,
     }
 
     NSError *encErr = nil;
-    NSData *blob = [TTIOMateInfoV2 encodeMateChromIds:mateChromIds
-                                        matePositions:run.matePositionsData
-                                      templateLengths:run.templateLengthsData
-                                          ownChromIds:ownChromIds
-                                         ownPositions:run.positionsData
-                                                error:&encErr];
+    NSData *blob = _TTIO_M86_EncodeMateInfoViaRegistry(mateChromIds,
+                                                       run.matePositionsData,
+                                                       run.templateLengthsData,
+                                                       ownChromIds,
+                                                       run.positionsData,
+                                                       &encErr);
     if (!blob) {
         if (error) *error = encErr ?: [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2101
@@ -1224,12 +1262,12 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
     }
 
     NSError *encErr = nil;
-    NSData *blob = [TTIOMateInfoV2 encodeMateChromIds:mateChromIds
-                                        matePositions:run.matePositionsData
-                                      templateLengths:run.templateLengthsData
-                                          ownChromIds:ownChromIds
-                                         ownPositions:run.positionsData
-                                                error:&encErr];
+    NSData *blob = _TTIO_M86_EncodeMateInfoViaRegistry(mateChromIds,
+                                                       run.matePositionsData,
+                                                       run.templateLengthsData,
+                                                       ownChromIds,
+                                                       run.positionsData,
+                                                       &encErr);
     if (!blob) {
         if (error) *error = encErr ?: [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2101
@@ -1961,10 +1999,16 @@ static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16Z(TTIOHDF5Group *sc,
                        ? flgs[i] : 0;
         [revcompFlags addObject:(f & 16u) ? @1 : @0];
     }
-    NSData *encoded = [TTIOFqzcompNx16Z encodeWithQualities:run.qualitiesData
-                                                 readLengths:readLengths
-                                                revcompFlags:revcompFlags
-                                                       error:error];
+    TTIOCodecContext *fqzCtx = [TTIOCodecContext emptyContext];
+    fqzCtx.readLengths = readLengths;
+    fqzCtx.revcompFlags = revcompFlags;
+    id<TTIOCodec> fqzCodec =
+        [TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z];
+    TTIOEncodedChannel *fqzEnc =
+        [fqzCodec encode:[[TTIODecodedBytes alloc] initWithData:run.qualitiesData]
+                 context:fqzCtx
+                   error:error];
+    NSData *encoded = ((TTIOEncodedDatasetBytes *)fqzEnc).bytes;
     if (!encoded) return NO;
     TTIOHDF5Dataset *ds = [sc createDatasetNamed:@"qualities"
                                         precision:TTIOPrecisionUInt8
@@ -2200,7 +2244,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                forName:@"compression"
                                  error:error]) return NO;
     } else if ([TTIONameTokenizerV2 nativeAvailable]) {
-        NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
+        NSData *encoded = _TTIO_M86_EncodeNamesViaRegistry(run.readNames);
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2032
@@ -2684,7 +2728,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                            (uint8_t)TTIOCompressionNameTokenizedV2,
                                            error)) return NO;
     } else if ([TTIONameTokenizerV2 nativeAvailable]) {
-        NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
+        NSData *encoded = _TTIO_M86_EncodeNamesViaRegistry(run.readNames);
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2032
