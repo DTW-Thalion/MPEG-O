@@ -406,7 +406,6 @@ class GenomicRun:
 
         # v1.8 probe: for sequences, check for the group layout first.
         if name == "sequences" and self._sequences_is_ref_diff_v2():
-            from .enums import Compression
             from .codecs._registry import CODEC_REGISTRY
             from .codecs._context import ChannelPayload
             sig = self.group.open_group("signal_channels")
@@ -425,7 +424,6 @@ class GenomicRun:
 
         # Compressed: read all bytes, decode, cache for subsequent slices.
         all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-        from .enums import Compression
         from .codecs._registry import CODEC_REGISTRY
         from .codecs._context import ChannelPayload
         try:
@@ -460,26 +458,6 @@ class GenomicRun:
             result = False
         self._sequences_is_v2_cached = result
         return result
-
-    def _decode_fqzcomp_nx16_z_qualities(self, encoded: bytes) -> bytes:
-        """Decode the ``qualities`` channel encoded with the M94.Z codec.
-
-        Drop-in parallel to :meth:`_decode_fqzcomp_nx16_qualities` — same
-        signature, same ``revcomp_flags`` derivation; only the underlying
-        codec module differs (``fqzcomp_nx16_z`` instead of v1's
-        ``fqzcomp_nx16``).
-        """
-        from .codecs.fqzcomp_nx16_z import (
-            decode_with_metadata as _fqz_z_decode,
-        )
-
-        SAM_REVERSE = 16
-        flags = self.index.flags  # numpy uint32 array
-        revcomp_flags = [
-            1 if (int(f) & SAM_REVERSE) else 0 for f in flags
-        ]
-        qualities, _, _ = _fqz_z_decode(encoded, revcomp_flags=revcomp_flags)
-        return qualities
 
     def _all_cigars(self) -> list[str]:
         """Return the full list of CIGAR strings for this run.
