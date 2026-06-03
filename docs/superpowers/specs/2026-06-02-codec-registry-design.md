@@ -24,13 +24,13 @@ Adding one codec ripples through ~3 enums + 6 ladders + 3 meta sets + the blob-p
 | RANS_ORDER0 / ORDER1 | 4 / 5 | bytes→bytes | none | dataset |
 | BASE_PACK | 6 | bytes→bytes | none | dataset |
 | QUALITY_BINNED | 7 | bytes→bytes | none | dataset |
-| DELTA_RANS | (signal) | bytes→bytes | `element_size` (encode) | dataset |
-| REF_DIFF_V2 | 14 | bytes | `reference` | **group** (`sequences/refdiff_v2`) |
-| FQZCOMP_NX16_Z | 11 | bytes | `read_lengths`, `revcomp_flags` | dataset |
+| DELTA_RANS_ORDER0 | 11 | bytes→bytes | `element_size` (encode) | dataset |
+| FQZCOMP_NX16_Z | 12 | bytes | `read_lengths`, `revcomp_flags` | dataset |
+| MATE_INLINE_V2 | 13 | **structured triple** | `own_chrom_ids`, `own_positions`, `n_records` | dataset |
+| REF_DIFF_V2 | 14 | bytes | `reference` (resolved via blob header), `positions`, `cigars`, `total_bases` | **group** (`sequences/refdiff_v2`) |
 | NAME_TOKENIZED_V2 | 15 | **`list[str]`** | none | dataset |
-| MATE_INLINE_V2 | 13 | **structured dict** | structured | dataset/group |
 
-(Exact ids per `python/src/ttio/enums.py`; verify during implementation.)
+(ids verified against `python/src/ttio/enums.py:81-108`.)
 
 ## Goals
 
@@ -50,8 +50,13 @@ Adding one codec ripples through ~3 enums + 6 ladders + 3 meta sets + the blob-p
 
 Five small new units under `python/src/ttio/codecs/_registry.py` (split into `_context.py` if it grows), plus a thin adapter per existing codec.
 
-1. **`CodecContext`** — frozen dataclass built once per `GenomicRun` (and per encode call), carrying everything any codec might need; plain codecs ignore it:
-   `reference: ReferenceImport | None`, `read_lengths: np.ndarray | None`, `revcomp_flags: np.ndarray | None`, `element_size: int | None`, `read_count: int | None`.
+1. **`CodecContext`** — frozen dataclass built once per `GenomicRun` (and per encode call), carrying everything any codec might need; plain codecs ignore it. The context-aware genomic codecs need a rich, but bounded, field set sourced from the run's index + storage:
+   - `read_lengths: np.ndarray | None` (fqzcomp, == index.lengths), `revcomp_flags: np.ndarray | None` (fqzcomp, derived `(flags & 16) != 0`), `element_size: int | None` (delta encode), `read_count: int | None` (== index.count).
+   - `positions: np.ndarray | None`, `cigars: list[str] | None`, `total_bases: int | None`, `chromosomes: list[str] | None` (ref_diff).
+   - `own_chrom_ids: np.ndarray | None`, `own_positions: np.ndarray | None`, `n_records: int | None` (mate_info).
+   - `reference_resolver: ReferenceResolver | None` (ref_diff resolves its reference from the *blob header* `reference_uri`/`reference_md5`, so the resolver — not a pre-resolved sequence — is what the context carries; this couples `CodecContext` to the HDF5-backed run for ref_diff, matching today's `_decode_ref_diff_v2_sequences` which requires HDF5).
+
+   Built lazily and cached on `GenomicRun._codec_context()`. Plain codecs receive it and read nothing.
 
 2. **`ChannelPayload`** — abstracts *where encoded bytes live*, hiding the dataset-vs-group difference so codecs never touch the storage protocol directly:
    `as_bytes() -> bytes` (dataset-stored), `group() -> StorageGroup` (ref_diff). Constructed by the channel layer from the storage node via `ChannelPayload.from_node(node)`.
