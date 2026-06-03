@@ -136,7 +136,8 @@ libTTIO_HEADER_FILES = \
 	Codecs/Registry/TTIOEncodedChannel.h \
 	Codecs/Registry/TTIOChannelPayload.h \
 	Codecs/Registry/TTIOCodecContext.h \
-	Codecs/Registry/TTIOCodec.h
+	Codecs/Registry/TTIOCodec.h \
+	Codecs/Registry/TTIOCodecRegistry.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \
@@ -261,7 +262,8 @@ libTTIO_OBJC_FILES = \
 	Codecs/Registry/TTIODecodedChannel.m \
 	Codecs/Registry/TTIOEncodedChannel.m \
 	Codecs/Registry/TTIOChannelPayload.m \
-	Codecs/Registry/TTIOCodecContext.m
+	Codecs/Registry/TTIOCodecContext.m \
+	Codecs/Registry/TTIOCodecRegistry.m
 
 # Objective-C++ source files compiled with `clang -x objective-c++`.
 # Pulled in via the GNUstep make convention (xxx_OBJCC_FILES); the
