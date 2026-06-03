@@ -168,8 +168,23 @@ public final class CodecRegistry {
             return new DecodedChannel.Bytes(out.sequences);
         }
         public EncodedChannel encode(DecodedChannel v, CodecContext ctx) {
-            throw new UnsupportedOperationException(
-                "REF_DIFF_V2 encode is wired by the writer path in Task 5");
+            if (ctx.offsets() == null || ctx.positions() == null
+                    || ctx.reference() == null || ctx.referenceMd5() == null
+                    || ctx.cigarsProvider() == null) {
+                throw new IllegalArgumentException(
+                    "REF_DIFF_V2 encode requires offsets/positions/reference/"
+                    + "referenceMd5/cigarsProvider");
+            }
+            int readsPerSlice = ctx.readsPerSlice() != null
+                ? ctx.readsPerSlice() : 10_000;
+            byte[] blob = RefDiffV2.encode(
+                bytes(v), ctx.offsets(), ctx.positions(),
+                ctx.cigarsProvider().get(), ctx.reference(),
+                ctx.referenceMd5(), ctx.referenceUri(), readsPerSlice);
+            return new EncodedChannel.GroupLayout(
+                new java.util.LinkedHashMap<>(
+                    java.util.Map.of("refdiff_v2", blob)),
+                new java.util.LinkedHashMap<>());
         }
     }
 

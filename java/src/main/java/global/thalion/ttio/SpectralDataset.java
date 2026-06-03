@@ -2119,10 +2119,22 @@ public class SpectralDataset implements
                     + "got " + offsets64.length + " for n=" + n);
             }
             String[] cigarArr = run.cigars().toArray(new String[0]);
-            byte[] encoded = global.thalion.ttio.codecs.RefDiffV2.encode(
-                rawBytes, offsets64n1, run.positions(),
-                cigarArr, chromSeq, md5, run.referenceUri(),
-                10_000);
+            long[] offsetsFinal = offsets64n1;
+            var refDiffCtx = global.thalion.ttio.codecs.registry.CodecContext.builder()
+                .offsets(offsetsFinal)
+                .positions(run.positions())
+                .reference(chromSeq)
+                .referenceMd5(md5)
+                .referenceUri(run.referenceUri())
+                .readsPerSlice(10_000)
+                .cigarsProvider(() -> cigarArr)
+                .build();
+            var layout = (global.thalion.ttio.codecs.registry.EncodedChannel.GroupLayout)
+                global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                    .get(Enums.Compression.REF_DIFF_V2)
+                    .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.Bytes(rawBytes),
+                        refDiffCtx);
+            byte[] encoded = layout.children().get("refdiff_v2");
             try (var seqGroup = sc.createGroup("sequences")) {
                 global.thalion.ttio.providers.StorageDataset blobDs;
                 try {
