@@ -77,6 +77,7 @@ extern void testV111DecryptInPlace(void);
 extern void testM79GenomicEnums(void);
 extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
+extern void testCodecRegistry(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -734,6 +735,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 3.10: CoverageGapWatchdog (.tis >= 1% of .tio + every accessor preserved)")
             testCoverageGapWatchdog();
         END_SET("transport v0.11 Task 3.10: CoverageGapWatchdog (.tis >= 1% of .tio + every accessor preserved)")
+
+        START_SET("codec registry")
+            testCodecRegistry();
+        END_SET("codec registry")
     }
     return 0;
 }
