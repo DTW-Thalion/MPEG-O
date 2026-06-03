@@ -51,7 +51,13 @@
 #import "Codecs/TTIOMateInfoV2.h"               // inline mate-pair codec
 #import "Codecs/TTIORefDiffV2.h"               // bit-packed ref-diff v2
 #import "Codecs/TTIONameTokenizerV2.h"          // v1.8 #11 ch3: adaptive name-tokenizer v2
+#import "Codecs/Registry/TTIOCodecRegistry.h"   // Task 6: codec-registry routing
+#import "Codecs/Registry/TTIOCodec.h"
+#import "Codecs/Registry/TTIODecodedChannel.h"
+#import "Codecs/Registry/TTIOEncodedChannel.h"
+#import "Codecs/Registry/TTIOCodecContext.h"
 #import <hdf5.h>
+#include <objc/message.h>                          // Task 6: typed objc_msgSend bridge
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
 // little-endian serialisation helpers. Use macOS's
@@ -68,6 +74,24 @@
 #  define TTIO_HOST_TO_LE32(x) htole32(x)
 #  define TTIO_HOST_TO_LE64(x) htole64(x)
 #endif
+
+// Bridge to the dynamically-resolved TTIOHDF5GroupAdapter. The adapter
+// lives in a separate compilation unit and is looked up by name to
+// avoid a hard build dependency. `initWithGroup:` is an init-family
+// selector, so a direct -performSelector: trips ARC's hard
+// "performSelector names a selector which retains the object" error
+// once the selector is in scope. We dispatch through a typed
+// objc_msgSend pointer instead: identical runtime behaviour (the
+// alloc/init pair is unchanged) but ARC tracks ownership normally.
+static id _TTIO_MakeHDF5GroupAdapter(id group)
+{
+    Class cls = NSClassFromString(@"TTIOHDF5GroupAdapter");
+    if (cls == Nil) return nil;
+    id obj = [cls alloc];
+    SEL sel = NSSelectorFromString(@"initWithGroup:");
+    id (*msg)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
+    return msg(obj, sel, group);
+}
 
 // Forward declarations — needed because mate_info and ref_diff v2 write
 // paths call functions defined later in the file.
@@ -402,22 +426,20 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
 /** Encode raw bytes through the selected M86 codec. */
 static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
 {
-    switch (codec) {
-        case TTIOCompressionRansOrder0:
-            return TTIORansEncode(raw, 0);
-        case TTIOCompressionRansOrder1:
-            return TTIORansEncode(raw, 1);
-        case TTIOCompressionBasePack:
-            return TTIOBasePackEncode(raw);
-        case TTIOCompressionQualityBinned:           // M86 Phase D
-            return TTIOQualityEncode(raw);
-        default:
-            [NSException raise:NSInvalidArgumentException
-                        format:@"_TTIO_M86_EncodeWithCodec: codec %lu not "
-                               @"a TTIO byte-stream codec",
-                               (unsigned long)codec];
-            return nil;
+    id<TTIOCodec> c = [TTIOCodecRegistry codecForId:codec];
+    if (c == nil) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"_TTIO_M86_EncodeWithCodec: codec %lu not "
+                           @"a TTIO byte-stream codec",
+                           (unsigned long)codec];
+        return nil;
     }
+    NSError *e = nil;
+    TTIOEncodedChannel *enc =
+        [c encode:[[TTIODecodedBytes alloc] initWithData:raw]
+           context:[TTIOCodecContext emptyContext]
+             error:&e];
+    return ((TTIOEncodedDatasetBytes *)enc).bytes;
 }
 
 // unsigned LEB128 varint writer for the cigars rANS path.
@@ -2525,8 +2547,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // slightly different signature (no `compression` arg). Wrap via
     // adapter to bridge.
     id<TTIOStorageGroup> idxGAdapter =
-        (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-            performSelector:@selector(initWithGroup:) withObject:idxG];
+        (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(idxG);
     if (!idxGAdapter) return NO;
     if (![idx writeToGroup:idxGAdapter error:error]) return NO;
 
@@ -3344,8 +3365,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             TTIOHDF5Group *runG = [gg openGroupNamed:trimmed error:error];
             if (!runG) return nil;
             id<TTIOStorageGroup> runAdapter =
-                (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-                    performSelector:@selector(initWithGroup:) withObject:runG];
+                (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(runG);
             TTIOGenomicRun *gr =
                 [TTIOGenomicRun openFromGroup:runAdapter name:trimmed error:error];
             if (!gr) return nil;
@@ -3447,9 +3467,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                     [refsG openGroupNamed:uri error:NULL];
                 if (oneRefG == nil) continue;
                 id<TTIOStorageGroup> oneRefAdapter =
-                    (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-                        performSelector:@selector(initWithGroup:)
-                                 withObject:oneRefG];
+                    (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(oneRefG);
                 TTIOReferenceImport *r =
                     [TTIOReferenceImport readFromGroup:oneRefAdapter];
                 if (r != nil) refs[uri] = r;
