@@ -89,6 +89,11 @@ public class GenomicRun
     // cost again (Gotcha §101). Mutable HashMap, not Map.of(), so the
     // dispatch helper can populate it.
     private final Map<String, byte[]> decodedByteChannels = new HashMap<>();
+    // Task 4 (codec registry): cached run-derived CodecContext. Built
+    // once on first decode and reused for every codec.decode() call on
+    // this GenomicRun instance. Mirrors the per-run lifetime of the
+    // other decode caches above.
+    private global.thalion.ttio.codecs.registry.CodecContext codecCtxCache;
     // lazy decode cache for the read_names channel when it
     // carries a NAME_TOKENIZED codec override. Held as a List<String>
     // (not byte[]) — different value type and
@@ -415,7 +420,20 @@ public class GenomicRun
         }
         // v1.8 probe: for sequences, check for the group layout first.
         if ("sequences".equals(name) && isSequencesRefDiffV2()) {
-            byte[] decoded = decodeRefDiffV2Sequences();
+            // Task 4: route REF_DIFF_V2 through the codec registry. The
+            // adapter opens the refdiff_v2 child dataset, parses the blob
+            // header, resolves the reference via CodecContext, and calls
+            // the same RefDiffV2.decode() the old side-path used.
+            ensureSignalChannels();
+            byte[] decoded;
+            try (StorageGroup sigGrp = signalChannels.openGroup("sequences")) {
+                decoded = ((global.thalion.ttio.codecs.registry.DecodedChannel.Bytes)
+                    global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                        .get(global.thalion.ttio.Enums.Compression.REF_DIFF_V2)
+                        .decode(new global.thalion.ttio.codecs.registry.ChannelPayload
+                            .GroupPayload(sigGrp), codecContext())).data();
+            }
+            decodedRefDiffV2 = decoded;
             decodedByteChannels.put(name, decoded);
             byte[] out = new byte[count];
             System.arraycopy(decoded, (int) offset, out, 0, count);
@@ -432,42 +450,108 @@ public class GenomicRun
         // Compressed: read the whole channel, decode once, cache.
         long total = ds.shape()[0];
         byte[] all = (byte[]) ds.readSlice(0L, total);
+        // Task 4: route through the codec registry. The registry's
+        // RANS/BASE_PACK/QUALITY/FQZCOMP decode adapters wrap the same
+        // static codec calls verbatim — byte-identical to the old ladder
+        // (FQZCOMP pulls revcomp_flags from CodecContext, derived from
+        // flags & 16 exactly as before).
         byte[] decoded;
-        if (codecId == global.thalion.ttio.Enums.Compression.RANS_ORDER0.ordinal()) {
-            decoded = global.thalion.ttio.codecs.Rans.decode(all);
-        } else if (codecId == global.thalion.ttio.Enums.Compression.RANS_ORDER1.ordinal()) {
-            decoded = global.thalion.ttio.codecs.Rans.decode(all);
-        } else if (codecId == global.thalion.ttio.Enums.Compression.BASE_PACK.ordinal()) {
-            decoded = global.thalion.ttio.codecs.BasePack.decode(all);
-        } else if (codecId == global.thalion.ttio.Enums.Compression.QUALITY_BINNED.ordinal()) {
-            // lossy Phred bin quantisation (§97).
-            // Caller of byteChannelSlice gets the bin-centre values,
-            // not the original Phred bytes.
-            decoded = global.thalion.ttio.codecs.Quality.decode(all);
-        } else if (codecId == global.thalion.ttio.Enums.Compression
-                .FQZCOMP_NX16_Z.ordinal()) {
-            // M94.Z v1.2: CRAM-mimic rANS-Nx16 quality codec.
-            // Wire format carries read_lengths in the header sidecar;
-            // revcomp_flags reconstructed from run.flags & 16 (SAM REVERSE).
-            int n = index.count();
-            int[] revcompFlags = new int[n];
-            for (int i = 0; i < n; i++) {
-                int f = index.flagsAt(i);
-                revcompFlags[i] = ((f & 16) != 0) ? 1 : 0;
-            }
-            global.thalion.ttio.codecs.FqzcompNx16Z.DecodeResult dr =
-                global.thalion.ttio.codecs.FqzcompNx16Z
-                    .decode(all, revcompFlags);
-            decoded = dr.qualities();
-        } else {
+        global.thalion.ttio.Enums.Compression comp = null;
+        var vals = global.thalion.ttio.Enums.Compression.values();
+        if (codecId >= 0 && codecId < vals.length) comp = vals[(int) codecId];
+        var codec = comp == null ? null
+            : global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY.get(comp);
+        if (codec == null) {
             throw new IllegalStateException(
-                "signal_channel '" + name + "': @compression="
-                + codecId + " is not a supported TTIO codec id");
+                "signal_channel '" + name + "': @compression=" + codecId
+                + " is not a supported TTIO codec id");
         }
+        decoded = ((global.thalion.ttio.codecs.registry.DecodedChannel.Bytes)
+            codec.decode(new global.thalion.ttio.codecs.registry.ChannelPayload.BytesPayload(all),
+                codecContext())).data();
         decodedByteChannels.put(name, decoded);
         byte[] out = new byte[count];
         System.arraycopy(decoded, (int) offset, out, 0, count);
         return out;
+    }
+
+    /** Task 4 (codec registry): build (and cache) the run-derived
+     *  {@link global.thalion.ttio.codecs.registry.CodecContext} consumed
+     *  by the registry decode adapters. Field derivations are byte-for-byte
+     *  copies of the inline logic the pre-registry decode ladder used:
+     *  <ul>
+     *    <li>{@code revcompFlags} ← {@code (flags & 16) != 0} (FQZCOMP path).</li>
+     *    <li>{@code positions}/{@code totalBases}/{@code chromosomes}/
+     *        {@code readCount} ← the index (REF_DIFF_V2 path).</li>
+     *    <li>{@code ownChromIds} ← the {@code mate_info/chrom_names} sidecar
+     *        + index chromosomes, EXACTLY as {@link #_decodeMateV2} derives
+     *        them (encounter-order LinkedHashMap, {@code 0xFFFF} sentinel for
+     *        chroms absent from the sidecar). When the run has no inline_v2
+     *        mate layout the sidecar is absent and {@code ownChromIds} is left
+     *        null — the MATE codec is then never invoked.</li>
+     *    <li>{@code referenceResolver} ← constructed exactly as the old
+     *        decodeRefDiffV2Sequences side-path did (unwrap HDF5 run group →
+     *        owning file → new ReferenceResolver). Left null for non-HDF5
+     *        backends; the REF_DIFF codec then raises a clear error.</li>
+     *  </ul> */
+    private global.thalion.ttio.codecs.registry.CodecContext codecContext() {
+        if (codecCtxCache != null) return codecCtxCache;
+        int n = index.count();
+        int[] readLengths = new int[n];
+        int[] revcomp = new int[n];
+        long[] positions = new long[n];
+        long totalBases = 0L;
+        for (int i = 0; i < n; i++) {
+            readLengths[i] = index.lengthAt(i);
+            revcomp[i] = ((index.flagsAt(i) & 16) != 0) ? 1 : 0;
+            positions[i] = index.positionAt(i);
+            totalBases += index.lengthAt(i);
+        }
+        String[] chromosomes = new String[n];
+        for (int i = 0; i < n; i++) chromosomes[i] = index.chromosomeAt(i);
+
+        // own_chrom_ids: rebuild encounter-order id-per-read from the
+        // mate_info/chrom_names sidecar, byte-identical to _decodeMateV2.
+        // Only meaningful when an inline_v2 mate layout exists.
+        short[] ownChromIds = null;
+        if (isMateInfoInlineV2()) {
+            List<String> chromTable = readMateInfoChromNamesTable();
+            java.util.LinkedHashMap<String, Integer> nameToId =
+                new java.util.LinkedHashMap<>();
+            for (int j = 0; j < chromTable.size(); j++) {
+                nameToId.put(chromTable.get(j), j);
+            }
+            ownChromIds = new short[n];
+            for (int i = 0; i < n; i++) {
+                String chr = index.chromosomeAt(i);
+                Integer id = nameToId.get(chr);
+                ownChromIds[i] = (id == null) ? (short) 0xFFFF
+                               : id.shortValue();
+            }
+        }
+
+        global.thalion.ttio.codecs.ReferenceResolver resolver;
+        try {
+            global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
+                .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
+            if (h5g == null) {
+                resolver = null;
+            } else {
+                resolver = new global.thalion.ttio.codecs.ReferenceResolver(
+                    h5g.owningFile());
+            }
+        } catch (RuntimeException e) {
+            resolver = null;  // non-HDF5 backend: ref_diff decode raises clearly
+        }
+
+        codecCtxCache = global.thalion.ttio.codecs.registry.CodecContext.builder()
+            .readLengths(readLengths).revcompFlags(revcomp).readCount(n)
+            .positions(positions).totalBases(totalBases).chromosomes(chromosomes)
+            .ownChromIds(ownChromIds).ownPositions(positions).nRecords(n)
+            .cigarsProvider(() -> allCigars().toArray(new String[0]))
+            .referenceResolver(resolver)
+            .build();
+        return codecCtxCache;
     }
 
     // decodeRefDiffSequences removed — the v1
@@ -475,97 +559,11 @@ public class GenomicRun
     // v1 codec (@compression == 9) raise IllegalStateException at
     // byteChannelSlice (see codec dispatch above).
 
-    /** Task 13 (ref_diff v2): decode the {@code signal_channels/sequences/refdiff_v2}
-     *  blob. Returns the concatenated per-read sequence bytes (total_bases long) —
-     *  same contract as the M82 sequences channel.
-     *
-     *  <p>Caches the result in {@link #decodedRefDiffV2}; subsequent calls
-     *  return the cached array.
-     *
-     *  @throws RuntimeException when the native JNI library is unavailable.
-     *  @throws global.thalion.ttio.codecs.RefMissingException when the reference
-     *      cannot be resolved. */
-    @SuppressWarnings("unchecked")
-    private byte[] decodeRefDiffV2Sequences() {
-        if (decodedRefDiffV2 != null) return decodedRefDiffV2;
-
-        if (!global.thalion.ttio.codecs.RefDiffV2.isAvailable()) {
-            throw new RuntimeException(
-                "REF_DIFF_V2 decode requires the native JNI library "
-                + "(libttio_rans). Set -Djava.library.path to the "
-                + "directory containing the library.");
-        }
-
-        ensureSignalChannels();
-        byte[] blob;
-        try (StorageGroup seqGrp = signalChannels.openGroup("sequences");
-             StorageDataset blobDs = seqGrp.openDataset("refdiff_v2")) {
-            // Validate @compression attribute.
-            Object codecAttr = blobDs.getAttribute("compression");
-            long codecId = (codecAttr instanceof Number n) ? n.longValue() : -1L;
-            if (codecId != global.thalion.ttio.Enums.Compression.REF_DIFF_V2.ordinal()) {
-                throw new IllegalStateException(
-                    "signal_channels/sequences/refdiff_v2: @compression="
-                    + codecId + ", expected REF_DIFF_V2 = "
-                    + global.thalion.ttio.Enums.Compression.REF_DIFF_V2.ordinal());
-            }
-            long total = blobDs.shape()[0];
-            blob = (byte[]) blobDs.readSlice(0L, total);
-        }
-
-        // Parse the outer header to extract reference_uri and reference_md5.
-        global.thalion.ttio.codecs.RefDiffV2.BlobHeader header =
-            global.thalion.ttio.codecs.RefDiffV2.parseBlobHeader(blob);
-
-        // Resolve reference via ReferenceResolver (same chain as v1 REF_DIFF).
-        global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
-            .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
-        if (h5g == null) {
-            throw new RuntimeException(
-                "REF_DIFF_V2 decode requires an HDF5-backed dataset; "
-                + "non-HDF5 storage providers are not yet supported.");
-        }
-        global.thalion.ttio.hdf5.Hdf5File h5File = h5g.owningFile();
-        global.thalion.ttio.codecs.ReferenceResolver resolver =
-            new global.thalion.ttio.codecs.ReferenceResolver(h5File);
-
-        // Single-chromosome runs only (v1.8 first pass).
-        java.util.Set<String> uniqueChroms = new java.util.LinkedHashSet<>();
-        for (int i = 0; i < index.count(); i++) {
-            uniqueChroms.add(index.chromosomeAt(i));
-        }
-        String chrom;
-        if (uniqueChroms.isEmpty()) {
-            chrom = "";
-        } else if (uniqueChroms.size() > 1) {
-            throw new RuntimeException(
-                "REF_DIFF_V2 v1.8 supports single-chromosome runs only; "
-                + "this run carries " + uniqueChroms + ".");
-        } else {
-            chrom = uniqueChroms.iterator().next();
-        }
-
-        byte[] chromSeq = resolver.resolve(
-            header.referenceUri(),
-            header.referenceMd5(),
-            chrom);
-
-        // Decode via the native JNI library.
-        int n = index.count();
-        long[] positions = new long[n];
-        for (int i = 0; i < n; i++) positions[i] = index.positionAt(i);
-        String[] cigarArr = allCigars().toArray(new String[0]);
-        long totalBases = 0;
-        for (int i = 0; i < n; i++) totalBases += index.lengthAt(i);
-
-        global.thalion.ttio.codecs.RefDiffV2.Pair result =
-            global.thalion.ttio.codecs.RefDiffV2.decode(
-                blob, positions, cigarArr, chromSeq,
-                n, totalBases);
-
-        decodedRefDiffV2 = result.sequences;
-        return decodedRefDiffV2;
-    }
+    // Task 4 (codec registry): decodeRefDiffV2Sequences() removed — the
+    // REF_DIFF_V2 sequences side-path in byteChannelSlice now routes
+    // through CodecRegistry's RefDiffCodec adapter (which performs the
+    // same blob-header parse + ReferenceResolver chain + RefDiffV2.decode),
+    // with the run-derived inputs supplied by codecContext().
 
     /** Return the full list of CIGAR strings for this run. Honours the
      *  M86 Phase C codec dispatch on the cigars channel (RANS /
@@ -619,10 +617,18 @@ public class GenomicRun
                 if (codecId == global.thalion.ttio.Enums.Compression
                         .NAME_TOKENIZED_V2.ordinal()) {
                     // v1.8 #11 ch3: name_tok_v2 codec output (NTK2 magic).
+                    // Task 4: route through the codec registry (StrList
+                    // variant) — the adapter wraps NameTokenizerV2.decode.
                     long total = ds.shape()[0];
                     byte[] all = (byte[]) ds.readSlice(0L, total);
-                    decodedReadNames = global.thalion.ttio.codecs
-                        .NameTokenizerV2.decode(all);
+                    decodedReadNames = ((global.thalion.ttio.codecs.registry
+                            .DecodedChannel.StrList)
+                        global.thalion.ttio.codecs.registry.CodecRegistry
+                            .CODEC_REGISTRY.get(global.thalion.ttio.Enums
+                                .Compression.NAME_TOKENIZED_V2)
+                            .decode(new global.thalion.ttio.codecs.registry
+                                .ChannelPayload.BytesPayload(all),
+                                codecContext())).names();
                     return decodedReadNames.get(i);
                 }
                 throw new IllegalStateException(
@@ -825,30 +831,21 @@ public class GenomicRun
                 }
             }
             mateV2ChromNames = chromTable;
-            // Build own_chrom_ids and own_positions from the index.
-            int n = index.count();
-            // Resolve own chrom_ids: rebuild the encounter-order table
-            // from index.chromosomeAt() in the same order as the writer.
-            // We need the actual uint16 ids, which the writer derived
-            // from the chromToId map. The chrom_names sidecar begins
-            // with own chroms in encounter order (writer guarantees this).
-            // Re-derive the id-per-read from the sidecar table.
-            java.util.LinkedHashMap<String, Integer> nameToId =
-                new java.util.LinkedHashMap<>();
-            for (int j = 0; j < chromTable.size(); j++) {
-                nameToId.put(chromTable.get(j), j);
-            }
-            short[] ownChromIds = new short[n];
-            long[]  ownPositions = new long[n];
-            for (int i = 0; i < n; i++) {
-                String chr = index.chromosomeAt(i);
-                Integer id = nameToId.get(chr);
-                ownChromIds[i] = (id == null) ? (short) 0xFFFF
-                               : id.shortValue();
-                ownPositions[i] = index.positionAt(i);
-            }
-            decodedMateV2 = global.thalion.ttio.codecs.MateInfoV2.decode(
-                blob, ownChromIds, ownPositions, n);
+            // Task 4: route the inline_v2 decode through the codec
+            // registry. The own_chrom_ids / own_positions / nRecords the
+            // MATE codec needs come from codecContext(), which derives
+            // own_chrom_ids from this same chrom_names sidecar in the same
+            // encounter-order LinkedHashMap (0xFFFF sentinel) — byte-
+            // identical to the old inline derivation. We rebuild a
+            // MateInfoV2.Triple from the registry result to preserve the
+            // decodedMateV2 field type + downstream array accessors.
+            var mi = (global.thalion.ttio.codecs.registry.DecodedChannel.MateInfo)
+                global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                    .get(global.thalion.ttio.Enums.Compression.MATE_INLINE_V2)
+                    .decode(new global.thalion.ttio.codecs.registry.ChannelPayload
+                        .BytesPayload(blob), codecContext());
+            decodedMateV2 = new global.thalion.ttio.codecs.MateInfoV2.Triple(
+                mi.mateChromIds(), mi.matePositions(), mi.templateLengths());
         }
     }
 

@@ -1444,9 +1444,13 @@ public class SpectralDataset implements
                 Enums.Compression seqCodec =
                     run.signalCodecOverrides().get("sequences");
                 BulkV2Blobs bulkBlobs = run.bulkV2Blobs();
+                // usesRefDiffDefaultPath captures (ZLIB default + no
+                // "sequences" override); seqCodec == null is equivalent to
+                // !containsKey("sequences") because signalCodecOverrides is
+                // a Map.copyOf (no null values). The referenceChromSeqs gate
+                // is extra to this site only.
                 boolean useRefDiffPath =
-                    seqCodec == null
-                    && run.signalCompression() == Enums.Compression.ZLIB
+                    usesRefDiffDefaultPath(run)
                     && run.referenceChromSeqs() != null;
                 if (bulkBlobs != null && bulkBlobs.refDiffBlob() != null) {
                     // Phase 2c-T: skip codec encode and write the
@@ -1590,8 +1594,12 @@ public class SpectralDataset implements
                         + "for read_names with readCount > 0.)");
                 } else {
                     byte[] encoded =
-                        global.thalion.ttio.codecs.NameTokenizerV2
-                            .encode(run.readNames());
+                        ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+                            global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                                .get(Enums.Compression.NAME_TOKENIZED_V2)
+                                .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.StrList(
+                                    run.readNames()),
+                                    global.thalion.ttio.codecs.registry.CodecContext.empty())).bytes();
                     global.thalion.ttio.providers.StorageDataset rnDs;
                     try {
                         rnDs = sc.createDataset("read_names",
@@ -1766,9 +1774,15 @@ public class SpectralDataset implements
         }
 
         // Encode to the inline_v2 blob via the native JNI library.
-        byte[] blob = global.thalion.ttio.codecs.MateInfoV2.encode(
-            mateChromIds, matePositions, templateLens,
-            ownChromIds, ownPositions);
+        var mateCtx = global.thalion.ttio.codecs.registry.CodecContext.builder()
+            .ownChromIds(ownChromIds)
+            .ownPositions(ownPositions)
+            .build();
+        byte[] blob = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+            global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                .get(Enums.Compression.MATE_INLINE_V2)
+                .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.MateInfo(
+                    mateChromIds, matePositions, templateLens), mateCtx)).bytes();
 
         // Write the mate_info group with inline_v2 + chrom_names.
         try (var mateGroup = sc.createGroup("mate_info")) {
@@ -1914,6 +1928,14 @@ public class SpectralDataset implements
         }
     }
 
+    /** True iff a written genomic run's sequences default to the ref-diff path
+     *  (ZLIB default codec + no explicit "sequences" override), which embeds a
+     *  reference. Single source of truth for the two former inlined copies. */
+    private static boolean usesRefDiffDefaultPath(WrittenGenomicRun run) {
+        return run.signalCompression() == Enums.Compression.ZLIB
+            && !run.signalCodecOverrides().containsKey("sequences");
+    }
+
     /** Embed each unique reference (by {@code reference_uri}) once at
      *  {@code /study/references/<uri>/}. Only runs that have
      *  {@code embedReference=true} AND a context-aware codec on
@@ -1933,10 +1955,7 @@ public class SpectralDataset implements
             if (run.referenceChromSeqs() == null) continue;
             // Only embed when the ref-diff path will actually be taken
             // (matches the selection condition in writeGenomicRunSubtree).
-            boolean useRefDiffPath =
-                run.signalCompression() == Enums.Compression.ZLIB
-                && !run.signalCodecOverrides().containsKey("sequences");
-            if (!useRefDiffPath) continue;
+            if (!usesRefDiffDefaultPath(run)) continue;
 
             byte[] md5 = referenceMd5ForRun(run);
             if (needsEmbedMd5.containsKey(run.referenceUri())) {
@@ -2109,10 +2128,22 @@ public class SpectralDataset implements
                     + "got " + offsets64.length + " for n=" + n);
             }
             String[] cigarArr = run.cigars().toArray(new String[0]);
-            byte[] encoded = global.thalion.ttio.codecs.RefDiffV2.encode(
-                rawBytes, offsets64n1, run.positions(),
-                cigarArr, chromSeq, md5, run.referenceUri(),
-                10_000);
+            long[] offsetsFinal = offsets64n1;
+            var refDiffCtx = global.thalion.ttio.codecs.registry.CodecContext.builder()
+                .offsets(offsetsFinal)
+                .positions(run.positions())
+                .reference(chromSeq)
+                .referenceMd5(md5)
+                .referenceUri(run.referenceUri())
+                .readsPerSlice(10_000)
+                .cigarsProvider(() -> cigarArr)
+                .build();
+            var layout = (global.thalion.ttio.codecs.registry.EncodedChannel.GroupLayout)
+                global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                    .get(Enums.Compression.REF_DIFF_V2)
+                    .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.Bytes(rawBytes),
+                        refDiffCtx);
+            byte[] encoded = layout.children().get("refdiff_v2");
             try (var seqGroup = sc.createGroup("sequences")) {
                 global.thalion.ttio.providers.StorageDataset blobDs;
                 try {
@@ -2176,8 +2207,15 @@ public class SpectralDataset implements
             revcompFlags[i] =
                 ((run.flags()[i] & SAM_REVERSE_FLAG) != 0) ? 1 : 0;
         }
-        byte[] encoded = global.thalion.ttio.codecs.FqzcompNx16Z.encode(
-            run.qualities(), readLengths, revcompFlags);
+        var ctx = global.thalion.ttio.codecs.registry.CodecContext.builder()
+            .readLengths(readLengths)
+            .revcompFlags(revcompFlags)
+            .build();
+        byte[] encoded = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+            global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                .get(Enums.Compression.FQZCOMP_NX16_Z)
+                .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.Bytes(run.qualities()),
+                    ctx)).bytes();
         global.thalion.ttio.providers.StorageDataset ds;
         try {
             ds = sc.createDataset("qualities", Enums.Precision.UINT8,
@@ -2216,20 +2254,14 @@ public class SpectralDataset implements
             writeSignalChannel(sc, name, Enums.Precision.UINT8, data, defaultCodec);
             return;
         }
-        byte[] encoded;
-        switch (codecOverride) {
-            case RANS_ORDER0 -> encoded =
-                global.thalion.ttio.codecs.Rans.encode(data, 0);
-            case RANS_ORDER1 -> encoded =
-                global.thalion.ttio.codecs.Rans.encode(data, 1);
-            case BASE_PACK   -> encoded =
-                global.thalion.ttio.codecs.BasePack.encode(data);
-            case QUALITY_BINNED -> encoded =
-                global.thalion.ttio.codecs.Quality.encode(data);
-            default -> throw new IllegalArgumentException(
-                "writeByteChannelWithCodec: unsupported codec "
-                + codecOverride);
+        var codec = global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY.get(codecOverride);
+        if (codec == null) {
+            throw new IllegalArgumentException(
+                "writeByteChannelWithCodec: unsupported codec " + codecOverride);
         }
+        byte[] encoded = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+            codec.encode(new global.thalion.ttio.codecs.registry.DecodedChannel.Bytes(data),
+                global.thalion.ttio.codecs.registry.CodecContext.empty())).bytes();
         // Unfiltered uint8 dataset; codec output already entropy-coded.
         // Force a chunked layout (chunkSize > 0) so HDF5 honours our
         // explicit Compression.NONE choice rather than the legacy

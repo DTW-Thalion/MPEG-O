@@ -1,0 +1,75 @@
+package global.thalion.ttio.codecs.registry;
+
+import global.thalion.ttio.codecs.ReferenceResolver;
+import java.util.function.Supplier;
+
+/** Run-derived context for codecs. All fields nullable; plain codecs ignore it.
+ *  Built once per GenomicRun (decode) or per channel (encode). */
+public record CodecContext(
+        int[] readLengths,
+        int[] revcompFlags,
+        Integer elementSize,
+        Integer readCount,
+        long[] positions,
+        Supplier<String[]> cigarsProvider,
+        Long totalBases,
+        String[] chromosomes,
+        short[] ownChromIds,
+        long[] ownPositions,
+        Integer nRecords,
+        ReferenceResolver referenceResolver,
+        long[] offsets,
+        byte[] reference,
+        byte[] referenceMd5,
+        String referenceUri,
+        Integer readsPerSlice) {
+
+    public static CodecContext empty() { return builder().build(); }
+
+    public static Builder builder() { return new Builder(); }
+
+    public static final class Builder {
+        private int[] readLengths;
+        private int[] revcompFlags;
+        private Integer elementSize;
+        private Integer readCount;
+        private long[] positions;
+        private Supplier<String[]> cigarsProvider;
+        private Long totalBases;
+        private String[] chromosomes;
+        private short[] ownChromIds;
+        private long[] ownPositions;
+        private Integer nRecords;
+        private ReferenceResolver referenceResolver;
+        private long[] offsets;
+        private byte[] reference;
+        private byte[] referenceMd5;
+        private String referenceUri;
+        private Integer readsPerSlice;
+
+        public Builder readLengths(int[] v) { this.readLengths = v; return this; }
+        public Builder revcompFlags(int[] v) { this.revcompFlags = v; return this; }
+        public Builder elementSize(Integer v) { this.elementSize = v; return this; }
+        public Builder readCount(Integer v) { this.readCount = v; return this; }
+        public Builder positions(long[] v) { this.positions = v; return this; }
+        public Builder cigarsProvider(Supplier<String[]> v) { this.cigarsProvider = v; return this; }
+        public Builder totalBases(Long v) { this.totalBases = v; return this; }
+        public Builder chromosomes(String[] v) { this.chromosomes = v; return this; }
+        public Builder ownChromIds(short[] v) { this.ownChromIds = v; return this; }
+        public Builder ownPositions(long[] v) { this.ownPositions = v; return this; }
+        public Builder nRecords(Integer v) { this.nRecords = v; return this; }
+        public Builder referenceResolver(ReferenceResolver v) { this.referenceResolver = v; return this; }
+        public Builder offsets(long[] v) { this.offsets = v; return this; }
+        public Builder reference(byte[] v) { this.reference = v; return this; }
+        public Builder referenceMd5(byte[] v) { this.referenceMd5 = v; return this; }
+        public Builder referenceUri(String v) { this.referenceUri = v; return this; }
+        public Builder readsPerSlice(Integer v) { this.readsPerSlice = v; return this; }
+
+        public CodecContext build() {
+            return new CodecContext(readLengths, revcompFlags, elementSize, readCount,
+                positions, cigarsProvider, totalBases, chromosomes, ownChromIds,
+                ownPositions, nRecords, referenceResolver, offsets, reference,
+                referenceMd5, referenceUri, readsPerSlice);
+        }
+    }
+}
