@@ -64,5 +64,26 @@ void testCodecRegistry(void)
             [delta encode:[[TTIODecodedBytes alloc] initWithData:[NSData dataWithBytes:"\0\0\0\0" length:4]]
                   context:[TTIOCodecContext emptyContext] error:&derr];
         PASS(de == nil && derr != nil, "delta encode without elementSize errors");
+
+        // name_tok round-trip.
+        id<TTIOCodec> nt = [TTIOCodecRegistry codecForId:TTIOCompressionNameTokenizedV2];
+        PASS(nt != nil && ![nt isContextAware], "name_tok registered, not context-aware");
+        NSMutableArray<NSString *> *names2 = [NSMutableArray array];
+        for (int i = 0; i < 200; i++) [names2 addObject:[NSString stringWithFormat:@"read%d", i]];
+        NSError *nerr = nil;
+        TTIOEncodedChannel *ne =
+            [nt encode:[[TTIODecodedStringList alloc] initWithNames:names2]
+                context:[TTIOCodecContext emptyContext] error:&nerr];
+        TTIODecodedChannel *nd =
+            [nt decode:[[TTIOBytesPayload alloc] initWithBytes:((TTIOEncodedDatasetBytes *)ne).bytes]
+                context:[TTIOCodecContext emptyContext] error:&nerr];
+        PASS([((TTIODecodedStringList *)nd).names isEqualToArray:names2], "name_tok round-trip");
+
+        // context-aware flags.
+        PASS([[TTIOCodecRegistry codecForId:TTIOCompressionRefDiffV2] isContextAware], "refdiff context-aware");
+        PASS([[TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z] isContextAware], "fqzcomp context-aware");
+        PASS([[TTIOCodecRegistry codecForId:TTIOCompressionMateInlineV2] isContextAware], "mate context-aware");
+        PASS([[TTIOCodecRegistry codecForId:TTIOCompressionRefDiffV2] needsEmbeddedReference], "refdiff needs embed");
+        PASS(![[TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z] needsEmbeddedReference], "fqzcomp no embed");
     }
 }
