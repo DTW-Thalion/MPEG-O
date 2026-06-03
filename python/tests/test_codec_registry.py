@@ -158,3 +158,16 @@ def test_is_context_aware_is_broader_than_embed():
     assert embed == {Compression.REF_DIFF_V2}
     assert {Compression.REF_DIFF_V2, Compression.FQZCOMP_NX16_Z,
             Compression.MATE_INLINE_V2} <= aware
+
+
+def test_embed_predicate_safe_for_unregistered_compressions():
+    """The reference-embed predicate must treat valid-but-unregistered codecs as
+    False (not KeyError). Mirrors spectral_dataset._embed_references_for_runs."""
+    # NONE/ZLIB/LZ4 are valid Compression members but are NOT registered codecs
+    # (they are HDF5-native filters), so the embed predicate must not raise.
+    for c in (Compression.NONE, Compression.ZLIB, Compression.LZ4):
+        result = getattr(CODEC_REGISTRY.get(c), "needs_embedded_reference", False)
+        assert result is False
+    # REF_DIFF_V2 is the only registered codec that needs an embedded reference.
+    assert getattr(CODEC_REGISTRY.get(Compression.REF_DIFF_V2),
+                   "needs_embedded_reference", False) is True

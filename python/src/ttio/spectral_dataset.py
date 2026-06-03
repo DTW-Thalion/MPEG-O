@@ -1459,7 +1459,7 @@ def _embed_references_for_runs(
         # OR if the v1.8 REF_DIFF_V2 default path will be used (when the
         # native lib is available).
         _has_context_aware_override = any(
-            CODEC_REGISTRY[_Compression(c)].needs_embedded_reference
+            getattr(CODEC_REGISTRY.get(_Compression(c)), "needs_embedded_reference", False)
             for c in run.signal_codec_overrides.values()
             if _is_valid_compression(c)
         )
