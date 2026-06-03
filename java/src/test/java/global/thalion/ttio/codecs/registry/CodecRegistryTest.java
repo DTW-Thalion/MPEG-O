@@ -88,4 +88,44 @@ class CodecRegistryTest {
     void registryKeyMatchesId() {
         CodecRegistry.CODEC_REGISTRY.forEach((cid, codec) -> assertEquals(cid, codec.id()));
     }
+
+    @Test
+    void nameTokenizedRoundTrip() {
+        Codec codec = CodecRegistry.CODEC_REGISTRY.get(
+            global.thalion.ttio.Enums.Compression.NAME_TOKENIZED_V2);
+        assertNotNull(codec);
+        assertFalse(codec.isContextAware());
+        java.util.List<String> names = new java.util.ArrayList<>();
+        for (int i = 0; i < 200; i++) names.add("read" + i);
+        var enc = codec.encode(new DecodedChannel.StrList(names), CodecContext.empty());
+        var dec = codec.decode(new ChannelPayload.BytesPayload(
+            ((EncodedChannel.DatasetBytes) enc).bytes()), CodecContext.empty());
+        assertEquals(names, ((DecodedChannel.StrList) dec).names());
+    }
+
+    @Test
+    void contextAwareFlags() {
+        var R = CodecRegistry.CODEC_REGISTRY;
+        assertTrue(R.get(global.thalion.ttio.Enums.Compression.REF_DIFF_V2).isContextAware());
+        assertTrue(R.get(global.thalion.ttio.Enums.Compression.FQZCOMP_NX16_Z).isContextAware());
+        assertTrue(R.get(global.thalion.ttio.Enums.Compression.MATE_INLINE_V2).isContextAware());
+        assertTrue(R.get(global.thalion.ttio.Enums.Compression.REF_DIFF_V2).needsEmbeddedReference());
+        assertFalse(R.get(global.thalion.ttio.Enums.Compression.FQZCOMP_NX16_Z).needsEmbeddedReference());
+    }
+
+    @Test
+    void qualityBinnedRegisteredLossy() {
+        Codec codec = CodecRegistry.CODEC_REGISTRY.get(
+            global.thalion.ttio.Enums.Compression.QUALITY_BINNED);
+        byte[] data = new byte[256];
+        for (int i = 0; i < 256; i++) data[i] = (byte) i;
+        byte[] once = ((DecodedChannel.Bytes) codec.decode(new ChannelPayload.BytesPayload(
+            ((EncodedChannel.DatasetBytes) codec.encode(new DecodedChannel.Bytes(data),
+                CodecContext.empty())).bytes()), CodecContext.empty())).data();
+        byte[] twice = ((DecodedChannel.Bytes) codec.decode(new ChannelPayload.BytesPayload(
+            ((EncodedChannel.DatasetBytes) codec.encode(new DecodedChannel.Bytes(once),
+                CodecContext.empty())).bytes()), CodecContext.empty())).data();
+        assertEquals(data.length, once.length);
+        assertArrayEquals(once, twice);
+    }
 }
