@@ -247,10 +247,12 @@ from ttio.enums import Compression
 
 
 @pytest.mark.parametrize("cid", [
-    Compression.RANS_ORDER0, Compression.RANS_ORDER1,
-    Compression.BASE_PACK, Compression.QUALITY_BINNED,
+    Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK,
 ])
 def test_plain_codec_registry_roundtrip(cid):
+    # NOTE: QUALITY_BINNED is excluded — it is lossy by design (Phred binning),
+    # so a byte-exact round-trip with arbitrary data is impossible. It gets its
+    # own idempotency test below.
     codec = CODEC_REGISTRY[cid]
     assert codec.id == cid
     assert codec.is_context_aware is False
@@ -259,6 +261,25 @@ def test_plain_codec_registry_roundtrip(cid):
     assert enc.is_group is False
     dec = codec.decode(ChannelPayload.of_bytes(enc.dataset_bytes), CodecContext.empty())
     assert dec.as_bytes() == data
+
+
+def _qb_roundtrip(codec, data: bytes) -> bytes:
+    enc = codec.encode(DecodedChannel.of_bytes(data), CodecContext.empty())
+    return codec.decode(ChannelPayload.of_bytes(enc.dataset_bytes), CodecContext.empty()).as_bytes()
+
+
+def test_quality_binned_registry_idempotent_and_length_preserving():
+    # QUALITY_BINNED is lossy (bins → bin centres). Assert the registry path is
+    # length-preserving and idempotent (re-encoding bin centres is stable),
+    # rather than byte-lossless.
+    codec = CODEC_REGISTRY[Compression.QUALITY_BINNED]
+    assert codec.id == Compression.QUALITY_BINNED
+    assert codec.is_context_aware is False
+    data = bytes(range(64)) * 4
+    once = _qb_roundtrip(codec, data)
+    twice = _qb_roundtrip(codec, once)
+    assert len(once) == len(data)
+    assert once == twice
 
 
 def test_delta_rans_registry_roundtrip_needs_element_size():
