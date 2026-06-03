@@ -53,4 +53,39 @@ class CodecRegistryTest {
         assertEquals(Integer.valueOf(10), ctx.readCount());
         assertNull(ctx.positions());
     }
+
+    @Test
+    void plainCodecsRegisteredAndRoundTrip() {
+        var ctx = CodecContext.empty();
+        for (var cid : java.util.List.of(
+                global.thalion.ttio.Enums.Compression.RANS_ORDER0,
+                global.thalion.ttio.Enums.Compression.RANS_ORDER1,
+                global.thalion.ttio.Enums.Compression.BASE_PACK)) {
+            Codec codec = CodecRegistry.CODEC_REGISTRY.get(cid);
+            assertNotNull(codec, "registered: " + cid);
+            assertEquals(cid, codec.id());
+            assertFalse(codec.isContextAware());
+            byte[] data = new byte[256];
+            for (int i = 0; i < 256; i++) data[i] = (byte) i;
+            var enc = codec.encode(new DecodedChannel.Bytes(data), ctx);
+            byte[] encBytes = ((EncodedChannel.DatasetBytes) enc).bytes();
+            var dec = codec.decode(new ChannelPayload.BytesPayload(encBytes), ctx);
+            assertArrayEquals(data, ((DecodedChannel.Bytes) dec).data());
+        }
+    }
+
+    @Test
+    void deltaRansNeedsElementSize() {
+        Codec codec = CodecRegistry.CODEC_REGISTRY.get(
+            global.thalion.ttio.Enums.Compression.DELTA_RANS_ORDER0);
+        assertNotNull(codec);
+        byte[] data = new byte[40];
+        assertThrows(IllegalArgumentException.class,
+            () -> codec.encode(new DecodedChannel.Bytes(data), CodecContext.empty()));
+    }
+
+    @Test
+    void registryKeyMatchesId() {
+        CodecRegistry.CODEC_REGISTRY.forEach((cid, codec) -> assertEquals(cid, codec.id()));
+    }
 }
