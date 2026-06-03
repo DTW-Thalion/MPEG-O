@@ -171,3 +171,13 @@ def test_embed_predicate_safe_for_unregistered_compressions():
     # REF_DIFF_V2 is the only registered codec that needs an embedded reference.
     assert getattr(CODEC_REGISTRY.get(Compression.REF_DIFF_V2),
                    "needs_embedded_reference", False) is True
+
+
+def test_registry_covers_all_real_codec_ids():
+    expected = {
+        Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK,
+        Compression.QUALITY_BINNED, Compression.DELTA_RANS_ORDER0,
+        Compression.FQZCOMP_NX16_Z, Compression.MATE_INLINE_V2,
+        Compression.REF_DIFF_V2, Compression.NAME_TOKENIZED_V2,
+    }
+    assert expected.issubset(set(CODEC_REGISTRY.keys()))
