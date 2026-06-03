@@ -121,3 +121,9 @@ def test_context_aware_codecs_registered():
     assert CODEC_REGISTRY[Compression.REF_DIFF_V2].is_context_aware is True
     assert CODEC_REGISTRY[Compression.FQZCOMP_NX16_Z].is_context_aware is True
     assert CODEC_REGISTRY[Compression.MATE_INLINE_V2].is_context_aware is True
+
+
+def test_genomic_run_has_codec_context():
+    """GenomicRun exposes a _codec_context() builder (decode routing depends on it)."""
+    from ttio.genomic_run import GenomicRun
+    assert hasattr(GenomicRun, "_codec_context")

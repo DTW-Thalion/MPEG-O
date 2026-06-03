@@ -41,6 +41,7 @@ from .codecs._varint import varint_decode as _varint_decode
 
 if TYPE_CHECKING:
     from .providers.base import StorageGroup
+    from .codecs._context import CodecContext
 
 
 def _wrap_hdf5_group(obj: object) -> "StorageGroup":
@@ -148,6 +149,13 @@ class GenomicRun:
     )
     # None = not yet probed; True/False = cached probe result.
     _sequences_is_v2_cached: "bool | None" = field(
+        default=None, repr=False, compare=False,
+    )
+
+    # Lazily-built run-derived CodecContext shared across all registry
+    # decode calls (codec-registry refactor). None until first
+    # _codec_context() call; immutable thereafter for the run lifetime.
+    _codec_ctx_cache: "CodecContext | None" = field(
         default=None, repr=False, compare=False,
     )
 
@@ -323,6 +331,59 @@ class GenomicRun:
             self._signal_cache[name] = sig.open_dataset(name)
         return self._signal_cache[name]
 
+    def _codec_context(self) -> "CodecContext":
+        """Build (and cache) the run-derived CodecContext for registry decode.
+
+        Every registry decode call routed from this run shares one
+        immutable context. ``own_chrom_ids`` is sourced with the same
+        encounter-order uint16 assignment that ``_decode_mate_inline_v2``
+        uses, so the MATE_INLINE_V2 decode adapter sees identical ids.
+        """
+        from .codecs._context import CodecContext
+        if self._codec_ctx_cache is not None:
+            return self._codec_ctx_cache
+        import numpy as np
+        idx = self.index
+        flags = np.asarray(idx.flags, dtype=np.uint32)
+        revcomp = ((flags & 16) != 0).astype(np.uint8)  # vectorized
+
+        # own_chrom_ids (uint16): encounter-order id assignment over the
+        # index chromosomes — verbatim mirror of _decode_mate_inline_v2's
+        # writer-matching derivation so MATE_INLINE_V2 decode is identical.
+        n = int(idx.count)
+        name_to_id: dict[str, int] = {}
+        own_chrom_ids = np.empty(n, dtype=np.uint16)
+        for i, cname in enumerate(idx.chromosomes):
+            if cname == "*" or not cname:
+                own_chrom_ids[i] = 0xFFFF
+            else:
+                if cname not in name_to_id:
+                    name_to_id[cname] = len(name_to_id)
+                own_chrom_ids[i] = name_to_id[cname]
+
+        resolver = None
+        try:
+            from .acquisition_run import _native_h5py
+            from .genomic.reference_resolver import ReferenceResolver
+            resolver = ReferenceResolver(_native_h5py(self.group).file)
+        except Exception:
+            resolver = None  # non-HDF5 backend: ref_diff decode raises clearly
+        ctx = CodecContext(
+            read_lengths=np.asarray(idx.lengths, dtype=np.uint32),
+            revcomp_flags=revcomp,
+            read_count=int(idx.count),
+            positions=np.asarray(idx.positions, dtype=np.int64),
+            cigars_provider=self._all_cigars,
+            total_bases=int(sum(idx.lengths)),
+            chromosomes=list(idx.chromosomes),
+            own_positions=np.asarray(idx.positions, dtype=np.int64),
+            n_records=int(idx.count),
+            own_chrom_ids=own_chrom_ids,
+            reference_resolver=resolver,
+        )
+        self._codec_ctx_cache = ctx
+        return ctx
+
     def _byte_channel_slice(self, name: str, offset: int, count: int) -> bytes:
         """Return bytes ``[offset, offset+count)`` for a uint8 byte channel.
 
@@ -345,8 +406,16 @@ class GenomicRun:
 
         # v1.8 probe: for sequences, check for the group layout first.
         if name == "sequences" and self._sequences_is_ref_diff_v2():
-            decoded = self._decode_ref_diff_v2_sequences()
+            from .enums import Compression
+            from .codecs._registry import CODEC_REGISTRY
+            from .codecs._context import ChannelPayload
+            sig = self.group.open_group("signal_channels")
+            decoded = CODEC_REGISTRY[Compression.REF_DIFF_V2].decode(
+                ChannelPayload.of_group(sig.open_group("sequences")),
+                self._codec_context(),
+            ).as_bytes()
             self._decoded_byte_channels[name] = decoded
+            self._decoded_ref_diff_v2 = decoded
             return decoded[offset:offset + count]
 
         ds = self._signal_dataset(name)
@@ -356,31 +425,16 @@ class GenomicRun:
 
         # Compressed: read all bytes, decode, cache for subsequent slices.
         all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-        if codec_id == int(Compression.RANS_ORDER0):
-            from .codecs.rans import decode as _dec
-            decoded = _dec(all_bytes)
-        elif codec_id == int(Compression.RANS_ORDER1):
-            from .codecs.rans import decode as _dec
-            decoded = _dec(all_bytes)
-        elif codec_id == int(Compression.BASE_PACK):
-            from .codecs.base_pack import decode as _dec
-            decoded = _dec(all_bytes)
-        elif codec_id == int(Compression.QUALITY_BINNED):
-            # Phase D: Illumina-8 Phred bin decode (lossy on encode;
-            # decode is deterministic from the wire stream).
-            from .codecs.quality import decode as _dec
-            decoded = _dec(all_bytes)
-        elif codec_id == int(Compression.FQZCOMP_NX16_Z):
-            # M94.Z v1.2: CRAM-mimic FQZCOMP_NX16 (rANS-Nx16). Same
-            # plumbing as v1: codec carries read_lengths inside its
-            # sidecar; revcomp_flags come from run.flags & 16. Different
-            # on-wire format (magic ``M94Z``).
-            decoded = self._decode_fqzcomp_nx16_z_qualities(all_bytes)
-        else:
+        from .enums import Compression
+        from .codecs._registry import CODEC_REGISTRY
+        from .codecs._context import ChannelPayload
+        try:
+            codec = CODEC_REGISTRY[Compression(codec_id)]
+        except (KeyError, ValueError):
             raise ValueError(
                 f"signal_channel '{name}': @compression={codec_id} "
-                "is not a supported TTIO codec id"
-            )
+                "is not a supported TTIO codec id")
+        decoded = codec.decode(ChannelPayload.of_bytes(all_bytes), self._codec_context()).as_bytes()
         self._decoded_byte_channels[name] = decoded
         return decoded[offset:offset + count]
 
@@ -406,83 +460,6 @@ class GenomicRun:
             result = False
         self._sequences_is_v2_cached = result
         return result
-
-    def _decode_ref_diff_v2_sequences(self) -> bytes:
-        """Decode the refdiff_v2 blob; cache and return the flat sequence bytes.
-
-        Returns concatenated per-read sequence bytes (total_bases long) —
-        identical contract to the M82 sequences channel.
-
-        Raises:
-            RefMissingError: when the reference cannot be resolved.
-            RuntimeError: when the native lib is unavailable.
-        """
-        if self._decoded_ref_diff_v2 is not None:
-            return self._decoded_ref_diff_v2
-
-        from .codecs import ref_diff_v2 as _rdv2
-        from .genomic.reference_resolver import ReferenceResolver
-        from .acquisition_run import _native_h5py
-
-        if not _rdv2.HAVE_NATIVE_LIB:
-            raise RuntimeError(
-                "REF_DIFF_V2 decode requires libttio_rans "
-                "(set TTIO_RANS_LIB_PATH env var)"
-            )
-
-        sig = self.group.open_group("signal_channels")
-        seq_grp = sig.open_group("sequences")
-        ds = seq_grp.open_dataset("refdiff_v2")
-
-        codec_id = io.read_int_attr(ds, "compression", default=0) or 0
-        if codec_id != int(Compression.REF_DIFF_V2):
-            raise ValueError(
-                f"signal_channels/sequences/refdiff_v2: @compression={codec_id}, "
-                f"expected REF_DIFF_V2 = {int(Compression.REF_DIFF_V2)}"
-            )
-
-        blob = bytes(ds.read(offset=0, count=int(ds.length)))
-
-        # Parse the outer header to extract reference_uri and reference_md5.
-        header = _rdv2.parse_blob_header(blob)
-
-        # Resolve reference via the same chain as v1 REF_DIFF.
-        try:
-            h5_grp = _native_h5py(self.group)
-        except TypeError as exc:
-            raise RuntimeError(
-                "REF_DIFF_V2 decode requires an HDF5-backed dataset; "
-                "non-HDF5 storage providers are not yet supported."
-            ) from exc
-        h5_file = h5_grp.file
-        resolver = ReferenceResolver(h5_file)
-
-        unique_chroms = set(self.index.chromosomes)
-        if len(unique_chroms) == 0:
-            chrom = ""
-        elif len(unique_chroms) > 1:
-            raise RuntimeError(
-                "REF_DIFF_V2 v1.8 supports single-chromosome runs only; "
-                f"this run carries {sorted(unique_chroms)}."
-            )
-        else:
-            chrom = next(iter(unique_chroms))
-
-        chrom_seq = resolver.resolve(
-            uri=header.reference_uri,
-            expected_md5=header.reference_md5,
-            chromosome=chrom,
-        )
-
-        n = self.index.count
-        positions = np.asarray(self.index.positions, dtype=np.int64)
-        cigars = self._all_cigars()
-        total_bases = int(sum(self.index.lengths))
-
-        out_seq, _ = _rdv2.decode(blob, positions, cigars, chrom_seq, n, total_bases)
-        decoded = bytes(out_seq)
-        self._decoded_ref_diff_v2 = decoded
-        return decoded
 
     def _decode_fqzcomp_nx16_z_qualities(self, encoded: bytes) -> bytes:
         """Decode the ``qualities`` channel encoded with the M94.Z codec.
@@ -575,9 +552,14 @@ class GenomicRun:
 
         codec_id = io.read_int_attr(ds, "compression", default=0) or 0
         if codec_id == int(Compression.NAME_TOKENIZED_V2):
-            from .codecs import name_tokenizer_v2 as _nt2
+            from .codecs._registry import CODEC_REGISTRY
+            from .codecs._context import ChannelPayload
             all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
-            self._decoded_read_names = _nt2.decode(all_bytes)
+            self._decoded_read_names = CODEC_REGISTRY[
+                Compression.NAME_TOKENIZED_V2
+            ].decode(
+                ChannelPayload.of_bytes(all_bytes), self._codec_context()
+            ).as_str_list()
             return self._decoded_read_names[i]
         raise ValueError(
             f"signal_channel 'read_names': @compression={codec_id} "
@@ -734,30 +716,20 @@ class GenomicRun:
         if "inline_v2" in self._decoded_mate_info:
             return self._decoded_mate_info
 
-        from .codecs import mate_info_v2 as _miv2
+        from .codecs._registry import CODEC_REGISTRY
+        from .codecs._context import ChannelPayload
 
         sig = self.group.open_group("signal_channels")
         mate_group = sig.open_group("mate_info")
         ds = mate_group.open_dataset("inline_v2")
         blob = bytes(np.asarray(ds.read(offset=0, count=int(ds.length))).tobytes())
 
-        n = self.index.count
-        own_positions = np.asarray(self.index.positions, dtype=np.int64)
-
-        # Build own_chrom_ids (uint16) from the index chromosomes list
-        # using encounter-order assignment — same as the writer.
-        name_to_id: dict[str, int] = {}
-        own_chrom_ids = np.empty(n, dtype=np.uint16)
-        for i, name in enumerate(self.index.chromosomes):
-            if name == "*" or not name:
-                own_chrom_ids[i] = 0xFFFF
-            else:
-                if name not in name_to_id:
-                    name_to_id[name] = len(name_to_id)
-                own_chrom_ids[i] = name_to_id[name]
-
-        mc, mp, ts = _miv2.decode(blob, own_chrom_ids, own_positions,
-                                   n_records=n)
+        decoded = CODEC_REGISTRY[Compression.MATE_INLINE_V2].decode(
+            ChannelPayload.of_bytes(blob), self._codec_context()
+        ).as_mate_info()
+        mc = decoded["mate_chrom_ids"]
+        mp = decoded["mate_positions"]
+        ts = decoded["template_lengths"]
 
         # Read the full chrom_id → name table written by the writer.
         # This covers mate-only chromosomes absent from genomic_index.
