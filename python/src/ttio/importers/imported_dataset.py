@@ -14,7 +14,7 @@ from ..quantification import Quantification
 from ..spectral_dataset import SpectralDataset, WrittenRun
 
 if TYPE_CHECKING:
-    from ..genomic_run import WrittenGenomicRun
+    from ..written_genomic_run import WrittenGenomicRun
 
 
 @dataclass(slots=True)
@@ -24,7 +24,7 @@ class ImportedDataset:
     title: str = ""
     isa_investigation_id: str = ""
     runs: dict[str, WrittenRun] = field(default_factory=dict)
-    genomic_runs: dict = field(default_factory=dict)  # name -> WrittenGenomicRun
+    genomic_runs: dict[str, "WrittenGenomicRun"] = field(default_factory=dict)
     identifications: list[Identification] = field(default_factory=list)
     quantifications: list[Quantification] = field(default_factory=list)
     provenance: list[ProvenanceRecord] = field(default_factory=list)
