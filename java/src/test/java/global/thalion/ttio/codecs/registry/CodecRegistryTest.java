@@ -135,4 +135,24 @@ class CodecRegistryTest {
         assertEquals(data.length, once.length);
         assertArrayEquals(once, twice);
     }
+
+    @Test
+    void needsEmbeddedReferenceOnlyRefDiff() {
+        var embed = new java.util.HashSet<global.thalion.ttio.Enums.Compression>();
+        CodecRegistry.CODEC_REGISTRY.forEach((cid, c) -> {
+            if (c.needsEmbeddedReference()) embed.add(cid);
+        });
+        assertEquals(java.util.Set.of(global.thalion.ttio.Enums.Compression.REF_DIFF_V2), embed);
+    }
+
+    @Test
+    void registryGetSafeForUnregisteredValidCodecs() {
+        // NONE/ZLIB/LZ4 are valid Compression members but not registered codecs;
+        // .get(...) must return null (no exception) — membership-safe.
+        for (var c : java.util.List.of(global.thalion.ttio.Enums.Compression.NONE,
+                global.thalion.ttio.Enums.Compression.ZLIB,
+                global.thalion.ttio.Enums.Compression.LZ4)) {
+            assertNull(CodecRegistry.CODEC_REGISTRY.get(c));
+        }
+    }
 }

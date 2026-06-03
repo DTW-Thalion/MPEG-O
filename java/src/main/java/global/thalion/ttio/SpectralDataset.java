@@ -1444,9 +1444,13 @@ public class SpectralDataset implements
                 Enums.Compression seqCodec =
                     run.signalCodecOverrides().get("sequences");
                 BulkV2Blobs bulkBlobs = run.bulkV2Blobs();
+                // usesRefDiffDefaultPath captures (ZLIB default + no
+                // "sequences" override); seqCodec == null is equivalent to
+                // !containsKey("sequences") because signalCodecOverrides is
+                // a Map.copyOf (no null values). The referenceChromSeqs gate
+                // is extra to this site only.
                 boolean useRefDiffPath =
-                    seqCodec == null
-                    && run.signalCompression() == Enums.Compression.ZLIB
+                    usesRefDiffDefaultPath(run)
                     && run.referenceChromSeqs() != null;
                 if (bulkBlobs != null && bulkBlobs.refDiffBlob() != null) {
                     // Phase 2c-T: skip codec encode and write the
@@ -1924,6 +1928,14 @@ public class SpectralDataset implements
         }
     }
 
+    /** True iff a written genomic run's sequences default to the ref-diff path
+     *  (ZLIB default codec + no explicit "sequences" override), which embeds a
+     *  reference. Single source of truth for the two former inlined copies. */
+    private static boolean usesRefDiffDefaultPath(WrittenGenomicRun run) {
+        return run.signalCompression() == Enums.Compression.ZLIB
+            && !run.signalCodecOverrides().containsKey("sequences");
+    }
+
     /** Embed each unique reference (by {@code reference_uri}) once at
      *  {@code /study/references/<uri>/}. Only runs that have
      *  {@code embedReference=true} AND a context-aware codec on
@@ -1943,10 +1955,7 @@ public class SpectralDataset implements
             if (run.referenceChromSeqs() == null) continue;
             // Only embed when the ref-diff path will actually be taken
             // (matches the selection condition in writeGenomicRunSubtree).
-            boolean useRefDiffPath =
-                run.signalCompression() == Enums.Compression.ZLIB
-                && !run.signalCodecOverrides().containsKey("sequences");
-            if (!useRefDiffPath) continue;
+            if (!usesRefDiffDefaultPath(run)) continue;
 
             byte[] md5 = referenceMd5ForRun(run);
             if (needsEmbedMd5.containsKey(run.referenceUri())) {
