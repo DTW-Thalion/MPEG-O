@@ -23,7 +23,7 @@
 - `global.thalion.ttio.providers.{StorageGroup,StorageDataset}`; `ds.readSlice(off,count)->Object` (cast `byte[]`), `ds.shape()[0]`, `sc.createDataset(name,Precision,len,chunk,Compression,lvl)`, `ds.writeAll(byte[])`, `ds.setAttribute("compression",int)`, `sc.openGroup(name)`/`openDataset(name)`.
 - `genomics/GenomicRun.java`: decode ladder `byteChannelSlice:436-466`; cache field `decodedByteChannels` (Map); side-paths `decodeRefDiffV2Sequences`, `cigarAt`, `readNameAt`, `_decodeMateV2`.
 - `SpectralDataset.java`: encode switch `writeByteChannelWithCodec:2210-2255`; `codecIdFor(codec)=ordinal()`; embed predicate `useRefDiffPath` at `:1936-1939` and `:1447-1450`.
-- `ReferenceResolver` at `global.thalion.ttio.genomics.ReferenceResolver`; obtained from the HDF5-backed run group (see `decodeRefDiffV2Sequences`).
+- `ReferenceResolver` at `global.thalion.ttio.codecs.ReferenceResolver`; obtained from the HDF5-backed run group (see `decodeRefDiffV2Sequences`).
 
 ---
 
@@ -166,7 +166,7 @@ public sealed interface ChannelPayload {
 ```java
 package global.thalion.ttio.codecs.registry;
 
-import global.thalion.ttio.genomics.ReferenceResolver;
+import global.thalion.ttio.codecs.ReferenceResolver;
 import java.util.function.Supplier;
 
 /** Run-derived context for codecs. All fields nullable; plain codecs ignore it.
@@ -653,7 +653,7 @@ Goal: route `byteChannelSlice` ladder + the ref_diff/read_names/mate_info side-p
             }
             ownChromIds[i] = id;
         }
-        global.thalion.ttio.genomics.ReferenceResolver resolver = null;
+        global.thalion.ttio.codecs.ReferenceResolver resolver = null;
         try {
             resolver = buildReferenceResolver();  // see Step 1b
         } catch (RuntimeException e) {
