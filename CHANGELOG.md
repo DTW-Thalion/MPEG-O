@@ -11,6 +11,18 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Codec dispatch unified behind a registry (Objective-C)
+
+ObjC's genomic codec dispatch (the decode switch + five bespoke
+ref_diff/fqzcomp/name_tok/mate_info/cigars side-paths and the two near-identical
+encode bodies) now routes through a single `TTIOCodec` registry keyed by
+`TTIOCompression` (`Codecs/Registry/`), fronted by a uniform `TTIOCodec`
+protocol, a `TTIOCodecContext` value object, and abstract-class-cluster unions
+`TTIODecodedChannel`/`TTIOEncodedChannel`/`TTIOChannelPayload`. Codecs expose
+`isContextAware` and `needsEmbeddedReference` (REF_DIFF_V2 only). No
+wire/on-disk format change; all byte-equality and cross-language fixtures
+unchanged. Completes the 3-SDK codec-registry parity (Python #209, Java #210).
+
 ### Changed — Codec dispatch unified behind a registry (Java)
 
 Java's genomic codec dispatch (the decode ladder + four bespoke

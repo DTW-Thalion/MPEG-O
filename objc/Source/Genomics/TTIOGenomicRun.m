@@ -37,6 +37,11 @@
 #import "Codecs/TTIOMateInfoV2.h"          // inline mate-pair codec
 #import "Codecs/TTIORefDiffV2.h"          // bit-packed ref-diff v2
 #import "Codecs/TTIONameTokenizerV2.h"     // v1.8 #11 ch3: adaptive name-tokenizer v2
+#import "Codecs/Registry/TTIOCodecRegistry.h"  // Task 5: codec registry dispatch
+#import "Codecs/Registry/TTIOCodec.h"
+#import "Codecs/Registry/TTIOChannelPayload.h"
+#import "Codecs/Registry/TTIODecodedChannel.h"
+#import "Codecs/Registry/TTIOCodecContext.h"
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
@@ -109,6 +114,10 @@
     // decoded flat sequence bytes from the refdiff_v2 blob.
     // Populated on first access when _sequencesLinkType == 1.
     NSData *_decodedRefDiffV2Sequences;
+    // Task 5: lazily-built, run-instance-cached codec context passed to
+    // the TTIOCodecRegistry decode adapters. Mirrors the field
+    // derivations the bespoke decode methods built inline.
+    TTIOCodecContext *_codecCtxCache;
 }
 
 - (NSUInteger)readCount { return _index.count; }
@@ -276,6 +285,132 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     return _ttio_m86_read_compression_attr_protocol(ds);
 }
 
+// Task 5: build (and cache) the TTIOCodecContext handed to the
+// TTIOCodecRegistry decode adapters. Every field is derived EXACTLY as
+// the bespoke decode methods (-byteChannelSliceNamed:, -cigarAtIndex:,
+// -_decodeRefDiffV2Sequences:, -_decodeMateInfoInlineV2:) built it
+// inline, so registry-routed decode stays byte-identical to the old
+// switch / side paths. Cached for the lifetime of the run instance.
+- (TTIOCodecContext *)_codecContext
+{
+    if (_codecCtxCache) return _codecCtxCache;
+
+    TTIOCodecContext *ctx = [TTIOCodecContext emptyContext];
+    NSUInteger n = _index ? _index.count : 0;
+
+    // readLengths / revcompFlags / totalBases (fqzcomp + refdiff).
+    // revcomp = run.flags & 16 (mirrors -_ttio_m94z_decodeFqzcompNx16Z:
+    // and -_decodeRefDiffV2Sequences:'s totalBases sum).
+    NSMutableArray<NSNumber *> *readLengths =
+        [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray<NSNumber *> *revcompFlags =
+        [NSMutableArray arrayWithCapacity:n];
+    NSUInteger totalBases = 0;
+    for (NSUInteger i = 0; i < n; i++) {
+        NSUInteger len = [_index lengthAt:i];
+        [readLengths addObject:@(len)];
+        totalBases += len;
+        uint32_t f = [_index flagsAt:i];
+        [revcompFlags addObject:((f & 16u) != 0) ? @1 : @0];
+    }
+    ctx.readLengths  = readLengths;
+    ctx.revcompFlags = revcompFlags;
+    ctx.totalBases   = @(totalBases);
+    ctx.readCount    = @(n);
+
+    // positions int64-LE (mirrors -_decodeRefDiffV2Sequences:).
+    NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    int64_t *posPtr = (int64_t *)positions.mutableBytes;
+    for (NSUInteger i = 0; i < n; i++) posPtr[i] = [_index positionAt:i];
+    ctx.positions = positions;
+
+    // chromosomes (refdiff single-chrom constraint).
+    NSMutableArray<NSString *> *chromosomes =
+        [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *c = [_index chromosomeAt:i];
+        [chromosomes addObject:c ?: @""];
+    }
+    ctx.chromosomes = chromosomes;
+
+    // ownChromIds (encounter-order uint16-LE) + ownPositions (int64-LE)
+    // + nRecords — MUST match -_decodeMateInfoInlineV2: EXACTLY.
+    NSMutableData *ownChromIds =
+        [NSMutableData dataWithLength:n * sizeof(uint16_t)];
+    uint16_t *ownIdsPtr = (uint16_t *)ownChromIds.mutableBytes;
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
+        [NSMutableDictionary dictionaryWithCapacity:32];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *name = [_index chromosomeAt:i];
+        NSNumber *existingId = nameToId[name];
+        if (existingId == nil) {
+            NSUInteger newId = nameToId.count;
+            nameToId[name] = @(newId);
+            ownIdsPtr[i] = (uint16_t)newId;
+        } else {
+            ownIdsPtr[i] = (uint16_t)[existingId unsignedIntegerValue];
+        }
+    }
+    ctx.ownChromIds = ownChromIds;
+
+    NSMutableData *ownPositions =
+        [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    int64_t *ownPosPtr = (int64_t *)ownPositions.mutableBytes;
+    for (NSUInteger i = 0; i < n; i++) ownPosPtr[i] = [_index positionAt:i];
+    ctx.ownPositions = ownPositions;
+    ctx.nRecords = @(n);
+
+    // cigarsProvider — lazy thunk that reproduces the cigar-list build
+    // from -_decodeRefDiffV2Sequences: (trigger cigarAtIndex:0 to
+    // populate _decodedCigars; otherwise materialise per-read).
+    __weak TTIOGenomicRun *weakSelf = self;
+    ctx.cigarsProvider = ^NSArray<NSString *> *(void) {
+        TTIOGenomicRun *s = weakSelf;
+        if (s == nil) return @[];
+        NSUInteger cn = s->_index ? s->_index.count : 0;
+        if (cn > 0) {
+            NSError *cigErr = nil;
+            (void)[s cigarAtIndex:0 error:&cigErr];
+        }
+        if (s->_decodedCigars != nil) {
+            return [NSArray arrayWithArray:s->_decodedCigars];
+        }
+        NSMutableArray<NSString *> *cigars =
+            [NSMutableArray arrayWithCapacity:cn];
+        for (NSUInteger i = 0; i < cn; i++) {
+            NSError *cigErr = nil;
+            NSString *cig = [s cigarAtIndex:i error:&cigErr];
+            if (cig == nil) return nil;
+            [cigars addObject:cig];
+        }
+        return cigars;
+    };
+
+    // referenceResolver — built EXACTLY as -_decodeRefDiffV2Sequences:
+    // does from the HDF5 root group; nil on non-HDF5 backends / failure.
+    TTIOHDF5Group *rootHDF5 = nil;
+    if ([_group respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *runG = [(id)_group performSelector:@selector(unwrap)];
+        hid_t fid = H5Iget_file_id([runG groupId]);
+        if (fid >= 0) {
+            hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
+            if (rootId >= 0) {
+                rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId
+                                                         retainer:nil];
+            }
+            H5Idec_ref(fid);
+        }
+    }
+    if (rootHDF5 != nil) {
+        ctx.referenceResolver = [[TTIOReferenceResolver alloc]
+                initWithRootGroup:rootHDF5
+            externalReferencePath:nil];
+    }
+
+    _codecCtxCache = ctx;
+    return _codecCtxCache;
+}
+
 // byte-channel slice helper.
 //
 // For byte channels (sequences, qualities) the read path may need to
@@ -292,12 +427,27 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
                              count:(NSUInteger)count
                              error:(NSError **)error
 {
-    // refdiff_v2 group layout probe for sequences channel.
+    // refdiff_v2 group layout probe for sequences channel. Routed via
+    // the codec registry (REF_DIFF_V2 group-payload adapter); the
+    // adapter opens the sequences GROUP / refdiff_v2 dataset from the
+    // signal_channels group, parses the blob, resolves the reference
+    // via context.referenceResolver, and decodes — byte-identical to
+    // the old -_decodeRefDiffV2Sequences: side path. Result is cached
+    // in _decodedRefDiffV2Sequences exactly as before.
     if ([name isEqualToString:@"sequences"] && [self _sequencesIsRefDiffV2]) {
         NSData *decoded = _decodedRefDiffV2Sequences;
         if (!decoded) {
-            decoded = [self _decodeRefDiffV2Sequences:error];
-            if (!decoded) return nil;
+            id<TTIOStorageGroup> sigGrp =
+                [self signalChannelsGroupWithError:error];
+            if (!sigGrp) return nil;
+            id<TTIOCodec> codec =
+                [TTIOCodecRegistry codecForId:TTIOCompressionRefDiffV2];
+            TTIODecodedChannel *dc =
+                [codec decode:[[TTIOGroupPayload alloc] initWithGroup:sigGrp]
+                      context:[self _codecContext] error:error];
+            if (dc == nil) return nil;
+            decoded = ((TTIODecodedBytes *)dc).data;
+            _decodedRefDiffV2Sequences = decoded;
         }
         NSUInteger from = MIN(offset, decoded.length);
         NSUInteger to   = MIN(from + count, decoded.length);
@@ -343,43 +493,39 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     NSData *encoded = (NSData *)allRaw;
     NSData *decoded = nil;
     NSError *decErr = nil;
-    switch (codec_id) {
-        case 4: // TTIOCompressionRansOrder0
-        case 5: // TTIOCompressionRansOrder1
-            decoded = TTIORansDecode(encoded, &decErr);
-            break;
-        case 6: // TTIOCompressionBasePack
-            decoded = TTIOBasePackDecode(encoded, &decErr);
-            break;
-        case 7: // TTIOCompressionQualityBinned (M86 Phase D)
-            decoded = TTIOQualityDecode(encoded, &decErr);
-            break;
-        case 9: // TTIOCompressionRefDiff (v1 — removed in Phase 2c)
-            if (error) *error = [NSError
-                errorWithDomain:@"TTIOGenomicRun" code:2020
-                       userInfo:@{NSLocalizedDescriptionKey:
-                           @"REF_DIFF v1 (codec id 9) is no longer "
-                           @"supported in v1.0; file was written with "
-                           @"an older TTI-O version. Re-encode with "
-                           @"v1.0+ which uses REF_DIFF_V2 (codec id "
-                           @"14)."}];
-            return nil;
-        case 11: // TTIOCompressionDeltaRansOrder0 (M95 v1.2)
-            decoded = TTIODeltaRansDecode(encoded, &decErr);
-            break;
-        case 12: // TTIOCompressionFqzcompNx16Z (M94.Z v1.2)
-            decoded = [self _ttio_m94z_decodeFqzcompNx16Z:encoded error:&decErr];
-            break;
-        default:
-            if (error) *error = [NSError
-                errorWithDomain:@"TTIOGenomicRun" code:2020
-                       userInfo:@{NSLocalizedDescriptionKey:
-                           [NSString stringWithFormat:
-                                @"signal_channel '%@': @compression=%u "
-                                @"is not a supported TTIO codec id",
-                                name, (unsigned)codec_id]}];
-            return nil;
+
+    // REF_DIFF v1 (codec id 9) is unregistered and removed — keep its
+    // dedicated re-encode hint instead of the generic default-arm error
+    // that the registry-nil path produces below.
+    if (codec_id == 9) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2020
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"REF_DIFF v1 (codec id 9) is no longer "
+                       @"supported in v1.0; file was written with "
+                       @"an older TTI-O version. Re-encode with "
+                       @"v1.0+ which uses REF_DIFF_V2 (codec id "
+                       @"14)."}];
+        return nil;
     }
+
+    id<TTIOCodec> codec = [TTIOCodecRegistry codecForId:(TTIOCompression)codec_id];
+    if (codec == nil) {
+        // Same NSError the old default arm built.
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOGenomicRun" code:2020
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       [NSString stringWithFormat:
+                            @"signal_channel '%@': @compression=%u "
+                            @"is not a supported TTIO codec id",
+                            name, (unsigned)codec_id]}];
+        return nil;
+    }
+    TTIODecodedChannel *dc =
+        [codec decode:[[TTIOBytesPayload alloc] initWithBytes:encoded]
+              context:[self _codecContext] error:&decErr];
+    if (dc != nil) decoded = ((TTIODecodedBytes *)dc).data;
+
     if (!decoded) {
         if (error) *error = decErr ?: [NSError
             errorWithDomain:@"TTIOGenomicRun" code:2021
@@ -399,29 +545,6 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 // removed alongside TTIORefDiff codec impl. The byte-channel codec
 // dispatcher above raises a clear NSError when @compression == 9 is
 // encountered on legacy files.
-
-// M94.Z v1.2: FQZCOMP_NX16_Z (CRAM-mimic rANS-Nx16) decode helper.
-// Same plumbing as the old NX16: revcomp_flags from run.flags & 16,
-// read_lengths carried inside the codec wire format.
-- (NSData *)_ttio_m94z_decodeFqzcompNx16Z:(NSData *)encoded
-                                     error:(NSError **)error
-{
-    NSUInteger n = _index ? _index.count : 0;
-    NSMutableArray<NSNumber *> *revcompFlags = [NSMutableArray arrayWithCapacity:n];
-    for (NSUInteger i = 0; i < n; i++) {
-        uint32_t f = [_index flagsAt:i];
-        [revcompFlags addObject:(f & 16u) ? @1 : @0];
-    }
-    NSError *decErr = nil;
-    NSDictionary *out = [TTIOFqzcompNx16Z decodeData:encoded
-                                          revcompFlags:revcompFlags
-                                                 error:&decErr];
-    if (!out) {
-        if (error) *error = decErr;
-        return nil;
-    }
-    return out[@"qualities"];
-}
 
 // read_names dispatch helper.
 //
@@ -523,9 +646,17 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
                                 (unsigned long)i]}];
             return nil;
         }
+        // Route NAME_TOKENIZED_V2 decode through the codec registry
+        // (str-list adapter). Byte-identical to the old inline
+        // [TTIONameTokenizerV2 decodeData:] call.
         NSError *decErr = nil;
+        id<TTIOCodec> codec =
+            [TTIOCodecRegistry codecForId:TTIOCompressionNameTokenizedV2];
+        TTIODecodedChannel *dc =
+            [codec decode:[[TTIOBytesPayload alloc] initWithBytes:encoded]
+                  context:[self _codecContext] error:&decErr];
         NSArray<NSString *> *decoded =
-            [TTIONameTokenizerV2 decodeData:encoded error:&decErr];
+            (dc != nil) ? ((TTIODecodedStringList *)dc).names : nil;
         if (decoded == nil) {
             if (error) *error = decErr ?: [NSError
                 errorWithDomain:@"TTIOGenomicRun" code:2042
@@ -659,8 +790,18 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 
         if (codec_id == (uint8_t)4 /* RANS_ORDER0 */
             || codec_id == (uint8_t)5 /* RANS_ORDER1 */) {
+            // Route ONLY the inner rANS decode through the registry; the
+            // length-prefix-concat framing below stays here (the codec
+            // layer is byte-stream agnostic). Byte-identical to the old
+            // TTIORansDecode(encoded, ...) call.
             NSError *decErr = nil;
-            NSData *decoded = TTIORansDecode(encoded, &decErr);
+            id<TTIOCodec> ransCodec =
+                [TTIOCodecRegistry codecForId:(TTIOCompression)codec_id];
+            TTIODecodedChannel *rdc =
+                [ransCodec decode:[[TTIOBytesPayload alloc] initWithBytes:encoded]
+                          context:[self _codecContext] error:&decErr];
+            NSData *decoded =
+                (rdc != nil) ? ((TTIODecodedBytes *)rdc).data : nil;
             if (decoded == nil) {
                 if (error) *error = decErr ?: [NSError
                     errorWithDomain:@"TTIOGenomicRun" code:2061
@@ -942,169 +1083,13 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
     return NO;
 }
 
-/** decode the refdiff_v2 blob into flat sequence bytes; cache
- *  the result in _decodedRefDiffV2Sequences. Returns nil + error on
- *  failure. Resolves the reference via TTIOReferenceResolver.
- *
- *  Blob header layout (from Python spec):
- *    [0:4]    magic "RDF2"
- *    [12:20]  n_reads (LE uint64)
- *    [20:36]  reference_md5 (16 bytes)
- *    [36:38]  uri_len (LE uint16)
- *    [38:38+uri_len] reference_uri (UTF-8)
- */
-- (NSData *)_decodeRefDiffV2Sequences:(NSError **)error
-{
-    if (_decodedRefDiffV2Sequences) return _decodedRefDiffV2Sequences;
-
-    id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:error];
-    if (!sig) return nil;
-
-    // Open the sequences GROUP and the refdiff_v2 dataset inside it.
-    NSData *blob = nil;
-    if ([sig respondsToSelector:@selector(unwrap)]) {
-        TTIOHDF5Group *hg = [(id)sig performSelector:@selector(unwrap)];
-        TTIOHDF5Group *seqGrp = [hg openGroupNamed:@"sequences" error:error];
-        if (!seqGrp) return nil;
-        TTIOHDF5Dataset *ds = [seqGrp openDatasetNamed:@"refdiff_v2" error:error];
-        if (!ds) return nil;
-        id raw = [ds readDataWithError:error];
-        if (![raw isKindOfClass:[NSData class]]) return nil;
-        blob = (NSData *)raw;
-    } else {
-        id<TTIOStorageGroup> seqGrp = [sig openGroupNamed:@"sequences" error:error];
-        if (!seqGrp) return nil;
-        id<TTIOStorageDataset> ds = [seqGrp openDatasetNamed:@"refdiff_v2" error:error];
-        if (!ds) return nil;
-        id raw = [ds readAll:error];
-        if (![raw isKindOfClass:[NSData class]]) return nil;
-        blob = (NSData *)raw;
-    }
-
-    // Parse the blob header to extract reference_uri and reference_md5.
-    // Header layout: [0:4] "RDF2" magic, [20:36] md5, [36:38] uri_len LE,
-    // [38:38+uri_len] uri UTF-8.
-    const uint8_t *blobBytes = (const uint8_t *)blob.bytes;
-    NSUInteger blobLen = blob.length;
-    if (blobLen < 38) {
-        if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2094
-                                           userInfo:@{NSLocalizedDescriptionKey:
-                                               @"refdiff_v2 blob too short to parse header"}];
-        return nil;
-    }
-    if (memcmp(blobBytes, "RDF2", 4) != 0) {
-        if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2094
-                                           userInfo:@{NSLocalizedDescriptionKey:
-                                               @"refdiff_v2 blob magic mismatch (expected 'RDF2')"}];
-        return nil;
-    }
-    NSData *blobMD5 = [NSData dataWithBytes:blobBytes + 20 length:16];
-    uint16_t uriLen = 0;
-    memcpy(&uriLen, blobBytes + 36, 2);
-    // uriLen is LE uint16
-    if (blobLen < (NSUInteger)(38 + uriLen)) {
-        if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2094
-                                           userInfo:@{NSLocalizedDescriptionKey:
-                                               @"refdiff_v2 blob truncated (uri)"}];
-        return nil;
-    }
-    NSString *blobURI = [[NSString alloc] initWithBytes:blobBytes + 38
-                                                  length:uriLen
-                                               encoding:NSUTF8StringEncoding]
-                        ?: @"";
-
-    // Resolve reference sequence via embedded /study/references/ or external path.
-    TTIOHDF5Group *rootHDF5 = nil;
-    if ([_group respondsToSelector:@selector(unwrap)]) {
-        TTIOHDF5Group *runG = [(id)_group performSelector:@selector(unwrap)];
-        hid_t fid = H5Iget_file_id([runG groupId]);
-        if (fid >= 0) {
-            hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
-            if (rootId >= 0) {
-                rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId
-                                                          retainer:nil];
-            }
-            H5Idec_ref(fid);
-        }
-    }
-    TTIOReferenceResolver *resolver = [[TTIOReferenceResolver alloc]
-        initWithRootGroup:rootHDF5
-    externalReferencePath:nil];
-
-    // Single-chromosome constraint (same as v1).
-    NSMutableSet<NSString *> *unique = [NSMutableSet set];
-    for (NSUInteger i = 0; i < _index.count; i++) {
-        NSString *c = [_index chromosomeAt:i];
-        if (c.length) [unique addObject:c];
-    }
-    if (unique.count != 1) {
-        if (error) *error = [NSError
-            errorWithDomain:@"TTIOGenomicRun" code:2095
-                   userInfo:@{NSLocalizedDescriptionKey:
-                       [NSString stringWithFormat:
-                            @"refdiff_v2 decode: expected single-chromosome "
-                            @"run, got %lu chromosomes",
-                            (unsigned long)unique.count]}];
-        return nil;
-    }
-    NSString *chrom = [unique anyObject];
-    NSError *resolveErr = nil;
-    NSData *ref = [resolver resolveURI:blobURI
-                           expectedMD5:blobMD5
-                            chromosome:chrom
-                                 error:&resolveErr];
-    if (!ref) {
-        if (error) *error = resolveErr;
-        return nil;
-    }
-
-    NSUInteger n = _index.count;
-    NSUInteger totalBases = 0;
-    for (NSUInteger i = 0; i < n; i++) totalBases += [_index lengthAt:i];
-
-    // Build positions array from the index.
-    NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
-    int64_t *posPtr = (int64_t *)positions.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) posPtr[i] = [_index positionAt:i];
-
-    // Build cigars list — trigger cigarAtIndex:0 to populate _decodedCigars
-    // when the cigars channel uses the codec path (same as v1 path).
-    NSMutableArray<NSString *> *cigars = nil;
-    if (n > 0) {
-        NSError *cigErr = nil;
-        (void)[self cigarAtIndex:0 error:&cigErr];
-    }
-    if (_decodedCigars != nil) {
-        cigars = [NSMutableArray arrayWithArray:_decodedCigars];
-    } else {
-        cigars = [NSMutableArray arrayWithCapacity:n];
-        for (NSUInteger i = 0; i < n; i++) {
-            NSError *cigErr = nil;
-            NSString *cig = [self cigarAtIndex:i error:&cigErr];
-            if (!cig) {
-                if (error) *error = cigErr;
-                return nil;
-            }
-            [cigars addObject:cig];
-        }
-    }
-
-    NSData *outSeq = nil;
-    NSData *outOff = nil;
-    BOOL ok = [TTIORefDiffV2 decodeData:blob
-                              positions:positions
-                           cigarStrings:cigars
-                              reference:ref
-                                 nReads:n
-                             totalBases:totalBases
-                           outSequences:&outSeq
-                             outOffsets:&outOff
-                                  error:error];
-    if (!ok) return nil;
-
-    _decodedRefDiffV2Sequences = outSeq;
-    return _decodedRefDiffV2Sequences;
-}
+// Task 5: -_decodeRefDiffV2Sequences: was deleted — its body now lives
+// in the REF_DIFF_V2 codec-registry adapter (_TTIORefDiffCodec in
+// TTIOCodecRegistry.m). -byteChannelSliceNamed: routes the sequences
+// refdiff_v2 group payload through that adapter with the context built
+// by -_codecContext (positions / totalBases / chromosomes /
+// cigarsProvider / referenceResolver), staying byte-identical to the
+// old side path.
 
 /** decode the inline_v2 blob; populate _decodedMateInfo with
  *  "chrom" (NSArray<NSString *>), "pos" (NSData int64), "tlen" (NSData int32).
@@ -1147,50 +1132,34 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 
     NSUInteger n = _index.count;
 
-    // Build own_chrom_ids using encounter-order (must match writer).
-    NSMutableData *ownChromIds =
-        [NSMutableData dataWithLength:n * sizeof(uint16_t)];
-    uint16_t *ownIdsPtr = (uint16_t *)ownChromIds.mutableBytes;
-    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
-        [NSMutableDictionary dictionaryWithCapacity:32];
-    for (NSUInteger i = 0; i < n; i++) {
-        NSString *name = [_index chromosomeAt:i];
-        NSNumber *existingId = nameToId[name];
-        if (existingId == nil) {
-            NSUInteger newId = nameToId.count;
-            nameToId[name] = @(newId);
-            ownIdsPtr[i] = (uint16_t)newId;
-        } else {
-            ownIdsPtr[i] = (uint16_t)[existingId unsignedIntegerValue];
-        }
-    }
+    // own_chrom_ids (encounter-order uint16, must match writer) and
+    // own_positions are now derived in -_codecContext and consumed by
+    // the registry adapter below — see that method for the exact
+    // encounter-order derivation this path used to inline here.
 
-    // Build own_positions from index.
-    NSMutableData *ownPositions =
-        [NSMutableData dataWithLength:n * sizeof(int64_t)];
-    int64_t *posPtr = (int64_t *)ownPositions.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) {
-        posPtr[i] = [_index positionAt:i];
-    }
-
-    // Decode via TTIOMateInfoV2.
+    // Decode via the codec registry (MATE_INLINE_V2 adapter). The
+    // adapter consumes context.ownChromIds / ownPositions / nRecords —
+    // those context fields are derived in -_codecContext using the same
+    // encounter-order uint16 derivation as the ownChromIds built above,
+    // so this is byte-identical to the old inline TTIOMateInfoV2 call.
     NSData *outMc = nil, *outMp = nil, *outTs = nil;
     NSError *decErr = nil;
-    BOOL ok = [TTIOMateInfoV2 decodeData:blob
-                             ownChromIds:ownChromIds
-                            ownPositions:ownPositions
-                               nRecords:n
-                        outMateChromIds:&outMc
-                       outMatePositions:&outMp
-                     outTemplateLengths:&outTs
-                                  error:&decErr];
-    if (!ok) {
+    id<TTIOCodec> codec =
+        [TTIOCodecRegistry codecForId:TTIOCompressionMateInlineV2];
+    TTIODecodedChannel *dc =
+        [codec decode:[[TTIOBytesPayload alloc] initWithBytes:blob]
+              context:[self _codecContext] error:&decErr];
+    if (dc == nil) {
         if (error) *error = decErr ?: [NSError
             errorWithDomain:@"TTIOGenomicRun" code:2090
                    userInfo:@{NSLocalizedDescriptionKey:
                        @"v1.7 inline_v2 decode failed"}];
         return NO;
     }
+    TTIODecodedMateInfo *mi = (TTIODecodedMateInfo *)dc;
+    outMc = mi.mateChromIds;
+    outMp = mi.matePositions;
+    outTs = mi.templateLengths;
 
     // Read the chrom_names sidecar compound to resolve mate chrom ids → names.
     NSArray *chromNameRows = nil;

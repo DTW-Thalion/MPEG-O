@@ -51,7 +51,13 @@
 #import "Codecs/TTIOMateInfoV2.h"               // inline mate-pair codec
 #import "Codecs/TTIORefDiffV2.h"               // bit-packed ref-diff v2
 #import "Codecs/TTIONameTokenizerV2.h"          // v1.8 #11 ch3: adaptive name-tokenizer v2
+#import "Codecs/Registry/TTIOCodecRegistry.h"   // Task 6: codec-registry routing
+#import "Codecs/Registry/TTIOCodec.h"
+#import "Codecs/Registry/TTIODecodedChannel.h"
+#import "Codecs/Registry/TTIOEncodedChannel.h"
+#import "Codecs/Registry/TTIOCodecContext.h"
 #import <hdf5.h>
+#include <objc/message.h>                          // Task 6: typed objc_msgSend bridge
 #include <openssl/md5.h>                          // M93 v1.2 ref MD5
 
 // little-endian serialisation helpers. Use macOS's
@@ -68,6 +74,24 @@
 #  define TTIO_HOST_TO_LE32(x) htole32(x)
 #  define TTIO_HOST_TO_LE64(x) htole64(x)
 #endif
+
+// Bridge to the dynamically-resolved TTIOHDF5GroupAdapter. The adapter
+// lives in a separate compilation unit and is looked up by name to
+// avoid a hard build dependency. `initWithGroup:` is an init-family
+// selector, so a direct -performSelector: trips ARC's hard
+// "performSelector names a selector which retains the object" error
+// once the selector is in scope. We dispatch through a typed
+// objc_msgSend pointer instead: identical runtime behaviour (the
+// alloc/init pair is unchanged) but ARC tracks ownership normally.
+static id _TTIO_MakeHDF5GroupAdapter(id group)
+{
+    Class cls = NSClassFromString(@"TTIOHDF5GroupAdapter");
+    if (cls == Nil) return nil;
+    id obj = [cls alloc];
+    SEL sel = NSSelectorFromString(@"initWithGroup:");
+    id (*msg)(id, SEL, id) = (id (*)(id, SEL, id))objc_msgSend;
+    return msg(obj, sel, group);
+}
 
 // Forward declarations — needed because mate_info and ref_diff v2 write
 // paths call functions defined later in the file.
@@ -402,22 +426,58 @@ static void _TTIO_M86_ValidateOverrides(NSDictionary<NSString *, NSNumber *> *ov
 /** Encode raw bytes through the selected M86 codec. */
 static NSData *_TTIO_M86_EncodeWithCodec(NSData *raw, TTIOCompression codec)
 {
-    switch (codec) {
-        case TTIOCompressionRansOrder0:
-            return TTIORansEncode(raw, 0);
-        case TTIOCompressionRansOrder1:
-            return TTIORansEncode(raw, 1);
-        case TTIOCompressionBasePack:
-            return TTIOBasePackEncode(raw);
-        case TTIOCompressionQualityBinned:           // M86 Phase D
-            return TTIOQualityEncode(raw);
-        default:
-            [NSException raise:NSInvalidArgumentException
-                        format:@"_TTIO_M86_EncodeWithCodec: codec %lu not "
-                               @"a TTIO byte-stream codec",
-                               (unsigned long)codec];
-            return nil;
+    id<TTIOCodec> c = [TTIOCodecRegistry codecForId:codec];
+    if (c == nil) {
+        [NSException raise:NSInvalidArgumentException
+                    format:@"_TTIO_M86_EncodeWithCodec: codec %lu not "
+                           @"a TTIO byte-stream codec",
+                           (unsigned long)codec];
+        return nil;
     }
+    NSError *e = nil;
+    TTIOEncodedChannel *enc =
+        [c encode:[[TTIODecodedBytes alloc] initWithData:raw]
+           context:[TTIOCodecContext emptyContext]
+             error:&e];
+    return ((TTIOEncodedDatasetBytes *)enc).bytes;
+}
+
+/** Encode read-names through the NAME_TOKENIZED_V2 codec via the
+ *  registry. Byte-identical to [TTIONameTokenizerV2 encodeNames:]. */
+static NSData *_TTIO_M86_EncodeNamesViaRegistry(NSArray<NSString *> *names)
+{
+    id<TTIOCodec> c =
+        [TTIOCodecRegistry codecForId:TTIOCompressionNameTokenizedV2];
+    if (c == nil) return nil;
+    NSError *e = nil;
+    TTIOEncodedChannel *enc =
+        [c encode:[[TTIODecodedStringList alloc] initWithNames:names]
+           context:[TTIOCodecContext emptyContext]
+             error:&e];
+    return ((TTIOEncodedDatasetBytes *)enc).bytes;
+}
+
+/** Encode mate-info through the MATE_INLINE_V2 codec via the registry.
+ *  Byte-identical to [TTIOMateInfoV2 encodeMateChromIds:...]. */
+static NSData *_TTIO_M86_EncodeMateInfoViaRegistry(NSData *mateChromIds,
+                                                   NSData *matePositions,
+                                                   NSData *templateLengths,
+                                                   NSData *ownChromIds,
+                                                   NSData *ownPositions,
+                                                   NSError **error)
+{
+    id<TTIOCodec> c =
+        [TTIOCodecRegistry codecForId:TTIOCompressionMateInlineV2];
+    if (c == nil) return nil;
+    TTIOCodecContext *ctx = [TTIOCodecContext emptyContext];
+    ctx.ownChromIds = ownChromIds;
+    ctx.ownPositions = ownPositions;
+    TTIODecodedMateInfo *mi =
+        [[TTIODecodedMateInfo alloc] initWithMateChromIds:mateChromIds
+                                            matePositions:matePositions
+                                          templateLengths:templateLengths];
+    TTIOEncodedChannel *enc = [c encode:mi context:ctx error:error];
+    return ((TTIOEncodedDatasetBytes *)enc).bytes;
 }
 
 // unsigned LEB128 varint writer for the cigars rANS path.
@@ -1141,12 +1201,12 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2HDF5(TTIOHDF5Group *sc,
     }
 
     NSError *encErr = nil;
-    NSData *blob = [TTIOMateInfoV2 encodeMateChromIds:mateChromIds
-                                        matePositions:run.matePositionsData
-                                      templateLengths:run.templateLengthsData
-                                          ownChromIds:ownChromIds
-                                         ownPositions:run.positionsData
-                                                error:&encErr];
+    NSData *blob = _TTIO_M86_EncodeMateInfoViaRegistry(mateChromIds,
+                                                       run.matePositionsData,
+                                                       run.templateLengthsData,
+                                                       ownChromIds,
+                                                       run.positionsData,
+                                                       &encErr);
     if (!blob) {
         if (error) *error = encErr ?: [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2101
@@ -1202,12 +1262,12 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
     }
 
     NSError *encErr = nil;
-    NSData *blob = [TTIOMateInfoV2 encodeMateChromIds:mateChromIds
-                                        matePositions:run.matePositionsData
-                                      templateLengths:run.templateLengthsData
-                                          ownChromIds:ownChromIds
-                                         ownPositions:run.positionsData
-                                                error:&encErr];
+    NSData *blob = _TTIO_M86_EncodeMateInfoViaRegistry(mateChromIds,
+                                                       run.matePositionsData,
+                                                       run.templateLengthsData,
+                                                       ownChromIds,
+                                                       run.positionsData,
+                                                       &encErr);
     if (!blob) {
         if (error) *error = encErr ?: [NSError
             errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2101
@@ -1777,6 +1837,49 @@ static NSData *_TTIO_V18_BuildOffsetsPlusOne(TTIOWrittenGenomicRun *run)
     return out;
 }
 
+/** Encode REF_DIFF_V2 sequences through the codec registry. Builds the
+ *  encode context exactly as the writers sourced their args from the
+ *  direct +[TTIORefDiffV2 encodeSequences:...] call: offsets (n+1),
+ *  positions = run.positionsData, cigars = run.cigars (via lazy
+ *  provider), reference = the resolved single-chrom sequence,
+ *  referenceMd5 = the run's reference MD5, referenceUri =
+ *  run.referenceUri ?: @"", readsPerSlice = 10000 (the codec's default
+ *  when ctx.readsPerSlice is nil). Returns the refdiff_v2 child blob,
+ *  byte-identical to the prior direct call, or nil + error on failure
+ *  (caller falls back to BASE_PACK). */
+static NSData *_TTIO_V18_EncodeRefDiffV2ViaRegistry(TTIOWrittenGenomicRun *run,
+                                                    NSData *offsets,
+                                                    NSData *reference,
+                                                    NSData *referenceMd5,
+                                                    NSError **error)
+{
+    id<TTIOCodec> c =
+        [TTIOCodecRegistry codecForId:TTIOCompressionRefDiffV2];
+    if (c == nil) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2120
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"REF_DIFF_V2 codec not registered"}];
+        return nil;
+    }
+    TTIOCodecContext *ctx = [TTIOCodecContext emptyContext];
+    ctx.offsets = offsets;
+    ctx.positions = run.positionsData;
+    NSArray<NSString *> *cigars = run.cigars;
+    ctx.cigarsProvider = ^NSArray<NSString *> *{ return cigars; };
+    ctx.reference = reference;
+    ctx.referenceMd5 = referenceMd5;
+    ctx.referenceUri = run.referenceUri ?: @"";
+    // ctx.readsPerSlice left nil -> codec uses its 10000 default,
+    // matching the prior direct call's readsPerSlice:10000.
+    TTIOEncodedChannel *enc =
+        [c encode:[[TTIODecodedBytes alloc] initWithData:run.sequencesData]
+           context:ctx
+             error:error];
+    if (![enc isKindOfClass:[TTIOEncodedGroupLayout class]]) return nil;
+    return ((TTIOEncodedGroupLayout *)enc).children[@"refdiff_v2"];
+}
+
 /** HDF5 fast path: write signal_channels/sequences as a GROUP with a
  *  refdiff_v2 child dataset @compression=14.  Falls back (with a silent
  *  BASE_PACK path) via _TTIO_M93_WriteRefDiffSequences when the C
@@ -1806,15 +1909,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesHDF5(TTIOHDF5Group *sc,
 
     NSError *encErr = nil;
     NSData *encoded =
-        [TTIORefDiffV2 encodeSequences:run.sequencesData
-                               offsets:offsets
-                             positions:run.positionsData
-                          cigarStrings:run.cigars
-                             reference:chromSeq
-                          referenceMd5:md5
-                          referenceUri:run.referenceUri ?: @""
-                         readsPerSlice:10000
-                                 error:&encErr];
+        _TTIO_V18_EncodeRefDiffV2ViaRegistry(run, offsets, chromSeq, md5, &encErr);
     if (!encoded) {
         // v2 encode failed — fall back to BASE_PACK so the write still
         // succeeds (no v1 REF_DIFF path under v1.0).
@@ -1867,15 +1962,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesStorage(id<TTIOStorageGroup> sc,
 
     NSError *encErr = nil;
     NSData *encoded =
-        [TTIORefDiffV2 encodeSequences:run.sequencesData
-                               offsets:offsets
-                             positions:run.positionsData
-                          cigarStrings:run.cigars
-                             reference:chromSeq
-                          referenceMd5:md5
-                          referenceUri:run.referenceUri ?: @""
-                         readsPerSlice:10000
-                                 error:&encErr];
+        _TTIO_V18_EncodeRefDiffV2ViaRegistry(run, offsets, chromSeq, md5, &encErr);
     if (!encoded) {
         // Fall back to plain sequences with BASE_PACK.
         return _TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
@@ -1939,10 +2026,16 @@ static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16Z(TTIOHDF5Group *sc,
                        ? flgs[i] : 0;
         [revcompFlags addObject:(f & 16u) ? @1 : @0];
     }
-    NSData *encoded = [TTIOFqzcompNx16Z encodeWithQualities:run.qualitiesData
-                                                 readLengths:readLengths
-                                                revcompFlags:revcompFlags
-                                                       error:error];
+    TTIOCodecContext *fqzCtx = [TTIOCodecContext emptyContext];
+    fqzCtx.readLengths = readLengths;
+    fqzCtx.revcompFlags = revcompFlags;
+    id<TTIOCodec> fqzCodec =
+        [TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z];
+    TTIOEncodedChannel *fqzEnc =
+        [fqzCodec encode:[[TTIODecodedBytes alloc] initWithData:run.qualitiesData]
+                 context:fqzCtx
+                   error:error];
+    NSData *encoded = ((TTIOEncodedDatasetBytes *)fqzEnc).bytes;
     if (!encoded) return NO;
     TTIOHDF5Dataset *ds = [sc createDatasetNamed:@"qualities"
                                         precision:TTIOPrecisionUInt8
@@ -2178,7 +2271,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                forName:@"compression"
                                  error:error]) return NO;
     } else if ([TTIONameTokenizerV2 nativeAvailable]) {
-        NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
+        NSData *encoded = _TTIO_M86_EncodeNamesViaRegistry(run.readNames);
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2032
@@ -2525,8 +2618,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     // slightly different signature (no `compression` arg). Wrap via
     // adapter to bridge.
     id<TTIOStorageGroup> idxGAdapter =
-        (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-            performSelector:@selector(initWithGroup:) withObject:idxG];
+        (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(idxG);
     if (!idxGAdapter) return NO;
     if (![idx writeToGroup:idxGAdapter error:error]) return NO;
 
@@ -2663,7 +2755,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                            (uint8_t)TTIOCompressionNameTokenizedV2,
                                            error)) return NO;
     } else if ([TTIONameTokenizerV2 nativeAvailable]) {
-        NSData *encoded = [TTIONameTokenizerV2 encodeNames:run.readNames];
+        NSData *encoded = _TTIO_M86_EncodeNamesViaRegistry(run.readNames);
         if (!encoded) {
             if (error) *error = [NSError
                 errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2032
@@ -3344,8 +3436,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             TTIOHDF5Group *runG = [gg openGroupNamed:trimmed error:error];
             if (!runG) return nil;
             id<TTIOStorageGroup> runAdapter =
-                (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-                    performSelector:@selector(initWithGroup:) withObject:runG];
+                (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(runG);
             TTIOGenomicRun *gr =
                 [TTIOGenomicRun openFromGroup:runAdapter name:trimmed error:error];
             if (!gr) return nil;
@@ -3447,9 +3538,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                     [refsG openGroupNamed:uri error:NULL];
                 if (oneRefG == nil) continue;
                 id<TTIOStorageGroup> oneRefAdapter =
-                    (id<TTIOStorageGroup>)[[NSClassFromString(@"TTIOHDF5GroupAdapter") alloc]
-                        performSelector:@selector(initWithGroup:)
-                                 withObject:oneRefG];
+                    (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(oneRefG);
                 TTIOReferenceImport *r =
                     [TTIOReferenceImport readFromGroup:oneRefAdapter];
                 if (r != nil) refs[uri] = r;

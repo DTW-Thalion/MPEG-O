@@ -77,6 +77,7 @@ TTIOTests_OBJC_FILES = \
 	TestM79GenomicEnums.m \
 	TestM82GenomicRun.m \
 	TestM83Rans.m \
+	TestCodecRegistry.m \
 	TestM84BasePack.m \
 	TestM85Quality.m \
 	TestM86GenomicCodecWiring.m \
