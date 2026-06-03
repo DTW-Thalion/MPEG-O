@@ -1590,8 +1590,12 @@ public class SpectralDataset implements
                         + "for read_names with readCount > 0.)");
                 } else {
                     byte[] encoded =
-                        global.thalion.ttio.codecs.NameTokenizerV2
-                            .encode(run.readNames());
+                        ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+                            global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                                .get(Enums.Compression.NAME_TOKENIZED_V2)
+                                .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.StrList(
+                                    run.readNames()),
+                                    global.thalion.ttio.codecs.registry.CodecContext.empty())).bytes();
                     global.thalion.ttio.providers.StorageDataset rnDs;
                     try {
                         rnDs = sc.createDataset("read_names",
@@ -1766,9 +1770,15 @@ public class SpectralDataset implements
         }
 
         // Encode to the inline_v2 blob via the native JNI library.
-        byte[] blob = global.thalion.ttio.codecs.MateInfoV2.encode(
-            mateChromIds, matePositions, templateLens,
-            ownChromIds, ownPositions);
+        var mateCtx = global.thalion.ttio.codecs.registry.CodecContext.builder()
+            .ownChromIds(ownChromIds)
+            .ownPositions(ownPositions)
+            .build();
+        byte[] blob = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+            global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                .get(Enums.Compression.MATE_INLINE_V2)
+                .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.MateInfo(
+                    mateChromIds, matePositions, templateLens), mateCtx)).bytes();
 
         // Write the mate_info group with inline_v2 + chrom_names.
         try (var mateGroup = sc.createGroup("mate_info")) {
@@ -2176,8 +2186,15 @@ public class SpectralDataset implements
             revcompFlags[i] =
                 ((run.flags()[i] & SAM_REVERSE_FLAG) != 0) ? 1 : 0;
         }
-        byte[] encoded = global.thalion.ttio.codecs.FqzcompNx16Z.encode(
-            run.qualities(), readLengths, revcompFlags);
+        var ctx = global.thalion.ttio.codecs.registry.CodecContext.builder()
+            .readLengths(readLengths)
+            .revcompFlags(revcompFlags)
+            .build();
+        byte[] encoded = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
+            global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY
+                .get(Enums.Compression.FQZCOMP_NX16_Z)
+                .encode(new global.thalion.ttio.codecs.registry.DecodedChannel.Bytes(run.qualities()),
+                    ctx)).bytes();
         global.thalion.ttio.providers.StorageDataset ds;
         try {
             ds = sc.createDataset("qualities", Enums.Precision.UINT8,
