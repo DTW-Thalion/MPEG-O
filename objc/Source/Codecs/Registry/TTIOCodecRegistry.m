@@ -261,8 +261,19 @@ static pthread_once_t gOnce = PTHREAD_ONCE_INIT;
     return [[TTIODecodedBytes alloc] initWithData:outSeq];
 }
 - (TTIOEncodedChannel *)encode:(TTIODecodedChannel *)v context:(TTIOCodecContext *)ctx error:(NSError **)e {
-    if (e) *e = _TTIOCodecError(@"REF_DIFF_V2 encode is wired in Task 6");
-    return nil;
+    NSData *blob =
+        [TTIORefDiffV2 encodeSequences:((TTIODecodedBytes *)v).data
+                               offsets:ctx.offsets
+                             positions:ctx.positions
+                          cigarStrings:(ctx.cigarsProvider ? ctx.cigarsProvider() : @[])
+                             reference:ctx.reference
+                          referenceMd5:ctx.referenceMd5
+                          referenceUri:ctx.referenceUri
+                         readsPerSlice:(ctx.readsPerSlice ? ctx.readsPerSlice.unsignedIntegerValue : 10000)
+                                 error:e];
+    if (!blob) return nil;
+    return [[TTIOEncodedGroupLayout alloc] initWithChildren:@{@"refdiff_v2": blob}
+                                                      attrs:@{}];
 }
 @end
 

@@ -1837,6 +1837,49 @@ static NSData *_TTIO_V18_BuildOffsetsPlusOne(TTIOWrittenGenomicRun *run)
     return out;
 }
 
+/** Encode REF_DIFF_V2 sequences through the codec registry. Builds the
+ *  encode context exactly as the writers sourced their args from the
+ *  direct +[TTIORefDiffV2 encodeSequences:...] call: offsets (n+1),
+ *  positions = run.positionsData, cigars = run.cigars (via lazy
+ *  provider), reference = the resolved single-chrom sequence,
+ *  referenceMd5 = the run's reference MD5, referenceUri =
+ *  run.referenceUri ?: @"", readsPerSlice = 10000 (the codec's default
+ *  when ctx.readsPerSlice is nil). Returns the refdiff_v2 child blob,
+ *  byte-identical to the prior direct call, or nil + error on failure
+ *  (caller falls back to BASE_PACK). */
+static NSData *_TTIO_V18_EncodeRefDiffV2ViaRegistry(TTIOWrittenGenomicRun *run,
+                                                    NSData *offsets,
+                                                    NSData *reference,
+                                                    NSData *referenceMd5,
+                                                    NSError **error)
+{
+    id<TTIOCodec> c =
+        [TTIOCodecRegistry codecForId:TTIOCompressionRefDiffV2];
+    if (c == nil) {
+        if (error) *error = [NSError
+            errorWithDomain:@"TTIOSpectralDatasetErrorDomain" code:2120
+                   userInfo:@{NSLocalizedDescriptionKey:
+                       @"REF_DIFF_V2 codec not registered"}];
+        return nil;
+    }
+    TTIOCodecContext *ctx = [TTIOCodecContext emptyContext];
+    ctx.offsets = offsets;
+    ctx.positions = run.positionsData;
+    NSArray<NSString *> *cigars = run.cigars;
+    ctx.cigarsProvider = ^NSArray<NSString *> *{ return cigars; };
+    ctx.reference = reference;
+    ctx.referenceMd5 = referenceMd5;
+    ctx.referenceUri = run.referenceUri ?: @"";
+    // ctx.readsPerSlice left nil -> codec uses its 10000 default,
+    // matching the prior direct call's readsPerSlice:10000.
+    TTIOEncodedChannel *enc =
+        [c encode:[[TTIODecodedBytes alloc] initWithData:run.sequencesData]
+           context:ctx
+             error:error];
+    if (![enc isKindOfClass:[TTIOEncodedGroupLayout class]]) return nil;
+    return ((TTIOEncodedGroupLayout *)enc).children[@"refdiff_v2"];
+}
+
 /** HDF5 fast path: write signal_channels/sequences as a GROUP with a
  *  refdiff_v2 child dataset @compression=14.  Falls back (with a silent
  *  BASE_PACK path) via _TTIO_M93_WriteRefDiffSequences when the C
@@ -1866,15 +1909,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesHDF5(TTIOHDF5Group *sc,
 
     NSError *encErr = nil;
     NSData *encoded =
-        [TTIORefDiffV2 encodeSequences:run.sequencesData
-                               offsets:offsets
-                             positions:run.positionsData
-                          cigarStrings:run.cigars
-                             reference:chromSeq
-                          referenceMd5:md5
-                          referenceUri:run.referenceUri ?: @""
-                         readsPerSlice:10000
-                                 error:&encErr];
+        _TTIO_V18_EncodeRefDiffV2ViaRegistry(run, offsets, chromSeq, md5, &encErr);
     if (!encoded) {
         // v2 encode failed — fall back to BASE_PACK so the write still
         // succeeds (no v1 REF_DIFF path under v1.0).
@@ -1927,15 +1962,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesStorage(id<TTIOStorageGroup> sc,
 
     NSError *encErr = nil;
     NSData *encoded =
-        [TTIORefDiffV2 encodeSequences:run.sequencesData
-                               offsets:offsets
-                             positions:run.positionsData
-                          cigarStrings:run.cigars
-                             reference:chromSeq
-                          referenceMd5:md5
-                          referenceUri:run.referenceUri ?: @""
-                         readsPerSlice:10000
-                                 error:&encErr];
+        _TTIO_V18_EncodeRefDiffV2ViaRegistry(run, offsets, chromSeq, md5, &encErr);
     if (!encoded) {
         // Fall back to plain sequences with BASE_PACK.
         return _TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
