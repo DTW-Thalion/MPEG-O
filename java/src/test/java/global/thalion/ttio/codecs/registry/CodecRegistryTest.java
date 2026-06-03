@@ -146,6 +146,21 @@ class CodecRegistryTest {
     }
 
     @Test
+    void registryCoversAllRealCodecIds() {
+        var expected = java.util.Set.of(
+            global.thalion.ttio.Enums.Compression.RANS_ORDER0,
+            global.thalion.ttio.Enums.Compression.RANS_ORDER1,
+            global.thalion.ttio.Enums.Compression.BASE_PACK,
+            global.thalion.ttio.Enums.Compression.QUALITY_BINNED,
+            global.thalion.ttio.Enums.Compression.DELTA_RANS_ORDER0,
+            global.thalion.ttio.Enums.Compression.FQZCOMP_NX16_Z,
+            global.thalion.ttio.Enums.Compression.MATE_INLINE_V2,
+            global.thalion.ttio.Enums.Compression.REF_DIFF_V2,
+            global.thalion.ttio.Enums.Compression.NAME_TOKENIZED_V2);
+        assertTrue(CodecRegistry.CODEC_REGISTRY.keySet().containsAll(expected));
+    }
+
+    @Test
     void registryGetSafeForUnregisteredValidCodecs() {
         // NONE/ZLIB/LZ4 are valid Compression members but not registered codecs;
         // .get(...) must return null (no exception) — membership-safe.
