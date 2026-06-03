@@ -16,6 +16,7 @@ from ._context import ChannelPayload, CodecContext, DecodedChannel, EncodedChann
 class Codec(Protocol):
     id: Compression
     is_context_aware: bool
+    needs_embedded_reference: bool
 
     def decode(self, payload: ChannelPayload, ctx: CodecContext) -> DecodedChannel: ...
     def encode(self, value: DecodedChannel, ctx: CodecContext) -> EncodedChannel: ...
@@ -27,6 +28,7 @@ class _RansCodec:
         self.id = cid
         self._order = order
         self.is_context_aware = False
+        self.needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         return DecodedChannel.of_bytes(rans.decode(payload.as_bytes()))
@@ -38,6 +40,7 @@ class _RansCodec:
 class _BasePackCodec:
     id = Compression.BASE_PACK
     is_context_aware = False
+    needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         return DecodedChannel.of_bytes(base_pack.decode(payload.as_bytes()))
@@ -49,6 +52,7 @@ class _BasePackCodec:
 class _QualityBinnedCodec:
     id = Compression.QUALITY_BINNED
     is_context_aware = False
+    needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         return DecodedChannel.of_bytes(quality.decode(payload.as_bytes()))
@@ -60,6 +64,7 @@ class _QualityBinnedCodec:
 class _DeltaRansCodec:
     id = Compression.DELTA_RANS_ORDER0
     is_context_aware = False
+    needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         return DecodedChannel.of_bytes(delta_rans.decode(payload.as_bytes()))
@@ -75,6 +80,7 @@ class _DeltaRansCodec:
 class _NameTokenizedV2Codec:
     id = Compression.NAME_TOKENIZED_V2
     is_context_aware = False  # str-list domain, but no run context needed
+    needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         return DecodedChannel.of_str_list(name_tokenizer_v2.decode(payload.as_bytes()))
@@ -86,6 +92,7 @@ class _NameTokenizedV2Codec:
 class _FqzcompNx16ZCodec:
     id = Compression.FQZCOMP_NX16_Z
     is_context_aware = True
+    needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         flags = None
@@ -112,6 +119,7 @@ class _FqzcompNx16ZCodec:
 class _MateInlineV2Codec:
     id = Compression.MATE_INLINE_V2
     is_context_aware = True
+    needs_embedded_reference = False
 
     def decode(self, payload, ctx):
         if ctx.own_chrom_ids is None or ctx.own_positions is None or ctx.n_records is None:
@@ -141,6 +149,7 @@ class _MateInlineV2Codec:
 class _RefDiffV2Codec:
     id = Compression.REF_DIFF_V2
     is_context_aware = True
+    needs_embedded_reference = True
 
     def decode(self, payload, ctx):
         # Relocated from GenomicRun._decode_ref_diff_v2_sequences: parse the blob

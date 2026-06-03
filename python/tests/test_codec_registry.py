@@ -136,3 +136,25 @@ def test_delta_rans_encode_via_registry_matches_direct():
     via = CODEC_REGISTRY[Compression.DELTA_RANS_ORDER0].encode(
         DecodedChannel.of_bytes(data), CodecContext(element_size=4)).dataset_bytes
     assert via == direct
+
+
+def test_needs_embedded_reference_matches_legacy_meta():
+    """needs_embedded_reference matches the legacy _CONTEXT_AWARE set ({REF_DIFF_V2})."""
+    import importlib
+    try:
+        meta = importlib.import_module("ttio.codecs._codec_meta")
+        legacy = set(getattr(meta, "_CONTEXT_AWARE"))
+    except (ModuleNotFoundError, AttributeError):
+        legacy = {Compression.REF_DIFF_V2}  # legacy membership (verified in T6)
+    assert legacy == {Compression.REF_DIFF_V2}
+    for cid, codec in CODEC_REGISTRY.items():
+        assert codec.needs_embedded_reference == (cid in legacy), cid
+
+
+def test_is_context_aware_is_broader_than_embed():
+    """is_context_aware (needs CodecContext) is the broader flag."""
+    aware = {cid for cid, c in CODEC_REGISTRY.items() if c.is_context_aware}
+    embed = {cid for cid, c in CODEC_REGISTRY.items() if c.needs_embedded_reference}
+    assert embed == {Compression.REF_DIFF_V2}
+    assert {Compression.REF_DIFF_V2, Compression.FQZCOMP_NX16_Z,
+            Compression.MATE_INLINE_V2} <= aware

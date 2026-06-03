@@ -1352,8 +1352,9 @@ def _any_v1_5_codec(
     removed; only REF_DIFF_V2 (codec id 14) and FQZCOMP_NX16_Z (codec id 12)
     register as v1.5 codecs for the format-version gate. FQZCOMP_NX16_Z
     carries its sibling-channel metadata (``read_lengths`` / ``revcomp_flags``)
-    inside the codec wire format, so it is not "context-aware" in the
-    :mod:`._codec_meta` sense — but it IS a v1.5 codec for the gate.
+    inside the codec wire format, so it does not need an embedded
+    reference (``needs_embedded_reference`` is False) — but it IS a v1.5
+    codec for the gate.
     """
     if not genomic_runs:
         return False
@@ -1442,7 +1443,7 @@ def _embed_references_for_runs(
     :class:`StorageGroup` (provider path). Internally normalises to
     ``StorageGroup``.
     """
-    from .codecs._codec_meta import is_context_aware
+    from .codecs._registry import CODEC_REGISTRY
     from .enums import Compression as _Compression, Precision as _Precision
     from .providers.hdf5 import _Group as _H5Group
 
@@ -1458,7 +1459,7 @@ def _embed_references_for_runs(
         # OR if the v1.8 REF_DIFF_V2 default path will be used (when the
         # native lib is available).
         _has_context_aware_override = any(
-            is_context_aware(_Compression(c))
+            CODEC_REGISTRY[_Compression(c)].needs_embedded_reference
             for c in run.signal_codec_overrides.values()
             if _is_valid_compression(c)
         )
