@@ -546,29 +546,6 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 // dispatcher above raises a clear NSError when @compression == 9 is
 // encountered on legacy files.
 
-// M94.Z v1.2: FQZCOMP_NX16_Z (CRAM-mimic rANS-Nx16) decode helper.
-// Same plumbing as the old NX16: revcomp_flags from run.flags & 16,
-// read_lengths carried inside the codec wire format.
-- (NSData *)_ttio_m94z_decodeFqzcompNx16Z:(NSData *)encoded
-                                     error:(NSError **)error
-{
-    NSUInteger n = _index ? _index.count : 0;
-    NSMutableArray<NSNumber *> *revcompFlags = [NSMutableArray arrayWithCapacity:n];
-    for (NSUInteger i = 0; i < n; i++) {
-        uint32_t f = [_index flagsAt:i];
-        [revcompFlags addObject:(f & 16u) ? @1 : @0];
-    }
-    NSError *decErr = nil;
-    NSDictionary *out = [TTIOFqzcompNx16Z decodeData:encoded
-                                          revcompFlags:revcompFlags
-                                                 error:&decErr];
-    if (!out) {
-        if (error) *error = decErr;
-        return nil;
-    }
-    return out[@"qualities"];
-}
-
 // read_names dispatch helper.
 //
 // The read_names channel has two on-disk layouts (Binding Decisions

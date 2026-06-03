@@ -90,5 +90,17 @@ void testCodecRegistry(void)
         // Task 5: GenomicRun exposes a cached codec-context builder.
         PASS([TTIOGenomicRun instancesRespondToSelector:@selector(_codecContext)],
              "GenomicRun exposes -_codecContext");
+
+        // Completeness: all 9 real codec ids registered.
+        TTIOCompression all9[9] = {
+            TTIOCompressionRansOrder0, TTIOCompressionRansOrder1, TTIOCompressionBasePack,
+            TTIOCompressionQualityBinned, TTIOCompressionDeltaRansOrder0,
+            TTIOCompressionFqzcompNx16Z, TTIOCompressionMateInlineV2,
+            TTIOCompressionRefDiffV2, TTIOCompressionNameTokenizedV2};
+        for (int k = 0; k < 9; k++)
+            PASS([TTIOCodecRegistry codecForId:all9[k]] != nil, "registry covers id %d", (int)all9[k]);
+        // Membership-safe: unregistered valid ids -> nil.
+        PASS([TTIOCodecRegistry codecForId:TTIOCompressionNone] == nil, "NONE unregistered -> nil");
+        PASS([TTIOCodecRegistry codecForId:TTIOCompressionZlib] == nil, "ZLIB unregistered -> nil");
     }
 }
