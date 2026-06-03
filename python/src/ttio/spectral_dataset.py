@@ -1659,7 +1659,8 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
     sibling-channel inputs (read_lengths + revcomp_flags) but a different
     on-wire format (magic ``M94Z`` instead of ``FQZN``). Codec id 12.
     """
-    from .codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     from .enums import Compression as _Compression, Precision as _Precision
 
     qualities = bytes(run.qualities.tobytes())
@@ -1668,7 +1669,17 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
         1 if (int(f) & SAM_REVERSE_FLAG) else 0 for f in run.flags
     ]
 
-    encoded = _fqzcomp_z_encode(qualities, read_lengths, revcomp_flags)
+    # Codec-registry refactor (Task 5b): route FQZCOMP_NX16_Z through the
+    # registry. Its encode adapter requires read_lengths + revcomp_flags
+    # in the CodecContext — sourced exactly as the prior direct call did
+    # (index lengths + the SAM reverse flag bit). Bytes are identical.
+    encoded = CODEC_REGISTRY[_Compression.FQZCOMP_NX16_Z].encode(
+        DecodedChannel.of_bytes(qualities),
+        CodecContext(
+            read_lengths=np.asarray(read_lengths),
+            revcomp_flags=np.asarray(revcomp_flags),
+        ),
+    ).dataset_bytes
 
     arr = np.frombuffer(encoded, dtype=np.uint8)
     ds = sc.create_dataset(
@@ -2096,7 +2107,15 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 "from source with --with-native (set TTIO_RANS_LIB_PATH if "
                 "the library is at a non-default location)."
             )
-        encoded = _nt2.encode(list(run.read_names))
+        # Codec-registry refactor (Task 5b): NAME_TOKENIZED_V2 needs no
+        # run context — encode through the registry with an empty
+        # CodecContext. Bytes are identical to the prior direct call.
+        from .codecs._registry import CODEC_REGISTRY
+        from .codecs._context import CodecContext, DecodedChannel
+        encoded = CODEC_REGISTRY[_Compression.NAME_TOKENIZED_V2].encode(
+            DecodedChannel.of_str_list(list(run.read_names)),
+            CodecContext.empty(),
+        ).dataset_bytes
         arr = np.frombuffer(encoded, dtype=np.uint8)
         ds = sc.create_dataset(
             "read_names",
@@ -2284,7 +2303,8 @@ def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:
     The reader uses this table to resolve mate_chrom_ids returned by
     ttio_mate_info_v2_decode back to string names.
     """
-    from .codecs import mate_info_v2 as _miv2
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     from .enums import Compression as _Compression, Precision as _Precision
 
     own_chrom_ids, name_to_id = _build_chrom_id_table(run.chromosomes)
@@ -2302,13 +2322,20 @@ def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:
     chrom_names_in_order = sorted(full_name_to_id.keys(),
                                   key=lambda n: full_name_to_id[n])
 
-    encoded = _miv2.encode(
-        mate_chrom_ids=mate_chrom_ids,
-        mate_positions=np.asarray(run.mate_positions, dtype=np.int64),
-        template_lengths=np.asarray(run.template_lengths, dtype=np.int32),
-        own_chrom_ids=own_chrom_ids,
-        own_positions=np.asarray(run.positions, dtype=np.int64),
-    )
+    # Codec-registry refactor (Task 5b): route MATE_INLINE_V2 through the
+    # registry. Its encode adapter consumes the mate triple via the
+    # DecodedChannel.of_mate_info value and own_chrom_ids/own_positions
+    # from the CodecContext — sourced exactly as the prior direct call.
+    # Bytes are identical.
+    own_positions = np.asarray(run.positions, dtype=np.int64)
+    encoded = CODEC_REGISTRY[_Compression.MATE_INLINE_V2].encode(
+        DecodedChannel.of_mate_info({
+            "mate_chrom_ids": mate_chrom_ids,
+            "mate_positions": np.asarray(run.mate_positions, dtype=np.int64),
+            "template_lengths": np.asarray(run.template_lengths, dtype=np.int32),
+        }),
+        CodecContext(own_chrom_ids=own_chrom_ids, own_positions=own_positions),
+    ).dataset_bytes
     arr = np.frombuffer(encoded, dtype=np.uint8)
 
     mate_group = sc.create_group("mate_info")
