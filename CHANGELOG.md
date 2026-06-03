@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Codec dispatch unified behind a registry (Java)
+
+Java's genomic codec dispatch (the decode ladder + four bespoke
+ref_diff/fqzcomp/name_tok/mate_info side-paths and the encode switch + writer
+methods) is replaced by a single `Codec` registry keyed by `Compression`
+(`codecs/registry/`), fronted by a uniform `Codec` interface, a `CodecContext`
+value object, and sealed `DecodedChannel`/`EncodedChannel`/`ChannelPayload`
+unions. Codecs expose `isContextAware` and `needsEmbeddedReference` (REF_DIFF_V2
+only); the duplicated `useRefDiffPath` embed predicate is consolidated into one
+helper. `DELTA_RANS_ORDER0` is now registered (previously unwired). No
+wire/on-disk format change; all byte-equality and cross-language fixtures
+unchanged. Mirrors the Python registry (PR #209); ObjC port is the remaining
+parity follow-on.
+
 ### Changed — Codec dispatch unified behind a registry (Python)
 
 Python's genomic codec dispatch (the decode/encode `if`/`elif` ladders, the
