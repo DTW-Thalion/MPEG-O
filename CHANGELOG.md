@@ -11,6 +11,20 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Codec dispatch unified behind a registry (Python)
+
+Python's genomic codec dispatch (the decode/encode `if`/`elif` ladders, the
+four bespoke ref_diff/fqzcomp/name_tok/mate_info side-paths, and the
+`_codec_meta` context-aware set) is replaced by a single `Codec` registry keyed
+by `Compression` id, fronted by a uniform `Codec` interface, a `CodecContext`
+value object, and closed `DecodedChannel`/`EncodedChannel` unions
+(`ttio/codecs/_registry.py`, `_context.py`). Adding a codec is now one registry
+entry. Codecs expose `is_context_aware` (needs run context) and
+`needs_embedded_reference` (the reference-embed predicate, formerly
+`_codec_meta._CONTEXT_AWARE`). No wire/on-disk format change; all byte-equality
+and cross-language fixtures unchanged. Java and ObjC parity ports are tracked as
+follow-on work.
+
 ## [1.6.4] - 2026-06-02
 
 Patch release bundling two cross-language SDK fixes. (1) The Java

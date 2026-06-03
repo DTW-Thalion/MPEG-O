@@ -1352,8 +1352,9 @@ def _any_v1_5_codec(
     removed; only REF_DIFF_V2 (codec id 14) and FQZCOMP_NX16_Z (codec id 12)
     register as v1.5 codecs for the format-version gate. FQZCOMP_NX16_Z
     carries its sibling-channel metadata (``read_lengths`` / ``revcomp_flags``)
-    inside the codec wire format, so it is not "context-aware" in the
-    :mod:`._codec_meta` sense — but it IS a v1.5 codec for the gate.
+    inside the codec wire format, so it does not need an embedded
+    reference (``needs_embedded_reference`` is False) — but it IS a v1.5
+    codec for the gate.
     """
     if not genomic_runs:
         return False
@@ -1442,7 +1443,7 @@ def _embed_references_for_runs(
     :class:`StorageGroup` (provider path). Internally normalises to
     ``StorageGroup``.
     """
-    from .codecs._codec_meta import is_context_aware
+    from .codecs._registry import CODEC_REGISTRY
     from .enums import Compression as _Compression, Precision as _Precision
     from .providers.hdf5 import _Group as _H5Group
 
@@ -1458,7 +1459,7 @@ def _embed_references_for_runs(
         # OR if the v1.8 REF_DIFF_V2 default path will be used (when the
         # native lib is available).
         _has_context_aware_override = any(
-            is_context_aware(_Compression(c))
+            getattr(CODEC_REGISTRY.get(_Compression(c)), "needs_embedded_reference", False)
             for c in run.signal_codec_overrides.values()
             if _is_valid_compression(c)
         )
@@ -1556,6 +1557,8 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
     runs raise :class:`ValueError`.
     """
     from .codecs import ref_diff_v2 as _rdv2
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     from .codecs.base_pack import encode as _base_pack_encode
     from .enums import Compression as _Compression, Precision as _Precision
 
@@ -1608,27 +1611,38 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
 
         md5 = _reference_md5_for_run(run)
         sequences_arr = np.asarray(run.sequences, dtype=np.uint8)
-        encoded = _rdv2.encode(
-            sequences_arr,
-            offsets_arr,
-            positions,
-            list(run.cigars),
-            chrom_seq,
-            md5,
-            run.reference_uri,
-            reads_per_slice=10_000,
+        # Codec-registry refactor (Task 5c): route REF_DIFF_V2 encode
+        # through the registry. Inputs that get written into the blob
+        # header (offsets/reference/md5/uri/cigars/positions) ride on the
+        # encode-only CodecContext fields. The codec returns a GROUP
+        # layout ({"refdiff_v2": blob}); we materialise the `sequences`
+        # group + child + @compression below — byte-identical to the
+        # prior direct ref_diff_v2.encode call.
+        encoded_channel = CODEC_REGISTRY[_Compression.REF_DIFF_V2].encode(
+            DecodedChannel.of_bytes(bytes(sequences_arr.tobytes())),
+            CodecContext(
+                offsets=offsets_arr,
+                positions=positions,
+                cigar_strings=list(run.cigars),
+                reference=chrom_seq,
+                reference_md5=md5,
+                reference_uri=run.reference_uri,
+                reads_per_slice=10_000,
+            ),
         )
-        arr = np.frombuffer(encoded, dtype=np.uint8)
         seq_group = sc.create_group("sequences")
-        ds = seq_group.create_dataset(
-            "refdiff_v2",
-            _Precision.UINT8,
-            length=int(arr.shape[0]),
-            chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-            compression=_Compression.NONE,
-        )
-        ds.write(arr)
-        io.write_int_attr(ds, "compression", int(_Compression.REF_DIFF_V2), dtype="<u1")
+        for child_name, blob in encoded_channel.group_children.items():
+            arr = np.frombuffer(blob, dtype=np.uint8)
+            ds = seq_group.create_dataset(
+                child_name,
+                _Precision.UINT8,
+                length=int(arr.shape[0]),
+                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
+                compression=_Compression.NONE,
+            )
+            ds.write(arr)
+            io.write_int_attr(
+                ds, "compression", int(_Compression.REF_DIFF_V2), dtype="<u1")
         return
 
     # Fallback: flat dataset with BASE_PACK (Q5b = C).
@@ -1659,7 +1673,8 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
     sibling-channel inputs (read_lengths + revcomp_flags) but a different
     on-wire format (magic ``M94Z`` instead of ``FQZN``). Codec id 12.
     """
-    from .codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     from .enums import Compression as _Compression, Precision as _Precision
 
     qualities = bytes(run.qualities.tobytes())
@@ -1668,7 +1683,17 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
         1 if (int(f) & SAM_REVERSE_FLAG) else 0 for f in run.flags
     ]
 
-    encoded = _fqzcomp_z_encode(qualities, read_lengths, revcomp_flags)
+    # Codec-registry refactor (Task 5b): route FQZCOMP_NX16_Z through the
+    # registry. Its encode adapter requires read_lengths + revcomp_flags
+    # in the CodecContext — sourced exactly as the prior direct call did
+    # (index lengths + the SAM reverse flag bit). Bytes are identical.
+    encoded = CODEC_REGISTRY[_Compression.FQZCOMP_NX16_Z].encode(
+        DecodedChannel.of_bytes(qualities),
+        CodecContext(
+            read_lengths=np.asarray(read_lengths),
+            revcomp_flags=np.asarray(revcomp_flags),
+        ),
+    ).dataset_bytes
 
     arr = np.frombuffer(encoded, dtype=np.uint8)
     ds = sc.create_dataset(
@@ -2096,7 +2121,15 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
                 "from source with --with-native (set TTIO_RANS_LIB_PATH if "
                 "the library is at a non-default location)."
             )
-        encoded = _nt2.encode(list(run.read_names))
+        # Codec-registry refactor (Task 5b): NAME_TOKENIZED_V2 needs no
+        # run context — encode through the registry with an empty
+        # CodecContext. Bytes are identical to the prior direct call.
+        from .codecs._registry import CODEC_REGISTRY
+        from .codecs._context import CodecContext, DecodedChannel
+        encoded = CODEC_REGISTRY[_Compression.NAME_TOKENIZED_V2].encode(
+            DecodedChannel.of_str_list(list(run.read_names)),
+            CodecContext.empty(),
+        ).dataset_bytes
         arr = np.frombuffer(encoded, dtype=np.uint8)
         ds = sc.create_dataset(
             "read_names",
@@ -2284,7 +2317,8 @@ def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:
     The reader uses this table to resolve mate_chrom_ids returned by
     ttio_mate_info_v2_decode back to string names.
     """
-    from .codecs import mate_info_v2 as _miv2
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     from .enums import Compression as _Compression, Precision as _Precision
 
     own_chrom_ids, name_to_id = _build_chrom_id_table(run.chromosomes)
@@ -2302,13 +2336,20 @@ def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:
     chrom_names_in_order = sorted(full_name_to_id.keys(),
                                   key=lambda n: full_name_to_id[n])
 
-    encoded = _miv2.encode(
-        mate_chrom_ids=mate_chrom_ids,
-        mate_positions=np.asarray(run.mate_positions, dtype=np.int64),
-        template_lengths=np.asarray(run.template_lengths, dtype=np.int32),
-        own_chrom_ids=own_chrom_ids,
-        own_positions=np.asarray(run.positions, dtype=np.int64),
-    )
+    # Codec-registry refactor (Task 5b): route MATE_INLINE_V2 through the
+    # registry. Its encode adapter consumes the mate triple via the
+    # DecodedChannel.of_mate_info value and own_chrom_ids/own_positions
+    # from the CodecContext — sourced exactly as the prior direct call.
+    # Bytes are identical.
+    own_positions = np.asarray(run.positions, dtype=np.int64)
+    encoded = CODEC_REGISTRY[_Compression.MATE_INLINE_V2].encode(
+        DecodedChannel.of_mate_info({
+            "mate_chrom_ids": mate_chrom_ids,
+            "mate_positions": np.asarray(run.mate_positions, dtype=np.int64),
+            "template_lengths": np.asarray(run.template_lengths, dtype=np.int32),
+        }),
+        CodecContext(own_chrom_ids=own_chrom_ids, own_positions=own_positions),
+    ).dataset_bytes
     arr = np.frombuffer(encoded, dtype=np.uint8)
 
     mate_group = sc.create_group("mate_info")

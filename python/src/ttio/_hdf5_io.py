@@ -643,21 +643,24 @@ def _write_byte_channel_with_codec(
         data = data.astype(np.uint8, copy=False)
     raw = bytes(data.tobytes())
 
-    if codec_override == Compression.RANS_ORDER0:
-        from .codecs.rans import encode as _enc
-        encoded = _enc(raw, order=0)
-    elif codec_override == Compression.RANS_ORDER1:
-        from .codecs.rans import encode as _enc
-        encoded = _enc(raw, order=1)
-    elif codec_override == Compression.BASE_PACK:
-        from .codecs.base_pack import encode as _enc
-        encoded = _enc(raw)
-    elif codec_override == Compression.QUALITY_BINNED:
-        # Phase D: Illumina-8 Phred bin quantisation. Lossy by
-        # construction — caller has already been validated to apply
-        # this only to the qualities channel ().
-        from .codecs.quality import encode as _enc
-        encoded = _enc(raw)
+    # Codec-registry refactor (Task 5a): route the plain byte codecs
+    # (rANS O0/O1, base_pack, quality) through the registry. These are
+    # context-free encoders, so an empty CodecContext suffices. The
+    # produced bytes are byte-identical to the prior direct calls.
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
+    if codec_override in (
+        Compression.RANS_ORDER0,
+        Compression.RANS_ORDER1,
+        Compression.BASE_PACK,
+        Compression.QUALITY_BINNED,
+    ):
+        # QUALITY_BINNED (Phase D): Illumina-8 Phred bin quantisation,
+        # lossy by construction — caller validation restricts it to the
+        # qualities channel.
+        encoded = CODEC_REGISTRY[codec_override].encode(
+            DecodedChannel.of_bytes(raw), CodecContext.empty()
+        ).dataset_bytes
     else:
         raise ValueError(
             f"signal_codec_overrides['{name}'] = {codec_override!r}: "
@@ -794,15 +797,22 @@ def _write_int_channel_with_codec(
     arr = np.ascontiguousarray(np.asarray(data).astype(dtype_str, copy=False))
     le_bytes = bytes(arr.tobytes())
 
-    # Encode through the appropriate codec.
+    # Codec-registry refactor (Task 5a): route through the registry.
+    # DELTA_RANS needs the element size in its CodecContext; rANS O0/O1
+    # are context-free. Bytes are byte-identical to the prior direct
+    # calls (delta_rans/rans encode with the same args).
+    from .codecs._registry import CODEC_REGISTRY
+    from .codecs._context import CodecContext, DecodedChannel
     if codec_override == Compression.DELTA_RANS_ORDER0:
-        from .codecs.delta_rans import encode as _dra_enc
         elem_size = {"<i8": 8, "<u4": 4, "<u1": 1}[dtype_str]
-        encoded = _dra_enc(le_bytes, element_size=elem_size)
+        encoded = CODEC_REGISTRY[codec_override].encode(
+            DecodedChannel.of_bytes(le_bytes),
+            CodecContext(element_size=elem_size),
+        ).dataset_bytes
     else:
-        from .codecs.rans import encode as _enc
-        order = 0 if codec_override == Compression.RANS_ORDER0 else 1
-        encoded = _enc(le_bytes, order=order)
+        encoded = CODEC_REGISTRY[codec_override].encode(
+            DecodedChannel.of_bytes(le_bytes), CodecContext.empty()
+        ).dataset_bytes
 
     # Write the codec output as a flat unfiltered uint8 dataset.
     arr_u8 = np.frombuffer(encoded, dtype=np.uint8)
