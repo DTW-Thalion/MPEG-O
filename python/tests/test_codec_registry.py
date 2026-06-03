@@ -48,3 +48,58 @@ def test_codec_context_empty_is_all_none():
     ctx = CodecContext.empty()
     assert ctx.read_lengths is None and ctx.element_size is None
     assert ctx.reference_resolver is None and ctx.cigars_provider is None
+
+
+from ttio.codecs._registry import CODEC_REGISTRY, Codec
+from ttio.enums import Compression
+
+
+@pytest.mark.parametrize("cid", [
+    Compression.RANS_ORDER0, Compression.RANS_ORDER1, Compression.BASE_PACK,
+])
+def test_plain_codec_registry_roundtrip(cid):
+    # NOTE: QUALITY_BINNED is excluded — it is lossy by design (Phred binning),
+    # so a byte-exact round-trip with arbitrary data is impossible. It gets its
+    # own idempotency test below.
+    codec = CODEC_REGISTRY[cid]
+    assert codec.id == cid
+    assert codec.is_context_aware is False
+    data = bytes(range(64)) * 4
+    enc = codec.encode(DecodedChannel.of_bytes(data), CodecContext.empty())
+    assert enc.is_group is False
+    dec = codec.decode(ChannelPayload.of_bytes(enc.dataset_bytes), CodecContext.empty())
+    assert dec.as_bytes() == data
+
+
+def _qb_roundtrip(codec, data: bytes) -> bytes:
+    enc = codec.encode(DecodedChannel.of_bytes(data), CodecContext.empty())
+    return codec.decode(ChannelPayload.of_bytes(enc.dataset_bytes), CodecContext.empty()).as_bytes()
+
+
+def test_quality_binned_registry_idempotent_and_length_preserving():
+    # QUALITY_BINNED is lossy (bins → bin centres). Assert the registry path is
+    # length-preserving and idempotent (re-encoding bin centres is stable),
+    # rather than byte-lossless.
+    codec = CODEC_REGISTRY[Compression.QUALITY_BINNED]
+    assert codec.id == Compression.QUALITY_BINNED
+    assert codec.is_context_aware is False
+    data = bytes(range(64)) * 4
+    once = _qb_roundtrip(codec, data)
+    twice = _qb_roundtrip(codec, once)
+    assert len(once) == len(data)
+    assert once == twice
+
+
+def test_delta_rans_registry_roundtrip_needs_element_size():
+    codec = CODEC_REGISTRY[Compression.DELTA_RANS_ORDER0]
+    data = np.arange(100, dtype="<u4").tobytes()
+    enc = codec.encode(DecodedChannel.of_bytes(data), CodecContext(element_size=4))
+    dec = codec.decode(ChannelPayload.of_bytes(enc.dataset_bytes), CodecContext.empty())
+    assert dec.as_bytes() == data
+    with pytest.raises(ValueError):
+        codec.encode(DecodedChannel.of_bytes(data), CodecContext.empty())
+
+
+def test_registry_entry_id_matches_key():
+    for cid, codec in CODEC_REGISTRY.items():
+        assert codec.id == cid
