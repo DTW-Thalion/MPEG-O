@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Performance — Vectorized genomic region/flag queries (Java + Objective-C)
+
+`GenomicIndex.indicesForRegion`/`indicesForFlag` (Java) and `TTIOGenomicIndex`
+(Objective-C) now scan the interned `chromosome_ids` (uint16) with integer
+comparisons instead of a per-read string compare, resolving the query
+chromosome to its id once — finishing the parity with the Python
+`indices_for_region` vectorization (PR #202). Identical returned indices; no
+wire/format change. (OO-assessment P1.2.)
+
 ### Performance — Vectorized DELTA_RANS + cached signal-channels handle (Python)
 
 `DELTA_RANS` encode/decode now compute delta + zigzag via numpy for
