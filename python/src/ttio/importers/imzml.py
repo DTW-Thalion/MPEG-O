@@ -127,14 +127,19 @@ class ImzMLImport:
     # provenance until the MSImage cube writer lands (M64.5).
     # ---------------------------------------------------------------- #
 
-    def to_ttio(
+    def to_imported_dataset(
         self,
-        path: str | Path,
         *,
         title: str | None = None,
         isa_investigation_id: str = "",
-    ) -> Path:
-        """Write the imported pixels to an .tio as a single MS run."""
+        path: str | Path | None = None,
+    ) -> "ImportedDataset":
+        """Build the normalized :class:`ImportedDataset` draft.
+
+        ``path`` is recorded in the provenance ``output_refs`` exactly as
+        the legacy :meth:`to_ttio` did; pass the eventual destination so
+        the round-trip provenance is byte-identical.
+        """
         n = len(self.spectra)
         if n == 0:
             raise ImzMLParseError(f"{self.source_imzml}: no spectra parsed")
@@ -195,13 +200,27 @@ class ImzMLImport:
             base_peak_intensities=base_peaks,
             provenance_records=[prov],
         )
-        return SpectralDataset.write_minimal(
-            path,
+        from .imported_dataset import ImportedDataset
+        return ImportedDataset(
             title=title or f"imzML import: {Path(self.source_imzml).name}",
             isa_investigation_id=isa_investigation_id,
             runs={"imzml_pixels": run},
             provenance=[prov],
         )
+
+    def to_ttio(
+        self,
+        path: str | Path,
+        *,
+        title: str | None = None,
+        isa_investigation_id: str = "",
+    ) -> Path:
+        """Write the imported pixels to an .tio as a single MS run."""
+        return self.to_imported_dataset(
+            title=title,
+            isa_investigation_id=isa_investigation_id,
+            path=path,
+        ).write(path)
 
 
 # --------------------------------------------------------------------------- #
