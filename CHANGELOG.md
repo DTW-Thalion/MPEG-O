@@ -37,6 +37,22 @@ test). JCAMP-DX / NMR export are scoped to the selected run's first spectrum
 next PR. Second of the 3-SDK P2.6 importer/exporter ports (Python shipped in
 #213; ObjC follows).
 
+### Changed — tio-browser dispatches imports/exports via the SDK registry (Java)
+
+The desktop GUI's `ImportTask`/`ExportTask` now dispatch the registry-covered
+formats (11 import / 8 export) through the Java SDK `ImporterRegistry`/
+`ExporterRegistry` and shared `RunSelection`, replacing the per-format
+`importX`/`exportX` bodies and the duplicated `toWritten`/`pickRun`/
+`pickGenomicRun`; the GUI format registries now source extensions and
+required-tool from the SDK registry. `fasta`/`fastq` (and the FASTA
+reference/reads + FASTQ export rows) remain GUI-local (CLI-delegated in the
+SDK). Two-phase import progress is preserved; registry-dispatched **exports**
+no longer emit per-section writer-phase progress (the bar advances 50%→100% on
+completion) — fasta/fastq exports retain full progress. The SDK registry's
+genomic `requiredTool` was corrected to null (Java uses bundled htsjdk, not
+samtools). No `.tio` wire change. Completes the P2.6 importer/exporter parity
+for Java (SDK in #214); ObjC port follows.
+
 ## [1.6.5] - 2026-06-03
 
 Refactor-only release completing the **3-SDK codec-registry parity**. Genomic
