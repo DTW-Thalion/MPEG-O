@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
 
 TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
 TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -120,6 +120,15 @@ TtioMsImageXLangReader_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioRamanImageXLangReader_OBJC_FILES = TtioRamanImageXLangReader.m
 TtioRamanImageXLangReader_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
 TtioRamanImageXLangReader_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+# OT8 — encode/export CLI dispatching through the importer/exporter registries.
+TtioEncode_OBJC_FILES = TtioEncode.m
+TtioEncode_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
+TtioEncode_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioExport_OBJC_FILES = TtioExport.m
+TtioExport_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
+TtioExport_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 ADDITIONAL_CPPFLAGS += -I../Source
 

@@ -89,6 +89,7 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOFastaReader.h \
 	Import/TTIOFastqReader.h \
 	Export/TTIOMzMLWriter.h \
+	Export/TTIORunSelection.h \
 	Export/TTIOBamWriter.h \
 	Export/TTIOCramWriter.h \
 	Export/TTIONmrMLWriter.h \
@@ -137,7 +138,14 @@ libTTIO_HEADER_FILES = \
 	Codecs/Registry/TTIOChannelPayload.h \
 	Codecs/Registry/TTIOCodecContext.h \
 	Codecs/Registry/TTIOCodec.h \
-	Codecs/Registry/TTIOCodecRegistry.h
+	Codecs/Registry/TTIOCodecRegistry.h \
+	Import/TTIOImportedDataset.h \
+	Import/TTIOReader.h \
+	Import/TTIOReaderAdapters.h \
+	Import/TTIOImporterRegistry.h \
+	Export/TTIOWriter.h \
+	Export/TTIOWriterAdapters.h \
+	Export/TTIOExporterRegistry.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \
@@ -201,6 +209,9 @@ libTTIO_OBJC_FILES = \
 	Query/TTIOQuery.m \
 	Query/TTIOStreamWriter.m \
 	Query/TTIOStreamReader.m \
+	Import/TTIOImportedDataset.m \
+	Import/TTIOReaderAdapters.m \
+	Import/TTIOImporterRegistry.m \
 	Import/TTIOBase64.m \
 	Import/TTIOCVTermMapper.m \
 	Import/TTIOMzMLReader.m \
@@ -218,6 +229,9 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOFastaReader.m \
 	Import/TTIOFastqReader.m \
 	Export/TTIOMzMLWriter.m \
+	Export/TTIORunSelection.m \
+	Export/TTIOWriterAdapters.m \
+	Export/TTIOExporterRegistry.m \
 	Export/TTIOBamWriter.m \
 	Export/TTIOCramWriter.m \
 	Export/TTIONmrMLWriter.m \

@@ -5,6 +5,7 @@ shared_obj/
 *.d
 *.so
 *.so.*
+objc/build-check.log
 
 # Native libraries bundled by the release workflow into
 # tio-browser/src/main/resources/native/<platform>/. CI stages these
