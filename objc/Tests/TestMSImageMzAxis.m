@@ -110,7 +110,7 @@ void testSpectralDatasetMsImageAccessor(void)
     TTIOSpectralDataset *plain =
         [TTIOSpectralDataset readFromFilePath:path error:&err];
     PASS(plain != nil, "opened as plain TTIOSpectralDataset");
-    TTIOMSImage *via = plain.msImage;
+    TTIOMSImage *via = (TTIOMSImage *)[plain imageForKind:TTIOImageKindMS];
     PASS(via != nil, "msImage accessor materialises image");
     PASS([via.mzAxis isEqualToData:mz], "mzAxis byte-equal via accessor");
     unlink([path fileSystemRepresentation]);

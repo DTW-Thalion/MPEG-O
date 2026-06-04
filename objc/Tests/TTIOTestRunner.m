@@ -147,6 +147,7 @@ extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
 extern void testTransportImageProcessed(void);
 extern void testSpectralDatasetIRImage(void);
+extern void testSpectralDatasetImages(void);
 extern void testIRImageWriteReadTypedAttrs(void);
 extern void testTransportRamanImage(void);
 extern void testTransportIRImage(void);
@@ -705,6 +706,10 @@ int main(int argc, const char *argv[])
         START_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
             testSpectralDatasetIRImage();
         END_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
+
+        START_SET("P2.5 OIT2: TTIOSpectralDataset imageForKind: / images uniform accessors")
+            testSpectralDatasetImages();
+        END_SET("P2.5 OIT2: TTIOSpectralDataset imageForKind: / images uniform accessors")
 
         START_SET("transport v0.11 Task 5.6 follow-up: TTIOIRImage typed HDF5 attrs (ir_mode i64) for cross-lang parity")
             testIRImageWriteReadTypedAttrs();

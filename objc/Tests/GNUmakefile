@@ -127,6 +127,7 @@ TTIOTests_OBJC_FILES = \
 	TestTransportImage.m \
 	TestTransportImageProcessed.m \
 	TestSpectralDatasetIRImage.m \
+	TestSpectralDatasetImages.m \
 	TestIRImageWriteReadTypedAttrs.m \
 	TestTransportRamanImage.m \
 	TestTransportIRImage.m \
