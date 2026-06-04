@@ -132,7 +132,8 @@ class AdapterRoundTripTest {
 
         Path imzml = tmp.resolve("out.imzML");
         try (SpectralDataset ds = SpectralDataset.open(tio.toString())) {
-            assertNotNull(ds.image(), "image must round-trip into the .tio");
+            assertNotNull(ds.imageForKind(Enums.ImageKind.MS),
+                "image must round-trip into the .tio");
             new ImzMLWriterAdapter().write(ds, null, imzml, Map.of());
         }
         assertTrue(Files.exists(imzml));

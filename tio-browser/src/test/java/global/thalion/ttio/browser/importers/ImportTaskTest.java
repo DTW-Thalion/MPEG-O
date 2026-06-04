@@ -13,6 +13,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
+import global.thalion.ttio.Enums;
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
 import javafx.application.Platform;
 import org.junit.jupiter.api.BeforeAll;
@@ -187,14 +189,15 @@ class ImportTaskTest {
 
         assertTrue(Files.exists(target), "expected .tio to be created");
         try (SpectralDataset ds = SpectralDataset.open(target.toString())) {
-            assertNotNull(ds.image(), "imported imzML should produce an MSImage");
-            assertEquals(gridX, ds.image().width(), "MSImage width");
-            assertEquals(gridY, ds.image().height(), "MSImage height");
-            assertEquals(nPeaks, ds.image().spectralPoints(), "MSImage spectralPoints");
-            assertEquals(nPeaks, ds.image().mzAxis().length, "mzAxis stored");
-            assertEquals(100.0, ds.image().mzAxis()[0], 1e-9, "mzAxis[0]");
+            MSImage img = (MSImage) ds.imageForKind(Enums.ImageKind.MS);
+            assertNotNull(img, "imported imzML should produce an MSImage");
+            assertEquals(gridX, img.width(), "MSImage width");
+            assertEquals(gridY, img.height(), "MSImage height");
+            assertEquals(nPeaks, img.spectralPoints(), "MSImage spectralPoints");
+            assertEquals(nPeaks, img.mzAxis().length, "mzAxis stored");
+            assertEquals(100.0, img.mzAxis()[0], 1e-9, "mzAxis[0]");
             // Pixel (row=0, col=0) has p=0 intensity: 0*1000+i = i
-            double[] p0 = ds.image().spectrumAt(0, 0);
+            double[] p0 = img.spectrumAt(0, 0);
             assertEquals(0.0, p0[0], 1e-9, "pixel(0,0) intensity[0]");
             assertEquals(1.0, p0[1], 1e-9, "pixel(0,0) intensity[1]");
         }

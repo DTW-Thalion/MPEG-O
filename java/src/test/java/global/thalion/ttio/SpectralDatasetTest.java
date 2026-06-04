@@ -817,8 +817,9 @@ class SpectralDatasetTest {
         }
 
         try (SpectralDataset ds = SpectralDataset.open(path.toString())) {
-            MSImage materialised = ds.image();
-            assertNotNull(materialised, "image() should return non-null when present");
+            MSImage materialised = (MSImage) ds.imageForKind(Enums.ImageKind.MS);
+            assertNotNull(materialised,
+                "imageForKind(MS) should return non-null when present");
             assertEquals(w, materialised.width());
             assertEquals(h, materialised.height());
             assertEquals(sp, materialised.spectralPoints());
@@ -831,7 +832,8 @@ class SpectralDatasetTest {
         // full_ms.tio has no image_cube
         String fixture = getFixturePath("full_ms.tio");
         try (SpectralDataset ds = SpectralDataset.open(fixture)) {
-            assertNull(ds.image(), "image() returns null on non-imaging .tio");
+            assertNull(ds.imageForKind(Enums.ImageKind.MS),
+                "imageForKind(MS) returns null on non-imaging .tio");
         }
     }
 }

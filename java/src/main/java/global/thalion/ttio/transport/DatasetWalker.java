@@ -5,6 +5,10 @@
 package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.Enums;
+import global.thalion.ttio.IRImage;
+import global.thalion.ttio.MSImage;
+import global.thalion.ttio.RamanImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
@@ -92,14 +96,17 @@ public final class DatasetWalker {
             }
         }
         // §5.4.5 image cubes — MS → Raman → IR.
-        if (dataset.image() != null) {
-            visitor.visitImage(this, dataset.image());
+        MSImage ms = (MSImage) dataset.imageForKind(Enums.ImageKind.MS);
+        if (ms != null) {
+            visitor.visitImage(this, ms);
         }
-        if (dataset.ramanImage() != null) {
-            visitor.visitRamanImage(this, dataset.ramanImage());
+        RamanImage raman = (RamanImage) dataset.imageForKind(Enums.ImageKind.RAMAN);
+        if (raman != null) {
+            visitor.visitRamanImage(this, raman);
         }
-        if (dataset.irImage() != null) {
-            visitor.visitIRImage(this, dataset.irImage());
+        IRImage ir = (IRImage) dataset.imageForKind(Enums.ImageKind.IR);
+        if (ir != null) {
+            visitor.visitIRImage(this, ir);
         }
         // §5.4.6 IDENTIFICATIONS_TABLE → QUANTIFICATIONS_TABLE
         if (dataset.identifications() != null

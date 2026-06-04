@@ -11,6 +11,7 @@ import java.util.concurrent.TimeUnit;
 
 import global.thalion.ttio.AcquisitionRun;
 import global.thalion.ttio.MassSpectrum;
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.hdf5.Hdf5File;
@@ -361,7 +362,7 @@ class ExportTaskTest {
 
         // Re-import via Phase 8.x imzML import path (wired in PR #39).
         // The import projects pixels back into an MSImage cube — NOT into
-        // an analytical msRun — so we assert on .image() rather than on
+        // an analytical msRun — so we assert on the MS image rather than on
         // msRuns(). Continuous-mode files round-trip; processed-mode raises.
         Path reTio = tmp.resolve("re.tio");
         ImportTask imp = new ImportTask(importSpec("imzML"),
@@ -375,7 +376,7 @@ class ExportTaskTest {
 
         // Re-import succeeded — spot-check structural invariants.
         try (SpectralDataset round = SpectralDataset.open(reTio.toString())) {
-            MSImage imgRound = round.image();
+            MSImage imgRound = (MSImage) round.imageForKind(Enums.ImageKind.MS);
             assertNotNull(imgRound, "imzML re-import should produce an MSImage");
             assertTrue(imgRound.mzAxis().length > 0,
                 "round-tripped MSImage must carry an mz_axis");

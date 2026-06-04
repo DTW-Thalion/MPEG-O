@@ -5,6 +5,7 @@
  */
 package global.thalion.ttio.exporters.writers;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.exporters.ImzMLWriter;
@@ -31,7 +32,7 @@ public final class ImzMLWriterAdapter implements Writer {
     @Override
     public void write(SpectralDataset ds, String layer, Path output,
                       Map<String, Object> opts) throws IOException {
-        MSImage img = ds.image();
+        MSImage img = (MSImage) ds.imageForKind(Enums.ImageKind.MS);
         if (img == null) {
             throw new IllegalArgumentException(
                 "dataset has no MS image to export as imzML");

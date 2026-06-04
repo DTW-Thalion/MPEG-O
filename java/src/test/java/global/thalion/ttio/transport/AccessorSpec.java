@@ -1,6 +1,7 @@
 package global.thalion.ttio.transport;
 
 import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.IRImage;
 import global.thalion.ttio.Identification;
 import global.thalion.ttio.MSImage;
@@ -187,8 +188,8 @@ public enum AccessorSpec {
         }
 
         @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
-            MSImage ia = a.image();
-            MSImage ib = b.image();
+            MSImage ia = (MSImage) a.imageForKind(Enums.ImageKind.MS);
+            MSImage ib = (MSImage) b.imageForKind(Enums.ImageKind.MS);
             if (ia == null || ib == null) {
                 throw new AssertionError("MSImage missing on at least one side: "
                     + "a=" + ia + ", b=" + ib);
@@ -355,7 +356,8 @@ public enum AccessorSpec {
                     "1.2", source.title(), source.isaInvestigationId(),
                     List.of(PacketType.TRANSPORT_V0_11_FEATURE),
                     0);
-                w.writeImageProcessed(source.image());
+                w.writeImageProcessed(
+                    (MSImage) source.imageForKind(Enums.ImageKind.MS));
                 w.writeEndOfStream();
             }
         }
@@ -380,8 +382,8 @@ public enum AccessorSpec {
         }
 
         @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
-            RamanImage ra = a.ramanImage();
-            RamanImage rb = b.ramanImage();
+            RamanImage ra = (RamanImage) a.imageForKind(Enums.ImageKind.RAMAN);
+            RamanImage rb = (RamanImage) b.imageForKind(Enums.ImageKind.RAMAN);
             // Both absent: trivially equal — the accessor isn't populated
             // on either fixture, so there's nothing to compare. Matches
             // the Python sibling comparator (#140 follow-up).
@@ -450,8 +452,8 @@ public enum AccessorSpec {
         }
 
         @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
-            IRImage ia = a.irImage();
-            IRImage ib = b.irImage();
+            IRImage ia = (IRImage) a.imageForKind(Enums.ImageKind.IR);
+            IRImage ib = (IRImage) b.imageForKind(Enums.ImageKind.IR);
             // Both absent: trivially equal — see RAMAN_IMAGE comparator
             // for rationale.
             if (ia == null && ib == null) return;
