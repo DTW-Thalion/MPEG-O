@@ -470,14 +470,11 @@ class SpectralDataset:
         # cheap dict copy. Added in 1.1.0.
         return MappingProxyType(self._references)
 
-    @property
-    def image(self) -> "MSImage | None":
-        """The embedded MSImage if /study/image_cube is present.
+    def _lazy_ms_image(self) -> "MSImage | None":
+        """Lazy-read the embedded MSImage at /study/image_cube.
 
-        Lazy: reads the cube on first access, caches the result.
-        Returns ``None`` when no image group exists.
-
-        :since: 1.2.0
+        Reads the cube on first access, caches the result. Returns
+        ``None`` when no image group exists.
         """
         if not self._image_cache_loaded:
             self._image_cache_loaded = True
@@ -491,14 +488,11 @@ class SpectralDataset:
                 # else: _image_cache stays None (already initialized)
         return self._image_cache
 
-    @property
-    def raman_image(self) -> "RamanImage | None":
-        """The embedded RamanImage if /study/raman_image_cube is present.
+    def _lazy_raman_image(self) -> "RamanImage | None":
+        """Lazy-read the embedded RamanImage at /study/raman_image_cube.
 
-        Lazy: reads the cube on first access, caches the result.
-        Returns ``None`` when no raman image group exists.
-
-        :since: 1.2.0
+        Reads the cube on first access, caches the result. Returns
+        ``None`` when no raman image group exists.
         """
         if not self._raman_image_cache_loaded:
             self._raman_image_cache_loaded = True
@@ -512,17 +506,12 @@ class SpectralDataset:
                 # else: _raman_image_cache stays None (already initialized)
         return self._raman_image_cache
 
-    @property
-    def ir_image(self) -> "IRImage | None":
-        """The embedded IRImage if /study/ir_image_cube is present.
+    def _lazy_ir_image(self) -> "IRImage | None":
+        """Lazy-read the embedded IRImage at /study/ir_image_cube.
 
-        Mirrors :attr:`image` (MSImage) and :attr:`raman_image`
-        accessors for the third imaging modality. Lazy: reads the
-        cube on first access, caches the result. Returns ``None``
-        when no IR image group exists. Stage 5.2 (transport-spec
-        v0.11, Deferral 1).
-
-        :since: 1.2.0
+        Reads the cube on first access, caches the result. Returns
+        ``None`` when no IR image group exists. Stage 5.2
+        (transport-spec v0.11, Deferral 1).
         """
         if not self._ir_image_cache_loaded:
             self._ir_image_cache_loaded = True
@@ -535,6 +524,44 @@ class SpectralDataset:
                     self._ir_image_cache = IRImage.read_from(study)
                 # else: _ir_image_cache stays None (already initialized)
         return self._ir_image_cache
+
+    def image_for_kind(self, kind: "ImageKind") -> "Image | None":
+        """The embedded :class:`~ttio.image.Image` for the given
+        :class:`~ttio.enums.ImageKind`, or ``None`` when that modality
+        is absent.
+
+        Lazy per-kind: reads the cube on first access and caches the
+        result. Replaces the former typed ``image`` / ``raman_image``
+        / ``ir_image`` accessors with a uniform lookup.
+
+        :since: 1.2.0
+        """
+        from .enums import ImageKind
+        if kind == ImageKind.MS:
+            return self._lazy_ms_image()
+        if kind == ImageKind.RAMAN:
+            return self._lazy_raman_image()
+        if kind == ImageKind.IR:
+            return self._lazy_ir_image()
+        raise ValueError(f"unknown ImageKind: {kind!r}")
+
+    @property
+    def images(self) -> "dict[ImageKind, Image]":
+        """Embedded images keyed by :class:`~ttio.enums.ImageKind`,
+        containing only the modalities present on this dataset.
+
+        Each entry is materialised lazily via :meth:`image_for_kind`
+        (per-kind cache preserved). Absent modalities are omitted.
+
+        :since: 1.2.0
+        """
+        from .enums import ImageKind
+        out: "dict[ImageKind, Image]" = {}
+        for k in (ImageKind.MS, ImageKind.RAMAN, ImageKind.IR):
+            img = self.image_for_kind(k)
+            if img is not None:
+                out[k] = img
+        return out
 
     @property
     def subjects(self) -> list[Subject]:

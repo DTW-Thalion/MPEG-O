@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 
 from ttio import SpectralDataset
+from ttio.enums import ImageKind
 from ttio.raman_image import RamanImage
 from ttio.transport.codec import TransportReader, TransportWriter
 from ttio.transport.packets import PacketType
@@ -68,7 +69,7 @@ def test_write_raman_image_emits_header_pixels_eoi_with_modality_1(
     tis = tmp_path / "raman.tis"
 
     with SpectralDataset.open(src) as ds:
-        assert ds.raman_image is not None, (
+        assert ds.image_for_kind(ImageKind.RAMAN) is not None, (
             "fixture precondition: dataset must carry a RamanImage"
         )
         out = io.BytesIO()
@@ -80,7 +81,7 @@ def test_write_raman_image_emits_header_pixels_eoi_with_modality_1(
                 features=[],
                 n_datasets=0,
             )
-            w.write_raman_image(ds.raman_image)
+            w.write_raman_image(ds.image_for_kind(ImageKind.RAMAN))
             w.write_end_of_stream()
         tis.write_bytes(out.getvalue())
 
@@ -162,8 +163,8 @@ def test_raman_image_round_trips_via_write_dataset_materialize(
         materialised.close()
 
     with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
-        img_a = a.raman_image
-        img_b = b.raman_image
+        img_a = a.image_for_kind(ImageKind.RAMAN)
+        img_b = b.image_for_kind(ImageKind.RAMAN)
         assert img_a is not None, "source must carry a RamanImage"
         assert img_b is not None, "round-tripped dataset must carry a RamanImage"
         assert img_a.width == img_b.width
@@ -244,12 +245,12 @@ def test_reader_skips_unknown_modality(tmp_path: Path) -> None:
         materialised = r.read_to_dataset(output_path=rt)
         materialised.close()
     with SpectralDataset.open(rt) as ds:
-        assert ds.image is None, (
+        assert ds.image_for_kind(ImageKind.MS) is None, (
             "unknown-modality stream must produce no MSImage"
         )
-        assert ds.raman_image is None, (
+        assert ds.image_for_kind(ImageKind.RAMAN) is None, (
             "unknown-modality stream must produce no RamanImage"
         )
-        assert ds.ir_image is None, (
+        assert ds.image_for_kind(ImageKind.IR) is None, (
             "unknown-modality stream must produce no IRImage"
         )

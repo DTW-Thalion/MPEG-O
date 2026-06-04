@@ -25,6 +25,7 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+from ttio.enums import ImageKind
 from ttio.genomic.reference_import import ReferenceImport
 from ttio.identification import Identification
 from ttio.provenance import ProvenanceRecord
@@ -257,7 +258,7 @@ def test_multi_section_prelude_emits_in_spec_5_4_order(tmp_path: Path) -> None:
     out = io.BytesIO()
     with SpectralDataset.open(src) as ds:
         assert ds.is_encrypted, "fixture precondition: encryption attr set"
-        assert ds.image is not None
+        assert ds.image_for_kind(ImageKind.MS) is not None
         assert ds.references
         assert ds.identifications()
         assert ds.quantifications()

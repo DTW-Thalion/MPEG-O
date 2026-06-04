@@ -31,6 +31,7 @@ from pathlib import Path
 import numpy as np
 
 from ttio import MSImage
+from ttio.enums import ImageKind
 from ttio.spectral_dataset import SpectralDataset
 from ttio.transport.codec import TransportReader, TransportWriter
 from ttio.transport.packets import PacketType, TRANSPORT_V0_11_FEATURE
@@ -81,7 +82,7 @@ def test_writeImage_emits_header_pixels_eof_in_order(tmp_path: Path) -> None:
     tis = tmp_path / "img.tis"
 
     with SpectralDataset.open(src) as ds:
-        assert ds.image is not None, (
+        assert ds.image_for_kind(ImageKind.MS) is not None, (
             "fixture precondition: dataset must carry an MSImage"
         )
         out = io.BytesIO()
@@ -93,7 +94,7 @@ def test_writeImage_emits_header_pixels_eof_in_order(tmp_path: Path) -> None:
                 features=[],
                 n_datasets=0,
             )
-            w.write_image(ds.image)
+            w.write_image(ds.image_for_kind(ImageKind.MS))
             w.write_end_of_stream()
         tis.write_bytes(out.getvalue())
 
@@ -167,8 +168,8 @@ def test_round_trip_via_write_dataset_and_materialize(tmp_path: Path) -> None:
         materialised.close()
 
     with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
-        img_a = a.image
-        img_b = b.image
+        img_a = a.image_for_kind(ImageKind.MS)
+        img_b = b.image_for_kind(ImageKind.MS)
         assert img_a is not None, "source must carry an MSImage"
         assert img_b is not None, "round-tripped dataset must carry an MSImage"
         assert img_a.width == img_b.width
@@ -211,7 +212,7 @@ def test_zero_emission_when_no_image(tmp_path: Path) -> None:
     )
     tis = tmp_path / "plain.tis"
     with SpectralDataset.open(src) as ds:
-        assert ds.image is None, (
+        assert ds.image_for_kind(ImageKind.MS) is None, (
             "fixture precondition: dataset must carry no image"
         )
         with tis.open("wb") as out, TransportWriter(out) as w:

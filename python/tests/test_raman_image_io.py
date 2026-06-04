@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from ttio import SpectralDataset
+from ttio.enums import ImageKind
 from ttio.raman_image import RamanImage
 from ttio.providers import open_provider
 
@@ -114,7 +115,7 @@ def test_spectral_dataset_raman_image_property(tmp_path: Path) -> None:
         runs={}, raman_image=img,
     )
     with SpectralDataset.open(out) as ds:
-        read = ds.raman_image
+        read = ds.image_for_kind(ImageKind.RAMAN)
     assert read is not None
     assert read.width == img.width
     np.testing.assert_array_equal(read.wavenumbers, img.wavenumbers)
@@ -127,7 +128,7 @@ def test_spectral_dataset_raman_image_property_returns_none_when_absent(tmp_path
     out = tmp_path / "no_raman.tio"
     SpectralDataset.write_minimal(out, title="", isa_investigation_id="", runs={})
     with SpectralDataset.open(out) as ds:
-        assert ds.raman_image is None
+        assert ds.image_for_kind(ImageKind.RAMAN) is None
 
 
 def test_spectral_dataset_raman_image_property_caches(tmp_path: Path) -> None:
@@ -139,6 +140,6 @@ def test_spectral_dataset_raman_image_property_caches(tmp_path: Path) -> None:
         runs={}, raman_image=img,
     )
     with SpectralDataset.open(out) as ds:
-        first = ds.raman_image
-        second = ds.raman_image
-        assert first is second, "second .raman_image call should return cached object"
+        first = ds.image_for_kind(ImageKind.RAMAN)
+        second = ds.image_for_kind(ImageKind.RAMAN)
+        assert first is second, "second call should return cached object"
