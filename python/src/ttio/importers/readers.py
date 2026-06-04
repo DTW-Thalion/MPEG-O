@@ -2,8 +2,8 @@
 into an :class:`ImportedDataset`; lazy module imports keep optional
 dependencies off the import path.
 
-These mirror the adapter callables in :mod:`ttio.importers.registry` one
-for one. P7 will wire them into the registry; here they only stand alone.
+The importer registry (:mod:`ttio.importers.registry`) holds one of these
+per format and dispatches ``encode`` through ``Reader.read(...).write(...)``.
 """
 from __future__ import annotations
 

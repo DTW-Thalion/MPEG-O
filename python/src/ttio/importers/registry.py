@@ -2,9 +2,10 @@
 ``ttio encode --format <fmt>`` accepts and how each maps to a `.tio`.
 
 Mirrors the tio-browser GUI ``ImportFormatRegistry`` so the CLI and the
-desktop app cover the same spec §4 format set (W6.4). Each spec wraps a
-format's existing importer in a uniform
-``adapter(inputs, output, **opts) -> None`` that writes a `.tio`.
+desktop app cover the same spec §4 format set (W6.4). Each spec pairs a
+format with a :class:`ttio.importers.base.Reader` instance; ``encode``
+dispatches via ``reader.read(inputs, opts) -> ImportedDataset`` then
+``.write(output)``.
 
 Two formats stand apart and are intentionally NOT in this registry:
 
@@ -13,7 +14,7 @@ Two formats stand apart and are intentionally NOT in this registry:
   modes, PHRED options); ``ttio encode`` delegates to those directly.
 Runtime tool availability (samtools for BAM/SAM/CRAM, the vendor
 converters for Thermo / Waters / Bruker) is the importer's concern: the
-adapter dispatches and the importer raises its own clear error when the
+reader dispatches and the importer raises its own clear error when the
 tool is missing. "Has a codec" (registered here) is distinct from "the
 external tool is installed right now".
 """

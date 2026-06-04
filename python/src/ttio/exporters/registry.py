@@ -1,9 +1,9 @@
 """Export-format registry: the formats ``ttio export --format <fmt>``
 accepts and how each maps a `.tio` layer to an output file.
 
-Export mirror of :mod:`ttio.importers.registry` (W6.4). Each spec wraps
-an existing exporter in a uniform
-``adapter(tio_path, layer, output, **opts) -> None``.
+Export mirror of :mod:`ttio.importers.registry` (W6.4). Each spec pairs a
+format with a :class:`ttio.exporters.base.Writer` instance; ``export``
+opens the `.tio` and dispatches via ``writer.write(ds, layer, output, opts)``.
 
 Formats handled elsewhere / not yet reachable:
 
@@ -18,8 +18,8 @@ Formats handled elsewhere / not yet reachable:
   yet reachable from the CLI.
 
 Runtime tool availability (samtools for BAM/CRAM) is the exporter's
-concern: the adapter dispatches and the writer raises its own clear
-error when the tool is missing.
+concern: the writer dispatches and raises its own clear error when the
+tool is missing.
 """
 from __future__ import annotations
 
