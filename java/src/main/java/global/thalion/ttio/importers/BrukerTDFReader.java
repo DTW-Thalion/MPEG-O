@@ -162,7 +162,40 @@ public final class BrukerTDFReader {
         // Metadata read is always performed locally — catches a
         // malformed directory before we spawn a subprocess.
         readMetadata(dDir);
+        return runImport(dDir, output);
+    }
 
+    /**
+     * Build a write-through {@link ImportedDataset} draft for a Bruker
+     * {@code .d} directory. The draft carries a {@linkplain
+     * ImportedDataset.WriteDelegate write delegate} that, on
+     * {@code write(output)}, spawns the Python {@code bruker_tdf}
+     * helper to produce the {@code .tio} directly — there is no
+     * in-Java run data to assemble.
+     *
+     * <p>The same up-front {@link #readMetadata(Path)} validation that
+     * {@link #read(Path, Path)} performs is done here so the draft
+     * fails fast on a malformed directory.</p>
+     *
+     * @param dDir Bruker {@code .d} directory.
+     * @throws BrukerTDFException if the directory is malformed.
+     */
+    public static ImportedDataset readDataset(Path dDir) throws BrukerTDFException {
+        // Fail fast on a malformed directory, exactly as read(...) does
+        // before spawning the subprocess.
+        readMetadata(dDir);
+        return ImportedDataset.delegated((output, progress) -> runImport(dDir, output));
+    }
+
+    // ── Internals ────────────────────────────────────────────────
+
+    /**
+     * Leaf helper: spawn the Python {@code bruker_tdf} helper to write
+     * {@code output} from {@code dDir}. Performs no metadata
+     * validation (callers do that up front). Subprocess invocation is
+     * byte-identical to the historical {@code read(...)} body.
+     */
+    private static Path runImport(Path dDir, Path output) throws BrukerTDFException {
         String python = resolvePython();
         String[] cmd = {
             python, "-m", "ttio.importers.bruker_tdf_cli",
@@ -192,8 +225,6 @@ public final class BrukerTDFReader {
         }
         return output;
     }
-
-    // ── Internals ────────────────────────────────────────────────
 
     private static Path locateTdf(Path d) throws BrukerTDFException {
         if (!Files.isDirectory(d)) {

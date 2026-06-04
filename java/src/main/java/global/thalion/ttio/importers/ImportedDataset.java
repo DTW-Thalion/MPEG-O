@@ -33,13 +33,42 @@ public final class ImportedDataset {
     public RamanImage ramanImage;
     public IRImage irImage;
 
+    /** Optional write-through delegate. When non-null, {@link #write}
+     *  routes the write through it instead of {@link SpectralDataset#create}.
+     *  Used by CLI-delegated (write-through) importers — e.g.
+     *  {@link BrukerTDFReader} — whose {@code .tio} is produced by an
+     *  external process at write time, not assembled in memory. */
+    @FunctionalInterface
+    public interface WriteDelegate {
+        java.nio.file.Path write(java.nio.file.Path output,
+                global.thalion.ttio.io.ProgressSink progress)
+                throws java.io.IOException;
+    }
+
+    /** When non-null, {@link #write} routes through this delegate. */
+    public WriteDelegate writeDelegate;
+
+    /** Create a delegate-backed draft for a write-through importer. */
+    public static ImportedDataset delegated(WriteDelegate delegate) {
+        ImportedDataset d = new ImportedDataset();
+        d.writeDelegate = delegate;
+        return d;
+    }
+
     /** Write this draft to {@code output} with no progress reporting. */
-    public Path write(Path output) { return write(output, null); }
+    public Path write(Path output) throws java.io.IOException {
+        return write(output, null);
+    }
 
     /** Write this draft to {@code output} via the single image-aware
      *  {@link SpectralDataset#create} call site, optionally reporting
-     *  per-section progress. Returns the written {@code .tio} path. */
-    public Path write(Path output, ProgressSink progress) {
+     *  per-section progress. Returns the written {@code .tio} path.
+     *  When a {@link #writeDelegate} is set, the write is routed
+     *  through it (write-through importers). */
+    public Path write(Path output, ProgressSink progress) throws java.io.IOException {
+        if (writeDelegate != null) {
+            return writeDelegate.write(output, progress);
+        }
         return SpectralDataset.create(
             output.toString(),
             title.isEmpty() ? "imported" : title,
