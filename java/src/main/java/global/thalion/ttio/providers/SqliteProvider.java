@@ -5,6 +5,9 @@
  */
 package global.thalion.ttio.providers;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.Enums.Precision;
 
@@ -39,6 +42,10 @@ import java.util.*;
  *
  */
 public final class SqliteProvider implements StorageProvider {
+
+    /** Structural JSON reader for the compound-dataset encoding. Read-only
+     *  use; the byte-canonical serializer is hand-rolled and untouched. */
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     // ── Schema DDL — byte-identical to Python sqlite.py ─────────────────
 
@@ -455,46 +462,66 @@ public final class SqliteProvider implements StorageProvider {
     }
 
     static List<CompoundField> fieldsFromJson(String json) {
-        // Parse [{\"name\":\"x\",\"kind\":\"vl_string\"}, ...]
+        // Parse [{"name":"x","kind":"vl_string"}, ...] structurally (Jackson),
+        // so whitespace, key order, and escapes a non-Java writer emits are all
+        // handled (cross-language compat — #205).
         List<CompoundField> result = new ArrayList<>();
-        // Simple hand-parser for the known structure.
-        json = json.trim();
-        if (json.equals("[]")) return result;
-        // Strip outer brackets
-        json = json.substring(1, json.length() - 1).trim();
-        // Split on "},{" — safe since field values don't contain objects/arrays.
-        String[] objects = splitJsonObjects(json);
-        for (String obj : objects) {
-            String name = extractJsonString(obj, "name");
-            String kind = extractJsonString(obj, "kind");
-            result.add(new CompoundField(name, fieldKindFromValue(kind)));
+        JsonNode arr = readJsonTree(json);
+        for (JsonNode obj : arr) {
+            result.add(new CompoundField(
+                obj.get("name").asText(),
+                fieldKindFromValue(obj.get("kind").asText())));
         }
         return result;
     }
 
     static List<Map<String, Object>> rowsFromJson(String json) {
         List<Map<String, Object>> result = new ArrayList<>();
-        json = json.trim();
-        if (json.equals("[]")) return result;
-        json = json.substring(1, json.length() - 1).trim();
-        String[] objects = splitJsonObjects(json);
-        for (String obj : objects) {
-            result.add(parseJsonObject(obj));
+        JsonNode arr = readJsonTree(json);
+        for (JsonNode obj : arr) {
+            Map<String, Object> row = new LinkedHashMap<>();
+            Iterator<String> names = obj.fieldNames();
+            while (names.hasNext()) {
+                String key = names.next();
+                row.put(key, jsonNodeToValue(obj.get(key)));
+            }
+            result.add(row);
         }
         return result;
     }
 
     static long[] shapeFromJson(String json) {
-        json = json.trim();
-        if (json.equals("[]")) return new long[0];
-        json = json.substring(1, json.length() - 1).trim();
-        if (json.isEmpty()) return new long[0];
-        String[] parts = json.split(",");
-        long[] shape = new long[parts.length];
-        for (int i = 0; i < parts.length; i++) {
-            shape[i] = Long.parseLong(parts[i].trim());
+        JsonNode arr = readJsonTree(json);
+        long[] shape = new long[arr.size()];
+        for (int i = 0; i < shape.length; i++) {
+            shape[i] = arr.get(i).asLong();
         }
         return shape;
+    }
+
+    /** Parse {@code json} to a tree, wrapping Jackson's checked failure as an
+     *  unchecked {@link IllegalArgumentException} (the reader's bad-input
+     *  contract — callers never declared a checked throw). */
+    private static JsonNode readJsonTree(String json) {
+        try {
+            return JSON.readTree(json);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            throw new IllegalArgumentException("Malformed compound JSON: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Map a JSON value node to a Java value with the SAME typing the old
+     * hand-rolled {@code parseJsonScalar} produced: {@code null}; Boolean;
+     * integral number &rarr; Long; floating number &rarr; Double; textual
+     * &rarr; String.
+     */
+    private static Object jsonNodeToValue(JsonNode node) {
+        if (node.isNull()) return null;
+        if (node.isBoolean()) return node.asBoolean();
+        if (node.isIntegralNumber()) return node.asLong();
+        if (node.isFloatingPointNumber()) return node.asDouble();
+        return node.asText();
     }
 
     static String shapeToJson(long[] shape) {
@@ -541,132 +568,6 @@ public final class SqliteProvider implements StorageProvider {
             case "vl_string" -> CompoundField.Kind.VL_STRING;
             default -> throw new IllegalArgumentException("Unknown CompoundFieldKind: " + value);
         };
-    }
-
-    /**
-     * Split a JSON array body (no outer brackets) on top-level object boundaries.
-     * Handles nested arrays/objects by tracking depth.
-     */
-    private static String[] splitJsonObjects(String body) {
-        List<String> parts = new ArrayList<>();
-        int depth = 0;
-        int start = 0;
-        boolean inString = false;
-        boolean escape = false;
-        for (int i = 0; i < body.length(); i++) {
-            char c = body.charAt(i);
-            if (escape) { escape = false; continue; }
-            if (c == '\\' && inString) { escape = true; continue; }
-            if (c == '"') { inString = !inString; continue; }
-            if (inString) continue;
-            if (c == '{' || c == '[') depth++;
-            else if (c == '}' || c == ']') depth--;
-            else if (c == ',' && depth == 0) {
-                parts.add(body.substring(start, i).trim());
-                start = i + 1;
-            }
-        }
-        if (start < body.length()) parts.add(body.substring(start).trim());
-        return parts.toArray(new String[0]);
-    }
-
-    private static String extractJsonString(String obj, String key) {
-        // Locate the key token, then tolerate optional whitespace around the
-        // colon and before the opening quote. Java's own writer emits compact
-        // JSON ("k":"v"), but Python's json.dumps emits spaces ("k": "v"); a
-        // spec-valid JSON consumer must accept both (cross-language compat).
-        String keyToken = "\"" + key + "\"";
-        int idx = obj.indexOf(keyToken);
-        if (idx < 0) return null;
-        int i = idx + keyToken.length();
-        while (i < obj.length() && Character.isWhitespace(obj.charAt(i))) i++;
-        if (i >= obj.length() || obj.charAt(i) != ':') return null;
-        i++;
-        while (i < obj.length() && Character.isWhitespace(obj.charAt(i))) i++;
-        if (i >= obj.length() || obj.charAt(i) != '"') return null;  // value is not a string
-        i++;
-        StringBuilder sb = new StringBuilder();
-        boolean escape = false;
-        for (; i < obj.length(); i++) {
-            char c = obj.charAt(i);
-            if (escape) { sb.append(c); escape = false; continue; }
-            if (c == '\\') { escape = true; continue; }
-            if (c == '"') break;
-            sb.append(c);
-        }
-        return sb.toString();
-    }
-
-    /**
-     * Parse a single JSON object (with braces) into Map&lt;String,Object&gt;.
-     * Values can be strings, numbers (long/double), booleans, or null.
-     */
-    private static Map<String, Object> parseJsonObject(String obj) {
-        Map<String, Object> map = new LinkedHashMap<>();
-        obj = obj.trim();
-        if (obj.startsWith("{")) obj = obj.substring(1);
-        if (obj.endsWith("}")) obj = obj.substring(0, obj.length() - 1);
-        obj = obj.trim();
-        if (obj.isEmpty()) return map;
-        // Split on top-level commas
-        String[] pairs = splitJsonObjects(obj);
-        for (String pair : pairs) {
-            pair = pair.trim();
-            if (pair.isEmpty()) continue;
-            // Find key: "key":value
-            if (!pair.startsWith("\"")) continue;
-            int keyEnd = 1;
-            boolean escape = false;
-            while (keyEnd < pair.length()) {
-                char c = pair.charAt(keyEnd);
-                if (escape) { escape = false; keyEnd++; continue; }
-                if (c == '\\') { escape = true; keyEnd++; continue; }
-                if (c == '"') break;
-                keyEnd++;
-            }
-            String key = pair.substring(1, keyEnd);
-            // value starts after ":"
-            int colonIdx = pair.indexOf(':', keyEnd + 1);
-            if (colonIdx < 0) continue;
-            String valStr = pair.substring(colonIdx + 1).trim();
-            map.put(key, parseJsonScalar(valStr));
-        }
-        return map;
-    }
-
-    private static Object parseJsonScalar(String s) {
-        if (s.equals("null")) return null;
-        if (s.equals("true")) return true;
-        if (s.equals("false")) return false;
-        if (s.startsWith("\"")) {
-            // String value
-            StringBuilder sb = new StringBuilder();
-            boolean escape = false;
-            for (int i = 1; i < s.length(); i++) {
-                char c = s.charAt(i);
-                if (escape) {
-                    switch (c) {
-                        case 'n' -> sb.append('\n');
-                        case 't' -> sb.append('\t');
-                        case 'r' -> sb.append('\r');
-                        default -> sb.append(c);
-                    }
-                    escape = false;
-                    continue;
-                }
-                if (c == '\\') { escape = true; continue; }
-                if (c == '"') break;
-                sb.append(c);
-            }
-            return sb.toString();
-        }
-        // Number
-        if (s.contains(".") || s.contains("e") || s.contains("E")) {
-            try { return Double.parseDouble(s); } catch (NumberFormatException ignored) {}
-        }
-        try { return Long.parseLong(s); } catch (NumberFormatException ignored) {}
-        try { return Double.parseDouble(s); } catch (NumberFormatException ignored) {}
-        return s;
     }
 
     // ── Array type coercions ─────────────────────────────────────────────
