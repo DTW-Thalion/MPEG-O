@@ -6,33 +6,15 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-import global.thalion.ttio.AcquisitionRun;
-import global.thalion.ttio.Enums.AcquisitionMode;
 import global.thalion.ttio.FeatureFlags;
-import global.thalion.ttio.InstrumentConfig;
-import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
-import global.thalion.ttio.SpectrumIndex;
-import global.thalion.ttio.SignalArray;
-import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.genomics.ReferenceImport;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
-import global.thalion.ttio.providers.ProviderRegistry;
-import global.thalion.ttio.providers.StorageGroup;
-import global.thalion.ttio.providers.StorageProvider;
-import global.thalion.ttio.importers.BamReader;
-import global.thalion.ttio.importers.BrukerTDFReader;
-import global.thalion.ttio.importers.CramReader;
 import global.thalion.ttio.importers.FastaReader;
 import global.thalion.ttio.importers.FastqReader;
-import global.thalion.ttio.importers.ImzMLReader;
-import global.thalion.ttio.importers.JcampDxReader;
-import global.thalion.ttio.importers.MzMLReader;
-import global.thalion.ttio.importers.MzTabReader;
-import global.thalion.ttio.importers.NmrMLReader;
-import global.thalion.ttio.importers.SamReader;
-import global.thalion.ttio.importers.ThermoRawReader;
-import global.thalion.ttio.importers.WatersMassLynxReader;
+import global.thalion.ttio.importers.ImportedDataset;
+import global.thalion.ttio.importers.ImporterRegistry;
+import global.thalion.ttio.browser.SdkFormatKeys;
 import global.thalion.ttio.browser.progress.PhaseProgress;
 import global.thalion.ttio.browser.progress.ProgressListener;
 import global.thalion.ttio.io.ProgressSink;
@@ -115,23 +97,23 @@ public final class ImportTask extends Task<Void> {
         System.err.println("[ImportTask] start " + spec.name
             + " source=" + config.sourcePath + " target=" + config.targetTio);
         try {
-            switch (spec.name) {
-            case "mzML"             -> importMzML(readerSink, writerSink);
-            case "nmrML"            -> importNmrML(readerSink, writerSink);
-            case "mzTab"            -> importMzTab(readerSink, writerSink);
-            case "BAM"              -> importBamLike(spec.name, readerSink, writerSink);
-            case "SAM"              -> importBamLike(spec.name, readerSink, writerSink);
-            case "CRAM"             -> importBamLike(spec.name, readerSink, writerSink);
-            case "FASTA"            -> importFasta(readerSink, writerSink);
-            case "FASTQ"            -> importFastq(readerSink, writerSink);
-            case "imzML"            -> importImzML(readerSink);
-            case "JCAMP-DX"         -> importJcampDx(readerSink, writerSink);
-            case "Waters MassLynx"  -> importWatersMassLynx();
-            case "Thermo .raw"      -> importThermoRaw();
-            case "Bruker timsTOF"   -> importBrukerTimsTOF();
-            default -> throw new UnsupportedOperationException(
-                spec.name + " import not yet wired -- see "
-                + "tio-browser/README.md follow-ups.");
+            // PR-J2/GT3: the 11 registry-covered formats dispatch through
+            // the SDK ImporterRegistry -> Reader.read(...) -> draft.write().
+            // The reader is handed the 0..50% readerSink and the write the
+            // 50..100% writerSink, so the two-phase progress UX is preserved
+            // exactly as the deleted per-format importX bodies did.
+            // fasta/fastq stay GUI-local (richer wizard-driven behavior).
+            String key = SdkFormatKeys.importKey(spec.name);
+            if (key != null) {
+                importViaRegistry(key, readerSink, writerSink);
+            } else {
+                switch (spec.name) {
+                case "FASTA" -> importFasta(readerSink, writerSink);
+                case "FASTQ" -> importFastq(readerSink, writerSink);
+                default -> throw new UnsupportedOperationException(
+                    spec.name + " import not yet wired -- see "
+                    + "tio-browser/README.md follow-ups.");
+                }
             }
             long t1 = System.currentTimeMillis();
             System.err.println("[ImportTask] dispatch returned after "
@@ -146,66 +128,63 @@ public final class ImportTask extends Task<Void> {
         return null;
     }
 
-    // -- Existing wired formats ----------------------------------------
+    // -- Registry dispatch (PR-J2/GT3) ---------------------------------
 
-    private void importMzML(ProgressSink readerSink, ProgressSink writerSink)
-            throws Exception {
-        AcquisitionRun run = MzMLReader.read(
-            config.sourcePath.toString(), readerSink);
-        writeAnalytical(List.of(run), writerSink);
-    }
-
-    private void importNmrML(ProgressSink readerSink, ProgressSink writerSink)
-            throws Exception {
-        NmrMLReader.NmrMLResult result =
-            NmrMLReader.read(config.sourcePath.toString(), readerSink);
-        writeAnalytical(List.of(result.run()), writerSink);
-    }
-
-    private void importMzTab(ProgressSink readerSink, ProgressSink writerSink)
-            throws Exception {
-        MzTabReader.MzTabImport im =
-            MzTabReader.read(config.sourcePath, readerSink);
-        // Stage E: writer-side sink is a separate scaled half so the
-        // dialog's percent stays monotonic across the read/write
-        // boundary (PhaseProgress.writerSink maps onto 50..100%).
-        SpectralDataset.create(
-            config.targetTio.toString(),
-            config.datasetTitle.isEmpty() ? im.title() : config.datasetTitle,
-            "",
-            List.of(),
-            im.identifications(),
-            im.quantifications(),
-            List.of(),
-            writerSink);
-    }
-
-    private void importBamLike(String name,
-                               ProgressSink readerSink,
-                               ProgressSink writerSink) throws Exception {
-        WrittenGenomicRun run;
-        Path source = config.sourcePath;
-        switch (name) {
-            case "BAM" -> {
-                BamReader r = new BamReader(source);
-                run = r.toGenomicRun(config.runName, null, null, readerSink);
-            }
-            case "SAM" -> {
-                SamReader r = new SamReader(source);
-                run = r.toGenomicRun(config.runName, null, null, readerSink);
-            }
-            case "CRAM" -> {
-                if (config.cramReference == null) {
-                    throw new IllegalArgumentException(
-                        "CRAM import requires a reference FASTA");
-                }
-                CramReader r = new CramReader(source, config.cramReference);
-                run = r.toGenomicRun(config.runName, null, null, readerSink);
-            }
-            default -> throw new IllegalStateException(name);
+    /**
+     * Dispatch a registry-covered format through the SDK importer
+     * registry, preserving the two-phase progress UX.
+     *
+     * <p>The SDK {@link global.thalion.ttio.importers.Reader} parses the
+     * source into an {@link ImportedDataset} draft (reader phase, 0..50%
+     * via {@code readerSink}); {@link ImportedDataset#write} then writes
+     * the {@code .tio} (writer phase, 50..100% via {@code writerSink}).
+     * This is the exact reader/writer split the deleted per-format
+     * {@code importX} bodies implemented.</p>
+     *
+     * <p>imzML now routes its {@code MSImage} through the SDK adapter +
+     * the image-aware {@link SpectralDataset#create} create path (same
+     * {@code MSImage.writeTo}) rather than the GUI's former raw-HDF5
+     * write; the result is byte-identical.</p>
+     */
+    private void importViaRegistry(String key,
+                                   ProgressSink readerSink,
+                                   ProgressSink writerSink) throws Exception {
+        Map<String, Object> opts = importOpts();
+        List<String> inputs = importInputs();
+        ImportedDataset draft = ImporterRegistry.specFor(key).reader()
+            .read(inputs, opts, readerSink);
+        if (config.datasetTitle != null && !config.datasetTitle.isEmpty()) {
+            draft.title = config.datasetTitle;
         }
-        writeGenomic(List.of(run), writerSink);
+        draft.write(config.targetTio, writerSink);
     }
+
+    /**
+     * Build the SDK opts map from {@link ImportConfig}. Only non-null /
+     * non-empty values are added. {@code name} feeds the genomic
+     * (BAM/SAM/CRAM) + JCAMP-DX adapters' run name (matching the GUI's
+     * former {@code config.runName} threading); {@code reference} feeds
+     * the CRAM adapter. Adapters that ignore a key (e.g. mzML) simply do
+     * not read it. imzML's {@code .ibd} is auto-located by the adapter
+     * from the {@code .imzML} sibling, so no {@code ibd} opt is supplied.
+     */
+    private Map<String, Object> importOpts() {
+        Map<String, Object> opts = new LinkedHashMap<>();
+        if (config.runName != null && !config.runName.isEmpty()) {
+            opts.put("name", config.runName);
+        }
+        if (config.cramReference != null) {
+            opts.put("reference", config.cramReference);
+        }
+        return opts;
+    }
+
+    /** Primary source path as the single SDK input. */
+    private List<String> importInputs() {
+        return List.of(config.sourcePath.toString());
+    }
+
+    // -- GUI-local formats (fasta/fastq) -------------------------------
 
     private void importFasta(ProgressSink readerSink, ProgressSink writerSink)
             throws Exception {
@@ -235,175 +214,13 @@ public final class ImportTask extends Task<Void> {
         writeGenomic(List.of(run), writerSink);
     }
 
-    // -- Phase 8.x: newly-wired formats --------------------------------
-
-    /**
-     * imzML import (continuous mode only).
-     *
-     * Reads the .imzML + .ibd pair via ImzMLReader, projects pixel
-     * spectra into a flat intensity cube, and writes an MSImage group
-     * directly via the HDF5 layer.
-     */
-    private void importImzML(ProgressSink readerSink) throws Exception {
-        // imzML uses the HDF5 layer directly (not SpectralDataset.create),
-        // so there is no writer-side ProgressSink hook -- the reader
-        // alone drives the percent into the 0..50 read half, and the
-        // PhaseProgress.emitFinal() in call() finishes it at 100%.
-        ImzMLReader.ImzMLImport imp = ImzMLReader.read(config.sourcePath, readerSink);
-        if (imp.spectra().isEmpty()) {
-            throw new IllegalStateException(
-                "imzML import: no pixels parsed from " + config.sourcePath);
-        }
-        if (!"continuous".equals(imp.mode())) {
-            throw new UnsupportedOperationException(
-                "imzML import: processed mode not yet supported; "
-                + "only continuous mode is wired. "
-                + "File reports mode=" + imp.mode() + ".");
-        }
-
-        int width  = imp.gridMaxX();
-        int height = imp.gridMaxY();
-        int sp     = imp.spectra().get(0).mz().length;
-        double[] mzAxis = imp.spectra().get(0).mz();
-
-        double[] cube = new double[width * height * sp];
-        for (ImzMLReader.PixelSpectrum pix : imp.spectra()) {
-            int col = pix.x() - 1;  // imzML is 1-indexed
-            int row = pix.y() - 1;
-            if (row < 0 || row >= height || col < 0 || col >= width) continue;
-            double[] pi = pix.intensity();
-            int base = (row * width + col) * sp;
-            System.arraycopy(pi, 0, cube, base, Math.min(pi.length, sp));
-        }
-
-        MSImage img = new MSImage(
-            width, height, sp, 0,
-            imp.pixelSizeX(), imp.pixelSizeY(),
-            imp.scanPattern(),
-            cube, mzAxis,
-            config.datasetTitle, "",
-            List.of(), List.of(), List.of());
-
-        try (StorageProvider provider = ProviderRegistry.open(
-                config.targetTio.toString(), StorageProvider.Mode.CREATE)) {
-            StorageGroup root = provider.rootGroup();
-            FeatureFlags.defaultCurrent().writeTo(root);
-            try (StorageGroup study = root.createGroup("study")) {
-                if (!config.datasetTitle.isEmpty()) {
-                    study.setAttribute("title", config.datasetTitle);
-                }
-                img.writeTo(study);
-            }
-        }
-    }
-
-    /**
-     * JCAMP-DX import.
-     *
-     * Wraps the single parsed spectrum into a single-spectrum
-     * AcquisitionRun. The AcquisitionMode is chosen from the spectrum
-     * subclass (Raman, IR, UV-Vis). All named signal arrays from the
-     * Spectrum are forwarded as run channels.
-     */
-    private void importJcampDx(ProgressSink readerSink, ProgressSink writerSink)
-            throws Exception {
-        Spectrum spectrum = JcampDxReader.readSpectrum(config.sourcePath, readerSink);
-
-        AcquisitionMode mode;
-        if (spectrum instanceof global.thalion.ttio.RamanSpectrum) {
-            mode = AcquisitionMode.RAMAN;
-        } else if (spectrum instanceof global.thalion.ttio.IRSpectrum) {
-            mode = AcquisitionMode.IR;
-        } else if (spectrum instanceof global.thalion.ttio.UVVisSpectrum) {
-            mode = AcquisitionMode.UV_VIS;
-        } else {
-            mode = AcquisitionMode.RAMAN;
-        }
-
-        Map<String, double[]> channels = new LinkedHashMap<>();
-        for (Map.Entry<String, SignalArray> entry
-                : spectrum.signalArrays().entrySet()) {
-            channels.put(entry.getKey(), entry.getValue().asDoubles());
-        }
-
-        int totalPeaks = channels.isEmpty() ? 0
-            : channels.values().iterator().next().length;
-        SpectrumIndex index = new SpectrumIndex(
-            1,
-            new long[]   { 0 },
-            new int[]    { totalPeaks },
-            new double[] { 0.0 },
-            new int[]    { 1 },
-            new int[]    { 0 },
-            new double[] { 0.0 },
-            new int[]    { 0 },
-            new double[] { 0.0 });
-
-        String runName = (config.runName != null && !config.runName.isEmpty())
-            ? config.runName : "spectrum_0001";
-        AcquisitionRun run = new AcquisitionRun(
-            runName, mode, index,
-            new InstrumentConfig("", "", "", "", "", ""),
-            channels, List.of(), List.of(), "", 0.0);
-        writeAnalytical(List.of(run), writerSink);
-    }
-
-    /**
-     * Waters MassLynx import.
-     *
-     * Delegates to the masslynxraw converter (or the MASSLYNXRAW env
-     * var), which emits mzML, then parses via MzMLReader.
-     */
-    private void importWatersMassLynx() throws Exception {
-        AcquisitionRun run =
-            WatersMassLynxReader.read(config.sourcePath.toString());
-        writeAnalytical(List.of(run), ProgressSink.discard());
-    }
-
-    /**
-     * Thermo .raw import.
-     *
-     * Delegates to ThermoRawFileParser (or the THERMORAWFILEPARSER env
-     * var), which emits mzML, then parses via MzMLReader.
-     */
-    private void importThermoRaw() throws Exception {
-        AcquisitionRun run =
-            ThermoRawReader.read(config.sourcePath.toString());
-        writeAnalytical(List.of(run), ProgressSink.discard());
-    }
-
-    /**
-     * Bruker timsTOF import.
-     *
-     * Validates the .d directory via SQLite metadata, then delegates
-     * binary frame extraction to the Python bruker_tdf_cli helper.
-     * Requires Python with ttio[bruker] installed, and either python3
-     * on PATH or the TTIO_PYTHON env var set.
-     */
-    private void importBrukerTimsTOF() throws Exception {
-        BrukerTDFReader.read(config.sourcePath, config.targetTio);
-    }
-
     // -- Write helpers --------------------------------------------------
 
-    /** Stage D: writeAnalytical accepts the writer-half {@link
-     *  ProgressSink} from {@link PhaseProgress#writerSink()}; the
-     *  writer's per-section progress flows into the 50..100% half of
-     *  the unified bar. */
-    private void writeAnalytical(List<AcquisitionRun> runs, ProgressSink sink) {
-        SpectralDataset.create(
-            config.targetTio.toString(),
-            config.datasetTitle,
-            "",
-            runs,
-            List.of(),
-            List.of(),
-            List.of(),
-            sink);
-    }
-
-    /** Stage D: writeGenomic with sink threading. See {@link
-     *  #writeAnalytical(List, ProgressSink)} for the two-phase note. */
+    /** Stage D: writeGenomic with sink threading -- the writer's
+     *  per-section progress flows into the 50..100% half of the unified
+     *  bar via {@link PhaseProgress#writerSink()}. Retained for the
+     *  GUI-local fasta/fastq paths (the registry-covered formats write
+     *  through {@link ImportedDataset#write}). */
     private void writeGenomic(List<WrittenGenomicRun> runs, ProgressSink sink) {
         FeatureFlags flags = new FeatureFlags(
             "1.0", List.of(FeatureFlags.OPT_GENOMIC));
