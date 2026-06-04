@@ -138,6 +138,17 @@ class ImportResult:
             )
         return runs
 
+    def to_imported_dataset(self) -> "ImportedDataset":
+        from .imported_dataset import ImportedDataset
+        return ImportedDataset(
+            title=self.title or "imported",
+            isa_investigation_id=self.isa_investigation_id,
+            runs=self.build_runs(),
+            identifications=list(self.identifications),
+            quantifications=list(self.quantifications),
+            provenance=list(self.provenance),
+        )
+
     def to_ttio(
         self,
         path: str | Path,
@@ -151,18 +162,8 @@ class ImportResult:
         (``"hdf5"``, ``"memory"``, ``"sqlite"``, ``"zarr"``). Passed
         through to :meth:`SpectralDataset.write_minimal` unchanged.
         """
-        runs = self.build_runs()
-        return SpectralDataset.write_minimal(
-            path,
-            title=self.title or "imported",
-            isa_investigation_id=self.isa_investigation_id,
-            runs=runs,
-            identifications=self.identifications or None,
-            quantifications=self.quantifications or None,
-            provenance=self.provenance or None,
-            features=features,
-            provider=provider,
-        )
+        return self.to_imported_dataset().write(path, features=features,
+                                                provider=provider)
 
 
 def _pack_run(
