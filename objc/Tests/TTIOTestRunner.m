@@ -79,6 +79,7 @@ extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
 extern void testCodecRegistry(void);
 extern void testImportedDataset(void);
+extern void testRunSelection(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -744,6 +745,10 @@ int main(int argc, const char *argv[])
         START_SET("OT1: TTIOImportedDataset draft + write-through delegate")
             testImportedDataset();
         END_SET("OT1: TTIOImportedDataset draft + write-through delegate")
+
+        START_SET("OT3: TTIORunSelection analytical/NMR/genomic run selection")
+            testRunSelection();
+        END_SET("OT3: TTIORunSelection analytical/NMR/genomic run selection")
     }
     return 0;
 }
