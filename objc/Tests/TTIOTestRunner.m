@@ -78,6 +78,14 @@ extern void testM79GenomicEnums(void);
 extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
 extern void testCodecRegistry(void);
+extern void testImportedDataset(void);
+extern void testRunSelection(void);
+extern void testBrukerReaderDataset(void);
+extern void testFormatReaders(void);
+extern void testFormatWriters(void);
+extern void testImporterExporterRegistry(void);
+extern void testRegistryParity(void);
+extern void testEncodeExportCli(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -739,6 +747,38 @@ int main(int argc, const char *argv[])
         START_SET("codec registry")
             testCodecRegistry();
         END_SET("codec registry")
+
+        START_SET("OT1: TTIOImportedDataset draft + write-through delegate")
+            testImportedDataset();
+        END_SET("OT1: TTIOImportedDataset draft + write-through delegate")
+
+        START_SET("OT3: TTIORunSelection analytical/NMR/genomic run selection")
+            testRunSelection();
+        END_SET("OT3: TTIORunSelection analytical/NMR/genomic run selection")
+
+        START_SET("OT4: TTIOBrukerTDFReader readDataset write-through draft")
+            testBrukerReaderDataset();
+        END_SET("OT4: TTIOBrukerTDFReader readDataset write-through draft")
+
+        START_SET("OT5: per-format TTIOReader adapters")
+            testFormatReaders();
+        END_SET("OT5: per-format TTIOReader adapters")
+
+        START_SET("OT6: per-format TTIOWriter adapters")
+            testFormatWriters();
+        END_SET("OT6: per-format TTIOWriter adapters")
+
+        START_SET("OT7: importer + exporter registries")
+            testImporterExporterRegistry();
+        END_SET("OT7: importer + exporter registries")
+
+        START_SET("OT7: registry cross-language parity fence")
+            testRegistryParity();
+        END_SET("OT7: registry cross-language parity fence")
+
+        START_SET("OT8: TtioEncode / TtioExport CLI tools")
+            testEncodeExportCli();
+        END_SET("OT8: TtioEncode / TtioExport CLI tools")
     }
     return 0;
 }
