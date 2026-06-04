@@ -59,18 +59,22 @@ import sqlite3
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
 from ..enums import AcquisitionMode
-from ..spectral_dataset import SpectralDataset, WrittenRun
+from ..spectral_dataset import WrittenRun
+
+if TYPE_CHECKING:
+    from .imported_dataset import ImportedDataset
 
 
 __all__ = [
     "BrukerTDFUnavailableError",
     "BrukerTDFMetadata",
     "read_metadata",
+    "read_dataset",
     "read",
 ]
 
@@ -179,10 +183,17 @@ def read_metadata(d_dir: str | Path) -> BrukerTDFMetadata:
     )
 
 
-def read(d_dir: str | Path, output_path: str | Path, *,
-         title: str | None = None,
-         ms2: bool = False) -> Path:
-    """Import a Bruker ``.d`` directory to an ``.tio`` file.
+def read_dataset(d_dir: str | Path, *,
+                 title: str | None = None,
+                 ms2: bool = False) -> "ImportedDataset":
+    """Import a Bruker ``.d`` directory into an in-memory draft.
+
+    Performs every step :func:`read` does up to (but not including) the
+    write, returning an :class:`~ttio.importers.imported_dataset.ImportedDataset`
+    populated with the same field values :func:`read` would hand to
+    :meth:`SpectralDataset.write_minimal`. Call ``.write(output_path)``
+    on the result to materialize the ``.tio`` file (this is what
+    :func:`read` does).
 
     Requires the optional ``opentimspy`` + ``opentims-bruker-bridge``
     dependencies (``pip install 'ttio[bruker]'``). Raises
@@ -197,12 +208,13 @@ def read(d_dir: str | Path, output_path: str | Path, *,
 
     Args:
         d_dir: Path to the Bruker ``.d`` directory.
-        output_path: Target ``.tio`` file path.
         title: Optional study title; defaults to the ``.d`` stem.
         ms2: If True, also emit MS2 fragment frames as a second run.
              Defaults to MS1-only; MS2 precursor threading is a v0.9
              concern (see module docstring).
     """
+    from .imported_dataset import ImportedDataset
+
     try:
         from opentimspy.opentims import OpenTIMS  # type: ignore[import-not-found]
     except ImportError as exc:
@@ -253,14 +265,6 @@ def read(d_dir: str | Path, output_path: str | Path, *,
     finally:
         ot.close()
 
-    out = SpectralDataset.write_minimal(
-        output_path,
-        title=title or d.stem,
-        isa_investigation_id="",
-        runs=runs,
-        provenance=None,
-        features=None,
-    )
     # Instrument metadata is returned by read_metadata() but not yet
     # auto-populated into the .tio instrument-config group; that is
     # a v0.9 enhancement (TTI-O's instrument-config schema needs
@@ -268,7 +272,35 @@ def read(d_dir: str | Path, output_path: str | Path, *,
     # read_metadata() directly for the raw Properties / GlobalMetadata
     # key/value pairs and stamp them manually.
     _ = metadata  # silence unused warning; kept for API discoverability
-    return Path(out)
+    return ImportedDataset(
+        title=title or d.stem,
+        isa_investigation_id="",
+        runs=runs,
+        provenance=[],
+    )
+
+
+def read(d_dir: str | Path, output_path: str | Path, *,
+         title: str | None = None,
+         ms2: bool = False) -> Path:
+    """Import a Bruker ``.d`` directory to an ``.tio`` file.
+
+    Thin wrapper over :func:`read_dataset` that materializes the draft
+    to disk. Requires the optional ``opentimspy`` +
+    ``opentims-bruker-bridge`` dependencies
+    (``pip install 'ttio[bruker]'``). Raises
+    :class:`BrukerTDFUnavailableError` otherwise — use
+    :func:`read_metadata` for the metadata-only fallback.
+
+    Args:
+        d_dir: Path to the Bruker ``.d`` directory.
+        output_path: Target ``.tio`` file path.
+        title: Optional study title; defaults to the ``.d`` stem.
+        ms2: If True, also emit MS2 fragment frames as a second run.
+             Defaults to MS1-only; MS2 precursor threading is a v0.9
+             concern (see module docstring).
+    """
+    return read_dataset(d_dir, title=title, ms2=ms2).write(output_path)
 
 
 # ── Internals ────────────────────────────────────────────────────────
