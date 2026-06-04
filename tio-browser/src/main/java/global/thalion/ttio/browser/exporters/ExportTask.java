@@ -1,32 +1,17 @@
 package global.thalion.ttio.browser.exporters;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
-import global.thalion.ttio.AcquisitionRun;
-import global.thalion.ttio.Enums;
-import global.thalion.ttio.IRSpectrum;
-import global.thalion.ttio.RamanSpectrum;
-import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.SpectralDataset;
-import global.thalion.ttio.MSImage;
-import global.thalion.ttio.UVVisSpectrum;
-import global.thalion.ttio.exporters.BamWriter;
-import global.thalion.ttio.exporters.CramWriter;
+import global.thalion.ttio.exporters.ExporterRegistry;
 import global.thalion.ttio.exporters.FastaWriter;
 import global.thalion.ttio.exporters.FastqWriter;
-import global.thalion.ttio.exporters.ISAExporter;
-import global.thalion.ttio.exporters.ImzMLWriter;
-import global.thalion.ttio.exporters.JcampDxEncoding;
-import global.thalion.ttio.exporters.JcampDxWriter;
-import global.thalion.ttio.exporters.MzMLWriter;
-import global.thalion.ttio.exporters.MzTabWriter;
-import global.thalion.ttio.exporters.NmrMLWriter;
-import global.thalion.ttio.genomics.GenomicIndex;
+import global.thalion.ttio.exporters.RunSelection;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
-import global.thalion.ttio.genomics.WrittenGenomicRun;
+import global.thalion.ttio.browser.SdkFormatKeys;
 import global.thalion.ttio.browser.progress.PhaseProgress;
 import global.thalion.ttio.browser.progress.ProgressListener;
 import global.thalion.ttio.io.ProgressSink;
@@ -38,26 +23,33 @@ import javafx.concurrent.Task;
  * {@link ExportFormatSpec#name}. Mirrors {@link ImportTask}'s
  * dispatch shape on the export side.
  *
- * <p>Phase 9 acceptance set wires:</p>
+ * <p><b>PR-J2 GT4:</b> the eight registry-covered rows
+ * ("mzML (indexed)", "mzTab", "nmrML", "imzML", "JCAMP-DX",
+ * "ISA-Tab/JSON", "BAM", "CRAM") now dispatch through the SDK
+ * {@link ExporterRegistry} {@code Writer} adapters via
+ * {@link SdkFormatKeys#exportKey} — the GUI no longer carries a private
+ * copy of each writer call (or of the {@code GenomicRun ->
+ * WrittenGenomicRun} materialisation, which moved to
+ * {@link RunSelection#toWritten}). Per-format knobs reach the writer
+ * through {@link #exportOpts()} ({@code dialect}, {@code mode},
+ * {@code encoding}, {@code reference}).</p>
+ *
+ * <p>The three GUI-local rows stay here because their export knobs
+ * ({@link ExportConfig#fastaLineWidth}, {@link ExportConfig#gzipOutput},
+ * {@link ExportConfig#fastqPhred}) have no SDK-registry equivalent —
+ * {@code fasta}/{@code fastq} are {@link ExporterRegistry#CLI_DELEGATED},
+ * not registered:</p>
  * <ul>
- *   <li>mzML (indexed) — one MS run via {@link MzMLWriter}.</li>
- *   <li>nmrML — one analytical run via {@link NmrMLWriter}.</li>
- *   <li>mzTab — identifications + quantifications, dialect chosen
- *       via {@link ExportConfig#mzTabDialect}.</li>
- *   <li>JCAMP-DX — first Raman/IR/UV-Vis spectrum encountered;
- *       AFFN default, PAC/SQZ/DIF gated by encoding extra.</li>
- *   <li>ISA-Tab/JSON — directory-style tab export (extension
- *       {@code .json} switches to JSON serialisation).</li>
- *   <li>BAM / CRAM — first genomic run via {@link BamWriter} /
- *       {@link CramWriter}; reflective {@code GenomicRun ->
- *       WrittenGenomicRun} adapter.</li>
  *   <li>FASTA (reference) / FASTA (reads) — first reference or
  *       genomic run via {@link FastaWriter}.</li>
  *   <li>FASTQ — first genomic run via {@link FastqWriter}.</li>
  * </ul>
  *
- * <p>All 11 format rows wired as of 1.2.0, including imzML via
- * {@link MSImage#toPixelSpectra()}.</p>
+ * <p>Note: the SDK {@code Writer.write} has no {@link ProgressSink}
+ * parameter, so registry-dispatched exports no longer emit per-section
+ * writer progress. The progress bar still completes: the reader phase
+ * fires its 50% boundary sample and {@link PhaseProgress#emitFinal()}
+ * advances it to 100% after the writer returns.</p>
  */
 public final class ExportTask extends Task<Void> {
 
@@ -126,20 +118,35 @@ public final class ExportTask extends Task<Void> {
         readerSink.onProgress(1L, 1L);
 
         try {
-            switch (spec.name) {
-                case "mzML (indexed)" -> exportMzML(writerSink);
-                case "mzTab"          -> exportMzTab(writerSink);
-                case "nmrML"          -> exportNmrML(writerSink);
-                case "JCAMP-DX"       -> exportJcampDx(writerSink);
-                case "ISA-Tab/JSON"   -> exportIsa();
-                case "BAM"            -> exportBamLike(false, writerSink);
-                case "CRAM"           -> exportBamLike(true, writerSink);
-                case "FASTA (reference)" -> exportFastaReference(writerSink);
-                case "FASTA (reads)"     -> exportFastaReads(writerSink);
-                case "FASTQ"          -> exportFastq(writerSink);
-                case "imzML"          -> exportImzML(writerSink);
-                default -> throw new UnsupportedOperationException(
-                    spec.name + " export not wired.");
+            String key = SdkFormatKeys.exportKey(spec.name);
+            if (key != null) {
+                // Preserve the GUI's pinned imzML "no image" contract:
+                // the SDK ImzMLWriterAdapter raises IllegalArgumentException
+                // ("dataset has no MS image..."), but the tio-browser dialog
+                // (and ExportTaskTest.imzMLOnNonImageDatasetRaisesIllegalState)
+                // expects IllegalStateException mentioning "image_cube".
+                // Guard here, then let the adapter do the real write so the
+                // imzMlMode knob is still honored via exportOpts().
+                if ("imzml".equals(key) && dataset.image() == null) {
+                    throw new IllegalStateException(
+                        "imzML export requires an MSImage in /study/image_cube; "
+                        + "this .tio has none.");
+                }
+                // Registry-covered: dispatch to the SDK Writer adapter
+                // against the already-open dataset. The SDK Writer has no
+                // ProgressSink param — writerSink stays unused here; the
+                // bar reaches 100% via emitFinal() below.
+                ExporterRegistry.specFor(key).writer().write(
+                    dataset, config.selectedRunName, config.targetPath,
+                    exportOpts());
+            } else {
+                switch (spec.name) {
+                    case "FASTA (reference)" -> exportFastaReference(writerSink);
+                    case "FASTA (reads)"     -> exportFastaReads(writerSink);
+                    case "FASTQ"          -> exportFastq(writerSink);
+                    default -> throw new UnsupportedOperationException(
+                        spec.name + " export not wired.");
+                }
             }
             // Always emit a final 100% sample so the dialog
             // terminates at the full bar (the writer SDK already
@@ -152,83 +159,36 @@ public final class ExportTask extends Task<Void> {
         return null;
     }
 
-    // ── analytical formats ──────────────────────────────────────────
-
-    private void exportMzML(ProgressSink sink) {
-        AcquisitionRun run = pickRun();
-        MzMLWriter.write(run, config.targetPath.toString(), true, sink);
+    /**
+     * Build the SDK {@code Writer} opts map from this export's config,
+     * including only the knobs the registry writer adapters honor and only
+     * when non-null. Unknown opts are ignored by the adapters, so threading
+     * every registry-covered config knob here is safe:
+     * <ul>
+     *   <li>{@code dialect} — {@code MzTabWriterAdapter} (mzTab version)</li>
+     *   <li>{@code mode} — {@code ImzMLWriterAdapter} (continuous/processed)</li>
+     *   <li>{@code encoding} — {@code JcampDxWriterAdapter} (AFFN/PAC/SQZ/DIF)</li>
+     *   <li>{@code reference} — {@code CramWriterAdapter} (CRAM reference FASTA)</li>
+     * </ul>
+     * The GUI-only fasta/fastq knobs ({@code fastaLineWidth},
+     * {@code gzipOutput}, {@code fastqPhred}) are intentionally absent — no
+     * registry writer honors them, so the fasta/fastq rows stay GUI-local
+     * (below) rather than silently dropping those options.
+     */
+    private Map<String, Object> exportOpts() {
+        Map<String, Object> opts = new LinkedHashMap<>();
+        if (config.mzTabDialect != null)  opts.put("dialect", config.mzTabDialect);
+        if (config.imzMlMode != null)     opts.put("mode", config.imzMlMode);
+        if (config.jcampEncoding != null) opts.put("encoding", config.jcampEncoding);
+        if (config.cramReference != null) opts.put("reference", config.cramReference);
+        return opts;
     }
 
-    private void exportNmrML(ProgressSink sink) {
-        AcquisitionRun run = pickRun();
-        NmrMLWriter.write(run, config.targetPath.toString(), sink);
-    }
-
-    private void exportMzTab(ProgressSink sink) {
-        MzTabWriter.write(
-            config.targetPath,
-            dataset.identifications(),
-            dataset.quantifications(),
-            java.util.List.of(),
-            config.mzTabDialect,
-            dataset.title(),
-            "",
-            sink);
-    }
-
-    private void exportJcampDx(ProgressSink sink) throws IOException {
-        JcampDxEncoding enc = JcampDxEncoding.fromString(config.jcampEncoding);
-        for (AcquisitionRun run : dataset.msRuns().values()) {
-            for (Spectrum s : run.spectra()) {
-                if (s instanceof RamanSpectrum r) {
-                    JcampDxWriter.writeRamanSpectrum(r, config.targetPath, dataset.title(), enc, sink);
-                    return;
-                }
-                if (s instanceof IRSpectrum ir) {
-                    JcampDxWriter.writeIRSpectrum(ir, config.targetPath, dataset.title(), enc, sink);
-                    return;
-                }
-                if (s instanceof UVVisSpectrum uv) {
-                    JcampDxWriter.writeUVVisSpectrum(uv, config.targetPath, dataset.title(), enc, sink);
-                    return;
-                }
-            }
-        }
-        throw new IllegalStateException(
-            "JCAMP-DX export found no Raman / IR / UV-Vis spectrum.");
-    }
-
-    private void exportIsa() {
-        String name = config.targetPath.getFileName().toString().toLowerCase();
-        if (name.endsWith(".json")) {
-            try {
-                String json = ISAExporter.exportJson(dataset);
-                java.nio.file.Files.writeString(config.targetPath, json);
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
-        } else {
-            ISAExporter.exportTab(dataset, config.targetPath);
-        }
-    }
-
-    // ── genomic formats ─────────────────────────────────────────────
-
-    private void exportBamLike(boolean cram, ProgressSink sink) throws Exception {
-        GenomicRun run = pickGenomicRun();
-        WrittenGenomicRun w = toWritten(run);
-        BamWriter writer;
-        if (cram) {
-            if (config.cramReference == null) {
-                throw new IllegalArgumentException(
-                    "CRAM export requires a reference FASTA");
-            }
-            writer = new CramWriter(config.targetPath, config.cramReference);
-        } else {
-            writer = new BamWriter(config.targetPath);
-        }
-        writer.write(w, dataset.provenanceRecords(), true, sink);
-    }
+    // ── GUI-local genomic formats (no SDK-registry equivalent) ──────
+    // fasta/fastq are ExporterRegistry.CLI_DELEGATED, not registered, and
+    // their wrap-width / gzip / phred knobs have no Writer-adapter opt.
+    // Run selection uses the shared SDK RunSelection (the GUI's private
+    // pickRun/pickGenomicRun/toWritten were removed in GT4).
 
     private void exportFastaReference(ProgressSink sink) throws IOException {
         if (dataset.references().isEmpty()) {
@@ -241,107 +201,15 @@ public final class ExportTask extends Task<Void> {
     }
 
     private void exportFastaReads(ProgressSink sink) throws IOException {
-        GenomicRun run = pickGenomicRun();
+        GenomicRun run = RunSelection.genomicRun(dataset, config.selectedRunName);
         FastaWriter.writeRun(run, config.targetPath,
             config.fastaLineWidth, config.gzipOutput, false, sink);
     }
 
     private void exportFastq(ProgressSink sink) throws IOException {
-        GenomicRun run = pickGenomicRun();
+        GenomicRun run = RunSelection.genomicRun(dataset, config.selectedRunName);
         FastqWriter.write(run, config.targetPath,
             config.gzipOutput, config.fastqPhred, sink);
-    }
-
-    private void exportImzML(ProgressSink sink) {
-        MSImage img = dataset.image();
-        if (img == null) {
-            throw new IllegalStateException(
-                "imzML export requires an MSImage in /study/image_cube; "
-                + "this .tio has none.");
-        }
-        ImzMLWriter.write(
-            img.toPixelSpectra(),
-            config.targetPath,
-            /* ibdPath */ null,
-            config.imzMlMode,
-            img.width(), img.height(), 1,
-            img.pixelSizeX(), img.pixelSizeY(),
-            img.scanPattern() != null ? img.scanPattern() : "flyback",
-            /* uuidHex */ null,
-            sink);
-    }
-
-    // ── helpers ─────────────────────────────────────────────────────
-
-    private AcquisitionRun pickRun() {
-        if (dataset.msRuns().isEmpty()) {
-            throw new IllegalStateException(
-                "Dataset has no analytical runs; cannot export "
-                + spec.name + ".");
-        }
-        if (config.selectedRunName != null
-            && dataset.msRuns().containsKey(config.selectedRunName)) {
-            return dataset.msRuns().get(config.selectedRunName);
-        }
-        return dataset.msRuns().values().iterator().next();
-    }
-
-    private GenomicRun pickGenomicRun() {
-        if (dataset.genomicRuns().isEmpty()) {
-            throw new IllegalStateException(
-                "Dataset has no genomic runs; cannot export "
-                + spec.name + ".");
-        }
-        if (config.selectedRunName != null
-            && dataset.genomicRuns().containsKey(config.selectedRunName)) {
-            return dataset.genomicRuns().get(config.selectedRunName);
-        }
-        return dataset.genomicRuns().values().iterator().next();
-    }
-
-    /** Materialise a read-side {@link GenomicRun} into a write-side
-     *  {@link WrittenGenomicRun} for BAM / CRAM consumption. */
-    static WrittenGenomicRun toWritten(GenomicRun run) {
-        int n = run.readCount();
-        GenomicIndex idx = run.index();
-        long[] positions = new long[n];
-        byte[] mapqs     = new byte[n];
-        int[]  flags     = new int[n];
-        long[] offsets   = new long[n];
-        int[]  lengths   = new int[n];
-        List<String> chromosomes = new ArrayList<>(n);
-        List<String> readNames   = new ArrayList<>(n);
-        List<String> cigars      = new ArrayList<>(n);
-        List<String> mateChroms  = new ArrayList<>(n);
-        long[] matePos   = new long[n];
-        int[]  tlens     = new int[n];
-        for (int i = 0; i < n; i++) {
-            positions[i] = idx.positionAt(i);
-            mapqs[i]     = (byte) idx.mappingQualityAt(i);
-            flags[i]     = idx.flagsAt(i);
-            offsets[i]   = idx.offsetAt(i);
-            lengths[i]   = idx.lengthAt(i);
-            chromosomes.add(idx.chromosomeAt(i));
-            readNames.add(run.readNameAt(i));
-            cigars.add(run.cigarAt(i));
-            mateChroms.add(run.mateChromAt(i));
-            matePos[i]   = run.matePosAt(i);
-            tlens[i]     = run.mateTlenAt(i);
-        }
-        byte[] seqs  = n > 0 ? run.sequencesFull() : new byte[0];
-        byte[] quals = n > 0 ? run.qualitiesFull() : new byte[0];
-        return new WrittenGenomicRun(
-            run.acquisitionMode() != null
-                ? run.acquisitionMode() : Enums.AcquisitionMode.GENOMIC_WGS,
-            run.referenceUri() != null ? run.referenceUri() : "",
-            run.platform() != null ? run.platform() : "",
-            run.sampleName() != null ? run.sampleName() : "",
-            positions, mapqs, flags,
-            seqs, quals,
-            offsets, lengths,
-            cigars, readNames, mateChroms, matePos, tlens, chromosomes,
-            Enums.Compression.NONE
-        );
     }
 
 }
