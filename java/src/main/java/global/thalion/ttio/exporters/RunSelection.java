@@ -1,0 +1,154 @@
+/*
+ * TTI-O Java Implementation
+ * Copyright (c) 2026 The Thalion Initiative
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ */
+package global.thalion.ttio.exporters;
+
+import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.genomics.GenomicRun;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeSet;
+
+/**
+ * Run-selection helpers shared by the export registry and the per-format
+ * {@code Writer} adapters. Each picks the right {@link AcquisitionRun}
+ * (or {@link GenomicRun}) from an opened {@link SpectralDataset} given an
+ * optional {@code layer} name.
+ *
+ * <p>This is the Java port of the Python reference
+ * {@code ttio.exporters._select} ({@code analytical_run} /
+ * {@code nmr_run} / {@code genomic_run}). The error-message strings are
+ * kept byte-identical to Python so cross-language error parity holds.</p>
+ *
+ * <p><b>Structural difference from Python:</b> Python merges two run maps
+ * ({@code ds.ms_runs} and {@code ds.nmr_runs}). The Java
+ * {@link SpectralDataset} exposes a single analytical-run map via
+ * {@link SpectralDataset#msRuns()}; there is no separate
+ * {@code nmrRuns()} accessor. NMR runs live inside {@code msRuns()} and
+ * are distinguished by
+ * {@code AcquisitionRun.spectrumClassName().equals("TTIONMRSpectrum")}
+ * (the same discriminant Python applies via {@code spectrum_class}).
+ * Selection behaviour is therefore equivalent to Python's intent.</p>
+ *
+ * <p>Exception mapping: Python's {@code KeyError} (not-found / ambiguous)
+ * maps to {@link IllegalArgumentException} here — matching how
+ * {@code exporters} / {@code ExportTask} already signal missing runs.</p>
+ *
+ * @since 1.7.0
+ */
+public final class RunSelection {
+
+    private RunSelection() { }
+
+    /** {@code "TTIONMRSpectrum"} discriminant, per Python's spectrum_class. */
+    private static final String NMR_SPECTRUM_CLASS = "TTIONMRSpectrum";
+
+    /**
+     * Select an analytical run (any spectrum class — MS or NMR) by
+     * {@code layer} name, or the single run when unambiguous. Mirrors
+     * Python's {@code analytical_run}.
+     *
+     * @throws IllegalArgumentException if there are no analytical runs,
+     *     the named {@code layer} is absent, or {@code layer} is null and
+     *     multiple runs are present (ambiguous).
+     */
+    public static AcquisitionRun analyticalRun(SpectralDataset ds, String layer) {
+        Map<String, AcquisitionRun> runs = ds.msRuns();
+        if (runs.isEmpty()) {
+            throw new IllegalArgumentException("no analytical runs in dataset");
+        }
+        if (layer != null && !layer.isEmpty()) {
+            AcquisitionRun r = runs.get(layer);
+            if (r == null) {
+                throw new IllegalArgumentException(
+                    "run '" + layer + "' not found; have: " + sortedNames(runs));
+            }
+            return r;
+        }
+        if (runs.size() == 1) {
+            return runs.values().iterator().next();
+        }
+        throw new IllegalArgumentException(
+            "multiple runs present; pass --layer <name>");
+    }
+
+    /**
+     * Select an NMR run, preferring the NMR-classed run, falling back to
+     * the sole analytical run. Mirrors Python's {@code nmr_run}.
+     *
+     * @throws IllegalArgumentException if there are no analytical runs,
+     *     the named {@code layer} is absent, or the choice is ambiguous.
+     */
+    public static AcquisitionRun nmrRun(SpectralDataset ds, String layer) {
+        Map<String, AcquisitionRun> runs = ds.msRuns();
+        if (runs.isEmpty()) {
+            throw new IllegalArgumentException("no analytical runs in dataset");
+        }
+        if (layer != null && !layer.isEmpty()) {
+            AcquisitionRun r = runs.get(layer);
+            if (r == null) {
+                throw new IllegalArgumentException(
+                    "run '" + layer + "' not found; have: " + sortedNames(runs));
+            }
+            return r;
+        }
+        List<AcquisitionRun> nmr = new ArrayList<>();
+        for (AcquisitionRun r : runs.values()) {
+            if (NMR_SPECTRUM_CLASS.equals(r.spectrumClassName())) {
+                nmr.add(r);
+            }
+        }
+        if (nmr.size() == 1) {
+            return nmr.get(0);
+        }
+        if (nmr.size() > 1) {
+            throw new IllegalArgumentException(
+                "multiple NMR runs present; pass --layer <name>");
+        }
+        if (runs.size() == 1) {
+            return runs.values().iterator().next();
+        }
+        throw new IllegalArgumentException(
+            "multiple runs present; pass --layer <name>");
+    }
+
+    /**
+     * Select a genomic run by {@code layer} name, or the single run when
+     * unambiguous. Mirrors Python's {@code genomic_run}.
+     *
+     * @throws IllegalArgumentException if there are no genomic runs, the
+     *     named {@code layer} is absent, or {@code layer} is null and
+     *     multiple genomic runs are present (ambiguous).
+     */
+    public static GenomicRun genomicRun(SpectralDataset ds, String layer) {
+        Map<String, GenomicRun> runs = ds.genomicRuns();
+        if (runs.isEmpty()) {
+            throw new IllegalArgumentException("no genomic runs in dataset");
+        }
+        if (layer != null && !layer.isEmpty()) {
+            GenomicRun r = runs.get(layer);
+            if (r == null) {
+                throw new IllegalArgumentException(
+                    "genomic run '" + layer + "' not found; have: "
+                    + sortedNames(runs));
+            }
+            return r;
+        }
+        if (runs.size() == 1) {
+            return runs.values().iterator().next();
+        }
+        throw new IllegalArgumentException(
+            "multiple genomic runs present; pass --layer <name>: "
+            + sortedNames(runs));
+    }
+
+    /** {@code ", ".join(sorted(runs))} — sorted, comma-space-joined keys. */
+    private static String sortedNames(Map<String, ?> runs) {
+        return String.join(", ", new TreeSet<>(runs.keySet()));
+    }
+}
