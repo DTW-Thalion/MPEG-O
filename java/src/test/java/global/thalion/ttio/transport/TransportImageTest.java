@@ -4,6 +4,7 @@
  */
 package global.thalion.ttio.transport;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
 import org.junit.jupiter.api.Test;
@@ -55,13 +56,14 @@ class TransportImageTest {
         Path tis = tmp.resolve("img.tis");
 
         try (SpectralDataset ds = SpectralDataset.open(src.toString())) {
-            assertNotNull(ds.image(),
+            MSImage msImg = (MSImage) ds.imageForKind(Enums.ImageKind.MS);
+            assertNotNull(msImg,
                 "fixture precondition: dataset must carry an MSImage");
             try (OutputStream out = Files.newOutputStream(tis);
                  TransportWriter w = new TransportWriter(out)) {
                 w.writeStreamHeader("1.2", ds.title(), ds.isaInvestigationId(),
                     List.of(), 0);
-                w.writeImage(ds.image());
+                w.writeImage(msImg);
                 w.writeEndOfStream();
             }
         }
@@ -142,8 +144,8 @@ class TransportImageTest {
 
         try (SpectralDataset a = SpectralDataset.open(src.toString());
              SpectralDataset b = SpectralDataset.open(rt.toString())) {
-            MSImage imgA = a.image();
-            MSImage imgB = b.image();
+            MSImage imgA = (MSImage) a.imageForKind(Enums.ImageKind.MS);
+            MSImage imgB = (MSImage) b.imageForKind(Enums.ImageKind.MS);
             assertNotNull(imgA, "source must carry an MSImage");
             assertNotNull(imgB, "round-tripped dataset must carry an MSImage");
             assertEquals(imgA.width(),          imgB.width());
@@ -193,7 +195,7 @@ class TransportImageTest {
         try (SpectralDataset ds = SpectralDataset.open(src.toString());
              OutputStream out = Files.newOutputStream(tis);
              TransportWriter w = new TransportWriter(out)) {
-            assertNull(ds.image(),
+            assertNull(ds.imageForKind(Enums.ImageKind.MS),
                 "fixture precondition: dataset must carry no image");
             w.writeDataset(ds);
         }

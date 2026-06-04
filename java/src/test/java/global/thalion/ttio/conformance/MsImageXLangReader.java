@@ -1,13 +1,14 @@
 /* TTI-O Java conformance helpers / SPDX-License-Identifier: Apache-2.0 */
 package global.thalion.ttio.conformance;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
-/** CLI: reads a .tio MSImage fields via SpectralDataset.open() and .image().
+/** CLI: reads a .tio MSImage fields via SpectralDataset.open() and imageForKind(MS).
  *  Writes data to stdout as little-endian float64.
  *
  *  Usage: MsImageXLangReader path.tio [--field=mz_axis|pixel_size_x|pixel_size_y]
@@ -28,7 +29,7 @@ public final class MsImageXLangReader {
             field = args[1].substring("--field=".length());
         }
         try (SpectralDataset ds = SpectralDataset.open(args[0])) {
-            MSImage img = ds.image();
+            MSImage img = (MSImage) ds.imageForKind(Enums.ImageKind.MS);
             if (img == null) {
                 System.err.println("no MSImage in " + args[0]);
                 System.exit(3);

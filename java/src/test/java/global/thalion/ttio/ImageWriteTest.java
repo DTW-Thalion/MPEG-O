@@ -20,9 +20,10 @@ class ImageWriteTest {
         SpectralDataset.createWithImages(out.toString(), "imgtitle", "TTIO:img",
             img, null, null);
         try (SpectralDataset ds = SpectralDataset.open(out.toString())) {
-            assertNotNull(ds.image());
-            assertEquals(w, ds.image().width());
-            assertEquals(h, ds.image().height());
+            MSImage read = (MSImage) ds.imageForKind(Enums.ImageKind.MS);
+            assertNotNull(read);
+            assertEquals(w, read.width());
+            assertEquals(h, read.height());
         }
     }
 }

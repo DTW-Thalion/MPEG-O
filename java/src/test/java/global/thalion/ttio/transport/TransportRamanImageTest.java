@@ -4,6 +4,7 @@
  */
 package global.thalion.ttio.transport;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.RamanImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.hdf5.Hdf5File;
@@ -87,13 +88,15 @@ class TransportRamanImageTest {
         Path tis = tmp.resolve("raman.tis");
 
         try (SpectralDataset ds = SpectralDataset.open(src.toString())) {
-            assertNotNull(ds.ramanImage(),
+            RamanImage ramanImg =
+                (RamanImage) ds.imageForKind(Enums.ImageKind.RAMAN);
+            assertNotNull(ramanImg,
                 "fixture precondition: dataset must carry a RamanImage");
             try (OutputStream out = Files.newOutputStream(tis);
                  TransportWriter w = new TransportWriter(out)) {
                 w.writeStreamHeader("1.2", ds.title(), ds.isaInvestigationId(),
                     List.of(), 0);
-                w.writeRamanImage(ds.ramanImage());
+                w.writeRamanImage(ramanImg);
                 w.writeEndOfStream();
             }
         }
@@ -181,8 +184,8 @@ class TransportRamanImageTest {
 
         try (SpectralDataset a = SpectralDataset.open(src.toString());
              SpectralDataset b = SpectralDataset.open(rt.toString())) {
-            RamanImage imgA = a.ramanImage();
-            RamanImage imgB = b.ramanImage();
+            RamanImage imgA = (RamanImage) a.imageForKind(Enums.ImageKind.RAMAN);
+            RamanImage imgB = (RamanImage) b.imageForKind(Enums.ImageKind.RAMAN);
             assertNotNull(imgA, "source must carry a RamanImage");
             assertNotNull(imgB, "round-tripped dataset must carry a RamanImage");
             assertEquals(imgA.width(),                   imgB.width());
@@ -257,11 +260,11 @@ class TransportRamanImageTest {
         // image block is silently dropped.
         Path rt = tmp.resolve("rt.tio");
         try (SpectralDataset materialised = r.materializeTo(rt.toString())) {
-            assertNull(materialised.image(),
+            assertNull(materialised.imageForKind(Enums.ImageKind.MS),
                 "unknown-modality stream must produce no MSImage");
-            assertNull(materialised.ramanImage(),
+            assertNull(materialised.imageForKind(Enums.ImageKind.RAMAN),
                 "unknown-modality stream must produce no RamanImage");
-            assertNull(materialised.irImage(),
+            assertNull(materialised.imageForKind(Enums.ImageKind.IR),
                 "unknown-modality stream must produce no IRImage");
         }
     }

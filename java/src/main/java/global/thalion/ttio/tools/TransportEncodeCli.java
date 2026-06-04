@@ -4,6 +4,8 @@
  */
 package global.thalion.ttio.tools;
 
+import global.thalion.ttio.Enums;
+import global.thalion.ttio.MSImage;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.transport.PacketType;
 import global.thalion.ttio.transport.TransportWriter;
@@ -65,7 +67,8 @@ public final class TransportEncodeCli {
                     ds.title(), ds.isaInvestigationId(),
                     List.of(PacketType.TRANSPORT_V0_11_FEATURE),
                     0);
-                tw.writeImageProcessed(ds.image());
+                tw.writeImageProcessed(
+                    (MSImage) ds.imageForKind(Enums.ImageKind.MS));
                 tw.writeEndOfStream();
             }
         } else {

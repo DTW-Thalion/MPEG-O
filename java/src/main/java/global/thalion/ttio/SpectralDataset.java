@@ -225,17 +225,48 @@ public class SpectralDataset implements
         return Collections.unmodifiableMap(references);
     }
 
-    /** The embedded MSImage when /study/image_cube is present; null otherwise.
-     *  @since 1.2.0 */
-    public MSImage image() { return image; }
+    /**
+     * The embedded {@link Image} for the requested {@code kind}, or
+     * {@code null} when that modality's cube is absent.
+     *
+     * <p>JIT2: replaces the typed {@code image()} / {@code ramanImage()}
+     * / {@code irImage()} accessors with a single uniform lookup keyed
+     * by {@link Enums.ImageKind}. Callers needing a typed handle cast
+     * the result (e.g. {@code (MSImage) ds.imageForKind(ImageKind.MS)}).
+     * Returns the same eagerly-materialised, cached value object the
+     * removed accessors returned — no re-read occurs per call.</p>
+     *
+     * @param kind which modality (MS / Raman / IR) to fetch
+     * @return the materialised image, or {@code null} when absent
+     * @since 1.2.0
+     */
+    public Image imageForKind(Enums.ImageKind kind) {
+        switch (kind) {
+            case MS:    return image;
+            case RAMAN: return ramanImage;
+            case IR:    return irImage;
+            default:
+                throw new IllegalArgumentException("unknown ImageKind: " + kind);
+        }
+    }
 
-    /** The embedded RamanImage when /study/raman_image_cube is present; null otherwise.
-     *  @since 1.2.0 */
-    public RamanImage ramanImage() { return ramanImage; }
-
-    /** The embedded IRImage when /study/ir_image_cube is present; null otherwise.
-     *  @since 1.2.0 */
-    public IRImage irImage() { return irImage; }
+    /**
+     * The embedded images on this dataset keyed by modality, containing
+     * only the kinds actually present (non-null).
+     *
+     * @return an {@link java.util.EnumMap} over the present {@link
+     *         Enums.ImageKind}s; empty when the dataset carries no images
+     * @since 1.2.0
+     */
+    public java.util.Map<Enums.ImageKind, Image> images() {
+        java.util.Map<Enums.ImageKind, Image> out =
+            new java.util.EnumMap<>(Enums.ImageKind.class);
+        for (Enums.ImageKind k : Enums.ImageKind.values()) {
+            Image img = imageForKind(k);
+            if (img != null) out.put(k, img);
+        }
+        return out;
+    }
 
     // ── Phase 2 (post-M91) — canonical unified runs accessor ────────
 
