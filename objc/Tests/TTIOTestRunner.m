@@ -83,6 +83,8 @@ extern void testRunSelection(void);
 extern void testBrukerReaderDataset(void);
 extern void testFormatReaders(void);
 extern void testFormatWriters(void);
+extern void testImporterExporterRegistry(void);
+extern void testRegistryParity(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -764,6 +766,14 @@ int main(int argc, const char *argv[])
         START_SET("OT6: per-format TTIOWriter adapters")
             testFormatWriters();
         END_SET("OT6: per-format TTIOWriter adapters")
+
+        START_SET("OT7: importer + exporter registries")
+            testImporterExporterRegistry();
+        END_SET("OT7: importer + exporter registries")
+
+        START_SET("OT7: registry cross-language parity fence")
+            testRegistryParity();
+        END_SET("OT7: registry cross-language parity fence")
     }
     return 0;
 }
