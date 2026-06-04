@@ -29,7 +29,7 @@ public final class ExportEligibility {
             case REFERENCES_PRESENT:
                 return d.referenceCount() > 0;
             case MS_IMAGE_PRESENT:
-                return d.dataset().image() != null
+                return d.dataset().imageForKind(Enums.ImageKind.MS) != null
                     || anyAnalyticalRunMatching(d, ExportEligibility::hasMsImageSpectrum);
             case IDENTS_OR_QUANTS_PRESENT:
                 return d.identificationCount() > 0 || d.quantificationCount() > 0;
