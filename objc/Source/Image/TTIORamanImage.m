@@ -69,27 +69,32 @@
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
     NSParameterAssert(wavenumbers.length == spectralPoints * sizeof(double));
-    self = [super init];
+    self = [super initWithTitle:title
+             isaInvestigationId:isaId
+                identifications:identifications
+                quantifications:quantifications
+              provenanceRecords:provenance
+                          width:width
+                         height:height
+                 spectralPoints:spectralPoints
+                       tileSize:tileSize
+                     pixelSizeX:pixelSizeX
+                     pixelSizeY:pixelSizeY
+                    scanPattern:scanPattern
+                           cube:cube];
     if (self) {
-        _title              = [title copy];
-        _isaInvestigationId = [isaId copy];
-        _identifications    = [identifications copy] ?: @[];
-        _quantifications    = [quantifications copy] ?: @[];
-        _provenanceRecords  = [provenance copy] ?: @[];
-        _width                  = width;
-        _height                 = height;
-        _spectralPoints         = spectralPoints;
-        _tileSize               = tileSize > 0 ? tileSize : 32;
-        _pixelSizeX             = pixelSizeX;
-        _pixelSizeY             = pixelSizeY;
-        _scanPattern            = [scanPattern copy];
         _excitationWavelengthNm = excitationNm;
         _laserPowerMw           = laserPowerMw;
-        _cube                   = [cube copy];
         _wavenumbers            = [wavenumbers copy];
     }
     return self;
 }
+
+#pragma mark - Polymorphic modality accessors
+
+- (TTIOImageKind)kind { return TTIOImageKindRaman; }
+- (nullable NSData *)spectralAxis { return self.wavenumbers; }
+- (TTIOSpectralAxisKind)spectralAxisKind { return TTIOSpectralAxisKindWavenumber; }
 
 #pragma mark - HDF5 helpers
 
@@ -298,16 +303,16 @@ static NSData *readWavenumbers(hid_t g, NSUInteger sp, NSError **error)
     // Write dataset-level structure using TTIOSpectralDataset as a write helper,
     // then append the raman_image_cube group directly under /study/.
     BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
-                                               title:_title
-                                  isaInvestigationId:_isaInvestigationId
+                                               title:self.title
+                                  isaInvestigationId:self.isaInvestigationId
                                               msRuns:@{}
-                                     identifications:_identifications
-                                     quantifications:_quantifications
-                                   provenanceRecords:_provenanceRecords
+                                     identifications:self.identifications
+                                     quantifications:self.quantifications
+                                   provenanceRecords:self.provenanceRecords
                                                error:error];
     if (!ok) return NO;
 
-    if (_width == 0 || _height == 0 || _spectralPoints == 0) return YES;
+    if (self.width == 0 || self.height == 0 || self.spectralPoints == 0) return YES;
 
     hid_t fid = H5Fopen([path fileSystemRepresentation],
                          H5F_ACC_RDWR, H5P_DEFAULT);
@@ -325,9 +330,9 @@ static NSData *readWavenumbers(hid_t g, NSUInteger sp, NSError **error)
     }
     ok = writeCubeGroup(studyGid,
                          TTIO_RAMAN_IMAGE_GROUP,
-                         _width, _height, _spectralPoints, _tileSize,
-                         _pixelSizeX, _pixelSizeY, _scanPattern,
-                         _cube.bytes, _wavenumbers.bytes,
+                         self.width, self.height, self.spectralPoints, self.tileSize,
+                         self.pixelSizeX, self.pixelSizeY, self.scanPattern,
+                         self.cube.bytes, _wavenumbers.bytes,
                          @{ @"excitation_wavelength_nm": @(_excitationWavelengthNm),
                             @"laser_power_mw":           @(_laserPowerMw) },
                          @{},
@@ -399,16 +404,16 @@ static NSData *readWavenumbers(hid_t g, NSUInteger sp, NSError **error)
     if (other == self) return YES;
     if (![other isKindOfClass:[TTIORamanImage class]]) return NO;
     TTIORamanImage *o = (TTIORamanImage *)other;
-    return _width == o.width
-        && _height == o.height
-        && _spectralPoints == o.spectralPoints
-        && _tileSize == o.tileSize
+    return self.width == o.width
+        && self.height == o.height
+        && self.spectralPoints == o.spectralPoints
+        && self.tileSize == o.tileSize
         && _excitationWavelengthNm == o.excitationWavelengthNm
         && _laserPowerMw == o.laserPowerMw
-        && [_cube isEqualToData:o.cube]
+        && [self.cube isEqualToData:o.cube]
         && [_wavenumbers isEqualToData:o.wavenumbers];
 }
 
-- (NSUInteger)hash { return _width ^ _height ^ _spectralPoints ^ [_cube hash]; }
+- (NSUInteger)hash { return self.width ^ self.height ^ self.spectralPoints ^ [self.cube hash]; }
 
 @end

@@ -70,27 +70,32 @@
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
     NSParameterAssert(wavenumbers.length == spectralPoints * sizeof(double));
-    self = [super init];
+    self = [super initWithTitle:title
+             isaInvestigationId:isaId
+                identifications:identifications
+                quantifications:quantifications
+              provenanceRecords:provenance
+                          width:width
+                         height:height
+                 spectralPoints:spectralPoints
+                       tileSize:tileSize
+                     pixelSizeX:pixelSizeX
+                     pixelSizeY:pixelSizeY
+                    scanPattern:scanPattern
+                           cube:cube];
     if (self) {
-        _title              = [title copy];
-        _isaInvestigationId = [isaId copy];
-        _identifications    = [identifications copy] ?: @[];
-        _quantifications    = [quantifications copy] ?: @[];
-        _provenanceRecords  = [provenance copy] ?: @[];
-        _width           = width;
-        _height          = height;
-        _spectralPoints  = spectralPoints;
-        _tileSize        = tileSize > 0 ? tileSize : 32;
-        _pixelSizeX      = pixelSizeX;
-        _pixelSizeY      = pixelSizeY;
-        _scanPattern     = [scanPattern copy];
         _mode            = mode;
         _resolutionCmInv = resolutionCmInv;
-        _cube            = [cube copy];
         _wavenumbers     = [wavenumbers copy];
     }
     return self;
 }
+
+#pragma mark - Polymorphic modality accessors
+
+- (TTIOImageKind)kind { return TTIOImageKindIR; }
+- (nullable NSData *)spectralAxis { return self.wavenumbers; }
+- (TTIOSpectralAxisKind)spectralAxisKind { return TTIOSpectralAxisKindWavenumber; }
 
 #pragma mark - HDF5 helpers (ir-image-cube local)
 
@@ -194,15 +199,15 @@ static BOOL writeIRCube(hid_t parentGid,
 - (BOOL)writeToFilePath:(NSString *)path error:(NSError **)error
 {
     BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
-                                               title:_title
-                                  isaInvestigationId:_isaInvestigationId
+                                               title:self.title
+                                  isaInvestigationId:self.isaInvestigationId
                                               msRuns:@{}
-                                     identifications:_identifications
-                                     quantifications:_quantifications
-                                   provenanceRecords:_provenanceRecords
+                                     identifications:self.identifications
+                                     quantifications:self.quantifications
+                                   provenanceRecords:self.provenanceRecords
                                                error:error];
     if (!ok) return NO;
-    if (_width == 0 || _height == 0 || _spectralPoints == 0) return YES;
+    if (self.width == 0 || self.height == 0 || self.spectralPoints == 0) return YES;
     hid_t fid = H5Fopen([path fileSystemRepresentation], H5F_ACC_RDWR, H5P_DEFAULT);
     if (fid < 0) {
         if (error) *error = TTIOMakeError(TTIOErrorFileOpen, @"H5Fopen RDWR failed");
@@ -214,10 +219,10 @@ static BOOL writeIRCube(hid_t parentGid,
         return NO;
     }
     ok = writeIRCube(studyGid,
-                      _width, _height, _spectralPoints, _tileSize,
-                      _pixelSizeX, _pixelSizeY, _scanPattern,
+                      self.width, self.height, self.spectralPoints, self.tileSize,
+                      self.pixelSizeX, self.pixelSizeY, self.scanPattern,
                       _mode, _resolutionCmInv,
-                      _cube.bytes, _wavenumbers.bytes, error);
+                      self.cube.bytes, _wavenumbers.bytes, error);
     H5Gclose(studyGid);
     H5Fclose(fid);
     return ok;
@@ -352,16 +357,16 @@ static BOOL writeIRCube(hid_t parentGid,
     if (other == self) return YES;
     if (![other isKindOfClass:[TTIOIRImage class]]) return NO;
     TTIOIRImage *o = (TTIOIRImage *)other;
-    return _width == o.width
-        && _height == o.height
-        && _spectralPoints == o.spectralPoints
-        && _tileSize == o.tileSize
+    return self.width == o.width
+        && self.height == o.height
+        && self.spectralPoints == o.spectralPoints
+        && self.tileSize == o.tileSize
         && _mode == o.mode
         && _resolutionCmInv == o.resolutionCmInv
-        && [_cube isEqualToData:o.cube]
+        && [self.cube isEqualToData:o.cube]
         && [_wavenumbers isEqualToData:o.wavenumbers];
 }
 
-- (NSUInteger)hash { return _width ^ _height ^ _spectralPoints ^ [_cube hash]; }
+- (NSUInteger)hash { return self.width ^ self.height ^ self.spectralPoints ^ [self.cube hash]; }
 
 @end

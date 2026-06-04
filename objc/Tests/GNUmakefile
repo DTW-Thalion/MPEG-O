@@ -150,7 +150,8 @@ TTIOTests_OBJC_FILES = \
 	TestFormatWriters.m \
 	TestImporterExporterRegistry.m \
 	TestRegistryParity.m \
-	TestEncodeExportCli.m
+	TestEncodeExportCli.m \
+	TestImageBase.m
 
 TTIOTests_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -larrow -lstdc++
 TTIOTests_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)

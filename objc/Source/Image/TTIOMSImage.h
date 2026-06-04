@@ -2,6 +2,7 @@
 #define TTIO_MS_IMAGE_H
 
 #import <Foundation/Foundation.h>
+#import "Image/TTIOImage.h"
 
 @class TTIOHDF5Group;
 @class TTIOPixelSpectrum;
@@ -29,52 +30,9 @@
  * Python: <code>ttio.ms_image.MSImage</code><br/>
  * Java: <code>global.thalion.ttio.MSImage</code></p>
  */
-@interface TTIOMSImage : NSObject
-
-#pragma mark - Dataset-level fields (composition: previously inherited from TTIOSpectralDataset)
-
-/** Free-form dataset title. */
-@property (readonly, copy) NSString *title;
-
-/** ISA-Tab investigation identifier this dataset belongs to. */
-@property (readonly, copy) NSString *isaInvestigationId;
-
-/** Dataset-wide identifications. */
-@property (readonly, copy) NSArray *identifications;
-
-/** Dataset-wide quantifications. */
-@property (readonly, copy) NSArray *quantifications;
-
-/** Dataset-wide provenance records. */
-@property (readonly, copy) NSArray *provenanceRecords;
+@interface TTIOMSImage : TTIOImage
 
 #pragma mark - Image-specific fields
-
-/** Image width in pixels. */
-@property (readonly) NSUInteger width;
-
-/** Image height in pixels. */
-@property (readonly) NSUInteger height;
-
-/** Spectral points per pixel. */
-@property (readonly) NSUInteger spectralPoints;
-
-/** Tile size in pixels for chunked storage. */
-@property (readonly) NSUInteger tileSize;
-
-/** Float64 row-major image cube. */
-@property (readonly, copy) NSData *cube;
-
-/** Pixel size in the X dimension (units instrument-specific);
- *  <code>0</code> when unknown. */
-@property (readonly) double pixelSizeX;
-
-/** Pixel size in the Y dimension; <code>0</code> when unknown. */
-@property (readonly) double pixelSizeY;
-
-/** Scan pattern identifier (e.g. <code>@"raster"</code>); empty
- *  when unknown. */
-@property (readonly, copy) NSString *scanPattern;
 
 /** Length-spectralPoints float64 array; nil for legacy files. */
 @property (readonly, copy, nullable) NSData *mzAxis;
