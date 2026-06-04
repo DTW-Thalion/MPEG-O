@@ -4,6 +4,7 @@
  */
 package global.thalion.ttio.transport;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.Enums.IRMode;
 import global.thalion.ttio.IRImage;
 import global.thalion.ttio.MSImage;
@@ -143,13 +144,14 @@ class TransportIRImageTest {
         Path tis = tmp.resolve("ir.tis");
 
         try (SpectralDataset ds = SpectralDataset.open(src.toString())) {
-            assertNotNull(ds.irImage(),
+            IRImage irImg = (IRImage) ds.imageForKind(Enums.ImageKind.IR);
+            assertNotNull(irImg,
                 "fixture precondition: dataset must carry an IRImage");
             try (OutputStream out = Files.newOutputStream(tis);
                  TransportWriter w = new TransportWriter(out)) {
                 w.writeStreamHeader("1.2", ds.title(), ds.isaInvestigationId(),
                     List.of(), 0);
-                w.writeIRImage(ds.irImage());
+                w.writeIRImage(irImg);
                 w.writeEndOfStream();
             }
         }
@@ -232,8 +234,8 @@ class TransportIRImageTest {
 
         try (SpectralDataset a = SpectralDataset.open(src.toString());
              SpectralDataset b = SpectralDataset.open(rt.toString())) {
-            IRImage imgA = a.irImage();
-            IRImage imgB = b.irImage();
+            IRImage imgA = (IRImage) a.imageForKind(Enums.ImageKind.IR);
+            IRImage imgB = (IRImage) b.imageForKind(Enums.ImageKind.IR);
             assertNotNull(imgA);
             assertNotNull(imgB);
             assertEquals(imgA.width(),                imgB.width());
@@ -260,9 +262,12 @@ class TransportIRImageTest {
         try (SpectralDataset ds = SpectralDataset.open(src.toString());
              OutputStream out = Files.newOutputStream(tis);
              TransportWriter w = new TransportWriter(out)) {
-            assertNotNull(ds.image(),       "MS image must be present");
-            assertNotNull(ds.ramanImage(),  "Raman image must be present");
-            assertNotNull(ds.irImage(),     "IR image must be present");
+            assertNotNull(ds.imageForKind(Enums.ImageKind.MS),
+                "MS image must be present");
+            assertNotNull(ds.imageForKind(Enums.ImageKind.RAMAN),
+                "Raman image must be present");
+            assertNotNull(ds.imageForKind(Enums.ImageKind.IR),
+                "IR image must be present");
             w.writeDataset(ds);
         }
 

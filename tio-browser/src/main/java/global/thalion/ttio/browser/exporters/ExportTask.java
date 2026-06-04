@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.exporters.ExporterRegistry;
 import global.thalion.ttio.exporters.FastaWriter;
@@ -105,7 +106,7 @@ public final class ExportTask extends Task<Void> {
         phaseProgress.emitInitial();
 
         // Reader phase: opening + materialising the source data
-        // happens inside pickRun() / pickGenomicRun() / dataset.image()
+        // happens inside pickRun() / pickGenomicRun() / imageForKind()
         // which are synchronous-fast and don't fire ProgressSink
         // callbacks (the dataset is already open before ExportTask
         // runs). Fire a single (1, 1) reader sample so the bar
@@ -127,7 +128,8 @@ public final class ExportTask extends Task<Void> {
                 // expects IllegalStateException mentioning "image_cube".
                 // Guard here, then let the adapter do the real write so the
                 // imzMlMode knob is still honored via exportOpts().
-                if ("imzml".equals(key) && dataset.image() == null) {
+                if ("imzml".equals(key)
+                        && dataset.imageForKind(Enums.ImageKind.MS) == null) {
                     throw new IllegalStateException(
                         "imzML export requires an MSImage in /study/image_cube; "
                         + "this .tio has none.");

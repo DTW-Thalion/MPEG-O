@@ -233,6 +233,24 @@ public final class Enums {
         BIG_ENDIAN
     }
 
+    /** Modality of a spatial image cube (MS / Raman / IR). */
+    public enum ImageKind {
+        /** Imaging mass spectrometry. */
+        MS,
+        /** Raman hyperspectral imaging. */
+        RAMAN,
+        /** Infrared hyperspectral imaging. */
+        IR
+    }
+
+    /** Physical interpretation of an image's spectral axis. */
+    public enum SpectralAxisKind {
+        /** Mass-to-charge ratio (m/z). */
+        MZ,
+        /** Wavenumber in {@code cm^-1}. */
+        WAVENUMBER
+    }
+
     /** Infrared y-axis interpretation (transmittance vs. absorbance). */
     public enum IRMode {
         /** y-values are transmittance (fraction of incident light). */

@@ -63,7 +63,7 @@ class SpectralDatasetIRImageTest {
 
         // Reopen and assert irImage() returns a matching IRImage.
         try (SpectralDataset ds = SpectralDataset.open(path)) {
-            IRImage read = ds.irImage();
+            IRImage read = (IRImage) ds.imageForKind(Enums.ImageKind.IR);
             assertNotNull(read, "irImage() must materialise /study/ir_image_cube");
             assertEquals(w, read.width());
             assertEquals(h, read.height());
@@ -75,9 +75,10 @@ class SpectralDatasetIRImageTest {
             assertArrayEquals(cube, read.intensityCube(), 1e-10);
 
             // Sibling accessors stay null since we wrote neither modality.
-            assertNull(ds.image(), "image() must be null when /study/image_cube absent");
-            assertNull(ds.ramanImage(),
-                    "ramanImage() must be null when /study/raman_image_cube absent");
+            assertNull(ds.imageForKind(Enums.ImageKind.MS),
+                    "MS image must be null when /study/image_cube absent");
+            assertNull(ds.imageForKind(Enums.ImageKind.RAMAN),
+                    "raman image must be null when /study/raman_image_cube absent");
         }
     }
 
@@ -93,8 +94,8 @@ class SpectralDatasetIRImageTest {
         }
 
         try (SpectralDataset ds = SpectralDataset.open(path)) {
-            assertNull(ds.irImage(),
-                    "irImage() must be null when /study/ir_image_cube is absent");
+            assertNull(ds.imageForKind(Enums.ImageKind.IR),
+                    "IR image must be null when /study/ir_image_cube is absent");
         }
     }
 }

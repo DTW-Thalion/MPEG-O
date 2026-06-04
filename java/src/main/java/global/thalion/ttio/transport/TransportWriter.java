@@ -986,12 +986,18 @@ public final class TransportWriter implements AutoCloseable {
         // image cube + identifications/quantifications tables +
         // subjects + samples — all the v0.11 prelude content types
         // ship under the same TRANSPORT_V0_11_FEATURE flag).
+        // JIT2: capture the (cached) typed image handles once and reuse
+        // them for both the v0.11 gating check and emission below — the
+        // accessor reads a cached field, so this preserves prior behavior.
+        MSImage msImage = (MSImage) dataset.imageForKind(Enums.ImageKind.MS);
+        RamanImage ramanImage = (RamanImage) dataset.imageForKind(Enums.ImageKind.RAMAN);
+        IRImage irImage = (IRImage) dataset.imageForKind(Enums.ImageKind.IR);
         boolean v011 = !dataset.references().isEmpty()
                     || dataset.isEncrypted()
                     || !dataset.provenanceRecords().isEmpty()
-                    || dataset.image() != null
-                    || dataset.ramanImage() != null
-                    || dataset.irImage() != null
+                    || msImage != null
+                    || ramanImage != null
+                    || irImage != null
                     || !dataset.identifications().isEmpty()
                     || !dataset.quantifications().isEmpty()
                     || !dataset.subjects().isEmpty()
@@ -1036,14 +1042,14 @@ public final class TransportWriter implements AutoCloseable {
             // Task 5.3 (Deferral 1): image cubes emit in MS → Raman → IR
             // order so a downstream reader sees a deterministic sequence
             // when more than one modality is present on the same dataset.
-            if (dataset.image() != null) {
-                writeImage(dataset.image());
+            if (msImage != null) {
+                writeImage(msImage);
             }
-            if (dataset.ramanImage() != null) {
-                writeRamanImage(dataset.ramanImage());
+            if (ramanImage != null) {
+                writeRamanImage(ramanImage);
             }
-            if (dataset.irImage() != null) {
-                writeIRImage(dataset.irImage());
+            if (irImage != null) {
+                writeIRImage(irImage);
             }
             // §5.4 step 6: identifications first, then quantifications.
             // Empty lists emit NO packet (spec says "zero or more").

@@ -7,7 +7,9 @@ package global.thalion.ttio;
 
 import global.thalion.ttio.Enums.Compression;
 import global.thalion.ttio.Enums.IRMode;
+import global.thalion.ttio.Enums.ImageKind;
 import global.thalion.ttio.Enums.Precision;
+import global.thalion.ttio.Enums.SpectralAxisKind;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -28,27 +30,13 @@ import java.util.List;
  *
  *
  */
-public class IRImage {
+public class IRImage extends Image {
 
     private static final String GROUP_NAME = "ir_image_cube";
 
-    private final int width;
-    private final int height;
-    private final int spectralPoints;
-    private final int tileSize;
-    private final double pixelSizeX;
-    private final double pixelSizeY;
-    private final String scanPattern;
     private final IRMode mode;
     private final double resolutionCmInv;
-    private final double[] intensityCube;
     private final double[] wavenumbers;
-
-    private final String title;
-    private final String isaInvestigationId;
-    private final List<Identification> identifications;
-    private final List<Quantification> quantifications;
-    private final List<ProvenanceRecord> provenanceRecords;
 
     /**
      * Full constructor capturing every cube dimension and study-level
@@ -87,22 +75,13 @@ public class IRImage {
                    List<Identification> identifications,
                    List<Quantification> quantifications,
                    List<ProvenanceRecord> provenanceRecords) {
-        this.width = width;
-        this.height = height;
-        this.spectralPoints = spectralPoints;
-        this.tileSize = tileSize;
-        this.pixelSizeX = pixelSizeX;
-        this.pixelSizeY = pixelSizeY;
-        this.scanPattern = scanPattern;
+        super(width, height, spectralPoints, tileSize,
+              pixelSizeX, pixelSizeY, scanPattern, intensityCube,
+              title, isaInvestigationId,
+              identifications, quantifications, provenanceRecords);
         this.mode = mode != null ? mode : IRMode.TRANSMITTANCE;
         this.resolutionCmInv = resolutionCmInv;
-        this.intensityCube = intensityCube;
         this.wavenumbers = wavenumbers;
-        this.title = title != null ? title : "";
-        this.isaInvestigationId = isaInvestigationId != null ? isaInvestigationId : "";
-        this.identifications = identifications != null ? List.copyOf(identifications) : List.of();
-        this.quantifications = quantifications != null ? List.copyOf(quantifications) : List.of();
-        this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
     }
 
     /**
@@ -120,77 +99,23 @@ public class IRImage {
              "", "", List.of(), List.of(), List.of());
     }
 
-    /** @return Image width in pixels. */
-    public int width() { return width; }
-
-    /** @return Image height in pixels. */
-    public int height() { return height; }
-
-    /** @return Number of points along the wavenumber axis. */
-    public int spectralPoints() { return spectralPoints; }
-
-    /** @return HDF5 chunk side for storage; 0 means full-image chunking. */
-    public int tileSize() { return tileSize; }
-
-    /** @return Pixel pitch in micrometres along X. */
-    public double pixelSizeX() { return pixelSizeX; }
-
-    /** @return Pixel pitch in micrometres along Y. */
-    public double pixelSizeY() { return pixelSizeY; }
-
-    /** @return Free-form scan-pattern label (e.g. {@code "raster"}). */
-    public String scanPattern() { return scanPattern; }
-
     /** @return IR acquisition mode (TRANSMITTANCE or ABSORBANCE). */
     public IRMode mode() { return mode; }
 
     /** @return Spectral resolution in {@code cm^-1}. */
     public double resolutionCmInv() { return resolutionCmInv; }
 
-    /** @return Row-major intensity cube of shape {@code [height, width, spectralPoints]}. */
-    public double[] intensityCube() { return intensityCube; }
-
     /** @return Per-band wavenumber axis values. */
     public double[] wavenumbers() { return wavenumbers; }
 
-    /** @return Study title (may be empty). */
-    public String title() { return title; }
+    @Override
+    public ImageKind kind() { return ImageKind.IR; }
 
-    /** @return ISA investigation identifier (may be empty). */
-    public String isaInvestigationId() { return isaInvestigationId; }
+    @Override
+    public double[] spectralAxis() { return wavenumbers; }
 
-    /** @return Unmodifiable list of dataset-level identifications. */
-    public List<Identification> identifications() { return identifications; }
-
-    /** @return Unmodifiable list of dataset-level quantifications. */
-    public List<Quantification> quantifications() { return quantifications; }
-
-    /** @return Unmodifiable list of dataset-level provenance records. */
-    public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
-
-    /**
-     * @param row pixel row in {@code [0, height)}
-     * @param col pixel column in {@code [0, width)}
-     * @param s   spectral index in {@code [0, spectralPoints)}
-     * @return    intensity at pixel {@code (row, col)} for spectral band {@code s}
-     */
-    public double valueAt(int row, int col, int s) {
-        return intensityCube[(row * width + col) * spectralPoints + s];
-    }
-
-    /**
-     * Materialize the full spectrum at a single pixel as a fresh array.
-     *
-     * @param row pixel row in {@code [0, height)}
-     * @param col pixel column in {@code [0, width)}
-     * @return    newly allocated array of length {@link #spectralPoints()}
-     */
-    public double[] spectrumAt(int row, int col) {
-        int base = (row * width + col) * spectralPoints;
-        double[] result = new double[spectralPoints];
-        System.arraycopy(intensityCube, base, result, 0, spectralPoints);
-        return result;
-    }
+    @Override
+    public SpectralAxisKind spectralAxisKind() { return SpectralAxisKind.WAVENUMBER; }
 
     /**
      * Persist the image and its annotations under the {@code ir_image}
