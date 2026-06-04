@@ -53,6 +53,20 @@ genomic `requiredTool` was corrected to null (Java uses bundled htsjdk, not
 samtools). No `.tio` wire change. Completes the P2.6 importer/exporter parity
 for Java (SDK in #214); ObjC port follows.
 
+### Changed — Importer/exporter dispatch unified behind Reader/Writer protocols (Objective-C)
+
+The ObjC SDK gains `TTIOReader`/`TTIOWriter` protocols, a `TTIOImportedDataset`
+draft (single write site, with a write-through delegate for the subprocess-backed
+Bruker importer, for imzML image output via `TTIOMSImage`, and for the
+dataset-returning XML importers), `TTIORunSelection` helpers (incl. the read-side
+genomic→written conversion), per-format Reader/Writer adapters,
+`TTIOImporterRegistry`/`TTIOExporterRegistry` mirroring the Python registries
+(11 import / 8 export; `fasta`/`fastq` CLI-delegated; genomic `requiredTool`
+="samtools" per ObjC's samtools-subprocess reality), a cross-language registry
+parity test, and `TtioEncode`/`TtioExport` CLI tools. imzML import now produces
+a `.tio` (previously parse-only). No `.tio` wire change. Completes the 3-SDK
+P2.6 importer/exporter parity (Python #213, Java #214/#215).
+
 ## [1.6.5] - 2026-06-03
 
 Refactor-only release completing the **3-SDK codec-registry parity**. Genomic
