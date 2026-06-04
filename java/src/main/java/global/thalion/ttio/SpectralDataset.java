@@ -1008,6 +1008,57 @@ public class SpectralDataset implements
                 null, null, null);
     }
 
+    /** JT2: one-shot, image-aware create used by the importer/exporter
+     *  registry. This is the single overload that carries the full
+     *  normalized draft an importer produces: MS {@code runs} +
+     *  {@code genomicRuns} + identifications / quantifications /
+     *  provenance + subjects / samples + the three optional embedded
+     *  images (MS / Raman / IR) + a {@link ProgressSink}. It forwards
+     *  straight to {@link #createMixed} (the widest backend, with image
+     *  embedding wired by JT1) using the legacy {@code genomic_NNNN}
+     *  auto-naming scheme — matching the other typed-list {@code create}
+     *  overloads. The created dataset is closed (flushed to disk) before
+     *  returning so the caller may immediately {@link #open(String)} it.
+     *
+     *  <p>{@link ImportedDataset#write} is the sole call site.
+     *  Cross-language equivalent: the Python importer draft's
+     *  {@code write(...)}.</p>
+     *
+     *  @return the {@link java.nio.file.Path} of the written {@code .tio}.
+     *  @since 1.7.0 */
+    public static java.nio.file.Path create(String pathOrUrl, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<WrittenGenomicRun> genomicRuns,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          List<Subject> subjects,
+                                          List<Sample> samples,
+                                          MSImage image, RamanImage ramanImage,
+                                          IRImage irImage,
+                                          ProgressSink progress) {
+        java.util.List<String> autoNames = new java.util.ArrayList<>();
+        if (genomicRuns != null) {
+            for (int i = 0; i < genomicRuns.size(); i++) {
+                autoNames.add("genomic_" + String.format("%04d", i + 1));
+            }
+        }
+        try (SpectralDataset ds = createMixed(pathOrUrl, title, isaInvestigationId,
+                runs != null ? runs : List.of(),
+                genomicRuns != null ? genomicRuns : List.of(),
+                autoNames,
+                identifications, quantifications, provenanceRecords,
+                subjects != null ? subjects : List.of(),
+                samples != null ? samples : List.of(),
+                autoFeatureFlags(runs),
+                progress != null ? progress : ProgressSink.discard(),
+                image, ramanImage, irImage)) {
+            // try-with-resources closes (flushes) the dataset.
+        }
+        return java.nio.file.Path.of(pathOrUrl);
+    }
+
     /** Back-compat overload for callers that don't pass Subject /
      *  Sample lists. Forwards with empty Stage-6 collections. */
     private static SpectralDataset createMixed(
