@@ -137,7 +137,8 @@ libTTIO_HEADER_FILES = \
 	Codecs/Registry/TTIOChannelPayload.h \
 	Codecs/Registry/TTIOCodecContext.h \
 	Codecs/Registry/TTIOCodec.h \
-	Codecs/Registry/TTIOCodecRegistry.h
+	Codecs/Registry/TTIOCodecRegistry.h \
+	Import/TTIOImportedDataset.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \
@@ -201,6 +202,7 @@ libTTIO_OBJC_FILES = \
 	Query/TTIOQuery.m \
 	Query/TTIOStreamWriter.m \
 	Query/TTIOStreamReader.m \
+	Import/TTIOImportedDataset.m \
 	Import/TTIOBase64.m \
 	Import/TTIOCVTermMapper.m \
 	Import/TTIOMzMLReader.m \

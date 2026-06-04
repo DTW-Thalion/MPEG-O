@@ -78,6 +78,7 @@ extern void testM79GenomicEnums(void);
 extern void testM82GenomicRun(void);
 extern void testM83Rans(void);
 extern void testCodecRegistry(void);
+extern void testImportedDataset(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -739,6 +740,10 @@ int main(int argc, const char *argv[])
         START_SET("codec registry")
             testCodecRegistry();
         END_SET("codec registry")
+
+        START_SET("OT1: TTIOImportedDataset draft + write-through delegate")
+            testImportedDataset();
+        END_SET("OT1: TTIOImportedDataset draft + write-through delegate")
     }
     return 0;
 }
