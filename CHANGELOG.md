@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Importer/exporter dispatch unified behind Reader/Writer interfaces (Python)
+
+Python importers now implement a uniform `Reader` protocol returning an
+`ImportedDataset` draft (the single `SpectralDataset.write_minimal` call site),
+and exporters a uniform `Writer` protocol over an opened dataset. The
+importer/exporter registries dispatch through these interfaces instead of
+per-format adapter callables; the run-selection helpers are shared. No `.tio`
+wire/on-disk change; supported formats, aliases, and the `ttio encode`/`export`
+CLI are unchanged. First of the 3-SDK P2.6 parity ports (Java + ObjC follow).
+
 ## [1.6.5] - 2026-06-03
 
 Refactor-only release completing the **3-SDK codec-registry parity**. Genomic

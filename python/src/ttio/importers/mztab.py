@@ -98,24 +98,18 @@ class MzTabImport:
         """
         return self.version.endswith("-M")
 
-    def to_ttio(
+    def to_imported_dataset(
         self,
-        path: str | Path,
         *,
         title: str | None = None,
         isa_investigation_id: str = "",
         link_to: SpectralDataset | None = None,
-    ) -> Path:
-        """Write the imported records to an .tio container.
+    ) -> "ImportedDataset":
+        """Build the normalized :class:`ImportedDataset` draft.
 
-        When ``link_to`` is ``None`` an identifications-only container
-        is emitted (no spectra runs). When a :class:`SpectralDataset`
-        is supplied, its existing runs + identifications are merged
-        with the mzTab records before writing — useful for splicing
-        results back into the dataset that produced them. The merge
-        preserves spectra_ref → run_name mappings recorded in the
-        ``MTD ms_run[N]-location`` lines whenever the basename
-        matches a run in the linked dataset.
+        Carries the same ``title`` / ``isa_investigation_id`` /
+        ``link_to`` semantics as :meth:`to_ttio`; see that method for
+        the meaning of ``link_to``.
         """
         merged_runs: dict[str, object] = {}
         merged_idents = list(self.identifications)
@@ -170,15 +164,40 @@ class MzTabImport:
             merged_quants = list(link_to.quantifications()) + merged_quants
             merged_prov = list(link_to.provenance()) + merged_prov
 
-        return SpectralDataset.write_minimal(
-            path,
+        from .imported_dataset import ImportedDataset
+        return ImportedDataset(
             title=title or self.title or f"mzTab import: {Path(self.source_path).name}",
             isa_investigation_id=isa_investigation_id,
             runs=merged_runs,
-            identifications=merged_idents or None,
-            quantifications=merged_quants or None,
-            provenance=merged_prov or None,
+            identifications=merged_idents,
+            quantifications=merged_quants,
+            provenance=merged_prov,
         )
+
+    def to_ttio(
+        self,
+        path: str | Path,
+        *,
+        title: str | None = None,
+        isa_investigation_id: str = "",
+        link_to: SpectralDataset | None = None,
+    ) -> Path:
+        """Write the imported records to an .tio container.
+
+        When ``link_to`` is ``None`` an identifications-only container
+        is emitted (no spectra runs). When a :class:`SpectralDataset`
+        is supplied, its existing runs + identifications are merged
+        with the mzTab records before writing — useful for splicing
+        results back into the dataset that produced them. The merge
+        preserves spectra_ref → run_name mappings recorded in the
+        ``MTD ms_run[N]-location`` lines whenever the basename
+        matches a run in the linked dataset.
+        """
+        return self.to_imported_dataset(
+            title=title,
+            isa_investigation_id=isa_investigation_id,
+            link_to=link_to,
+        ).write(path)
 
 
 def read(
