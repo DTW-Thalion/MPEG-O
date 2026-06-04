@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Performance — Vectorized DELTA_RANS + cached signal-channels handle (Python)
+
+`DELTA_RANS` encode/decode now compute delta + zigzag via numpy for
+element_size 1 and 4 (only the variable-length varint stream stays serial;
+element_size 8 stays scalar for byte-exact safety) — ~2.3× faster on a 1M-element
+int32 channel. `GenomicRun` caches the `signal_channels` group handle instead of
+re-opening it on every channel access. Byte-identical output; no wire/format
+change. (OO-assessment P1.3 + P1.4.)
+
 ### Changed — Importer/exporter dispatch unified behind Reader/Writer interfaces (Python)
 
 Python importers now implement a uniform `Reader` protocol returning an

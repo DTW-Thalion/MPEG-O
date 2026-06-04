@@ -75,6 +75,12 @@ class GenomicRun:
     channel_names: list[str]  # populated for introspection / future tooling; not read by __getitem__
 
     _signal_cache: dict = field(default_factory=dict, repr=False, compare=False)
+    # Cached handle to the ``signal_channels`` child group. Opened once on
+    # first per-record signal access and reused thereafter (PT2, P1.4):
+    # the group is otherwise re-opened on every uncached channel access.
+    # ``None`` until first use. Lifetime is the GenomicRun instance, so the
+    # handle GCs with the run — same lifecycle as the eager open in open().
+    _signal_group: object | None = field(default=None, repr=False, compare=False)
     _compound_cache: dict[str, list[dict]] = field(default_factory=dict, repr=False, compare=False)
     # lazy whole-channel decode cache for byte channels whose
     # @compression attribute names a TTIO codec (rANS / BASE_PACK).
@@ -324,10 +330,16 @@ class GenomicRun:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _signal_channels_group(self):
+        """Open the signal_channels group once and cache the handle."""
+        if self._signal_group is None:
+            self._signal_group = self.group.open_group("signal_channels")
+        return self._signal_group
+
     def _signal_dataset(self, name: str):
         """Open a primitive signal-channel dataset and cache the handle."""
         if name not in self._signal_cache:
-            sig = self.group.open_group("signal_channels")
+            sig = self._signal_channels_group()
             self._signal_cache[name] = sig.open_dataset(name)
         return self._signal_cache[name]
 
@@ -408,7 +420,7 @@ class GenomicRun:
         if name == "sequences" and self._sequences_is_ref_diff_v2():
             from .codecs._registry import CODEC_REGISTRY
             from .codecs._context import ChannelPayload
-            sig = self.group.open_group("signal_channels")
+            sig = self._signal_channels_group()
             decoded = CODEC_REGISTRY[Compression.REF_DIFF_V2].decode(
                 ChannelPayload.of_group(sig.open_group("sequences")),
                 self._codec_context(),
@@ -444,7 +456,7 @@ class GenomicRun:
         """
         if self._sequences_is_v2_cached is not None:
             return self._sequences_is_v2_cached
-        sig = self.group.open_group("signal_channels")
+        sig = self._signal_channels_group()
         try:
             seq_grp = sig.open_group("sequences")
             # It's a group — check for the refdiff_v2 child dataset.
@@ -497,7 +509,7 @@ class GenomicRun:
         callers never need to check ``isinstance(v, bytes)``.
         """
         if name not in self._compound_cache:
-            sig = self.group.open_group("signal_channels")
+            sig = self._signal_channels_group()
             self._compound_cache[name] = io.read_compound_dataset(sig, name)
         return self._compound_cache[name]
 
@@ -515,7 +527,7 @@ class GenomicRun:
         if cached is not None:
             return cached[i]
 
-        sig = self.group.open_group("signal_channels")
+        sig = self._signal_channels_group()
         ds = sig.open_dataset("read_names")
 
         if ds.precision != Precision.UINT8:
@@ -570,7 +582,7 @@ class GenomicRun:
         if cached is not None:
             return cached[i]
 
-        sig = self.group.open_group("signal_channels")
+        sig = self._signal_channels_group()
         ds = sig.open_dataset("cigars")
 
         if ds.precision == Precision.UINT8:
@@ -653,7 +665,7 @@ class GenomicRun:
         """
         if self._mate_info_subgroup_cached is not None:
             return self._mate_info_subgroup_cached
-        sig = self.group.open_group("signal_channels")
+        sig = self._signal_channels_group()
         try:
             sig.open_group("mate_info")
             self._mate_info_subgroup_cached = True
@@ -672,7 +684,7 @@ class GenomicRun:
         cached = self._decoded_mate_info.get("_is_inline_v2")
         if cached is not None:
             return cached
-        sig = self.group.open_group("signal_channels")
+        sig = self._signal_channels_group()
         mate_group = sig.open_group("mate_info")
         try:
             mate_group.open_dataset("inline_v2")
@@ -697,7 +709,7 @@ class GenomicRun:
         from .codecs._registry import CODEC_REGISTRY
         from .codecs._context import ChannelPayload
 
-        sig = self.group.open_group("signal_channels")
+        sig = self._signal_channels_group()
         mate_group = sig.open_group("mate_info")
         ds = mate_group.open_dataset("inline_v2")
         blob = bytes(np.asarray(ds.read(offset=0, count=int(ds.length))).tobytes())
