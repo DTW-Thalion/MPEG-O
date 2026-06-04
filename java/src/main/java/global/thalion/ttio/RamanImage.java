@@ -6,7 +6,9 @@
 package global.thalion.ttio;
 
 import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.Enums.ImageKind;
 import global.thalion.ttio.Enums.Precision;
+import global.thalion.ttio.Enums.SpectralAxisKind;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
 
@@ -30,27 +32,13 @@ import java.util.List;
  *
  *
  */
-public class RamanImage {
+public class RamanImage extends Image {
 
     private static final String GROUP_NAME = "raman_image_cube";
 
-    private final int width;
-    private final int height;
-    private final int spectralPoints;
-    private final int tileSize;
-    private final double pixelSizeX;
-    private final double pixelSizeY;
-    private final String scanPattern;
     private final double excitationWavelengthNm;
     private final double laserPowerMw;
-    private final double[] intensityCube;
     private final double[] wavenumbers;
-
-    private final String title;
-    private final String isaInvestigationId;
-    private final List<Identification> identifications;
-    private final List<Quantification> quantifications;
-    private final List<ProvenanceRecord> provenanceRecords;
 
     /**
      * Full constructor capturing every cube dimension, laser metadata,
@@ -87,22 +75,13 @@ public class RamanImage {
                       List<Identification> identifications,
                       List<Quantification> quantifications,
                       List<ProvenanceRecord> provenanceRecords) {
-        this.width = width;
-        this.height = height;
-        this.spectralPoints = spectralPoints;
-        this.tileSize = tileSize;
-        this.pixelSizeX = pixelSizeX;
-        this.pixelSizeY = pixelSizeY;
-        this.scanPattern = scanPattern;
+        super(width, height, spectralPoints, tileSize,
+              pixelSizeX, pixelSizeY, scanPattern, intensityCube,
+              title, isaInvestigationId,
+              identifications, quantifications, provenanceRecords);
         this.excitationWavelengthNm = excitationWavelengthNm;
         this.laserPowerMw = laserPowerMw;
-        this.intensityCube = intensityCube;
         this.wavenumbers = wavenumbers;
-        this.title = title != null ? title : "";
-        this.isaInvestigationId = isaInvestigationId != null ? isaInvestigationId : "";
-        this.identifications = identifications != null ? List.copyOf(identifications) : List.of();
-        this.quantifications = quantifications != null ? List.copyOf(quantifications) : List.of();
-        this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
     }
 
     /** Convenience — image-only construction (empty dataset-level metadata). */
@@ -117,66 +96,23 @@ public class RamanImage {
              "", "", List.of(), List.of(), List.of());
     }
 
-    /** @return Image width in pixels. */
-    public int width() { return width; }
-
-    /** @return Image height in pixels. */
-    public int height() { return height; }
-
-    /** @return Number of points along the Raman-shift axis. */
-    public int spectralPoints() { return spectralPoints; }
-
-    /** @return HDF5 chunk side for storage; 0 means full-image chunking. */
-    public int tileSize() { return tileSize; }
-
-    /** @return Pixel pitch in micrometres along X. */
-    public double pixelSizeX() { return pixelSizeX; }
-
-    /** @return Pixel pitch in micrometres along Y. */
-    public double pixelSizeY() { return pixelSizeY; }
-
-    /** @return Free-form scan-pattern label. */
-    public String scanPattern() { return scanPattern; }
-
     /** @return Laser excitation wavelength in nm. */
     public double excitationWavelengthNm() { return excitationWavelengthNm; }
 
     /** @return Laser power at the sample in mW. */
     public double laserPowerMw() { return laserPowerMw; }
 
-    /** @return Row-major intensity cube of shape {@code [height, width, spectralPoints]}. */
-    public double[] intensityCube() { return intensityCube; }
-
     /** @return Per-band Raman-shift values in {@code cm^-1}. */
     public double[] wavenumbers() { return wavenumbers; }
 
-    /** @return Study title (may be empty). */
-    public String title() { return title; }
+    @Override
+    public ImageKind kind() { return ImageKind.RAMAN; }
 
-    /** @return ISA investigation identifier (may be empty). */
-    public String isaInvestigationId() { return isaInvestigationId; }
+    @Override
+    public double[] spectralAxis() { return wavenumbers; }
 
-    /** @return Unmodifiable list of dataset-level identifications. */
-    public List<Identification> identifications() { return identifications; }
-
-    /** @return Unmodifiable list of dataset-level quantifications. */
-    public List<Quantification> quantifications() { return quantifications; }
-
-    /** @return Unmodifiable list of dataset-level provenance records. */
-    public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
-
-    /** Intensity at pixel ({@code row}, {@code col}), spectral index {@code s}. */
-    public double valueAt(int row, int col, int s) {
-        return intensityCube[(row * width + col) * spectralPoints + s];
-    }
-
-    /** Full spectrum at pixel ({@code row}, {@code col}). */
-    public double[] spectrumAt(int row, int col) {
-        int base = (row * width + col) * spectralPoints;
-        double[] result = new double[spectralPoints];
-        System.arraycopy(intensityCube, base, result, 0, spectralPoints);
-        return result;
-    }
+    @Override
+    public SpectralAxisKind spectralAxisKind() { return SpectralAxisKind.WAVENUMBER; }
 
     /** Write this image cube as an HDF5 sub-group of {@code studyGroup}. */
     public void writeTo(StorageGroup studyGroup) {

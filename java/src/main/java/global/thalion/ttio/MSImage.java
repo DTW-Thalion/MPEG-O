@@ -6,7 +6,9 @@
 package global.thalion.ttio;
 
 import global.thalion.ttio.Enums.Compression;
+import global.thalion.ttio.Enums.ImageKind;
 import global.thalion.ttio.Enums.Precision;
+import global.thalion.ttio.Enums.SpectralAxisKind;
 import global.thalion.ttio.importers.ImzMLReader;
 import global.thalion.ttio.providers.StorageDataset;
 import global.thalion.ttio.providers.StorageGroup;
@@ -41,24 +43,9 @@ import java.util.List;
  *
  *
  */
-public class MSImage {
+public class MSImage extends Image {
 
-    private final int width;
-    private final int height;
-    private final int spectralPoints;
-    private final int tileSize;
-    private final double pixelSizeX;
-    private final double pixelSizeY;
-    private final String scanPattern;
-    private final double[] intensityCube;
     private final double[] mzAxis;     // NEW -- length 0 (legacy) or == spectralPoints
-
-    // Dataset-level composition fields
-    private final String title;
-    private final String isaInvestigationId;
-    private final List<Identification> identifications;
-    private final List<Quantification> quantifications;
-    private final List<ProvenanceRecord> provenanceRecords;
 
     /** Designated constructor (1.2.0): includes mzAxis. */
     public MSImage(int width, int height, int spectralPoints, int tileSize,
@@ -68,14 +55,10 @@ public class MSImage {
                    List<Identification> identifications,
                    List<Quantification> quantifications,
                    List<ProvenanceRecord> provenanceRecords) {
-        this.width = width;
-        this.height = height;
-        this.spectralPoints = spectralPoints;
-        this.tileSize = tileSize;
-        this.pixelSizeX = pixelSizeX;
-        this.pixelSizeY = pixelSizeY;
-        this.scanPattern = scanPattern;
-        this.intensityCube = intensityCube;
+        super(width, height, spectralPoints, tileSize,
+              pixelSizeX, pixelSizeY, scanPattern, intensityCube,
+              title, isaInvestigationId,
+              identifications, quantifications, provenanceRecords);
         if (mzAxis == null) mzAxis = new double[0];
         if (mzAxis.length > 0 && mzAxis.length != spectralPoints) {
             throw new IllegalArgumentException(
@@ -83,11 +66,6 @@ public class MSImage {
                 + " does not match spectralPoints=" + spectralPoints);
         }
         this.mzAxis = mzAxis;
-        this.title = title != null ? title : "";
-        this.isaInvestigationId = isaInvestigationId != null ? isaInvestigationId : "";
-        this.identifications = identifications != null ? List.copyOf(identifications) : List.of();
-        this.quantifications = quantifications != null ? List.copyOf(quantifications) : List.of();
-        this.provenanceRecords = provenanceRecords != null ? List.copyOf(provenanceRecords) : List.of();
     }
 
     /** Backwards-compat 13-arg ctor (1.1.x callers): defaults mzAxis to empty. */
@@ -113,60 +91,17 @@ public class MSImage {
              "", "", List.of(), List.of(), List.of());
     }
 
-    /** @return Image width in pixels. */
-    public int width() { return width; }
-
-    /** @return Image height in pixels. */
-    public int height() { return height; }
-
-    /** @return Number of points along the m/z axis. */
-    public int spectralPoints() { return spectralPoints; }
-
-    /** @return HDF5 chunk side for storage; 0 means full-image chunking. */
-    public int tileSize() { return tileSize; }
-
-    /** @return Pixel pitch in micrometres along X. */
-    public double pixelSizeX() { return pixelSizeX; }
-
-    /** @return Pixel pitch in micrometres along Y. */
-    public double pixelSizeY() { return pixelSizeY; }
-
-    /** @return Free-form scan-pattern label (e.g. {@code "raster"}, {@code "random"}). */
-    public String scanPattern() { return scanPattern; }
-
-    /** @return Row-major intensity cube of shape {@code [height, width, spectralPoints]}. */
-    public double[] intensityCube() { return intensityCube; }
-
     /** The shared m/z axis when present; empty array for legacy files. */
     public double[] mzAxis() { return mzAxis; }
 
-    /** @return Study title (may be empty). */
-    public String title() { return title; }
+    @Override
+    public ImageKind kind() { return ImageKind.MS; }
 
-    /** @return ISA investigation identifier (may be empty). */
-    public String isaInvestigationId() { return isaInvestigationId; }
+    @Override
+    public double[] spectralAxis() { return mzAxis; }
 
-    /** @return Unmodifiable list of dataset-level identifications. */
-    public List<Identification> identifications() { return identifications; }
-
-    /** @return Unmodifiable list of dataset-level quantifications. */
-    public List<Quantification> quantifications() { return quantifications; }
-
-    /** @return Unmodifiable list of dataset-level provenance records. */
-    public List<ProvenanceRecord> provenanceRecords() { return provenanceRecords; }
-
-    /** Get intensity at pixel (row, col) for spectral index s. */
-    public double valueAt(int row, int col, int s) {
-        return intensityCube[(row * width + col) * spectralPoints + s];
-    }
-
-    /** Get the full spectrum at pixel (row, col). */
-    public double[] spectrumAt(int row, int col) {
-        int base = (row * width + col) * spectralPoints;
-        double[] result = new double[spectralPoints];
-        System.arraycopy(intensityCube, base, result, 0, spectralPoints);
-        return result;
-    }
+    @Override
+    public SpectralAxisKind spectralAxisKind() { return SpectralAxisKind.MZ; }
 
     /** Project this image as a list of {@link
      *  global.thalion.ttio.importers.ImzMLReader.PixelSpectrum} records
