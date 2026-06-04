@@ -82,6 +82,7 @@ extern void testImportedDataset(void);
 extern void testRunSelection(void);
 extern void testBrukerReaderDataset(void);
 extern void testFormatReaders(void);
+extern void testFormatWriters(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -759,6 +760,10 @@ int main(int argc, const char *argv[])
         START_SET("OT5: per-format TTIOReader adapters")
             testFormatReaders();
         END_SET("OT5: per-format TTIOReader adapters")
+
+        START_SET("OT6: per-format TTIOWriter adapters")
+            testFormatWriters();
+        END_SET("OT6: per-format TTIOWriter adapters")
     }
     return 0;
 }

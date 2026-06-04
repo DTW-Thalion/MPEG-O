@@ -142,7 +142,8 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOImportedDataset.h \
 	Import/TTIOReader.h \
 	Import/TTIOReaderAdapters.h \
-	Export/TTIOWriter.h
+	Export/TTIOWriter.h \
+	Export/TTIOWriterAdapters.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \
@@ -226,6 +227,7 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOFastqReader.m \
 	Export/TTIOMzMLWriter.m \
 	Export/TTIORunSelection.m \
+	Export/TTIOWriterAdapters.m \
 	Export/TTIOBamWriter.m \
 	Export/TTIOCramWriter.m \
 	Export/TTIONmrMLWriter.m \
