@@ -30,6 +30,7 @@
 #import "Genomics/TTIOGenomicIndex.h"
 #import "Genomics/TTIOAlignedRead.h"
 #import "Genomics/TTIOReferenceImport.h"
+#import "Image/TTIOImage.h"
 #import "Image/TTIOMSImage.h"
 #import "Image/TTIORamanImage.h"
 #import "Image/TTIOIRImage.h"
@@ -1471,17 +1472,17 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
     // with a dimension check so v0.10 image-less datasets don't
     // trigger an image branch. Java + Python return null/None
     // directly because their getters don't allocate a placeholder.
-    TTIOMSImage *datasetImage = dataset.msImage;
+    TTIOMSImage *datasetImage = (TTIOMSImage *)[dataset imageForKind:TTIOImageKindMS];
     BOOL hasImage = (datasetImage != nil
                      && datasetImage.width  > 0
                      && datasetImage.height > 0);
     if (!hasImage) datasetImage = nil;
-    TTIORamanImage *datasetRamanImage = dataset.ramanImage;
+    TTIORamanImage *datasetRamanImage = (TTIORamanImage *)[dataset imageForKind:TTIOImageKindRaman];
     BOOL hasRamanImage = (datasetRamanImage != nil
                           && datasetRamanImage.width  > 0
                           && datasetRamanImage.height > 0);
     if (!hasRamanImage) datasetRamanImage = nil;
-    TTIOIRImage *datasetIRImage = dataset.irImage;
+    TTIOIRImage *datasetIRImage = (TTIOIRImage *)[dataset imageForKind:TTIOImageKindIR];
     BOOL hasIRImage = (datasetIRImage != nil
                        && datasetIRImage.width  > 0
                        && datasetIRImage.height > 0);

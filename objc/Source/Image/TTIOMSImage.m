@@ -94,25 +94,30 @@
 {
     NSParameterAssert(cube.length == width * height * spectralPoints * sizeof(double));
     NSParameterAssert(mzAxis == nil || mzAxis.length == spectralPoints * sizeof(double));
-    self = [super init];
+    self = [super initWithTitle:title
+             isaInvestigationId:isaId
+                identifications:identifications
+                quantifications:quantifications
+              provenanceRecords:provenance
+                          width:width
+                         height:height
+                 spectralPoints:spectralPoints
+                       tileSize:tileSize
+                     pixelSizeX:pixelSizeX
+                     pixelSizeY:pixelSizeY
+                    scanPattern:scanPattern
+                           cube:cube];
     if (self) {
-        _title              = [title copy];
-        _isaInvestigationId = [isaId copy];
-        _identifications    = [identifications copy] ?: @[];
-        _quantifications    = [quantifications copy] ?: @[];
-        _provenanceRecords  = [provenance copy] ?: @[];
-        _width          = width;
-        _height         = height;
-        _spectralPoints = spectralPoints;
-        _tileSize       = tileSize > 0 ? tileSize : 32;
-        _pixelSizeX     = pixelSizeX;
-        _pixelSizeY     = pixelSizeY;
-        _scanPattern    = [scanPattern copy];
-        _cube           = [cube copy];
-        _mzAxis         = [mzAxis copy];
+        _mzAxis = [mzAxis copy];
     }
     return self;
 }
+
+#pragma mark - Polymorphic modality accessors
+
+- (TTIOImageKind)kind { return TTIOImageKindMS; }
+- (nullable NSData *)spectralAxis { return self.mzAxis; }
+- (TTIOSpectralAxisKind)spectralAxisKind { return TTIOSpectralAxisKindMZ; }
 
 #pragma mark - Internal: write/read the 3-D cube under a given group
 
@@ -323,16 +328,16 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
     // Write dataset-level structure using TTIOSpectralDataset as a write helper,
     // then append the image_cube group directly under /study/.
     BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
-                                               title:_title
-                                  isaInvestigationId:_isaInvestigationId
+                                               title:self.title
+                                  isaInvestigationId:self.isaInvestigationId
                                               msRuns:@{}
-                                     identifications:_identifications
-                                     quantifications:_quantifications
-                                   provenanceRecords:_provenanceRecords
+                                     identifications:self.identifications
+                                     quantifications:self.quantifications
+                                   provenanceRecords:self.provenanceRecords
                                                error:error];
     if (!ok) return NO;
 
-    if (_width == 0 || _height == 0 || _spectralPoints == 0) return YES;
+    if (self.width == 0 || self.height == 0 || self.spectralPoints == 0) return YES;
 
     // Re-open the file to append the image_cube group under /study/.
     hid_t fid = H5Fopen([path fileSystemRepresentation],
@@ -350,9 +355,9 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
         return NO;
     }
     ok = writeImageCubeUnderGroup(studyGid,
-                                   _width, _height, _spectralPoints, _tileSize,
-                                   _pixelSizeX, _pixelSizeY, _scanPattern,
-                                   _cube.bytes, _mzAxis, error);
+                                   self.width, self.height, self.spectralPoints, self.tileSize,
+                                   self.pixelSizeX, self.pixelSizeY, self.scanPattern,
+                                   self.cube.bytes, _mzAxis, error);
     H5Gclose(studyGid);
     H5Fclose(fid);
     return ok;
@@ -536,14 +541,14 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
                            @"or supply mz_axis explicitly."];
 
     }
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:_width * _height];
-    const double *cubeP = (const double *)_cube.bytes;
-    for (NSUInteger row = 0; row < _height; row++) {
-        for (NSUInteger col = 0; col < _width; col++) {
-            NSUInteger base = (row * _width + col) * _spectralPoints;
+    NSMutableArray *out = [NSMutableArray arrayWithCapacity:self.width * self.height];
+    const double *cubeP = (const double *)self.cube.bytes;
+    for (NSUInteger row = 0; row < self.height; row++) {
+        for (NSUInteger col = 0; col < self.width; col++) {
+            NSUInteger base = (row * self.width + col) * self.spectralPoints;
             NSData *intensity =
                 [NSData dataWithBytes:cubeP + base
-                               length:_spectralPoints * sizeof(double)];
+                               length:self.spectralPoints * sizeof(double)];
             [out addObject:[[TTIOPixelSpectrum alloc]
                               initWithX:col y:row z:1
                                      mz:_mzAxis
@@ -560,13 +565,13 @@ static NSData *readMzAxisFromGroup(hid_t imageGroup, NSUInteger sp)
     if (other == self) return YES;
     if (![other isKindOfClass:[TTIOMSImage class]]) return NO;
     TTIOMSImage *o = (TTIOMSImage *)other;
-    return _width == o.width
-        && _height == o.height
-        && _spectralPoints == o.spectralPoints
-        && _tileSize == o.tileSize
-        && [_cube isEqualToData:o.cube];
+    return self.width == o.width
+        && self.height == o.height
+        && self.spectralPoints == o.spectralPoints
+        && self.tileSize == o.tileSize
+        && [self.cube isEqualToData:o.cube];
 }
 
-- (NSUInteger)hash { return _width ^ _height ^ _spectralPoints ^ [_cube hash]; }
+- (NSUInteger)hash { return self.width ^ self.height ^ self.spectralPoints ^ [self.cube hash]; }
 
 @end

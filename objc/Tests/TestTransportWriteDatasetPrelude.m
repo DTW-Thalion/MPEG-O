@@ -399,7 +399,7 @@ static void testMultiSectionPreludeEmitsInSpec54Order(void)
          "3.9 multi: fixture precondition: provenance non-empty");
     PASS(ds.references.count > 0,
          "3.9 multi: fixture precondition: references non-empty");
-    PASS(ds.msImage != nil,
+    PASS([ds imageForKind:TTIOImageKindMS] != nil,
          "3.9 multi: fixture precondition: msImage non-nil");
     PASS(ds.identifications.count > 0,
          "3.9 multi: fixture precondition: identifications non-empty");

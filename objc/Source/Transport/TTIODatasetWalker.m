@@ -35,6 +35,7 @@
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "Dataset/TTIOSubject.h"
 #import "Dataset/TTIOSample.h"
+#import "Image/TTIOImage.h"
 #import "Image/TTIOMSImage.h"
 #import "Image/TTIORamanImage.h"
 #import "Image/TTIOIRImage.h"
@@ -338,19 +339,19 @@ visitEncryptionAlgorithm:dataset.encryptedAlgorithm];
     // -msImage / -ramanImage / -irImage may return non-nil placeholders
     // (width=0, height=0) when their cube group is absent; gate on a
     // dimension check to match the writer.
-    TTIOMSImage *msImg = dataset.msImage;
+    TTIOMSImage *msImg = (TTIOMSImage *)[dataset imageForKind:TTIOImageKindMS];
     if (msImg && msImg.width > 0 && msImg.height > 0) {
         if ([visitor respondsToSelector:@selector(walker:visitImage:)]) {
             [visitor walker:self visitImage:msImg];
         }
     }
-    TTIORamanImage *ramanImg = dataset.ramanImage;
+    TTIORamanImage *ramanImg = (TTIORamanImage *)[dataset imageForKind:TTIOImageKindRaman];
     if (ramanImg && ramanImg.width > 0 && ramanImg.height > 0) {
         if ([visitor respondsToSelector:@selector(walker:visitRamanImage:)]) {
             [visitor walker:self visitRamanImage:ramanImg];
         }
     }
-    TTIOIRImage *irImg = dataset.irImage;
+    TTIOIRImage *irImg = (TTIOIRImage *)[dataset imageForKind:TTIOImageKindIR];
     if (irImg && irImg.width > 0 && irImg.height > 0) {
         if ([visitor respondsToSelector:@selector(walker:visitIRImage:)]) {
             [visitor walker:self visitIRImage:irImg];

@@ -55,6 +55,7 @@ libTTIO_HEADER_FILES = \
 	Dataset/TTIOSpectralDataset.h \
 	Dataset/TTIOWrittenRun.h \
 	Dataset/TTIOCompoundIO.h \
+	Image/TTIOImage.h \
 	Image/TTIOMSImage.h \
 	Image/TTIOPixelSpectrum.h \
 	Image/TTIORamanImage.h \
@@ -192,6 +193,7 @@ libTTIO_OBJC_FILES = \
 	Dataset/TTIOSpectralDataset.m \
 	Dataset/TTIOWrittenRun.m \
 	Dataset/TTIOCompoundIO.m \
+	Image/TTIOImage.m \
 	Image/TTIOMSImage.m \
 	Image/TTIOPixelSpectrum.m \
 	Image/TTIORamanImage.m \

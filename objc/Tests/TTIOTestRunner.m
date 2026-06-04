@@ -86,6 +86,7 @@ extern void testFormatWriters(void);
 extern void testImporterExporterRegistry(void);
 extern void testRegistryParity(void);
 extern void testEncodeExportCli(void);
+extern void testImageBase(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -146,6 +147,7 @@ extern void testTransportDatasetProvenance(void);
 extern void testTransportImage(void);
 extern void testTransportImageProcessed(void);
 extern void testSpectralDatasetIRImage(void);
+extern void testSpectralDatasetImages(void);
 extern void testIRImageWriteReadTypedAttrs(void);
 extern void testTransportRamanImage(void);
 extern void testTransportIRImage(void);
@@ -705,6 +707,10 @@ int main(int argc, const char *argv[])
             testSpectralDatasetIRImage();
         END_SET("transport v0.11 Task 5.2: TTIOSpectralDataset -irImage / -ramanImage accessors")
 
+        START_SET("P2.5 OIT2: TTIOSpectralDataset imageForKind: / images uniform accessors")
+            testSpectralDatasetImages();
+        END_SET("P2.5 OIT2: TTIOSpectralDataset imageForKind: / images uniform accessors")
+
         START_SET("transport v0.11 Task 5.6 follow-up: TTIOIRImage typed HDF5 attrs (ir_mode i64) for cross-lang parity")
             testIRImageWriteReadTypedAttrs();
         END_SET("transport v0.11 Task 5.6 follow-up: TTIOIRImage typed HDF5 attrs (ir_mode i64) for cross-lang parity")
@@ -784,6 +790,10 @@ int main(int argc, const char *argv[])
         START_SET("OT8: TtioEncode / TtioExport CLI tools")
             testEncodeExportCli();
         END_SET("OT8: TtioEncode / TtioExport CLI tools")
+
+        START_SET("OIT1: TTIOImage base extraction (MS/Raman/IR round-trip + kind/spectralAxis)")
+            testImageBase();
+        END_SET("OIT1: TTIOImage base extraction (MS/Raman/IR round-trip + kind/spectralAxis)")
     }
     return 0;
 }

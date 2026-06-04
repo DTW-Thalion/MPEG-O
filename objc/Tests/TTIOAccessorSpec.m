@@ -214,8 +214,8 @@ static NSString *spec_genomicRunsEqual(TTIOSpectralDataset *a,
 static NSString *spec_imageEqual(TTIOSpectralDataset *a,
                                    TTIOSpectralDataset *b)
 {
-    TTIOMSImage *ia = a.msImage;
-    TTIOMSImage *ib = b.msImage;
+    TTIOMSImage *ia = (TTIOMSImage *)[a imageForKind:TTIOImageKindMS];
+    TTIOMSImage *ib = (TTIOMSImage *)[b imageForKind:TTIOImageKindMS];
     if (ia == nil || ib == nil) {
         return [NSString stringWithFormat:
             @"MSImage missing on at least one side: a=%p, b=%p",
@@ -401,8 +401,8 @@ static NSString *spec_encryptionEqual(TTIOSpectralDataset *a,
 static NSString *spec_ramanImageEqual(TTIOSpectralDataset *a,
                                         TTIOSpectralDataset *b)
 {
-    TTIORamanImage *ra = a.ramanImage;
-    TTIORamanImage *rb = b.ramanImage;
+    TTIORamanImage *ra = (TTIORamanImage *)[a imageForKind:TTIOImageKindRaman];
+    TTIORamanImage *rb = (TTIORamanImage *)[b imageForKind:TTIOImageKindRaman];
     if (ra == nil || rb == nil) {
         return [NSString stringWithFormat:
             @"RamanImage missing on at least one side: a=%p, b=%p",
@@ -451,8 +451,8 @@ static NSString *spec_ramanImageEqual(TTIOSpectralDataset *a,
 static NSString *spec_irImageEqual(TTIOSpectralDataset *a,
                                      TTIOSpectralDataset *b)
 {
-    TTIOIRImage *ia = a.irImage;
-    TTIOIRImage *ib = b.irImage;
+    TTIOIRImage *ia = (TTIOIRImage *)[a imageForKind:TTIOImageKindIR];
+    TTIOIRImage *ib = (TTIOIRImage *)[b imageForKind:TTIOImageKindIR];
     if (ia == nil || ib == nil) {
         return [NSString stringWithFormat:
             @"IRImage missing on at least one side: a=%p, b=%p",
@@ -717,7 +717,7 @@ static void _ttioAccessorSpecsInit(void)
                                                             nDatasets:0
                                                                 error:error];
                      if (!ok) { [w close]; return NO; }
-                     ok = [w writeImageProcessed:source.msImage error:error];
+                     ok = [w writeImageProcessed:(TTIOMSImage *)[source imageForKind:TTIOImageKindMS] error:error];
                      if (!ok) { [w close]; return NO; }
                      ok = [w writeEndOfStreamWithError:error];
                      [w close];
