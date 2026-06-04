@@ -138,7 +138,9 @@ libTTIO_HEADER_FILES = \
 	Codecs/Registry/TTIOCodecContext.h \
 	Codecs/Registry/TTIOCodec.h \
 	Codecs/Registry/TTIOCodecRegistry.h \
-	Import/TTIOImportedDataset.h
+	Import/TTIOImportedDataset.h \
+	Import/TTIOReader.h \
+	Export/TTIOWriter.h
 
 libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOCVParam.m \

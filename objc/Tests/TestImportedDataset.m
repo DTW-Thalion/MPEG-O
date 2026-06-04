@@ -15,9 +15,40 @@
 #import <unistd.h>
 
 #import "Import/TTIOImportedDataset.h"
+#import "Import/TTIOReader.h"
+#import "Export/TTIOWriter.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Dataset/TTIOWrittenRun.h"
 #import "ValueClasses/TTIOEnums.h"
+
+/* OT2: file-private adapters that conform to the new TTIOReader / TTIOWriter
+ * protocols, used purely to assert protocol availability + conformance. */
+@interface OT2StubReader : NSObject <TTIOReader>
+@end
+@implementation OT2StubReader
+- (nullable TTIOImportedDataset *)readInputs:(NSArray<NSString *> *)inputs
+                                     options:(NSDictionary<NSString *, id> *)options
+                                    progress:(nullable TTIOProgressBlock)progress
+                                       error:(NSError *_Nullable *_Nullable)error
+{
+    (void)inputs; (void)options; (void)progress; (void)error;
+    return [[TTIOImportedDataset alloc] init];
+}
+@end
+
+@interface OT2StubWriter : NSObject <TTIOWriter>
+@end
+@implementation OT2StubWriter
+- (BOOL)writeDataset:(TTIOSpectralDataset *)dataset
+               layer:(nullable NSString *)layer
+            toOutput:(NSString *)output
+             options:(NSDictionary<NSString *, id> *)options
+               error:(NSError *_Nullable *_Nullable)error
+{
+    (void)dataset; (void)layer; (void)output; (void)options; (void)error;
+    return YES;
+}
+@end
 
 static NSString *tmpPath(NSString *suffix)
 {
@@ -112,5 +143,24 @@ void testImportedDataset(void)
         PASS([contents isEqualToString:@"sentinel"],
              "delegate wrote the sentinel file (writeMinimal not used)");
         unlink([delPath fileSystemRepresentation]);
+
+        // (3) OT2: TTIOReader / TTIOWriter protocols exist and a conforming
+        //     adapter answers conformsToProtocol:, while a plain NSObject does not.
+        OT2StubReader *r = [[OT2StubReader alloc] init];
+        OT2StubWriter *w = [[OT2StubWriter alloc] init];
+        PASS([r conformsToProtocol:@protocol(TTIOReader)],
+             "OT2StubReader conforms to TTIOReader");
+        PASS([w conformsToProtocol:@protocol(TTIOWriter)],
+             "OT2StubWriter conforms to TTIOWriter");
+        TTIOImportedDataset *produced =
+            [r readInputs:@[@"in.raw"] options:@{} progress:nil error:NULL];
+        PASS([produced isKindOfClass:[TTIOImportedDataset class]],
+             "TTIOReader -readInputs:options:progress:error: returns a TTIOImportedDataset");
+
+        NSObject *plain = [[NSObject alloc] init];
+        PASS(![plain conformsToProtocol:@protocol(TTIOReader)],
+             "plain NSObject does NOT conform to TTIOReader");
+        PASS(![plain conformsToProtocol:@protocol(TTIOWriter)],
+             "plain NSObject does NOT conform to TTIOWriter");
     }
 }
