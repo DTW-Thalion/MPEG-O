@@ -20,7 +20,24 @@ external tool is installed right now".
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import TYPE_CHECKING
+
+from .readers import (
+    BamReader,
+    BrukerReader,
+    CramReader,
+    ImzMLReader,
+    JcampDxReader,
+    MzMLReader,
+    MzTabReader,
+    NmrMLReader,
+    SamReader,
+    ThermoRawReader,
+    WatersMassLynxReader,
+)
+
+if TYPE_CHECKING:
+    from .base import Reader
 
 # Importers delegated to the dedicated CLIs rather than this registry.
 CLI_DELEGATED = ("fasta", "fastq")
@@ -40,103 +57,25 @@ class FormatSpec:
     display_name: str              # GUI-matching label (e.g. "mzML")
     extensions: tuple[str, ...]
     required_tool: str | None      # external binary, or None
-    adapter: Callable[..., None]   # (inputs, output, **opts) -> None
-
-
-# ---- adapters (lazy imports keep optional deps out of import time) ----
-
-def _adapt_import_result(reader_module: str):
-    """Adapter for importers exposing ``read(path) -> X`` where X has
-    ``to_ttio(output)`` (mzML / mzTab / imzML / nmrML / Thermo / Waters).
-
-    A caller-supplied ``progress`` kwarg is threaded through to the
-    underlying reader when present.
-    """
-    def _adapter(inputs, output, **opts):
-        import importlib
-        mod = importlib.import_module(f"ttio.importers.{reader_module}")
-        read_kwargs = {}
-        if "progress" in opts and opts["progress"] is not None:
-            read_kwargs["progress"] = opts["progress"]
-        result = mod.read(inputs[0], **read_kwargs)
-        result.to_ttio(output)
-    return _adapter
-
-
-def _adapt_imzml(inputs, output, **opts):
-    from ttio.importers import imzml
-    ibd = opts.get("ibd")
-    if ibd is None and len(inputs) > 1:
-        ibd = inputs[1]
-    read_kwargs = {}
-    if "progress" in opts and opts["progress"] is not None:
-        read_kwargs["progress"] = opts["progress"]
-    imzml.read(inputs[0], ibd_path=ibd, **read_kwargs).to_ttio(output)
-
-
-def _adapt_bruker(inputs, output, **opts):
-    from ttio.importers import bruker_tdf
-    bruker_tdf.read(inputs[0], output, ms2=bool(opts.get("ms2", False)))
-
-
-def _adapt_jcamp(inputs, output, **opts):
-    from pathlib import Path
-
-    from ttio.importers import jcamp_dx
-    from ttio.spectral_dataset import SpectralDataset
-    read_kwargs = {}
-    if "progress" in opts and opts["progress"] is not None:
-        read_kwargs["progress"] = opts["progress"]
-    spectrum = jcamp_dx.read_spectrum(inputs[0], **read_kwargs)
-    run = jcamp_dx.build_written_run(spectrum)
-    SpectralDataset.write_minimal(
-        output, title=Path(inputs[0]).stem, isa_investigation_id="",
-        runs={"run_0001": run})
-
-
-def _adapt_genomic(reader_attr: str):
-    """Adapter for BAM/SAM/CRAM: read into a genomic run, write minimal."""
-    def _adapter(inputs, output, **opts):
-        from ttio.importers import bam as bam_mod
-        from ttio.importers import cram as cram_mod
-        from ttio.importers import sam as sam_mod
-        from ttio.spectral_dataset import SpectralDataset
-        reader_cls = {
-            "BamReader": bam_mod.BamReader,
-            "SamReader": sam_mod.SamReader,
-            "CramReader": cram_mod.CramReader,
-        }[reader_attr]
-        name = opts.get("name", "genomic_0001")
-        read_kwargs = {}
-        if "progress" in opts and opts["progress"] is not None:
-            read_kwargs["progress"] = opts["progress"]
-        run = reader_cls(inputs[0]).to_genomic_run(
-            name=name, sample_name=opts.get("sample"), **read_kwargs)
-        SpectralDataset.write_minimal(
-            output, title="", isa_investigation_id="",
-            runs={}, genomic_runs={name: run})
-    return _adapter
+    reader: "Reader"               # parses inputs -> ImportedDataset
 
 
 _SPECS: tuple[FormatSpec, ...] = (
-    FormatSpec("mzml", "mzML", (".mzML", ".mzML.gz"), None,
-               _adapt_import_result("mzml")),
-    FormatSpec("mztab", "mzTab", (".mzTab", ".mztab"), None,
-               _adapt_import_result("mztab")),
-    FormatSpec("imzml", "imzML", (".imzML",), None, _adapt_imzml),
-    FormatSpec("nmrml", "nmrML", (".nmrML",), None,
-               _adapt_import_result("nmrml")),
+    FormatSpec("mzml", "mzML", (".mzML", ".mzML.gz"), None, MzMLReader()),
+    FormatSpec("mztab", "mzTab", (".mzTab", ".mztab"), None, MzTabReader()),
+    FormatSpec("imzml", "imzML", (".imzML",), None, ImzMLReader()),
+    FormatSpec("nmrml", "nmrML", (".nmrML",), None, NmrMLReader()),
     FormatSpec("jcamp-dx", "JCAMP-DX", (".jdx", ".dx", ".jcm"), None,
-               _adapt_jcamp),
+               JcampDxReader()),
     FormatSpec("bruker-timstof", "Bruker timsTOF", (".d",),
-               "Bruker Python helper", _adapt_bruker),
+               "Bruker Python helper", BrukerReader()),
     FormatSpec("waters-masslynx", "Waters MassLynx", (".raw",),
-               "masslynxraw", _adapt_import_result("waters_masslynx")),
+               "masslynxraw", WatersMassLynxReader()),
     FormatSpec("thermo-raw", "Thermo .raw", (".raw",),
-               "ThermoRawFileParser", _adapt_import_result("thermo_raw")),
-    FormatSpec("bam", "BAM", (".bam",), "samtools", _adapt_genomic("BamReader")),
-    FormatSpec("sam", "SAM", (".sam",), "samtools", _adapt_genomic("SamReader")),
-    FormatSpec("cram", "CRAM", (".cram",), "samtools", _adapt_genomic("CramReader")),
+               "ThermoRawFileParser", ThermoRawReader()),
+    FormatSpec("bam", "BAM", (".bam",), "samtools", BamReader()),
+    FormatSpec("sam", "SAM", (".sam",), "samtools", SamReader()),
+    FormatSpec("cram", "CRAM", (".cram",), "samtools", CramReader()),
 )
 
 _BY_KEY: dict[str, FormatSpec] = {s.key: s for s in _SPECS}
@@ -191,4 +130,6 @@ def encode(fmt: str, inputs, output, **opts) -> None:
 
     Raises :class:`UnknownFormatError` for non-registry formats (the CLI
     handles the ``fasta`` / ``fastq`` delegation separately)."""
-    spec_for(fmt).adapter(list(inputs), output, **opts)
+    spec = spec_for(fmt)
+    progress = opts.pop("progress", None)
+    spec.reader.read(list(inputs), opts, progress=progress).write(output)
