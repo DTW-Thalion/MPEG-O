@@ -21,6 +21,22 @@ per-format adapter callables; the run-selection helpers are shared. No `.tio`
 wire/on-disk change; supported formats, aliases, and the `ttio encode`/`export`
 CLI are unchanged. First of the 3-SDK P2.6 parity ports (Java + ObjC follow).
 
+### Changed — Importer/exporter dispatch unified behind Reader/Writer interfaces (Java SDK)
+
+The Java SDK gains uniform `Reader`/`Writer` interfaces, an `ImportedDataset`
+draft (the single dataset-write call site, supporting a write-through delegate
+for the subprocess-backed Bruker importer), shared `RunSelection` export helpers,
+per-format Reader/Writer adapters, `ImporterRegistry`/`ExporterRegistry`
+mirroring the Python registries (11 import / 8 export formats; `fasta`/`fastq`
+remain CLI-delegated), and unified `encode`/`export` CLI tools. The dataset
+write path (`SpectralDataset.createMixed`) learned MS/Raman/IR image writing
+(reusing `MSImage.writeTo`; image-free output is byte-identical). No `.tio` wire
+change; format keys/aliases match Python (asserted by a cross-language parity
+test). JCAMP-DX / NMR export are scoped to the selected run's first spectrum
+(matching the Python contract). The tio-browser GUI dispatch migration is the
+next PR. Second of the 3-SDK P2.6 importer/exporter ports (Python shipped in
+#213; ObjC follows).
+
 ## [1.6.5] - 2026-06-03
 
 Refactor-only release completing the **3-SDK codec-registry parity**. Genomic

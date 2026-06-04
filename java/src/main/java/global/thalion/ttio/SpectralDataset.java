@@ -791,7 +791,8 @@ public class SpectralDataset implements
                 identifications, quantifications, provenanceRecords,
                 List.of(), List.of(),
                 autoFeatureFlags(runs),
-                progress != null ? progress : ProgressSink.discard());
+                progress != null ? progress : ProgressSink.discard(),
+                null, null, null);
     }
 
     /** Stage 6 (transport-spec v0.11, Deferral 2): create a .tio file
@@ -1003,7 +1004,59 @@ public class SpectralDataset implements
                 identifications, quantifications, provenanceRecords,
                 List.of(), List.of(),
                 featureFlags,
-                progress != null ? progress : ProgressSink.discard());
+                progress != null ? progress : ProgressSink.discard(),
+                null, null, null);
+    }
+
+    /** JT2: one-shot, image-aware create used by the importer/exporter
+     *  registry. This is the single overload that carries the full
+     *  normalized draft an importer produces: MS {@code runs} +
+     *  {@code genomicRuns} + identifications / quantifications /
+     *  provenance + subjects / samples + the three optional embedded
+     *  images (MS / Raman / IR) + a {@link ProgressSink}. It forwards
+     *  straight to {@link #createMixed} (the widest backend, with image
+     *  embedding wired by JT1) using the legacy {@code genomic_NNNN}
+     *  auto-naming scheme — matching the other typed-list {@code create}
+     *  overloads. The created dataset is closed (flushed to disk) before
+     *  returning so the caller may immediately {@link #open(String)} it.
+     *
+     *  <p>{@link ImportedDataset#write} is the sole call site.
+     *  Cross-language equivalent: the Python importer draft's
+     *  {@code write(...)}.</p>
+     *
+     *  @return the {@link java.nio.file.Path} of the written {@code .tio}.
+     *  @since 1.7.0 */
+    public static java.nio.file.Path create(String pathOrUrl, String title,
+                                          String isaInvestigationId,
+                                          List<AcquisitionRun> runs,
+                                          List<WrittenGenomicRun> genomicRuns,
+                                          List<Identification> identifications,
+                                          List<Quantification> quantifications,
+                                          List<ProvenanceRecord> provenanceRecords,
+                                          List<Subject> subjects,
+                                          List<Sample> samples,
+                                          MSImage image, RamanImage ramanImage,
+                                          IRImage irImage,
+                                          ProgressSink progress) {
+        java.util.List<String> autoNames = new java.util.ArrayList<>();
+        if (genomicRuns != null) {
+            for (int i = 0; i < genomicRuns.size(); i++) {
+                autoNames.add("genomic_" + String.format("%04d", i + 1));
+            }
+        }
+        try (SpectralDataset ds = createMixed(pathOrUrl, title, isaInvestigationId,
+                runs != null ? runs : List.of(),
+                genomicRuns != null ? genomicRuns : List.of(),
+                autoNames,
+                identifications, quantifications, provenanceRecords,
+                subjects != null ? subjects : List.of(),
+                samples != null ? samples : List.of(),
+                autoFeatureFlags(runs),
+                progress != null ? progress : ProgressSink.discard(),
+                image, ramanImage, irImage)) {
+            // try-with-resources closes (flushes) the dataset.
+        }
+        return java.nio.file.Path.of(pathOrUrl);
     }
 
     /** Back-compat overload for callers that don't pass Subject /
@@ -1022,7 +1075,8 @@ public class SpectralDataset implements
                 identifications, quantifications, provenanceRecords,
                 List.of(), List.of(),
                 featureFlags,
-                ProgressSink.discard());
+                ProgressSink.discard(),
+                null, null, null);
     }
 
     /** Phase 2 (post-M91): names-aware backend used by both the
@@ -1048,7 +1102,8 @@ public class SpectralDataset implements
                 runs, genomicRuns, genomicRunNames,
                 identifications, quantifications, provenanceRecords,
                 subjects, samples, featureFlags,
-                ProgressSink.discard());
+                ProgressSink.discard(),
+                null, null, null);
     }
 
     /** Stage D ProgressSink-aware overload of {@link #createMixed} that
@@ -1065,7 +1120,8 @@ public class SpectralDataset implements
             List<Subject> subjects,
             List<Sample> samples,
             FeatureFlags featureFlags,
-            ProgressSink progress) {
+            ProgressSink progress,
+            MSImage image, RamanImage ramanImage, IRImage irImage) {
         if (progress == null) progress = ProgressSink.discard();
         // v1.0 single format-version stamp. Readers gate optional
         // features by the feature-flag list (opt_*), not by version
@@ -1126,6 +1182,15 @@ public class SpectralDataset implements
         };
 
         if (pathOrUrl != null && isNonHdf5Url(pathOrUrl)) {
+            // JT1: image embedding is currently only wired on the HDF5
+            // fast path. Fail fast rather than silently drop images on a
+            // memory:// / sqlite:// / zarr:// target.
+            if (image != null || ramanImage != null || irImage != null) {
+                throw new UnsupportedOperationException(
+                    "createMixed: image embedding is only supported for "
+                    + "local .tio (HDF5) targets, not provider URL "
+                    + pathOrUrl);
+            }
             return createViaProviderMixed(pathOrUrl, title, isaInvestigationId,
                     runs, genomicRuns, gNamesList,
                     identifications, quantifications,
@@ -1142,6 +1207,18 @@ public class SpectralDataset implements
                 if (title != null) study.setStringAttribute("title", title);
                 if (isaInvestigationId != null)
                     study.setStringAttribute("isa_investigation_id", isaInvestigationId);
+
+                // JT1: write any embedded images via the same writeTo(...)
+                // path the tio-browser GUI uses, immediately after the
+                // study-level title/isa attributes and BEFORE the §5.4
+                // run sections, so image-free datasets are byte-identical
+                // (these branches are skipped when all images are null).
+                if (image != null)
+                    image.writeTo(Hdf5Provider.adapterForGroup(study));
+                if (ramanImage != null)
+                    ramanImage.writeTo(Hdf5Provider.adapterForGroup(study));
+                if (irImage != null)
+                    irImage.writeTo(Hdf5Provider.adapterForGroup(study));
 
                 Map<String, AcquisitionRun> runMap = new LinkedHashMap<>();
                 if (runs != null && !runs.isEmpty()) {
@@ -1223,6 +1300,33 @@ public class SpectralDataset implements
                         "");
             }
         }
+    }
+
+    /** JT1: one-shot writer for an image-bearing dataset. Writes the
+     *  given (nullable) {@link MSImage} / {@link RamanImage} /
+     *  {@link IRImage} into {@code /study/} via the same
+     *  {@code writeTo(StorageGroup)} path the tio-browser GUI uses, with
+     *  no run / metadata sections. The created dataset is closed (and the
+     *  HDF5 file flushed to disk) before returning so the caller may
+     *  immediately {@link #open(String)} it.
+     *
+     *  @return the {@link Path} of the written {@code .tio} file.
+     *  @since 1.7.0 */
+    public static java.nio.file.Path createWithImages(String path, String title,
+                                        String isaInvestigationId,
+                                        MSImage image, RamanImage ramanImage,
+                                        IRImage irImage) {
+        FeatureFlags flags = FeatureFlags.defaultCurrent();
+        try (SpectralDataset ds = createMixed(path, title, isaInvestigationId,
+                List.of(), List.of(), new java.util.ArrayList<String>(),
+                List.of(), List.of(), List.of(),
+                List.of(), List.of(),
+                flags,
+                ProgressSink.discard(),
+                image, ramanImage, irImage)) {
+            // try-with-resources closes (flushes) the dataset.
+        }
+        return java.nio.file.Path.of(path);
     }
 
     /** write one {@code /study/genomic_runs/<name>/}
