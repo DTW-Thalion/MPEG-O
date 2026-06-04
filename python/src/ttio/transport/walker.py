@@ -205,9 +205,10 @@ def walk_dataset(
         dataset_provenance = list(dataset.provenance())
     except Exception:  # pragma: no cover - defensive
         dataset_provenance = []
-    dataset_image = getattr(dataset, "image", None)
-    dataset_raman_image = getattr(dataset, "raman_image", None)
-    dataset_ir_image = getattr(dataset, "ir_image", None)
+    from ..enums import ImageKind
+    dataset_image = dataset.image_for_kind(ImageKind.MS)
+    dataset_raman_image = dataset.image_for_kind(ImageKind.RAMAN)
+    dataset_ir_image = dataset.image_for_kind(ImageKind.IR)
     try:
         dataset_identifications = list(dataset.identifications())
     except Exception:  # pragma: no cover - defensive

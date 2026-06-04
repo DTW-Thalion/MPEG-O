@@ -21,7 +21,7 @@ from pathlib import Path
 import numpy as np
 
 from ttio import MSImage, SpectralDataset
-from ttio.enums import IRMode
+from ttio.enums import IRMode, ImageKind
 from ttio.ir_image import IRImage
 from ttio.raman_image import RamanImage
 from ttio.transport.codec import TransportReader, TransportWriter
@@ -116,7 +116,7 @@ def test_write_ir_image_emits_header_pixels_eoi_with_modality_2(
     tis = tmp_path / "ir.tis"
 
     with SpectralDataset.open(src) as ds:
-        assert ds.ir_image is not None, (
+        assert ds.image_for_kind(ImageKind.IR) is not None, (
             "fixture precondition: dataset must carry an IRImage"
         )
         out = io.BytesIO()
@@ -128,7 +128,7 @@ def test_write_ir_image_emits_header_pixels_eoi_with_modality_2(
                 features=[],
                 n_datasets=0,
             )
-            w.write_ir_image(ds.ir_image)
+            w.write_ir_image(ds.image_for_kind(ImageKind.IR))
             w.write_end_of_stream()
         tis.write_bytes(out.getvalue())
 
@@ -202,8 +202,8 @@ def test_ir_image_round_trips_via_write_dataset_materialize(
         materialised.close()
 
     with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
-        img_a = a.ir_image
-        img_b = b.ir_image
+        img_a = a.image_for_kind(ImageKind.IR)
+        img_b = b.image_for_kind(ImageKind.IR)
         assert img_a is not None
         assert img_b is not None
         assert img_a.width == img_b.width
@@ -227,9 +227,9 @@ def test_write_dataset_emits_all_three_image_modalities_in_order(
     tis = tmp_path / "all.tis"
 
     with SpectralDataset.open(src) as ds:
-        assert ds.image is not None, "MS image must be present"
-        assert ds.raman_image is not None, "Raman image must be present"
-        assert ds.ir_image is not None, "IR image must be present"
+        assert ds.image_for_kind(ImageKind.MS) is not None, "MS image must be present"
+        assert ds.image_for_kind(ImageKind.RAMAN) is not None, "Raman image must be present"
+        assert ds.image_for_kind(ImageKind.IR) is not None, "IR image must be present"
         with tis.open("wb") as out, TransportWriter(out) as w:
             w.write_dataset(ds)
 

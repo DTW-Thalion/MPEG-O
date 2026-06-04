@@ -801,7 +801,7 @@ class TransportWriter:
 
         :param image: :class:`ttio.MSImage` to emit. ``image`` must
             not be ``None`` (caller's responsibility to gate on
-            :attr:`SpectralDataset.image is not None`).
+            :meth:`SpectralDataset.image_for_kind` is not None).
         """
         if image is None:
             raise ValueError("write_image: image must not be None")
@@ -1344,12 +1344,12 @@ class TransportWriter:
             dataset_provenance = list(dataset.provenance())
         except Exception:  # pragma: no cover - defensive
             dataset_provenance = []
-        # ``image`` / ``raman_image`` / ``ir_image`` are properties — read
-        # once so the cache hit is shared between the flag-detect and
-        # the emit branch.
-        dataset_image = getattr(dataset, "image", None)
-        dataset_raman_image = getattr(dataset, "raman_image", None)
-        dataset_ir_image = getattr(dataset, "ir_image", None)
+        # Images are read via image_for_kind() — read once so the cache
+        # hit is shared between the flag-detect and the emit branch.
+        from ..enums import ImageKind
+        dataset_image = dataset.image_for_kind(ImageKind.MS)
+        dataset_raman_image = dataset.image_for_kind(ImageKind.RAMAN)
+        dataset_ir_image = dataset.image_for_kind(ImageKind.IR)
         # identifications + quantifications are methods on
         # SpectralDataset (matching ``provenance()``). Empty lists do
         # not emit a packet (spec §5.4 step 6 says "zero or more")

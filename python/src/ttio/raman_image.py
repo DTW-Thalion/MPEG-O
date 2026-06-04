@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import numpy as np
+
+from .enums import ImageKind, SpectralAxisKind
+from .image import Image
 
 
 def _parse_double_attr(value) -> float:
@@ -15,7 +19,7 @@ def _parse_double_attr(value) -> float:
 
 
 @dataclass(slots=True)
-class RamanImage:
+class RamanImage(Image):
     """Raman hyperspectral imaging dataset: a ``width × height`` grid of
     pixels, each pixel a spectrum of ``spectral_points`` intensity values
     sampled at a shared rank-1 ``wavenumbers`` axis.
@@ -56,23 +60,21 @@ class RamanImage:
     ``global.thalion.ttio.RamanImage``.
     """
 
-    width: int = 0
-    height: int = 0
-    spectral_points: int = 0
-    pixel_size_x: float = 0.0
-    pixel_size_y: float = 0.0
-    intensity: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0)))
+    # Common fields are inherited from Image; only Raman-specific fields here.
     wavenumbers: np.ndarray = field(default_factory=lambda: np.zeros((0,)))
-    scan_pattern: str = ""
-    tile_size: int = 0
     excitation_wavelength_nm: float = 0.0
     laser_power_mw: float = 0.0
 
-    title: str = ""
-    isa_investigation_id: str = ""
-    identifications: list = field(default_factory=list)
-    quantifications: list = field(default_factory=list)
-    provenance_records: list = field(default_factory=list)
+    kind: ClassVar[ImageKind] = ImageKind.RAMAN
+
+    @property
+    def spectral_axis(self) -> np.ndarray:
+        """The wavenumber axis (alias of :attr:`wavenumbers`)."""
+        return self.wavenumbers
+
+    @property
+    def spectral_axis_kind(self) -> SpectralAxisKind:
+        return SpectralAxisKind.WAVENUMBER
 
     def __post_init__(self) -> None:
         if self.width == 0 and self.height == 0 and self.spectral_points == 0:

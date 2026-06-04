@@ -45,8 +45,9 @@ class ImzMLWriter:
     def write(self, ds, layer, output, opts) -> None:
         from pathlib import Path
 
+        from ..enums import ImageKind
         from . import imzml
-        img = ds.image
+        img = ds.image_for_kind(ImageKind.MS)
         if img is None:
             raise ValueError("dataset has no MS image to export as imzML")
         ibd = Path(output).with_suffix(".ibd")

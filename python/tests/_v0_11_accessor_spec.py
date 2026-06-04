@@ -39,6 +39,7 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 
+from ttio.enums import ImageKind
 from ttio.spectral_dataset import SpectralDataset
 from ttio.transport.codec import (
     TRANSPORT_V0_11_FEATURE,
@@ -93,7 +94,7 @@ def _ms_image_processed_encode(
             features=[TRANSPORT_V0_11_FEATURE],
             n_datasets=0,
         )
-        w.write_image_processed(source.image)
+        w.write_image_processed(source.image_for_kind(ImageKind.MS))
         w.write_end_of_stream()
 
 
@@ -269,8 +270,8 @@ def _image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
     """Mirror Java's ``IMAGE.assertContentEquals``: same shape,
     element-wise m/z axis equality (within 1e-9), element-wise
     intensity cube equality (within 1e-9)."""
-    ia = a.image
-    ib = b.image
+    ia = a.image_for_kind(ImageKind.MS)
+    ib = b.image_for_kind(ImageKind.MS)
     if ia is None or ib is None:
         raise AssertionError(
             f"MSImage missing on at least one side: a={ia}, b={ib}"
@@ -451,8 +452,8 @@ def _raman_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
     """Mirror Java's ``RAMAN_IMAGE.assertContentEquals``: same shape +
     excitation + laser power + scan pattern + element-wise wavenumbers
     + element-wise intensity cube (all within 1e-9)."""
-    ra = a.raman_image
-    rb = b.raman_image
+    ra = a.image_for_kind(ImageKind.RAMAN)
+    rb = b.image_for_kind(ImageKind.RAMAN)
     # Both sides absent: trivially equal — the accessor isn't populated
     # on either fixture, so there's nothing to compare. (build_everything
     # exercises every required v0.11 accessor; the optional Raman/IR
@@ -520,8 +521,8 @@ def _ir_image_equals(a: SpectralDataset, b: SpectralDataset) -> None:
     """Mirror Java's ``IR_IMAGE.assertContentEquals``: same shape +
     mode + resolution + scan pattern + element-wise wavenumbers +
     element-wise intensity cube (all within 1e-9)."""
-    ia = a.ir_image
-    ib = b.ir_image
+    ia = a.image_for_kind(ImageKind.IR)
+    ib = b.image_for_kind(ImageKind.IR)
     # Both sides absent: trivially equal — see _raman_image_equals
     # for rationale.
     if ia is None and ib is None:

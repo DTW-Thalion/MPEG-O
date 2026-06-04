@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 from ttio import MSImage
+from ttio.enums import ImageKind
 from ttio.providers import open_provider
 
 
@@ -110,7 +111,7 @@ def test_spectral_dataset_image_property(tmp_path: Path) -> None:
     )
 
     with SpectralDataset.open(out) as ds:
-        materialised = ds.image
+        materialised = ds.image_for_kind(ImageKind.MS)
         assert materialised is not None
         assert materialised.width == 2
         np.testing.assert_array_equal(materialised.mz_axis, img.mz_axis)
@@ -121,7 +122,7 @@ def test_spectral_dataset_image_property_returns_none_when_absent(tmp_path: Path
     out = tmp_path / "no_image.tio"
     SpectralDataset.write_minimal(out, title="", isa_investigation_id="", runs={})
     with SpectralDataset.open(out) as ds:
-        assert ds.image is None
+        assert ds.image_for_kind(ImageKind.MS) is None
 
 
 def test_zero_dim_image_with_mz_axis_rejected() -> None:
@@ -141,6 +142,6 @@ def test_spectral_dataset_image_property_caches(tmp_path: Path) -> None:
         runs={}, image=img,
     )
     with SpectralDataset.open(out) as ds:
-        first = ds.image
-        second = ds.image
-        assert first is second, "second .image call should return cached object"
+        first = ds.image_for_kind(ImageKind.MS)
+        second = ds.image_for_kind(ImageKind.MS)
+        assert first is second, "second call should return cached object"

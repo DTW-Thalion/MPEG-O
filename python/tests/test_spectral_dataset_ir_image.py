@@ -16,7 +16,7 @@ import numpy as np
 import pytest
 
 from ttio import SpectralDataset
-from ttio.enums import IRMode
+from ttio.enums import IRMode, ImageKind
 from ttio.ir_image import IRImage
 
 
@@ -53,7 +53,7 @@ def test_ir_image_accessor_round_trip(tmp_path: Path) -> None:
     )
 
     with SpectralDataset.open(path) as ds:
-        read = ds.ir_image
+        read = ds.image_for_kind(ImageKind.IR)
         assert read is not None, (
             "ir_image must materialise /study/ir_image_cube"
         )
@@ -67,10 +67,10 @@ def test_ir_image_accessor_round_trip(tmp_path: Path) -> None:
         np.testing.assert_array_equal(read.intensity, img.intensity)
 
         # Sibling accessors stay None since we wrote neither modality.
-        assert ds.image is None, (
+        assert ds.image_for_kind(ImageKind.MS) is None, (
             "image must be None when /study/image_cube absent"
         )
-        assert ds.raman_image is None, (
+        assert ds.image_for_kind(ImageKind.RAMAN) is None, (
             "raman_image must be None when /study/raman_image_cube absent"
         )
 
@@ -87,7 +87,7 @@ def test_ir_image_accessor_none_when_absent(tmp_path: Path) -> None:
     )
 
     with SpectralDataset.open(path) as ds:
-        assert ds.ir_image is None, (
+        assert ds.image_for_kind(ImageKind.IR) is None, (
             "ir_image must be None when /study/ir_image_cube is absent"
         )
 
