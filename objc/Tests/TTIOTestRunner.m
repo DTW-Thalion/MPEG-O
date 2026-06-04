@@ -81,6 +81,7 @@ extern void testCodecRegistry(void);
 extern void testImportedDataset(void);
 extern void testRunSelection(void);
 extern void testBrukerReaderDataset(void);
+extern void testFormatReaders(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -754,6 +755,10 @@ int main(int argc, const char *argv[])
         START_SET("OT4: TTIOBrukerTDFReader readDataset write-through draft")
             testBrukerReaderDataset();
         END_SET("OT4: TTIOBrukerTDFReader readDataset write-through draft")
+
+        START_SET("OT5: per-format TTIOReader adapters")
+            testFormatReaders();
+        END_SET("OT5: per-format TTIOReader adapters")
     }
     return 0;
 }
