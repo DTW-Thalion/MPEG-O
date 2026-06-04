@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Java SqliteProvider JSON reader uses Jackson (Java)
+
+The Java `SqliteProvider`'s hand-rolled compound-JSON reader (a brittle
+string-splitter vulnerable to whitespace, key reordering, and values containing
+JSON tokens — the class of bug behind #205) is replaced by Jackson
+(`jackson-databind`, declared as a direct dependency; already on the classpath
+via Arrow). The byte-canonical JSON *serializer* is unchanged, so cross-language
+compound byte-parity is preserved; a cross-language compound round-trip
+conformance test is added. No `.tio`/SQLite schema change. (OO-assessment P2.7.)
+
 ### Changed — Shared Image base + uniform image collection (Java + tio-browser)
 
 `MSImage`/`RamanImage`/`IRImage` now share an abstract `Image` base (common
