@@ -39,9 +39,32 @@ public final class GenomicIndex {
     private final byte[]   mappingQualities; // uint8
     private final int[]    flags;            // uint32
 
+    // PJ1: interned chromosome table, populated by readFrom() from the
+    // on-disk uint16 id column (Task #82). Both null for in-memory
+    // construction — region lookup then falls back to scanning the
+    // chromosomes string list. When present, indicesForRegion resolves
+    // the query name to its id ONCE and scans an int comparison instead
+    // of an O(N) per-read String.equals. Mirrors Python
+    // genomic_index.py:126-146.
+    private final short[] chromosomeIds;                          // uint16 per read; null in-memory
+    private final java.util.Map<String, Integer> chromosomeNameToId; // null when no ids
+
     public GenomicIndex(long[] offsets, int[] lengths,
                          List<String> chromosomes, long[] positions,
                          byte[] mappingQualities, int[] flags) {
+        this(offsets, lengths, chromosomes, positions, mappingQualities,
+             flags, null, null);
+    }
+
+    /** PJ1 internal constructor that also retains the interned
+     *  chromosome ids (one uint16 per read) and a name→id map, enabling
+     *  the vectorized region scan. Both id arguments are {@code null}
+     *  for in-memory construction (string-fallback path). */
+    private GenomicIndex(long[] offsets, int[] lengths,
+                         List<String> chromosomes, long[] positions,
+                         byte[] mappingQualities, int[] flags,
+                         short[] chromosomeIds,
+                         java.util.Map<String, Integer> chromosomeNameToId) {
         Objects.requireNonNull(offsets);
         Objects.requireNonNull(lengths);
         Objects.requireNonNull(chromosomes);
@@ -62,6 +85,8 @@ public final class GenomicIndex {
         this.positions = positions;
         this.mappingQualities = mappingQualities;
         this.flags = flags;
+        this.chromosomeIds = chromosomeIds;
+        this.chromosomeNameToId = chromosomeNameToId;
     }
 
     /** Number of reads. */
@@ -80,8 +105,35 @@ public final class GenomicIndex {
     /** Reference sequence name of read {@code i}. */
     public String chromosomeAt(int i) { return chromosomes.get(i); }
 
-    /** Read indices on {@code chromosome} with {@code start <= position < end}. */
+    /** Read indices on {@code chromosome} with {@code start <= position < end}.
+     *
+     *  <p>PJ1: on disk-loaded indices (interned {@code chromosome_ids}
+     *  present) the query chromosome is resolved to its uint16 id once,
+     *  then the per-read id column is scanned with an int comparison —
+     *  avoiding an O(N) {@code String.equals} per read. An absent
+     *  chromosome resolves to no id and yields the empty list, matching
+     *  the old never-matched behavior. Results are byte-identical to the
+     *  string-scan fallback (same indices, same ascending order).</p>
+     */
     public List<Integer> indicesForRegion(String chromosome, long start, long end) {
+        if (chromosomeIds != null) {
+            Integer tid = chromosomeNameToId.get(chromosome);
+            if (tid == null) return List.of();
+            int target = tid;
+            int[] buf = new int[8];
+            int n = 0;
+            for (int i = 0; i < count(); i++) {
+                if ((chromosomeIds[i] & 0xFFFF) == target
+                        && positions[i] >= start && positions[i] < end) {
+                    if (n == buf.length) buf = java.util.Arrays.copyOf(buf, n * 2);
+                    buf[n++] = i;
+                }
+            }
+            List<Integer> out = new ArrayList<>(n);
+            for (int k = 0; k < n; k++) out.add(buf[k]);
+            return out;
+        }
+        // Fallback: in-memory index without interned ids.
         List<Integer> out = new ArrayList<>();
         for (int i = 0; i < count(); i++) {
             if (chromosomes.get(i).equals(chromosome)
@@ -97,10 +149,16 @@ public final class GenomicIndex {
 
     /** Read indices where {@code (flags & flagMask) != 0}. */
     public List<Integer> indicesForFlag(int flagMask) {
-        List<Integer> out = new ArrayList<>();
+        int[] buf = new int[8];
+        int n = 0;
         for (int i = 0; i < count(); i++) {
-            if ((flags[i] & flagMask) != 0) out.add(i);
+            if ((flags[i] & flagMask) != 0) {
+                if (n == buf.length) buf = java.util.Arrays.copyOf(buf, n * 2);
+                buf[n++] = i;
+            }
         }
+        List<Integer> out = new ArrayList<>(n);
+        for (int k = 0; k < n; k++) out.add(buf[k]);
         return out;
     }
 
@@ -213,7 +271,19 @@ public final class GenomicIndex {
             chroms.add(idx < nameTable.size() ? nameTable.get(idx) : "");
         }
 
-        return new GenomicIndex(offsets, lengths, chroms, positions, mapqs, flags);
+        // PJ1: invert the id→name table (chromosome_names is written in
+        // encounter-order id sequence — row k carries the name for id k,
+        // a 1:1 correspondence) into a name→id map so indicesForRegion
+        // can resolve the query chromosome to its uint16 id once and scan
+        // the retained `ids` column with int comparisons.
+        java.util.Map<String, Integer> nameToId =
+            new java.util.HashMap<>(nameTable.size() * 2);
+        for (int id = 0; id < nameTable.size(); id++) {
+            nameToId.putIfAbsent(nameTable.get(id), id);
+        }
+
+        return new GenomicIndex(offsets, lengths, chroms, positions, mapqs,
+                                flags, ids, nameToId);
     }
 
     // ── Typed-channel helpers (chunked + zlib, falling back to raw) ─
