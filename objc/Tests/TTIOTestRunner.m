@@ -85,6 +85,7 @@ extern void testFormatReaders(void);
 extern void testFormatWriters(void);
 extern void testImporterExporterRegistry(void);
 extern void testRegistryParity(void);
+extern void testEncodeExportCli(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -774,6 +775,10 @@ int main(int argc, const char *argv[])
         START_SET("OT7: registry cross-language parity fence")
             testRegistryParity();
         END_SET("OT7: registry cross-language parity fence")
+
+        START_SET("OT8: TtioEncode / TtioExport CLI tools")
+            testEncodeExportCli();
+        END_SET("OT8: TtioEncode / TtioExport CLI tools")
     }
     return 0;
 }
