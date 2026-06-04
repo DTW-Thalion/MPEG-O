@@ -7,6 +7,7 @@ package global.thalion.ttio.importers;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,11 +74,12 @@ final class ImporterRegistryTest {
     }
 
     @Test
-    void bamSpecMatchesPython() {
+    void bamSpec() {
         FormatSpec spec = ImporterRegistry.specFor("bam");
         assertEquals("BAM", spec.displayName());
         assertEquals(List.of(".bam"), spec.extensions());
-        assertEquals("samtools", spec.requiredTool());
+        // Java uses bundled htsjdk (no external samtools); cf. Python which shells out to samtools.
+        assertNull(spec.requiredTool());
     }
 
     @Test

@@ -5,8 +5,10 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Properties;
 
+import global.thalion.ttio.browser.SdkFormatKeys;
 import global.thalion.ttio.browser.exporters.ExportFormatSpec.Eligibility;
 import global.thalion.ttio.browser.exporters.ExportFormatSpec.ExtraField;
+import global.thalion.ttio.exporters.ExporterRegistry;
 
 public final class ExportFormatRegistry {
 
@@ -71,13 +73,27 @@ public final class ExportFormatRegistry {
         );
     }
 
+    /** Builds one row. For registry-covered formats ({@code SdkFormatKeys
+     *  .exportKey(name) != null}) the {@code fileExts} and {@code requiredBinary}
+     *  are sourced from the TTI-O SDK {@link ExporterRegistry} (single source of
+     *  truth); the {@code exts}/{@code requiredBinary} args are the GUI-local
+     *  fallback used only for the fasta/fastq rows. GUI-only attributes
+     *  (eligibility, extras, description) are always supplied here. */
     private static ExportFormatSpec spec(String name, String fqn,
                                          List<String> exts,
                                          Eligibility eligibility,
                                          ExtraField extras, Properties props,
                                          String requiredBinary) {
-        return new ExportFormatSpec(name, fqn, exts, eligibility, extras,
+        String sdkKey = SdkFormatKeys.exportKey(name);
+        List<String> fileExts = exts;
+        String binary = requiredBinary;
+        if (sdkKey != null) {
+            var sdk = ExporterRegistry.specFor(sdkKey);
+            fileExts = sdk.extensions();
+            binary = sdk.requiredTool();
+        }
+        return new ExportFormatSpec(name, fqn, fileExts, eligibility, extras,
             props.getProperty("export." + name + ".description", "(no description)"),
-            requiredBinary);
+            binary);
     }
 }
