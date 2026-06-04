@@ -172,7 +172,7 @@ static void testIRImageRoundTripBothModes(void)
 
         TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:srcPath
                                                                     error:&err];
-        PASS(ds != nil && ds.irImage != nil,
+        PASS(ds != nil && [ds imageForKind:TTIOImageKindIR] != nil,
              "5.3 ir rt: source dataset carries IRImage");
 
         NSMutableData *buf = [NSMutableData data];
@@ -185,7 +185,7 @@ static void testIRImageRoundTripBothModes(void)
                                           nDatasets:0
                                               error:&err],
              "5.3 ir rt: StreamHeader");
-        PASS([w writeIRImage:ds.irImage error:&err],
+        PASS([w writeIRImage:(TTIOIRImage *)[ds imageForKind:TTIOImageKindIR] error:&err],
              "5.3 ir rt: writeIRImage");
         PASS([w writeEndOfStreamWithError:&err], "5.3 ir rt: EndOfStream");
 
@@ -197,9 +197,9 @@ static void testIRImageRoundTripBothModes(void)
 
         TTIOSpectralDataset *rt = [TTIOSpectralDataset readFromFilePath:rtPath
                                                                     error:&err];
-        PASS(rt != nil && rt.irImage != nil,
+        PASS(rt != nil && [rt imageForKind:TTIOImageKindIR] != nil,
              "5.3 ir rt: round-tripped dataset carries IRImage");
-        TTIOIRImage *back = rt.irImage;
+        TTIOIRImage *back = (TTIOIRImage *)[rt imageForKind:TTIOImageKindIR];
         PASS(back.mode == img.mode,
              "5.3 ir rt: ir_mode round-trip");
         PASS(back.resolutionCmInv == img.resolutionCmInv,
@@ -209,7 +209,7 @@ static void testIRImageRoundTripBothModes(void)
         PASS([back.wavenumbers isEqualToData:img.wavenumbers],
              "5.3 ir rt: wavenumbers byte-equal");
         // No Raman / no MS on a pure-IR round-trip.
-        PASS(rt.ramanImage == nil,
+        PASS([rt imageForKind:TTIOImageKindRaman] == nil,
              "5.3 ir rt: ramanImage stays nil");
 
         [ds closeFile]; [rt closeFile];
@@ -279,7 +279,7 @@ static void testWriteDatasetSingleModalityRaman(void)
 
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
                                                                 error:&err];
-    PASS(ds != nil && ds.ramanImage != nil,
+    PASS(ds != nil && [ds imageForKind:TTIOImageKindRaman] != nil,
          "5.3 wds raman: source dataset carries Raman");
 
     NSMutableData *buf = [NSMutableData data];

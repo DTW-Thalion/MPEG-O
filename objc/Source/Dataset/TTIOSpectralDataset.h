@@ -6,6 +6,7 @@
 #import "Protocols/TTIORun.h"
 #import "ValueClasses/TTIOEnums.h"
 #import "Core/TTIOProgressSink.h"
+#import "Image/TTIOImage.h"
 
 @class TTIOAcquisitionRun;
 @class TTIOWrittenRun;
@@ -404,29 +405,22 @@
 @end
 
 @interface TTIOSpectralDataset (Image)
-/** The embedded MSImage when /study/image_cube is present; nil otherwise.
- *  Reads and materialises the image from the file when called on a plain
- *  TTIOSpectralDataset.
+/** The embedded image for the requested modality, or nil when the
+ *  corresponding cube group is absent. The image is read and
+ *  materialised lazily from the dataset file on first access and
+ *  cached per kind. Returns the polymorphic <code>TTIOImage</code>
+ *  base; callers needing a concrete subclass cast the result
+ *  (e.g. <code>(TTIOMSImage *)[ds imageForKind:TTIOImageKindMS]</code>).
+ *
+ *  <p>Java parity: <code>SpectralDataset.imageForKind(...)</code>.
+ *  Python parity: <code>SpectralDataset.image_for_kind(...)</code>.</p>
  *  @since 1.2.0 */
-@property (readonly, nullable) TTIOMSImage *msImage;
+- (nullable TTIOImage *)imageForKind:(TTIOImageKind)kind;
 
-/** The embedded RamanImage when /study/raman_image_cube is present; nil
- *  otherwise. Mirrors <code>msImage</code> — reads and materialises the
- *  image lazily from the dataset file on first access. Java parity:
- *  <code>SpectralDataset.ramanImage()</code>. Python parity:
- *  <code>SpectralDataset.raman_image</code>.
+/** All embedded images present on this dataset, in modality order
+ *  (MS, Raman, IR), skipping any kind whose cube group is absent.
  *  @since 1.2.0 */
-@property (readonly, nullable) TTIORamanImage *ramanImage;
-
-/** The embedded IRImage when /study/ir_image_cube is present; nil
- *  otherwise. Mirrors <code>msImage</code> / <code>ramanImage</code> for
- *  the third imaging modality. Java parity:
- *  <code>SpectralDataset.irImage()</code> (commit
- *  <code>97fb065e</code>). Python parity:
- *  <code>SpectralDataset.ir_image</code> (commit
- *  <code>8b57baa7</code>).
- *  @since 1.2.0 */
-@property (readonly, nullable) TTIOIRImage *irImage;
+- (nonnull NSArray<TTIOImage *> *)images;
 @end
 
 #endif

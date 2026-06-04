@@ -81,7 +81,7 @@ static void testIRImageRoundTrip(void)
                                                                 error:&err];
     PASS(ds != nil && err == nil, "5.2 rt: opened dataset");
 
-    TTIOIRImage *back = ds.irImage;
+    TTIOIRImage *back = (TTIOIRImage *)[ds imageForKind:TTIOImageKindIR];
     PASS(back != nil, "5.2 rt: -irImage returns non-nil for IR-bearing dataset");
     PASS(back.width == img.width
         && back.height == img.height
@@ -97,7 +97,7 @@ static void testIRImageRoundTrip(void)
          "5.2 rt: wavenumbers byte-equal");
 
     // The accessor caches — second call returns the same instance.
-    TTIOIRImage *again = ds.irImage;
+    TTIOIRImage *again = (TTIOIRImage *)[ds imageForKind:TTIOImageKindIR];
     PASS(again == back,
          "5.2 rt: -irImage caches (returns the same instance on second access)");
 
@@ -125,11 +125,11 @@ static void testIRImageAbsent(void)
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
                                                                 error:&err];
     PASS(ds != nil && err == nil, "5.2 absent: dataset opened");
-    PASS(ds.irImage == nil,
+    PASS([ds imageForKind:TTIOImageKindIR] == nil,
          "5.2 absent: -irImage returns nil when ir_image_cube absent");
     // Same for msImage / ramanImage — the IR commit must not regress
     // the other accessors when the file has neither cube.
-    PASS(ds.ramanImage == nil,
+    PASS([ds imageForKind:TTIOImageKindRaman] == nil,
          "5.2 absent: -ramanImage returns nil when raman_image_cube absent");
 
     [ds closeFile];
@@ -190,9 +190,10 @@ static void testIRImageCoexistsWithMSImage(void)
 
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path
                                                                 error:&err];
-    PASS(ds.irImage != nil, "5.2 coex: IR present");
-    PASS(ds.msImage == nil
-         || ds.msImage.width == 0,
+    PASS([ds imageForKind:TTIOImageKindIR] != nil, "5.2 coex: IR present");
+    TTIOMSImage *coexMS = (TTIOMSImage *)[ds imageForKind:TTIOImageKindMS];
+    PASS(coexMS == nil
+         || coexMS.width == 0,
          "5.2 coex: MS placeholder (nil or zero-dim) when only IR cube on disk");
 
     [ds closeFile];

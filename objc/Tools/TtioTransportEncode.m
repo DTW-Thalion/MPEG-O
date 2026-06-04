@@ -9,6 +9,8 @@
  */
 #import <Foundation/Foundation.h>
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Image/TTIOImage.h"
+#import "Image/TTIOMSImage.h"
 #import "Transport/TTIOTransportWriter.h"
 #import "Transport/TTIOTransportPacket.h"
 #include <stdio.h>
@@ -64,7 +66,7 @@ int main(int argc, const char **argv)
                                                  features:@[TTIOTransportV011Feature]
                                                 nDatasets:0
                                                     error:&err];
-            if (ok) ok = [tw writeImageProcessed:ds.msImage error:&err];
+            if (ok) ok = [tw writeImageProcessed:(TTIOMSImage *)[ds imageForKind:TTIOImageKindMS] error:&err];
             if (ok) ok = [tw writeEndOfStreamWithError:&err];
         } else {
             tw.useBulkMode = bulk;

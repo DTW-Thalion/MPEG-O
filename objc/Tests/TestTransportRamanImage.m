@@ -169,7 +169,7 @@ static void testRamanImageRoundTrip(void)
 
     TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:srcPath
                                                                 error:&err];
-    PASS(ds != nil && ds.ramanImage != nil,
+    PASS(ds != nil && [ds imageForKind:TTIOImageKindRaman] != nil,
          "5.3 raman rt: source dataset carries RamanImage");
 
     NSMutableData *buf = [NSMutableData data];
@@ -182,7 +182,7 @@ static void testRamanImageRoundTrip(void)
                                       nDatasets:0
                                           error:&err],
          "5.3 raman rt: StreamHeader");
-    PASS([w writeRamanImage:ds.ramanImage error:&err],
+    PASS([w writeRamanImage:(TTIORamanImage *)[ds imageForKind:TTIOImageKindRaman] error:&err],
          "5.3 raman rt: writeRamanImage");
     PASS([w writeEndOfStreamWithError:&err], "5.3 raman rt: EndOfStream");
 
@@ -194,9 +194,9 @@ static void testRamanImageRoundTrip(void)
 
     TTIOSpectralDataset *rt = [TTIOSpectralDataset readFromFilePath:rtPath
                                                                 error:&err];
-    PASS(rt != nil && rt.ramanImage != nil,
+    PASS(rt != nil && [rt imageForKind:TTIOImageKindRaman] != nil,
          "5.3 raman rt: round-tripped dataset carries RamanImage");
-    TTIORamanImage *back = rt.ramanImage;
+    TTIORamanImage *back = (TTIORamanImage *)[rt imageForKind:TTIOImageKindRaman];
     PASS(back.width == img.width
         && back.height == img.height
         && back.spectralPoints == img.spectralPoints,
@@ -210,7 +210,7 @@ static void testRamanImageRoundTrip(void)
     PASS([back.wavenumbers isEqualToData:img.wavenumbers],
          "5.3 raman rt: wavenumbers byte-equal");
     // The materialised .tio carries only Raman; MS/IR remain absent.
-    PASS(rt.irImage == nil,
+    PASS([rt imageForKind:TTIOImageKindIR] == nil,
          "5.3 raman rt: irImage stays nil");
 
     [ds closeFile];
@@ -281,12 +281,13 @@ static void testReaderSkipsUnknownModality(void)
     TTIOSpectralDataset *rt = [TTIOSpectralDataset readFromFilePath:outPath
                                                                 error:&err];
     PASS(rt != nil, "5.3 unknown: re-opened materialised");
-    PASS(rt.ramanImage == nil,
+    PASS([rt imageForKind:TTIOImageKindRaman] == nil,
          "5.3 unknown: unknown-modality stream produces no RamanImage");
-    PASS(rt.irImage == nil,
+    PASS([rt imageForKind:TTIOImageKindIR] == nil,
          "5.3 unknown: unknown-modality stream produces no IRImage");
     // msImage's placeholder semantics — check width==0.
-    PASS(rt.msImage == nil || rt.msImage.width == 0,
+    TTIOMSImage *unkMS = (TTIOMSImage *)[rt imageForKind:TTIOImageKindMS];
+    PASS(unkMS == nil || unkMS.width == 0,
          "5.3 unknown: unknown-modality stream produces no MSImage cube");
 
     [rt closeFile];

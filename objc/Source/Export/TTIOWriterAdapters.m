@@ -29,6 +29,7 @@
 #import "Export/TTIOCramWriter.h"
 
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Image/TTIOImage.h"
 #import "Image/TTIOMSImage.h"
 #import "Image/TTIOPixelSpectrum.h"
 #import "Import/TTIOImzMLReader.h"  /* TTIOImzMLPixelSpectrum */
@@ -174,7 +175,7 @@ static NSString *_owaWithSuffix(NSString *output, NSString *ext)
     // the file has no /study/image_cube it yields a degenerate empty image
     // (width/height/spectralPoints == 0). Treat that as "no image" so the
     // guard matches Java's `ds.image() == null` and Python's `img is None`.
-    TTIOMSImage *img = dataset.msImage;
+    TTIOMSImage *img = (TTIOMSImage *)[dataset imageForKind:TTIOImageKindMS];
     if (img == nil ||
         img.width == 0 || img.height == 0 || img.spectralPoints == 0) {
         if (error) *error =

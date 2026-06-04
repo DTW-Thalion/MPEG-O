@@ -22,6 +22,16 @@ migrated. No `.tio` wire/format or transport-protocol change; image-class
 constructor signatures unchanged. Second of the 3-SDK P2.5 ports (Python #219;
 ObjC follows). (OO-assessment P2.5.)
 
+### Changed — Shared Image base + uniform image collection (Objective-C)
+
+`TTIOMSImage`/`TTIORamanImage`/`TTIOIRImage` now share a `TTIOImage` base (common
+geometry, intensity cube, metadata) with a `TTIOImageKind` discriminator and a
+generic `spectralAxis`. `TTIOSpectralDataset`'s `msImage`/`ramanImage`/`irImage`
+are replaced by `-imageForKind:` + `-images`; the transport writer/walker,
+exporter adapter, and CLI migrated. No `.tio` wire/format or transport-protocol
+change; initializer signatures unchanged. Completes the 3-SDK P2.5 shared-image
+abstraction (Python #219, Java #220). (OO-assessment P2.5.)
+
 ### Changed — Shared Image base + uniform image collection (Python)
 
 `MSImage`/`RamanImage`/`IRImage` now share an `Image` base (common geometry,

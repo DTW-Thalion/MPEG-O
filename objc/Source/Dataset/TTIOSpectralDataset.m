@@ -4294,9 +4294,39 @@ TTIOReadSamplesFromFile(NSString *path)
 
 @end
 
+// Private lazy/cached per-modality materialisers backing -imageForKind:.
+// Each reads + caches its image from the dataset file on first access
+// (associated-object cache, preserved verbatim from the former public
+// -msImage / -ramanImage / -irImage property getters).
+@interface TTIOSpectralDataset (ImagePrivate)
+- (nullable TTIOMSImage *)_lazyMSImage;
+- (nullable TTIORamanImage *)_lazyRamanImage;
+- (nullable TTIOIRImage *)_lazyIRImage;
+@end
+
 @implementation TTIOSpectralDataset (Image)
 
-- (TTIOMSImage *)msImage
+- (nullable TTIOImage *)imageForKind:(TTIOImageKind)kind
+{
+    switch (kind) {
+        case TTIOImageKindMS:    return [self _lazyMSImage];
+        case TTIOImageKindRaman: return [self _lazyRamanImage];
+        case TTIOImageKindIR:    return [self _lazyIRImage];
+    }
+    return nil;
+}
+
+- (NSArray<TTIOImage *> *)images
+{
+    NSMutableArray<TTIOImage *> *out = [NSMutableArray array];
+    for (TTIOImageKind k = TTIOImageKindMS; k <= TTIOImageKindIR; k++) {
+        TTIOImage *img = [self imageForKind:k];
+        if (img) [out addObject:img];
+    }
+    return out;
+}
+
+- (TTIOMSImage *)_lazyMSImage
 {
     // TTIOMSImage no longer inherits from TTIOSpectralDataset; always
     // materialise from file path via the image class factory.
@@ -4316,7 +4346,7 @@ TTIOReadSamplesFromFile(NSString *path)
     return img;
 }
 
-- (TTIORamanImage *)ramanImage
+- (TTIORamanImage *)_lazyRamanImage
 {
     // v0.11 Stage 5.2: lazy /study/raman_image_cube accessor mirroring
     // -msImage. Java parity: SpectralDataset.ramanImage(). Python parity:
@@ -4335,7 +4365,7 @@ TTIOReadSamplesFromFile(NSString *path)
     return img;
 }
 
-- (TTIOIRImage *)irImage
+- (TTIOIRImage *)_lazyIRImage
 {
     // v0.11 Stage 5.2: lazy /study/ir_image_cube accessor mirroring
     // -msImage / -ramanImage. Java parity: SpectralDataset.irImage()
