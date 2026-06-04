@@ -50,6 +50,71 @@ class EncodeCliTest {
         assertTrue(Files.exists(out));
     }
 
+    @Test
+    void fastaFastqAreDelegatedExit3() {
+        assertEquals(3, EncodeCli.run(new String[]{
+            "--input", "x.fasta", "--format", "fasta", "--output", "o.tio"}));
+        assertEquals(3, EncodeCli.run(new String[]{
+            "--input", "x.fastq", "--format", "fastq", "--output", "o.tio"}));
+    }
+
+    @Test
+    void missingArgsExits2() {
+        // no --output
+        assertEquals(2, EncodeCli.run(new String[]{
+            "--input", "x.mzML", "--format", "mzml"}));
+        // no --input
+        assertEquals(2, EncodeCli.run(new String[]{
+            "--format", "mzml", "--output", "o.tio"}));
+        // nothing
+        assertEquals(2, EncodeCli.run(new String[]{}));
+    }
+
+    @Test
+    void danglingOptionValueExits2() {
+        assertEquals(2, EncodeCli.run(new String[]{"--input"}));
+        assertEquals(2, EncodeCli.run(new String[]{"--format"}));
+        assertEquals(2, EncodeCli.run(new String[]{"--output"}));
+        assertEquals(2, EncodeCli.run(new String[]{"--extra"}));
+    }
+
+    @Test
+    void unknownArgumentExits2() {
+        assertEquals(2, EncodeCli.run(new String[]{"--nope"}));
+    }
+
+    @Test
+    void malformedExtraExits2() {
+        assertEquals(2, EncodeCli.run(new String[]{
+            "--input", "x.mzML", "--format", "mzml",
+            "--output", "o.tio", "--extra", "noequals"}));
+    }
+
+    @Test
+    void importerFailureOnMissingInputExits2(@TempDir Path tmp) {
+        // A registry format whose input file does not exist → importer
+        // throws → exit 2.
+        int rc = EncodeCli.run(new String[]{
+            "--input", tmp.resolve("does-not-exist.mzML").toString(),
+            "--format", "mzml",
+            "--output", tmp.resolve("o.tio").toString()});
+        assertEquals(2, rc);
+    }
+
+    @Test
+    void encodesMzmlWithExtraOpt(@TempDir Path tmp) throws Exception {
+        Path mzml = tmp.resolve("tiny2.mzML");
+        MzMLWriter.write(minimalRun("run1"), mzml.toString());
+        Path out = tmp.resolve("e2.tio");
+        int rc = EncodeCli.run(new String[]{
+            "--input", mzml.toString(),
+            "--format", "mzml",
+            "--output", out.toString(),
+            "--extra", "title=custom"});
+        assertEquals(0, rc);
+        assertTrue(Files.exists(out));
+    }
+
     private static AcquisitionRun minimalRun(String name) {
         SpectrumIndex idx = new SpectrumIndex(
             1, new long[]{0L}, new int[]{1},
