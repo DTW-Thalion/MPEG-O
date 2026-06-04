@@ -14,6 +14,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOBrukerTDFReader.h"
+#import "Import/TTIOImportedDataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import <sqlite3.h>
 
@@ -221,6 +222,33 @@ static NSString *btdfResolvePython(void)
         return NO;
     }
 
+    return [self _runImportFromPath:dDir toOutput:output error:error];
+}
+
++ (nullable TTIOImportedDataset *)readDatasetFromPath:(NSString *)dDir
+                                                error:(NSError **)error
+{
+    // Same up-front validation as +importFromPath: — fail fast on
+    // malformed input before any subprocess is deferred into the draft.
+    NSError *mdErr = nil;
+    TTIOBrukerTDFMetadata *md = [self readMetadataAtPath:dDir error:&mdErr];
+    if (!md) {
+        if (error) *error = mdErr;
+        return nil;
+    }
+
+    // Defer the binary extraction: the delegate calls the leaf at
+    // -writeToPath: time (no recursion through +importFromPath: /
+    // +readDatasetFromPath:).
+    return [TTIOImportedDataset datasetWithWriteDelegate:^BOOL(NSString *out, NSError **e) {
+        return [TTIOBrukerTDFReader _runImportFromPath:dDir toOutput:out error:e];
+    }];
+}
+
++ (BOOL)_runImportFromPath:(NSString *)dDir
+                  toOutput:(NSString *)output
+                     error:(NSError **)error
+{
     NSString *python = btdfResolvePython();
     if (!python) {
         if (error) *error = TTIOMakeError(TTIOErrorFileOpen,

@@ -10,6 +10,8 @@
 
 #import <Foundation/Foundation.h>
 
+@class TTIOImportedDataset;
+
 NS_ASSUME_NONNULL_BEGIN
 
 /**
@@ -84,6 +86,21 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)importFromPath:(NSString *)dDir
              toOutput:(NSString *)output
                 error:(NSError **)error;
+
+/** Produce a normalized importer draft for a Bruker `.d` directory.
+ *
+ *  Performs the SAME up-front SQLite metadata validation as
+ *  `+importFromPath:toOutput:error:` (so malformed input fails fast,
+ *  before any subprocess spawn), then returns a
+ *  `TTIOImportedDataset` whose `writeDelegate` shells out to the
+ *  Python `ttio.importers.bruker_tdf_cli` helper. The subprocess runs
+ *  only when the caller invokes `-writeToPath:error:` on the draft —
+ *  conforming Bruker to the "produce a draft, caller writes" model.
+ *
+ *  Returns the draft on success; nil with an NSError populated when
+ *  the up-front metadata validation fails. */
++ (nullable TTIOImportedDataset *)readDatasetFromPath:(NSString *)dDir
+                                                error:(NSError **)error;
 
 @end
 

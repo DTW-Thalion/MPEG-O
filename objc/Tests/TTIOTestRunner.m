@@ -80,6 +80,7 @@ extern void testM83Rans(void);
 extern void testCodecRegistry(void);
 extern void testImportedDataset(void);
 extern void testRunSelection(void);
+extern void testBrukerReaderDataset(void);
 extern void testM84BasePack(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
@@ -749,6 +750,10 @@ int main(int argc, const char *argv[])
         START_SET("OT3: TTIORunSelection analytical/NMR/genomic run selection")
             testRunSelection();
         END_SET("OT3: TTIORunSelection analytical/NMR/genomic run selection")
+
+        START_SET("OT4: TTIOBrukerTDFReader readDataset write-through draft")
+            testBrukerReaderDataset();
+        END_SET("OT4: TTIOBrukerTDFReader readDataset write-through draft")
     }
     return 0;
 }
