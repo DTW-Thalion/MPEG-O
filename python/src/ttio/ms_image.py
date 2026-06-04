@@ -2,12 +2,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import ClassVar
 
 import numpy as np
 
+from .enums import ImageKind, SpectralAxisKind
+from .image import Image
+
 
 @dataclass(slots=True)
-class MSImage:
+class MSImage(Image):
     """Mass-spectrometry imaging dataset: a ``width x height`` grid of
     pixels, each pixel a spectral profile of ``spectral_points`` values.
 
@@ -60,22 +64,22 @@ class MSImage:
     ``global.thalion.ttio.MSImage``.
     """
 
-    width: int = 0
-    height: int = 0
-    spectral_points: int = 0
-    pixel_size_x: float = 0.0
-    pixel_size_y: float = 0.0
-    intensity: np.ndarray = field(default_factory=lambda: np.zeros((0, 0, 0)))
+    # Common fields (width, height, spectral_points, pixel sizes, intensity,
+    # scan_pattern, tile_size, title, isa_investigation_id, identifications,
+    # quantifications, provenance_records) are inherited from Image. Only the
+    # MS-specific spectral axis is declared here.
     mz_axis: np.ndarray = field(default_factory=lambda: np.zeros(0))
-    scan_pattern: str = ""
-    tile_size: int = 0
 
-    # Dataset-level composition fields (ObjC inherits from TTIOSpectralDataset)
-    title: str = ""
-    isa_investigation_id: str = ""
-    identifications: list = field(default_factory=list)
-    quantifications: list = field(default_factory=list)
-    provenance_records: list = field(default_factory=list)
+    kind: ClassVar[ImageKind] = ImageKind.MS
+
+    @property
+    def spectral_axis(self) -> np.ndarray:
+        """The m/z calibration axis (alias of :attr:`mz_axis`)."""
+        return self.mz_axis
+
+    @property
+    def spectral_axis_kind(self) -> SpectralAxisKind:
+        return SpectralAxisKind.MZ
 
     def __post_init__(self) -> None:
         if self.width == 0 and self.height == 0 and self.spectral_points == 0 and self.mz_axis.size == 0:
