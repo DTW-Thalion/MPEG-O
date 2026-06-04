@@ -52,9 +52,11 @@ public final class ExporterRegistry {
             null, new JcampDxWriterAdapter()),
         new ExportSpec("isa", "ISA-Tab/JSON", List.of(".zip", ".json"), null,
             new IsaWriterAdapter()),
-        new ExportSpec("bam", "BAM", List.of(".bam", ".sam"), "samtools",
+        // Java uses bundled htsjdk (no external samtools); cf. Python which shells out to samtools.
+        new ExportSpec("bam", "BAM", List.of(".bam", ".sam"), null,
             new BamWriterAdapter()),
-        new ExportSpec("cram", "CRAM", List.of(".cram"), "samtools",
+        // Java uses bundled htsjdk (no external samtools); cf. Python which shells out to samtools.
+        new ExportSpec("cram", "CRAM", List.of(".cram"), null,
             new CramWriterAdapter()));
 
     private static final Map<String, ExportSpec> _BY_KEY = byKey(_SPECS);

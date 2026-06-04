@@ -5,8 +5,10 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.Properties;
 
+import global.thalion.ttio.browser.SdkFormatKeys;
 import global.thalion.ttio.browser.importers.ImportFormatSpec.ExtraField;
 import global.thalion.ttio.browser.importers.ImportFormatSpec.SourceKind;
+import global.thalion.ttio.importers.ImporterRegistry;
 
 public final class ImportFormatRegistry {
 
@@ -74,12 +76,26 @@ public final class ImportFormatRegistry {
         );
     }
 
+    /** Builds one row. For registry-covered formats ({@code SdkFormatKeys
+     *  .importKey(name) != null}) the {@code fileExts} and {@code requiredBinary}
+     *  are sourced from the TTI-O SDK {@link ImporterRegistry} (single source of
+     *  truth); the {@code exts}/{@code requiredBinary} args are the GUI-local
+     *  fallback used only for fasta/fastq. GUI-only attributes (sourceKind,
+     *  extras, description) are always supplied here. */
     private static ImportFormatSpec spec(String name, String fqn,
                                          SourceKind kind, List<String> exts,
                                          ExtraField extras, Properties props,
                                          String requiredBinary) {
-        return new ImportFormatSpec(name, fqn, kind, exts, extras,
+        String sdkKey = SdkFormatKeys.importKey(name);
+        List<String> fileExts = exts;
+        String binary = requiredBinary;
+        if (sdkKey != null) {
+            var sdk = ImporterRegistry.specFor(sdkKey);
+            fileExts = sdk.extensions();
+            binary = sdk.requiredTool();
+        }
+        return new ImportFormatSpec(name, fqn, kind, fileExts, extras,
             props.getProperty("import." + name + ".description", "(no description)"),
-            requiredBinary);
+            binary);
     }
 }

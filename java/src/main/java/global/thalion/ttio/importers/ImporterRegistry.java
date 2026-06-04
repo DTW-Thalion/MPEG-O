@@ -59,11 +59,14 @@ public final class ImporterRegistry {
             "masslynxraw", new WatersMassLynxReaderAdapter()),
         new FormatSpec("thermo-raw", "Thermo .raw", List.of(".raw"),
             "ThermoRawFileParser", new ThermoRawReaderAdapter()),
-        new FormatSpec("bam", "BAM", List.of(".bam"), "samtools",
+        // Java uses bundled htsjdk (no external samtools); cf. Python which shells out to samtools.
+        new FormatSpec("bam", "BAM", List.of(".bam"), null,
             new BamReaderAdapter()),
-        new FormatSpec("sam", "SAM", List.of(".sam"), "samtools",
+        // Java uses bundled htsjdk (no external samtools); cf. Python which shells out to samtools.
+        new FormatSpec("sam", "SAM", List.of(".sam"), null,
             new SamReaderAdapter()),
-        new FormatSpec("cram", "CRAM", List.of(".cram"), "samtools",
+        // Java uses bundled htsjdk (no external samtools); cf. Python which shells out to samtools.
+        new FormatSpec("cram", "CRAM", List.of(".cram"), null,
             new CramReaderAdapter()));
 
     private static final Map<String, FormatSpec> _BY_KEY = byKey(_SPECS);
