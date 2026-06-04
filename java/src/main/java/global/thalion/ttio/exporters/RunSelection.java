@@ -6,8 +6,11 @@
 package global.thalion.ttio.exporters;
 
 import global.thalion.ttio.AcquisitionRun;
+import global.thalion.ttio.Enums;
 import global.thalion.ttio.SpectralDataset;
+import global.thalion.ttio.genomics.GenomicIndex;
 import global.thalion.ttio.genomics.GenomicRun;
+import global.thalion.ttio.genomics.WrittenGenomicRun;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -145,6 +148,58 @@ public final class RunSelection {
         throw new IllegalArgumentException(
             "multiple genomic runs present; pass --layer <name>: "
             + sortedNames(runs));
+    }
+
+    /**
+     * Materialise a read-side {@link GenomicRun} into a write-side
+     * {@link WrittenGenomicRun} for BAM / CRAM export.
+     *
+     * <p>This is the single shared copy of the conversion the tio-browser
+     * GUI performs in {@code ExportTask.toWritten}; the {@code BamWriterAdapter}
+     * and {@code CramWriterAdapter} both call it so the materialisation logic
+     * lives in exactly one place (and PR-J2's GUI can adopt it later).</p>
+     */
+    public static WrittenGenomicRun toWritten(GenomicRun run) {
+        int n = run.readCount();
+        GenomicIndex idx = run.index();
+        long[] positions = new long[n];
+        byte[] mapqs     = new byte[n];
+        int[]  flags     = new int[n];
+        long[] offsets   = new long[n];
+        int[]  lengths   = new int[n];
+        List<String> chromosomes = new ArrayList<>(n);
+        List<String> readNames   = new ArrayList<>(n);
+        List<String> cigars      = new ArrayList<>(n);
+        List<String> mateChroms  = new ArrayList<>(n);
+        long[] matePos   = new long[n];
+        int[]  tlens     = new int[n];
+        for (int i = 0; i < n; i++) {
+            positions[i] = idx.positionAt(i);
+            mapqs[i]     = (byte) idx.mappingQualityAt(i);
+            flags[i]     = idx.flagsAt(i);
+            offsets[i]   = idx.offsetAt(i);
+            lengths[i]   = idx.lengthAt(i);
+            chromosomes.add(idx.chromosomeAt(i));
+            readNames.add(run.readNameAt(i));
+            cigars.add(run.cigarAt(i));
+            mateChroms.add(run.mateChromAt(i));
+            matePos[i]   = run.matePosAt(i);
+            tlens[i]     = run.mateTlenAt(i);
+        }
+        byte[] seqs  = n > 0 ? run.sequencesFull() : new byte[0];
+        byte[] quals = n > 0 ? run.qualitiesFull() : new byte[0];
+        return new WrittenGenomicRun(
+            run.acquisitionMode() != null
+                ? run.acquisitionMode() : Enums.AcquisitionMode.GENOMIC_WGS,
+            run.referenceUri() != null ? run.referenceUri() : "",
+            run.platform() != null ? run.platform() : "",
+            run.sampleName() != null ? run.sampleName() : "",
+            positions, mapqs, flags,
+            seqs, quals,
+            offsets, lengths,
+            cigars, readNames, mateChroms, matePos, tlens, chromosomes,
+            Enums.Compression.NONE
+        );
     }
 
     /** {@code ", ".join(sorted(runs))} — sorted, comma-space-joined keys. */
