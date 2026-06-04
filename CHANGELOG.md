@@ -11,6 +11,17 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — Shared Image base + uniform image collection (Python)
+
+`MSImage`/`RamanImage`/`IRImage` now share an `Image` base (common geometry,
+intensity cube, dataset-level metadata) with an `ImageKind` discriminator and a
+generic `spectral_axis`. `SpectralDataset`'s `image`/`raman_image`/`ir_image`
+accessors are replaced by `images` (collection of present kinds) +
+`image_for_kind(kind)`; every consumer (exporters, transport walker/writer, CLI)
+migrated. No `.tio` wire/format or transport-protocol change; each image keeps
+its own on-disk group + I/O. First of the 3-SDK P2.5 ports (Java + tio-browser
+and ObjC follow). (OO-assessment P2.5.)
+
 ### Performance — Vectorized genomic region/flag queries (Java + Objective-C)
 
 `GenomicIndex.indicesForRegion`/`indicesForFlag` (Java) and `TTIOGenomicIndex`

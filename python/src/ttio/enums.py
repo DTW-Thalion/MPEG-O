@@ -175,6 +175,32 @@ class IRMode(IntEnum):
     ABSORBANCE = 1
 
 
+class ImageKind(IntEnum):
+    """Discriminator for the shared :class:`ttio.image.Image` base.
+
+    Identifies which concrete imaging modality an :class:`~ttio.image.Image`
+    instance is, without inspecting its distinct fields. Purely an in-memory
+    aid; not written to the ``.tio`` wire format (each image subclass keeps
+    its own on-disk group).
+    """
+
+    MS = 0
+    RAMAN = 1
+    IR = 2
+
+
+class SpectralAxisKind(IntEnum):
+    """Interpretation of an :class:`~ttio.image.Image`'s generic
+    ``spectral_axis``.
+
+    ``MZ`` for mass-spectrometry m/z axes, ``WAVENUMBER`` for Raman/IR
+    wavenumber axes. In-memory aid only; not part of the wire format.
+    """
+
+    MZ = 0
+    WAVENUMBER = 1
+
+
 class EncryptionLevel(IntEnum):
     """Multi-level protection granularity (MPEG-G style).
 

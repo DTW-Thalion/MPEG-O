@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from ttio.enums import ImageKind
 from ttio.spectral_dataset import SpectralDataset
 from ttio.transport.codec import (
     TRANSPORT_V0_11_FEATURE,
@@ -48,7 +49,7 @@ def _encode_image_processed(input_path: str, output_path: str) -> None:
                     features=[TRANSPORT_V0_11_FEATURE],
                     n_datasets=0,
                 )
-                w.write_image_processed(ds.image)
+                w.write_image_processed(ds.image_for_kind(ImageKind.MS))
                 w.write_end_of_stream()
 
 
