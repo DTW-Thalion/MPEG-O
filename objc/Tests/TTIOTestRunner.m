@@ -100,6 +100,7 @@ extern void testRefDiffV2Dispatch(void);
 extern void testNameTokenizerV2(void);
 extern void testNameTokenizedV2Dispatch(void);
 extern void testOffsetsCumsum(void);
+extern void testGenomicIndexRegionQuery(void);
 extern void testM95DeltaRansUnit(void);
 extern void testM87BamImporter(void);
 extern void testM88CramBamRoundTrip(void);
@@ -537,6 +538,10 @@ int main(int argc, const char *argv[])
         START_SET("v1.10 #10: TTIOOffsetsFromLengths cumsum + uint32->uint64 overflow")
             testOffsetsCumsum();
         END_SET("v1.10 #10: TTIOOffsetsFromLengths cumsum + uint32->uint64 overflow")
+
+        START_SET("PO1: TTIOGenomicIndex region/flag query equivalence (disk interned-id + in-memory fallback)")
+            testGenomicIndexRegionQuery();
+        END_SET("PO1: TTIOGenomicIndex region/flag query equivalence (disk interned-id + in-memory fallback)")
 
         START_SET("M95: DELTA_RANS_ORDER0 codec unit")
             testM95DeltaRansUnit();

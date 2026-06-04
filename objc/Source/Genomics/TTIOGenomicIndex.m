@@ -51,6 +51,17 @@ NSData *TTIOOffsetsFromLengths(NSData *lengths)
     NSData *_positionsData;
     NSData *_mappingQualitiesData;
     NSData *_flagsData;
+
+    // PO1 (P1.2): interned chromosome table, populated by
+    // +readFromGroup: from the on-disk uint16 id column (Task #82).
+    // Both nil for in-memory construction — region lookup then falls
+    // back to scanning the _chromosomes string array. When present,
+    // -indicesForRegion: resolves the query name to its id ONCE and
+    // scans a uint16 comparison instead of an O(N) per-read
+    // -isEqualToString:. Mirrors Java GenomicIndex (PJ1) +
+    // Python genomic_index.py:126-146.
+    NSData *_chromosomeIdsData;                            // uint16 per read; nil in-memory
+    NSDictionary<NSString *, NSNumber *> *_chromosomeNameToId; // nil when no ids
 }
 
 - (instancetype)initWithOffsets:(NSData *)offsets
@@ -111,9 +122,33 @@ NSData *TTIOOffsetsFromLengths(NSData *lengths)
                             start:(int64_t)start
                               end:(int64_t)end
 {
-    NSMutableIndexSet *result = [NSMutableIndexSet indexSet];
     NSUInteger n = self.count;
     const int64_t *positions = (const int64_t *)_positionsData.bytes;
+
+    // PO1 fast path: on a disk-loaded index the interned uint16 ids are
+    // retained alongside a name→id map, so resolve the query chromosome
+    // to its id ONCE and scan a uint16 comparison per read. An absent
+    // chromosome resolves to no id and yields the empty set — identical
+    // to the never-matched behaviour of the string scan. Results
+    // (indices + ascending order) are identical to the fallback below.
+    if (_chromosomeIdsData != nil) {
+        NSNumber *tid = _chromosomeNameToId[chromosome];
+        if (tid == nil) return [NSIndexSet indexSet];
+        uint16_t target = tid.unsignedShortValue;
+        NSMutableIndexSet *result = [NSMutableIndexSet indexSet];
+        const uint16_t *ids = (const uint16_t *)_chromosomeIdsData.bytes;
+        for (NSUInteger i = 0; i < n; i++) {
+            if (ids[i] == target
+                && positions[i] >= start
+                && positions[i] < end) {
+                [result addIndex:i];
+            }
+        }
+        return result;
+    }
+
+    // Fallback: in-memory index without interned ids (verbatim old loop).
+    NSMutableIndexSet *result = [NSMutableIndexSet indexSet];
     for (NSUInteger i = 0; i < n; i++) {
         if ([_chromosomes[i] isEqualToString:chromosome]
             && positions[i] >= start
@@ -283,13 +318,33 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
         [chroms addObject:idx < nameTable.count ? nameTable[idx] : @""];
     }
 
-    return [[TTIOGenomicIndex alloc]
+    TTIOGenomicIndex *index = [[TTIOGenomicIndex alloc]
         initWithOffsets:offsets
                 lengths:lengths
             chromosomes:chroms
               positions:positions
        mappingQualities:mapqs
                   flags:flags];
+
+    // PO1 (P1.2): retain the per-read uint16 ids and invert the id→name
+    // table (nameTable row k carries the name for id k, encounter-order
+    // 1:1) into a name→uint16 map. -indicesForRegion: then resolves the
+    // query chromosome once and scans uint16 comparisons. First
+    // occurrence wins for any duplicate name (setObject:forKey: only on
+    // absent key), matching Java/Python. Set ONLY on the disk-load path;
+    // the in-memory designated initialiser leaves both ivars nil.
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
+        [NSMutableDictionary dictionaryWithCapacity:nameTable.count];
+    for (NSUInteger id_ = 0; id_ < nameTable.count; id_++) {
+        NSString *name = nameTable[id_];
+        if (nameToId[name] == nil) {
+            nameToId[name] = @((uint16_t)id_);
+        }
+    }
+    index->_chromosomeIdsData   = [idsData copy];
+    index->_chromosomeNameToId  = [nameToId copy];
+
+    return index;
 }
 
 @end
