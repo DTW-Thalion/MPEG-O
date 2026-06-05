@@ -11,6 +11,17 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Deprecated — `StorageProvider.native_handle()` (Python)
+
+`StorageProvider.native_handle()` — the raw-backend escape hatch — is now
+deprecated and emits a `DeprecationWarning`. Reach storage through
+`root_group()` / the `StorageGroup` protocol instead. The method and its return
+values are unchanged for now; this mirrors the Java SDK's
+`@Deprecated(forRemoval=true)` to keep the three SDKs in parity, with hard
+removal deferred to a future coordinated major. All mainline TTI-O code already
+routes through the protocol, so the warning never fires on our own code.
+Completes OO-assessment P3.9.
+
 ### Changed — genomic `ReferenceResolver` resolves embedded references via the StorageGroup protocol (Python)
 
 The genomic REF_DIFF `ReferenceResolver` now navigates the

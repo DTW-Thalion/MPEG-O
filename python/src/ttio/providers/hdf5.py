@@ -743,6 +743,13 @@ class Hdf5Provider(StorageProvider):
     def native_handle(self) -> h5py.File:
         """Return the underlying :class:`h5py.File` handle.
 
+        .. deprecated::
+            ``native_handle()`` is deprecated and slated for removal in a
+            future coordinated major. Reach storage through
+            :meth:`root_group` and the :class:`StorageGroup` protocol
+            instead. (Parity with the Java SDK's
+            ``@Deprecated(forRemoval=true)``.)
+
         Escape hatch for byte-level code (signature hashing,
         encryption, native compression filters) that has to bypass
         the provider abstraction. Callers must not close the handle;
@@ -752,4 +759,12 @@ class Hdf5Provider(StorageProvider):
         -------
         h5py.File
         """
+        import warnings
+        warnings.warn(
+            "StorageProvider.native_handle() is deprecated and slated for "
+            "removal; reach storage through root_group() and the StorageGroup "
+            "protocol. (Parity with the Java SDK's @Deprecated(forRemoval=true).)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._file
