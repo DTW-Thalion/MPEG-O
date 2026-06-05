@@ -68,12 +68,12 @@ def _dataset_native_bytes(dataset: h5py.Dataset) -> bytes:
 def _dataset_canonical_bytes(dataset: h5py.Dataset) -> bytes:
     """Return the canonical little-endian byte stream for ``dataset`` (v2).
 
-    : this helper now delegates to the storage-provider
-    protocol's :meth:`StorageDataset.read_canonical_bytes`, so the byte
-    stream is guaranteed bit-identical across HDF5, Memory, and SQLite
-    backends — a file signed through any provider verifies through any
-    other. The HDF5 path still runs its optimised native-dtype walk via
-    the :class:`ttio.providers.hdf5._Dataset` override.
+    This helper delegates to the storage-provider protocol's
+    :meth:`StorageDataset.read_canonical_bytes`, so the byte stream is
+    guaranteed bit-identical across HDF5, Memory, and SQLite backends —
+    a file signed through any provider verifies through any other. The
+    HDF5 backend's zero-copy speed comes from its :meth:`_Dataset.read`
+    override, which the shared canonicaliser consumes.
     """
     from .providers.hdf5 import _Dataset as _Hdf5Dataset
     return _Hdf5Dataset(dataset).read_canonical_bytes()
