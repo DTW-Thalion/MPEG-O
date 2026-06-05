@@ -96,38 +96,38 @@ public class SignalArray implements CVAnnotatable {
     public List<CVParam> cvParams() { return Collections.unmodifiableList(cvParams); }
 
     /**
-     * @return The backing array typed as {@code double[]}.
+     * @return a defensive copy of the backing array as {@code double[]}.
      * @throws ClassCastException when the buffer is not a {@code double[]}
      */
     public double[] asDoubles() {
-        if (buffer instanceof double[] d) return d;
+        if (buffer instanceof double[] d) return d.clone();
         throw new ClassCastException("buffer is not double[]");
     }
 
     /**
-     * @return The backing array typed as {@code float[]}.
+     * @return a defensive copy of the backing array as {@code float[]}.
      * @throws ClassCastException when the buffer is not a {@code float[]}
      */
     public float[] asFloats() {
-        if (buffer instanceof float[] f) return f;
+        if (buffer instanceof float[] f) return f.clone();
         throw new ClassCastException("buffer is not float[]");
     }
 
     /**
-     * @return The backing array typed as {@code int[]}.
+     * @return a defensive copy of the backing array as {@code int[]}.
      * @throws ClassCastException when the buffer is not an {@code int[]}
      */
     public int[] asInts() {
-        if (buffer instanceof int[] i) return i;
+        if (buffer instanceof int[] i) return i.clone();
         throw new ClassCastException("buffer is not int[]");
     }
 
     /**
-     * @return The backing array typed as {@code long[]}.
+     * @return a defensive copy of the backing array as {@code long[]}.
      * @throws ClassCastException when the buffer is not a {@code long[]}
      */
     public long[] asLongs() {
-        if (buffer instanceof long[] l) return l;
+        if (buffer instanceof long[] l) return l.clone();
         throw new ClassCastException("buffer is not long[]");
     }
 
