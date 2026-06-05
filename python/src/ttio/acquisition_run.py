@@ -521,13 +521,14 @@ class AcquisitionRun:
         falls back to the v0.2 ``@provenance_json`` attribute. Pre-v0.2
         files (no per-run provenance of any kind) return an empty list.
         """
-        # cold-path — cast to native h5py handle for the
-        # compound-provenance reader, which uses the h5py typed-read
-        # API directly. Protocol-native compound reads are a v0.8
-        # follow-up.
-        h5group = _native_h5py(self.group)
-        if "provenance" in h5group and "steps" in h5group["provenance"]:
-            return _decode_provenance_compound(h5group["provenance"], "steps")
+        # cold-path — navigate the compound-provenance subgroup through
+        # the StorageGroup protocol. read_compound_dataset (via
+        # _decode_provenance_compound) unwraps to the native h5py handle
+        # for HDF5 backends and falls back to read_rows() otherwise.
+        if self.group.has_child("provenance"):
+            prov = self.group.open_group("provenance")
+            if prov.has_child("steps"):
+                return _decode_provenance_compound(prov, "steps")
         if self.provenance_json:
             return _decode_provenance_json(self.provenance_json)
         return []
@@ -773,7 +774,7 @@ class AcquisitionRun:
 
 
 def _decode_provenance_compound(
-    prov_group: h5py.Group, dataset_name: str
+    prov_group: "StorageGroup", dataset_name: str
 ) -> list[ProvenanceRecord]:
     records = io.read_compound_dataset(prov_group, dataset_name)
     out: list[ProvenanceRecord] = []

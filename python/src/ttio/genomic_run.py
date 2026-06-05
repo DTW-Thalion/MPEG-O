@@ -188,23 +188,16 @@ class GenomicRun:
         written by :func:`spectral_dataset._write_genomic_run`.
         Returns ``[]`` for runs that carry no provenance.
         """
-        # Use the h5py-native path through the StorageGroup wrapper.
-        # The provenance compound layout is identical to the MS path
-        # (see acquisition_run.AcquisitionRun.provenance) and is
-        # decoded by the same helper.
-        from .acquisition_run import (
-            _decode_provenance_compound, _native_h5py,
-        )
-        try:
-            h5group = _native_h5py(self.group)
-        except Exception:
-            return []
-        if h5group is None:
-            return []
-        if "provenance" in h5group and "steps" in h5group["provenance"]:
-            return _decode_provenance_compound(
-                h5group["provenance"], "steps",
-            )
+        # Navigate the compound-provenance subgroup through the
+        # StorageGroup protocol. The provenance compound layout is
+        # identical to the MS path (see
+        # acquisition_run.AcquisitionRun.provenance) and is decoded by
+        # the same helper.
+        from .acquisition_run import _decode_provenance_compound
+        if self.group.has_child("provenance"):
+            prov = self.group.open_group("provenance")
+            if prov.has_child("steps"):
+                return _decode_provenance_compound(prov, "steps")
         return []
 
     def __getitem__(self, i: int) -> AlignedRead:
