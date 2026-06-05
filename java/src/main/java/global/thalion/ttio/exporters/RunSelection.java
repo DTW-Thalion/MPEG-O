@@ -34,7 +34,7 @@ import java.util.TreeSet;
  * {@link SpectralDataset#msRuns()}; there is no separate
  * {@code nmrRuns()} accessor. NMR runs live inside {@code msRuns()} and
  * are distinguished by
- * {@code AcquisitionRun.spectrumClassName().equals("TTIONMRSpectrum")}
+ * {@code Enums.SpectrumKind.fromPersisted(run.spectrumClassName()) == NMR}
  * (the same discriminant Python applies via {@code spectrum_class}).
  * Selection behaviour is therefore equivalent to Python's intent.</p>
  *
@@ -47,9 +47,6 @@ import java.util.TreeSet;
 public final class RunSelection {
 
     private RunSelection() { }
-
-    /** {@code "TTIONMRSpectrum"} discriminant, per Python's spectrum_class. */
-    private static final String NMR_SPECTRUM_CLASS = "TTIONMRSpectrum";
 
     /**
      * Select an analytical run (any spectrum class — MS or NMR) by
@@ -102,7 +99,8 @@ public final class RunSelection {
         }
         List<AcquisitionRun> nmr = new ArrayList<>();
         for (AcquisitionRun r : runs.values()) {
-            if (NMR_SPECTRUM_CLASS.equals(r.spectrumClassName())) {
+            if (Enums.SpectrumKind.fromPersisted(r.spectrumClassName())
+                    == Enums.SpectrumKind.NMR) {
                 nmr.add(r);
             }
         }
