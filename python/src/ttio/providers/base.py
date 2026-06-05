@@ -478,10 +478,25 @@ class StorageProvider(ABC):
         """Return the underlying native storage handle — ``h5py.File``
         for :class:`Hdf5Provider`, ``None`` for :class:`MemoryProvider`.
 
+        .. deprecated::
+            ``native_handle()`` is deprecated and slated for removal in a
+            future coordinated major. Reach storage through
+            :meth:`root_group` and the :class:`StorageGroup` protocol
+            instead. (Parity with the Java SDK's
+            ``@Deprecated(forRemoval=true)``.)
+
         Escape hatch for byte-level code (signatures, encryption,
         native compression filters) that cannot be expressed through
         the protocol. Any caller that invokes this is pinned to a
         specific backend."""
+        import warnings
+        warnings.warn(
+            "StorageProvider.native_handle() is deprecated and slated for "
+            "removal; reach storage through root_group() and the StorageGroup "
+            "protocol. (Parity with the Java SDK's @Deprecated(forRemoval=true).)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return None
 
     def __enter__(self) -> "StorageProvider":
