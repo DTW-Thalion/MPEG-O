@@ -6,7 +6,6 @@ from typing import Iterator
 
 import json
 
-import h5py
 import numpy as np
 
 from . import _hdf5_io as io

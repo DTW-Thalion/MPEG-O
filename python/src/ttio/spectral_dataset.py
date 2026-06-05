@@ -104,10 +104,10 @@ class SpectralDataset:
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
     _lock: RWLock | None = None  # set when opened with thread_safe=True
     provider: StorageProvider | None = None  # owning storage provider
-    # ``provider`` is the backend abstraction introduced in M39. Byte-level
-    # code (signatures, encryption, signal-channel codecs) reaches the
-    # underlying ``h5py.File`` via ``provider.native_handle()``; call sites
-    # should prefer ``provider.root_group()`` for protocol access.
+    # ``provider`` is the backend abstraction introduced in M39. All code
+    # reaches storage through ``provider.root_group()`` and the StorageGroup
+    # protocol; the raw-handle escape hatch ``native_handle()`` is deprecated
+    # (P3.9) and no longer used by mainline code.
     # Encryptable conformance.
     _access_policy: AccessPolicy | None = field(default=None, repr=False)
     # Lazy image cache — populated on first access of the `image` property.
