@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — signature sign/verify route raw-h5py through the protocol (Python)
+
+`sign_dataset`/`verify_dataset` now wrap raw `h5py.Dataset` inputs in the HDF5
+provider's `StorageDataset` adapter and route through the provider-agnostic
+`sign_storage_dataset`/`verify_storage_dataset`, so the live signature path no
+longer touches raw h5py directly. The deprecated v1 unprefixed native-bytes
+verify is the sole remaining raw-h5py path (scheduled for separate removal at
+v1.0). No signature/`.tio` wire change — signatures stay byte-identical and
+cross-language conformance is preserved. (OO-assessment P3.9.)
+
 ### Changed — `SpectralDataset.file` raw-h5py handle removed (Python)
 
 The public `SpectralDataset.file` attribute (a raw `h5py.File` handle) is
