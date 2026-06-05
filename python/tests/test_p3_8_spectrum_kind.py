@@ -3,8 +3,8 @@ from ttio.enums import SpectrumKind
 
 
 def test_known_strings_round_trip():
-    for s in ["TTIOMassSpectrum", "TTIONMRSpectrum", "TTIOIRSpectrum",
-              "TTIORamanSpectrum", "TTIOUVVisSpectrum",
+    for s in ["TTIOMassSpectrum", "TTIONMRSpectrum", "TTIONMR2DSpectrum",
+              "TTIOIRSpectrum", "TTIORamanSpectrum", "TTIOUVVisSpectrum",
               "TTIOFreeInductionDecay", "TTIOMSImagePixel"]:
         k = SpectrumKind.from_persisted(s)
         assert k is not SpectrumKind.UNKNOWN
