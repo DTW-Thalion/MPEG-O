@@ -23,8 +23,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
-
 from ..exporters.fasta import DEFAULT_LINE_WIDTH, FastaWriter
 from ..genomic.reference_import import ReferenceImport
 from ..spectral_dataset import SpectralDataset
@@ -88,31 +86,24 @@ def _load_embedded_reference(ds: SpectralDataset, uri: str) -> ReferenceImport:
             f"got {type(ds).__name__} with no .provider."
         )
     root = provider.root_group()
-    if not (root.has_child("study")
-            and root.open_group("study").has_child("references")):
+    if not root.has_child("study"):
         raise RuntimeError(
             "fasta_export_cli requires a provider-backed input with "
             f"embedded references; got {type(provider).__name__} with "
             "no /study/references group."
         )
-    refs = root.open_group("study").open_group("references")
+    study = root.open_group("study")
+    if not study.has_child("references"):
+        raise RuntimeError(
+            "fasta_export_cli requires a provider-backed input with "
+            f"embedded references; got {type(provider).__name__} with "
+            "no /study/references group."
+        )
+    refs = study.open_group("references")
     if not refs.has_child(uri):
         raise KeyError(f"reference {uri!r} not embedded in input")
     grp = refs.open_group(uri)
-    md5_attr = grp.get_attribute("md5")
-    if isinstance(md5_attr, bytes):
-        md5_hex = md5_attr.decode("ascii")
-    else:
-        md5_hex = bytes(md5_attr).decode("ascii") if hasattr(md5_attr, "tobytes") \
-            else str(md5_attr)
-    md5 = bytes.fromhex(md5_hex)
-    chrom_grp = grp.open_group("chromosomes")
-    names: list[str] = sorted(chrom_grp.child_names())
-    seqs: list[bytes] = [
-        bytes(np.asarray(chrom_grp.open_group(n).open_dataset("data").read()).tobytes())
-        for n in names
-    ]
-    return ReferenceImport(uri=uri, chromosomes=names, sequences=seqs, md5=md5)
+    return ReferenceImport.read_from_group(grp)
 
 
 def main(argv: list[str] | None = None) -> int:
