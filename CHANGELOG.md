@@ -11,6 +11,17 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — genomic `ReferenceResolver` resolves embedded references via the StorageGroup protocol (Python)
+
+The genomic REF_DIFF `ReferenceResolver` now navigates the
+`/study/references` subtree through the `StorageGroup` protocol
+(`has_child`/`open_group`/`open_dataset` + `StorageDataset.read`) instead of a
+raw `h5py.File` handle; `SpectralDataset` threads the references group into each
+`GenomicRun` at open time. The `_native_h5py` escape shim — its last caller —
+is removed. No REF_DIFF wire/decode change: encoded→decoded sequences stay
+byte-identical and the external-FASTA / `REF_PATH` / Q5c hard-error fallbacks
+are preserved. (OO-assessment P3.9.)
+
 ### Changed — per-run provenance cold path reads via the StorageGroup protocol (Python)
 
 The per-run provenance cold path (`AcquisitionRun.provenance` and

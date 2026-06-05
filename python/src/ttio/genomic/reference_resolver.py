@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:  # pragma: no cover — annotation only
-    import h5py
+    from ..providers.base import StorageGroup
 
 
 def _hex_str_attr(raw: object) -> str:
@@ -56,18 +56,20 @@ class ReferenceResolver:
     """Resolve a reference chromosome sequence for REF_DIFF decode.
 
     Args:
-        h5_file: open ``h5py.File`` handle in read mode. The resolver
-            looks for ``/study/references/<uri>/`` as the primary source.
+        references_group: the ``/study/references`` group as a
+            :class:`~ttio.providers.base.StorageGroup`, or ``None`` when
+            no embedded references are available. The resolver looks for
+            ``<uri>/`` children under this group as the primary source.
         external_reference_path: optional explicit path to a FASTA file.
             If unset, the ``REF_PATH`` environment variable is consulted.
     """
 
     def __init__(
         self,
-        h5_file: "h5py.File",
+        references_group: "StorageGroup | None" = None,
         external_reference_path: Path | None = None,
     ):
-        self._h5 = h5_file
+        self._refs = references_group
         self._external = external_reference_path or self._env_path()
 
     @staticmethod
@@ -83,22 +85,23 @@ class ReferenceResolver:
                 MD5 doesn't match.
         """
         # 1. Try embedded.
-        ref_grp = self._h5.get(f"/study/references/{uri}")
-        if ref_grp is not None:
-            embedded_md5 = bytes.fromhex(_hex_str_attr(ref_grp.attrs["md5"]))
+        if self._refs is not None and self._refs.has_child(uri):
+            ref_grp = self._refs.open_group(uri)
+            embedded_md5 = bytes.fromhex(_hex_str_attr(ref_grp.get_attribute("md5")))
             if embedded_md5 != expected_md5:
                 raise RefMissingError(
                     f"MD5 mismatch for embedded reference {uri!r}: "
                     f"expected {expected_md5.hex()}, got {embedded_md5.hex()}"
                 )
-            chrom_grp = ref_grp.get(f"chromosomes/{chromosome}")
-            if chrom_grp is None:
+            chroms = ref_grp.open_group("chromosomes")
+            if not chroms.has_child(chromosome):
                 raise RefMissingError(
                     f"chromosome {chromosome!r} not embedded in "
                     f"reference {uri!r} — covered_chromosomes are "
-                    f"{sorted(ref_grp['chromosomes'].keys())}"
+                    f"{sorted(chroms.child_names())}"
                 )
-            return bytes(np.asarray(chrom_grp["data"]).tobytes())
+            data_ds = chroms.open_group(chromosome).open_dataset("data")
+            return bytes(np.asarray(data_ds.read()).tobytes())
 
         # 2. Try external FASTA.
         if self._external is not None and self._external.exists():
