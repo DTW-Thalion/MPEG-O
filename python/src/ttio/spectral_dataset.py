@@ -263,12 +263,22 @@ class SpectralDataset:
         genomic_runs_map: dict[str, GenomicRun] = {}  # M82
         if study.has_child("genomic_runs"):
             g_group = study.open_group("genomic_runs")
+            # /study/references threaded into each run for REF_DIFF decode
+            # via the StorageGroup protocol (P3.9). None when absent.
+            refs_group = (
+                study.open_group("references")
+                if study.has_child("references")
+                else None
+            )
             names = _split_run_names(
                 io.read_string_attr(g_group, "_run_names", default="") or ""
             )
             for name in names:
                 if g_group.has_child(name):
-                    genomic_runs_map[name] = GenomicRun.open(g_group.open_group(name), name)
+                    genomic_runs_map[name] = GenomicRun.open(
+                        g_group.open_group(name), name,
+                        references_group=refs_group,
+                    )
 
         references_map = _load_references_provider(study)
 

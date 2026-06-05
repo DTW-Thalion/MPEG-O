@@ -46,22 +46,6 @@ def _wrap_hdf5_group(obj: object) -> StorageGroup:
     return _Hdf5Group(obj)
 
 
-def _native_h5py(group: StorageGroup) -> "h5py.Group":
-    """Return the underlying h5py.Group for a StorageGroup backed by
-    :class:`~ttio.providers.hdf5.Hdf5Provider`. Raises if the group
-    is not HDF5-backed — callers that need cold-path attribute
-    helpers (``io.read_string_attr``) route through this shim while
-    the v0.8 migration extends those helpers to accept StorageGroup
-    directly."""
-    native = getattr(group, "_grp", None)
-    if native is None:
-        raise TypeError(
-            "AcquisitionRun cold-path attribute helpers require an "
-            "HDF5-backed StorageGroup; got "
-            f"{type(group).__name__}"
-        )
-    return native
-
 # Channel -> default axis metadata for the two spectrum classes we currently
 # materialize lazily. Writers may store additional channels; reading an unknown
 # channel falls back to a generic "amplitude" axis.
@@ -251,9 +235,9 @@ class SpectrumIndex:
         """Load all index columns.
 
         Accepts either a :class:`StorageGroup` (protocol path)
-        or an :class:`h5py.Group` (legacy). The h5py path is retained
-        via ``_native_h5py`` so existing callers that dereferenced
-        child groups with ``group["spectrum_index"]`` continue to work.
+        or an :class:`h5py.Group` (legacy). The legacy h5py path uses
+        direct ``group[name]`` indexing so existing callers that
+        dereferenced child groups continue to work.
         """
         if isinstance(idx_group, StorageGroup):
             # Protocol path: read columns via StorageDataset.read().
@@ -649,8 +633,8 @@ class AcquisitionRun:
         from .encryption import encrypt_intensity_channel_in_group
         # phase B: the in-place encrypter now accepts either
         # h5py.Group or StorageGroup, so route through the protocol —
-        # works on Memory / SQLite / Zarr backends without
-        # _native_h5py.
+        # works on Memory / SQLite / Zarr backends without unwrapping
+        # to a raw h5py handle.
         sig_group = self.group.open_group("signal_channels")
         encrypt_intensity_channel_in_group(sig_group, key)
 
