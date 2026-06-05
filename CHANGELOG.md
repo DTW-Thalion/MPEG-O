@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `SpectralDataset.file` raw-h5py handle removed (Python)
+
+The public `SpectralDataset.file` attribute (a raw `h5py.File` handle) is
+removed; all storage is now reached through `dataset.provider`, the
+protocol-based `StorageProvider`. The remaining internal consumers (reference
+embed `ReferenceImport.write_to_dataset`, the FASTA-export CLI helper, and the
+subject/sample readers) were migrated to navigate via `provider.root_group()`
+and the `StorageGroup` protocol. On-disk `.tio` bytes are unchanged. (OO-assessment
+P3.9.)
+
 ### Changed — Java SqliteProvider JSON reader uses Jackson (Java)
 
 The Java `SqliteProvider`'s hand-rolled compound-JSON reader (a brittle

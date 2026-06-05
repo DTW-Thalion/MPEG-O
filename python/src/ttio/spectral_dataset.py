@@ -1,7 +1,7 @@
 """``SpectralDataset`` — root ``.tio`` reader / writer façade.
 
-This class is the main public entry point. It owns the underlying
-``h5py.File`` handle, provides mapping-style access to runs, and exposes the
+This class is the main public entry point. It delegates storage to a
+:class:`~ttio.providers.base.StorageProvider`, provides mapping-style access to runs, and exposes the
 feature-flag / identifications / quantifications / provenance metadata.
 
 Only reading and minimal writing are implemented in M16. Full writing
@@ -86,11 +86,6 @@ class SpectralDataset:
     """
 
     path: Path
-    # ``file`` is the legacy h5py handle.: when the dataset
-    # was opened via a non-HDF5 provider (memory/sqlite/zarr) this is
-    # ``None`` and call sites must use :attr:`provider` instead. New
-    # code paths route through the StorageGroup protocol.
-    file: h5py.File | None
     feature_flags: FeatureFlags
     title: str
     isa_investigation_id: str
@@ -109,12 +104,10 @@ class SpectralDataset:
     _remote_fileobj: Any = None  # fsspec file-like kept alive when remote
     _lock: RWLock | None = None  # set when opened with thread_safe=True
     provider: StorageProvider | None = None  # owning storage provider
-    # ``provider`` is the backend abstraction introduced in M39. ``file``
-    # remains the canonical h5py handle for byte-level code (signatures,
-    # encryption, signal-channel codecs) that isn't expressed through the
-    # protocol; it is the provider's native handle when ``provider`` is
-    # set. New call sites should reach for ``provider.root_group()`` or
-    # ``provider.native_handle()`` instead of ``file`` directly.
+    # ``provider`` is the backend abstraction introduced in M39. Byte-level
+    # code (signatures, encryption, signal-channel codecs) reaches the
+    # underlying ``h5py.File`` via ``provider.native_handle()``; call sites
+    # should prefer ``provider.root_group()`` for protocol access.
     # Encryptable conformance.
     _access_policy: AccessPolicy | None = field(default=None, repr=False)
     # Lazy image cache — populated on first access of the `image` property.
@@ -165,9 +158,8 @@ class SpectralDataset:
             read-only). Default: ``False``.
 
         M39: a :class:`~ttio.providers.Hdf5Provider` is constructed for
-        the target and exposed as ``dataset.provider``. The legacy
-        ``dataset.file`` attribute continues to point at the underlying
-        ``h5py.File`` (= ``provider.native_handle()``).
+        the target and exposed as ``dataset.provider``. The dataset is
+        provider-backed; reach storage through ``dataset.provider``.
         """
         from .remote import is_remote_url, open_remote_file
 
@@ -179,11 +171,10 @@ class SpectralDataset:
                 fileobj.close()
                 raise
             try:
-                provider = Hdf5Provider(f)
-                return cls._from_open_file(Path(str(path)), f,
-                                           remote_fileobj=fileobj,
-                                           thread_safe=thread_safe,
-                                           provider=provider)
+                provider = Hdf5Provider._from_open_h5py(f)
+                return cls._from_provider(Path(str(path)), provider,
+                                          thread_safe=thread_safe,
+                                          _remote_fileobj=fileobj)
             except Exception:
                 f.close()
                 fileobj.close()
@@ -215,10 +206,8 @@ class SpectralDataset:
                 sp.close()
                 raise
         provider = Hdf5Provider.open(str(p), mode=mode)
-        f = provider.native_handle()
         try:
-            return cls._from_open_file(p, f, thread_safe=thread_safe,
-                                         provider=provider)
+            return cls._from_provider(p, provider, thread_safe=thread_safe)
         except Exception:
             provider.close()
             raise
@@ -230,6 +219,7 @@ class SpectralDataset:
         provider: StorageProvider,
         *,
         thread_safe: bool = False,
+        _remote_fileobj: Any = None,
     ) -> "SpectralDataset":
         """Open-side constructor for non-HDF5 providers.
 
@@ -284,7 +274,6 @@ class SpectralDataset:
 
         return cls(
             path=path,
-            file=None,  # non-HDF5 providers don't expose h5py.File
             feature_flags=flags,
             title=title,
             isa_investigation_id=isa,
@@ -293,77 +282,7 @@ class SpectralDataset:
             genomic_runs=genomic_runs_map,  # M82
             _references=references_map,
             encrypted_algorithm=encrypted,
-            _remote_fileobj=None,
-            _lock=(RWLock() if thread_safe else None),
-            provider=provider,
-        )
-
-    @classmethod
-    def _from_open_file(
-        cls,
-        path: Path,
-        f: h5py.File,
-        remote_fileobj: Any = None,
-        thread_safe: bool = False,
-        provider: StorageProvider | None = None,
-    ) -> "SpectralDataset":
-        version, features = io.read_feature_flags(f)
-        flags = FeatureFlags.from_iterable(version, features)
-        encrypted = io.read_string_attr(f, "encrypted", default="") or ""
-
-        if "study" not in f:
-            raise ValueError(f"{path}: missing /study group; not a v0.2+ .tio file")
-        study = f["study"]
-
-        title = io.read_string_attr(study, "title", default="") or ""
-        isa = io.read_string_attr(study, "isa_investigation_id", default="") or ""
-
-        # Resolve the canonical file path for the persistence context that
-        # enables AcquisitionRun.encrypt_with_key / decrypt_with_key.
-        file_path = str(path)
-
-        ms_runs: dict[str, AcquisitionRun] = {}
-        if "ms_runs" in study:
-            ms_group = study["ms_runs"]
-            names = _split_run_names(io.read_string_attr(ms_group, "_run_names", default=""))
-            for name in names:
-                if name in ms_group:
-                    run = AcquisitionRun.open(ms_group[name], name)
-                    run._set_persistence_context(file_path, name)
-                    ms_runs[name] = run
-
-        nmr_runs: dict[str, AcquisitionRun] = {}
-        if "nmr_runs" in study:
-            nmr_group = study["nmr_runs"]
-            names = _split_run_names(io.read_string_attr(nmr_group, "_run_names", default=""))
-            for name in names:
-                if name in nmr_group:
-                    run = AcquisitionRun.open(nmr_group[name], name)
-                    run._set_persistence_context(file_path, name)
-                    nmr_runs[name] = run
-
-        genomic_runs_map: dict[str, GenomicRun] = {}  # M82
-        if "genomic_runs" in study:
-            g_group = study["genomic_runs"]
-            names = _split_run_names(io.read_string_attr(g_group, "_run_names", default=""))
-            for name in names:
-                if name in g_group:
-                    genomic_runs_map[name] = GenomicRun.open(g_group[name], name)
-
-        references_map = _load_references_h5py(study)
-
-        return cls(
-            path=path,
-            file=f,
-            feature_flags=flags,
-            title=title,
-            isa_investigation_id=isa,
-            ms_runs=ms_runs,
-            nmr_runs=nmr_runs,
-            genomic_runs=genomic_runs_map,  # M82
-            _references=references_map,
-            encrypted_algorithm=encrypted,
-            _remote_fileobj=remote_fileobj,
+            _remote_fileobj=_remote_fileobj,
             _lock=(RWLock() if thread_safe else None),
             provider=provider,
         )
@@ -403,8 +322,6 @@ class SpectralDataset:
                 # close for legacy instances constructed without M39.
                 if self.provider is not None:
                     self.provider.close()
-                else:
-                    self.file.close()
                 if self._remote_fileobj is not None:
                     try:
                         self._remote_fileobj.close()
@@ -577,7 +494,7 @@ class SpectralDataset:
         """
         if not self._subjects_cache_loaded:
             self._subjects_cache_loaded = True
-            self._subjects_cache = _read_subjects(self.provider, self.file)
+            self._subjects_cache = _read_subjects(self.provider)
         return self._subjects_cache
 
     @property
@@ -594,7 +511,7 @@ class SpectralDataset:
         """
         if not self._samples_cache_loaded:
             self._samples_cache_loaded = True
-            self._samples_cache = _read_samples(self.provider, self.file)
+            self._samples_cache = _read_samples(self.provider)
         return self._samples_cache
 
     @property
@@ -688,19 +605,12 @@ class SpectralDataset:
     def _study_target(self) -> Any:
         """Return the IO target representing ``/study``.
 
-        For HDF5-backed datasets this is the raw ``h5py.Group``; for
-        provider-backed datasets it is a :class:`StorageGroup`. The
+        Returns the :class:`StorageGroup` wrapping ``/study``. The
         helpers in :mod:`_hdf5_io` accept either form.
         """
-        if self.file is not None:
-            return self.file["study"]
-        assert self.provider is not None  # invariant: file or provider is set
         return self.provider.root_group().open_group("study")
 
     def _study_has_child(self, name: str) -> bool:
-        if self.file is not None:
-            return name in self.file["study"]
-        assert self.provider is not None
         return self.provider.root_group().open_group("study").has_child(name)
 
     def identifications(self) -> list[Identification]:
@@ -832,10 +742,7 @@ class SpectralDataset:
         """
         from .encryption import DEFAULT_ENCRYPTION_ALGORITHM
 
-        if self.file is not None:
-            io.write_fixed_string_attr(self.file, "encrypted", DEFAULT_ENCRYPTION_ALGORITHM)
-        elif self.provider is not None:
-            self.provider.root_group().set_attribute("encrypted", DEFAULT_ENCRYPTION_ALGORITHM)
+        self.provider.root_group().set_attribute("encrypted", DEFAULT_ENCRYPTION_ALGORITHM)
         object.__setattr__(self, "encrypted_algorithm", DEFAULT_ENCRYPTION_ALGORITHM)
 
     def decrypt_with_key(self, key: bytes) -> dict[str, bytes]:
@@ -1441,17 +1348,6 @@ def _load_references_provider(study) -> dict[str, ReferenceImport]:
     finally:
         refs_grp.close()
     return out
-
-
-def _load_references_h5py(study: "h5py.Group") -> dict[str, ReferenceImport]:
-    """Read ``/study/references/<uri>/`` directly from an ``h5py`` study
-    group. Wraps the group in the HDF5 :class:`StorageGroup` adapter so
-    :meth:`ReferenceImport.read_from_group` sees the same protocol
-    surface used by the provider path."""
-    if "references" not in study:
-        return {}
-    from .providers.hdf5 import _Group as _H5Group
-    return _load_references_provider(_H5Group(study))
 
 
 def _embed_references_for_runs(
@@ -2718,38 +2614,12 @@ def _parse_attributes_json(blob: str | None) -> dict[str, str]:
 
 
 def _read_subjects(
-    provider: StorageProvider | None, file: h5py.File | None
+    provider: StorageProvider | None,
 ) -> list[Subject]:
     """Stage 6: enumerate ``/study/subjects/`` children and decode each
     per-row group into a :class:`Subject`. Empty list when the group
     is absent (pre-Stage-6 files)."""
     out: list[Subject] = []
-    # Fast path: native h5py.
-    if file is not None:
-        if "study" not in file:
-            return out
-        study = file["study"]
-        if "subjects" not in study:
-            return out
-        from ttio.providers.hdf5 import _Group as _Hdf5Group
-        subjects_group = study["subjects"]
-        for name in subjects_group.keys():
-            row_native = subjects_group[name]
-            row = _Hdf5Group(row_native)
-            external_id = io.read_string_attr(row, "external_id", default=name) or name
-            project = io.read_string_attr(row, "project", default="") or ""
-            sex = io.read_string_attr(row, "sex", default="") or ""
-            birth_year = io.read_int_attr(row, "birth_year", default=0) or 0
-            attrs_json = io.read_string_attr(row, "attributes_json", default="{}") or "{}"
-            out.append(Subject(
-                external_id=external_id,
-                project=project,
-                sex=sex,
-                birth_year=int(birth_year),
-                attributes=_parse_attributes_json(attrs_json),
-            ))
-        return out
-    # Provider path.
     if provider is None:
         return out
     root = provider.root_group()
@@ -2777,38 +2647,12 @@ def _read_subjects(
 
 
 def _read_samples(
-    provider: StorageProvider | None, file: h5py.File | None
+    provider: StorageProvider | None,
 ) -> list[Sample]:
     """Stage 6: enumerate ``/study/samples/`` children and decode each
     per-row group into a :class:`Sample`. Empty list when the group
     is absent (pre-Stage-6 files)."""
     out: list[Sample] = []
-    if file is not None:
-        if "study" not in file:
-            return out
-        study = file["study"]
-        if "samples" not in study:
-            return out
-        from ttio.providers.hdf5 import _Group as _Hdf5Group
-        samples_group = study["samples"]
-        for name in samples_group.keys():
-            row_native = samples_group[name]
-            row = _Hdf5Group(row_native)
-            sample_id = io.read_string_attr(row, "sample_id", default=name) or name
-            subject_external_id = io.read_string_attr(
-                row, "subject_external_id", default=""
-            ) or ""
-            sample_kind = io.read_string_attr(row, "sample_kind", default="") or ""
-            collected_at = io.read_int_attr(row, "collected_at", default=0) or 0
-            attrs_json = io.read_string_attr(row, "attributes_json", default="{}") or "{}"
-            out.append(Sample(
-                sample_id=sample_id,
-                subject_external_id=subject_external_id,
-                sample_kind=sample_kind,
-                collected_at=int(collected_at),
-                attributes=_parse_attributes_json(attrs_json),
-            ))
-        return out
     if provider is None:
         return out
     root = provider.root_group()

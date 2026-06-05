@@ -692,6 +692,18 @@ class Hdf5Provider(StorageProvider):
         instance._file = h5py.File(actual_path, mode=mode, **kwargs)
         return instance
 
+    @classmethod
+    def _from_open_h5py(cls, f: "h5py.File") -> "Hdf5Provider":
+        """Wrap an already-open :class:`h5py.File` without reopening it.
+
+        Used for remote fsspec-backed handles already wrapped in an
+        ``h5py.File`` by the caller. Mirrors the single instance
+        attribute (:attr:`_file`) that :meth:`open` sets.
+        """
+        instance = cls()
+        instance._file = f
+        return instance
+
     def provider_name(self) -> str:
         """Return the provider's stable identifier string (``"hdf5"``)."""
         return "hdf5"
