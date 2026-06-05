@@ -20,6 +20,17 @@ are extracted out of `spectral_dataset.py` into two new private submodules
 into the submodules. Pure internal restructure — no public API, `.tio` wire,
 or behaviour change. (OO-assessment P3.10.)
 
+### Changed — `transport/codec.py` god-file split: writer / reader / common modules (Python)
+
+`transport/codec.py` is split into three new private modules: `_writer.py`
+(`TransportWriter` + writer-only helpers), `_reader.py` (`TransportReader` +
+reader/ingest helpers), and `_common.py` (the wire-mapping constants and the
+shared genomic/codec helpers used by both). `codec.py` is now a thin
+re-export facade that keeps every historical
+`from ttio.transport.codec import …` path working. Pure internal
+restructure — no public API, `.tio` wire, or behaviour change.
+(OO-assessment P3.10.)
+
 ### Deprecated — `StorageProvider.native_handle()` (Python)
 
 `StorageProvider.native_handle()` — the raw-backend escape hatch — is now
