@@ -16,6 +16,7 @@ from .enums import (
     Polarity,
     Precision,
     SamplingMode,
+    SpectrumKind,
 )
 from .value_range import ValueRange
 from .isolation_window import IsolationWindow
@@ -63,6 +64,7 @@ __all__ = [
     "Polarity",
     "Precision",
     "SamplingMode",
+    "SpectrumKind",
     "ValueRange",
     "IsolationWindow",
     "CVParam",
