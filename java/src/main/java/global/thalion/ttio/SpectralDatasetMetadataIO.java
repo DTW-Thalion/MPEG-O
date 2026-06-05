@@ -5,16 +5,8 @@
  */
 package global.thalion.ttio;
 
-import global.thalion.ttio.genomics.BulkV2Blobs;          // Phase 2c-T
-import global.thalion.ttio.genomics.GenomicIndex;
-import global.thalion.ttio.genomics.GenomicRun;
-import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.hdf5.Hdf5CompoundIO;
-import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
-import global.thalion.ttio.io.ProgressSink;
-import global.thalion.ttio.providers.Hdf5Provider;
-import global.thalion.ttio.providers.StorageProvider;
 
 import java.util.*;
 
@@ -25,11 +17,8 @@ final class SpectralDatasetMetadataIO {
     private SpectralDatasetMetadataIO() { }
 
     /** Logger for soft-FK warnings (Sample.subjectExternalId not in
-
      *  Subject list). Spec §4.4: this is a WARNING, not an error. */
-
     static final java.util.logging.Logger STAGE6_LOG =
-
         java.util.logging.Logger.getLogger(SpectralDataset.class.getName());
 
     static void writeIdentifications(Hdf5Group study,

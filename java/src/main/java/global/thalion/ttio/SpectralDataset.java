@@ -5,11 +5,8 @@
  */
 package global.thalion.ttio;
 
-import global.thalion.ttio.genomics.BulkV2Blobs;          // Phase 2c-T
-import global.thalion.ttio.genomics.GenomicIndex;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
-import global.thalion.ttio.hdf5.Hdf5CompoundIO;
 import global.thalion.ttio.hdf5.Hdf5File;
 import global.thalion.ttio.hdf5.Hdf5Group;
 import global.thalion.ttio.io.ProgressSink;
