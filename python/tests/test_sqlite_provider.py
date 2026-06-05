@@ -315,7 +315,8 @@ def test_native_handle(tmp_path):
     path = str(tmp_path / "t.tio.sqlite")
     p = SqliteProvider()
     p.open(path, mode="w")
-    handle = p.native_handle()
+    with pytest.warns(DeprecationWarning, match="native_handle"):
+        handle = p.native_handle()
     assert isinstance(handle, sqlite3.Connection)
     p.close()
 
