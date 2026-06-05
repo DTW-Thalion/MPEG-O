@@ -144,14 +144,17 @@ def test_fasta_reference_to_tio_to_fasta_byte_exact(tmp_path: Path) -> None:
     # Step 3: open .tio and load reference back from
     #         /study/references/<uri>/
     with SpectralDataset.open(tio_path) as ds:
-        h5 = ds.file
-        grp = h5["/study/references/ref"]
-        md5_hex = grp.attrs["md5"]
+        root = ds.provider.root_group()
+        grp = root.open_group("study").open_group("references").open_group("ref")
+        md5_hex = grp.get_attribute("md5")
         if isinstance(md5_hex, bytes):
             md5_hex = md5_hex.decode("ascii")
-        names = sorted(grp["chromosomes"].keys())
+        chroms = grp.open_group("chromosomes")
+        names = sorted(chroms.child_names())
         seqs = [
-            bytes(np.asarray(grp["chromosomes"][n]["data"]).tobytes())
+            bytes(np.asarray(
+                chroms.open_group(n).open_dataset("data").read()
+            ).tobytes())
             for n in names
         ]
         ref_back = ReferenceImport(

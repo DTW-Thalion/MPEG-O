@@ -623,7 +623,7 @@ class AcquisitionRun:
     def _set_persistence_context(self, file_path: str, run_name: str) -> None:
         """Attach file + run path so ``encrypt_with_key`` can delegate.
 
-        Internal API — called by SpectralDataset._from_open_file after
+        Internal API — called by SpectralDataset._from_provider after
         loading each run.
         """
         object.__setattr__(self, "_persistence_file_path", file_path)

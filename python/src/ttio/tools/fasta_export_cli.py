@@ -23,8 +23,6 @@ import argparse
 import sys
 from pathlib import Path
 
-import numpy as np
-
 from ..exporters.fasta import DEFAULT_LINE_WIDTH, FastaWriter
 from ..genomic.reference_import import ReferenceImport
 from ..spectral_dataset import SpectralDataset
@@ -58,14 +56,13 @@ def _parser() -> argparse.ArgumentParser:
 def _load_embedded_reference(ds: SpectralDataset, uri: str) -> ReferenceImport:
     """Read an embedded reference genome from a ``.tio`` container.
 
-    Requires the dataset to be HDF5-backed (the helper accesses the
-    raw ``h5py`` handle directly to avoid an extra copy of the
-    chromosome arrays).
+    Reads through the dataset's :class:`StorageProvider` to access the
+    embedded reference under ``/study/references/``.
 
     Parameters
     ----------
     ds : SpectralDataset
-        Opened HDF5-backed dataset.
+        Opened provider-backed dataset.
     uri : str
         Reference URI under ``/study/references/``.
 
@@ -77,32 +74,36 @@ def _load_embedded_reference(ds: SpectralDataset, uri: str) -> ReferenceImport:
     Raises
     ------
     RuntimeError
-        If the dataset is not HDF5-backed.
+        If the dataset is not provider-backed or has no embedded
+        references.
     KeyError
         If no reference is embedded at ``uri``.
     """
-    h5 = ds.file
-    if h5 is None:
+    provider = getattr(ds, "provider", None)
+    if provider is None:
         raise RuntimeError(
-            "fasta_export_cli requires an HDF5-backed input; "
-            f"got {type(ds).__name__} with no .file handle."
+            "fasta_export_cli requires a provider-backed input; "
+            f"got {type(ds).__name__} with no .provider."
         )
-    grp = h5.get(f"/study/references/{uri}")
-    if grp is None:
+    root = provider.root_group()
+    if not root.has_child("study"):
+        raise RuntimeError(
+            "fasta_export_cli requires a provider-backed input with "
+            f"embedded references; got {type(provider).__name__} with "
+            "no /study/references group."
+        )
+    study = root.open_group("study")
+    if not study.has_child("references"):
+        raise RuntimeError(
+            "fasta_export_cli requires a provider-backed input with "
+            f"embedded references; got {type(provider).__name__} with "
+            "no /study/references group."
+        )
+    refs = study.open_group("references")
+    if not refs.has_child(uri):
         raise KeyError(f"reference {uri!r} not embedded in input")
-    md5_attr = grp.attrs["md5"]
-    if isinstance(md5_attr, bytes):
-        md5_hex = md5_attr.decode("ascii")
-    else:
-        md5_hex = bytes(md5_attr).decode("ascii") if hasattr(md5_attr, "tobytes") \
-            else str(md5_attr)
-    md5 = bytes.fromhex(md5_hex)
-    chrom_grp = grp["chromosomes"]
-    names: list[str] = sorted(chrom_grp.keys())
-    seqs: list[bytes] = [
-        bytes(np.asarray(chrom_grp[n]["data"]).tobytes()) for n in names
-    ]
-    return ReferenceImport(uri=uri, chromosomes=names, sequences=seqs, md5=md5)
+    grp = refs.open_group(uri)
+    return ReferenceImport.read_from_group(grp)
 
 
 def main(argv: list[str] | None = None) -> int:

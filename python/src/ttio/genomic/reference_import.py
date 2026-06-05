@@ -265,40 +265,48 @@ class ReferenceImport:
             If a reference with the same ``uri`` is already embedded
             and ``overwrite`` is ``False``.
         RuntimeError
-            If ``dataset``'s storage backend doesn't expose an open
-            HDF5 group (only HDF5-backed datasets support reference
-            embed).
+            If ``dataset``'s storage backend doesn't expose a provider
+            (an open dataset always does).
         """
         import numpy as np
 
         from .. import _hdf5_io as io
         from ..enums import Compression as _Compression
         from ..enums import Precision as _Precision
-        from ..providers.hdf5 import _Group as _H5Group
         from ..io.progress import _fire
 
-        h5 = getattr(dataset, "file", None)
-        if h5 is None:
+        provider = getattr(dataset, "provider", None)
+        if provider is None:
             raise RuntimeError(
-                "ReferenceImport.write_to_dataset requires an "
-                "HDF5-backed dataset; got "
-                f"{type(dataset).__name__} with no .file handle."
+                "ReferenceImport.write_to_dataset requires a "
+                "provider-backed dataset; got "
+                f"{type(dataset).__name__} with no .provider."
             )
+        root = provider.root_group()
+        study = (
+            root.open_group("study")
+            if root.has_child("study")
+            else root.create_group("study")
+        )
+        references = (
+            study.open_group("references")
+            if study.has_child("references")
+            else study.create_group("references")
+        )
         path = f"/study/references/{self.uri}"
-        if path in h5:
+        if references.has_child(self.uri):
             if not overwrite:
                 raise FileExistsError(
                     f"reference {self.uri!r} already embedded at {path}; "
                     f"pass overwrite=True to replace."
                 )
-            del h5[path]
+            references.delete_child(self.uri)
 
-        # Use the StorageGroup adapter so the attribute layout
+        # Write through the StorageGroup protocol so the attribute layout
         # (NULLTERM fixed-length strings via write_fixed_string_attr,
         # int64 via write_int_attr) matches the canonical embed-helper
         # writer and Java's embedReferencesForRuns byte-for-byte.
-        ref_h5 = h5.create_group(path)
-        ref_grp = _H5Group(ref_h5)
+        ref_grp = references.create_group(self.uri)
         io.write_fixed_string_attr(ref_grp, "md5", self.md5.hex())
         io.write_fixed_string_attr(ref_grp, "reference_uri", self.uri)
         chroms_grp = ref_grp.create_group("chromosomes")
