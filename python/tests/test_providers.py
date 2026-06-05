@@ -375,8 +375,7 @@ def test_spectral_dataset_open_wires_provider(tmp_path: Path) -> None:
     with SpectralDataset.open(path) as ds:
         assert ds.provider is not None
         assert ds.provider.provider_name() == "hdf5"
-        # ds.file is the same h5py.File as provider.native_handle()
-        assert ds.provider.native_handle() is ds.file
+        assert not hasattr(ds, "file")
 
 
 def test_hdf5_provider_accepts_file_scheme(tmp_path: Path) -> None:
