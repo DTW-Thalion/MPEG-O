@@ -20,6 +20,14 @@ freeze is applied to an internal view, never to the caller's source array. The
 `Run` protocol is promoted from Provisional to Stable. No `.tio` wire or
 API-shape change — `data` stays an `np.ndarray` field. (OO-assessment P3.11.)
 
+### Changed — `SignalArray` typed accessors return defensive copies (Java)
+
+Java `SignalArray.asDoubles()`/`asFloats()`/`asInts()`/`asLongs()` now return a
+defensive copy of the backing array (they no longer leak the internal array by
+reference, so a caller can no longer corrupt the `SignalArray`'s state).
+`buffer()` remains the documented raw accessor for callers needing zero-copy
+access. No public API shape or `.tio` wire change. (OO-assessment P3.11.)
+
 ### Changed — `TTIOSpectralDataset.m` god-file split: genomic-write category (ObjC)
 
 The genomic-modality write path is extracted out of the 4388-LOC
