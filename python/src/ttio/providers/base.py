@@ -204,9 +204,10 @@ class StorageDataset(ABC):
         Signatures and encryption consume this method so that a signed
         or encrypted dataset verifies identically regardless of which
         provider wrote it. The default implementation delegates to
-        :mod:`ttio.providers._canonical`; concrete providers may
-        override when a zero-copy fast-path exists
-        (:class:`~ttio.providers.hdf5.Hdf5Provider` does this).
+        :mod:`ttio.providers._canonical`, reading via :meth:`read` (which
+        concrete providers — e.g. the HDF5 ``_Dataset`` — override for a
+        zero-copy fast-path); a provider may also override this method
+        directly should a canonical-form fast-path ever be added.
 
         follow-up — extends :meth:`read_rows` by
         promising a stable byte form, not just a stable row form."""
