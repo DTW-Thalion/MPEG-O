@@ -738,23 +738,24 @@ class AcquisitionRun:
             precursor_charge=int(self.index.precursor_charges[i]),
         )
 
-        if self.kind is SpectrumKind.NMR:
+        kind = self.kind  # one lookup per spectrum (hot path)
+        if kind is SpectrumKind.NMR:
             return NMRSpectrum(nucleus_type=self.nucleus_type, **base_kwargs)
-        if self.kind is SpectrumKind.IR:
+        if kind is SpectrumKind.IR:
             return IRSpectrum(
                 mode=IRMode(self.ir_mode),
                 resolution_cm_inv=self.ir_resolution_cm_inv,
                 number_of_scans=self.ir_number_of_scans,
                 **base_kwargs,
             )
-        if self.kind is SpectrumKind.RAMAN:
+        if kind is SpectrumKind.RAMAN:
             return RamanSpectrum(
                 excitation_wavelength_nm=self.raman_excitation_wavelength_nm,
                 laser_power_mw=self.raman_laser_power_mw,
                 integration_time_sec=self.raman_integration_time_sec,
                 **base_kwargs,
             )
-        if self.kind is SpectrumKind.UVVIS:
+        if kind is SpectrumKind.UVVIS:
             return UVVisSpectrum(
                 path_length_cm=self.uvvis_path_length_cm,
                 solvent=self.solvent,
