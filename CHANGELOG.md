@@ -11,16 +11,14 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-### Changed — `AcquisitionRun` spectrum dispatch goes through a `SpectrumKind` enum (Python)
+### Changed — `AcquisitionRun` spectrum-class dispatch now goes through `Enums.SpectrumKind` (Java)
 
-The stringly-typed `spectrum_class` dispatch in `AcquisitionRun._materialize_spectrum`
-now routes through a new `SpectrumKind` enum (`ttio.enums.SpectrumKind`) via a derived
-`AcquisitionRun.kind` property, instead of comparing the raw `@spectrum_class` string in
-each branch. The persisted `@spectrum_class` string is unchanged — it stays the on-disk
-source of truth and is written verbatim; the enum is an in-code dispatch key only.
-Unrecognized classes map to `SpectrumKind.UNKNOWN` and dispatch to the `MassSpectrum`
-default, preserving the v0.1 fallback. No `.tio` wire, transport, or API-shape change.
-(OO-assessment P3.8.)
+Java `AcquisitionRun`'s stringly-typed `spectrum_class` dispatch (the
+materialize switch and the read/write `equals` chains) now routes through a new
+`Enums.SpectrumKind` enum (`fromPersisted(String)` / `persisted()`); the
+persisted `@spectrum_class` attribute string remains the source of truth and is
+written verbatim. `RunSelection`'s NMR discriminant was converted to the same
+enum. No `.tio` wire, transport, or API-shape change. (OO-assessment P3.8.)
 
 ### Changed — read-only `SignalArray.data` view + `Run` protocol promoted to Stable (Python)
 
