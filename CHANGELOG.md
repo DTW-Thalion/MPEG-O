@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `spectral_dataset.py` god-file split: genomic-write + metadata-IO submodules (Python)
+
+The genomic-run write helpers and the metadata + subjects/samples IO helpers
+are extracted out of `spectral_dataset.py` into two new private submodules
+(`_dataset_write_genomic.py`, `_dataset_write_metadata.py`). The
+`SpectralDataset` class and its write orchestration stay in place and call
+into the submodules. Pure internal restructure — no public API, `.tio` wire,
+or behaviour change. (OO-assessment P3.10.)
+
 ### Deprecated — `StorageProvider.native_handle()` (Python)
 
 `StorageProvider.native_handle()` — the raw-backend escape hatch — is now
