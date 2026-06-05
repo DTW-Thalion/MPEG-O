@@ -11,6 +11,18 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `TTIOSpectralDataset.m` god-file split: genomic-write category (ObjC)
+
+The genomic-modality write path is extracted out of the 4388-LOC
+`TTIOSpectralDataset.m` into a new Objective-C category file,
+`TTIOSpectralDataset+GenomicWrite.m`, with a new internal header
+`TTIOSpectralDataset+Internal.h` sharing the handful of file-static helpers
+(`kTTIOFormatVersion`, `_TTIO_MakeHDF5GroupAdapter`, `isNonHdf5ProviderURL`,
+and the little-endian serialisation macros) used by both translation units.
+The core `.m` (init / read / encrypt / decrypt / `writeToFilePath:` instance
+methods) stays in place. Pure internal restructure — no public API, `.tio`
+wire, or behaviour change. (OO-assessment P3.10.)
+
 ### Changed — `SpectralDataset` god-file split: genomic-write + metadata-IO helpers (Java)
 
 The Java `SpectralDataset` static write/IO machinery is extracted into two new
