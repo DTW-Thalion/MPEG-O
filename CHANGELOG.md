@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — read-only `SignalArray.data` view + `Run` protocol promoted to Stable (Python)
+
+`SignalArray.data` is now stored as a zero-copy, read-only numpy view
+(`flags.writeable=False`) so callers can no longer mutate the value object in
+place; an in-place write such as `sa.data[i] = x` now raises `ValueError`. The
+freeze is applied to an internal view, never to the caller's source array. The
+`Run` protocol is promoted from Provisional to Stable. No `.tio` wire or
+API-shape change — `data` stays an `np.ndarray` field. (OO-assessment P3.11.)
+
 ### Changed — `SignalArray` typed accessors return defensive copies (Java)
 
 Java `SignalArray.asDoubles()`/`asFloats()`/`asInts()`/`asLongs()` now return a
