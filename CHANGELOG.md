@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — per-run provenance cold path reads via the StorageGroup protocol (Python)
+
+The per-run provenance cold path (`AcquisitionRun.provenance` and
+`GenomicRun.provenance_chain`) now reads the compound `provenance/steps` dataset
+through the `StorageGroup` protocol (`has_child`/`open_group` navigation +
+`read_compound_dataset`) instead of casting to a raw h5py handle via
+`_native_h5py`. Decoded provenance is identical and on-disk `.tio` bytes are
+unchanged. (OO-assessment P3.9.)
+
 ### Changed — signature sign/verify route raw-h5py through the protocol (Python)
 
 `sign_dataset`/`verify_dataset` now wrap raw `h5py.Dataset` inputs in the HDF5
