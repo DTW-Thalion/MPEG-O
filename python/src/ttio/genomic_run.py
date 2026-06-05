@@ -165,6 +165,16 @@ class GenomicRun:
         default=None, repr=False, compare=False,
     )
 
+    # The /study/references group (StorageGroup) threaded in by
+    # SpectralDataset._from_provider so REF_DIFF decode can resolve
+    # embedded reference chromosomes through the storage protocol rather
+    # than a raw h5py handle (P3.9). None when the file carries no
+    # embedded references; resolve() then falls back to REF_PATH or
+    # raises RefMissingError.
+    _references_group: "StorageGroup | None" = field(
+        default=None, repr=False, compare=False,
+    )
+
     # ------------------------------------------------------------------
     # Sequence protocol
     # ------------------------------------------------------------------
@@ -281,13 +291,19 @@ class GenomicRun:
     # ------------------------------------------------------------------
 
     @classmethod
-    def open(cls, group, name: str) -> "GenomicRun":
+    def open(cls, group, name: str, *, references_group=None) -> "GenomicRun":
         """Open an existing genomic_runs/<name>/ group.
 
         Mirrors :meth:`ttio.acquisition_run.AcquisitionRun.open`: the
         caller resolves the child group before calling this classmethod.
         The genomic index and run-level attributes are loaded eagerly;
         signal channel datasets remain closed until first access.
+
+        Args:
+            references_group: the ``/study/references`` group as a
+                :class:`~ttio.providers.base.StorageGroup`, threaded
+                through to the REF_DIFF :class:`ReferenceResolver`. May
+                be ``None`` when the file carries no embedded references.
         """
 
         sgroup = _wrap_hdf5_group(group)
@@ -317,6 +333,7 @@ class GenomicRun:
             index=index,
             group=sgroup,
             channel_names=channel_names,
+            _references_group=references_group,
         )
 
     # ------------------------------------------------------------------
@@ -366,13 +383,13 @@ class GenomicRun:
                     name_to_id[cname] = len(name_to_id)
                 own_chrom_ids[i] = name_to_id[cname]
 
-        resolver = None
-        try:
-            from .acquisition_run import _native_h5py
-            from .genomic.reference_resolver import ReferenceResolver
-            resolver = ReferenceResolver(_native_h5py(self.group).file)
-        except Exception:
-            resolver = None  # non-HDF5 backend: ref_diff decode raises clearly
+        from .genomic.reference_resolver import ReferenceResolver
+        # ReferenceResolver navigates the /study/references group through
+        # the StorageGroup protocol (P3.9). references_group is None when
+        # the file has no embedded refs; resolve() then uses REF_PATH or
+        # raises RefMissingError — the same clear failure the old
+        # non-HDF5 path produced.
+        resolver = ReferenceResolver(self._references_group)
         ctx = CodecContext(
             read_lengths=np.asarray(idx.lengths, dtype=np.uint32),
             revcomp_flags=revcomp,
