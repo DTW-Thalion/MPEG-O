@@ -18,8 +18,9 @@ class SignalArray:
     Parameters
     ----------
     data : numpy.ndarray
-        1-D numeric array holding the raw signal values. Callers should
-        treat the array contents as immutable after construction.
+        1-D numeric array holding the raw signal values. Stored as a
+        zero-copy, read-only (flags.writeable=False) view so callers
+        cannot mutate this value object in place after construction.
     axis : AxisDescriptor or None, optional
         Descriptor of the physical dimension represented by ``data``
         (e.g. m/z, ppm). ``None`` when the axis is not yet known or not
@@ -45,6 +46,16 @@ class SignalArray:
     axis: AxisDescriptor | None = None
     encoding: EncodingSpec = field(default_factory=EncodingSpec)
     cv_params: list[CVParam] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        # P3.11: store `data` as a zero-copy read-only view so callers cannot
+        # mutate this value object in place. A view (not a copy) preserves
+        # zero-copy; we freeze our view, not the caller's source array.
+        arr = np.ascontiguousarray(self.data)
+        if arr is self.data:
+            arr = arr.view()
+        arr.flags.writeable = False
+        self.data = arr
 
     # ------------------------------------------------------------------
     # CVAnnotatable
@@ -115,7 +126,7 @@ class SignalArray:
         if array.ndim != 1:
             raise ValueError(f"SignalArray expects a 1-D ndarray, got shape={array.shape}")
         return cls(
-            data=np.ascontiguousarray(array),
+            data=array,
             axis=axis,
             encoding=encoding or EncodingSpec(),
         )

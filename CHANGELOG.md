@@ -11,17 +11,14 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-### Changed — `TTIOSpectralDataset.m` god-file split: genomic-write category (ObjC)
+### Changed — read-only `SignalArray.data` view + `Run` protocol promoted to Stable (Python)
 
-The genomic-modality write path is extracted out of the 4388-LOC
-`TTIOSpectralDataset.m` into a new Objective-C category file,
-`TTIOSpectralDataset+GenomicWrite.m`, with a new internal header
-`TTIOSpectralDataset+Internal.h` sharing the handful of file-static helpers
-(`kTTIOFormatVersion`, `_TTIO_MakeHDF5GroupAdapter`, `isNonHdf5ProviderURL`,
-and the little-endian serialisation macros) used by both translation units.
-The core `.m` (init / read / encrypt / decrypt / `writeToFilePath:` instance
-methods) stays in place. Pure internal restructure — no public API, `.tio`
-wire, or behaviour change. (OO-assessment P3.10.)
+`SignalArray.data` is now stored as a zero-copy, read-only numpy view
+(`flags.writeable=False`) so callers can no longer mutate the value object in
+place; an in-place write such as `sa.data[i] = x` now raises `ValueError`. The
+freeze is applied to an internal view, never to the caller's source array. The
+`Run` protocol is promoted from Provisional to Stable. No `.tio` wire or
+API-shape change — `data` stays an `np.ndarray` field. (OO-assessment P3.11.)
 
 ### Changed — `SpectralDataset` god-file split: genomic-write + metadata-IO helpers (Java)
 
