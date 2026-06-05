@@ -191,6 +191,7 @@ libTTIO_OBJC_FILES = \
 	Dataset/TTIOSample.m \
 	Dataset/TTIOTransitionList.m \
 	Dataset/TTIOSpectralDataset.m \
+	Dataset/TTIOSpectralDataset+GenomicWrite.m \
 	Dataset/TTIOWrittenRun.m \
 	Dataset/TTIOCompoundIO.m \
 	Image/TTIOImage.m \
