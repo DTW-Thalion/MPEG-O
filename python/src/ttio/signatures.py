@@ -106,23 +106,13 @@ def sign_dataset(
     from .providers.base import StorageDataset
     if isinstance(dataset, StorageDataset):
         return sign_storage_dataset(dataset, key, algorithm=algorithm)
-    from . import cipher_suite
-    canonical = _dataset_canonical_bytes(dataset)
-    if algorithm == "hmac-sha256":
-        cipher_suite.validate_key(algorithm, key)
-        mac_b64 = hmac_sha256_b64(canonical, key)
-        prefixed = SIGNATURE_V2_PREFIX + mac_b64
-    elif algorithm == "ml-dsa-87":
-        cipher_suite.validate_private_key(algorithm, key)
-        from . import pqc
-        sig = pqc.sig_sign(key, canonical)
-        prefixed = SIGNATURE_V3_PREFIX + base64.b64encode(sig).decode("ascii")
-    else:
-        raise cipher_suite.UnsupportedAlgorithmError(
-            f"{algorithm}: signature path not yet implemented"
-        )
-    _write_vl_string_attr(dataset, SIGNATURE_ATTR, prefixed)
-    return prefixed
+    # P3.9: a raw ``h5py.Dataset`` is wrapped in the HDF5 provider's
+    # StorageDataset adapter and signed through the provider-agnostic
+    # path, so the live signing path no longer touches raw h5py here.
+    # The wrapper's ``set_attribute`` writes a byte-identical
+    # ``@ttio_signature`` attribute (proven by the cross-path tests).
+    from .providers.hdf5 import _Dataset as _Hdf5Dataset
+    return sign_storage_dataset(_Hdf5Dataset(dataset), key, algorithm=algorithm)
 
 
 def verify_dataset(
@@ -153,49 +143,53 @@ def verify_dataset(
     if isinstance(dataset, StorageDataset):
         return verify_storage_dataset(dataset, key, algorithm=algorithm)
     from . import cipher_suite
-    stored = _read_vl_string_attr(dataset, SIGNATURE_ATTR)
+    from .providers.hdf5 import _Dataset as _Hdf5Dataset
+    # P3.9: wrap the raw h5py.Dataset once and read the stored signature
+    # through the provider adapter, mirroring verify_storage_dataset.
+    wrapped = _Hdf5Dataset(dataset)
+    if not wrapped.has_attribute(SIGNATURE_ATTR):
+        return False
+    stored = wrapped.get_attribute(SIGNATURE_ATTR)
     if stored is None:
         return False
+    if isinstance(stored, bytes):
+        stored = stored.decode("utf-8", errors="replace")
+    stored = str(stored)
 
-    canonical = _dataset_canonical_bytes(dataset)
-
-    if stored.startswith(SIGNATURE_V3_PREFIX):
-        if algorithm != "ml-dsa-87":
-            raise cipher_suite.UnsupportedAlgorithmError(
-                f"stored signature is v3 (ml-dsa-87) but caller "
-                f"passed algorithm={algorithm!r}"
-            )
-        cipher_suite.validate_public_key(algorithm, key)
-        from . import pqc
-        sig = base64.b64decode(stored[len(SIGNATURE_V3_PREFIX):])
-        return pqc.sig_verify(key, canonical, sig)
+    # v3 (ml-dsa-87) and v2 (hmac) prefixes route entirely through the
+    # provider-agnostic verifier — including its algorithm-mismatch
+    # guards, which are identical to the previous inline ones.
+    if stored.startswith(SIGNATURE_V3_PREFIX) or stored.startswith(
+        SIGNATURE_V2_PREFIX
+    ):
+        return verify_storage_dataset(wrapped, key, algorithm=algorithm)
 
     # Reject caller passing "ml-dsa-87" against a non-v3 stored blob —
-    # saves a confusing empty-verify return.
+    # saves a confusing empty-verify return. (Same guard as the v2/v3
+    # path above, applied here before the v1 native-bytes fallback.)
     if algorithm == "ml-dsa-87":
         raise cipher_suite.UnsupportedAlgorithmError(
             "stored signature is not v3 (ml-dsa-87) — pass "
             "algorithm='hmac-sha256' to verify legacy signatures"
         )
+
+    # --- SOLE remaining raw-h5py island (v1 legacy) -------------------
+    # v0.2 legacy path — unprefixed base64 HMAC over the dataset's
+    # *native* byte layout (not the canonical stream), which requires
+    # _dataset_native_bytes()'s direct h5py read. This is the only
+    # signature code path that still touches raw h5py and is scheduled
+    # for separate removal at v1.0 per docs/api-stability-v0.8.md §6.
     cipher_suite.validate_key(algorithm, key)
-    if stored.startswith(SIGNATURE_V2_PREFIX):
-        payload = stored[len(SIGNATURE_V2_PREFIX):]
-        expected = hmac_sha256_b64(canonical, key)
-    else:
-        # v0.2 legacy path — unprefixed base64 HMAC over the native
-        # byte layout. Scheduled for removal at v1.0 per
-        # docs/api-stability-v0.8.md §6.
-        warnings.warn(
-            "verifying an unprefixed v1 HMAC signature — the v0.2 "
-            "native-byte fallback is scheduled for removal at v1.0. "
-            "Re-sign with algorithm='hmac-sha256' (emits v2: prefix) "
-            "or 'ml-dsa-87' (v3:) to stay compatible.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
-        payload = stored
-        expected = hmac_sha256_b64(_dataset_native_bytes(dataset), key)
-    return hmac.compare_digest(payload, expected)
+    warnings.warn(
+        "verifying an unprefixed v1 HMAC signature — the v0.2 "
+        "native-byte fallback is scheduled for removal at v1.0. "
+        "Re-sign with algorithm='hmac-sha256' (emits v2: prefix) "
+        "or 'ml-dsa-87' (v3:) to stay compatible.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    expected = hmac_sha256_b64(_dataset_native_bytes(dataset), key)
+    return hmac.compare_digest(stored, expected)
 
 
 def verify_provenance(run_group: h5py.Group, key: bytes) -> bool:
