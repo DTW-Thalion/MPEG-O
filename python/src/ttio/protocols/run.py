@@ -14,7 +14,7 @@ Modality-specific work (e.g. extracting a CIGAR string from an
 aligned read, or a precursor m/z from a mass spectrum) requires
 narrowing via ``isinstance()`` to the concrete class.
 
-API status: Provisional (Phase 1 abstraction polish, post-M91).
+API status: Stable.
 """
 from __future__ import annotations
 
