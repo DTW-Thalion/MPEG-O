@@ -11,6 +11,17 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `SpectralDataset` god-file split: genomic-write + metadata-IO helpers (Java)
+
+The Java `SpectralDataset` static write/IO machinery is extracted into two new
+package-private helper classes, `SpectralDatasetGenomicWriter` (genomic-run
+write statics) and `SpectralDatasetMetadataIO` (metadata + subjects/samples
+statics). The public `SpectralDataset` class (instance accessors, public
+`open`/`create`/`createWithImages`, encrypt/decrypt/close, and create
+orchestration) stays in place and calls into the helpers. Pure internal
+restructure — no public API, `.tio` wire, or behaviour change. (OO-assessment
+P3.10.)
+
 ### Changed — `spectral_dataset.py` god-file split: genomic-write + metadata-IO submodules (Python)
 
 The genomic-run write helpers and the metadata + subjects/samples IO helpers
