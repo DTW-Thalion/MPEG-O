@@ -119,10 +119,10 @@ def test_fasta_import_reference_writes_tio(tmp_path: Path) -> None:
     # The embedded reference is now retrievable through SpectralDataset.
     from ttio import SpectralDataset
     with SpectralDataset.open(out) as ds:
-        assert ds.file is not None
-        refs = ds.file.get("/study/references")
-        assert refs is not None
-        assert "test_ref" in list(refs.keys())
+        root = ds.provider.root_group()
+        study = root.open_group("study")
+        assert study.has_child("references")
+        assert "test_ref" in study.open_group("references").child_names()
 
 
 def test_fasta_import_unaligned_writes_tio(tmp_path: Path) -> None:
