@@ -350,14 +350,38 @@ def test_nd_dataset_roundtrip(provider: str,
 def test_hdf5_native_handle_returns_h5py_file(hdf5_url: str) -> None:
     import h5py
     with open_provider(hdf5_url, mode="w") as p:
-        handle = p.native_handle()
+        with pytest.warns(DeprecationWarning):
+            handle = p.native_handle()
         assert isinstance(handle, h5py.File)
 
 
 def test_memory_native_handle_is_none(memory_url: str) -> None:
     with open_provider(memory_url, mode="w") as p:
-        assert p.native_handle() is None
+        with pytest.warns(DeprecationWarning):
+            handle = p.native_handle()
+        assert handle is None
     MemoryProvider.discard_store(memory_url)
+
+
+def test_native_handle_emits_deprecation_via_spectral_dataset(
+    tmp_path: Path,
+) -> None:
+    """An HDF5-backed provider reached through SpectralDataset emits a
+    DeprecationWarning from native_handle() (P3.9, parity with the Java
+    SDK's @Deprecated(forRemoval=true))."""
+    from ttio import SpectralDataset
+    import h5py
+
+    path = tmp_path / "deprecation.tio"
+    with h5py.File(path, "w") as f:
+        f.attrs["ttio_format_version"] = "1.1"
+        f.attrs["ttio_features"] = "[\"base_v1\"]"
+        f.create_group("study")
+
+    with SpectralDataset.open(path) as ds:
+        with pytest.warns(DeprecationWarning, match="native_handle"):
+            handle = ds.provider.native_handle()
+        assert isinstance(handle, h5py.File)
 
 
 def test_spectral_dataset_open_wires_provider(tmp_path: Path) -> None:

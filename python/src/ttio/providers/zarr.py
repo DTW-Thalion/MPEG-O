@@ -479,8 +479,9 @@ class ZarrProvider(StorageProvider):
         # Never auto-use consolidated metadata: cross-language tests
         # modify files after Python consolidates them (e.g. Java adds
         # a signature attr), and stale consolidated metadata hides
-        # those changes. Consolidation remains available to callers
-        # via ``native_handle()`` if they know the file is final.
+        # those changes. Consolidation remains available via the
+        # deprecated ``native_handle()`` escape hatch if a caller knows
+        # the file is final; prefer the StorageGroup protocol.
         import warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -518,7 +519,23 @@ class ZarrProvider(StorageProvider):
     def native_handle(self) -> Any:
         """The underlying :class:`zarr.Group` — callers that
         need zarr-specific APIs (consolidate_metadata, tree display)
-        can reach for it."""
+        can reach for it.
+
+        .. deprecated::
+            ``native_handle()`` is deprecated and slated for removal in a
+            future coordinated major. Reach storage through
+            :meth:`root_group` and the :class:`StorageGroup` protocol
+            instead. (Parity with the Java SDK's
+            ``@Deprecated(forRemoval=true)``.)
+        """
+        import warnings
+        warnings.warn(
+            "StorageProvider.native_handle() is deprecated and slated for "
+            "removal; reach storage through root_group() and the StorageGroup "
+            "protocol. (Parity with the Java SDK's @Deprecated(forRemoval=true).)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._root
 
     @staticmethod

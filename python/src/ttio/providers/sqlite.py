@@ -698,7 +698,23 @@ class SqliteProvider(StorageProvider):
         return SqliteGroup(self._conn, row[0], "/", self._read_only)
 
     def native_handle(self) -> sqlite3.Connection | None:
-        """Return the raw ``sqlite3.Connection``. Escape hatch."""
+        """Return the raw ``sqlite3.Connection``. Escape hatch.
+
+        .. deprecated::
+            ``native_handle()`` is deprecated and slated for removal in a
+            future coordinated major. Reach storage through
+            :meth:`root_group` and the :class:`StorageGroup` protocol
+            instead. (Parity with the Java SDK's
+            ``@Deprecated(forRemoval=true)``.)
+        """
+        import warnings
+        warnings.warn(
+            "StorageProvider.native_handle() is deprecated and slated for "
+            "removal; reach storage through root_group() and the StorageGroup "
+            "protocol. (Parity with the Java SDK's @Deprecated(forRemoval=true).)",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         return self._conn
 
     # ── Transactions ─────────────────────────
