@@ -11,6 +11,17 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `AcquisitionRun` spectrum dispatch goes through a `SpectrumKind` enum (Python)
+
+The stringly-typed `spectrum_class` dispatch in `AcquisitionRun._materialize_spectrum`
+now routes through a new `SpectrumKind` enum (`ttio.enums.SpectrumKind`) via a derived
+`AcquisitionRun.kind` property, instead of comparing the raw `@spectrum_class` string in
+each branch. The persisted `@spectrum_class` string is unchanged — it stays the on-disk
+source of truth and is written verbatim; the enum is an in-code dispatch key only.
+Unrecognized classes map to `SpectrumKind.UNKNOWN` and dispatch to the `MassSpectrum`
+default, preserving the v0.1 fallback. No `.tio` wire, transport, or API-shape change.
+(OO-assessment P3.8.)
+
 ### Changed — read-only `SignalArray.data` view + `Run` protocol promoted to Stable (Python)
 
 `SignalArray.data` is now stored as a zero-copy, read-only numpy view

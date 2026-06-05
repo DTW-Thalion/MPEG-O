@@ -13,7 +13,7 @@ Java: ``global.thalion.ttio.Enums``
 """
 from __future__ import annotations
 
-from enum import IntEnum
+from enum import Enum, IntEnum
 
 
 class SamplingMode(IntEnum):
@@ -199,6 +199,34 @@ class SpectralAxisKind(IntEnum):
 
     MZ = 0
     WAVENUMBER = 1
+
+
+class SpectrumKind(Enum):
+    """Discriminator for a spectrum run's concrete type, derived from the
+    persisted ``@spectrum_class`` string (which stays the on-disk source of
+    truth — this enum is an in-code dispatch key, P3.8)."""
+    MASS = "TTIOMassSpectrum"
+    NMR = "TTIONMRSpectrum"
+    NMR_2D = "TTIONMR2DSpectrum"
+    IR = "TTIOIRSpectrum"
+    RAMAN = "TTIORamanSpectrum"
+    UVVIS = "TTIOUVVisSpectrum"
+    FREE_INDUCTION_DECAY = "TTIOFreeInductionDecay"
+    MS_IMAGE_PIXEL = "TTIOMSImagePixel"
+    UNKNOWN = ""
+
+    @property
+    def persisted(self) -> str:
+        return self.value
+
+    @classmethod
+    def from_persisted(cls, s):
+        if not s:
+            return cls.MASS  # v0.1 fallback
+        for k in cls:
+            if k is not cls.UNKNOWN and k.value == s:
+                return k
+        return cls.UNKNOWN
 
 
 class EncryptionLevel(IntEnum):

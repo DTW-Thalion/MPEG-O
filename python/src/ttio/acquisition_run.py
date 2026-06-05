@@ -19,6 +19,7 @@ from .enums import (
     EncryptionLevel,
     IRMode,
     Polarity,
+    SpectrumKind,
 )
 from .instrument_config import InstrumentConfig
 from .ir_spectrum import IRSpectrum
@@ -378,6 +379,20 @@ class AcquisitionRun:
     _persistence_file_path: str | None = field(default=None, repr=False)
     _persistence_run_name: str | None = field(default=None, repr=False)
 
+    @property
+    def kind(self) -> SpectrumKind:
+        """The :class:`~ttio.enums.SpectrumKind` derived from the persisted
+        ``@spectrum_class`` string.
+
+        In-code dispatch key only (P3.8). The ``spectrum_class`` field stays
+        the on-disk source of truth and is never normalized through this
+        enum; an unrecognized class maps to
+        :attr:`~ttio.enums.SpectrumKind.UNKNOWN` and dispatches to the
+        :class:`~ttio.mass_spectrum.MassSpectrum` default, preserving the
+        v0.1 fallback behavior.
+        """
+        return SpectrumKind.from_persisted(self.spectrum_class)
+
     @classmethod
     def open(cls, group: StorageGroup | "h5py.Group", name: str) -> "AcquisitionRun":
         """Open a run from a storage-provider group .
@@ -723,23 +738,24 @@ class AcquisitionRun:
             precursor_charge=int(self.index.precursor_charges[i]),
         )
 
-        if self.spectrum_class == "TTIONMRSpectrum":
+        kind = self.kind  # one lookup per spectrum (hot path)
+        if kind is SpectrumKind.NMR:
             return NMRSpectrum(nucleus_type=self.nucleus_type, **base_kwargs)
-        if self.spectrum_class == "TTIOIRSpectrum":
+        if kind is SpectrumKind.IR:
             return IRSpectrum(
                 mode=IRMode(self.ir_mode),
                 resolution_cm_inv=self.ir_resolution_cm_inv,
                 number_of_scans=self.ir_number_of_scans,
                 **base_kwargs,
             )
-        if self.spectrum_class == "TTIORamanSpectrum":
+        if kind is SpectrumKind.RAMAN:
             return RamanSpectrum(
                 excitation_wavelength_nm=self.raman_excitation_wavelength_nm,
                 laser_power_mw=self.raman_laser_power_mw,
                 integration_time_sec=self.raman_integration_time_sec,
                 **base_kwargs,
             )
-        if self.spectrum_class == "TTIOUVVisSpectrum":
+        if kind is SpectrumKind.UVVIS:
             return UVVisSpectrum(
                 path_length_cm=self.uvvis_path_length_cm,
                 solvent=self.solvent,
