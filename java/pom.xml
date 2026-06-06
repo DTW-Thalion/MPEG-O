@@ -277,8 +277,11 @@
                                      ContainerListPage, ContainerLayer,
                                      ContainerManifest) stay measured. -->
                                 <exclude>**/workbench/containers/ContainersClient*</exclude>
-                                <!-- 2-line marker interface; a 0% "package"
-                                     that would trip the PACKAGE floor. -->
+                                <!-- Indexable: a generic interface whose only
+                                     instrumented lines are two uncovered
+                                     default-method throw bodies; unexcluded it
+                                     makes the protocols package show 0% and trip
+                                     the PACKAGE floor. -->
                                 <exclude>**/protocols/Indexable*</exclude>
                             </excludes>
                         </configuration>
@@ -315,6 +318,12 @@
                                      ContainerListPage, ContainerLayer,
                                      ContainerManifest) stay measured. -->
                                 <exclude>**/workbench/containers/ContainersClient*</exclude>
+                                <!-- Indexable: a generic interface whose only
+                                     instrumented lines are two uncovered
+                                     default-method throw bodies; unexcluded it
+                                     makes the protocols package show 0% and trip
+                                     the PACKAGE floor. -->
+                                <exclude>**/protocols/Indexable*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -350,8 +359,11 @@
                                      ContainerListPage, ContainerLayer,
                                      ContainerManifest) stay measured. -->
                                 <exclude>**/workbench/containers/ContainersClient*</exclude>
-                                <!-- 2-line marker interface; a 0% "package"
-                                     that would trip the PACKAGE floor. -->
+                                <!-- Indexable: a generic interface whose only
+                                     instrumented lines are two uncovered
+                                     default-method throw bodies; unexcluded it
+                                     makes the protocols package show 0% and trip
+                                     the PACKAGE floor. -->
                                 <exclude>**/protocols/Indexable*</exclude>
                             </excludes>
                             <rules>
