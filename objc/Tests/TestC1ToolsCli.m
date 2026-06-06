@@ -231,5 +231,103 @@ void testC1ToolsCli(void)
                      "C1 ObjC #14: TtioBamDump output starts with JSON {");
             }
         }
+
+        // ── Happy-path runs for one-shot tools (raise beyond no-args) ──
+        // Build a genomic fixture once, then chain the encode/sign tools
+        // off it so their success paths (not just the arg-error branch)
+        // execute under coverage. Each run is guarded by c1ToolMissing.
+        if (!c1ToolMissing(@"TtioWriteGenomicFixture")) {
+            NSString *hp = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_hp_fixture.tio"];
+            [[NSFileManager defaultManager] removeItemAtPath:hp error:NULL];
+            NSMutableData *o = nil, *e = nil;
+            c1RunTool(@"TtioWriteGenomicFixture", @[hp], &o, &e);
+
+            if ([[NSFileManager defaultManager] fileExistsAtPath:hp]) {
+                // TtioTransportEncode <in.tio> <out.tis>  (exit 0, .tis written)
+                if (!c1ToolMissing(@"TtioTransportEncode")) {
+                    NSString *tis = [NSTemporaryDirectory()
+                        stringByAppendingPathComponent:@"c1_hp.tis"];
+                    [[NSFileManager defaultManager] removeItemAtPath:tis error:NULL];
+                    NSMutableData *eo = nil, *ee = nil;
+                    int rc = c1RunTool(@"TtioTransportEncode", @[hp, tis], &eo, &ee);
+                    PASS(rc == 0 && [[NSFileManager defaultManager]
+                            fileExistsAtPath:tis],
+                         "C1 ObjC HP: TtioTransportEncode wrote a .tis");
+                    [[NSFileManager defaultManager] removeItemAtPath:tis error:NULL];
+                }
+
+                // TtioSign <tio> <dataset> <key-hex>  (64 hex chars = 32 bytes).
+                // The genomic_index/positions dataset is written by the
+                // fixture writer (confirmed via h5py), so signing it
+                // exercises the success path and returns 0.
+                if (!c1ToolMissing(@"TtioSign")) {
+                    NSString *ds =
+                        @"/study/genomic_runs/genomic_0001/genomic_index/positions";
+                    NSString *keyHex = [@"" stringByPaddingToLength:64
+                        withString:@"0" startingAtIndex:0];
+                    NSMutableData *so = nil, *se = nil;
+                    int rc = c1RunTool(@"TtioSign", @[hp, ds, keyHex], &so, &se);
+                    PASS(rc == 0, "C1 ObjC HP: TtioSign on a real dataset exits 0");
+                }
+            }
+            [[NSFileManager defaultManager] removeItemAtPath:hp error:NULL];
+        }
+
+        // TtioSimulator <output.tis> [flags] — self-contained synthetic
+        // stream generator; needs no input fixture. Keep it small with
+        // --duration/--scan-rate so the run is fast. Exit 0 + .tis written.
+        if (!c1ToolMissing(@"TtioSimulator")) {
+            NSString *simTis = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_hp_sim.tis"];
+            [[NSFileManager defaultManager] removeItemAtPath:simTis error:NULL];
+            NSMutableData *o = nil, *e = nil;
+            int rc = c1RunTool(@"TtioSimulator",
+                               @[simTis, @"--duration", @"1", @"--scan-rate", @"5"],
+                               &o, &e);
+            PASS(rc == 0 && [[NSFileManager defaultManager]
+                    fileExistsAtPath:simTis],
+                 "C1 ObjC HP: TtioSimulator wrote a synthetic .tis");
+            [[NSFileManager defaultManager] removeItemAtPath:simTis error:NULL];
+        }
+
+        // MakeFixtures <output_dir> — writes the canonical MS/NMR fixture
+        // set (minimal_ms.tio, full_ms.tio, nmr_1d.tio, encrypted.tio,
+        // signed.tio). Exit 0 on success. We then feed full_ms.tio to
+        // TtioToMzML, which needs MS content (the genomic fixture above
+        // would not satisfy it).
+        if (!c1ToolMissing(@"MakeFixtures")) {
+            NSString *dir = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_makefixtures"];
+            [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
+            [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                withIntermediateDirectories:YES attributes:nil error:NULL];
+            NSMutableData *o = nil, *e = nil;
+            int rc = c1RunTool(@"MakeFixtures", @[dir], &o, &e);
+            PASS(rc == 0, "C1 ObjC HP: MakeFixtures wrote its fixture set");
+
+            // TtioToMzML <input.tio> <output.mzML> on the MS fixture.
+            NSString *msTio = [dir stringByAppendingPathComponent:@"full_ms.tio"];
+            if (!c1ToolMissing(@"TtioToMzML")
+                    && [[NSFileManager defaultManager] fileExistsAtPath:msTio]) {
+                NSString *mzml = [NSTemporaryDirectory()
+                    stringByAppendingPathComponent:@"c1_hp.mzML"];
+                [[NSFileManager defaultManager] removeItemAtPath:mzml error:NULL];
+                NSMutableData *mo = nil, *me = nil;
+                int mrc = c1RunTool(@"TtioToMzML", @[msTio, mzml], &mo, &me);
+                PASS(mrc == 0 && [[NSFileManager defaultManager]
+                        fileExistsAtPath:mzml],
+                     "C1 ObjC HP: TtioToMzML wrote an .mzML from an MS .tio");
+                [[NSFileManager defaultManager] removeItemAtPath:mzml error:NULL];
+            }
+            [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
+        }
+
+        // NOTE: TtioJcampDxDump <path.jdx> needs a JCAMP-DX input file.
+        // No JCAMP-DX fixture is committed under the repo (only transient
+        // copies appear in tools/perf/_out_* scratch dirs), so we do not
+        // invent one here — its no-args branch is still covered by the
+        // per-tool loop above. Add a happy-path run if/when a .jdx
+        // fixture is committed to the tree.
     }
 }
