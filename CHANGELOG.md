@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `TTIOAcquisitionRun` spectrum-class dispatch now goes through `TTIOSpectrumKind` (ObjC)
+
+ObjC `TTIOAcquisitionRun`'s stringly-typed `spectrum_class` dispatch (the
+materialize, vibrational-metadata, and read chains) now routes through a new
+`TTIOSpectrumKind` `NS_ENUM` (`TTIOSpectrumKindFromPersisted` /
+`TTIOSpectrumKindPersisted`, in `ValueClasses/TTIOEnums.{h,m}`); the persisted
+`@spectrum_class` attribute string remains the source of truth and is written
+verbatim. `TTIOMzMLWriter`'s MS discriminant was converted to the same enum. No
+`.tio` wire, transport, or API change. (OO-assessment P3.8.)
+
 ### Changed — `AcquisitionRun` spectrum-class dispatch now goes through `Enums.SpectrumKind` (Java)
 
 Java `AcquisitionRun`'s stringly-typed `spectrum_class` dispatch (the
