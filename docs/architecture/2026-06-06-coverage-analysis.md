@@ -5,6 +5,13 @@ Analysis of the three-SDK coverage setup (Python / Java / ObjC) at `main`
 and blind spots — then prioritized recommendations. Numbers are point-in-time;
 re-verify before acting.
 
+> **Status (updated 2026-06-06): R1–R6 COMPLETE; R7–R8 deferred.**
+> All six high-ROI recommendations shipped and merged — R1 (#241), R2 (#244),
+> R3 (#242), R4 (#243), R5 (#245), R6 (#246). All three SDKs now have enforcing,
+> honestly-scoped coverage gates with per-unit floors, plus real coverage gains
+> from R1/R3. R7 (live-daemon integration tests) and R8 (native C/Cython coverage)
+> remain deferred. See per-recommendation notes in §3.
+
 ## 1. Current state
 
 | SDK | Line | Branch | Gate | Branch gated? |
@@ -93,47 +100,73 @@ xlang failures contribute nothing).
 ## 3. Recommendations (prioritized)
 
 ### High value, low effort
-- **R1 — Exercise the CLI tools so coverage credits them (F3).** Java + Python: invoke
+- **R1 ✅ DONE (#241) — Exercise the CLI tools so coverage credits them (F3).** Java + Python: invoke
   each tool's `main()` **in-process** (capture argv + stdout) instead of (or in addition
   to) the subprocess smoke — the 4 Java 0% tools and the Python `tools/*_cli`. ObjC:
   add **happy-path NSTask invocations** (subprocess already credited). The logic already
   works (smokes pass); this just makes coverage *see* it. Big % jump for little code.
-- **R2 — Make the ObjC gate real + fix measurement scope (F5).** The 82% threshold
+  *Outcome: Java 4 tools off 0%; Python `transport_encode` 66→100%, `verify` 73→91%,
+  `pqc` 64→81%; ObjC tool happy-paths + a server launch→PORT→SIGTERM test. Behaviour-
+  identical `serve()` seam extracted from `transport_server_cli`.*
+- **R2 ✅ DONE (#244) — Make the ObjC gate real + fix measurement scope (F5).** The 82% threshold
   already exists in `build.sh`; promote it to enforcing by dropping `continue-on-error:
   true` from the "Coverage build (opt-in)" CI step (and ensuring `llvm-cov` is reliably
   installed there). Also scope the lcov to `objc/Source` (drop `/usr/GNUstep/...` system
   headers) so the gated number reflects TTI-O code. Cheap; closes the "advisory-only"
   hole so the others' parity holds.
+  *Outcome: dropped `continue-on-error`; scoped lcov to `objc/Source` + `objc/Tools`
+  (dropped system/3rd-party headers + test sources); added `TTIO_COV_STRICT` so a
+  tool-less/broken runner fails instead of silently passing. Floor recalibrated to 67 —
+  scoped CI coverage is 69.47% (vs 74.81% local; ObjC coverage is ~5pt lower in CI due
+  to libhdf5/runner env). The old "82%" was inflated by system+test files.*
 
 ### High value, medium effort
-- **R3 — Test the fqzcomp codec (F2).** Add round-trip + edge-case unit tests for the
+- **R3 ✅ DONE (#242) — Test the fqzcomp codec (F2).** Add round-trip + edge-case unit tests for the
   pure-language `fqzcomp_nx16_z` encoder/decoder in Python and Java (quality models,
   renorm boundaries, empty/short inputs). Biggest single coverage + correctness win;
   ~600 lines of real codec logic per language currently dark.
-- **R4 — Add a BRANCH gate to Java (F1).** Add a jacoco `BRANCH COVEREDRATIO` limit.
+  *PIVOT: the "dark" code turned out to be **dead** — the V1/V2/V3 pure-language codecs
+  were removed from dispatch in the v1.0 reset (Phase 2c) but left in the files; the live
+  path is V4-only (wrapper over native `libttio_rans`) and decode already rejects v1/2/3.
+  So R3 became: **delete** the dead code in all 3 SDKs (~3,600 lines) + add live-V4
+  edge/error tests. Coverage rose honestly — Python file 28→67%, Java class 19→80%.*
+- **R4 ✅ DONE (#243) — Add a BRANCH gate to Java (F1).** Add a jacoco `BRANCH COVEREDRATIO` limit.
   Set the initial floor at the current ~0.67 to stop regressions, then ratchet up as
   R1/R3 land. Consider the same for ObjC once R2 is in.
+  *Outcome: Java BUNDLE branch gated at 0.68 (actual ~69.5%). Kept tight given branch
+  volatility; not ratcheted in R6.*
 
 ### Structural / longer-term
-- **R5 — Per-class/package floor (F6).** Add a jacoco `CLASS`-element rule (e.g. no
+- **R5 ✅ DONE (#245) — Per-class/package floor (F6).** Add a jacoco `CLASS`-element rule (e.g. no
   class below 0.50, excluding the documented live-daemon set) so outliers can't hide
   behind the bundle aggregate. Python equivalent: a small CI check that fails if any
   measured module drops below a floor.
-- **R6 — Ratchet the gates (margins).** After R1/R3 raise the numbers, bump the gates
+  *Outcome: used a **PACKAGE** floor for Java (0.50) rather than CLASS — ~32 legitimately-
+  low small classes (exceptions, marker interfaces, subprocess-only CLIs, reader adapters)
+  would have needed excluding; per-package smooths that. Python: new stdlib
+  `scripts/check_module_coverage.py` (per-module ≥0.50, 2 documented known-low excludes),
+  wired into CI.*
+- **R6 ✅ DONE (#246) — Ratchet the gates (margins).** After R1/R3 raise the numbers, bump the gates
   (e.g. 0.84 → 0.87 line) and prefer a *never-decrease* ratchet over a fixed constant
   so coverage can't silently erode back to the floor.
-- **R7 — Land the deferred live-daemon integration tests (F7)** to un-exclude the
+  *Outcome: ratcheted only the **stable** aggregate line gates — Java BUNDLE line and
+  Python total 0.84 → 0.86 (both ~87% actual). Deliberately left branch (0.68), package
+  (0.50), ObjC (67), and Python per-module (0.50) unchanged — volatile or knife-edge, so
+  ratcheting them would trade a tiny lock-in for false-failure risk.*
+- **R7 ⏳ DEFERRED — Land the deferred live-daemon integration tests (F7)** to un-exclude the
   workbench clients (Python `omit` + Java `<excludes>`). Bigger effort (daemon in CI);
   do after the cheaper wins.
-- **R8 — (Optional) native coverage (F8).** gcov/llvm-cov on the C rANS lib + the
+- **R8 ⏳ DEFERRED — (Optional) native coverage (F8).** gcov/llvm-cov on the C rANS lib + the
   Cython extension if the codec paths warrant it. Low priority.
 
 ## 4. Suggested sequencing
-1. **R1 + R2** (cheap, high-yield: CLI in-process tests + ObjC scope/enforce) — likely
+*Executed 2026-06-06 as: R1 → R3 → R4 → R2 → R5 → R6 (all merged), each as its own PR
+via spec → plan → subagent-driven implementation + review. R7/R8 deferred.*
+1. ✅ **R1 + R2** (cheap, high-yield: CLI in-process tests + ObjC scope/enforce) — likely
    lifts Java/ObjC several points and promotes the ObjC gate from advisory to enforcing.
-2. **R3** (fqzcomp tests) — the biggest real logic gap, both langs.
-3. **R4** (Java branch gate at a no-regression floor) — locks in the branch story.
-4. **R5 + R6** (per-class floor + ratchet) — prevent future erosion.
-5. **R7 / R8** as capacity allows.
+2. ✅ **R3** (fqzcomp tests) — the biggest real logic gap, both langs. *(Became dead-code removal.)*
+3. ✅ **R4** (Java branch gate at a no-regression floor) — locks in the branch story.
+4. ✅ **R5 + R6** (per-class floor + ratchet) — prevent future erosion.
+5. ⏳ **R7 / R8** as capacity allows. *(Deferred.)*
 
 Each is independently shippable as its own PR; R1–R4 are the high-ROI core.
