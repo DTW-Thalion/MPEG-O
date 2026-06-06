@@ -11,6 +11,15 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed — `AcquisitionRun` spectrum-class dispatch now goes through `Enums.SpectrumKind` (Java)
+
+Java `AcquisitionRun`'s stringly-typed `spectrum_class` dispatch (the
+materialize switch and the read/write `equals` chains) now routes through a new
+`Enums.SpectrumKind` enum (`fromPersisted(String)` / `persisted()`); the
+persisted `@spectrum_class` attribute string remains the source of truth and is
+written verbatim. `RunSelection`'s NMR discriminant was converted to the same
+enum. No `.tio` wire, transport, or API-shape change. (OO-assessment P3.8.)
+
 ### Changed — `AcquisitionRun` spectrum dispatch goes through a `SpectrumKind` enum (Python)
 
 The stringly-typed `spectrum_class` dispatch in `AcquisitionRun._materialize_spectrum`
