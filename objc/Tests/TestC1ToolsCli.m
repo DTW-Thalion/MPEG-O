@@ -16,6 +16,7 @@
 #import "Testing.h"
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
 
 static NSString *kToolsDir =
     @"/home/toddw/TTI-O/objc/Tools/obj";
@@ -231,5 +232,162 @@ void testC1ToolsCli(void)
                      "C1 ObjC #14: TtioBamDump output starts with JSON {");
             }
         }
+
+        // ── Happy-path runs for one-shot tools (raise beyond no-args) ──
+        // Build a genomic fixture once, then chain the encode/sign tools
+        // off it so their success paths (not just the arg-error branch)
+        // execute under coverage. Each run is guarded by c1ToolMissing.
+        if (!c1ToolMissing(@"TtioWriteGenomicFixture")) {
+            NSString *hp = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_hp_fixture.tio"];
+            [[NSFileManager defaultManager] removeItemAtPath:hp error:NULL];
+            NSMutableData *o = nil, *e = nil;
+            c1RunTool(@"TtioWriteGenomicFixture", @[hp], &o, &e);
+
+            if ([[NSFileManager defaultManager] fileExistsAtPath:hp]) {
+                // TtioTransportEncode <in.tio> <out.tis>  (exit 0, .tis written)
+                if (!c1ToolMissing(@"TtioTransportEncode")) {
+                    NSString *tis = [NSTemporaryDirectory()
+                        stringByAppendingPathComponent:@"c1_hp.tis"];
+                    [[NSFileManager defaultManager] removeItemAtPath:tis error:NULL];
+                    NSMutableData *eo = nil, *ee = nil;
+                    int rc = c1RunTool(@"TtioTransportEncode", @[hp, tis], &eo, &ee);
+                    PASS(rc == 0 && [[NSFileManager defaultManager]
+                            fileExistsAtPath:tis],
+                         "C1 ObjC HP: TtioTransportEncode wrote a .tis");
+                    [[NSFileManager defaultManager] removeItemAtPath:tis error:NULL];
+                }
+
+                // TtioSign <tio> <dataset> <key-hex>  (64 hex chars = 32 bytes).
+                // The genomic_index/positions dataset is written by the
+                // fixture writer (confirmed via h5py), so signing it
+                // exercises the success path and returns 0.
+                if (!c1ToolMissing(@"TtioSign")) {
+                    NSString *ds =
+                        @"/study/genomic_runs/genomic_0001/genomic_index/positions";
+                    NSString *keyHex = [@"" stringByPaddingToLength:64
+                        withString:@"0" startingAtIndex:0];
+                    NSMutableData *so = nil, *se = nil;
+                    int rc = c1RunTool(@"TtioSign", @[hp, ds, keyHex], &so, &se);
+                    PASS(rc == 0, "C1 ObjC HP: TtioSign on a real dataset exits 0");
+                }
+            }
+            [[NSFileManager defaultManager] removeItemAtPath:hp error:NULL];
+        }
+
+        // TtioSimulator <output.tis> [flags] — self-contained synthetic
+        // stream generator; needs no input fixture. Keep it small with
+        // --duration/--scan-rate so the run is fast. Exit 0 + .tis written.
+        if (!c1ToolMissing(@"TtioSimulator")) {
+            NSString *simTis = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_hp_sim.tis"];
+            [[NSFileManager defaultManager] removeItemAtPath:simTis error:NULL];
+            NSMutableData *o = nil, *e = nil;
+            int rc = c1RunTool(@"TtioSimulator",
+                               @[simTis, @"--duration", @"1", @"--scan-rate", @"5"],
+                               &o, &e);
+            PASS(rc == 0 && [[NSFileManager defaultManager]
+                    fileExistsAtPath:simTis],
+                 "C1 ObjC HP: TtioSimulator wrote a synthetic .tis");
+            [[NSFileManager defaultManager] removeItemAtPath:simTis error:NULL];
+        }
+
+        // MakeFixtures <output_dir> — writes the canonical MS/NMR fixture
+        // set (minimal_ms.tio, full_ms.tio, nmr_1d.tio, encrypted.tio,
+        // signed.tio). Exit 0 on success. We then feed full_ms.tio to
+        // TtioToMzML, which needs MS content (the genomic fixture above
+        // would not satisfy it).
+        if (!c1ToolMissing(@"MakeFixtures")) {
+            NSString *dir = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_makefixtures"];
+            [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
+            [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                withIntermediateDirectories:YES attributes:nil error:NULL];
+            NSMutableData *o = nil, *e = nil;
+            int rc = c1RunTool(@"MakeFixtures", @[dir], &o, &e);
+            PASS(rc == 0, "C1 ObjC HP: MakeFixtures wrote its fixture set");
+
+            // TtioToMzML <input.tio> <output.mzML> on the MS fixture.
+            NSString *msTio = [dir stringByAppendingPathComponent:@"full_ms.tio"];
+            if (!c1ToolMissing(@"TtioToMzML")
+                    && [[NSFileManager defaultManager] fileExistsAtPath:msTio]) {
+                NSString *mzml = [NSTemporaryDirectory()
+                    stringByAppendingPathComponent:@"c1_hp.mzML"];
+                [[NSFileManager defaultManager] removeItemAtPath:mzml error:NULL];
+                NSMutableData *mo = nil, *me = nil;
+                int mrc = c1RunTool(@"TtioToMzML", @[msTio, mzml], &mo, &me);
+                PASS(mrc == 0 && [[NSFileManager defaultManager]
+                        fileExistsAtPath:mzml],
+                     "C1 ObjC HP: TtioToMzML wrote an .mzML from an MS .tio");
+                [[NSFileManager defaultManager] removeItemAtPath:mzml error:NULL];
+            }
+            [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
+        }
+
+        // ── TtioTransportServer: launch, read PORT=, then SIGTERM ──────
+        // TtioTransportServer is long-running (loops until SIGTERM/SIGINT),
+        // so we cannot use c1RunTool (which waitsUntilExit). We launch a
+        // dedicated NSTask, read stdout until we see the PORT=<n> line the
+        // server prints (with fflush) once bound, then SIGTERM it and wait
+        // for the clean exit handleSig() drives. The read is capped so the
+        // test can NEVER hang: kill + waitUntilExit always run.
+        if (!c1ToolMissing(@"TtioTransportServer")
+                && !c1ToolMissing(@"TtioWriteGenomicFixture")) {
+            NSString *srvTio = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_srv.tio"];
+            [[NSFileManager defaultManager] removeItemAtPath:srvTio error:NULL];
+            NSMutableData *fo = nil, *fe = nil;
+            c1RunTool(@"TtioWriteGenomicFixture", @[srvTio], &fo, &fe);
+
+            if ([[NSFileManager defaultManager] fileExistsAtPath:srvTio]) {
+                NSString *path = [kToolsDir
+                    stringByAppendingPathComponent:@"TtioTransportServer"];
+                NSTask *task = [[NSTask alloc] init];
+                task.launchPath = path;
+                task.arguments = @[srvTio, @"--port", @"0"];
+                task.environment = [NSProcessInfo processInfo].environment;
+                NSPipe *outPipe = [NSPipe pipe];
+                task.standardOutput = outPipe;
+                NSFileHandle *rd = [outPipe fileHandleForReading];
+
+                BOOL launched = YES;
+                @try { [task launch]; }
+                @catch (NSException *exc) { launched = NO; }
+                PASS(launched, "C1 ObjC HP: TtioTransportServer launched");
+
+                if (launched) {
+                    // Read until we see a PORT= line, EOF, or 30 chunk-reads (a hard
+                    // cap on iterations, not wall-clock — the server flushes PORT=
+                    // promptly after binding so the first availableData usually has it).
+                    NSMutableData *acc = [NSMutableData data];
+                    BOOL sawPort = NO;
+                    for (int i = 0; i < 30 && !sawPort; i++) {
+                        NSData *chunk = [rd availableData];
+                        if (chunk.length) {
+                            [acc appendData:chunk];
+                            NSString *s = [[NSString alloc] initWithData:acc
+                                encoding:NSUTF8StringEncoding];
+                            if ([s containsString:@"PORT="]) sawPort = YES;
+                        } else {
+                            // EOF (server died) — stop looping, proceed to kill.
+                            break;
+                        }
+                    }
+                    PASS(sawPort,
+                         "C1 ObjC HP: TtioTransportServer printed PORT=");
+                    kill(task.processIdentifier, SIGTERM);
+                    [task waitUntilExit];
+                    PASS(task.terminationStatus == 0,
+                         "C1 ObjC HP: TtioTransportServer exited 0 after SIGTERM");
+                }
+            }
+            [[NSFileManager defaultManager] removeItemAtPath:srvTio error:NULL];
+        }
+
+        // TtioJcampDxDump: no happy-path run. The only committed JCAMP-DX
+        // fixtures (conformance/jcamp_dx/uvvis_ramp25_*.jdx) are UV/Vis
+        // spectra (TTIOUVVisSpectrum), which TtioJcampDxDump rejects (it
+        // handles Raman/IR only). Left as the no-args case until a
+        // Raman/IR .jdx fixture is committed.
     }
 }
