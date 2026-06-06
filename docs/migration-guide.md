@@ -463,6 +463,11 @@ This returns the same bytes regardless of provider (HDF5 / Memory /
 SQLite / Zarr), so signatures verify across backend transitions.
 Binding decision 37.
 
+> **v1.7.0:** `native_handle()` is now actively deprecated (Python
+> emits a `DeprecationWarning`; Java is `@Deprecated(forRemoval=true)`).
+> It still works, but new code should use `root_group()` / the
+> StorageGroup protocol (and `read_canonical_bytes()` for signing).
+
 ---
 
 ## 7. Migrating from v0.7 to v0.8
