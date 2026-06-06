@@ -11,12 +11,16 @@ re-verify before acting.
 |-----|-----:|-------:|------|---------------|
 | **Python** | ~88% (2029/16573 missed) | ~83.5% (852/5168 partial) | `--cov-fail-under=84` (combined = **85%**) | ✅ (`branch=true`) |
 | **Java** | **84.3%** (17095/20278) | **67.7%** (7026/10377) | jacoco `BUNDLE LINE COVEREDRATIO ≥ 0.84` | ❌ (line only) |
-| **ObjC** | ~83.9%* (36823/43874) | n/a | **none** — `--coverage` emits lcov + uploads, never fails | ❌ |
+| **ObjC** | ~83%* | n/a | 82% line threshold in `build.sh --coverage`, but **advisory** (CI step is `continue-on-error`) | ❌ |
 
-\* ObjC number is from a **stale** `coverage/coverage.lcov` (Apr-27, pre-v1.7.0) and
-is **polluted by system headers** (`/usr/GNUstep/.../Foundation/*.h` instrumented at
-0–19%); `llvm-profdata`/`llvm-cov` aren't on the local PATH (CI only), so it couldn't
-be freshly measured here.
+\* A fresh `./build.sh --coverage check` measures ~83% line (the earlier
+`coverage/coverage.lcov` snapshot was stale and polluted by system Foundation
+headers). `objc/build.sh:163-176` defines an 82% line-coverage threshold
+(`TTIO_COV_MIN`, default 82) and **exits 1** below it — so a direct local
+`./build.sh --coverage check` is build-breaking. But CI's "Coverage build (opt-in)"
+step (`.github/workflows/ci.yml`) runs it with `continue-on-error: true`, and the
+gating step is the plain `./build.sh check` (which never evaluates coverage). Net:
+the ObjC threshold is **advisory only** — coverage regressions do NOT fail CI.
 
 **Margins are thin:** Java 84.3% vs the 84.0% gate; Python 85% vs 84%. A small
 regression trips either.
@@ -57,10 +61,14 @@ waters_masslynx}.py`; Java `{BrukerTDFReader,ThermoRawReader,WatersMassLynxReade
 because they shell out to vendor tooling / are partial stubs. Lower-value (needs
 fixtures or mocked subprocess), but the parse/validate paths are unit-testable.
 
-### F5 — ObjC has no gate + a polluted measurement scope
-CI runs `build.sh --coverage check` and uploads the lcov but **never fails on a
-threshold** — ObjC coverage is informational only. The lcov also instruments system
-Foundation headers, so the headline % is meaningless without scoping to `objc/Source`.
+### F5 — ObjC gate exists but is advisory; measurement scope is polluted
+`objc/build.sh` *does* define an 82% line-coverage threshold under `--coverage`
+(`build.sh:163-176`, `TTIO_COV_MIN` default 82, `exit 1` below it). But CI runs that
+step with `continue-on-error: true` and gates the job on the plain `./build.sh check`
+(which never evaluates coverage), so the threshold is **advisory** — a regression
+won't fail CI. Making it real is a one-line change (drop `continue-on-error` from the
+"Coverage build (opt-in)" step). Separately, the lcov instruments system Foundation
+headers, so the headline % is inflated/noisy without scoping to `objc/Source`.
 
 ### F6 — Gate *shape* lets gaps hide
 - Java uses a single **BUNDLE** aggregate: a few large well-covered classes mask the
@@ -90,9 +98,12 @@ xlang failures contribute nothing).
   to) the subprocess smoke — the 4 Java 0% tools and the Python `tools/*_cli`. ObjC:
   add **happy-path NSTask invocations** (subprocess already credited). The logic already
   works (smokes pass); this just makes coverage *see* it. Big % jump for little code.
-- **R2 — Fix ObjC measurement + add a gate (F5).** Scope the lcov to `objc/Source`
-  (drop `/usr/GNUstep/...` system headers), then add a CI line-rate threshold so ObjC
-  is gated like the others. Cheap, closes the "one SDK ungated" hole.
+- **R2 — Make the ObjC gate real + fix measurement scope (F5).** The 82% threshold
+  already exists in `build.sh`; promote it to enforcing by dropping `continue-on-error:
+  true` from the "Coverage build (opt-in)" CI step (and ensuring `llvm-cov` is reliably
+  installed there). Also scope the lcov to `objc/Source` (drop `/usr/GNUstep/...` system
+  headers) so the gated number reflects TTI-O code. Cheap; closes the "advisory-only"
+  hole so the others' parity holds.
 
 ### High value, medium effort
 - **R3 — Test the fqzcomp codec (F2).** Add round-trip + edge-case unit tests for the
@@ -118,8 +129,8 @@ xlang failures contribute nothing).
   Cython extension if the codec paths warrant it. Low priority.
 
 ## 4. Suggested sequencing
-1. **R1 + R2** (cheap, high-yield: CLI in-process tests + ObjC scope/gate) — likely
-   lifts Java/ObjC several points and closes the ungated hole.
+1. **R1 + R2** (cheap, high-yield: CLI in-process tests + ObjC scope/enforce) — likely
+   lifts Java/ObjC several points and promotes the ObjC gate from advisory to enforcing.
 2. **R3** (fqzcomp tests) — the biggest real logic gap, both langs.
 3. **R4** (Java branch gate at a no-regression floor) — locks in the branch story.
 4. **R5 + R6** (per-class floor + ratchet) — prevent future erosion.
