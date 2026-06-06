@@ -23,6 +23,8 @@ import xml.etree.ElementTree as ET
 
 # Known-low modules, excluded from the floor with a recorded reason.
 # Matched by path suffix against each <class filename="...">.
+# Each entry MUST include a directory component (not a bare "errors.py")
+# so endswith() can't over-match an unrelated same-named module.
 EXCLUDES = (
     "exporters/_select.py",          # 35.9% — thin selection helper
     "workbench/transport/errors.py", # 45%  — error-type definitions
@@ -56,8 +58,14 @@ def main(argv: list[str] | None = None) -> int:
     def excluded(fn: str) -> bool:
         return any(fn.endswith(suffix) for suffix in EXCLUDES)
 
+    ratios = module_ratios(args.coverage_xml)
+    if not ratios:
+        print(f"No measured modules found in {args.coverage_xml} "
+              f"(empty or misconfigured coverage report)", file=sys.stderr)
+        return 1
+
     violations = []
-    for filename, ratio, n in module_ratios(args.coverage_xml):
+    for filename, ratio, n in ratios:
         if excluded(filename):
             continue
         if ratio < args.min:
