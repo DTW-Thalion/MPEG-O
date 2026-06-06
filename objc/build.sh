@@ -10,7 +10,9 @@
 #   ./build.sh --coverage check  # build with clang coverage instrumentation,
 #                                 # run tests, emit objc/coverage/coverage.lcov
 #                                 # (requires llvm-profdata + llvm-cov on PATH;
-#                                 # warns and skips export if missing).
+#                                 # warns and skips export if missing, unless
+#                                 # TTIO_COV_STRICT=1, which makes a non-measurable
+#                                 # run fail).
 #
 # V1 (verification workplan): the --coverage flag injects
 # -fprofile-instr-generate -fcoverage-mapping into ADDITIONAL_OBJCFLAGS
@@ -63,6 +65,11 @@ if [ "$COVERAGE" = "1" ]; then
     # which would silently drop -fobjc-arc and break the build.
     export LLVM_PROFILE_FILE="$here/coverage/raw/ttio-%p.profraw"
     export TTIO_COVERAGE=1
+    # In strict mode (CI), a coverage run that can't actually measure
+    # coverage must FAIL rather than silently pass — otherwise an
+    # enforcing CI gate could be no-op'd by missing tooling. Local
+    # --coverage builds default to non-strict (graceful) behavior.
+    cov_strict="${TTIO_COV_STRICT:-0}"
     mkdir -p "$here/coverage/raw"
     rm -f "$here/coverage/raw/"*.profraw 2>/dev/null || true
 
@@ -77,7 +84,9 @@ if [ "$COVERAGE" = "1" ]; then
 
     if [ ${#profraws[@]} -eq 0 ]; then
         echo "build.sh --coverage: no .profraw files emitted (did you run with 'check'?)" >&2
-        exit 0
+        # Strict mode fails here: a coverage gate that produced no
+        # profiles measured nothing and must not pass silently.
+        [ "$cov_strict" = "1" ] && exit 1 || exit 0
     fi
 
     # Resolve the llvm tool names — distros ship them version-suffixed
@@ -101,7 +110,9 @@ if [ "$COVERAGE" = "1" ]; then
         echo "build.sh --coverage: llvm-profdata + llvm-cov not on PATH;" >&2
         echo "                    raw profiles in $here/coverage/raw/" >&2
         echo "                    install with: apt install llvm" >&2
-        exit 0
+        # Strict mode fails here: missing llvm tooling means the gate
+        # cannot compute coverage and must not be silently no-op'd.
+        [ "$cov_strict" = "1" ] && exit 1 || exit 0
     fi
 
     "$LLVM_PROFDATA" merge -sparse "${profraws[@]}" \
@@ -136,7 +147,9 @@ if [ "$COVERAGE" = "1" ]; then
     if [ ${#binaries[@]} -eq 0 ]; then
         echo "build.sh --coverage: no TTIOTests binary found under $here" >&2
         echo "                    raw profiles in $here/coverage/raw/" >&2
-        exit 0
+        # Strict mode fails here: no test binary means no coverage maps
+        # to measure against and must not pass silently.
+        [ "$cov_strict" = "1" ] && exit 1 || exit 0
     fi
 
     # llvm-cov export needs one positional binary; the rest take -object.
@@ -148,19 +161,39 @@ if [ "$COVERAGE" = "1" ]; then
 
     "$LLVM_COV" export "$primary" "${rest[@]}" \
         -instr-profile="$here/coverage/coverage.profdata" \
+        -ignore-filename-regex='(^/usr/)|(/_oqs/)|(/Makefiles/)|(libobjc2)|(/objc/Tests/)' \
         -format=lcov > "$here/coverage/coverage.lcov"
 
     lines_hit=$(grep -c '^DA:.*,[1-9]' "$here/coverage/coverage.lcov" || echo 0)
     echo "build.sh --coverage: wrote $here/coverage/coverage.lcov ($lines_hit hit lines)"
 
-    # C7 — minimum aggregate line coverage (LH/LF across all files).
-    # Set 1 pt below the post-C-series ObjC baseline (~84% as
-    # measured by summing LH:/LF: across coverage.lcov) to allow
-    # for natural drift while catching regressions. Bump after
-    # intentional improvements; never lower without a recorded
-    # reason. Override by setting TTIO_COV_MIN=<pct> in the env.
+    # Guard: the gated % is only meaningful if the lcov is scoped to our
+    # own code. If the ignore-regex ever fails to drop a system/3rd-party
+    # path (e.g. a changed GNUstep prefix), fail loudly under strict mode
+    # rather than silently inflating/deflating the denominator.
+    stray=$(grep '^SF:' "$here/coverage/coverage.lcov" | grep -vE '/objc/(Source|Tools)/' | head -5)
+    if [ -n "$stray" ]; then
+        echo "build.sh --coverage: lcov contains out-of-scope SF: records (scope regex needs updating):" >&2
+        echo "$stray" >&2
+        [ "$cov_strict" = "1" ] && exit 1 || echo "build.sh --coverage: (non-strict) continuing despite scope leak" >&2
+    fi
+
+    # C7/R2 — minimum aggregate line coverage (LH/LF across all files).
+    # The export is scoped (-ignore-filename-regex above) so the
+    # denominator is objc/Source + objc/Tools ONLY; system headers
+    # (/usr/...), liboqs (/_oqs/), GNUstep makefiles (/Makefiles/),
+    # libobjc2, and the test sources (/objc/Tests/) are excluded.
+    # Scoped baseline 2026-06-06: local B = 74.81%, but the CI runner
+    # measures 69.47% for the SAME scope — ObjC coverage is sensitive to
+    # the build environment (libhdf5 version drives which metadata paths
+    # execute; liboqs/runner differences also shift it). The gate runs in
+    # CI, so the floor is calibrated to the CI baseline with a wider
+    # (~2.5 pt) buffer than the Java gates to absorb that local<->CI and
+    # runner-to-runner variance: floor(69.47) - ~2 = 67. Bump after
+    # intentional improvements; never lower without a recorded reason.
+    # Override by setting TTIO_COV_MIN=<pct> in the env.
     # See docs/verification-workplan.md §V1 + docs/coverage-workplan.md §C7.
-    cov_min="${TTIO_COV_MIN:-82}"
+    cov_min="${TTIO_COV_MIN:-67}"
     cov_pct=$(awk -F: '
         /^LH:/ { hit += $2 }
         /^LF:/ { found += $2 }
