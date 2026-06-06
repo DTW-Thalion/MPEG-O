@@ -543,3 +543,110 @@ def test_ttio_pqc_kem_keygen_writes_key_files(tmp_path):
     rc = ttio_pqc_cli.main(["kem-keygen", str(pk), str(sk)])
     assert rc == 0
     assert pk.exists() and sk.exists()
+
+
+# ── In-process happy-path / error-branch coverage (ported from the
+#    subprocess round-trips in test_m75_cli_parity.py, which pytest-cov
+#    does not credit). ────────────────────────────────────────────────
+
+_VERIFY_KEY_HEX = bytes((0xA5 ^ (i * 3)) & 0xFF for i in range(32)).hex()
+_VERIFY_DATASET = "/study/ms_runs/run_0001/signal_channels/intensity_values"
+
+
+def test_verify_cli_not_signed_in_process(tmp_path, capsys):
+    from ttio.tools import ttio_verify_cli
+    src = _make_minimal_tio(tmp_path, "verify_unsigned.tio")
+    rc = ttio_verify_cli.main([str(src), _VERIFY_DATASET, _VERIFY_KEY_HEX])
+    assert rc == 2
+    assert capsys.readouterr().out.strip() == "NOT_SIGNED"
+
+
+def test_verify_cli_bad_key_length_in_process(tmp_path):
+    from ttio.tools import ttio_verify_cli
+    src = _make_minimal_tio(tmp_path, "verify_badlen.tio")
+    with pytest.raises(SystemExit):
+        ttio_verify_cli.main([str(src), _VERIFY_DATASET, "deadbeef"])
+
+
+def test_verify_cli_non_hex_key_in_process(tmp_path):
+    from ttio.tools import ttio_verify_cli
+    src = _make_minimal_tio(tmp_path, "verify_nonhex.tio")
+    with pytest.raises(SystemExit):
+        ttio_verify_cli.main([str(src), _VERIFY_DATASET, "z" * 64])
+
+
+def test_verify_cli_dataset_not_found_in_process(tmp_path, capsys):
+    from ttio.tools import ttio_verify_cli
+    src = _make_minimal_tio(tmp_path, "verify_missing_ds.tio")
+    rc = ttio_verify_cli.main([str(src), "/does/not/exist", _VERIFY_KEY_HEX])
+    assert rc == 3
+    assert capsys.readouterr().out.strip() == "ERROR"
+
+
+def test_verify_cli_open_failure_in_process(tmp_path, capsys):
+    from ttio.tools import ttio_verify_cli
+    missing = tmp_path / "nope.tio"
+    rc = ttio_verify_cli.main([str(missing), _VERIFY_DATASET, _VERIFY_KEY_HEX])
+    assert rc == 3
+    assert capsys.readouterr().out.strip() == "ERROR"
+
+
+def test_transport_encode_checksum_and_bulk_in_process(tmp_path):
+    from ttio.tools import transport_encode_cli
+    src = _make_minimal_tio(tmp_path, "te_src.tio")
+    out = tmp_path / "te_out.tis"
+    rc = transport_encode_cli.main(
+        [str(src), str(out), "--checksum", "--bulk"])
+    assert rc == 0
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_transport_encode_image_processed_in_process(tmp_path):
+    # Reuse the shared v0.11 fixture builder, which writes a .tio
+    # carrying a continuous-mode MSImage (4x4x5). The CLI's
+    # --image-processed path opens the file and re-emits its MSImage
+    # via write_image_processed, so the fixture must expose an MS image
+    # through ds.image_for_kind(ImageKind.MS).
+    from _v0_11_fixtures import build_image_ms_continuous
+
+    from ttio.tools import transport_encode_cli
+    src = build_image_ms_continuous(tmp_path / "te_img.tio")
+    out = tmp_path / "te_img.tis"
+    rc = transport_encode_cli.main([str(src), str(out), "--image-processed"])
+    assert rc == 0
+    assert out.exists() and out.stat().st_size > 0
+
+
+def test_pqc_cli_sig_roundtrip_in_process(tmp_path):
+    _skip_if_no_liboqs()
+    from ttio.tools import ttio_pqc_cli
+    pk, sk = tmp_path / "pk.bin", tmp_path / "sk.bin"
+    msg, sig = tmp_path / "msg.bin", tmp_path / "sig.bin"
+    msg.write_bytes(b"r1 in-process pqc")
+    assert ttio_pqc_cli.main(["sig-keygen", str(pk), str(sk)]) == 0
+    assert ttio_pqc_cli.main(["sig-sign", str(sk), str(msg), str(sig)]) == 0
+    assert ttio_pqc_cli.main(["sig-verify", str(pk), str(msg), str(sig)]) == 0
+
+
+def test_pqc_cli_kem_roundtrip_in_process(tmp_path):
+    _skip_if_no_liboqs()
+    from ttio.tools import ttio_pqc_cli
+    pk, sk = tmp_path / "kpk.bin", tmp_path / "ksk.bin"
+    ct = tmp_path / "ct.bin"
+    ss1, ss2 = tmp_path / "ss1.bin", tmp_path / "ss2.bin"
+    assert ttio_pqc_cli.main(["kem-keygen", str(pk), str(sk)]) == 0
+    assert ttio_pqc_cli.main(["kem-encaps", str(pk), str(ct), str(ss1)]) == 0
+    assert ttio_pqc_cli.main(["kem-decaps", str(sk), str(ct), str(ss2)]) == 0
+    assert ss1.read_bytes() == ss2.read_bytes()
+
+
+def test_pqc_cli_hdf5_sign_verify_in_process(tmp_path):
+    _skip_if_no_liboqs()
+    from ttio.tools import ttio_pqc_cli
+    src = _make_minimal_tio(tmp_path, "pqc_hdf5.tio")
+    pk, sk = tmp_path / "hpk.bin", tmp_path / "hsk.bin"
+    assert ttio_pqc_cli.main(["sig-keygen", str(pk), str(sk)]) == 0
+    assert ttio_pqc_cli.main(
+        ["hdf5-sign", str(src), _VERIFY_DATASET, str(sk)]) == 0
+    assert ttio_pqc_cli.main(
+        ["hdf5-verify", str(src), _VERIFY_DATASET, str(pk)]) == 0
