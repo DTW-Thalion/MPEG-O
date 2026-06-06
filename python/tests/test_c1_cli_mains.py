@@ -650,3 +650,29 @@ def test_pqc_cli_hdf5_sign_verify_in_process(tmp_path):
         ["hdf5-sign", str(src), _VERIFY_DATASET, str(sk)]) == 0
     assert ttio_pqc_cli.main(
         ["hdf5-verify", str(src), _VERIFY_DATASET, str(pk)]) == 0
+
+
+@pytest.mark.asyncio
+async def test_transport_server_cli_serve_binds_and_stops(tmp_path):
+    _skip_if_optional_dep_missing("ttio.tools.transport_server_cli")
+    import asyncio
+    from ttio.tools import transport_server_cli
+    src = _make_minimal_tio(tmp_path, "serve.tio")
+    ports: list[int] = []
+    task = asyncio.create_task(
+        transport_server_cli.serve(
+            str(src), host="127.0.0.1", port=0, on_ready=ports.append)
+    )
+    try:
+        for _ in range(100):
+            if ports:
+                break
+            await asyncio.sleep(0.02)
+        assert ports, "serve() did not report a bound port"
+        assert ports[0] > 0
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
