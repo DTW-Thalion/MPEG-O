@@ -384,8 +384,11 @@
                                                  (after the R1 CLI tests + R3 fqzcomp dead-code
                                                  removal), so the 0.84 floor has a wider buffer
                                                  than the earlier ~84.2% figure. FqzcompNx16Z remains
-                                                 deferred (needs FASTQ corpus — see plan). -->
-                                            <minimum>0.84</minimum>
+                                                 deferred (needs FASTQ corpus — see plan).
+                                                 Ratcheted to 0.86 (R6, 2026-06-06) to lock in the
+                                                 ~87% actual; never decrease without a recorded
+                                                 reason. -->
+                                            <minimum>0.86</minimum>
                                         </limit>
                                         <!-- Branch-coverage gate (R4). No-regression floor:
                                              gated bundle branch ratio is ~0.695 (2026-06-06,
