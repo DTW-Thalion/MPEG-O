@@ -39,6 +39,14 @@ ttio.importers.fastq
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.fastq.PROGRESS_INTERVAL_READS
+
+
 Exceptions
 ----------
 
@@ -65,6 +73,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: PROGRESS_INTERVAL_READS
+   :value: 1000
+
 
 .. py:exception:: FastqParseError
 
@@ -122,7 +134,7 @@ Module Contents
       called yet.
 
 
-   .. py:method:: read(*, sample_name: str = '', platform: str = '', reference_uri: str = '', acquisition_mode: ttio.enums.AcquisitionMode = AcquisitionMode.GENOMIC_WGS) -> ttio.written_genomic_run.WrittenGenomicRun
+   .. py:method:: read(*, sample_name: str = '', platform: str = '', reference_uri: str = '', acquisition_mode: ttio.enums.AcquisitionMode = AcquisitionMode.GENOMIC_WGS, progress: ttio.io.progress.ProgressSinkLike | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
 
       Parse the file and return a :class:`WrittenGenomicRun`.
 

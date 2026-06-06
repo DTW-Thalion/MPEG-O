@@ -78,6 +78,16 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color">
 <div class="block">Parse an mzTab file.</div>
 </div>
+<div class="col-first odd-row-color"><code>static <a href="../MzTabReader.MzTabImport.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabImport</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">MzTabReader.</span><code><a href="../MzTabReader.html#read(java.nio.file.Path,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Parse an mzTab file, firing
+<code>progress.onProgress(rowsDone, -1L)</code> every
+<a href="../MzTabReader.html#PROGRESS_INTERVAL_ROWS"><code>MzTabReader.PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM / SML /
+SMF / SME) and a final <code>onProgress(total, total)</code> once the
+full row count is known.</div>
+</div>
 </div>
 </section>
 </li>

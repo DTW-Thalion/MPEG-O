@@ -67,7 +67,7 @@
 @property (readonly, copy) NSDictionary<NSString *, TTIOGenomicRun *> *genomicRuns;
 
 /**
- * Map of reference URI &rarr; <code>TTIOReferenceImport</code> for
+ * Map of reference URI → <code>TTIOReferenceImport</code> for
  * embedded references found under <code>/study/references/</code>.
  *
  * <p>Empty dictionary when no references were embedded at write

@@ -39,3 +39,20 @@ Module Contents
 
 .. py:function:: main(argv: list[str] | None = None) -> int
 
+   Emit an embedded reference or a genomic run as a FASTA file.
+
+   Two subcommands are exposed:
+
+   * ``reference`` — write an embedded reference genome to FASTA.
+   * ``run`` — write an unaligned genomic run to FASTA.
+
+   Both subcommands emit a samtools-style ``.fai`` index alongside
+   the FASTA unless ``--no-fai`` is set.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: list[str], optional
+
+   :returns: *int* -- ``0`` on success, ``2`` on I/O / lookup failure. Argparse
+             exits with ``2`` on usage errors.
+
+

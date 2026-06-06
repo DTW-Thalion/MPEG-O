@@ -56,13 +56,15 @@ Module Contents
    Initialize self.  See help(type(self)) for accurate signature.
 
 
-.. py:class:: ReferenceResolver(h5_file: h5py.File, external_reference_path: pathlib.Path | None = None)
+.. py:class:: ReferenceResolver(references_group: StorageGroup | None = None, external_reference_path: pathlib.Path | None = None)
 
    Resolve a reference chromosome sequence for REF_DIFF decode.
 
    Args:
-       h5_file: open ``h5py.File`` handle in read mode. The resolver
-           looks for ``/study/references/<uri>/`` as the primary source.
+       references_group: the ``/study/references`` group as a
+           :class:`~ttio.providers.base.StorageGroup`, or ``None`` when
+           no embedded references are available. The resolver looks for
+           ``<uri>/`` children under this group as the primary source.
        external_reference_path: optional explicit path to a FASTA file.
            If unset, the ``REF_PATH`` environment variable is consulted.
 

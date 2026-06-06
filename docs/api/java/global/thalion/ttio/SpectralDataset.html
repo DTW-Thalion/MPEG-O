@@ -66,21 +66,28 @@ loadScripts(document, 'script');</script>
 <li><a href="#msRuns()" tabindex="0">msRuns()</a></li>
 <li><a href="#genomicRuns()" tabindex="0">genomicRuns()</a></li>
 <li><a href="#references()" tabindex="0">references()</a></li>
-<li><a href="#image()" tabindex="0">image()</a></li>
-<li><a href="#ramanImage()" tabindex="0">ramanImage()</a></li>
+<li><a href="#imageForKind(global.thalion.ttio.Enums.ImageKind)" tabindex="0">imageForKind(Enums.ImageKind)</a></li>
+<li><a href="#images()" tabindex="0">images()</a></li>
 <li><a href="#runs()" tabindex="0">runs()</a></li>
 <li><a href="#runsForSample(java.lang.String)" tabindex="0">runsForSample(String)</a></li>
 <li><a href="#runsOfModality(java.lang.Class)" tabindex="0">runsOfModality(Class)</a></li>
 <li><a href="#identifications()" tabindex="0">identifications()</a></li>
 <li><a href="#quantifications()" tabindex="0">quantifications()</a></li>
 <li><a href="#provenanceRecords()" tabindex="0">provenanceRecords()</a></li>
+<li><a href="#subjects()" tabindex="0">subjects()</a></li>
+<li><a href="#samples()" tabindex="0">samples()</a></li>
 <li><a href="#isEncrypted()" tabindex="0">isEncrypted()</a></li>
 <li><a href="#encryptedAlgorithm()" tabindex="0">encryptedAlgorithm()</a></li>
 <li><a href="#open(java.lang.String)" tabindex="0">open(String)</a></li>
 <li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List)" tabindex="0">create(String, String, String, List, List, List, List)</a></li>
+<li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.io.ProgressSink)" tabindex="0">create(String, String, String, List, List, List, List, ProgressSink)</a></li>
+<li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List)" tabindex="0">create(String, String, String, List, List, List, List, List, List)</a></li>
 <li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" tabindex="0">create(String, String, String, List, List, List, List, FeatureFlags)</a></li>
 <li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.Map,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" tabindex="0">create(String, String, String, Map, List, List, List, FeatureFlags)</a></li>
 <li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" tabindex="0">create(String, String, String, List, List, List, List, List, FeatureFlags)</a></li>
+<li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags,global.thalion.ttio.io.ProgressSink)" tabindex="0">create(String, String, String, List, List, List, List, List, FeatureFlags, ProgressSink)</a></li>
+<li><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage,global.thalion.ttio.io.ProgressSink)" tabindex="0">create(String, String, String, List, List, List, List, List, List, List, MSImage, RamanImage, IRImage, ProgressSink)</a></li>
+<li><a href="#createWithImages(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage)" tabindex="0">createWithImages(String, String, String, MSImage, RamanImage, IRImage)</a></li>
 <li><a href="#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)" tabindex="0">encryptWithKey(byte[], Enums.EncryptionLevel)</a></li>
 <li><a href="#decryptWithKey(byte%5B%5D)" tabindex="0">decryptWithKey(byte[])</a></li>
 <li><a href="#decryptInPlace(java.lang.String,byte%5B%5D)" tabindex="0">decryptInPlace(String, byte[])</a></li>
@@ -151,7 +158,11 @@ delivered in slice 41.5 when the encryption manager lands in Java.</p>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Release the underlying storage handles (<a href="providers/StorageProvider.html" title="interface in global.thalion.ttio.providers"><code>StorageProvider</code></a>
+preferred, falling back to the <a href="hdf5/Hdf5File.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5File</code></a> for legacy
+callers).</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
@@ -165,6 +176,42 @@ delivered in slice 41.5 when the encryption manager lands in Java.</p>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">full create signature accepting genomic runs
   alongside MS runs.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a>&nbsp;featureFlags,
+ <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of the genomic-aware
+<a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)"><code>create(String, String, String, List, List, List, List, List, FeatureFlags)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples,
+ <a href="MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage,
+ <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">JT2: one-shot, image-aware create used by the importer/exporter
+  registry.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
@@ -191,6 +238,35 @@ delivered in slice 41.5 when the encryption manager lands in Java.</p>
   <code>genomicRuns</code>-aware variant with an empty genomic list.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List)"><code>create(String, String, String, List, List, List, List)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): create a .tio file
+  with first-class <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> + <a href="Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a> lists.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.Map,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
@@ -202,50 +278,69 @@ delivered in slice 41.5 when the encryption manager lands in Java.</p>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Phase 2 (post-M91): mixed-Map create.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#decryptInPlace(java.lang.String,byte%5B%5D)" class="member-name-link">decryptInPlace</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
- byte[]&nbsp;key)</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#createWithImages(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage)" class="member-name-link">createWithImages</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">JT1: one-shot writer for an image-bearing dataset.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#decryptInPlace(java.lang.String,byte%5B%5D)" class="member-name-link">decryptInPlace</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ byte[]&nbsp;key)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">v1.1.1: persist-to-disk decrypt.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#decryptWithKey(byte%5B%5D)" class="member-name-link">decryptWithKey</a><wbr>(byte[]&nbsp;key)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#decryptWithKey(byte%5B%5D)" class="member-name-link">decryptWithKey</a><wbr>(byte[]&nbsp;key)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Decrypt every MS run's intensity channel into an in-memory
 overlay.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#encryptedAlgorithm()" class="member-name-link">encryptedAlgorithm</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#encryptedAlgorithm()" class="member-name-link">encryptedAlgorithm</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Algorithm string stored in the root <code>@encrypted</code> attribute,
   or the empty string when the dataset is not encrypted.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)" class="member-name-link">encryptWithKey</a><wbr>(byte[]&nbsp;key,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)" class="member-name-link">encryptWithKey</a><wbr>(byte[]&nbsp;key,
  <a href="Enums.EncryptionLevel.html" title="enum class in global.thalion.ttio">Enums.EncryptionLevel</a>&nbsp;level)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Encrypt this object's protectable content at the given granularity.</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Encrypt every MS run's intensity channel in place on disk under
+AES-256-GCM, then mark the root <code>@encrypted</code> attribute so
+the encrypted state survives close/reopen.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#featureFlags()" class="member-name-link">featureFlags</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#filePath()" class="member-name-link">filePath</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#featureFlags()" class="member-name-link">featureFlags</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#filePath()" class="member-name-link">filePath</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">The absolute path of the underlying .tio file (null for in-memory datasets).</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="genomics/GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#genomicRuns()" class="member-name-link">genomicRuns</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="genomics/GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#genomicRuns()" class="member-name-link">genomicRuns</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">zero or more named genomic runs.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#identifications()" class="member-name-link">identifications</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="MSImage.html" title="class in global.thalion.ttio">MSImage</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#image()" class="member-name-link">image</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#identifications()" class="member-name-link">identifications</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="Image.html" title="class in global.thalion.ttio">Image</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#imageForKind(global.thalion.ttio.Enums.ImageKind)" class="member-name-link">imageForKind</a><wbr>(<a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a>&nbsp;kind)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">The embedded <a href="Image.html" title="class in global.thalion.ttio"><code>Image</code></a> for the requested <code>kind</code>, or
+<code>null</code> when that modality's cube is absent.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a>, <a href="Image.html" title="class in global.thalion.ttio">Image</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#images()" class="member-name-link">images</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">The embedded MSImage when /study/image_cube is present; null otherwise.</div>
+<div class="block">The embedded images on this dataset keyed by modality, containing
+only the kinds actually present (non-null).</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isaInvestigationId()" class="member-name-link">isaInvestigationId</a>()</code></div>
@@ -275,42 +370,51 @@ overlay.</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#quantifications()" class="member-name-link">quantifications</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#ramanImage()" class="member-name-link">ramanImage</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#references()" class="member-name-link">references</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">The embedded RamanImage when /study/raman_image_cube is present; null otherwise.</div>
-</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#references()" class="member-name-link">references</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Returns embedded references discovered under
 <code>/study/references/</code> on this dataset.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#runs()" class="member-name-link">runs</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#runs()" class="member-name-link">runs</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Phase 2: canonical mapping over every run in the file (MS +
   genomic), keyed by run name.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#runsForSample(java.lang.String)" class="member-name-link">runsForSample</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleUri)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#runsForSample(java.lang.String)" class="member-name-link">runsForSample</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleUri)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Phase 1 (post-M91): every run associated with <code>sampleUri</code>.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#runsOfModality(java.lang.Class)" class="member-name-link">runsOfModality</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;? extends <a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;&nbsp;runType)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#runsOfModality(java.lang.Class)" class="member-name-link">runsOfModality</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Class.html" title="class or interface in java.lang" class="external-link">Class</a>&lt;? extends <a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a>&gt;&nbsp;runType)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Phase 1 (post-M91): every run whose value is an instance of
   <code>runType</code>.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#samples()" class="member-name-link">samples</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): every <a href="Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a>
+  persisted under <code>/study/samples/</code> on this dataset, in
+  on-disk iteration order.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setAccessPolicy(java.lang.Object)" class="member-name-link">setAccessPolicy</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;policy)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Replace the current access policy.</div>
+<div class="block">Attach an access policy to the dataset.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#title()" class="member-name-link">title</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#subjects()" class="member-name-link">subjects</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): every <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a>
+  persisted under <code>/study/subjects/</code> on this dataset, in
+  on-disk iteration order.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#title()" class="member-name-link">title</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 </div>
 </div>
 </div>
@@ -352,6 +456,10 @@ overlay.</div>
 <h3>featureFlags</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a></span>&nbsp;<span class="element-name">featureFlags</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The format feature flags advertised by the file (version + opt-in features).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -360,6 +468,10 @@ overlay.</div>
 <h3>title</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">title</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The dataset's free-form title attribute; empty when unset.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -368,6 +480,10 @@ overlay.</div>
 <h3>isaInvestigationId</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">isaInvestigationId</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The ISA investigation identifier linking this dataset to an ISA-Tab/JSON bundle; empty when unset.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -376,6 +492,10 @@ overlay.</div>
 <h3>msRuns</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;</span>&nbsp;<span class="element-name">msRuns</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable map of mass-spectrometry / vibrational / NMR acquisition runs keyed by run name.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -417,12 +537,24 @@ is non-null on individual runs.</div>
 </section>
 </li>
 <li>
-<section class="detail" id="image()">
-<h3>image</h3>
+<section class="detail" id="imageForKind(global.thalion.ttio.Enums.ImageKind)">
+<h3>imageForKind</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="MSImage.html" title="class in global.thalion.ttio">MSImage</a></span>&nbsp;<span class="element-name">image</span>()</div>
-<div class="block">The embedded MSImage when /study/image_cube is present; null otherwise.</div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Image.html" title="class in global.thalion.ttio">Image</a></span>&nbsp;<span class="element-name">imageForKind</span><wbr><span class="parameters">(<a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a>&nbsp;kind)</span></div>
+<div class="block">The embedded <a href="Image.html" title="class in global.thalion.ttio"><code>Image</code></a> for the requested <code>kind</code>, or
+<code>null</code> when that modality's cube is absent.
+
+<p>JIT2: replaces the typed <code>image()</code> / <code>ramanImage()</code>
+/ <code>irImage()</code> accessors with a single uniform lookup keyed
+by <a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio"><code>Enums.ImageKind</code></a>. Callers needing a typed handle cast
+the result (e.g. <code>(MSImage) ds.imageForKind(ImageKind.MS)</code>).
+Returns the same eagerly-materialised, cached value object the
+removed accessors returned — no re-read occurs per call.</p></div>
 <dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>kind</code> - which modality (MS / Raman / IR) to fetch</dd>
+<dt>Returns:</dt>
+<dd>the materialised image, or <code>null</code> when absent</dd>
 <dt>Since:</dt>
 <dd>1.2.0</dd>
 </dl>
@@ -430,12 +562,15 @@ is non-null on individual runs.</div>
 </section>
 </li>
 <li>
-<section class="detail" id="ramanImage()">
-<h3>ramanImage</h3>
+<section class="detail" id="images()">
+<h3>images</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></span>&nbsp;<span class="element-name">ramanImage</span>()</div>
-<div class="block">The embedded RamanImage when /study/raman_image_cube is present; null otherwise.</div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a>, <a href="Image.html" title="class in global.thalion.ttio">Image</a>&gt;</span>&nbsp;<span class="element-name">images</span>()</div>
+<div class="block">The embedded images on this dataset keyed by modality, containing
+only the kinds actually present (non-null).</div>
 <dl class="notes">
+<dt>Returns:</dt>
+<dd>an <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/EnumMap.html" title="class or interface in java.util" class="external-link"><code>EnumMap</code></a> over the present <a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio"><code>Enums.ImageKind</code></a>s; empty when the dataset carries no images</dd>
 <dt>Since:</dt>
 <dd>1.2.0</dd>
 </dl>
@@ -507,6 +642,10 @@ is non-null on individual runs.</div>
 <h3>identifications</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</span>&nbsp;<span class="element-name">identifications</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable list of dataset-level identification records.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -515,6 +654,10 @@ is non-null on individual runs.</div>
 <h3>quantifications</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;</span>&nbsp;<span class="element-name">quantifications</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable list of dataset-level quantification records.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -523,6 +666,44 @@ is non-null on individual runs.</div>
 <h3>provenanceRecords</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</span>&nbsp;<span class="element-name">provenanceRecords</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable list of dataset-level provenance records (per-run provenance lives on each <a href="AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a>).</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="subjects()">
+<h3>subjects</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;</span>&nbsp;<span class="element-name">subjects</span>()</div>
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): every <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a>
+  persisted under <code>/study/subjects/</code> on this dataset, in
+  on-disk iteration order. Empty list when no Subjects were
+  written (which is most pre-Stage-6 files). Backed by an
+  eagerly-read snapshot taken when <a href="#open(java.lang.String)"><code>open(String)</code></a> runs.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.4.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="samples()">
+<h3>samples</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;</span>&nbsp;<span class="element-name">samples</span>()</div>
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): every <a href="Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a>
+  persisted under <code>/study/samples/</code> on this dataset, in
+  on-disk iteration order. Empty list when no Samples were
+  written. Backed by an eagerly-read snapshot taken when
+  <a href="#open(java.lang.String)"><code>open(String)</code></a> runs.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.4.0</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -579,6 +760,86 @@ is non-null on individual runs.</div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</span></div>
 <div class="block">Create a new .tio file with the given content.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.io.ProgressSink)">
+<h3>create</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></span>&nbsp;<span class="element-name">create</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">Stage D overload of
+<a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List)"><code>create(String, String, String, List, List, List, List)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised. UI can drive
+a determinate progress bar showing "writing identifications..."
+with section-count progress.
+
+<p>The total <code>sectionCount</code> reflects only sections that
+will actually be written (empty collections are skipped, so a
+spectral-only .tio with no identifications / no provenance fires
+fewer reports than one with the full set).</p>
+
+<p>The outer sink does not see byte counts (HDF5 does not expose
+those per-section cleanly); for per-record progress within a
+section, consumers should wire a sink directly into the relevant
+writer (e.g. 
+<details class="invalid-tag">
+<summary>invalid reference</summary>
+<pre><code>MzMLWriter#write(AcquisitionRun, String, boolean, ProgressSink)</code></pre>
+</details>
+) — Stage D's writer side has those.</p></div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List)">
+<h3>create</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></span>&nbsp;<span class="element-name">create</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples)</span></div>
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): create a .tio file
+  with first-class <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> + <a href="Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a> lists.
+  Subjects are persisted as <code>/study/subjects/&lt;external_id&gt;/</code>
+  per-row groups; Samples as <code>/study/samples/&lt;sample_id&gt;/</code>.
+  See <code>docs/superpowers/specs/2026-05-26-subjects-samples-design.md</code>
+  §4 and §5.
+
+  <p>Validation per spec §4.4:</p>
+  <ul>
+    <li>Duplicate <code>Subject.externalId</code> or
+        <code>Sample.sampleId</code> raises
+        <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link"><code>IllegalArgumentException</code></a>.</li>
+    <li><code>Sample.subjectExternalId</code> that does not match any
+        Subject in the same dataset logs a WARNING but does not
+        fail (anonymous / cross-dataset samples are valid).</li>
+  </ul>
+
+  <p><code>AcquisitionRun.sampleName</code> remains the canonical
+  run → sample link string. Adding Sample rows does not change
+  that contract.</p></div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.4.0</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -652,22 +913,126 @@ is non-null on individual runs.</div>
 </section>
 </li>
 <li>
+<section class="detail" id="create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags,global.thalion.ttio.io.ProgressSink)">
+<h3>create</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></span>&nbsp;<span class="element-name">create</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a>&nbsp;featureFlags,
+ <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">Stage D overload of the genomic-aware
+<a href="#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)"><code>create(String, String, String, List, List, List, List, List, FeatureFlags)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage,global.thalion.ttio.io.ProgressSink)">
+<h3>create</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></span>&nbsp;<span class="element-name">create</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples,
+ <a href="MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage,
+ <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">JT2: one-shot, image-aware create used by the importer/exporter
+  registry. This is the single overload that carries the full
+  normalized draft an importer produces: MS <code>runs</code> +
+  <code>genomicRuns</code> + identifications / quantifications /
+  provenance + subjects / samples + the three optional embedded
+  images (MS / Raman / IR) + a <a href="io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>. It forwards
+  straight to <code>createMixed(String, String, String, List, List, Collection, List, List, List, FeatureFlags)</code> (the widest backend, with image
+  embedding wired by JT1) using the legacy <code>genomic_NNNN</code>
+  auto-naming scheme — matching the other typed-list <code>create</code>
+  overloads. The created dataset is closed (flushed to disk) before
+  returning so the caller may immediately <a href="#open(java.lang.String)"><code>open(String)</code></a> it.
+
+  <p>
+<details class="invalid-tag">
+<summary>invalid reference</summary>
+<pre><code>ImportedDataset#write</code></pre>
+</details>
+ is the sole call site.
+  Cross-language equivalent: the Python importer draft's
+  <code>write(...)</code>.</p></div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link"><code>Path</code></a> of the written <code>.tio</code>.</dd>
+<dt>Since:</dt>
+<dd>1.7.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="createWithImages(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage)">
+<h3>createWithImages</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></span>&nbsp;<span class="element-name">createWithImages</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage)</span></div>
+<div class="block">JT1: one-shot writer for an image-bearing dataset. Writes the
+  given (nullable) <a href="MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> / <a href="RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a> /
+  <a href="IRImage.html" title="class in global.thalion.ttio"><code>IRImage</code></a> into <code>/study/</code> via the same
+  <code>writeTo(StorageGroup)</code> path the tio-browser GUI uses, with
+  no run / metadata sections. The created dataset is closed (and the
+  HDF5 file flushed to disk) before returning so the caller may
+  immediately <a href="#open(java.lang.String)"><code>open(String)</code></a> it.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the 
+<details class="invalid-tag">
+<summary>invalid reference</summary>
+<pre><code>Path</code></pre>
+</details>
+ of the written <code>.tio</code> file.</dd>
+<dt>Since:</dt>
+<dd>1.7.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="encryptWithKey(byte[],global.thalion.ttio.Enums.EncryptionLevel)">
 <h3>encryptWithKey</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">encryptWithKey</span><wbr><span class="parameters">(byte[]&nbsp;key,
  <a href="Enums.EncryptionLevel.html" title="enum class in global.thalion.ttio">Enums.EncryptionLevel</a>&nbsp;level)</span>
                     throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Encryptable.html#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)">Encryptable</a></code></span></div>
-<div class="block">Encrypt this object's protectable content at the given granularity.</div>
+<div class="block">Encrypt every MS run's intensity channel in place on disk under
+AES-256-GCM, then mark the root <code>@encrypted</code> attribute so
+the encrypted state survives close/reopen.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)">encryptWithKey</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Parameters:</dt>
-<dd><code>key</code> - raw key material; length and format are algorithm-specific</dd>
-<dd><code>level</code> - the granularity at which to apply protection</dd>
+<dd><code>key</code> - 32-byte AES-256 key material</dd>
+<dd><code>level</code> - Encryption granularity (per-run, per-dataset, per-AU)</dd>
 <dt>Throws:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code> - if encryption fails (key material invalid, I/O error, etc.)</dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code> - on I/O or cipher failure</dd>
 </dl>
 </div>
 </section>
@@ -742,7 +1107,10 @@ the pre-encryption layout.</p>
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#accessPolicy()">accessPolicy</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Returns:</dt>
-<dd>the current access policy, or <code>null</code> if none.</dd>
+<dd>The dataset's attached access policy, or <code>null</code>
+        when none is set. Typed as <code>Object</code> to keep the
+        <code>Encryptable</code> protocol free of the protection
+        package dependency.</dd>
 </dl>
 </div>
 </section>
@@ -752,13 +1120,16 @@ the pre-encryption layout.</p>
 <h3>setAccessPolicy</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setAccessPolicy</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;policy)</span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Encryptable.html#setAccessPolicy(java.lang.Object)">Encryptable</a></code></span></div>
-<div class="block">Replace the current access policy.</div>
+<div class="block">Attach an access policy to the dataset.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#setAccessPolicy(java.lang.Object)">setAccessPolicy</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Parameters:</dt>
-<dd><code>policy</code> - the new policy object, or <code>null</code> to clear</dd>
+<dd><code>policy</code> - a <code>global.thalion.ttio.protection.AccessPolicy</code>
+              instance, or <code>null</code> to clear</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ClassCastException.html" title="class or interface in java.lang" class="external-link">ClassCastException</a></code> - when <code>policy</code> is non-null and
+        not an <code>AccessPolicy</code></dd>
 </dl>
 </div>
 </section>
@@ -768,6 +1139,10 @@ the pre-encryption layout.</p>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Release the underlying storage handles (<a href="providers/StorageProvider.html" title="interface in global.thalion.ttio.providers"><code>StorageProvider</code></a>
+preferred, falling back to the <a href="hdf5/Hdf5File.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5File</code></a> for legacy
+callers). Idempotent. Wired through <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link"><code>AutoCloseable</code></a> so
+try-with-resources works.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

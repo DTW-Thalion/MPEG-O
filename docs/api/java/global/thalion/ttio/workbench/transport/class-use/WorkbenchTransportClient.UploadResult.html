@@ -84,7 +84,9 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Convenience: one-shot upload via the transport client.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
 </div>
 <div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
@@ -92,35 +94,69 @@ loadScripts(document, 'script');</script>
  byte[]&nbsp;payload,
  <a href="../TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
 <div class="col-last odd-row-color">
-<div class="block">Convenience: one-shot upload reporting byte progress.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
 </div>
 <div class="col-first even-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncrypted(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)" class="member-name-link">uploadEncrypted</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="../TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Convenience: one-shot streaming upload from a file on disk.</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncrypted(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)" class="member-name-link">uploadEncrypted</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
  byte[]&nbsp;key,
  boolean&nbsp;encryptHeaders)</code></div>
-<div class="col-last even-row-color">
+<div class="col-last odd-row-color">
 <div class="block">Encrypt a plaintext <code>.tio</code> per-AU and upload it.</div>
 </div>
-<div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncryptedEnvelope(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)" class="member-name-link">uploadEncryptedEnvelope</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="col-first even-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncryptedEnvelope(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)" class="member-name-link">uploadEncryptedEnvelope</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
  byte[]&nbsp;kek,
  boolean&nbsp;encryptHeaders)</code></div>
-<div class="col-last odd-row-color">
+<div class="col-last even-row-color">
 <div class="block">Per-AU encrypt a <code>.tio</code> with a fresh DEK, wrap that DEK under
   a symmetric AES-256-GCM key-encryption key (KEK), and upload it.</div>
 </div>
+<div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,boolean,boolean)" class="member-name-link">uploadEncryptedMulti</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a>&gt;&nbsp;recipients,
+ boolean&nbsp;preview,
+ boolean&nbsp;encryptHeaders)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Per-AU encrypt a <code>.tio</code> with a fresh DEK, wrap that DEK under
+  <em>each</em> recipient's key, and upload it (FD-1 Phase B).</div>
+</div>
 <div class="col-first even-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncryptedPqc(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean,boolean)" class="member-name-link">uploadEncryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.lang.String,boolean,boolean)" class="member-name-link">uploadEncryptedMulti</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a>&gt;&nbsp;recipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;serverKekId,
+ boolean&nbsp;preview,
+ boolean&nbsp;encryptHeaders)</code></div>
+<div class="col-last even-row-color">
+<div class="block">FD-1 C-2a overload: declares the container server-processable under
+  <code>serverKekId</code> (stamped into the ProtectionMetadata packet so
+  the daemon can resolve it).</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../WorkbenchClient.html#uploadEncryptedPqc(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean,boolean)" class="member-name-link">uploadEncryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
  byte[]&nbsp;recipientPublicKey,
  boolean&nbsp;preview,
  boolean&nbsp;encryptHeaders)</code></div>
-<div class="col-last even-row-color">
+<div class="col-last odd-row-color">
 <div class="block">Per-AU encrypt a <code>.tio</code> with a fresh DEK, wrap that DEK under
   the recipient's ML-KEM-1024 public key, and upload it.</div>
 </div>
@@ -140,7 +176,9 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Upload a fully-buffered <code>.tis</code> byte payload.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
 </div>
 <div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">WorkbenchTransportClient.</span><code><a href="../WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
@@ -148,7 +186,9 @@ loadScripts(document, 'script');</script>
  byte[]&nbsp;payload,
  <a href="../ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume)</code></div>
 <div class="col-last odd-row-color">
-<div class="block">Upload with optional resume state.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
 </div>
 <div class="col-first even-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">WorkbenchTransportClient.</span><code><a href="../WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
@@ -157,7 +197,27 @@ loadScripts(document, 'script');</script>
  <a href="../ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
  <a href="../TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Upload with optional resume state + a progress callback.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">WorkbenchTransportClient.</span><code><a href="../WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Streaming-upload convenience overload without resume / progress.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">WorkbenchTransportClient.</span><code><a href="../WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="../ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
+ <a href="../TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Streaming upload — read the <code>.tis</code> payload from a file
+  on disk in <code>chunkSize</code>-bounded slices instead of slurping
+  the whole thing into a <code>byte[]</code>.</div>
 </div>
 </div>
 </section>

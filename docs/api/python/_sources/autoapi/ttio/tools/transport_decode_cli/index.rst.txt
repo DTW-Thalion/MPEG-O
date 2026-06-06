@@ -28,3 +28,15 @@ Module Contents
 
 .. py:function:: main(argv: list[str] | None = None) -> int
 
+   Decode a ``.tis`` transport stream into a ``.tio`` file.
+
+   Parses positional arguments ``input`` and ``output``, then calls
+   :func:`ttio.transport.codec.transport_to_file` to materialise the
+   stream onto disk and close the resulting dataset.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: list[str], optional
+
+   :returns: *int* -- ``0`` on success. Argparse exits with ``2`` on usage errors.
+
+

@@ -71,6 +71,8 @@ loadScripts(document, 'script');</script>
 <li><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)" tabindex="0">upload(String, String, byte[])</a></li>
 <li><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState)" tabindex="0">upload(String, String, byte[], ResumeState)</a></li>
 <li><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" tabindex="0">upload(String, String, byte[], ResumeState, TransferProgress)</a></li>
+<li><a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" tabindex="0">upload(String, String, Path, ResumeState, TransferProgress)</a></li>
+<li><a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path)" tabindex="0">upload(String, String, Path)</a></li>
 <li><a href="#download(java.lang.String)" tabindex="0">download(String)</a></li>
 <li><a href="#download(java.lang.String,java.util.Map,global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode,int)" tabindex="0">download(String, Map, WorkbenchHandshake.OutputMode, int)</a></li>
 <li><a href="#download(java.lang.String,java.util.Map,global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode,int,global.thalion.ttio.workbench.transport.TransferProgress)" tabindex="0">download(String, Map, WorkbenchHandshake.OutputMode, int, TransferProgress)</a></li>
@@ -159,7 +161,7 @@ operations.</p></div>
 <section class="method-summary" id="method-summary">
 <h2>Method Summary</h2>
 <div id="method-summary-table">
-<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="method-summary-table-tab0" role="tab" aria-selected="true" aria-controls="method-summary-table.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table', 3)" class="active-table-tab">All Methods</button><button id="method-summary-table-tab1" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab1', 3)" class="table-tab">Static Methods</button><button id="method-summary-table-tab2" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab2', 3)" class="table-tab">Instance Methods</button><button id="method-summary-table-tab4" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab4', 3)" class="table-tab">Concrete Methods</button></div>
+<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="method-summary-table-tab0" role="tab" aria-selected="true" aria-controls="method-summary-table.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table', 3)" class="active-table-tab">All Methods</button><button id="method-summary-table-tab1" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab1', 3)" class="table-tab">Static Methods</button><button id="method-summary-table-tab2" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab2', 3)" class="table-tab">Instance Methods</button><button id="method-summary-table-tab4" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab4', 3)" class="table-tab">Concrete Methods</button><button id="method-summary-table-tab6" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab6', 3)" class="table-tab">Deprecated Methods</button></div>
 <div id="method-summary-table.tabpanel" role="tabpanel" aria-labelledby="method-summary-table-tab0">
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -206,29 +208,53 @@ operations.</p></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Construct with a raw bearer token + owner string.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Upload a fully-buffered <code>.tis</code> byte payload.</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload,
  <a href="ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Upload with optional resume state.</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload,
  <a href="ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
  <a href="TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Streaming-upload convenience overload without resume / progress.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
+ <a href="TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Upload with optional resume state + a progress callback.</div>
+<div class="block">Streaming upload — read the <code>.tis</code> payload from a file
+  on disk in <code>chunkSize</code>-bounded slices instead of slurping
+  the whole thing into a <code>byte[]</code>.</div>
 </div>
 </div>
 </div>
@@ -311,10 +337,26 @@ operations.</p></div>
 <section class="detail" id="upload(java.lang.String,java.lang.String,byte[])">
 <h3>upload</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#since()" title="class or interface in java.lang" class="external-link">since</a>="1.5.0",
+            <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=false)
+</span><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload)</span></div>
-<div class="block">Upload a fully-buffered <code>.tis</code> byte payload.</div>
+<div class="deprecation-block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0. Prefer the streaming
+      <a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)"><code>upload(String, String, Path, ResumeState, TransferProgress)</code></a>
+      overload — peak heap = O(<code>chunkSize</code>) instead of
+      O(<code>payload.length</code>). The byte[] entry point remains
+      functional for in-memory test fixtures and small-payload
+      callers but is not recommended for new code.</div>
+</div>
+<div class="block">Upload a fully-buffered <code>.tis</code> byte payload.
+
+  <p>Memory cost: at least <code>payload.length</code> heap for the
+  caller-supplied byte[] (this method does not copy). For
+  multi-MB payloads, prefer
+  <a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)"><code>upload(String, String, Path, ResumeState, TransferProgress)</code></a>
+  which streams from a file in <code>chunkSize</code>-bounded slices.</p></div>
 </div>
 </section>
 </li>
@@ -322,10 +364,16 @@ operations.</p></div>
 <section class="detail" id="upload(java.lang.String,java.lang.String,byte[],global.thalion.ttio.workbench.transport.ResumeState)">
 <h3>upload</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#since()" title="class or interface in java.lang" class="external-link">since</a>="1.5.0",
+            <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=false)
+</span><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload,
  <a href="ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume)</span></div>
+<div class="deprecation-block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0. See
+      <a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)"><code>upload(String, String, byte[])</code></a>.</div>
+</div>
 <div class="block">Upload with optional resume state.</div>
 </div>
 </section>
@@ -334,15 +382,69 @@ operations.</p></div>
 <section class="detail" id="upload(java.lang.String,java.lang.String,byte[],global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)">
 <h3>upload</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#since()" title="class or interface in java.lang" class="external-link">since</a>="1.5.0",
+            <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=false)
+</span><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload,
  <a href="ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
  <a href="TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</span></div>
+<div class="deprecation-block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0. See
+      <a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)"><code>upload(String, String, byte[])</code></a>.</div>
+</div>
 <div class="block">Upload with optional resume state + a progress callback.
   <code>progress</code> (nullable) is invoked with
   <code>(bytesSent, payload.length)</code> as chunks are enqueued,
   plus a final <code>(length, length)</code> once fully sent.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)">
+<h3>upload</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
+ <a href="TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</span>
+                                             throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Streaming upload — read the <code>.tis</code> payload from a file
+  on disk in <code>chunkSize</code>-bounded slices instead of slurping
+  the whole thing into a <code>byte[]</code>.
+
+  <p>Peak heap during this call is O(<code>chunkSize</code>) — one
+  chunk read into a ByteBuffer and at most one chunk in flight
+  on the WS thread — regardless of <code>payloadFile</code> size. Use
+  this overload for multi-GB <code>.tis</code> uploads where the
+  byte[] entry point would OOM long before bytes hit the wire.</p>
+
+  <p>The <a href="TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport"><code>TransferProgress</code></a> callback fires
+  <code>(bytesSent, totalBytes)</code> with the same shape as the
+  byte[] path; downstream
+  <code>PhaseProgress</code> / <code>ProgressTracker</code> wiring is
+  byte-equivalent.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="upload(java.lang.String,java.lang.String,java.nio.file.Path)">
+<h3>upload</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile)</span>
+                                             throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Streaming-upload convenience overload without resume / progress.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
 </div>
 </section>
 </li>

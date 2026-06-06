@@ -46,59 +46,105 @@ Module Contents
      Objective-C: ``TTIOHDF5Provider``
      Java:        ``global.thalion.ttio.providers.Hdf5Provider``
 
+   Construct a provider, optionally pre-bound to an open h5py file.
+
+   :param file: An already-open file handle to adopt. ``None`` (the
+                default) creates a closed provider; :meth:`open` must
+                then be called before any group/dataset access.
+   :type file: h5py.File, optional
+
 
    .. py:method:: open(path_or_url=None, *, mode: str = 'r', **kwargs) -> Hdf5Provider
 
-      Open an HDF5 file under this provider. Supports both factory
-      and instance call styles per — see
-      :class:`ttio.providers.base.StorageProvider.open`.
+      Open an HDF5 file (or fsspec URL) and return a bound provider.
+
+      Supports both factory and instance call styles per the
+      :class:`ttio.providers.base.StorageProvider.open` contract:
+      ``Hdf5Provider.open("/path", mode="w")`` returns a fresh
+      provider; ``p = Hdf5Provider(); p.open("/path", mode="w")``
+      mutates and returns the same instance.
+
+      ``fsspec`` URL schemes (``s3://``, ``http(s)://``, etc.) are
+      opened via the optional ``ttio[cloud]`` dependency; the
+      ``file://`` scheme is stripped and the rest of the URL is
+      treated as a local path.
+
+      :param path_or_url: Filesystem path or fsspec-compatible URL. In factory
+                          style this is the first positional argument; in instance
+                          style it is the second.
+      :type path_or_url: str
+      :param mode: h5py file-open mode (``"r"``, ``"r+"``, ``"w"``,
+                   ``"w-"``, ``"a"``). Default ``"r"``.
+      :type mode: str, optional
+      :param \*\*kwargs: Forwarded to :class:`h5py.File`.
+
+      :returns: *Hdf5Provider* -- Bound provider with :attr:`is_open` set to ``True``.
+
+      :raises TypeError: If no path or URL is supplied.
+      :raises ImportError: If a URL scheme is given but ``fsspec`` is not installed.
 
 
 
    .. py:method:: provider_name() -> str
 
-      Short identifier used for logging and registry lookup
-      (``"hdf5"``, ``"memory"``, ``"zarr"``, …).
-
-      Exposed as a method (not a property) to mirror the ObjC
-      ``-providerName`` selector and Java ``providerName()`` getter.
-      — Provisional storage-provider convergence.
+      Return the provider's stable identifier string (``"hdf5"``).
 
 
 
    .. py:method:: root_group() -> ttio.providers.base.StorageGroup
 
+      Return the file's root group as a :class:`StorageGroup`.
+
+      The root is the top-level container; child groups and
+      datasets are reached via :meth:`StorageGroup.open_group` /
+      :meth:`StorageGroup.open_dataset`.
+
+
 
    .. py:method:: is_open() -> bool
+
+      Return ``True`` when the provider has an open backing file.
+
 
 
    .. py:method:: close() -> None
 
+      Close the underlying h5py file if open.
+
+      Idempotent: a close error or a second call is silently
+      swallowed so the method is safe to call from cleanup paths.
+
+
 
    .. py:method:: supports_chunking() -> bool
 
-      Returns True if the backend honors ``chunk_size`` in
-      :meth:`StorageGroup.create_dataset`. HDF5 returns True; Memory
-      and SQLite return False (chunk_size is accepted for interface
-      compatibility but silently ignored).
-
-      Callers that depend on chunked I/O for streaming large datasets
-      can query this to degrade gracefully.
+      Return ``True`` — HDF5 always supports chunked storage.
 
 
 
    .. py:method:: supports_compression() -> bool
 
-      Returns True if the backend honors ``compression`` /
-      ``compression_level``. HDF5 returns True (zlib + LZ4); Memory
-      and SQLite return False.
+      Return ``True`` — HDF5 supports the documented compression filters.
 
 
 
    .. py:method:: native_handle() -> h5py.File
 
-      Underlying h5py.File — escape hatch for byte-level code
-      (signature hashing, encryption, native compression filters).
+      Return the underlying :class:`h5py.File` handle.
+
+      .. deprecated::
+          ``native_handle()`` is deprecated and slated for removal in a
+          future coordinated major. Reach storage through
+          :meth:`root_group` and the :class:`StorageGroup` protocol
+          instead. (Parity with the Java SDK's
+          ``@Deprecated(forRemoval=true)``.)
+
+      Escape hatch for byte-level code (signature hashing,
+      encryption, native compression filters) that has to bypass
+      the provider abstraction. Callers must not close the handle;
+      ownership remains with the provider.
+
+      :returns: *h5py.File*
 
 
 

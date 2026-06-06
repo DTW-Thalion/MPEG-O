@@ -64,6 +64,8 @@ loadScripts(document, 'script');</script>
 <div class="col-last odd-row-color">&nbsp;</div>
 <div class="col-first even-row-color"><a href="#global.thalion.ttio.importers">global.thalion.ttio.importers</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.importers.readers">global.thalion.ttio.importers.readers</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
 </div>
 <section class="package-uses">
 <ul class="block-list">
@@ -121,40 +123,79 @@ loadScripts(document, 'script');</script>
 <div class="block">Raised on malformed FASTA / FASTQ input (missing header, embedded
 null byte, header without sequence, SEQ/QUAL length mismatch).</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/ImzMLReader.ImzMLImport.html#global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a></div>
+<div class="col-first even-row-color"><a href="class-use/FormatSpec.html#global.thalion.ttio.importers">FormatSpec</a></div>
 <div class="col-last even-row-color">
+<div class="block">One import-format entry: a canonical key paired with its display label,
+  filename extensions, optional external tool, and the <a href="Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> that
+  parses inputs into an <a href="ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a>.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/ImportedDataset.html#global.thalion.ttio.importers">ImportedDataset</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Normalized in-memory draft every importer produces; <a href="ImportedDataset.html#write(java.nio.file.Path)"><code>ImportedDataset.write(Path)</code></a> is
+  the single dataset-write call site.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/ImportedDataset.WriteDelegate.html#global.thalion.ttio.importers">ImportedDataset.WriteDelegate</a></div>
+<div class="col-last even-row-color">
+<div class="block">Optional write-through delegate.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/ImzMLReader.ImzMLImport.html#global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Result of parsing an imzML + .ibd pair.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/ImzMLReader.PixelSpectrum.html#global.thalion.ttio.importers">ImzMLReader.PixelSpectrum</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/ImzMLReader.PixelSpectrum.html#global.thalion.ttio.importers">ImzMLReader.PixelSpectrum</a></div>
+<div class="col-last even-row-color">
 <div class="block">One pixel's spatial coordinates plus its m/z + intensity arrays.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/JcampDxDecode.DecodedXY.html#global.thalion.ttio.importers">JcampDxDecode.DecodedXY</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/JcampDxDecode.DecodedXY.html#global.thalion.ttio.importers">JcampDxDecode.DecodedXY</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Decoded XYDATA: two equal-length primitive arrays.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/MzMLParseException.html#global.thalion.ttio.importers">MzMLParseException</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/MzMLParseException.html#global.thalion.ttio.importers">MzMLParseException</a></div>
+<div class="col-last even-row-color">
 <div class="block">Thrown when an mzML document cannot be parsed: malformed XML,
 missing required elements, or unsupported schema features.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/MzTabReader.MzTabImport.html#global.thalion.ttio.importers">MzTabReader.MzTabImport</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/MzTabReader.MzTabImport.html#global.thalion.ttio.importers">MzTabReader.MzTabImport</a></div>
+<div class="col-last odd-row-color">
 <div class="block">In-memory representation of a parsed mzTab document.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/NmrMLParseException.html#global.thalion.ttio.importers">NmrMLParseException</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/NmrMLParseException.html#global.thalion.ttio.importers">NmrMLParseException</a></div>
+<div class="col-last even-row-color">
 <div class="block">Thrown when an nmrML document cannot be parsed.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/NmrMLReader.NmrMLResult.html#global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/NmrMLReader.NmrMLResult.html#global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Parse result bundling the AcquisitionRun and optional FID,
   plus the acquisition-parameter scalars surfaced for parity
   with the Python <code>ImportResult</code> fields added 2026-05-05.</div>
 </div>
+<div class="col-first even-row-color"><a href="class-use/Reader.html#global.thalion.ttio.importers">Reader</a></div>
+<div class="col-last even-row-color">
+<div class="block">Uniform importer interface: parse one or more sources into an
+  <a href="ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a>.</div>
+</div>
 <div class="col-first odd-row-color"><a href="class-use/TtioReaderException.html#global.thalion.ttio.importers">TtioReaderException</a></div>
 <div class="col-last odd-row-color">
 <div class="block">Base type for importer failures (mzML, nmrML, Thermo RAW).</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.importers.readers">
+<div class="caption"><span>Classes in <a href="package-summary.html">global.thalion.ttio.importers</a> used by <a href="readers/package-summary.html">global.thalion.ttio.importers.readers</a></span></div>
+<div class="summary-table two-column-summary">
+<div class="table-header col-first">Class</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><a href="class-use/ImportedDataset.html#global.thalion.ttio.importers.readers">ImportedDataset</a></div>
+<div class="col-last even-row-color">
+<div class="block">Normalized in-memory draft every importer produces; <a href="ImportedDataset.html#write(java.nio.file.Path)"><code>ImportedDataset.write(Path)</code></a> is
+  the single dataset-write call site.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/Reader.html#global.thalion.ttio.importers.readers">Reader</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Uniform importer interface: parse one or more sources into an
+  <a href="ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a>.</div>
 </div>
 </div>
 </section>

@@ -22,6 +22,14 @@ ttio.exporters.nmrml
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.nmrml.PROGRESS_INTERVAL_SPECTRA
+
+
 Functions
 ---------
 
@@ -34,7 +42,11 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: spectrum_to_bytes(spectrum: ttio.nmr_spectrum.NMRSpectrum, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0, spectrometer_frequency_mhz: float = 0.0) -> bytes
+.. py:data:: PROGRESS_INTERVAL_SPECTRA
+   :value: 1
+
+
+.. py:function:: spectrum_to_bytes(spectrum: ttio.nmr_spectrum.NMRSpectrum, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0, spectrometer_frequency_mhz: float = 0.0, progress: ttio.io.progress.ProgressSinkLike | None = None) -> bytes
 
    Build an nmrML byte blob from ``spectrum`` + optional ``fid``.
 
@@ -43,5 +55,26 @@ Module Contents
    Pass 0.0 (the default) to omit the cvParam entirely.
 
 
-.. py:function:: write_spectrum(spectrum: ttio.nmr_spectrum.NMRSpectrum, path: str | pathlib.Path, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0, spectrometer_frequency_mhz: float = 0.0) -> pathlib.Path
+.. py:function:: write_spectrum(spectrum: ttio.nmr_spectrum.NMRSpectrum, path: str | pathlib.Path, *, fid: FreeInductionDecay | None = None, sweep_width_ppm: float = 0.0, spectrometer_frequency_mhz: float = 0.0, progress: ttio.io.progress.ProgressSinkLike | None = None) -> pathlib.Path
+
+   Serialize ``spectrum`` to ``path`` as an nmrML file.
+
+   :param spectrum: The NMR spectrum to encode.
+   :type spectrum: NMRSpectrum
+   :param path: Destination file path. Overwritten if it already exists.
+   :type path: str | Path
+   :param fid: Time-domain FID payload to embed alongside the processed
+               spectrum. Omitted when None.
+   :type fid: FreeInductionDecay, optional
+   :param sweep_width_ppm: Threaded into the nmrML acquisition parameters. Default
+                           0.0 omits the value.
+   :type sweep_width_ppm: float, optional
+   :param spectrometer_frequency_mhz: Spectrometer frequency; nmrML stores in Hz so this is
+                                      scaled by 1e6 on emit. Default 0.0 omits the cvParam.
+   :type spectrometer_frequency_mhz: float, optional
+   :param progress: Optional sink fired by the underlying byte-blob builder.
+   :type progress: ProgressSinkLike, optional
+
+   :returns: *Path* -- The destination path (for fluent chaining).
+
 

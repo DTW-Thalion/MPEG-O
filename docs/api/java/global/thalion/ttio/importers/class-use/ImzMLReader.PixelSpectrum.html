@@ -109,6 +109,26 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color">
 <div class="block">Write <code>pixels</code> as an imzML + .ibd pair.</div>
 </div>
+<div class="col-first odd-row-color"><code>static <a href="../../exporters/ImzMLWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">ImzMLWriter.</span><code><a href="../../exporters/ImzMLWriter.html#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ImzMLReader.PixelSpectrum.html" title="class in global.thalion.ttio.importers">ImzMLReader.PixelSpectrum</a>&gt;&nbsp;pixels,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mode,
+ int&nbsp;gridMaxX,
+ int&nbsp;gridMaxY,
+ int&nbsp;gridMaxZ,
+ double&nbsp;pixelSizeX,
+ double&nbsp;pixelSizeY,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;scanPattern,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;uuidHex,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D overload of the main <a href="../../exporters/ImzMLWriter.html#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String)"><code>ImzMLWriter.write(List, Path, Path, String, int, int, int, double, double, String, String)</code></a> entry that fires
+<code>progress.onProgress(pixelsDone, totalPixels)</code> every
+<a href="../../exporters/ImzMLWriter.html#PROGRESS_INTERVAL_SPECTRA"><code>ImzMLWriter.PROGRESS_INTERVAL_SPECTRA</code></a> pixels during the .ibd
+encode loop and a final fire once both .imzML + .ibd are
+flushed to disk.</div>
+</div>
 </div>
 </section>
 </li>

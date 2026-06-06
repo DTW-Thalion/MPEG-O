@@ -99,74 +99,82 @@ transport-stream event a filtered dataset produces.</div>
 <div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">Synthetic LC-MS acquisition simulator.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="AUFilter.html" title="class in global.thalion.ttio.transport">AUFilter</a></div>
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="ArrowIpcCodec.html" title="class in global.thalion.ttio.transport">ArrowIpcCodec</a></div>
 <div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="block">Stateless encoder/decoder for tabular transport-spec v0.11 packet
+payloads — <a href="../Identification.html" title="class in global.thalion.ttio"><code>Identification</code></a> (packet 0x16 IDENTIFICATIONS_TABLE),
+<a href="../Quantification.html" title="class in global.thalion.ttio"><code>Quantification</code></a> (packet 0x17 QUANTIFICATIONS_TABLE),
+<a href="../Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> (packet 0x19 SUBJECT_METADATA), and <a href="../Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a>
+(packet 0x1A SAMPLE_METADATA) — as Apache Arrow IPC streams.</div>
+</div>
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="AUFilter.html" title="class in global.thalion.ttio.transport">AUFilter</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">Server-side filter predicate applied to every <a href="AccessUnit.html" title="class in global.thalion.ttio.transport"><code>AccessUnit</code></a>
 before serialisation.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab2"><a href="AUStats.html" title="class in global.thalion.ttio.transport">AUStats</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="AUStats.html" title="class in global.thalion.ttio.transport">AUStats</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">Per-AccessUnit summary statistics — every field is derivable from
 an <a href="AccessUnit.html" title="class in global.thalion.ttio.transport"><code>AccessUnit</code></a> without decoding signal-channel payload.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="ChannelData.html" title="class in global.thalion.ttio.transport">ChannelData</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="ChannelData.html" title="class in global.thalion.ttio.transport">ChannelData</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">One signal channel inside an <a href="AccessUnit.html" title="class in global.thalion.ttio.transport"><code>AccessUnit</code></a>.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab2"><a href="DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">Walks a <a href="../SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a>, applying an optional
 <a href="AUFilter.html" title="class in global.thalion.ttio.transport"><code>AUFilter</code></a> and dispatching transport-stream events to an
 <a href="AccessUnitVisitor.html" title="interface in global.thalion.ttio.transport"><code>AccessUnitVisitor</code></a>.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="PacketHeader.html" title="class in global.thalion.ttio.transport">PacketHeader</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="PacketHeader.html" title="class in global.thalion.ttio.transport">PacketHeader</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">24-byte packet header for the TTI-O transport format.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab3"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab3">
+<div class="col-first odd-row-color class-summary class-summary-tab3"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab3">
 <div class="block">Transport packet types.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="ProtectionMetadata.html" title="class in global.thalion.ttio.transport">ProtectionMetadata</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="ProtectionMetadata.html" title="class in global.thalion.ttio.transport">ProtectionMetadata</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">ProtectionMetadata packet payload () per
 <code>docs/transport-spec.md</code> §4.4.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportClient.html" title="class in global.thalion.ttio.transport">TransportClient</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportClient.html" title="class in global.thalion.ttio.transport">TransportClient</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">Java client for the TTI-O streaming transport protocol ().</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportIngest.html" title="class in global.thalion.ttio.transport">TransportIngest</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportIngest.html" title="class in global.thalion.ttio.transport">TransportIngest</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">Callback-driven incremental transport-stream parser.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab5"><a href="TransportIngest.IngestException.html" title="class in global.thalion.ttio.transport">TransportIngest.IngestException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="col-first odd-row-color class-summary class-summary-tab5"><a href="TransportIngest.IngestException.html" title="class in global.thalion.ttio.transport">TransportIngest.IngestException</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
 <div class="block">Thrown by <a href="TransportIngest.html#feed(byte%5B%5D)"><code>TransportIngest.feed(byte[])</code></a> / <a href="TransportIngest.html#finish()"><code>TransportIngest.finish()</code></a> on any parse failure.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="TransportIngest.Listener.html" title="interface in global.thalion.ttio.transport">TransportIngest.Listener</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="col-first even-row-color class-summary class-summary-tab1"><a href="TransportIngest.Listener.html" title="interface in global.thalion.ttio.transport">TransportIngest.Listener</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab1">
 <div class="block">Receives packets and lifecycle events as bytes arrive.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportIngest.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportIngest.PacketRecord</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportIngest.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportIngest.PacketRecord</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">One parsed packet as header + payload.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportReader.html" title="class in global.thalion.ttio.transport">TransportReader</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportReader.html" title="class in global.thalion.ttio.transport">TransportReader</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">Deserialises a transport byte stream into <a href="TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport"><code>TransportReader.PacketRecord</code></a> values
 or materializes the stream into a <a href="../SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a>.</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportReader.PacketRecord</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportReader.PacketRecord</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">One parsed packet as header + payload.</div>
 </div>
-<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportServer.html" title="class in global.thalion.ttio.transport">TransportServer</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportServer.html" title="class in global.thalion.ttio.transport">TransportServer</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">WebSocket transport server (parity backfill).</div>
 </div>
-<div class="col-first even-row-color class-summary class-summary-tab2"><a href="TransportWriter.html" title="class in global.thalion.ttio.transport">TransportWriter</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="TransportWriter.html" title="class in global.thalion.ttio.transport">TransportWriter</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">Serialises an <a href="../SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> as a transport byte stream.</div>
 </div>
 </div>

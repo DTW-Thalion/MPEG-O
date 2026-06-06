@@ -128,10 +128,14 @@ present.</p></div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>static final record&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="Hdf5CompoundIO.Field.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Field</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">One field in a compound schema, paired with its on-disk kind.</div>
+</div>
 <div class="col-first odd-row-color"><code>static enum&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="Hdf5CompoundIO.FieldKind.html" class="type-name-link" title="enum class in global.thalion.ttio.hdf5">Hdf5CompoundIO.FieldKind</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Field kinds covered by the compound-IO helper.</div>
+</div>
 <div class="col-first even-row-color"><code>static interface&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="Hdf5CompoundIO.RowPacker.html" class="type-name-link" title="interface in global.thalion.ttio.hdf5">Hdf5CompoundIO.RowPacker</a></code></div>
 <div class="col-last even-row-color">
@@ -139,7 +143,9 @@ present.</p></div>
 </div>
 <div class="col-first odd-row-color"><code>static final class&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="Hdf5CompoundIO.Schema.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Immutable layout description for a compound dataset.</div>
+</div>
 </div>
 </section>
 </li>
@@ -156,13 +162,25 @@ present.</p></div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#identificationSchema()" class="member-name-link">identificationSchema</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Schema for the <code>identifications</code> compound dataset as defined
+in format-spec section 6.1: run name, spectrum index, chemical
+entity, confidence score, and a JSON-encoded evidence chain.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#provenanceSchema()" class="member-name-link">provenanceSchema</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Schema for the <code>provenance</code> compound dataset as defined in
+format-spec section 6.3: Unix timestamp, software identifier, and
+JSON-encoded parameters / input refs / output refs.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#quantificationSchema()" class="member-name-link">quantificationSchema</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Schema for the <code>quantifications</code> compound dataset as defined
+in format-spec section 6.2: chemical entity, sample reference,
+abundance value, and normalisation method.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>[]&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readCompoundFull(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema)" class="member-name-link">readCompoundFull</a><wbr>(<a href="Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
@@ -174,7 +192,10 @@ present.</p></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readCompoundPrimitives(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema)" class="member-name-link">readCompoundPrimitives</a><wbr>(<a href="Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
  <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a>&nbsp;schema)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Read a compound dataset returning only the primitive (non-VL)
+fields.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeCompoundDataset(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema,int,global.thalion.ttio.hdf5.Hdf5CompoundIO.RowPacker)" class="member-name-link">writeCompoundDataset</a><wbr>(<a href="Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
@@ -206,6 +227,13 @@ present.</p></div>
 <h3>identificationSchema</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></span>&nbsp;<span class="element-name">identificationSchema</span>()</div>
+<div class="block">Schema for the <code>identifications</code> compound dataset as defined
+in format-spec section 6.1: run name, spectrum index, chemical
+entity, confidence score, and a JSON-encoded evidence chain.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a fresh <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5CompoundIO.Schema</code></a> instance describing the layout</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -214,6 +242,13 @@ present.</p></div>
 <h3>quantificationSchema</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></span>&nbsp;<span class="element-name">quantificationSchema</span>()</div>
+<div class="block">Schema for the <code>quantifications</code> compound dataset as defined
+in format-spec section 6.2: chemical entity, sample reference,
+abundance value, and normalisation method.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a fresh <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5CompoundIO.Schema</code></a> instance describing the layout</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -222,6 +257,13 @@ present.</p></div>
 <h3>provenanceSchema</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></span>&nbsp;<span class="element-name">provenanceSchema</span>()</div>
+<div class="block">Schema for the <code>provenance</code> compound dataset as defined in
+format-spec section 6.3: Unix timestamp, software identifier, and
+JSON-encoded parameters / input refs / output refs.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a fresh <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5CompoundIO.Schema</code></a> instance describing the layout</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -248,6 +290,19 @@ byte-buffer approach.</div>
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>[]&gt;</span>&nbsp;<span class="element-name">readCompoundPrimitives</span><wbr><span class="parameters">(<a href="Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
  <a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a>&nbsp;schema)</span></div>
+<div class="block">Read a compound dataset returning only the primitive (non-VL)
+fields. VL_STRING fields are returned as empty strings and
+VL_BYTES fields as empty byte arrays. Use <a href="#readCompoundFull(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema)"><code>readCompoundFull(Hdf5Group, String, Hdf5CompoundIO.Schema)</code></a>
+to also decode the VL fields.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>parent</code> - the group that owns the dataset</dd>
+<dd><code>datasetName</code> - the dataset name inside <code>parent</code></dd>
+<dd><code>schema</code> - the full schema describing the on-disk layout</dd>
+<dt>Returns:</dt>
+<dd>one <code>Object[]</code> per record, in field order; an
+         empty list if the dataset is missing or empty</dd>
+</dl>
 </div>
 </section>
 </li>

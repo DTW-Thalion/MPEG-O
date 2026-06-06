@@ -35,3 +35,15 @@ Module Contents
 
 .. py:function:: main(argv: list[str] | None = None) -> int
 
+   Emit a genomic run from a ``.tio`` container as a FASTQ file.
+
+   The output Phred offset defaults to ``33`` and may be overridden
+   with ``--phred``.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: list[str], optional
+
+   :returns: *int* -- ``0`` on success, ``2`` on I/O / lookup failure. Argparse
+             exits with ``2`` on usage errors.
+
+

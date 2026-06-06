@@ -1,0 +1,71 @@
+ttio.exporters.writers
+======================
+
+.. py:module:: ttio.exporters.writers
+
+.. autoapi-nested-parse::
+
+   Per-format :class:`~ttio.exporters.base.Writer` implementations. Each
+   serializes one layer of an *opened* :class:`SpectralDataset`. Run selection
+   is shared via :mod:`._select`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.exporters.writers.MzMLWriter
+   ttio.exporters.writers.MzTabWriter
+   ttio.exporters.writers.IsaWriter
+   ttio.exporters.writers.NmrMLWriter
+   ttio.exporters.writers.ImzMLWriter
+   ttio.exporters.writers.JcampDxWriter
+   ttio.exporters.writers.BamWriter
+   ttio.exporters.writers.CramWriter
+
+
+Module Contents
+---------------
+
+.. py:class:: MzMLWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: MzTabWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: IsaWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: NmrMLWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: ImzMLWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: JcampDxWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: BamWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+
+.. py:class:: CramWriter
+
+   .. py:method:: write(ds, layer, output, opts) -> None
+
+

@@ -72,12 +72,25 @@ loadScripts(document, 'script');</script>
 <div class="block">Domain protocols defining the five cross-cutting capabilities
 (CV annotation, encryption, indexability, provenance, streamability).</div>
 </div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.transport">global.thalion.ttio.transport</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
 </div>
 <section class="class-uses">
 <ul class="block-list">
 <li>
 <section class="detail" id="global.thalion.ttio">
 <h2>Uses of <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a> in <a href="../package-summary.html">global.thalion.ttio</a></h2>
+<div class="caption"><span>Fields in <a href="../package-summary.html">global.thalion.ttio</a> with type parameters of type <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>protected final <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Image.</span><code><a href="../Image.html#provenanceRecords" class="member-name-link">provenanceRecords</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Unmodifiable list of dataset-level provenance records.</div>
+</div>
+</div>
 <div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio</a> that return <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -110,13 +123,7 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color"><span class="type-name-label">AcquisitionRun.</span><code><a href="../AcquisitionRun.html#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">IRImage.</span><code><a href="../IRImage.html#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
-<div class="col-first even-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">MSImage.</span><code><a href="../MSImage.html#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">RamanImage.</span><code><a href="../RamanImage.html#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">Image.</span><code><a href="../Image.html#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
 <div class="col-first even-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
@@ -129,7 +136,9 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>void</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">AcquisitionRun.</span><code><a href="../AcquisitionRun.html#addProcessingStep(global.thalion.ttio.ProvenanceRecord)" class="member-name-link">addProcessingStep</a><wbr>(<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&nbsp;step)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Append a processing step to the run's in-memory provenance chain.</div>
+</div>
 </div>
 </section>
 </li>
@@ -147,6 +156,19 @@ loadScripts(document, 'script');</script>
  boolean&nbsp;sort)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Serialise <code>run</code> to the configured output path.</div>
+</div>
+<div class="col-first odd-row-color"><code>void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">BamWriter.</span><code><a href="../exporters/BamWriter.html#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenance,
+ boolean&nbsp;sort,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D overload of
+<a href="../exporters/BamWriter.html#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean)"><code>BamWriter.write(WrittenGenomicRun, List, boolean)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="../exporters/BamWriter.html#PROGRESS_INTERVAL_READS"><code>BamWriter.PROGRESS_INTERVAL_READS</code></a> records during the alignment
+write loop and a final <code>onProgress(total, total)</code> once
+the writer closes.</div>
 </div>
 </div>
 </section>
@@ -176,6 +198,15 @@ loadScripts(document, 'script');</script>
 <li>
 <section class="detail" id="global.thalion.ttio.importers">
 <h2>Uses of <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a> in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a></h2>
+<div class="caption"><span>Fields in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> with type parameters of type <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>final <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ImportedDataset.</span><code><a href="../importers/ImportedDataset.html#provenance" class="member-name-link">provenance</a></code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+</div>
 <div class="caption"><span>Methods in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> that return types with arguments of type <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -213,6 +244,29 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color"><span class="type-name-label">Provenanceable.</span><code><a href="../protocols/Provenanceable.html#addProcessingStep(global.thalion.ttio.ProvenanceRecord)" class="member-name-link">addProcessingStep</a><wbr>(<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&nbsp;step)</code></div>
 <div class="col-last even-row-color">
 <div class="block">Append a processing step to the chain.</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.transport">
+<h2>Uses of <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a> in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a></h2>
+<div class="caption"><span>Method parameters in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a> with type arguments of type <a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../transport/AccessUnitVisitor.html#visitDatasetProvenance(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitDatasetProvenance</a><wbr>(<a href="../transport/DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;records)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.2 — dataset-level provenance chain.</div>
+</div>
+<div class="col-first odd-row-color"><code>void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">TransportWriter.</span><code><a href="../transport/TransportWriter.html#writeDatasetProvenance(java.util.List)" class="member-name-link">writeDatasetProvenance</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;records)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">v0.11 Task 1.6: emit a <code>DATASET_PROVENANCE</code> (0x18) packet
+carrying the dataset-level provenance chain (format-spec §6.3).</div>
 </div>
 </div>
 </section>

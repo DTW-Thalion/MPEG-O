@@ -107,8 +107,7 @@ compound datasets with VL strings, scalar and array attributes.
 Unsupported capabilities raise
 <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/UnsupportedOperationException.html" title="class or interface in java.lang" class="external-link"><code>UnsupportedOperationException</code></a> at the call site.</p>
 
-<p><b>API status:</b> Stable (Provisional per M39 — may change
-before v1.0).</p>
+<p><b>API status:</b> Stable.</p>
 
 <p><b>Cross-language equivalents:</b> Objective-C
 <code>TTIOStorageProvider</code>, Python
@@ -152,7 +151,9 @@ before v1.0).</p>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Release backend resources.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#commitTransaction()" class="member-name-link">commitTransaction</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
@@ -166,7 +167,7 @@ before v1.0).</p>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5 method-summary-table-tab6"><code><a href="#nativeHandle()" class="member-name-link">nativeHandle</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5 method-summary-table-tab6">
 <div class="block"><span class="deprecated-label">Deprecated, for removal: This API element is subject to removal in a future version.</span>
-<div class="deprecation-comment">Scheduled for removal at v1.0.</div>
+<div class="deprecation-comment">Scheduled for removal.</div>
 </div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="StorageProvider.html" title="interface in global.thalion.ttio.providers">StorageProvider</a></code></div>
@@ -270,6 +271,11 @@ before v1.0).</p>
 <h3>isOpen</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">boolean</span>&nbsp;<span class="element-name">isOpen</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd><code>true</code> when the provider is currently open and
+  ready for read / write calls.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -277,14 +283,12 @@ before v1.0).</p>
 <section class="detail" id="nativeHandle()">
 <h3>nativeHandle</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#since()" title="class or interface in java.lang" class="external-link">since</a>="0.8",
-            <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=true)
+<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=true)
 </span><span class="modifiers">default</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span>&nbsp;<span class="element-name">nativeHandle</span>()</div>
 <div class="deprecation-block"><span class="deprecated-label">Deprecated, for removal: This API element is subject to removal in a future version.</span>
-<div class="deprecation-comment">Scheduled for removal at v1.0. M43-M45 eliminated
-              every internal caller; external callers should
-              migrate to the StorageGroup / StorageDataset
-              protocol. See <code>docs/api-stability-v0.8.md</code> §6.</div>
+<div class="deprecation-comment">Scheduled for removal. External callers should
+              migrate to the <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a> /
+              <a href="StorageDataset.html" title="interface in global.thalion.ttio.providers"><code>StorageDataset</code></a> protocol.</div>
 </div>
 <div class="block">Return the underlying native storage handle — an
   <a href="../hdf5/Hdf5File.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5File</code></a> for
@@ -332,8 +336,7 @@ before v1.0).</p>
 
   <p>Callers that wrap bulk loads in
   <code>beginTransaction() / commitTransaction()</code> get the SQLite
-  batch speedup without the ad-hoc per-provider convention the
-  M39 providers used before.</p></div>
+  batch speedup without ad-hoc per-provider conventions.</p></div>
 </div>
 </section>
 </li>
@@ -362,6 +365,9 @@ before v1.0).</p>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Release backend resources. After this call <a href="#isOpen()"><code>isOpen()</code></a> must
+  return <code>false</code>; calling <code>close</code> a second time is a
+  no-op.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

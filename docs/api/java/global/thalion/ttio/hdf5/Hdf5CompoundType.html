@@ -108,7 +108,10 @@ all are released in <a href="#close()"><code>close()</code></a>.</div>
 <div class="table-header col-first">Constructor</div>
 <div class="table-header col-last">Description</div>
 <div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(long)" class="member-name-link">Hdf5CompoundType</a><wbr>(long&nbsp;totalSize)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Create an empty compound type sized to hold <code>totalSize</code> bytes
+per record.</div>
+</div>
 </div>
 </section>
 </li>
@@ -138,7 +141,10 @@ all are released in <a href="#close()"><code>close()</code></a>.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Release the compound type id and every variable-length string
+  aux type id retained during construction.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>long</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#getTotalSize()" class="member-name-link">getTotalSize</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -167,6 +173,16 @@ all are released in <a href="#close()"><code>close()</code></a>.</div>
 <h3>Hdf5CompoundType</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">Hdf5CompoundType</span><wbr><span class="parameters">(long&nbsp;totalSize)</span></div>
+<div class="block">Create an empty compound type sized to hold <code>totalSize</code> bytes
+per record. Fields are added via <a href="#addField(java.lang.String,long,long)"><code>addField(String, long, long)</code></a> or
+<a href="#addVariableLengthStringField(java.lang.String,long)"><code>addVariableLengthStringField(String, long)</code></a> before the type is used.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>totalSize</code> - the byte size of one record (sum of all field
+                  byte widths)</dd>
+<dt>Throws:</dt>
+<dd><code><a href="Hdf5Errors.Hdf5Exception.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.Hdf5Exception</a></code> - if <code>H5Tcreate</code> fails</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -186,6 +202,12 @@ all are released in <a href="#close()"><code>close()</code></a>.</div>
  long&nbsp;type,
  long&nbsp;offset)</span></div>
 <div class="block">Insert a native (non-VL) field at the given byte offset.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the field name as stored in HDF5</dd>
+<dd><code>type</code> - one of the <code>HDF5Constants.H5T_NATIVE_*</code> ids</dd>
+<dd><code>offset</code> - byte offset of the field within the record</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -197,6 +219,11 @@ all are released in <a href="#close()"><code>close()</code></a>.</div>
  long&nbsp;offset)</span></div>
 <div class="block">Insert a variable-length C string field. Internally copies H5T_C_S1,
 sets size to H5T_VARIABLE, and retains the aux type id for cleanup.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the field name as stored in HDF5</dd>
+<dd><code>offset</code> - byte offset of the field within the record</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -205,6 +232,10 @@ sets size to H5T_VARIABLE, and retains the aux type id for cleanup.</div>
 <h3>getTypeId</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">long</span>&nbsp;<span class="element-name">getTypeId</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the underlying HDF5 type id, or <code>-1</code> after close.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -213,6 +244,10 @@ sets size to H5T_VARIABLE, and retains the aux type id for cleanup.</div>
 <h3>getTotalSize</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">long</span>&nbsp;<span class="element-name">getTotalSize</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the byte size of one record in this compound layout.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -221,6 +256,8 @@ sets size to H5T_VARIABLE, and retains the aux type id for cleanup.</div>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Release the compound type id and every variable-length string
+  aux type id retained during construction. Idempotent.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

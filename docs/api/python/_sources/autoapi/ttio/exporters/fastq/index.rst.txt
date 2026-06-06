@@ -43,6 +43,14 @@ ttio.exporters.fastq
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.fastq.PROGRESS_INTERVAL_READS
+
+
 Classes
 -------
 
@@ -54,12 +62,16 @@ Classes
 Module Contents
 ---------------
 
+.. py:data:: PROGRESS_INTERVAL_READS
+   :value: 1000
+
+
 .. py:class:: FastqWriter
 
    FASTQ exporter for unaligned genomic runs.
 
 
-   .. py:method:: write(run: ttio.written_genomic_run.WrittenGenomicRun | ttio.genomic_run.GenomicRun, path: str | os.PathLike[str], *, gzip_output: bool | None = None, phred_offset: int = 33) -> None
+   .. py:method:: write(run: ttio.written_genomic_run.WrittenGenomicRun | ttio.genomic_run.GenomicRun, path: str | os.PathLike[str], *, gzip_output: bool | None = None, phred_offset: int = 33, progress: ttio.io.progress.ProgressSinkLike | None = None) -> None
       :classmethod:
 
 

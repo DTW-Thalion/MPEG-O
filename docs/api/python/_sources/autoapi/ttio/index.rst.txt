@@ -40,8 +40,10 @@ Submodules
    /autoapi/ttio/genomic_index/index
    /autoapi/ttio/genomic_run/index
    /autoapi/ttio/identification/index
+   /autoapi/ttio/image/index
    /autoapi/ttio/importers/index
    /autoapi/ttio/instrument_config/index
+   /autoapi/ttio/io/index
    /autoapi/ttio/ir_image/index
    /autoapi/ttio/ir_spectrum/index
    /autoapi/ttio/isolation_window/index
@@ -59,12 +61,14 @@ Submodules
    /autoapi/ttio/raman_image/index
    /autoapi/ttio/raman_spectrum/index
    /autoapi/ttio/remote/index
+   /autoapi/ttio/sample/index
    /autoapi/ttio/signal_array/index
    /autoapi/ttio/signatures/index
    /autoapi/ttio/spectral_dataset/index
    /autoapi/ttio/spectrum/index
    /autoapi/ttio/stream_reader/index
    /autoapi/ttio/stream_writer/index
+   /autoapi/ttio/subject/index
    /autoapi/ttio/tools/index
    /autoapi/ttio/transition_list/index
    /autoapi/ttio/transport/index
@@ -72,6 +76,7 @@ Submodules
    /autoapi/ttio/uv_vis_spectrum/index
    /autoapi/ttio/value_range/index
    /autoapi/ttio/verifier/index
+   /autoapi/ttio/workbench/index
    /autoapi/ttio/written_genomic_run/index
 
 
@@ -96,6 +101,7 @@ Classes
    ttio.Polarity
    ttio.Precision
    ttio.SamplingMode
+   ttio.SpectrumKind
    ttio.ValueRange
    ttio.IsolationWindow
    ttio.CVParam
@@ -113,6 +119,8 @@ Classes
    ttio.Quantification
    ttio.Feature
    ttio.ProvenanceRecord
+   ttio.Sample
+   ttio.Subject
    ttio.Transition
    ttio.TransitionList
    ttio.FeatureFlags
@@ -135,7 +143,7 @@ Package Contents
 ----------------
 
 .. py:data:: __version__
-   :value: '1.0.0'
+   :value: '1.1.0'
 
 
 .. py:data:: FORMAT_VERSION
@@ -197,6 +205,21 @@ Package Contents
 
    .. py:attribute:: GENOMIC_WES
       :value: 8
+
+
+
+   .. py:attribute:: RAMAN
+      :value: 9
+
+
+
+   .. py:attribute:: IR
+      :value: 10
+
+
+
+   .. py:attribute:: UV_VIS
+      :value: 11
 
 
 
@@ -473,6 +496,71 @@ Package Contents
 
    .. py:attribute:: NON_UNIFORM
       :value: 1
+
+
+
+.. py:class:: SpectrumKind(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Discriminator for a spectrum run's concrete type, derived from the
+   persisted ``@spectrum_class`` string (which stays the on-disk source of
+   truth — this enum is an in-code dispatch key, P3.8).
+
+
+   .. py:attribute:: MASS
+      :value: 'TTIOMassSpectrum'
+
+
+
+   .. py:attribute:: NMR
+      :value: 'TTIONMRSpectrum'
+
+
+
+   .. py:attribute:: NMR_2D
+      :value: 'TTIONMR2DSpectrum'
+
+
+
+   .. py:attribute:: IR
+      :value: 'TTIOIRSpectrum'
+
+
+
+   .. py:attribute:: RAMAN
+      :value: 'TTIORamanSpectrum'
+
+
+
+   .. py:attribute:: UVVIS
+      :value: 'TTIOUVVisSpectrum'
+
+
+
+   .. py:attribute:: FREE_INDUCTION_DECAY
+      :value: 'TTIOFreeInductionDecay'
+
+
+
+   .. py:attribute:: MS_IMAGE_PIXEL
+      :value: 'TTIOMSImagePixel'
+
+
+
+   .. py:attribute:: UNKNOWN
+      :value: ''
+
+
+
+   .. py:property:: persisted
+      :type: str
+
+
+
+   .. py:method:: from_persisted(s)
+      :classmethod:
 
 
 
@@ -810,8 +898,9 @@ Package Contents
    A named 1-D numeric signal buffer paired with axis and encoding
    metadata, with CV annotation support.
 
-   :param data: 1-D numeric array holding the raw signal values. Callers should
-                treat the array contents as immutable after construction.
+   :param data: 1-D numeric array holding the raw signal values. Stored as a
+                zero-copy, read-only (flags.writeable=False) view so callers
+                cannot mutate this value object in place after construction.
    :type data: numpy.ndarray
    :param axis: Descriptor of the physical dimension represented by ``data``
                 (e.g. m/z, ppm). ``None`` when the axis is not yet known or not
@@ -854,6 +943,9 @@ Package Contents
 
 
 
+   .. py:method:: __post_init__() -> None
+
+
    .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None
 
       Attach *param* to this array in insertion order.
@@ -892,6 +984,23 @@ Package Contents
 
    .. py:method:: from_numpy(array: numpy.ndarray, axis: ttio.axis_descriptor.AxisDescriptor | None = None, encoding: ttio.encoding_spec.EncodingSpec | None = None) -> SignalArray
       :classmethod:
+
+
+      Wrap a NumPy array as a :class:`SignalArray`.
+
+      :param array: 1-D NumPy array carrying the signal values. Made contiguous
+                    via :func:`numpy.ascontiguousarray` before storage.
+      :type array: numpy.ndarray
+      :param axis: Optional descriptor for the array's axis (label, unit,
+                   spacing). Default ``None``.
+      :type axis: AxisDescriptor, optional
+      :param encoding: Optional encoding hint (compression, precision). Defaults
+                       to a fresh :class:`EncodingSpec` when omitted.
+      :type encoding: EncodingSpec, optional
+
+      :returns: *SignalArray* -- Newly constructed signal array wrapping ``array``.
+
+      :raises ValueError: If ``array.ndim != 1``.
 
 
 
@@ -1069,6 +1178,12 @@ Package Contents
 
 
 
+   .. py:attribute:: is_centroided
+      :type:  bool
+      :value: False
+
+
+
    .. py:property:: mz_array
       :type: ttio.signal_array.SignalArray
 
@@ -1209,10 +1324,20 @@ Package Contents
       :type: int
 
 
+      Number of rows (F1 dimension) in the intensity matrix.
+
+      :returns: *int* -- ``intensity_matrix.shape[0]``; corresponds to the F1 axis
+                (indirect dimension).
+
 
    .. py:property:: matrix_width
       :type: int
 
+
+      Number of columns (F2 dimension) in the intensity matrix.
+
+      :returns: *int* -- ``intensity_matrix.shape[1]``; corresponds to the F2 axis
+                (direct dimension).
 
 
 .. py:class:: FreeInductionDecay
@@ -1401,6 +1526,11 @@ Package Contents
    :param normalization_method: Normalization method. Empty string represents an unnormalized
                                 abundance.
    :type normalization_method: str, default ""
+   :param unit: Free-form unit label for ``abundance`` (e.g. ``"ng/mL"``,
+                ``"peak-area"``, ``"ion-count"``, ``"normalized"``). Empty when
+                not specified — readers should interpret an empty unit as
+                "implied by ``normalization_method``".
+   :type unit: str, default ""
 
    .. rubric:: Notes
 
@@ -1425,6 +1555,12 @@ Package Contents
 
 
    .. py:attribute:: normalization_method
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: unit
       :type:  str
       :value: ''
 
@@ -1583,6 +1719,162 @@ Package Contents
 
 
 
+.. py:class:: Sample
+
+   A biological / material Sample collected from a
+   :class:`~ttio.subject.Subject`, or a standalone sample with no
+   recorded subject.
+
+   The :attr:`sample_id` matches
+   :attr:`~ttio.acquisition_run.AcquisitionRun.sample_name` for the
+   run → sample link; that string remains the canonical link (no
+   breaking change in Stage 6). When both Sample rows and
+   ``AcquisitionRun.sample_name`` are present, applications SHOULD
+   treat ``sample_name`` as a foreign key into the Sample list. No
+   automatic enrichment.
+
+   :param sample_id: Stable, depositor-controlled identifier; primary key within
+                     the dataset. Required, non-empty, must not contain ``'/'``
+                     (HDF5 group-name restriction, see format-spec §11).
+   :type sample_id: str
+   :param subject_external_id: Soft foreign key into the Subject list of the same dataset.
+                               Absent / unset = ``""``. A mismatch (non-empty value but no
+                               matching Subject) logs a WARNING during write; it is not an
+                               error.
+   :type subject_external_id: str, default ""
+   :param sample_kind: Free string (e.g. ``"tissue"``, ``"plasma"``). ``""`` = unset.
+   :type sample_kind: str, default ""
+   :param collected_at: Unix seconds since epoch when the sample was collected, or
+                        ``0`` sentinel for unknown. Stored as int64 on disk and in
+                        the ``SAMPLE_METADATA`` Arrow transport payload.
+   :type collected_at: int, default 0
+   :param attributes: Open extension slot. Keys are free strings; values are
+                      stringified. Serialised on disk as a sort-keys JSON object so
+                      the bytes are deterministic across Python / ObjC / Java.
+   :type attributes: dict[str, str], default {}
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSample`` · Java:
+   ``global.thalion.ttio.Sample``.
+
+
+   .. py:attribute:: sample_id
+      :type:  str
+
+
+   .. py:attribute:: subject_external_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: sample_kind
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: collected_at
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: attributes
+      :type:  dict[str, str]
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: attributes_json() -> str
+
+      Return the JSON serialisation of :attr:`attributes` with
+      sorted keys. Matches Java's ``Sample.attributesJson()`` and
+      ObjC ``NSJSONWritingSortedKeys`` byte-for-byte — required for
+      cross-language transport-spec v0.11 conformance. Returns
+      ``"{}"`` for an empty map.
+
+
+
+.. py:class:: Subject
+
+   A study Subject: the donor / patient / animal / object the
+   sample was drawn from.
+
+   :param external_id: Stable, depositor-controlled identifier; primary key within the
+                       dataset. Required, non-empty, must not contain ``'/'`` (HDF5
+                       group-name restriction, see format-spec §11).
+   :type external_id: str
+   :param project: Study acronym / cohort identifier. Free string. ``""`` = unset.
+   :type project: str, default ""
+   :param sex: Free string (e.g. ``"M"``, ``"F"``, ``"NA"``). No enumeration
+               enforced. ``""`` = unset.
+   :type sex: str, default ""
+   :param birth_year: Four-digit year of birth, or ``0`` sentinel for unknown. Stored
+                      as int64 on disk; widened to int32 in the
+                      ``SUBJECT_METADATA`` Arrow transport payload (column-width
+                      consistency with the identification table).
+   :type birth_year: int, default 0
+   :param attributes: Open extension slot. Keys are free strings; values are
+                      stringified. Serialised on disk as a sort-keys JSON object so
+                      the bytes are deterministic across Python / ObjC / Java.
+   :type attributes: dict[str, str], default {}
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSubject`` · Java:
+   ``global.thalion.ttio.Subject``.
+
+
+   .. py:attribute:: external_id
+      :type:  str
+
+
+   .. py:attribute:: project
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: sex
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: birth_year
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: attributes
+      :type:  dict[str, str]
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: attributes_json() -> str
+
+      Return the JSON serialisation of :attr:`attributes` with
+      sorted keys. Matches Java's ``Subject.attributesJson()`` and
+      ObjC ``NSJSONWritingSortedKeys`` byte-for-byte — required for
+      cross-language transport-spec v0.11 conformance. Returns
+      ``"{}"`` for an empty map.
+
+
+
 .. py:class:: Transition
 
    One SRM/MRM transition.
@@ -1685,8 +1977,28 @@ Package Contents
       :classmethod:
 
 
+      Build a :class:`FeatureFlags` from any iterable of feature strings.
+
+      :param version: Format version label (e.g. ``"1.1"``, ``"1.5"``).
+      :type version: str
+      :param features: Feature flag names; consumed once and frozen into a tuple
+                       preserving iteration order.
+      :type features: Iterable[str]
+
+      :returns: *FeatureFlags* -- Immutable feature flag set with the given version label.
+
+
 
    .. py:method:: has(name: str) -> bool
+
+      Return whether a feature flag is set.
+
+      :param name: Feature flag string to test (e.g.
+                   ``"opt_ms2_activation_detail"``).
+      :type name: str
+
+      :returns: *bool* -- True when ``name`` is present in :attr:`features`.
+
 
 
    .. py:method:: required() -> tuple[str, Ellipsis]
@@ -1766,10 +2078,73 @@ Package Contents
 
 
 
+   .. py:attribute:: solvent
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: ir_mode
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: ir_resolution_cm_inv
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: ir_number_of_scans
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: raman_excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: raman_laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: raman_integration_time_sec
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: uvvis_path_length_cm
+      :type:  float
+      :value: 0.0
+
+
+
    .. py:attribute:: chromatograms
       :type:  list[ttio.chromatogram.Chromatogram]
       :value: []
 
+
+
+   .. py:property:: kind
+      :type: ttio.enums.SpectrumKind
+
+
+      The :class:`~ttio.enums.SpectrumKind` derived from the persisted
+      ``@spectrum_class`` string.
+
+      In-code dispatch key only (P3.8). The ``spectrum_class`` field stays
+      the on-disk source of truth and is never normalized through this
+      enum; an unrecognized class maps to
+      :attr:`~ttio.enums.SpectrumKind.UNKNOWN` and dispatches to the
+      :class:`~ttio.mass_spectrum.MassSpectrum` default, preserving the
+      v0.1 fallback behavior.
 
 
    .. py:method:: open(group: ttio.providers.base.StorageGroup | h5py.Group, name: str) -> AcquisitionRun
@@ -1790,6 +2165,17 @@ Package Contents
 
 
    .. py:method:: __iter__() -> Iterator[ttio.spectrum.Spectrum]
+
+
+   .. py:method:: spectra() -> list[ttio.spectrum.Spectrum]
+
+      Return all spectra as a list.
+
+      Convenience for parity with the Java ``AcquisitionRun.spectra()``
+      and Objective-C ``-[TTIOAcquisitionRun spectra]`` accessors.
+      Equivalent to ``list(run)`` but provided as a named method so
+      cross-language code reads the same.
+
 
 
    .. py:method:: provenance() -> list[ttio.provenance.ProvenanceRecord]
@@ -2036,9 +2422,21 @@ Package Contents
 
 
 
+   .. py:attribute:: centroideds
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
    .. py:property:: count
       :type: int
 
+
+      Number of spectra indexed.
+
+      :returns: *int* -- Length of the parallel ``offsets`` array; equals the number
+                of spectra resolvable through :meth:`offset_at` /
+                :meth:`length_at`.
 
 
    .. py:method:: offset_at(index: int) -> int
@@ -2105,6 +2503,20 @@ Package Contents
 
 
 
+   .. py:method:: centroided_at(index: int) -> bool
+
+      Return whether spectrum ``index`` is centroided (mzML
+      MS:1000127). Returns ``False`` when the column is absent —
+      callers needing to distinguish "unknown" from "profile" should
+      check ``self.centroideds is None``.
+
+      Cross-language equivalents
+      --------------------------
+      Java: ``SpectrumIndex.centroidedAt(i)`` · Objective-C:
+      ``-[TTIOSpectrumIndex centroidedAt:]``.
+
+
+
    .. py:method:: indices_in_retention_time_range(value_range: ttio.value_range.ValueRange) -> list[int]
 
       Return indices whose retention time lies in
@@ -2125,9 +2537,9 @@ Package Contents
       Load all index columns.
 
       Accepts either a :class:`StorageGroup` (protocol path)
-      or an :class:`h5py.Group` (legacy). The h5py path is retained
-      via ``_native_h5py`` so existing callers that dereferenced
-      child groups with ``group["spectrum_index"]`` continue to work.
+      or an :class:`h5py.Group` (legacy). The legacy h5py path uses
+      direct ``group[name]`` indexing so existing callers that
+      dereferenced child groups continue to work.
 
 
 
@@ -2184,30 +2596,56 @@ Package Contents
       :type: bool
 
 
+      Whether the read is aligned to a reference position.
+
+      :returns: *bool* -- True when SAM flag 0x4 (``unmapped``) is cleared.
+
 
    .. py:property:: is_paired
       :type: bool
 
+
+      Whether the read is part of a paired-end template.
+
+      :returns: *bool* -- True when SAM flag 0x1 (``paired``) is set.
 
 
    .. py:property:: is_reverse
       :type: bool
 
 
+      Whether the read aligns to the reverse strand.
+
+      :returns: *bool* -- True when SAM flag 0x10 (``reverse complement``) is set.
+
 
    .. py:property:: is_secondary
       :type: bool
 
+
+      Whether the alignment is a secondary alignment.
+
+      :returns: *bool* -- True when SAM flag 0x100 (``secondary alignment``) is set.
 
 
    .. py:property:: is_supplementary
       :type: bool
 
 
+      Whether the alignment is a supplementary alignment.
+
+      :returns: *bool* -- True when SAM flag 0x800 (``supplementary alignment``) is
+                set; typically marks chimeric / split-read parts.
+
 
    .. py:property:: read_length
       :type: int
 
+
+      Length of the read's sequence in bases.
+
+      :returns: *int* -- ``len(self.sequence)``. Zero when the BAM record stored
+                ``SEQ=*`` (sequence stripped).
 
 
 .. py:class:: GenomicIndex
@@ -2275,9 +2713,26 @@ Package Contents
       :type:  numpy.ndarray
 
 
+   .. py:attribute:: chromosome_ids
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: chromosome_names
+      :type:  list[str] | None
+      :value: None
+
+
+
    .. py:property:: count
       :type: int
 
+
+      Number of aligned reads indexed.
+
+      :returns: *int* -- Length of the parallel ``offsets`` array; equals the number
+                of reads accessible through this index.
 
 
    .. py:method:: indices_for_region(chromosome: str, start: int, end: int) -> list[int]
@@ -2407,7 +2862,7 @@ Package Contents
 
 
 
-   .. py:method:: open(group, name: str) -> GenomicRun
+   .. py:method:: open(group, name: str, *, references_group=None) -> GenomicRun
       :classmethod:
 
 
@@ -2417,6 +2872,12 @@ Package Contents
       caller resolves the child group before calling this classmethod.
       The genomic index and run-level attributes are loaded eagerly;
       signal channel datasets remain closed until first access.
+
+      Args:
+          references_group: the ``/study/references`` group as a
+              :class:`~ttio.providers.base.StorageGroup`, threaded
+              through to the REF_DIFF :class:`ReferenceResolver`. May
+              be ``None`` when the file carries no embedded references.
 
 
 
@@ -2527,9 +2988,18 @@ Package Contents
 
 
 
+   .. py:attribute:: bulk_v2_blobs
+      :type:  BulkV2Blobs | None
+      :value: None
+
+
+
 .. py:class:: MSImage
 
-   Mass-spectrometry imaging dataset: a ``width × height`` grid of
+   Bases: :py:obj:`ttio.image.Image`
+
+
+   Mass-spectrometry imaging dataset: a ``width x height`` grid of
    pixels, each pixel a spectral profile of ``spectral_points`` values.
 
    :param width: Image grid dimensions in pixels.
@@ -2540,6 +3010,11 @@ Package Contents
    :type spectral_points: int, default 0
    :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
    :type intensity: numpy.ndarray, default empty rank-3 array
+   :param mz_axis: 1-D float64 array of length ``spectral_points`` giving the m/z
+                   calibration for each spectral bin.  Empty when the file was
+                   written before format v1.2 (legacy files); use
+                   :meth:`to_pixel_spectra` only when this is populated.
+   :type mz_axis: numpy.ndarray, default empty 1-D array
    :param pixel_size_x: Spatial pixel size (implementation-defined units).
    :type pixel_size_x: float, default 0.0
    :param pixel_size_y: Spatial pixel size (implementation-defined units).
@@ -2556,7 +3031,7 @@ Package Contents
                                 from ``TTIOSpectralDataset``; in Python they are composed
                                 directly onto ``MSImage``.
    :type isa_investigation_id: str, default ""
-   :param identifications: Dataset-level identifications (composed — see Notes).
+   :param identifications: Dataset-level identifications (composed -- see Notes).
    :type identifications: list, default []
    :param quantifications: Dataset-level quantifications (composed).
    :type quantifications: list, default []
@@ -2578,87 +3053,63 @@ Package Contents
 
    Cross-language equivalents
    --------------------------
-   Objective-C: ``TTIOMSImage`` · Java:
+   Objective-C: ``TTIOMSImage`` - Java:
    ``global.thalion.ttio.MSImage``.
 
 
-   .. py:attribute:: width
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: height
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: spectral_points
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: pixel_size_x
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: pixel_size_y
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: intensity
+   .. py:attribute:: mz_axis
       :type:  numpy.ndarray
 
 
-   .. py:attribute:: scan_pattern
-      :type:  str
-      :value: ''
+   .. py:attribute:: kind
+      :type:  ClassVar[ttio.enums.ImageKind]
 
 
-
-   .. py:attribute:: tile_size
-      :type:  int
-      :value: 0
+   .. py:property:: spectral_axis
+      :type: numpy.ndarray
 
 
-
-   .. py:attribute:: title
-      :type:  str
-      :value: ''
+      The m/z calibration axis (alias of :attr:`mz_axis`).
 
 
-
-   .. py:attribute:: isa_investigation_id
-      :type:  str
-      :value: ''
+   .. py:property:: spectral_axis_kind
+      :type: ttio.enums.SpectralAxisKind
 
 
-
-   .. py:attribute:: identifications
-      :type:  list
-      :value: []
-
-
-
-   .. py:attribute:: quantifications
-      :type:  list
-      :value: []
-
-
-
-   .. py:attribute:: provenance_records
-      :type:  list
-      :value: []
-
+      Interpretation of :attr:`spectral_axis` for this modality.
 
 
    .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: write_to(study_group) -> None
+
+      Write this image cube under ``<study_group>/image_cube/``.
+
+      Mirrors :meth:`global.thalion.ttio.MSImage.writeTo` -- intensity
+      as a 3-D ``[h, w, sp]`` dataset, optional ``mz_axis`` 1-D
+      dataset when populated.
+
+
+
+   .. py:method:: read_from(study_group) -> MSImage | None
+      :classmethod:
+
+
+      Read an MSImage cube from a study group; return None if absent.
+
+
+
+   .. py:method:: to_pixel_spectra()
+
+      Project this image as a list of continuous-mode pixel records.
+
+      Returns a list of :class:`ttio.importers.imzml.ImzMLPixelSpectrum`
+      objects, one per pixel, all sharing :attr:`mz_axis` as their
+      ``mz`` array.
+
+      Raises ``RuntimeError`` when ``mz_axis`` is empty (legacy file).
+
 
 
 .. py:class:: RamanSpectrum
@@ -2939,6 +3390,9 @@ Package Contents
 
 .. py:class:: RamanImage
 
+   Bases: :py:obj:`ttio.image.Image`
+
+
    Raman hyperspectral imaging dataset: a ``width × height`` grid of
    pixels, each pixel a spectrum of ``spectral_points`` intensity values
    sampled at a shared rank-1 ``wavenumbers`` axis.
@@ -2989,54 +3443,8 @@ Package Contents
    ``global.thalion.ttio.RamanImage``.
 
 
-   .. py:attribute:: width
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: height
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: spectral_points
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: pixel_size_x
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: pixel_size_y
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: intensity
-      :type:  numpy.ndarray
-
-
    .. py:attribute:: wavenumbers
       :type:  numpy.ndarray
-
-
-   .. py:attribute:: scan_pattern
-      :type:  str
-      :value: ''
-
-
-
-   .. py:attribute:: tile_size
-      :type:  int
-      :value: 0
-
 
 
    .. py:attribute:: excitation_wavelength_nm
@@ -3051,40 +3459,57 @@ Package Contents
 
 
 
-   .. py:attribute:: title
-      :type:  str
-      :value: ''
+   .. py:attribute:: kind
+      :type:  ClassVar[ttio.enums.ImageKind]
 
 
-
-   .. py:attribute:: isa_investigation_id
-      :type:  str
-      :value: ''
+   .. py:property:: spectral_axis
+      :type: numpy.ndarray
 
 
-
-   .. py:attribute:: identifications
-      :type:  list
-      :value: []
+      The wavenumber axis (alias of :attr:`wavenumbers`).
 
 
-
-   .. py:attribute:: quantifications
-      :type:  list
-      :value: []
+   .. py:property:: spectral_axis_kind
+      :type: ttio.enums.SpectralAxisKind
 
 
-
-   .. py:attribute:: provenance_records
-      :type:  list
-      :value: []
-
+      Interpretation of :attr:`spectral_axis` for this modality.
 
 
    .. py:method:: __post_init__() -> None
 
 
+   .. py:method:: write_to(study_group) -> None
+
+      Write this Raman image cube under ``<study_group>/raman_image_cube/``.
+
+      Mirrors :meth:`global.thalion.ttio.RamanImage.writeTo` — intensity
+      as a 3-D ``[h, w, sp]`` dataset, ``wavenumbers`` 1-D dataset,
+      and Raman-specific scalar attributes.
+
+      Pixel size attributes are written as **native double** (not strings),
+      applying the PR #31 lesson immediately so legacy-string reads remain
+      backwards-compatible via :meth:`read_from`.
+
+
+
+   .. py:method:: read_from(study_group) -> RamanImage | None
+      :classmethod:
+
+
+      Read a Raman image cube from a study group; return None if absent.
+
+      Accepts both the native-double form (written by this class) and
+      the legacy string form for pixel_size_x/y,
+      excitation_wavelength_nm, and laser_power_mw.
+
+
+
 .. py:class:: IRImage
+
+   Bases: :py:obj:`ttio.image.Image`
+
 
    Infrared hyperspectral imaging dataset: a ``width × height`` grid
    of pixels, each pixel an IR spectrum of ``spectral_points`` intensity
@@ -3133,54 +3558,8 @@ Package Contents
    ``global.thalion.ttio.IRImage``.
 
 
-   .. py:attribute:: width
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: height
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: spectral_points
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: pixel_size_x
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: pixel_size_y
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: intensity
-      :type:  numpy.ndarray
-
-
    .. py:attribute:: wavenumbers
       :type:  numpy.ndarray
-
-
-   .. py:attribute:: scan_pattern
-      :type:  str
-      :value: ''
-
-
-
-   .. py:attribute:: tile_size
-      :type:  int
-      :value: 0
-
 
 
    .. py:attribute:: mode
@@ -3193,36 +3572,50 @@ Package Contents
 
 
 
-   .. py:attribute:: title
-      :type:  str
-      :value: ''
+   .. py:attribute:: kind
+      :type:  ClassVar[ttio.enums.ImageKind]
 
 
-
-   .. py:attribute:: isa_investigation_id
-      :type:  str
-      :value: ''
+   .. py:property:: spectral_axis
+      :type: numpy.ndarray
 
 
-
-   .. py:attribute:: identifications
-      :type:  list
-      :value: []
+      The wavenumber axis (alias of :attr:`wavenumbers`).
 
 
-
-   .. py:attribute:: quantifications
-      :type:  list
-      :value: []
+   .. py:property:: spectral_axis_kind
+      :type: ttio.enums.SpectralAxisKind
 
 
-
-   .. py:attribute:: provenance_records
-      :type:  list
-      :value: []
-
+      Interpretation of :attr:`spectral_axis` for this modality.
 
 
    .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: write_to(study_group) -> None
+
+      Write this IR image cube under ``<study_group>/ir_image_cube/``.
+
+      Mirrors :meth:`global.thalion.ttio.IRImage.writeTo` — intensity
+      as a 3-D ``[h, w, sp]`` dataset, ``wavenumbers`` 1-D dataset,
+      and IR-specific scalar attributes (``ir_mode``,
+      ``resolution_cm_inv``).
+
+      Pixel size attributes are written as **native double** (not
+      strings), applying the PR #31 lesson immediately so legacy-string
+      reads remain backwards-compatible via :meth:`read_from`.
+
+
+
+   .. py:method:: read_from(study_group) -> IRImage | None
+      :classmethod:
+
+
+      Read an IR image cube from a study group; return None if absent.
+
+      Accepts both native-double (written by this class) and legacy
+      string forms for ``pixel_size_x/y`` and ``resolution_cm_inv``.
+
 
 

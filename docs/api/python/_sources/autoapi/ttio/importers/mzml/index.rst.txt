@@ -22,6 +22,14 @@ ttio.importers.mzml
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.mzml.PROGRESS_INTERVAL_SPECTRA
+
+
 Exceptions
 ----------
 
@@ -41,6 +49,10 @@ Functions
 Module Contents
 ---------------
 
+.. py:data:: PROGRESS_INTERVAL_SPECTRA
+   :value: 100
+
+
 .. py:exception:: MzMLParseError
 
    Bases: :py:obj:`ValueError`
@@ -51,12 +63,16 @@ Module Contents
    Initialize self.  See help(type(self)) for accurate signature.
 
 
-.. py:function:: read(path: str | pathlib.Path) -> ttio.importers.import_result.ImportResult
+.. py:function:: read(path: str | pathlib.Path, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> ttio.importers.import_result.ImportResult
 
    Parse an mzML file and return an :class:`ImportResult`.
 
    Supports the indexed (``<indexedmzML>``) and non-indexed wrappers. Only
    spectrum-level binary arrays are materialized; chromatograms are
    ignored in this minimal port (they will be added by M19).
+
+   ``progress`` fires every :data:`PROGRESS_INTERVAL_SPECTRA` spectra
+   (``total = -1``) and once more at the end with ``(n_spectra,
+   n_spectra)``.
 
 

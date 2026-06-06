@@ -94,8 +94,7 @@ loadScripts(document, 'script');</script>
 extends <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></span></div>
 <div class="block">Named directory of subgroups, datasets, and attributes.
 
-<p><b>API status:</b> Stable (Provisional per M39 — may change
-before v1.0).</p>
+<p><b>API status:</b> Stable.</p>
 
 <p><b>Cross-language equivalents:</b> Objective-C
 <code>TTIOStorageGroup</code>, Python
@@ -155,16 +154,24 @@ before v1.0).</p>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#createGroup(java.lang.String)" class="member-name-link">createGroup</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Create a new sub-group.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#deleteAttribute(java.lang.String)" class="member-name-link">deleteAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Remove an attribute.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#deleteChild(java.lang.String)" class="member-name-link">deleteChild</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Delete a child link (sub-group or dataset).</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#getAttribute(java.lang.String)" class="member-name-link">getAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Read an attribute value.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>boolean</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#hasAttribute(java.lang.String)" class="member-name-link">hasAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
@@ -176,14 +183,20 @@ before v1.0).</p>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="StorageDataset.html" title="interface in global.thalion.ttio.providers">StorageDataset</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#openDataset(java.lang.String)" class="member-name-link">openDataset</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Open an existing dataset directly under this group.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#openGroup(java.lang.String)" class="member-name-link">openGroup</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Open an existing sub-group.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#setAttribute(java.lang.String,java.lang.Object)" class="member-name-link">setAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;value)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Write an attribute.</div>
+</div>
 </div>
 </div>
 </div>
@@ -203,6 +216,11 @@ before v1.0).</p>
 <h3>name</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">name</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the short (last-path-segment) name of this group;
+  <code>"/"</code> for the root group.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -211,6 +229,11 @@ before v1.0).</p>
 <h3>childNames</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</span>&nbsp;<span class="element-name">childNames</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>every child link name (sub-group or dataset) directly
+  under this group in storage order.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -219,6 +242,13 @@ before v1.0).</p>
 <h3>hasChild</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">boolean</span>&nbsp;<span class="element-name">hasChild</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the child link name</dd>
+<dt>Returns:</dt>
+<dd><code>true</code> when a sub-group or dataset of that name
+  exists directly under this group.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -227,6 +257,13 @@ before v1.0).</p>
 <h3>openGroup</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></span>&nbsp;<span class="element-name">openGroup</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Open an existing sub-group.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the sub-group name</dd>
+<dt>Returns:</dt>
+<dd>the opened <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -235,6 +272,14 @@ before v1.0).</p>
 <h3>createGroup</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></span>&nbsp;<span class="element-name">createGroup</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Create a new sub-group.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the sub-group name (must not collide with an
+               existing child)</dd>
+<dt>Returns:</dt>
+<dd>the newly-created <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -243,6 +288,11 @@ before v1.0).</p>
 <h3>deleteChild</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">deleteChild</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Delete a child link (sub-group or dataset). No-op when absent.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the child name</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -251,6 +301,13 @@ before v1.0).</p>
 <h3>openDataset</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="StorageDataset.html" title="interface in global.thalion.ttio.providers">StorageDataset</a></span>&nbsp;<span class="element-name">openDataset</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Open an existing dataset directly under this group.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the dataset name</dd>
+<dt>Returns:</dt>
+<dd>the opened <a href="StorageDataset.html" title="interface in global.thalion.ttio.providers"><code>StorageDataset</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -265,6 +322,19 @@ before v1.0).</p>
  <a href="../Enums.Compression.html" title="enum class in global.thalion.ttio">Enums.Compression</a>&nbsp;compression,
  int&nbsp;compressionLevel)</span></div>
 <div class="block">Create a primitive 1-D dataset.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the dataset name</dd>
+<dd><code>precision</code> - the element type</dd>
+<dd><code>length</code> - element count along the single axis</dd>
+<dd><code>chunkSize</code> - chunk extent (honoured only when the
+                           backend reports
+                           <a href="StorageProvider.html#supportsChunking()"><code>StorageProvider.supportsChunking()</code></a>)</dd>
+<dd><code>compression</code> - compression algorithm</dd>
+<dd><code>compressionLevel</code> - algorithm-specific level (0 = none)</dd>
+<dt>Returns:</dt>
+<dd>the newly-created <a href="StorageDataset.html" title="interface in global.thalion.ttio.providers"><code>StorageDataset</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -291,6 +361,14 @@ before v1.0).</p>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="CompoundField.html" title="class in global.thalion.ttio.providers">CompoundField</a>&gt;&nbsp;fields,
  long&nbsp;count)</span></div>
 <div class="block">Create a 1-D compound dataset.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the dataset name</dd>
+<dd><code>fields</code> - the ordered list of fields in one record</dd>
+<dd><code>count</code> - number of records</dd>
+<dt>Returns:</dt>
+<dd>the newly-created <a href="StorageDataset.html" title="interface in global.thalion.ttio.providers"><code>StorageDataset</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -299,6 +377,12 @@ before v1.0).</p>
 <h3>hasAttribute</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">boolean</span>&nbsp;<span class="element-name">hasAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+<dt>Returns:</dt>
+<dd><code>true</code> when the attribute is present on this group.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -307,6 +391,14 @@ before v1.0).</p>
 <h3>getAttribute</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span>&nbsp;<span class="element-name">getAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Read an attribute value.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+<dt>Returns:</dt>
+<dd>the stored value boxed into a Java object (string, boxed
+          numeric, or primitive array), or <code>null</code> if absent</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -316,6 +408,13 @@ before v1.0).</p>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">setAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;value)</span></div>
+<div class="block">Write an attribute. Replaces any existing entry of the same name.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+<dd><code>value</code> - the value to store (string, boxed numeric, or
+                primitive array)</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -324,6 +423,11 @@ before v1.0).</p>
 <h3>deleteAttribute</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">deleteAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Remove an attribute. No-op when the attribute is absent.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -332,6 +436,10 @@ before v1.0).</p>
 <h3>attributeNames</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</span>&nbsp;<span class="element-name">attributeNames</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>every attribute name on this group.</dd>
+</dl>
 </div>
 </section>
 </li>

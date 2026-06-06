@@ -65,10 +65,9 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-summary-item-name even-row-color"><a href="global/thalion/ttio/providers/StorageProvider.html#nativeHandle()">global.thalion.ttio.providers.StorageProvider.nativeHandle()</a></div>
 <div class="col-last even-row-color">
-<div class="block">Scheduled for removal at v1.0. M43-M45 eliminated
-              every internal caller; external callers should
-              migrate to the StorageGroup / StorageDataset
-              protocol. See <code>docs/api-stability-v0.8.md</code> §6.</div>
+<div class="block">Scheduled for removal. External callers should
+              migrate to the <a href="global/thalion/ttio/providers/StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a> /
+              <a href="global/thalion/ttio/providers/StorageDataset.html" title="interface in global.thalion.ttio.providers"><code>StorageDataset</code></a> protocol.</div>
 </div>
 </div>
 </div>
@@ -83,10 +82,40 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-summary-item-name even-row-color"><a href="global/thalion/ttio/providers/StorageProvider.html#nativeHandle()">global.thalion.ttio.providers.StorageProvider.nativeHandle()</a></div>
 <div class="col-last even-row-color">
-<div class="block">Scheduled for removal at v1.0. M43-M45 eliminated
-              every internal caller; external callers should
-              migrate to the StorageGroup / StorageDataset
-              protocol. See <code>docs/api-stability-v0.8.md</code> §6.</div>
+<div class="block">Scheduled for removal. External callers should
+              migrate to the <a href="global/thalion/ttio/providers/StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a> /
+              <a href="global/thalion/ttio/providers/StorageDataset.html" title="interface in global.thalion.ttio.providers"><code>StorageDataset</code></a> protocol.</div>
+</div>
+<div class="col-summary-item-name odd-row-color"><a href="global/thalion/ttio/workbench/transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D)">global.thalion.ttio.workbench.transport.WorkbenchTransportClient.upload<wbr>(String, String, byte[])</a></div>
+<div class="col-last odd-row-color">
+<div class="block">since 1.5.0. Prefer the streaming
+      <a href="global/thalion/ttio/workbench/transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)"><code>WorkbenchTransportClient.upload(String, String, Path, ResumeState, TransferProgress)</code></a>
+      overload — peak heap = O(<code>chunkSize</code>) instead of
+      O(<code>payload.length</code>). The byte[] entry point remains
+      functional for in-memory test fixtures and small-payload
+      callers but is not recommended for new code.</div>
+</div>
+<div class="col-summary-item-name even-row-color"><a href="global/thalion/ttio/workbench/transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState)">global.thalion.ttio.workbench.transport.WorkbenchTransportClient.upload<wbr>(String, String, byte[], ResumeState)</a></div>
+<div class="col-last even-row-color">
+<div class="block">since 1.5.0. See
+      <a href="global/thalion/ttio/workbench/transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D)"><code>WorkbenchTransportClient.upload(String, String, byte[])</code></a>.</div>
+</div>
+<div class="col-summary-item-name odd-row-color"><a href="global/thalion/ttio/workbench/transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)">global.thalion.ttio.workbench.transport.WorkbenchTransportClient.upload<wbr>(String, String, byte[], ResumeState, TransferProgress)</a></div>
+<div class="col-last odd-row-color">
+<div class="block">since 1.5.0. See
+      <a href="global/thalion/ttio/workbench/transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D)"><code>WorkbenchTransportClient.upload(String, String, byte[])</code></a>.</div>
+</div>
+<div class="col-summary-item-name even-row-color"><a href="global/thalion/ttio/workbench/WorkbenchClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D)">global.thalion.ttio.workbench.WorkbenchClient.upload<wbr>(String, String, byte[])</a></div>
+<div class="col-last even-row-color">
+<div class="block">since 1.5.0. Prefer
+      <a href="global/thalion/ttio/workbench/WorkbenchClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.TransferProgress)"><code>WorkbenchClient.upload(String, String, Path, TransferProgress)</code></a>
+      which streams from disk — peak heap O(<code>chunkSize</code>)
+      instead of O(<code>payload.length</code>).</div>
+</div>
+<div class="col-summary-item-name odd-row-color"><a href="global/thalion/ttio/workbench/WorkbenchClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.TransferProgress)">global.thalion.ttio.workbench.WorkbenchClient.upload<wbr>(String, String, byte[], TransferProgress)</a></div>
+<div class="col-last odd-row-color">
+<div class="block">since 1.5.0. See
+      <a href="global/thalion/ttio/workbench/WorkbenchClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D)"><code>WorkbenchClient.upload(String, String, byte[])</code></a>.</div>
 </div>
 </div>
 </div>

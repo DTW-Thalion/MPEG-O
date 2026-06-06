@@ -92,6 +92,22 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description)</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>static <a href="../MzTabWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">MzTabWriter.WriteResult</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">MzTabWriter.</span><code><a href="../MzTabWriter.html#write(java.nio.file.Path,java.util.List,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Feature.html" title="class in global.thalion.ttio">Feature</a>&gt;&nbsp;features,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;version,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D overload that fires
+<code>progress.onProgress(rowsDone, totalRows)</code> every
+<a href="../MzTabWriter.html#PROGRESS_INTERVAL_ROWS"><code>MzTabWriter.PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM /
+SML / SMF / SME) emitted and a final fire once the file is
+flushed to disk.</div>
+</div>
 </div>
 </section>
 </li>

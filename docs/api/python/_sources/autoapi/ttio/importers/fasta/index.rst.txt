@@ -25,6 +25,14 @@ ttio.importers.fasta
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.fasta.PROGRESS_INTERVAL_READS
+
+
 Exceptions
 ----------
 
@@ -43,6 +51,10 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:data:: PROGRESS_INTERVAL_READS
+   :value: 1000
+
 
 .. py:exception:: FastaParseError
 
@@ -93,7 +105,7 @@ Module Contents
 
 
 
-   .. py:method:: read_unaligned(*, sample_name: str = '', platform: str = '', reference_uri: str = '', acquisition_mode: ttio.enums.AcquisitionMode = AcquisitionMode.GENOMIC_WGS) -> ttio.written_genomic_run.WrittenGenomicRun
+   .. py:method:: read_unaligned(*, sample_name: str = '', platform: str = '', reference_uri: str = '', acquisition_mode: ttio.enums.AcquisitionMode = AcquisitionMode.GENOMIC_WGS, progress: ttio.io.progress.ProgressSinkLike | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
 
       Parse the file as a set of unaligned reads.
 

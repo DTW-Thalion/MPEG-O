@@ -1,0 +1,314 @@
+ttio.workbench.jobs
+===================
+
+.. py:module:: ttio.workbench.jobs
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.jobs -- pipeline-job submit + tracking client.
+
+   Wraps the workbench server's REST + SSE surface for jobs:
+
+     POST   /v1/jobs              -- submit
+     GET    /v1/jobs              -- list (project-scoped, optional ?status=)
+     GET    /v1/jobs/{id}         -- detail
+     DELETE /v1/jobs/{id}         -- cancel (queued -> cancelled,
+                                     running -> SIGTERM + cancel-grace)
+     GET    /v1/jobs/{id}/events  -- SSE long-poll, raw bytes till close
+
+   Job state machine (statuses emitted on the wire):
+
+       queued --[claim]--> starting --[spawn]--> running --[exit:0]--> completed
+         |                   |                      |
+         +--[cancel]-------> cancelled             +--[exit:N]--> failed
+                                                    |
+                                                    +--[cancel]--> cancelled
+
+   SSE wire format (per the v1.0 wire-contract survey + the reference
+   parser in `tti-workbench-server/scripts/smoke_jobs.py`): plain HTTP
+   body, no chunked encoding; the daemon streams
+   `event: <name>\ndata: <json>\n\n` frames until close. v1.0 emits
+   only `job.state` events (snapshot on open + one per state
+   transition). No `Last-Event-Id` resumption; reconnect for a full
+   state replay.
+
+   Inputs dual-column contract (Decision-4 on the server): job inputs
+   may be either plain `container_uri` strings OR
+   `{"cohort_query": <query>}` dicts. The server resolves cohort
+   queries at submit time, stores the resolved URIs alongside the
+   original query verbatim so future `/resubmit` runs against the
+   *query*, not the snapshot.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.jobs.JobInput
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.jobs.Job
+   ttio.workbench.jobs.JobEvent
+   ttio.workbench.jobs.JobsClient
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.jobs.build_cohort_input
+
+
+Module Contents
+---------------
+
+.. py:data:: JobInput
+
+.. py:class:: Job
+
+   A pipeline job as returned by `GET /v1/jobs{,/{id}}`.
+
+
+   .. py:attribute:: job_id
+      :type:  str
+
+
+   .. py:attribute:: pipeline_id
+      :type:  str
+
+
+   .. py:attribute:: status
+      :type:  str
+
+
+   .. py:attribute:: project
+      :type:  str
+
+
+   .. py:attribute:: owner
+      :type:  str
+
+
+   .. py:attribute:: queued_at
+      :type:  int
+
+
+   .. py:attribute:: started_at
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: completed_at
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: working_dir
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: engine_identifier
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: pid
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: exit_code
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: error_message
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: inputs
+      :type:  Mapping[str, Any]
+
+
+   .. py:attribute:: params
+      :type:  Mapping[str, Any]
+
+
+   .. py:attribute:: inputs_query
+      :type:  Mapping[str, Any]
+
+
+   .. py:attribute:: TERMINAL_STATUSES
+
+
+   .. py:property:: is_terminal
+      :type: bool
+
+
+      Return True when the job has reached a terminal status.
+
+      :returns: *bool* -- True for ``completed``, ``failed``, or ``cancelled``;
+                False for ``queued``, ``starting``, or ``running``.
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> Job
+      :classmethod:
+
+
+      Construct a :class:`Job` from a parsed server JSON body.
+
+      :param body: Decoded JSON object as returned by the ``/v1/jobs`` REST
+                   surface.
+      :type body: Mapping[str, Any]
+
+      :returns: *Job* -- Immutable snapshot. Missing optional fields collapse to
+                ``None`` / empty dict.
+
+
+
+.. py:class:: JobEvent
+
+   One SSE frame from `/v1/jobs/{id}/events`.
+
+   v1.0 emits `event: job.state` only. Future server versions
+   may add `job.heartbeat` / `job.log_line`; the parser keeps
+   the raw event name + JSON data so callers can switch on it.
+
+
+   .. py:attribute:: event
+      :type:  str
+
+
+   .. py:attribute:: data
+      :type:  Mapping[str, Any]
+
+
+.. py:class:: JobsClient(host: str, port: int, *, scheme: str, token: str)
+
+   Job submit + tracking surface.
+
+   Bind the client to a server endpoint and bearer token.
+
+   :param host: Workbench server hostname.
+   :type host: str
+   :param port: TCP port the REST listener is bound to.
+   :type port: int
+   :param scheme: ``"http"`` or ``"https"``.
+   :type scheme: str
+   :param token: Bearer token (``ttiowbs_...``) used for ``Authorization``
+                 headers on every REST call.
+   :type token: str
+
+
+   .. py:method:: submit(*, pipeline_id: str, inputs: Mapping[str, JobInput], params: Optional[Mapping[str, Any]] = None) -> Job
+
+      Submit a new pipeline job to the server queue.
+
+      :param pipeline_id: Registered pipeline identifier (server-assigned UUID).
+      :type pipeline_id: str
+      :param inputs: Per-slot inputs. Each value is either a container URI
+                     string or a ``{"cohort_query": <query>}`` envelope built
+                     via :func:`build_cohort_input`.
+      :type inputs: Mapping[str, JobInput]
+      :param params: Free-form pipeline parameters. Not validated by v1.0.
+      :type params: Mapping[str, Any], optional
+
+      :returns: *Job* -- The newly queued job row (status ``queued``).
+
+      :raises WorkbenchHttpError: If the server returns anything other than 201.
+
+
+
+   .. py:method:: list(*, status_filter: Optional[str] = None, limit: Optional[int] = None) -> list[Job]
+
+      List jobs visible to the caller's project scope.
+
+      :param status_filter: One of ``queued``, ``starting``, ``running``, ``completed``,
+                            ``failed``, ``cancelled``. When None, all states are
+                            returned.
+      :type status_filter: str, optional
+      :param limit: Maximum row count. Server applies a default cap when
+                    None.
+      :type limit: int, optional
+
+      :returns: *list[Job]* -- Jobs ordered as the server returns them (typically
+                newest-first by ``queued_at``).
+
+      :raises WorkbenchHttpError: On non-200 response.
+
+
+
+   .. py:method:: get(job_id: str) -> Job
+
+      Fetch a single job by identifier.
+
+      :param job_id: Server-assigned job identifier returned by :meth:`submit`.
+      :type job_id: str
+
+      :returns: *Job* -- Current snapshot of the job row.
+
+      :raises WorkbenchHttpError: On non-200 response (404 when the id is unknown).
+
+
+
+   .. py:method:: cancel(job_id: str) -> None
+
+      Cancel a queued or running job.
+
+      :param job_id: Server-assigned job identifier.
+      :type job_id: str
+
+      :raises WorkbenchHttpError: If the server returns anything other than 200 / 204.
+          409 indicates the job is already in a terminal state.
+
+      .. rubric:: Notes
+
+      Queued jobs transition directly to ``cancelled``; running
+      jobs receive SIGTERM and then SIGKILL after the configured
+      cancel-grace window before the row settles to ``cancelled``.
+
+
+
+   .. py:method:: events(job_id: str) -> AsyncIterator[JobEvent]
+      :async:
+
+
+      Async iterator over the job's SSE stream.
+
+      Opens `GET /v1/jobs/{id}/events`, yields parsed `JobEvent`
+      objects as they arrive. The server emits a snapshot of the
+      current state on open, then one frame per state transition,
+      then closes the connection when the job reaches a terminal
+      state.
+
+      Implementation: raw `asyncio.open_connection` + line-buffered
+      SSE parser. Matches the reference implementation in
+      `tti-workbench-server/scripts/smoke_jobs.py` byte-for-byte.
+
+
+
+.. py:function:: build_cohort_input(query_json: Mapping[str, Any]) -> dict[str, Any]
+
+   Build the `{"cohort_query": ...}` envelope the server's
+   Decision-4 input resolver recognises. Used by callers that
+   want to thread a `CohortQuery` directly into a job submit
+   without first running the query and pasting URIs.
+
+

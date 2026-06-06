@@ -1,0 +1,178 @@
+ttio.transport.arrow_ipc
+========================
+
+.. py:module:: ttio.transport.arrow_ipc
+
+.. autoapi-nested-parse::
+
+   Apache Arrow IPC encode/decode for transport-spec v0.11 tabular packets.
+
+   Mirrors Java's :class:`global.thalion.ttio.transport.ArrowIpcCodec` for
+   cross-language byte-equivalence of the IPC payload. The Arrow IPC
+   format is endian-independent and the schemas are declarative, so
+   identical inputs produce identical bytes in Java and Python.
+
+   See transport-spec
+   :doc:`/transport-spec` sections 4.19 (IDENTIFICATIONS_TABLE 0x16),
+   4.20 (QUANTIFICATIONS_TABLE 0x17), and 4.22
+   (SUBJECT_METADATA 0x19 + SAMPLE_METADATA 0x1A — Stage 6).
+
+   Schemas
+   -------
+
+   ``IDENTIFICATION_SCHEMA``::
+
+       run_name             : utf8
+       spectrum_index       : int32
+       chemical_entity      : utf8
+       confidence_score     : float64
+       evidence_chain_json  : utf8        # JSON array of evidence strings
+
+   ``QUANTIFICATION_SCHEMA``::
+
+       chemical_entity      : utf8
+       sample_ref           : utf8
+       abundance            : float64
+       normalization_method : utf8
+       unit                 : utf8
+
+   ``SUBJECT_SCHEMA`` (Stage 6, design spec §6.1)::
+
+       external_id          : utf8  (notNullable)
+       project              : utf8  (nullable)
+       sex                  : utf8  (nullable)
+       birth_year           : int32 (nullable)   # widened from on-disk int64
+       attributes_json      : utf8  (nullable)
+
+   ``SAMPLE_SCHEMA`` (Stage 6, design spec §6.2)::
+
+       sample_id            : utf8  (notNullable)
+       subject_external_id  : utf8  (nullable)
+       sample_kind          : utf8  (nullable)
+       collected_at         : int64 (nullable)
+       attributes_json      : utf8  (nullable)
+
+   .. rubric:: Notes
+
+   ``evidence_chain`` is serialised to a compact JSON array of strings
+   matching Java's emit format: ``[]`` for an empty list,
+   ``["a","b"]`` (no whitespace, double-quoted) otherwise. ``json.dumps``
+   with ``separators=(",", ":")`` produces exactly this shape.
+
+   **Subject / Sample null handling** (transport-spec §11 + Java's
+   :class:`ArrowIpcCodec` Javadoc, commit ``dd211600``):
+
+   * Optional string columns (``project``, ``sex``,
+     ``subject_external_id``, ``sample_kind``) emit Arrow null when the
+     source is the empty string ``""``. On read, Arrow null decodes back
+     to ``""`` so the dataclasses' "empty-string = unset" invariant is
+     preserved end to end.
+   * Optional integer columns (``birth_year``, ``collected_at``) emit
+     Arrow null when the source value is the sentinel ``0``; Arrow null
+     decodes back to ``0``. This mirrors the on-disk sentinel-0
+     convention so Python and Java implementations interoperate
+     byte-for-byte at the value level.
+   * The ``attributes_json`` column is **always** emitted with a value
+     (``"{}"`` for empty maps), never Arrow null; its semantics are
+     well-defined as a sort-keys JSON object.
+
+   Cross-language equivalents
+   --------------------------
+   Java: :class:`global.thalion.ttio.transport.ArrowIpcCodec`.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.arrow_ipc.encode_identifications
+   ttio.transport.arrow_ipc.decode_identifications
+   ttio.transport.arrow_ipc.encode_quantifications
+   ttio.transport.arrow_ipc.decode_quantifications
+   ttio.transport.arrow_ipc.encode_subjects
+   ttio.transport.arrow_ipc.decode_subjects
+   ttio.transport.arrow_ipc.encode_samples
+   ttio.transport.arrow_ipc.decode_samples
+
+
+Module Contents
+---------------
+
+.. py:function:: encode_identifications(rows: List[ttio.identification.Identification]) -> bytes
+
+   Encode a list of :class:`~ttio.identification.Identification`
+   rows as an Arrow IPC stream.
+
+   Empty input yields a valid empty IPC stream that round-trips to
+   an empty list.
+
+
+.. py:function:: decode_identifications(ipc: bytes) -> List[ttio.identification.Identification]
+
+   Decode an Arrow IPC stream into a list of
+   :class:`~ttio.identification.Identification`.
+
+
+.. py:function:: encode_quantifications(rows: List[ttio.quantification.Quantification]) -> bytes
+
+   Encode a list of :class:`~ttio.quantification.Quantification`
+   rows as an Arrow IPC stream.
+
+   Empty input yields a valid empty IPC stream.
+
+
+.. py:function:: decode_quantifications(ipc: bytes) -> List[ttio.quantification.Quantification]
+
+   Decode an Arrow IPC stream into a list of
+   :class:`~ttio.quantification.Quantification`.
+
+
+.. py:function:: encode_subjects(rows: List[ttio.subject.Subject]) -> bytes
+
+   Encode a list of :class:`~ttio.subject.Subject` rows as an
+   Arrow IPC stream per transport-spec §4.22.
+
+   Empty input yields a valid empty IPC stream that round-trips to
+   an empty list. See the module docstring for null-handling rules:
+   optional strings (``project`` / ``sex``) map empty-string to Arrow
+   null; ``birth_year`` sentinel ``0`` maps to Arrow null;
+   ``attributes_json`` is always present (``"{}"`` for empty maps).
+
+   Java parity: :meth:`ArrowIpcCodec.encodeSubjects`.
+
+
+.. py:function:: decode_subjects(ipc: bytes) -> List[ttio.subject.Subject]
+
+   Decode an Arrow IPC stream into a list of
+   :class:`~ttio.subject.Subject`.
+
+   Arrow null in ``project`` / ``sex`` decodes to ``""``; Arrow null
+   in ``birth_year`` decodes to ``0``. Java parity:
+   :meth:`ArrowIpcCodec.decodeSubjects`.
+
+
+.. py:function:: encode_samples(rows: List[ttio.sample.Sample]) -> bytes
+
+   Encode a list of :class:`~ttio.sample.Sample` rows as an Arrow
+   IPC stream per transport-spec §4.22.
+
+   Empty input yields a valid empty IPC stream. Null-handling rules
+   match :func:`encode_subjects`: optional strings map empty-string
+   to Arrow null; ``collected_at`` sentinel ``0`` maps to Arrow null;
+   ``attributes_json`` is always present (``"{}"`` for empty).
+
+   Java parity: :meth:`ArrowIpcCodec.encodeSamples`.
+
+
+.. py:function:: decode_samples(ipc: bytes) -> List[ttio.sample.Sample]
+
+   Decode an Arrow IPC stream into a list of
+   :class:`~ttio.sample.Sample`.
+
+   Arrow null in ``subject_external_id`` / ``sample_kind`` decodes to
+   ``""``; Arrow null in ``collected_at`` decodes to ``0``. Java
+   parity: :meth:`ArrowIpcCodec.decodeSamples`.
+
+

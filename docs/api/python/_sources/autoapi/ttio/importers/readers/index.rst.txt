@@ -1,0 +1,137 @@
+ttio.importers.readers
+======================
+
+.. py:module:: ttio.importers.readers
+
+.. autoapi-nested-parse::
+
+   Per-format :class:`Reader` implementations. Each parses its source
+   into an :class:`ImportedDataset`; lazy module imports keep optional
+   dependencies off the import path.
+
+   The importer registry (:mod:`ttio.importers.registry`) holds one of these
+   per format and dispatches ``encode`` through ``Reader.read(...).write(...)``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.readers.MzMLReader
+   ttio.importers.readers.MzTabReader
+   ttio.importers.readers.NmrMLReader
+   ttio.importers.readers.ThermoRawReader
+   ttio.importers.readers.WatersMassLynxReader
+   ttio.importers.readers.ImzMLReader
+   ttio.importers.readers.BrukerReader
+   ttio.importers.readers.JcampDxReader
+   ttio.importers.readers.BamReader
+   ttio.importers.readers.SamReader
+   ttio.importers.readers.CramReader
+
+
+Module Contents
+---------------
+
+.. py:class:: MzMLReader
+
+   Bases: :py:obj:`_ImportResultReader`
+
+
+   mzML / mzTab / nmrML / Thermo / Waters: module ``read()`` returns a
+   result object exposing ``to_imported_dataset()``.
+
+   ``_supports_progress`` is ``False`` for modules whose ``read`` does
+   not accept a ``progress`` kwarg (Thermo, Waters); passing it would
+   raise ``TypeError``, so the flag matches the old generic adapter,
+   which only ever threaded ``progress`` for readers that accept it.
+
+
+.. py:class:: MzTabReader
+
+   Bases: :py:obj:`_ImportResultReader`
+
+
+   mzML / mzTab / nmrML / Thermo / Waters: module ``read()`` returns a
+   result object exposing ``to_imported_dataset()``.
+
+   ``_supports_progress`` is ``False`` for modules whose ``read`` does
+   not accept a ``progress`` kwarg (Thermo, Waters); passing it would
+   raise ``TypeError``, so the flag matches the old generic adapter,
+   which only ever threaded ``progress`` for readers that accept it.
+
+
+.. py:class:: NmrMLReader
+
+   Bases: :py:obj:`_ImportResultReader`
+
+
+   mzML / mzTab / nmrML / Thermo / Waters: module ``read()`` returns a
+   result object exposing ``to_imported_dataset()``.
+
+   ``_supports_progress`` is ``False`` for modules whose ``read`` does
+   not accept a ``progress`` kwarg (Thermo, Waters); passing it would
+   raise ``TypeError``, so the flag matches the old generic adapter,
+   which only ever threaded ``progress`` for readers that accept it.
+
+
+.. py:class:: ThermoRawReader
+
+   Bases: :py:obj:`_ImportResultReader`
+
+
+   mzML / mzTab / nmrML / Thermo / Waters: module ``read()`` returns a
+   result object exposing ``to_imported_dataset()``.
+
+   ``_supports_progress`` is ``False`` for modules whose ``read`` does
+   not accept a ``progress`` kwarg (Thermo, Waters); passing it would
+   raise ``TypeError``, so the flag matches the old generic adapter,
+   which only ever threaded ``progress`` for readers that accept it.
+
+
+.. py:class:: WatersMassLynxReader
+
+   Bases: :py:obj:`_ImportResultReader`
+
+
+   mzML / mzTab / nmrML / Thermo / Waters: module ``read()`` returns a
+   result object exposing ``to_imported_dataset()``.
+
+   ``_supports_progress`` is ``False`` for modules whose ``read`` does
+   not accept a ``progress`` kwarg (Thermo, Waters); passing it would
+   raise ``TypeError``, so the flag matches the old generic adapter,
+   which only ever threaded ``progress`` for readers that accept it.
+
+
+.. py:class:: ImzMLReader
+
+   .. py:method:: read(inputs, opts, progress=None) -> ttio.importers.imported_dataset.ImportedDataset
+
+
+.. py:class:: BrukerReader
+
+   .. py:method:: read(inputs, opts, progress=None) -> ttio.importers.imported_dataset.ImportedDataset
+
+
+.. py:class:: JcampDxReader
+
+   .. py:method:: read(inputs, opts, progress=None) -> ttio.importers.imported_dataset.ImportedDataset
+
+
+.. py:class:: BamReader
+
+   Bases: :py:obj:`_GenomicReader`
+
+
+.. py:class:: SamReader
+
+   Bases: :py:obj:`_GenomicReader`
+
+
+.. py:class:: CramReader
+
+   Bases: :py:obj:`_GenomicReader`
+
+

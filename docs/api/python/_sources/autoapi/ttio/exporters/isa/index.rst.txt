@@ -47,8 +47,12 @@ Module Contents
    Return the ISA bundle as ``{filename: bytes}`` for ``dataset``.
 
 
-.. py:function:: write_bundle_for_dataset(dataset: ttio.spectral_dataset.SpectralDataset, directory: str | pathlib.Path) -> pathlib.Path
+.. py:function:: write_bundle_for_dataset(dataset: ttio.spectral_dataset.SpectralDataset, directory: str | pathlib.Path, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> pathlib.Path
 
    Write the ISA bundle to ``directory`` (creating it if needed).
+
+   Fires ``progress`` after each file is written; total = number of
+   files in the bundle (one investigation + one study + one JSON +
+   one per MS run).
 
 

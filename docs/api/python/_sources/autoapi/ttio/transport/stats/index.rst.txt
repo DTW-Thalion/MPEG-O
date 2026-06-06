@@ -1,0 +1,153 @@
+ttio.transport.stats
+====================
+
+.. py:module:: ttio.transport.stats
+
+.. autoapi-nested-parse::
+
+   Per-AccessUnit summary statistics (no payload decoding).
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.stats.AUStats
+
+
+Module Contents
+---------------
+
+.. py:class:: AUStats
+
+   Lightweight per-AU descriptor — every field is derivable from
+   an :class:`AccessUnit` without decoding signal-channel payload.
+   Used by the workbench server's ``stats-only`` and
+   ``stats-with-payload`` download modes.
+
+   Cross-language equivalents:
+     * Objective-C: ``TTIOAUStats``
+     * Java:       ``global.thalion.ttio.transport.AUStats``
+
+   The :meth:`json_string` form is byte-stable across languages
+   (sorted keys, no whitespace).
+
+
+   .. py:attribute:: au_sequence
+      :type:  int
+
+
+   .. py:attribute:: spectrum_class
+      :type:  int
+
+
+   .. py:attribute:: ms_level
+      :type:  int
+
+
+   .. py:attribute:: polarity
+      :type:  int
+
+
+   .. py:attribute:: retention_time
+      :type:  float
+
+
+   .. py:attribute:: precursor_mz
+      :type:  float
+
+
+   .. py:attribute:: precursor_charge
+      :type:  int
+
+
+   .. py:attribute:: ion_mobility
+      :type:  float
+
+
+   .. py:attribute:: base_peak_intensity
+      :type:  float
+
+
+   .. py:attribute:: channel_count
+      :type:  int
+
+
+   .. py:attribute:: total_elements
+      :type:  int
+
+
+   .. py:attribute:: payload_bytes
+      :type:  int
+
+
+   .. py:attribute:: chromosome
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: position
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: mapping_quality
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: flags
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_x
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_y
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: pixel_z
+      :type:  int
+      :value: 0
+
+
+
+   .. py:method:: from_access_unit(au: ttio.transport.packets.AccessUnit, au_sequence: int) -> AUStats
+      :classmethod:
+
+
+
+   .. py:method:: to_dict() -> dict[str, Any]
+
+      Mirrors :class:`TTIOAUStats` JSON shape: genomic and
+      image keys appear only for their respective spectrum
+      classes; all other keys are always present.
+
+
+
+   .. py:method:: json_string() -> str
+
+      Byte-stable JSON: sorted keys, no spaces. Matches the
+      ObjC ``NSJSONWritingSortedKeys`` output and Java
+      ``JsonOrderedSerializer`` output.
+
+
+
+   .. py:method:: json_string_for(au: ttio.transport.packets.AccessUnit, au_sequence: int) -> str
+      :classmethod:
+
+
+

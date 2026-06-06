@@ -39,7 +39,7 @@ This repository hosts three reference-implementation streams plus a desktop GUI 
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.0.0. | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.7.0. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
 | **Java (`global.thalion.ttio`)** | **Full parity with ObjC and Python, JDK 22, Maven.** Library + tio-browser combined `mvn test` is green across the suite. | `java/` |
 | **`tio-browser` (JavaFX desktop GUI)** | **v1.5.0 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
@@ -64,7 +64,7 @@ implementation streams.
 * **UV/Visible** — `UVVisSpectrum` keyed by `wavelength` (nm) + `absorbance`, with `pathLengthCm` + `solvent` metadata.
 * **2D correlation spectroscopy (2D-COS)** — `TwoDimensionalCorrelationSpectrum` holds synchronous + asynchronous rank-2 correlation matrices over a shared variable axis; gated behind `opt_native_2d_cos`.
 * **Chromatograms** — TIC / XIC / SRM traces persist as `Chromatogram` with a parallel-array chromatogram index, round-tripped via `<chromatogramList>` + `<index name="chromatogram">` in the mzML writer.
-* **MS imaging** — `MSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking (default 32×32 pixel tiles); inherits identifications / quantifications / provenance / access-policy from `SpectralDataset`.
+* **MS imaging** — `MSImage` stores a 3-D `[height, width, spectralPoints]` HDF5 dataset with tile-aligned chunking (default 32×32 pixel tiles); inherits identifications / quantifications / provenance / access-policy from `SpectralDataset`. As of v1.7.0 `MSImage` / `RamanImage` / `IRImage` share a common `Image` base + `ImageKind` enum, accessed uniformly via `imageForKind(kind)` / `images` (the old `image()` / `ramanImage()` / `irImage()` accessors were replaced).
 * **Genomic sequencing** — `GenomicRun` is a parallel run-and-element hierarchy alongside the spectrum-based classes. `AlignedRead` is the per-read value class (read_name, chromosome, position, mapping_quality, cigar, sequence, qualities, flags, mate-pair info — modelled on SAM/BAM). `GenomicIndex` carries parallel-array per-read scalars (offsets, lengths, chromosomes, positions, mapping qualities, flags) for region / unmapped / flag queries. `WrittenGenomicRun` is the write-side container. Storage under `/study/genomic_runs/<name>/` with `signal_channels/` for per-base byte arrays (sequences, qualities) and per-read parallel arrays (positions, flags, mapping_qualities) plus VL_STRING compounds (cigars, read_names, mate_info). See [`docs/genomic-runs.md`](docs/genomic-runs.md) for the data-model walkthrough.
 
 ### Genomic compression codecs
@@ -84,8 +84,8 @@ A complete genomic codec stack ships across all three languages with cross-langu
 
 ### The six data primitives
 
-* **SignalArray** — atomic typed-buffer unit conforming to `CVAnnotatable`; round-trips with axis descriptors and CV annotations. Supports `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128`.
-* **Spectrum** — named dictionary of SignalArrays with coordinate axes and CV metadata; specialized by MS / NMR / Raman / IR / UV-Vis / 2D-COS subclasses and persisted through the generic path with `@ttio_class` attributes.
+* **SignalArray** — atomic typed-buffer unit conforming to `CVAnnotatable`; round-trips with axis descriptors and CV annotations. Supports `float32` / `float64` / `int32` / `int64` / `uint32` / `complex128`. Buffer access is encapsulated (v1.7.0): Python `data` is a read-only zero-copy numpy view, Java `asDoubles()/asFloats()/asInts()/asLongs()` return defensive copies, ObjC stays `(readonly, copy)`.
+* **Spectrum** — named dictionary of SignalArrays with coordinate axes and CV metadata; specialized by MS / NMR / Raman / IR / UV-Vis / 2D-COS subclasses and persisted through the generic path with `@ttio_class` attributes. As of v1.7.0 subclass dispatch is keyed by the `SpectrumKind` enum (Python `ttio.enums.SpectrumKind`, Java `Enums.SpectrumKind`, ObjC `TTIOSpectrumKind`) rather than raw string comparison; the persisted `@spectrum_class` string is unchanged and remains the source of truth.
 * **AcquisitionRun** — ordered, indexable, streamable collection of Spectrum objects sharing an instrument configuration and provenance chain. Accepts any Spectrum subclass; signal-channel serialization is name-driven. Conforms to `Indexable` + `Streamable` + `Provenanceable` + `Encryptable` with per-run provenance chains. Also conforms to the modality-agnostic `Run` protocol (Phase 1+2; same surface as `GenomicRun`) so cross-modality code can iterate `dataset.runs.values()` uniformly and call `runs_for_sample(uri)` / `runs_of_modality(cls)` regardless of modality.
 * **CVAnnotation** — controlled-vocabulary parameter (ontology reference + accession + value + unit) attachable to any annotatable object. PSI-MS / nmrCV / Unimod accessions mapped via `CVTermMapper`.
 * **Identification** — link from a spectrum (or region) to a chemical entity, with confidence score and evidence chain. Persisted as a native HDF5 compound dataset.
@@ -105,6 +105,8 @@ A complete genomic codec stack ships across all three languages with cross-langu
 * **Streaming + query** — `StreamWriter` / `StreamReader` for incremental write + sequential read over runs of arbitrary size. `Query` evaluates compressed-domain predicates (RT range, MS level, polarity, precursor m/z range, base peak threshold) over the in-memory index without touching signal channels; a 10k-spectrum scan runs in ~0.2 ms in CI.
 
 ### Importers
+
+All importers and exporters are registered through a unified `Reader` / `Writer` registry (one entry per format) across the three languages (v1.7.0). Readers return an `ImportedDataset` draft with a write-through delegate, and advertise a per-language `requiredTool` (genomic readers report `samtools` in Python / ObjC; Java uses htsjdk and reports `null`).
 
 * **mzML 1.1** — SAX-parsed, base64 + zlib-aware, CV-mapped; populates activation method, isolation window, ion mobility, and chromatograms.
 * **nmrML 1.0+** — element-based acquisition parameters, int32/int64 FID payloads widened to complex128 on import, dimension-scale extraction. Validated against BMRB `bmse000325.nmrML`.

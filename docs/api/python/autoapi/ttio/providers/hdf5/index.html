@@ -10,6 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css?v=8cd3d715" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -191,7 +192,11 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/workbench_quickstart.html">Workbench client quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul class="current">
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../../index.html">ttio</a><input aria-label="Toggle navigation of ttio" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../../access_policy/index.html">ttio.access_policy</a></li>
@@ -223,6 +228,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../enums/index.html">ttio.enums</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/bam/index.html">ttio.exporters.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exporters/base/index.html">ttio.exporters.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/cram/index.html">ttio.exporters.cram</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/fasta/index.html">ttio.exporters.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/fastq/index.html">ttio.exporters.fastq</a></li>
@@ -232,6 +238,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/mzml/index.html">ttio.exporters.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/mztab/index.html">ttio.exporters.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exporters/registry/index.html">ttio.exporters.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exporters/writers/index.html">ttio.exporters.writers</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../feature/index.html">ttio.feature</a></li>
@@ -245,9 +253,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../../genomic_index/index.html">ttio.genomic_index</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../genomic_run/index.html">ttio.genomic_run</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../image/index.html">ttio.image</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bam/index.html">ttio.importers.bam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bam_dump/index.html">ttio.importers.bam_dump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/base/index.html">ttio.importers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/cram/index.html">ttio.importers.cram</a></li>
@@ -255,17 +265,24 @@
 <li class="toctree-l3"><a class="reference internal" href="../../importers/fasta/index.html">ttio.importers.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/fastq/index.html">ttio.importers.fastq</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/imported_dataset/index.html">ttio.importers.imported_dataset</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/imzml/index.html">ttio.importers.imzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/mzml/index.html">ttio.importers.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/mztab/index.html">ttio.importers.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/readers/index.html">ttio.importers.readers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/registry/index.html">ttio.importers.registry</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/sam/index.html">ttio.importers.sam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../io/index.html">ttio.io</a><input aria-label="Toggle navigation of ttio.io" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../io/progress/index.html">ttio.io.progress</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../ir_image/index.html">ttio.ir_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../ir_spectrum/index.html">ttio.ir_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../isolation_window/index.html">ttio.isolation_window</a></li>
@@ -275,7 +292,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../nmr_2d/index.html">ttio.nmr_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../pqc/index.html">ttio.pqc</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../protocols/indexable/index.html">ttio.protocols.indexable</a></li>
@@ -285,7 +302,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../provenance/index.html">ttio.provenance</a></li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" checked="" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" checked="" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l3"><a class="reference internal" href="../base/index.html">ttio.providers.base</a></li>
 <li class="toctree-l3 current current-page"><a class="current reference internal" href="#">ttio.providers.hdf5</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../memory/index.html">ttio.providers.memory</a></li>
@@ -299,13 +316,15 @@
 <li class="toctree-l2"><a class="reference internal" href="../../raman_image/index.html">ttio.raman_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../raman_spectrum/index.html">ttio.raman_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sample/index.html">ttio.sample</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../signal_array/index.html">ttio.signal_array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../signatures/index.html">ttio.signatures</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../spectral_dataset/index.html">ttio.spectral_dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../spectrum/index.html">ttio.spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../stream_reader/index.html">ttio.stream_reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../stream_writer/index.html">ttio.stream_writer</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../subject/index.html">ttio.subject</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/fasta_export_cli/index.html">ttio.tools.fasta_export_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/fasta_import_cli/index.html">ttio.tools.fasta_import_cli</a></li>
@@ -319,23 +338,51 @@
 <li class="toctree-l3"><a class="reference internal" href="../../tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../tools/workbench_cli/index.html">ttio.tools.workbench_cli</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../transition_list/index.html">ttio.transition_list</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../transport/arrow_ipc/index.html">ttio.transport.arrow_ipc</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/client/index.html">ttio.transport.client</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/codec/index.html">ttio.transport.codec</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/encrypted/index.html">ttio.transport.encrypted</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transport/ingest/index.html">ttio.transport.ingest</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/packets/index.html">ttio.transport.packets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/server/index.html">ttio.transport.server</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../transport/simulator/index.html">ttio.transport.simulator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transport/stats/index.html">ttio.transport.stats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../transport/walker/index.html">ttio.transport.walker</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../value_range/index.html">ttio.value_range</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../verifier/index.html">ttio.verifier</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../workbench/index.html">ttio.workbench</a><input aria-label="Toggle navigation of ttio.workbench" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/auth/index.html">ttio.workbench.auth</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/auth_providers/index.html">ttio.workbench.auth_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/client/index.html">ttio.workbench.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/cohort/index.html">ttio.workbench.cohort</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/containers/index.html">ttio.workbench.containers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/federation/index.html">ttio.workbench.federation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/jobs/index.html">ttio.workbench.jobs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/pipeline/index.html">ttio.workbench.pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/pqc/index.html">ttio.workbench.pqc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/session_proxy/index.html">ttio.workbench.session_proxy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/sessions/index.html">ttio.workbench.sessions</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../workbench/transport/index.html">ttio.workbench.transport</a><input aria-label="Toggle navigation of ttio.workbench.transport" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/download/index.html">ttio.workbench.transport.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/errors/index.html">ttio.workbench.transport.errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/handshake/index.html">ttio.workbench.transport.handshake</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/resume/index.html">ttio.workbench.transport.resume</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/selective_access/index.html">ttio.workbench.transport.selective_access</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/upload/index.html">ttio.workbench.transport.upload</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../written_genomic_run/index.html">ttio.written_genomic_run</a></li>
 </ul>
 </li>
@@ -415,63 +462,111 @@ Java:        <code class="docutils literal notranslate"><span class="pre">global
 Java:        <code class="docutils literal notranslate"><span class="pre">global.thalion.ttio.providers.Hdf5Provider</span></code></p>
 </dd>
 </dl>
+<p>Construct a provider, optionally pre-bound to an open h5py file.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>file</strong> (<a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><em>h5py.File</em></a><em>, </em><em>optional</em>) – An already-open file handle to adopt. <code class="docutils literal notranslate"><span class="pre">None</span></code> (the
+default) creates a closed provider; <a class="reference internal" href="#ttio.providers.hdf5.Hdf5Provider.open" title="ttio.providers.hdf5.Hdf5Provider.open"><code class="xref py py-meth docutils literal notranslate"><span class="pre">open()</span></code></a> must
+then be called before any group/dataset access.</p>
+</dd>
+</dl>
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.open">
 <span class="sig-name descname"><span class="pre">open</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path_or_url</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">mode</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'r'</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.providers.hdf5.Hdf5Provider" title="ttio.providers.hdf5.Hdf5Provider"><span class="pre">Hdf5Provider</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.open" title="Link to this definition">¶</a></dt>
-<dd><p>Open an HDF5 file under this provider. Supports both factory
-and instance call styles per — see
-<a class="reference internal" href="../base/index.html#ttio.providers.base.StorageProvider.open" title="ttio.providers.base.StorageProvider.open"><code class="xref py py-class docutils literal notranslate"><span class="pre">ttio.providers.base.StorageProvider.open</span></code></a>.</p>
+<dd><p>Open an HDF5 file (or fsspec URL) and return a bound provider.</p>
+<p>Supports both factory and instance call styles per the
+<a class="reference internal" href="../base/index.html#ttio.providers.base.StorageProvider.open" title="ttio.providers.base.StorageProvider.open"><code class="xref py py-class docutils literal notranslate"><span class="pre">ttio.providers.base.StorageProvider.open</span></code></a> contract:
+<code class="docutils literal notranslate"><span class="pre">Hdf5Provider.open(&quot;/path&quot;,</span> <span class="pre">mode=&quot;w&quot;)</span></code> returns a fresh
+provider; <code class="docutils literal notranslate"><span class="pre">p</span> <span class="pre">=</span> <span class="pre">Hdf5Provider();</span> <span class="pre">p.open(&quot;/path&quot;,</span> <span class="pre">mode=&quot;w&quot;)</span></code>
+mutates and returns the same instance.</p>
+<p><code class="docutils literal notranslate"><span class="pre">fsspec</span></code> URL schemes (<code class="docutils literal notranslate"><span class="pre">s3://</span></code>, <code class="docutils literal notranslate"><span class="pre">http(s)://</span></code>, etc.) are
+opened via the optional <code class="docutils literal notranslate"><span class="pre">ttio[cloud]</span></code> dependency; the
+<code class="docutils literal notranslate"><span class="pre">file://</span></code> scheme is stripped and the rest of the URL is
+treated as a local path.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>path_or_url</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a>) – Filesystem path or fsspec-compatible URL. In factory
+style this is the first positional argument; in instance
+style it is the second.</p></li>
+<li><p><strong>mode</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><em>str</em></a><em>, </em><em>optional</em>) – h5py file-open mode (<code class="docutils literal notranslate"><span class="pre">&quot;r&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;r+&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;w&quot;</span></code>,
+<code class="docutils literal notranslate"><span class="pre">&quot;w-&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;a&quot;</span></code>). Default <code class="docutils literal notranslate"><span class="pre">&quot;r&quot;</span></code>.</p></li>
+<li><p><strong>**kwargs</strong> – Forwarded to <a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">h5py.File</span></code></a>.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p><em>Hdf5Provider</em> – Bound provider with <a class="reference internal" href="#ttio.providers.hdf5.Hdf5Provider.is_open" title="ttio.providers.hdf5.Hdf5Provider.is_open"><code class="xref py py-attr docutils literal notranslate"><span class="pre">is_open</span></code></a> set to <code class="docutils literal notranslate"><span class="pre">True</span></code>.</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#TypeError" title="(in Python v3.14)"><strong>TypeError</strong></a> – If no path or URL is supplied.</p></li>
+<li><p><a class="reference external" href="https://docs.python.org/3/library/exceptions.html#ImportError" title="(in Python v3.14)"><strong>ImportError</strong></a> – If a URL scheme is given but <code class="docutils literal notranslate"><span class="pre">fsspec</span></code> is not installed.</p></li>
+</ul>
+</dd>
+</dl>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.provider_name">
 <span class="sig-name descname"><span class="pre">provider_name</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.provider_name"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.provider_name" title="Link to this definition">¶</a></dt>
-<dd><p>Short identifier used for logging and registry lookup
-(<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;memory&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;zarr&quot;</span></code>, …).</p>
-<p>Exposed as a method (not a property) to mirror the ObjC
-<code class="docutils literal notranslate"><span class="pre">-providerName</span></code> selector and Java <code class="docutils literal notranslate"><span class="pre">providerName()</span></code> getter.
-— Provisional storage-provider convergence.</p>
+<dd><p>Return the provider’s stable identifier string (<code class="docutils literal notranslate"><span class="pre">&quot;hdf5&quot;</span></code>).</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.root_group">
 <span class="sig-name descname"><span class="pre">root_group</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../base/index.html#ttio.providers.base.StorageGroup" title="ttio.providers.base.StorageGroup"><span class="pre">ttio.providers.base.StorageGroup</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.root_group"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.root_group" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return the file’s root group as a <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageGroup</span></code>.</p>
+<p>The root is the top-level container; child groups and
+datasets are reached via <code class="xref py py-meth docutils literal notranslate"><span class="pre">StorageGroup.open_group()</span></code> /
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">StorageGroup.open_dataset()</span></code>.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.is_open">
 <span class="sig-name descname"><span class="pre">is_open</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.is_open"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.is_open" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> when the provider has an open backing file.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.close">
 <span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.close" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Close the underlying h5py file if open.</p>
+<p>Idempotent: a close error or a second call is silently
+swallowed so the method is safe to call from cleanup paths.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.supports_chunking">
 <span class="sig-name descname"><span class="pre">supports_chunking</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.supports_chunking"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.supports_chunking" title="Link to this definition">¶</a></dt>
-<dd><p>Returns True if the backend honors <code class="docutils literal notranslate"><span class="pre">chunk_size</span></code> in
-<code class="xref py py-meth docutils literal notranslate"><span class="pre">StorageGroup.create_dataset()</span></code>. HDF5 returns True; Memory
-and SQLite return False (chunk_size is accepted for interface
-compatibility but silently ignored).</p>
-<p>Callers that depend on chunked I/O for streaming large datasets
-can query this to degrade gracefully.</p>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> — HDF5 always supports chunked storage.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.supports_compression">
 <span class="sig-name descname"><span class="pre">supports_compression</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.supports_compression"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.supports_compression" title="Link to this definition">¶</a></dt>
-<dd><p>Returns True if the backend honors <code class="docutils literal notranslate"><span class="pre">compression</span></code> /
-<code class="docutils literal notranslate"><span class="pre">compression_level</span></code>. HDF5 returns True (zlib + LZ4); Memory
-and SQLite return False.</p>
+<dd><p>Return <code class="docutils literal notranslate"><span class="pre">True</span></code> — HDF5 supports the documented compression filters.</p>
 </dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.providers.hdf5.Hdf5Provider.native_handle">
 <span class="sig-name descname"><span class="pre">native_handle</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><span class="pre">h5py.File</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/providers/hdf5.html#Hdf5Provider.native_handle"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.providers.hdf5.Hdf5Provider.native_handle" title="Link to this definition">¶</a></dt>
-<dd><p>Underlying h5py.File — escape hatch for byte-level code
-(signature hashing, encryption, native compression filters).</p>
+<dd><p>Return the underlying <a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><code class="xref py py-class docutils literal notranslate"><span class="pre">h5py.File</span></code></a> handle.</p>
+<div class="deprecated">
+<p><span class="versionmodified deprecated">Deprecated since version ``native_handle()``: </span>is deprecated and slated for removal in a
+future coordinated major. Reach storage through
+<a class="reference internal" href="#ttio.providers.hdf5.Hdf5Provider.root_group" title="ttio.providers.hdf5.Hdf5Provider.root_group"><code class="xref py py-meth docutils literal notranslate"><span class="pre">root_group()</span></code></a> and the <code class="xref py py-class docutils literal notranslate"><span class="pre">StorageGroup</span></code> protocol
+instead. (Parity with the Java SDK’s
+<code class="docutils literal notranslate"><span class="pre">&#64;Deprecated(forRemoval=true)</span></code>.)</p>
+</div>
+<p>Escape hatch for byte-level code (signature hashing,
+encryption, native compression filters) that has to bypass
+the provider abstraction. Callers must not close the handle;
+ownership remains with the provider.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>h5py.File</em></p>
+</dd>
+</dl>
 </dd></dl>
 
 </dd></dl>

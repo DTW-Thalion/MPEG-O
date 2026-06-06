@@ -1,0 +1,329 @@
+ttio.transport.walker
+=====================
+
+.. py:module:: ttio.transport.walker
+
+.. autoapi-nested-parse::
+
+   Dataset walker — produces transport-stream events from a
+   :class:`SpectralDataset` filtered through an :class:`AUFilter`.
+
+   This is the Python equivalent of the ObjC ``TTIODatasetWalker`` and
+   Java ``DatasetWalker``. Where ObjC/Java use a visitor protocol, the
+   Python form is a generator that yields :class:`WalkerEvent`
+   instances — more idiomatic and trivially composable with ``async``
+   producers via ``async for`` adapters.
+
+   Used by:
+     * :func:`ttio.transport.server._emit_stream` — encodes each event
+       as a transport packet.
+     * Workbench Server S3 (out-of-tree) — drives binary, stats-only,
+       and stats-with-payload download modes from the same iteration.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.walker.WalkerEvent
+   ttio.transport.walker.StreamHeaderEvent
+   ttio.transport.walker.DatasetHeaderEvent
+   ttio.transport.walker.AccessUnitEvent
+   ttio.transport.walker.EndOfDatasetEvent
+   ttio.transport.walker.EndOfStreamEvent
+   ttio.transport.walker.EncryptionAlgorithmEvent
+   ttio.transport.walker.DatasetProvenanceEvent
+   ttio.transport.walker.SubjectMetadataEvent
+   ttio.transport.walker.SampleMetadataEvent
+   ttio.transport.walker.ReferenceGroupEvent
+   ttio.transport.walker.ImageEvent
+   ttio.transport.walker.RamanImageEvent
+   ttio.transport.walker.IRImageEvent
+   ttio.transport.walker.IdentificationsTableEvent
+   ttio.transport.walker.QuantificationsTableEvent
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.transport.walker.walk_dataset
+
+
+Module Contents
+---------------
+
+.. py:class:: WalkerEvent
+
+   Marker base class for walker events. Use ``isinstance`` /
+   pattern matching in consumers.
+
+
+.. py:class:: StreamHeaderEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   Marker base class for walker events. Use ``isinstance`` /
+   pattern matching in consumers.
+
+
+   .. py:attribute:: format_version
+      :type:  str
+
+
+   .. py:attribute:: title
+      :type:  str
+
+
+   .. py:attribute:: isa_investigation
+      :type:  str
+
+
+   .. py:attribute:: features
+      :type:  list[str]
+
+
+   .. py:attribute:: n_datasets
+      :type:  int
+
+
+.. py:class:: DatasetHeaderEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   Marker base class for walker events. Use ``isinstance`` /
+   pattern matching in consumers.
+
+
+   .. py:attribute:: dataset_id
+      :type:  int
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  int
+
+
+   .. py:attribute:: spectrum_class
+      :type:  str
+
+
+   .. py:attribute:: channel_names
+      :type:  list[str]
+
+
+   .. py:attribute:: instrument_json
+      :type:  str
+
+
+   .. py:attribute:: expected_au_count
+      :type:  int
+
+
+.. py:class:: AccessUnitEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   Marker base class for walker events. Use ``isinstance`` /
+   pattern matching in consumers.
+
+
+   .. py:attribute:: au
+      :type:  ttio.transport.packets.AccessUnit
+
+
+   .. py:attribute:: dataset_id
+      :type:  int
+
+
+   .. py:attribute:: au_sequence
+      :type:  int
+
+
+.. py:class:: EndOfDatasetEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   Marker base class for walker events. Use ``isinstance`` /
+   pattern matching in consumers.
+
+
+   .. py:attribute:: dataset_id
+      :type:  int
+
+
+   .. py:attribute:: final_au_sequence
+      :type:  int
+
+
+.. py:class:: EndOfStreamEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   Marker base class for walker events. Use ``isinstance`` /
+   pattern matching in consumers.
+
+
+.. py:class:: EncryptionAlgorithmEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.1 — dataset-level ``@encrypted`` algorithm name.
+
+
+   .. py:attribute:: algorithm
+      :type:  str
+
+
+.. py:class:: DatasetProvenanceEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.2 — dataset-level provenance chain.
+
+
+   .. py:attribute:: records
+      :type:  list
+
+
+.. py:class:: SubjectMetadataEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.3 — Subject rows.
+
+
+   .. py:attribute:: rows
+      :type:  list
+
+
+.. py:class:: SampleMetadataEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.3 — Sample rows.
+
+
+   .. py:attribute:: rows
+      :type:  list
+
+
+.. py:class:: ReferenceGroupEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.4 — one embedded reference (single ReferenceImport).
+
+
+   .. py:attribute:: reference
+      :type:  object
+
+
+.. py:class:: ImageEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.5 — embedded MSImage cube.
+
+
+   .. py:attribute:: image
+      :type:  object
+
+
+.. py:class:: RamanImageEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.5 — embedded RamanImage cube.
+
+
+   .. py:attribute:: image
+      :type:  object
+
+
+.. py:class:: IRImageEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.5 — embedded IRImage cube.
+
+
+   .. py:attribute:: image
+      :type:  object
+
+
+.. py:class:: IdentificationsTableEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.6 — Identification rows.
+
+
+   .. py:attribute:: rows
+      :type:  list
+
+
+.. py:class:: QuantificationsTableEvent
+
+   Bases: :py:obj:`WalkerEvent`
+
+
+   §5.4.6 — Quantification rows.
+
+
+   .. py:attribute:: rows
+      :type:  list
+
+
+.. py:function:: walk_dataset(dataset: ttio.spectral_dataset.SpectralDataset, filter: Optional[ttio.transport.filters.AUFilter] = None) -> Iterator[WalkerEvent]
+
+   Generator that yields the canonical transport-stream event
+   sequence for the given dataset:
+
+     1. :class:`StreamHeaderEvent` once.
+     1a. v0.11 §5.4 prelude events (when populated):
+           :class:`EncryptionAlgorithmEvent`,
+           :class:`DatasetProvenanceEvent`,
+           :class:`SubjectMetadataEvent`,
+           :class:`SampleMetadataEvent`,
+           :class:`ReferenceGroupEvent` (one per reference, sorted
+           by URI key),
+           :class:`ImageEvent`,
+           :class:`RamanImageEvent`,
+           :class:`IRImageEvent`,
+           :class:`IdentificationsTableEvent`,
+           :class:`QuantificationsTableEvent`.
+     2. :class:`DatasetHeaderEvent` per matched dataset.
+     3. :class:`AccessUnitEvent` per matched AU (spectral + genomic).
+     4. :class:`EndOfDatasetEvent` per matched dataset.
+     5. :class:`EndOfStreamEvent` once.
+
+   Iteration order matches :meth:`TransportWriter.write_dataset` —
+   the byte form emitted by encoding the events one-by-one is
+   identical to the unfiltered writer output (mod filter cuts).
+
+   :param dataset: A :class:`SpectralDataset` to walk.
+   :param filter:  Optional :class:`AUFilter`. ``None`` emits every
+                   AU in dataset iteration order.
+
+

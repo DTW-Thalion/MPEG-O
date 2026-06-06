@@ -31,5 +31,6 @@ Submodules
    /autoapi/ttio/tools/ttio_pqc_cli/index
    /autoapi/ttio/tools/ttio_sign_cli/index
    /autoapi/ttio/tools/ttio_verify_cli/index
+   /autoapi/ttio/tools/workbench_cli/index
 
 

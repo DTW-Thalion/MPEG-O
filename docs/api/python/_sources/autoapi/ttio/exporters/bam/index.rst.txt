@@ -38,6 +38,14 @@ ttio.exporters.bam
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.bam.PROGRESS_INTERVAL_READS
+
+
 Classes
 -------
 
@@ -48,6 +56,10 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:data:: PROGRESS_INTERVAL_READS
+   :value: 1000
+
 
 .. py:class:: BamWriter(path: str | os.PathLike[str])
 
@@ -64,13 +76,23 @@ Module Contents
    :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
    is missing at first call (from M87).
 
+   Configure the writer with an output BAM path.
+
+   :param path: Destination BAM file path. The path is stored verbatim;
+                the file is not opened or created until :meth:`write` runs.
+   :type path: str or os.PathLike
+
 
    .. py:property:: path
       :type: pathlib.Path
 
 
+      Return the configured output path as a :class:`pathlib.Path`.
 
-   .. py:method:: write(run: ttio.written_genomic_run.WrittenGenomicRun, provenance_records: list[ttio.provenance.ProvenanceRecord] | None = None, sort: bool = True) -> None
+      :returns: *pathlib.Path* -- The destination path supplied at construction.
+
+
+   .. py:method:: write(run: ttio.written_genomic_run.WrittenGenomicRun, provenance_records: list[ttio.provenance.ProvenanceRecord] | None = None, sort: bool = True, *, progress: ProgressSinkLike | None = None) -> None
 
       Serialise ``run`` to the configured output path.
 

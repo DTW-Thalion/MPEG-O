@@ -148,13 +148,19 @@ config, spectrum index, and optional chromatograms.</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code><a href="../Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">AcquisitionRun.</span><code><a href="../AcquisitionRun.html#nextObject()" class="member-name-link">nextObject</a>()</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Advance the stream cursor and return the next spectrum.</div>
+</div>
 <div class="col-first odd-row-color"><code><a href="../Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">StreamReader.</span><code><a href="../StreamReader.html#nextSpectrum()" class="member-name-link">nextSpectrum</a>()</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Advance the cursor and return the next spectrum.</div>
+</div>
 <div class="col-first even-row-color"><code><a href="../Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">AcquisitionRun.</span><code><a href="../AcquisitionRun.html#objectAtIndex(int)" class="member-name-link">objectAtIndex</a><wbr>(int&nbsp;index)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Materialize the spectrum at the given index.</div>
+</div>
 </div>
 <div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio</a> that return types with arguments of type <a href="../Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></span></div>
 <div class="summary-table three-column-summary">
@@ -180,6 +186,13 @@ config, spectrum index, and optional chromatograms.</div>
 <div class="col-first even-row-color"><code>static <a href="../Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">JcampDxReader.</span><code><a href="../importers/JcampDxReader.html#readSpectrum(java.nio.file.Path)" class="member-name-link">readSpectrum</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><code>static <a href="../Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">JcampDxReader.</span><code><a href="../importers/JcampDxReader.html#readSpectrum(java.nio.file.Path,global.thalion.ttio.io.ProgressSink)" class="member-name-link">readSpectrum</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Overload of <a href="../importers/JcampDxReader.html#readSpectrum(java.nio.file.Path)"><code>JcampDxReader.readSpectrum(Path)</code></a> that accepts a
+<a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
 </div>
 </section>
 </li>

@@ -123,7 +123,9 @@ the order they are declared.</div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusType,
  double&nbsp;spectrometerFrequencyMHz)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Pre-modality overload retained for backward compatibility.</div>
+</div>
 <div class="col-first odd-row-color"><code>&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../AcquisitionRun.html#%3Cinit%3E(java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.SpectrumIndex,global.thalion.ttio.InstrumentConfig,java.util.Map,java.util.List,java.util.List,java.lang.String,double,java.lang.String)" class="member-name-link">AcquisitionRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
@@ -159,7 +161,10 @@ the order they are declared.</div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName,
  <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
  <a href="../InstrumentConfig.html" title="class in global.thalion.ttio">InstrumentConfig</a>&nbsp;instrumentConfig)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Construct a writer targeting a new or existing <code>.tio</code>
+file.</div>
+</div>
 </div>
 </section>
 </li>
@@ -334,12 +339,35 @@ that defaults the Phase 2c-T <code>WrittenGenomicRun.bulkV2Blobs</code> to <code
 <div class="block">Parse the file and return an unaligned <a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a>.</div>
 </div>
 <div class="col-first odd-row-color"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">FastaReader.</span><code><a href="../importers/FastaReader.html#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+<div class="col-second odd-row-color"><span class="type-name-label">FastqReader.</span><code><a href="../importers/FastqReader.html#read(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;platform,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;referenceUri,
+ <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Parse the file and return an unaligned <a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a>,
+firing <code>progress.onProgress(readsDone, -1L)</code> every
+<a href="../importers/FastqReader.html#PROGRESS_INTERVAL_READS"><code>FastqReader.PROGRESS_INTERVAL_READS</code></a> records during the parse phase
+and a final <code>onProgress(total, total)</code> once the record
+count is known.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">FastaReader.</span><code><a href="../importers/FastaReader.html#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;platform,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;referenceUri,
  <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode)</code></div>
-<div class="col-last odd-row-color">
+<div class="col-last even-row-color">
 <div class="block">Parse the file as a set of unaligned reads.</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">FastaReader.</span><code><a href="../importers/FastaReader.html#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;platform,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;referenceUri,
+ <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Parse the file as a set of unaligned reads, emitting per-read
+<a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks.</div>
 </div>
 </div>
 </section>

@@ -59,6 +59,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String)" tabindex="0">write(AcquisitionRun, String)</a></li>
+<li><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(AcquisitionRun, String, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -107,6 +108,15 @@ Python: <code>ttio.exporters.nmrml</code></p></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Write an NMR AcquisitionRun as nmrML.</div>
 </div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of <a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String)"><code>write(AcquisitionRun, String)</code></a> that
+fires a single <code>progress.onProgress(1, 1)</code> once the file
+is on disk.</div>
+</div>
 </div>
 </div>
 </div>
@@ -135,6 +145,24 @@ Python: <code>ttio.exporters.nmrml</code></p></div>
 <dt>Parameters:</dt>
 <dd><code>run</code> - the acquisition run (must have chemical_shift and intensity channels)</dd>
 <dd><code>path</code> - output file path</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="write(global.thalion.ttio.AcquisitionRun,java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">Stage D overload of <a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String)"><code>write(AcquisitionRun, String)</code></a> that
+fires a single <code>progress.onProgress(1, 1)</code> once the file
+is on disk. nmrML stores a single 1-D spectrum per file, so the
+per-spectrum cadence collapses to a single done fire.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

@@ -25,6 +25,14 @@ ttio.exporters.jcamp_dx
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.jcamp_dx.PROGRESS_INTERVAL_SPECTRA
+
+
 Functions
 ---------
 
@@ -38,7 +46,11 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: write_raman_spectrum(spectrum: ttio.raman_spectrum.RamanSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn') -> None
+.. py:data:: PROGRESS_INTERVAL_SPECTRA
+   :value: 1
+
+
+.. py:function:: write_raman_spectrum(spectrum: ttio.raman_spectrum.RamanSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn', progress: ttio.io.progress.ProgressSinkLike | None = None) -> None
 
    Write ``spectrum`` to a JCAMP-DX 5.01 Raman file at ``path``.
 
@@ -46,7 +58,7 @@ Module Contents
    forms require equispaced wavenumber sampling (M76).
 
 
-.. py:function:: write_ir_spectrum(spectrum: ttio.ir_spectrum.IRSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn') -> None
+.. py:function:: write_ir_spectrum(spectrum: ttio.ir_spectrum.IRSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn', progress: ttio.io.progress.ProgressSinkLike | None = None) -> None
 
    Write ``spectrum`` to a JCAMP-DX 5.01 IR file at ``path``.
 
@@ -54,7 +66,7 @@ Module Contents
    forms require equispaced wavenumber sampling (M76).
 
 
-.. py:function:: write_uv_vis_spectrum(spectrum: ttio.uv_vis_spectrum.UVVisSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn') -> None
+.. py:function:: write_uv_vis_spectrum(spectrum: ttio.uv_vis_spectrum.UVVisSpectrum, path: str | pathlib.Path, title: str = '', *, encoding: str = 'affn', progress: ttio.io.progress.ProgressSinkLike | None = None) -> None
 
    Write ``spectrum`` to a JCAMP-DX 5.01 UV/VIS file at ``path``.
 

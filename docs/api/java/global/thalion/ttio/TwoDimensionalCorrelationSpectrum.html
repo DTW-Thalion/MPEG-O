@@ -121,7 +121,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;perturbation,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;perturbationUnit,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sourceModality)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct a 2D-COS spectrum from synchronous and asynchronous
+correlation matrices computed by <a href="analysis/TwoDCos.html" title="class in global.thalion.ttio.analysis"><code>TwoDCos</code></a>.</div>
+</div>
 </div>
 </section>
 </li>
@@ -202,6 +205,29 @@ as flat <code>double[]</code> of length <code>size × size</code>.
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;perturbation,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;perturbationUnit,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sourceModality)</span></div>
+<div class="block">Construct a 2D-COS spectrum from synchronous and asynchronous
+correlation matrices computed by <a href="analysis/TwoDCos.html" title="class in global.thalion.ttio.analysis"><code>TwoDCos</code></a>.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>synchronousMatrix</code> - row-major <code>size × size</code> matrix
+                          of synchronous correlations</dd>
+<dd><code>asynchronousMatrix</code> - row-major <code>size × size</code> matrix
+                          of asynchronous correlations</dd>
+<dd><code>size</code> - side length of both matrices</dd>
+<dd><code>variableAxis</code> - axis descriptor for the shared
+                          variable dimension</dd>
+<dd><code>perturbation</code> - perturbation name (e.g.
+                          <code>"temperature"</code>); null becomes
+                          empty</dd>
+<dd><code>perturbationUnit</code> - perturbation unit (e.g. <code>"K"</code>);
+                          null becomes empty</dd>
+<dd><code>sourceModality</code> - source modality label (e.g.
+                          <code>"IR"</code>, <code>"Raman"</code>); null
+                          becomes empty</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - when either matrix is null or
+        the matrix lengths don't equal <code>size*size</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -218,6 +244,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
 <h3>synchronousMatrix</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">synchronousMatrix</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Row-major synchronous correlation matrix.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -226,6 +256,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
 <h3>asynchronousMatrix</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">asynchronousMatrix</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Row-major asynchronous correlation matrix.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -243,6 +277,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
 <h3>variableAxis</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a></span>&nbsp;<span class="element-name">variableAxis</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Axis descriptor for the shared variable dimension.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -251,6 +289,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
 <h3>perturbation</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">perturbation</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Perturbation label (e.g. <code>"temperature"</code>); empty when unspecified.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -259,6 +301,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
 <h3>perturbationUnit</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">perturbationUnit</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Perturbation unit (e.g. <code>"K"</code>); empty when unspecified.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -267,6 +313,10 @@ as flat <code>double[]</code> of length <code>size × size</code>.
 <h3>sourceModality</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">sourceModality</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Source modality label (e.g. <code>"IR"</code>, <code>"Raman"</code>); empty when unspecified.</dd>
+</dl>
 </div>
 </section>
 </li>

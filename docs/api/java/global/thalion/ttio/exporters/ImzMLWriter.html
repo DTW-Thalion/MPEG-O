@@ -56,10 +56,17 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
 <li><a href="#nested-class-summary" tabindex="0">Nested Class Summary</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_SPECTRA" tabindex="0">PROGRESS_INTERVAL_SPECTRA</a></li>
+</ol>
+</li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String)" tabindex="0">write(List, Path, Path, String, int, int, int, double, double, String, String)</a></li>
+<li><a href="#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(List, Path, Path, String, int, int, int, double, double, String, String, ProgressSink)</a></li>
 <li><a href="#writeFromImport(global.thalion.ttio.importers.ImzMLReader.ImzMLImport,java.nio.file.Path,java.nio.file.Path)" tabindex="0">writeFromImport(ImzMLReader.ImzMLImport, Path, Path)</a></li>
 </ol>
 </li>
@@ -116,6 +123,24 @@ Objective-C: <code>TTIOImzMLWriter</code></p></div>
 </div>
 </section>
 </li>
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_SPECTRA" class="member-name-link">PROGRESS_INTERVAL_SPECTRA</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during imzML pixel serialisation.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ========== METHOD SUMMARY =========== -->
 <li>
 <section class="method-summary" id="method-summary">
@@ -143,10 +168,30 @@ Objective-C: <code>TTIOImzMLWriter</code></p></div>
 <div class="block">Write <code>pixels</code> as an imzML + .ibd pair.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="ImzMLWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeFromImport(global.thalion.ttio.importers.ImzMLReader.ImzMLImport,java.nio.file.Path,java.nio.file.Path)" class="member-name-link">writeFromImport</a><wbr>(<a href="../importers/ImzMLReader.ImzMLImport.html" title="class in global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a>&nbsp;imp,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../importers/ImzMLReader.PixelSpectrum.html" title="class in global.thalion.ttio.importers">ImzMLReader.PixelSpectrum</a>&gt;&nbsp;pixels,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mode,
+ int&nbsp;gridMaxX,
+ int&nbsp;gridMaxY,
+ int&nbsp;gridMaxZ,
+ double&nbsp;pixelSizeX,
+ double&nbsp;pixelSizeY,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;scanPattern,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;uuidHex,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of the main <a href="#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String)"><code>write(List, Path, Path, String, int, int, int, double, double, String, String)</code></a> entry that fires
+<code>progress.onProgress(pixelsDone, totalPixels)</code> every
+<a href="#PROGRESS_INTERVAL_SPECTRA"><code>PROGRESS_INTERVAL_SPECTRA</code></a> pixels during the .ibd
+encode loop and a final fire once both .imzML + .ibd are
+flushed to disk.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="ImzMLWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeFromImport(global.thalion.ttio.importers.ImzMLReader.ImzMLImport,java.nio.file.Path,java.nio.file.Path)" class="member-name-link">writeFromImport</a><wbr>(<a href="../importers/ImzMLReader.ImzMLImport.html" title="class in global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a>&nbsp;imp,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Round-trip helper: re-emit an <a href="../importers/ImzMLReader.ImzMLImport.html" title="class in global.thalion.ttio.importers"><code>ImzMLReader.ImzMLImport</code></a>.</div>
 </div>
 </div>
@@ -161,6 +206,33 @@ Objective-C: <code>TTIOImzMLWriter</code></p></div>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_SPECTRA">
+<h3>PROGRESS_INTERVAL_SPECTRA</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_SPECTRA</span></div>
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during imzML pixel serialisation. Mirrors
+  <code>ImzMLReader.PROGRESS_INTERVAL_SPECTRA = 100</code>.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.exporters.ImzMLWriter.PROGRESS_INTERVAL_SPECTRA">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ============ METHOD DETAIL ========== -->
 <li>
 <section class="method-details" id="method-detail">
@@ -192,6 +264,34 @@ Objective-C: <code>TTIOImzMLWriter</code></p></div>
 <dd><code>pixelSizeX</code> - /Y Pixel size in micrometres; 0 =&gt; omit cvParam.</dd>
 <dd><code>scanPattern</code> - Free-text scan pattern ("flyback", etc.).</dd>
 <dd><code>uuidHex</code> - Optional UUID string (dashes/braces tolerated); null =&gt; random UUID4.</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="ImzMLWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../importers/ImzMLReader.PixelSpectrum.html" title="class in global.thalion.ttio.importers">ImzMLReader.PixelSpectrum</a>&gt;&nbsp;pixels,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;mode,
+ int&nbsp;gridMaxX,
+ int&nbsp;gridMaxY,
+ int&nbsp;gridMaxZ,
+ double&nbsp;pixelSizeX,
+ double&nbsp;pixelSizeY,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;scanPattern,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;uuidHex,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">Stage D overload of the main <a href="#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String)"><code>write(List, Path, Path, String, int, int, int, double, double, String, String)</code></a> entry that fires
+<code>progress.onProgress(pixelsDone, totalPixels)</code> every
+<a href="#PROGRESS_INTERVAL_SPECTRA"><code>PROGRESS_INTERVAL_SPECTRA</code></a> pixels during the .ibd
+encode loop and a final fire once both .imzML + .ibd are
+flushed to disk.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

@@ -67,7 +67,7 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><a href="#global.thalion.ttio.providers">global.thalion.ttio.providers</a></div>
 <div class="col-last odd-row-color">
-<div class="block">Storage/transport provider abstraction — .</div>
+<div class="block">Storage/transport provider abstraction.</div>
 </div>
 </div>
 <section class="class-uses">
@@ -103,10 +103,14 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code><a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5Group.</span><code><a href="../Hdf5Group.html#createGroup(java.lang.String)" class="member-name-link">createGroup</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Create a new sub-group with the given name.</div>
+</div>
 <div class="col-first odd-row-color"><code><a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">Hdf5Group.</span><code><a href="../Hdf5Group.html#openGroup(java.lang.String)" class="member-name-link">openGroup</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Open an existing sub-group by name.</div>
+</div>
 <div class="col-first even-row-color"><code><a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5File.</span><code><a href="../Hdf5File.html#rootGroup()" class="member-name-link">rootGroup</a>()</code></div>
 <div class="col-last even-row-color">
@@ -129,7 +133,10 @@ loadScripts(document, 'script');</script>
 <div class="col-second odd-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#readCompoundPrimitives(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema)" class="member-name-link">readCompoundPrimitives</a><wbr>(<a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
  <a href="../Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a>&nbsp;schema)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Read a compound dataset returning only the primitive (non-VL)
+fields.</div>
+</div>
 <div class="col-first even-row-color"><code>static void</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#writeCompoundDataset(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema,int,global.thalion.ttio.hdf5.Hdf5CompoundIO.RowPacker)" class="member-name-link">writeCompoundDataset</a><wbr>(<a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
@@ -175,9 +182,8 @@ loadScripts(document, 'script');</script>
 <div class="col-first even-row-color"><code>static <a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5Provider.</span><code><a href="../../providers/Hdf5Provider.html#tryUnwrapHdf5Group(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">tryUnwrapHdf5Group</a><wbr>(<a href="../../providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;group)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Phase 2 (post-M91): if <code>group</code> is an HDF5-backed
-  <a href="../../providers/StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return the underlying <a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>;
-  otherwise return <code>null</code>.</div>
+<div class="block">If <code>group</code> is an HDF5-backed <a href="../../providers/StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return
+  the underlying <a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>; otherwise return <code>null</code>.</div>
 </div>
 </div>
 <div class="caption"><span>Methods in <a href="../../providers/package-summary.html">global.thalion.ttio.providers</a> with parameters of type <a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></span></div>
