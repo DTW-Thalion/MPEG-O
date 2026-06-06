@@ -193,6 +193,10 @@ jobs:
         # intentional coverage improvements.
         run: pytest -v --tb=short --cov=src/ttio --cov-report=term --cov-report=xml --cov-report=html --cov-fail-under=84
 
+      - name: Per-module coverage floor (R5)
+        working-directory: python
+        run: python scripts/check_module_coverage.py coverage.xml
+
       # V1: publish coverage on the 3.12 leg only.
       - name: Upload coverage (Python 3.12 only)
         if: matrix.python-version == '3.12' && always()
