@@ -323,11 +323,10 @@ void testC1ToolsCli(void)
             [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
         }
 
-        // NOTE: TtioJcampDxDump <path.jdx> needs a JCAMP-DX input file.
-        // No JCAMP-DX fixture is committed under the repo (only transient
-        // copies appear in tools/perf/_out_* scratch dirs), so we do not
-        // invent one here — its no-args branch is still covered by the
-        // per-tool loop above. Add a happy-path run if/when a .jdx
-        // fixture is committed to the tree.
+        // TtioJcampDxDump: no happy-path run. The only committed JCAMP-DX
+        // fixtures (conformance/jcamp_dx/uvvis_ramp25_*.jdx) are UV/Vis
+        // spectra (TTIOUVVisSpectrum), which TtioJcampDxDump rejects (it
+        // handles Raman/IR only). Left as the no-args case until a
+        // Raman/IR .jdx fixture is committed.
     }
 }
