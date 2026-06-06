@@ -356,9 +356,9 @@ void testC1ToolsCli(void)
                 PASS(launched, "C1 ObjC HP: TtioTransportServer launched");
 
                 if (launched) {
-                    // Read until we see a PORT= line or time out (~3s). The
-                    // server flushes stdout promptly after binding, so the
-                    // first availableData typically carries the whole line.
+                    // Read until we see a PORT= line, EOF, or 30 chunk-reads (a hard
+                    // cap on iterations, not wall-clock — the server flushes PORT=
+                    // promptly after binding so the first availableData usually has it).
                     NSMutableData *acc = [NSMutableData data];
                     BOOL sawPort = NO;
                     for (int i = 0; i < 30 && !sawPort; i++) {
@@ -377,8 +377,8 @@ void testC1ToolsCli(void)
                          "C1 ObjC HP: TtioTransportServer printed PORT=");
                     kill(task.processIdentifier, SIGTERM);
                     [task waitUntilExit];
-                    PASS(YES,
-                         "C1 ObjC HP: TtioTransportServer exited after SIGTERM");
+                    PASS(task.terminationStatus == 0,
+                         "C1 ObjC HP: TtioTransportServer exited 0 after SIGTERM");
                 }
             }
             [[NSFileManager defaultManager] removeItemAtPath:srvTio error:NULL];
