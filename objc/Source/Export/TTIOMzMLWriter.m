@@ -130,7 +130,8 @@ static NSString *precisionName(BOOL useFloat32)
     NSString *chosenName = nil;
     for (NSString *n in runNames) {
         TTIOAcquisitionRun *r = dataset.msRuns[n];
-        if ([r.spectrumClassName isEqualToString:@"TTIOMassSpectrum"]) {
+        if (TTIOSpectrumKindFromPersisted(r.spectrumClassName)
+                == TTIOSpectrumKindMass) {
             chosenRun = r;
             chosenName = n;
             break;

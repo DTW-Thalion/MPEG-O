@@ -168,4 +168,47 @@ typedef NS_ENUM(NSInteger, TTIOActivationMethod) {
     TTIOActivationMethodEThcD = 6
 };
 
+/**
+ * Discriminator for a spectrum run's concrete type. Derived from the
+ * persisted <code>@spectrum_class</code> string, which remains the
+ * on-disk source of truth; this enum is an in-code dispatch key only
+ * (P3.8) and is never written to the <code>.tio</code> / wire format.
+ *
+ * Use <code>TTIOSpectrumKindFromPersisted()</code> to map a stored
+ * string to its member (nil/empty falls back to
+ * <code>TTIOSpectrumKindMass</code> for v0.1 files; an unrecognised
+ * string yields <code>TTIOSpectrumKindUnknown</code>) and
+ * <code>TTIOSpectrumKindPersisted()</code> for the reverse.
+ *
+ * Cross-language equivalents: Python
+ * <code>ttio.enums.SpectrumKind</code>, Java
+ * <code>global.thalion.ttio.Enums.SpectrumKind</code>.
+ */
+typedef NS_ENUM(NSInteger, TTIOSpectrumKind) {
+    TTIOSpectrumKindMass = 0,
+    TTIOSpectrumKindNMR,
+    TTIOSpectrumKindNMR2D,
+    TTIOSpectrumKindIR,
+    TTIOSpectrumKindRaman,
+    TTIOSpectrumKindUVVis,
+    TTIOSpectrumKindFreeInductionDecay,
+    TTIOSpectrumKindMSImagePixel,
+    TTIOSpectrumKindUnknown
+};
+
+/**
+ * Maps a persisted <code>@spectrum_class</code> string to its
+ * <code>TTIOSpectrumKind</code>. A nil or empty string returns
+ * <code>TTIOSpectrumKindMass</code> (v0.1 fallback); a string that
+ * matches no known member returns <code>TTIOSpectrumKindUnknown</code>.
+ */
+TTIOSpectrumKind TTIOSpectrumKindFromPersisted(NSString * _Nullable s);
+
+/**
+ * Maps a <code>TTIOSpectrumKind</code> back to its canonical persisted
+ * <code>@spectrum_class</code> string. <code>TTIOSpectrumKindUnknown</code>
+ * maps to the empty string.
+ */
+NSString *TTIOSpectrumKindPersisted(TTIOSpectrumKind k);
+
 #endif /* TTIO_ENUMS_H */
