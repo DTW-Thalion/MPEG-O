@@ -21,6 +21,26 @@
  *
  * Wire format (little-endian):
  *
+ *   This codec is V4-only under v1.0: encode ALWAYS emits a V4 stream
+ *   (version byte = 4) and decode accepts ONLY V4. Decode of any stream
+ *   whose version byte is 1, 2, or 3 returns nil with error 203 ("no
+ *   longer supported in v1.0"); the V1/V2/V3 emitters were DELETED in
+ *   v1.0. The legacy layouts are retained below purely as forensic
+ *   reference for understanding why such old streams are rejected — they
+ *   are NEVER emitted.
+ *
+ * Wire format V4 (LIVE — version byte = 4; CRAM 3.1 fqzcomp port via
+ * libttio_rans). This is the only format the codec emits and decodes:
+ *   Outer header  : magic "M94Z", version=4, flags (bits 4-5 = pad_count),
+ *                   num_qualities (uint64 LE), num_reads (uint64 LE),
+ *                   rlt_compressed_len (uint32 LE), cram_body_len (uint32 LE).
+ *   Body          : deflated RLT followed by htscodecs-byte-equal
+ *                   fqzcomp_qual stream (auto-tune by default).
+ *   See native/src/m94z_v4_wire.h for full layout.
+ *
+ * Legacy wire format V1 (DELETED in v1.0 — decode-rejected with error 203):
+ *   Retained for forensic reference only; NOT emitted.
+ *
  *   Header:
  *     0       4    magic "M94Z"
  *     4       1    version = 1
@@ -51,21 +71,14 @@
  *       4     4    ctx_id            (uint32 LE)
  *       8     512  freq[256]         (256 × uint16 LE)
  *
- * Wire format V2 (version byte = 2; body produced by libttio_rans):
+ * Legacy wire format V2 (DELETED in v1.0 — decode-rejected with error 203):
+ *   Retained for forensic reference only; NOT emitted.
  *   Header: same fields as V1 EXCEPT no 16-byte state_init suffix
  *           (V2 body embeds final states at its own offset 0..15).
  *   Body  : raw output of ttio_rans_encode_block — self-contained
  *             [4 × uint32 LE final states][4 × uint32 LE lane sizes]
  *             [per-lane 16-bit LE chunks]
  *   No trailer.
- *
- * Wire format V4 (version byte = 4; CRAM 3.1 fqzcomp port via libttio_rans):
- *   Outer header  : magic "M94Z", version=4, flags (bits 4-5 = pad_count),
- *                   num_qualities (uint64 LE), num_reads (uint64 LE),
- *                   rlt_compressed_len (uint32 LE), cram_body_len (uint32 LE).
- *   Body          : deflated RLT followed by htscodecs-byte-equal
- *                   fqzcomp_qual stream (auto-tune by default).
- *   See native/src/m94z_v4_wire.h for full layout.
  *
  * Cross-language equivalents:
  *   Python: ttio.codecs.fqzcomp_nx16_z
