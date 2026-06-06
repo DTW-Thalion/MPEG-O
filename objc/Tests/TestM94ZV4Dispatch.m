@@ -4,17 +4,19 @@
 //   python/tests/test_m94z_v4_dispatch.py
 //   java/src/test/java/.../FqzcompNx16ZV4DispatchTest.java
 //
-// Verifies:
+// Verifies (V4 is the only supported wire format under v1.0):
 //   * V4 explicit encode round-trips and emits version byte 4.
-//   * V4 is the default emit format when libttio_rans is linked
-//     (no options, no env var override).
-//   * V2 explicit (preferV4=NO + preferNative=YES) still works.
-//   * V1 explicit (preferV4=NO + preferNative=NO) still works.
+//   * V4 is the emit format for the plain encode paths (no options,
+//     options dict, and the 4-arg convenience method).
 //   * Pad count, single-read, and mixed-revcomp edge cases round-trip.
-//   * V4 with version byte rewritten to 2 fails to decode.
+//   * decode of a V4 blob with the version byte rewritten to 2 is
+//     rejected (the legacy V1/V2/V3 reject path, error 203).
+//   * encode rejects readLengths/revcompFlags count mismatch.
+//   * decode rejects truncated and bad-magic blobs.
 //
-// When +backendName is "pure-objc" (libttio_rans not built), every V4
-// test short-circuits — only documents the absence of native dispatch.
+// When +backendName is "pure-objc" (libttio_rans not built), the V4
+// round-trip tests short-circuit — encode/decode have no pure-ObjC
+// fallback under v1.0.
 //
 // SPDX-License-Identifier: LGPL-3.0-or-later
 
@@ -294,6 +296,52 @@ static void testV4DecodeRejectsTamperedVersionByte(void)
          "decode of V4 blob with version byte rewritten to 2 must fail");
 }
 
+// These error-path checks exercise the public validation that runs
+// before (and independently of) native dispatch, so they hold whether
+// or not libttio_rans is linked: encode rejects a readLengths/
+// revcompFlags count mismatch, and decode rejects malformed blobs.
+static void testV4InputValidationErrors(void)
+{
+    @autoreleasepool {
+        // encode rejects readLengths/revcompFlags count mismatch.
+        {
+            NSData *q = [@"IIIIIIII" dataUsingEncoding:NSUTF8StringEncoding];
+            NSError *err = nil;
+            NSData *enc = [TTIOFqzcompNx16Z encodeWithQualities:q
+                                                    readLengths:@[@4, @4]
+                                                   revcompFlags:@[@0]
+                                                          error:&err];
+            PASS(enc == nil && err != nil,
+                 "M94Z V4: encode rejects readLengths/revcompFlags count mismatch");
+        }
+
+        // decode rejects a blob shorter than magic+version (5 bytes).
+        {
+            NSMutableData *trunc = [NSMutableData dataWithLength:3];
+            NSError *err = nil;
+            NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:trunc
+                                               revcompFlags:@[@0]
+                                                      error:&err];
+            PASS(dec == nil && err != nil,
+                 "M94Z V4: decode rejects truncated (sub-header) blob");
+        }
+
+        // decode rejects a bad-magic blob.
+        {
+            NSMutableData *bad = [NSMutableData dataWithLength:32];
+            uint8_t *b = (uint8_t *)bad.mutableBytes;
+            b[0] = 'X'; b[1] = '9'; b[2] = '4'; b[3] = 'Z';
+            b[4] = 4;  // valid-looking version, but magic is wrong
+            NSError *err = nil;
+            NSDictionary *dec = [TTIOFqzcompNx16Z decodeData:bad
+                                               revcompFlags:@[@0]
+                                                      error:&err];
+            PASS(dec == nil && err != nil,
+                 "M94Z V4: decode rejects bad-magic blob");
+        }
+    }
+}
+
 void testM94ZV4Dispatch(void);
 void testM94ZV4Dispatch(void)
 {
@@ -305,4 +353,5 @@ void testM94ZV4Dispatch(void)
     testV4MixedRevcompRoundtrip();
     testV4MagicAndMinHeaderSize();
     testV4DecodeRejectsTamperedVersionByte();
+    testV4InputValidationErrors();
 }
