@@ -109,9 +109,8 @@ final class FqzcompNx16ZUnitTest {
             () -> FqzcompNx16Z.decode(bad, null));
     }
 
-    // The legacy V1 canonical fixtures (m94z_*.bin) and their PyRandom-based
-    // builders were removed alongside the dead V1/V2 codec paths. V4
-    // (CRAM 3.1 fqzcomp_qual) byte-exact coverage lives in
-    // FqzcompNx16ZV4ByteExactTest; live-path edge/error coverage lives in
-    // FqzcompNx16ZV4DispatchTest.
+    // The legacy V1 canonical fixtures (m94z_*.bin) and their builders were
+    // removed alongside the dead V1/V2 codec paths. V4 (CRAM 3.1
+    // fqzcomp_qual) byte-exact coverage lives in FqzcompNx16ZV4ByteExactTest;
+    // live-path edge/error coverage lives in FqzcompNx16ZV4DispatchTest.
 }

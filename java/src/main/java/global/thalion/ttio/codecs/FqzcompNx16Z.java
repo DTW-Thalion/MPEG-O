@@ -6,34 +6,17 @@
 package global.thalion.ttio.codecs;
 
 /**
- * FQZCOMP_NX16.Z — CRAM-mimic (rANS-Nx16) lossless quality codec (M94.Z).
+ * FQZCOMP_NX16.Z — lossless quality codec (M94.Z), V4 wire format only.
  *
- * <p>Clean-room Java port of the Python reference at
- * {@code python/src/ttio/codecs/fqzcomp_nx16_z.py}. Spec at
- * {@code docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md}.
+ * <p>This class is a thin JNI wrapper over the native {@code libttio_rans}
+ * CRAM-3.1 {@code fqzcomp_qual} core. It emits and decodes only the M94.Z
+ * <b>V4</b> wire format (magic {@code M94Z}, version byte {@code 4}); the
+ * legacy V1/V2/V3 dispatch paths were removed in Phase 2c and are rejected
+ * on decode.
  *
- * <p>Algorithm summary:
- * <ul>
- *   <li>{@code L = 2^15 = 32 768} state lower bound.</li>
- *   <li>{@code B = 16}-bit renormalisation chunks
- *       ({@code b = 2^16 = 65 536}, {@code b·L = 2^31}).</li>
- *   <li>{@code N = 4} interleaved rANS states (round-robin by symbol index).</li>
- *   <li>{@code T = 4096 = 2^12} fixed total per-context (CRAM-Nx16 discipline:
- *       static-per-block freq tables, built once in pass 1, held constant in
- *       pass 2).</li>
- *   <li>Bit-packed CRAM-style context: 12-bit prev-q ring (3 × 4-bit window) |
- *       2-bit position bucket | 1-bit revcomp.</li>
- * </ul>
- *
- * <p>Wire format magic is {@code M94Z}, distinct from M94 v1's {@code FQZN}.
- * This is an independent codec. M94 v1 fixtures stay valid; M94.Z fixtures
- * are unrelated bytes. Both codecs exist side by side in the codebase.
- *
- * <p>Cross-language equivalents:
- * <ul>
- *   <li>Python: {@code ttio.codecs.fqzcomp_nx16_z}</li>
- *   <li>Cython: {@code ttio.codecs._fqzcomp_nx16_z._fqzcomp_nx16_z}</li>
- * </ul>
+ * <p>The native library is required for both encode and decode: when
+ * libttio_rans_jni is not on {@code java.library.path}, encode/decode throw
+ * {@link IllegalStateException}. There is no pure-Java fallback.
  */
 public final class FqzcompNx16Z {
 
@@ -51,9 +34,6 @@ public final class FqzcompNx16Z {
     /** M94.Z V4 wire-format version: CRAM 3.1 fqzcomp port (Stage 2/3).
      *  The only version emitted and decoded in v1.0+. */
     public static final int VERSION_V4_FQZCOMP = 4;
-    /** Env var that overrides the default M94.Z dispatch version
-     *  ("1"/"2"/"3" → force pre-V4 path; "4" → force V4). */
-    public static final String ENV_VERSION_OVERRIDE = "TTIO_M94Z_VERSION";
 
     // ── Default context parameters ──────────────────────────────────
 
@@ -78,14 +58,9 @@ public final class FqzcompNx16Z {
      *   <li>{@code "native"} as a defensive fallback if the library loaded
      *       but kernel introspection fails.</li>
      *   <li>{@code "pure-java"} when the JNI library is not on
-     *       {@code java.library.path}; the Java codec uses its built-in
-     *       {@link Rans} backend.</li>
+     *       {@code java.library.path}; in this state encode/decode throw
+     *       {@link IllegalStateException} (there is no pure-Java fallback).</li>
      * </ul>
-     *
-     * <p>Backend selection only affects V2 (native-body) dispatch — see
-     * {@link EncodeOptions#preferNative(boolean)} or the
-     * {@code TTIO_M94Z_USE_NATIVE} environment variable. V1 encode/decode
-     * always uses pure-Java for both paths.
      */
     public static String getBackendName() {
         if (TtioRansNative.isAvailable()) {
@@ -139,41 +114,32 @@ public final class FqzcompNx16Z {
     // ── EncodeOptions ───────────────────────────────────────────────
 
     /**
-     * Encoder options bag. Currently exposes a single knob:
-     * {@link #preferNative(boolean)} — when {@code true} (and the
-     * native library is available), {@link #encode} emits a V2 wire
-     * format with body produced by libttio_rans's
-     * {@code ttio_rans_encode_block}. When {@code false}, the V1 path
-     * is forced (default behaviour, byte-identical to historical
-     * encoders). When this method is never called (or the native
-     * library is unavailable), the encoder consults the environment
-     * variable {@code TTIO_M94Z_USE_NATIVE} — values {@code "1"},
-     * {@code "true"}, {@code "yes"}, {@code "on"} (case-insensitive)
-     * enable V2 dispatch.
+     * Encoder options bag. The only effective knob is
+     * {@link #v4StrategyHint(int)}, which selects the V4 (CRAM 3.1
+     * fqzcomp) strategy preset ({@code -1} = auto-tune; {@code 0..3} =
+     * explicit preset).
      *
-     * <p>V2 encode is fast (native rANS); V2 decode is pure-Java
-     * because contexts are derived from previously-decoded symbols
-     * (see Task 21/22 design notes — the C library's decode requires
-     * a fully pre-computed contexts vector). V1 streams continue to
-     * round-trip via the existing pure-Java path.
+     * <p>{@link #preferNative(boolean)} and {@link #preferV4(boolean)} are
+     * retained for source/ABI backward compatibility but are <b>ignored</b>:
+     * only the V4 wire format is ever emitted (the legacy V1/V2 dispatch
+     * paths were removed in Phase 2c).
      */
     public static final class EncodeOptions {
-        // null = consult env var; Boolean.TRUE/FALSE = explicit override.
+        // Retained for backward compatibility; ignored — only V4 is emitted.
         Boolean preferNative = null;
 
-        // V4 (CRAM 3.1 fqzcomp) dispatch knobs:
-        //   preferV4: null = follow env / default (V4 when JNI loaded);
-        //             TRUE  = force V4 path (throws if JNI not loaded);
-        //             FALSE = force pre-V4 (V1/V2) path.
-        //   v4StrategyHint: null = -1 (auto-tune); 0..3 = explicit preset.
+        // Retained for backward compatibility; ignored — only V4 is emitted.
         Boolean preferV4 = null;
+        // v4StrategyHint: null = -1 (auto-tune); 0..3 = explicit preset.
         Integer v4StrategyHint = null;
 
+        /** Accepted for backward compatibility; ignored — only V4 is emitted. */
         public EncodeOptions preferNative(boolean v) {
             this.preferNative = v;
             return this;
         }
 
+        /** Accepted for backward compatibility; ignored — only V4 is emitted. */
         public EncodeOptions preferV4(boolean v) {
             this.preferV4 = v;
             return this;
@@ -289,6 +255,12 @@ public final class FqzcompNx16Z {
         return encode(qualities, readLengths, revcompFlags, params, null);
     }
 
+    /**
+     * Encode qualities to the M94.Z V4 wire format.
+     *
+     * <p>{@code params} is accepted for API compatibility; the V4 codec
+     * derives contexts internally and ignores it.
+     */
     public static byte[] encode(byte[] qualities, int[] readLengths,
                                 int[] revcompFlags, ContextParams params,
                                 EncodeOptions opts) {
