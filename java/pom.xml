@@ -277,6 +277,9 @@
                                      ContainerListPage, ContainerLayer,
                                      ContainerManifest) stay measured. -->
                                 <exclude>**/workbench/containers/ContainersClient*</exclude>
+                                <!-- 2-line marker interface; a 0% "package"
+                                     that would trip the PACKAGE floor. -->
+                                <exclude>**/protocols/Indexable*</exclude>
                             </excludes>
                         </configuration>
                     </execution>
@@ -347,6 +350,9 @@
                                      ContainerListPage, ContainerLayer,
                                      ContainerManifest) stay measured. -->
                                 <exclude>**/workbench/containers/ContainersClient*</exclude>
+                                <!-- 2-line marker interface; a 0% "package"
+                                     that would trip the PACKAGE floor. -->
+                                <exclude>**/protocols/Indexable*</exclude>
                             </excludes>
                             <rules>
                                 <rule>
@@ -377,6 +383,22 @@
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
                                             <minimum>0.68</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <!-- R5 per-package floor: no package below 50%
+                                     line coverage, so a subsystem can't silently
+                                     regress behind the BUNDLE aggregate. Lowest
+                                     gated package ~55.7% (importers.readers,
+                                     2026-06-06); 0.50 leaves buffer. Shares the
+                                     excludes above. Ratchet in R6. -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.50</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
