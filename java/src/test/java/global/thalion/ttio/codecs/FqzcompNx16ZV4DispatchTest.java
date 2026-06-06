@@ -10,6 +10,7 @@ import org.junit.jupiter.api.condition.EnabledIf;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -179,5 +180,23 @@ final class FqzcompNx16ZV4DispatchTest {
             threw = true;
         }
         assertTrue(threw, "decode of V4 blob with version byte rewritten to 2 must throw");
+    }
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void v4EncodeRejectsRevcompMismatch() {
+        // readLengths.length != revcompFlags.length → IllegalArgumentException.
+        byte[] q = "IIIIIIII".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        assertThrows(IllegalArgumentException.class,
+            () -> FqzcompNx16Z.encode(q, new int[]{4, 4}, new int[]{0}));
+    }
+
+    @Test
+    @EnabledIf("isNativeAvailable")
+    void v4EncodeRejectsSumMismatch() {
+        // sum(readLengths) != qualities.length → IllegalArgumentException.
+        byte[] q = "III".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        assertThrows(IllegalArgumentException.class,
+            () -> FqzcompNx16Z.encode(q, new int[]{2}, new int[]{0}));
     }
 }
