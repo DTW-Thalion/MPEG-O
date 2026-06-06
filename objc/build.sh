@@ -10,7 +10,9 @@
 #   ./build.sh --coverage check  # build with clang coverage instrumentation,
 #                                 # run tests, emit objc/coverage/coverage.lcov
 #                                 # (requires llvm-profdata + llvm-cov on PATH;
-#                                 # warns and skips export if missing).
+#                                 # warns and skips export if missing, unless
+#                                 # TTIO_COV_STRICT=1, which makes a non-measurable
+#                                 # run fail).
 #
 # V1 (verification workplan): the --coverage flag injects
 # -fprofile-instr-generate -fcoverage-mapping into ADDITIONAL_OBJCFLAGS
@@ -164,6 +166,17 @@ if [ "$COVERAGE" = "1" ]; then
 
     lines_hit=$(grep -c '^DA:.*,[1-9]' "$here/coverage/coverage.lcov" || echo 0)
     echo "build.sh --coverage: wrote $here/coverage/coverage.lcov ($lines_hit hit lines)"
+
+    # Guard: the gated % is only meaningful if the lcov is scoped to our
+    # own code. If the ignore-regex ever fails to drop a system/3rd-party
+    # path (e.g. a changed GNUstep prefix), fail loudly under strict mode
+    # rather than silently inflating/deflating the denominator.
+    stray=$(grep '^SF:' "$here/coverage/coverage.lcov" | grep -vE '/objc/(Source|Tools)/' | head -5)
+    if [ -n "$stray" ]; then
+        echo "build.sh --coverage: lcov contains out-of-scope SF: records (scope regex needs updating):" >&2
+        echo "$stray" >&2
+        [ "$cov_strict" = "1" ] && exit 1 || echo "build.sh --coverage: (non-strict) continuing despite scope leak" >&2
+    fi
 
     # C7/R2 — minimum aggregate line coverage (LH/LF across all files).
     # The export is scoped (-ignore-filename-regex above) so the
