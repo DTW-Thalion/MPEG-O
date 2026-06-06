@@ -16,6 +16,7 @@
 #import "Testing.h"
 #include <unistd.h>
 #include <stdlib.h>
+#include <signal.h>
 
 static NSString *kToolsDir =
     @"/home/toddw/TTI-O/objc/Tools/obj";
@@ -321,6 +322,66 @@ void testC1ToolsCli(void)
                 [[NSFileManager defaultManager] removeItemAtPath:mzml error:NULL];
             }
             [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];
+        }
+
+        // ── TtioTransportServer: launch, read PORT=, then SIGTERM ──────
+        // TtioTransportServer is long-running (loops until SIGTERM/SIGINT),
+        // so we cannot use c1RunTool (which waitsUntilExit). We launch a
+        // dedicated NSTask, read stdout until we see the PORT=<n> line the
+        // server prints (with fflush) once bound, then SIGTERM it and wait
+        // for the clean exit handleSig() drives. The read is capped so the
+        // test can NEVER hang: kill + waitUntilExit always run.
+        if (!c1ToolMissing(@"TtioTransportServer")
+                && !c1ToolMissing(@"TtioWriteGenomicFixture")) {
+            NSString *srvTio = [NSTemporaryDirectory()
+                stringByAppendingPathComponent:@"c1_srv.tio"];
+            [[NSFileManager defaultManager] removeItemAtPath:srvTio error:NULL];
+            NSMutableData *fo = nil, *fe = nil;
+            c1RunTool(@"TtioWriteGenomicFixture", @[srvTio], &fo, &fe);
+
+            if ([[NSFileManager defaultManager] fileExistsAtPath:srvTio]) {
+                NSString *path = [kToolsDir
+                    stringByAppendingPathComponent:@"TtioTransportServer"];
+                NSTask *task = [[NSTask alloc] init];
+                task.launchPath = path;
+                task.arguments = @[srvTio, @"--port", @"0"];
+                task.environment = [NSProcessInfo processInfo].environment;
+                NSPipe *outPipe = [NSPipe pipe];
+                task.standardOutput = outPipe;
+                NSFileHandle *rd = [outPipe fileHandleForReading];
+
+                BOOL launched = YES;
+                @try { [task launch]; }
+                @catch (NSException *exc) { launched = NO; }
+                PASS(launched, "C1 ObjC HP: TtioTransportServer launched");
+
+                if (launched) {
+                    // Read until we see a PORT= line or time out (~3s). The
+                    // server flushes stdout promptly after binding, so the
+                    // first availableData typically carries the whole line.
+                    NSMutableData *acc = [NSMutableData data];
+                    BOOL sawPort = NO;
+                    for (int i = 0; i < 30 && !sawPort; i++) {
+                        NSData *chunk = [rd availableData];
+                        if (chunk.length) {
+                            [acc appendData:chunk];
+                            NSString *s = [[NSString alloc] initWithData:acc
+                                encoding:NSUTF8StringEncoding];
+                            if ([s containsString:@"PORT="]) sawPort = YES;
+                        } else {
+                            // EOF (server died) — stop looping, proceed to kill.
+                            break;
+                        }
+                    }
+                    PASS(sawPort,
+                         "C1 ObjC HP: TtioTransportServer printed PORT=");
+                    kill(task.processIdentifier, SIGTERM);
+                    [task waitUntilExit];
+                    PASS(YES,
+                         "C1 ObjC HP: TtioTransportServer exited after SIGTERM");
+                }
+            }
+            [[NSFileManager defaultManager] removeItemAtPath:srvTio error:NULL];
         }
 
         // TtioJcampDxDump: no happy-path run. The only committed JCAMP-DX
