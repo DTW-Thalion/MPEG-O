@@ -6,6 +6,7 @@ TTIOTests_OBJC_FILES = \
 	TTIOTestRunner.m \
 	TestValueRange.m \
 	TestIsolationWindow.m \
+	TestSpectrumKind.m \
 	TestEncodingSpec.m \
 	TestAxisDescriptor.m \
 	TestCVParam.m \
