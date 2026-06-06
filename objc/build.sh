@@ -183,13 +183,17 @@ if [ "$COVERAGE" = "1" ]; then
     # denominator is objc/Source + objc/Tools ONLY; system headers
     # (/usr/...), liboqs (/_oqs/), GNUstep makefiles (/Makefiles/),
     # libobjc2, and the test sources (/objc/Tests/) are excluded.
-    # Scoped baseline measured 2026-06-06: B = 74.81%. The default
-    # threshold is set ~1 pt below B (floor(B) - 1 = 73) to allow for
-    # natural drift while catching regressions. Bump after intentional
-    # improvements; never lower without a recorded reason. Override by
-    # setting TTIO_COV_MIN=<pct> in the env.
+    # Scoped baseline 2026-06-06: local B = 74.81%, but the CI runner
+    # measures 69.47% for the SAME scope — ObjC coverage is sensitive to
+    # the build environment (libhdf5 version drives which metadata paths
+    # execute; liboqs/runner differences also shift it). The gate runs in
+    # CI, so the floor is calibrated to the CI baseline with a wider
+    # (~2.5 pt) buffer than the Java gates to absorb that local<->CI and
+    # runner-to-runner variance: floor(69.47) - ~2 = 67. Bump after
+    # intentional improvements; never lower without a recorded reason.
+    # Override by setting TTIO_COV_MIN=<pct> in the env.
     # See docs/verification-workplan.md §V1 + docs/coverage-workplan.md §C7.
-    cov_min="${TTIO_COV_MIN:-73}"
+    cov_min="${TTIO_COV_MIN:-67}"
     cov_pct=$(awk -F: '
         /^LH:/ { hit += $2 }
         /^LF:/ { found += $2 }
