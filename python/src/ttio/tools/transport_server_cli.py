@@ -11,8 +11,36 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from collections.abc import Callable
 
 from ttio.transport.server import TransportServer
+
+
+async def serve(
+    ttio_path: str,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    on_ready: Callable[[int], None] | None = None,
+) -> None:
+    """Serve a .tio file over WebSocket transport until cancelled.
+
+    The bound port is reported via ``on_ready(port)`` if given, else
+    printed to stdout as ``PORT=<n>`` (the CLI default). Runs until the
+    surrounding task is cancelled or the server is closed.
+    """
+    server = TransportServer(ttio_path, host=host, port=port)
+    await server.start()
+    if on_ready is not None:
+        on_ready(server.port)
+    else:
+        print(f"PORT={server.port}", flush=True)
+    try:
+        await server.wait_closed()
+    except asyncio.CancelledError:
+        pass
+    finally:
+        await server.stop()
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -25,21 +53,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="0 = pick any free port (default)")
     args = parser.parse_args(argv)
 
-    async def run() -> None:
-        server = TransportServer(args.ttio_path, host=args.host, port=args.port)
-        await server.start()
-        # Print once, flush, keep serving until the parent closes stdin
-        # or sends SIGTERM.
-        print(f"PORT={server.port}", flush=True)
-        try:
-            await server.wait_closed()
-        except asyncio.CancelledError:
-            pass
-        finally:
-            await server.stop()
-
     try:
-        asyncio.run(run())
+        asyncio.run(serve(args.ttio_path, host=args.host, port=args.port))
     except KeyboardInterrupt:
         return 130
     return 0
