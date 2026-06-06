@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from collections.abc import Callable
 
 from ttio.transport.server import TransportServer
 
@@ -20,7 +21,7 @@ async def serve(
     *,
     host: str = "127.0.0.1",
     port: int = 0,
-    on_ready=None,
+    on_ready: Callable[[int], None] | None = None,
 ) -> None:
     """Serve a .tio file over WebSocket transport until cancelled.
 
