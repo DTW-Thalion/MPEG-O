@@ -114,7 +114,10 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <div class="table-header col-last">Description</div>
 <div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(java.lang.String,java.lang.String)" class="member-name-link">StreamReader</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;filePath,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Open the <code>.tio</code> file at <code>filePath</code> and position a
+cursor at the start of run <code>runName</code>.</div>
+</div>
 </div>
 </section>
 </li>
@@ -134,16 +137,22 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Close the underlying HDF5 file.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#currentPosition()" class="member-name-link">currentPosition</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#nextSpectrum()" class="member-name-link">nextSpectrum</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Advance the cursor and return the next spectrum.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#reset()" class="member-name-link">reset</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Reset the cursor to the beginning of the run.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#totalCount()" class="member-name-link">totalCount</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -170,6 +179,13 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">StreamReader</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;filePath,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName)</span></div>
+<div class="block">Open the <code>.tio</code> file at <code>filePath</code> and position a
+cursor at the start of run <code>runName</code>.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>filePath</code> - absolute path to the <code>.tio</code> file</dd>
+<dd><code>runName</code> - MS-run name under <code>/study/ms_runs/</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -186,6 +202,10 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <h3>totalCount</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">totalCount</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Total number of spectra in the opened run.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -194,6 +214,10 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <h3>currentPosition</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">currentPosition</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Current zero-based stream cursor position.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -202,6 +226,10 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <h3>atEnd</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">boolean</span>&nbsp;<span class="element-name">atEnd</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd><code>true</code> when no further spectra remain to be read.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -210,6 +238,14 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <h3>nextSpectrum</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></span>&nbsp;<span class="element-name">nextSpectrum</span>()</div>
+<div class="block">Advance the cursor and return the next spectrum.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>next spectrum</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/NoSuchElementException.html" title="class or interface in java.util" class="external-link">NoSuchElementException</a></code> - when the cursor has
+        already reached the end of the run</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -218,6 +254,7 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <h3>reset</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">reset</span>()</div>
+<div class="block">Reset the cursor to the beginning of the run.</div>
 </div>
 </section>
 </li>
@@ -226,6 +263,7 @@ file. Delegates to <a href="AcquisitionRun.html" title="class in global.thalion.
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Close the underlying HDF5 file. Idempotent.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

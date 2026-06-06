@@ -60,6 +60,8 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><a href="#global.thalion.ttio.exporters">global.thalion.ttio.exporters</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.exporters.writers">global.thalion.ttio.exporters.writers</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
 </div>
 <section class="package-uses">
 <ul class="block-list">
@@ -73,18 +75,43 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color">
 <div class="block">BAM exporter — M88.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/ImzMLWriter.WriteResult.html#global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></div>
+<div class="col-first odd-row-color"><a href="class-use/ExportSpec.html#global.thalion.ttio.exporters">ExportSpec</a></div>
 <div class="col-last odd-row-color">
+<div class="block">One export-format entry: a canonical key paired with its display label,
+  filename extensions, optional external tool, and the <a href="Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> that
+  serializes one layer of an opened dataset to an output file.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/ImzMLWriter.WriteResult.html#global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></div>
+<div class="col-last even-row-color">
 <div class="block">Return value of <a href="ImzMLWriter.html#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String)"><code>ImzMLWriter.write(List, Path, Path, String, int, int, int, double, double, String, String)</code></a>: resolved paths + UUID.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/JcampDxEncoding.html#global.thalion.ttio.exporters">JcampDxEncoding</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/JcampDxEncoding.html#global.thalion.ttio.exporters">JcampDxEncoding</a></div>
+<div class="col-last odd-row-color">
 <div class="block">JCAMP-DX 5.01 <code>##XYDATA=(X++(Y..Y))</code> encoding modes supported
 by <a href="JcampDxWriter.html" title="class in global.thalion.ttio.exporters"><code>JcampDxWriter</code></a>.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/MzTabWriter.WriteResult.html#global.thalion.ttio.exporters">MzTabWriter.WriteResult</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/MzTabWriter.WriteResult.html#global.thalion.ttio.exporters">MzTabWriter.WriteResult</a></div>
+<div class="col-last even-row-color">
 <div class="block">Paths + per-section row counts.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/Writer.html#global.thalion.ttio.exporters">Writer</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Uniform exporter interface: serialize one layer of an <em>opened</em>
+  <a href="../SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> to <code>output</code>.</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.exporters.writers">
+<div class="caption"><span>Classes in <a href="package-summary.html">global.thalion.ttio.exporters</a> used by <a href="writers/package-summary.html">global.thalion.ttio.exporters.writers</a></span></div>
+<div class="summary-table two-column-summary">
+<div class="table-header col-first">Class</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><a href="class-use/Writer.html#global.thalion.ttio.exporters.writers">Writer</a></div>
+<div class="col-last even-row-color">
+<div class="block">Uniform exporter interface: serialize one layer of an <em>opened</em>
+  <a href="../SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> to <code>output</code>.</div>
 </div>
 </div>
 </section>

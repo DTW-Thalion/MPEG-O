@@ -82,6 +82,7 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#packetTypeByte()" tabindex="0">packetTypeByte()</a></li>
 <li><a href="#encode()" tabindex="0">encode()</a></li>
 <li><a href="#decode(byte%5B%5D)" tabindex="0">decode(byte[])</a></li>
 </ol>
@@ -155,7 +156,11 @@ AU sequence, uint32 payload length, uint64 timestamp.</p>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><code>final <a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></code></div>
 <div class="col-second odd-row-color"><code><a href="#packetType" class="member-name-link">packetType</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Decoded packet type, or <code>null</code> when the wire byte is not
+  a recognised <a href="PacketType.html" title="enum class in global.thalion.ttio.transport"><code>PacketType</code></a> (forward-compat skip-unknown
+  path; see transport-spec §6).</div>
+</div>
 <div class="col-first even-row-color"><code>final long</code></div>
 <div class="col-second even-row-color"><code><a href="#payloadLength" class="member-name-link">payloadLength</a></code></div>
 <div class="col-last even-row-color">&nbsp;</div>
@@ -203,6 +208,11 @@ AU sequence, uint32 payload length, uint64 timestamp.</p>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>byte[]</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#encode()" class="member-name-link">encode</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#packetTypeByte()" class="member-name-link">packetTypeByte</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Raw wire byte for the packet type.</div>
+</div>
 </div>
 </div>
 </div>
@@ -330,6 +340,10 @@ AU sequence, uint32 payload length, uint64 timestamp.</p>
 <h3>packetType</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">packetType</span></div>
+<div class="block">Decoded packet type, or <code>null</code> when the wire byte is not
+  a recognised <a href="PacketType.html" title="enum class in global.thalion.ttio.transport"><code>PacketType</code></a> (forward-compat skip-unknown
+  path; see transport-spec §6). The raw byte is always available
+  via <a href="#packetTypeByte()"><code>packetTypeByte()</code></a>.</div>
 </div>
 </section>
 </li>
@@ -402,6 +416,16 @@ AU sequence, uint32 payload length, uint64 timestamp.</p>
 <section class="method-details" id="method-detail">
 <h2>Method Details</h2>
 <ul class="member-list">
+<li>
+<section class="detail" id="packetTypeByte()">
+<h3>packetTypeByte</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">packetTypeByte</span>()</div>
+<div class="block">Raw wire byte for the packet type. Always populated, even when
+  <a href="#packetType"><code>packetType</code></a> is <code>null</code>.</div>
+</div>
+</section>
+</li>
 <li>
 <section class="detail" id="encode()">
 <h3>encode</h3>

@@ -1,0 +1,169 @@
+ttio.workbench.encryption
+=========================
+
+.. py:module:: ttio.workbench.encryption
+
+.. autoapi-nested-parse::
+
+   Workbench client-side payload protection (BYOK / envelope).
+
+   A thin client wrapper over the core :mod:`ttio.encryption` (AES-256-GCM
+   bulk seal) and :mod:`ttio.key_rotation` (DEK wrapping) that prepares a
+   ``.tis`` payload for an *encrypted* workbench upload and produces the
+   matching :class:`ProtectionMetadata` the server records.
+
+   Two modes (spec UC-03.2/3):
+
+   * **BYOK** -- the researcher brings a 32-byte data-encryption key (DEK).
+     The payload is sealed under that DEK; the key never leaves the client,
+     so ``wrapped_dek`` is empty. The server stores ciphertext opaquely and
+     a future authorised downloader decrypts with the same DEK.
+   * **ENVELOPE** -- a fresh random DEK seals the payload, and the DEK is
+     wrapped under a key-encryption key (KEK) via the core v1.2 wrap
+     (AES-256-GCM KEK, or ML-KEM-1024 -- the latter is W6.3/PQC territory).
+     ``wrapped_dek`` carries the wrapped key.
+
+   Sealed-payload framing (both languages): ``iv(12) || tag(16) ||
+   ciphertext``. This is the byte string that gets uploaded.
+
+   Cross-language equivalent: Java
+   ``global.thalion.ttio.workbench.encryption.WorkbenchEncryptor`` +
+   ``ProtectionMetadata``. The :meth:`ProtectionMetadata.to_json` form is a
+   cross-language anchor for a fixed BYOK key (deterministic because BYOK
+   carries no random wrapped DEK).
+
+   API status: Preview (W6.2).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.encryption.DEFAULT_CIPHER_SUITE
+   ttio.workbench.encryption.DEFAULT_KEK_ALGORITHM
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.encryption.ProtectionMode
+   ttio.workbench.encryption.ProtectionMetadata
+   ttio.workbench.encryption.SealedPayload
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.encryption.seal
+   ttio.workbench.encryption.open_sealed
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_CIPHER_SUITE
+   :value: 'aes-256-gcm'
+
+
+.. py:data:: DEFAULT_KEK_ALGORITHM
+   :value: 'aes-256-gcm'
+
+
+.. py:class:: ProtectionMode(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Client payload-protection mode.
+
+
+   .. py:attribute:: BYOK
+      :value: 'byok'
+
+
+
+   .. py:attribute:: ENVELOPE
+      :value: 'envelope'
+
+
+
+.. py:class:: ProtectionMetadata
+
+   Upload-path protection descriptor.
+
+   Mirrors the transport ProtectionMetadata packet
+   (``ttio.transport.encrypted``): ``cipher_suite`` / ``kek_algorithm``
+   / ``wrapped_dek`` / ``signature_algorithm`` / ``public_key``.
+
+
+   .. py:attribute:: cipher_suite
+      :type:  str
+
+
+   .. py:attribute:: kek_algorithm
+      :type:  str
+
+
+   .. py:attribute:: wrapped_dek
+      :type:  bytes
+
+
+   .. py:attribute:: signature_algorithm
+      :type:  str
+
+
+   .. py:attribute:: public_key
+      :type:  bytes
+
+
+   .. py:method:: to_json() -> str
+
+      Canonical JSON: sorted keys, compact separators, standard
+      base64 for byte blobs. Byte-identical to the Java mirror, so a
+      fixed BYOK metadata serialises identically across languages.
+
+
+
+   .. py:method:: from_json(text: str) -> ProtectionMetadata
+      :classmethod:
+
+
+
+.. py:class:: SealedPayload
+
+   A sealed upload payload plus its protection descriptor.
+
+
+   .. py:attribute:: ciphertext
+      :type:  bytes
+
+
+   .. py:attribute:: protection
+      :type:  ProtectionMetadata
+
+
+.. py:function:: seal(payload: bytes, *, mode: ProtectionMode, dek: Optional[bytes] = None, kek: Optional[bytes] = None, kek_algorithm: str = DEFAULT_KEK_ALGORITHM, iv: Optional[bytes] = None) -> SealedPayload
+
+   Seal ``payload`` for an encrypted upload.
+
+   BYOK: pass the researcher ``dek`` (32 bytes). ENVELOPE: pass a
+   ``kek`` (32-byte symmetric for ``aes-256-gcm``, or the ML-KEM-1024
+   public key); a fresh DEK is generated and wrapped under it.
+
+   ``iv`` is only for deterministic tests; production uses a random
+   nonce per the core seal.
+
+
+.. py:function:: open_sealed(ciphertext: bytes, protection: ProtectionMetadata, *, dek: Optional[bytes] = None, kek: Optional[bytes] = None) -> bytes
+
+   Reverse :func:`seal`. BYOK: pass the same ``dek``. ENVELOPE: pass
+   the ``kek`` (32-byte symmetric, or the ML-KEM-1024 private key) used
+   to unwrap the DEK.
+
+

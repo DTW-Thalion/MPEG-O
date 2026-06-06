@@ -21,6 +21,14 @@ ttio.importers.nmrml
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.nmrml.PROGRESS_INTERVAL_SPECTRA
+
+
 Exceptions
 ----------
 
@@ -40,18 +48,26 @@ Functions
 Module Contents
 ---------------
 
+.. py:data:: PROGRESS_INTERVAL_SPECTRA
+   :value: 1
+
+
 .. py:exception:: NmrMLParseError
 
    Bases: :py:obj:`ValueError`
 
 
-   Inappropriate argument value (of correct type).
+   Raised when an nmrML document cannot be decoded into an
+   :class:`ImportResult`.
 
    Initialize self.  See help(type(self)) for accurate signature.
 
 
-.. py:function:: read(path: str | pathlib.Path) -> ttio.importers.import_result.ImportResult
+.. py:function:: read(path: str | pathlib.Path, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> ttio.importers.import_result.ImportResult
 
    Parse an nmrML file and return an :class:`ImportResult`.
+
+   Single-spectrum format; ``progress`` fires once with ``(n, n)`` at
+   completion (no mid-parse fires).
 
 

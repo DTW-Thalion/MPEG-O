@@ -160,6 +160,22 @@ Module Contents
       :type: bool
 
 
+      Whether the parsed file is a metabolomics-dialect mzTab.
+
+      :returns: *bool* -- ``True`` if :attr:`version` ends with ``-M`` (i.e. the
+                ``2.0.0-M`` metabolomics dialect; SML rows), ``False`` for
+                the proteomics dialect (``1.0``; PSM + PRT rows).
+
+
+   .. py:method:: to_imported_dataset(*, title: str | None = None, isa_investigation_id: str = '', link_to: ttio.spectral_dataset.SpectralDataset | None = None) -> ttio.importers.imported_dataset.ImportedDataset
+
+      Build the normalized :class:`ImportedDataset` draft.
+
+      Carries the same ``title`` / ``isa_investigation_id`` /
+      ``link_to`` semantics as :meth:`to_ttio`; see that method for
+      the meaning of ``link_to``.
+
+
 
    .. py:method:: to_ttio(path: str | pathlib.Path, *, title: str | None = None, isa_investigation_id: str = '', link_to: ttio.spectral_dataset.SpectralDataset | None = None) -> pathlib.Path
 
@@ -176,8 +192,12 @@ Module Contents
 
 
 
-.. py:function:: read(path: str | pathlib.Path) -> MzTabImport
+.. py:function:: read(path: str | pathlib.Path, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> MzTabImport
 
    Parse an mzTab file and return an :class:`MzTabImport`.
+
+   ``progress`` fires every :data:`PROGRESS_INTERVAL_ROWS` data rows
+   (PRT/PEP/PSM/SML/SMF/SME) with ``total = -1`` and once more at the
+   end with ``(n_rows, n_rows)``.
 
 

@@ -78,6 +78,17 @@ loadScripts(document, 'script');</script>
 <li><a href="#writeBlobV2MateInfo(int,java.util.List,byte%5B%5D)" tabindex="0">writeBlobV2MateInfo(int, List, byte[])</a></li>
 <li><a href="#writeBlobV2RefDiff(int,java.lang.String,byte%5B%5D)" tabindex="0">writeBlobV2RefDiff(int, String, byte[])</a></li>
 <li><a href="#writeBlobV2NameTok(int,byte%5B%5D)" tabindex="0">writeBlobV2NameTok(int, byte[])</a></li>
+<li><a href="#writeEncryptionAlgorithm(java.lang.String)" tabindex="0">writeEncryptionAlgorithm(String)</a></li>
+<li><a href="#writeDatasetProvenance(java.util.List)" tabindex="0">writeDatasetProvenance(List)</a></li>
+<li><a href="#writeReferenceGroup(global.thalion.ttio.genomics.ReferenceImport)" tabindex="0">writeReferenceGroup(ReferenceImport)</a></li>
+<li><a href="#writeImage(global.thalion.ttio.MSImage)" tabindex="0">writeImage(MSImage)</a></li>
+<li><a href="#writeRamanImage(global.thalion.ttio.RamanImage)" tabindex="0">writeRamanImage(RamanImage)</a></li>
+<li><a href="#writeIRImage(global.thalion.ttio.IRImage)" tabindex="0">writeIRImage(IRImage)</a></li>
+<li><a href="#writeImageProcessed(global.thalion.ttio.MSImage)" tabindex="0">writeImageProcessed(MSImage)</a></li>
+<li><a href="#writeIdentifications(java.util.List)" tabindex="0">writeIdentifications(List)</a></li>
+<li><a href="#writeQuantifications(java.util.List)" tabindex="0">writeQuantifications(List)</a></li>
+<li><a href="#writeSubjectMetadata(java.util.List)" tabindex="0">writeSubjectMetadata(List)</a></li>
+<li><a href="#writeSampleMetadata(java.util.List)" tabindex="0">writeSampleMetadata(List)</a></li>
 <li><a href="#writeEndOfDataset(int,long)" tabindex="0">writeEndOfDataset(int, long)</a></li>
 <li><a href="#writeEndOfStream()" tabindex="0">writeEndOfStream()</a></li>
 <li><a href="#writeDataset(global.thalion.ttio.SpectralDataset)" tabindex="0">writeDataset(SpectralDataset)</a></li>
@@ -204,6 +215,19 @@ implements <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base
  long&nbsp;expectedAUCount)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeDatasetProvenance(java.util.List)" class="member-name-link">writeDatasetProvenance</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;records)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 1.6: emit a <code>DATASET_PROVENANCE</code> (0x18) packet
+carrying the dataset-level provenance chain (format-spec §6.3).</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeEncryptionAlgorithm(java.lang.String)" class="member-name-link">writeEncryptionAlgorithm</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;algorithm)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 1.5: emit an <code>ENCRYPTION_ALGORITHM</code> (0x1B)
+packet carrying the dataset-level <code>@encrypted</code> algorithm
+name (e.g.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeEndOfDataset(int,long)" class="member-name-link">writeEndOfDataset</a><wbr>(int&nbsp;datasetId,
  long&nbsp;finalAUSequence)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -218,12 +242,79 @@ implements <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base
 <div class="block">Write a single <a href="../genomics/GenomicRun.html" title="class in global.thalion.ttio.genomics"><code>GenomicRun</code></a> as a stream segment.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeIdentifications(java.util.List)" class="member-name-link">writeIdentifications</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 1.8: emit an <code>IDENTIFICATIONS_TABLE</code> (0x16)
+packet carrying the full identifications table as a single
+length-prefixed Apache Arrow IPC stream.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeImage(global.thalion.ttio.MSImage)" class="member-name-link">writeImage</a><wbr>(<a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;img)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 1.7: emit an <a href="../MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> as the packet sequence
+<code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL (0x14)
+ → END_OF_IMAGE (0x15)</code>, where <code>N = width * height</code>.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeImageProcessed(global.thalion.ttio.MSImage)" class="member-name-link">writeImageProcessed</a><wbr>(<a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;img)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 5.1 (Deferral 1): emit an <a href="../MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> in <b>processed mode</b>
+(sparse), where each pixel carries only its nonzero
+<code>(channel_index, intensity)</code> pairs indexed into the
+shared <code>mzAxis</code>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeIRImage(global.thalion.ttio.IRImage)" class="member-name-link">writeIRImage</a><wbr>(<a href="../IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;img)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 5.3 (Deferral 1): emit an <a href="../IRImage.html" title="class in global.thalion.ttio"><code>IRImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> with <code>modality=2</code>.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeQuantifications(java.util.List)" class="member-name-link">writeQuantifications</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 1.8: emit a <code>QUANTIFICATIONS_TABLE</code> (0x17)
+packet carrying the full quantifications table as a single
+length-prefixed Apache Arrow IPC stream.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeRamanImage(global.thalion.ttio.RamanImage)" class="member-name-link">writeRamanImage</a><wbr>(<a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;img)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Task 5.3 (Deferral 1): emit a <a href="../RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> with <code>modality=1</code>.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeReferenceGroup(global.thalion.ttio.genomics.ReferenceImport)" class="member-name-link">writeReferenceGroup</a><wbr>(<a href="../genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&nbsp;ref)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">v0.11 Stage 1: emit a <a href="../genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics"><code>ReferenceImport</code></a> as the packet
+sequence
+<code>REFERENCE_GROUP_HEADER (0x10) → N × REFERENCE_CHROMOSOME (0x11)
+ → END_OF_REFERENCE_GROUP (0x12)</code>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeSampleMetadata(java.util.List)" class="member-name-link">writeSampleMetadata</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Stage 6 / Task 6.2: emit a <code>SAMPLE_METADATA</code> (0x1A) packet
+carrying the full <a href="../Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a> table as a single length-prefixed
+Apache Arrow IPC stream.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeStreamHeader(java.lang.String,java.lang.String,java.lang.String,java.util.List,int)" class="member-name-link">writeStreamHeader</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;formatVersion,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigation,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;features,
  int&nbsp;nDatasets)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeSubjectMetadata(java.util.List)" class="member-name-link">writeSubjectMetadata</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Stage 6 / Task 6.2: emit a <code>SUBJECT_METADATA</code> (0x19) packet
+carrying the full <a href="../Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> table as a single length-
+prefixed Apache Arrow IPC stream.</div>
+</div>
 </div>
 </div>
 </div>
@@ -436,6 +527,348 @@ implements <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base
  byte[]&nbsp;blob)</span>
                         throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
 <div class="block">Phase 2c-T (transport-spec §4.12).</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeEncryptionAlgorithm(java.lang.String)">
+<h3>writeEncryptionAlgorithm</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeEncryptionAlgorithm</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;algorithm)</span>
+                              throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 1.5: emit an <code>ENCRYPTION_ALGORITHM</code> (0x1B)
+packet carrying the dataset-level <code>@encrypted</code> algorithm
+name (e.g. <code>"aes-256-gcm"</code>). Wire layout matches
+transport-spec §4.23:
+
+<pre>
+algorithm_length:  uint16
+algorithm_utf8:    bytes[algorithm_length]
+</pre>
+
+<p>All multi-byte integers LITTLE-ENDIAN per spec §1.7.</p>
+
+<p>This packet only conveys the algorithm-name string; per-AU
+key material continues to ride on <code>ProtectionMetadata</code>
+(0x04).</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeDatasetProvenance(java.util.List)">
+<h3>writeDatasetProvenance</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeDatasetProvenance</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;records)</span>
+                            throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 1.6: emit a <code>DATASET_PROVENANCE</code> (0x18) packet
+carrying the dataset-level provenance chain (format-spec §6.3).
+One packet carries all records — see transport-spec §4.21 for
+the wire layout:
+
+<pre>
+record_count:        uint32
+# repeated record_count times:
+timestamp_unix:      int64
+software_length:     uint16, software bytes[..]   (UTF-8)
+parameters_length:   uint16, parameters_json[..]  (UTF-8 JSON)
+input_refs_length:   uint16, input_refs_csv[..]   (UTF-8 CSV)
+output_refs_length:  uint16, output_refs_csv[..]  (UTF-8 CSV)
+</pre>
+
+<p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+input_refs / output_refs lists ride as comma-joined UTF-8 — a
+single empty string for an empty list (no separators).</p>
+
+<p>Distinct from the per-run <code>Provenance</code> (0x06) packet,
+which carries one JSON record per packet.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeReferenceGroup(global.thalion.ttio.genomics.ReferenceImport)">
+<h3>writeReferenceGroup</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeReferenceGroup</span><wbr><span class="parameters">(<a href="../genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&nbsp;ref)</span>
+                         throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Stage 1: emit a <a href="../genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics"><code>ReferenceImport</code></a> as the packet
+sequence
+<code>REFERENCE_GROUP_HEADER (0x10) → N × REFERENCE_CHROMOSOME (0x11)
+ → END_OF_REFERENCE_GROUP (0x12)</code>.
+
+<p>Wire layout matches transport-spec §4.13–§4.15. All
+multi-byte integers are LITTLE-ENDIAN (spec §1.7). The
+chromosome index rides in the packet header's
+<code>auSequence</code> field (0-based). The MD5 hex string from
+<a href="../genomics/ReferenceImport.html#md5Hex()"><code>ReferenceImport.md5Hex()</code></a> is emitted verbatim as 32
+ASCII bytes.</p>
+
+<p>The encoding byte on each chromosome record is 0
+(uncompressed UINT8) when the raw sequence is shorter than
+<code>REFERENCE_CHROMOSOME_ZLIB_THRESHOLD</code>, otherwise 1
+(zlib via <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/zip/Deflater.html" title="class or interface in java.util.zip" class="external-link"><code>Deflater</code></a> with default
+settings).</p>
+
+<p>Reader-side materialisation is added by Task 1.3; this
+method only emits the wire bytes.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeImage(global.thalion.ttio.MSImage)">
+<h3>writeImage</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeImage</span><wbr><span class="parameters">(<a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;img)</span>
+                throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 1.7: emit an <a href="../MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> as the packet sequence
+<code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL (0x14)
+ → END_OF_IMAGE (0x15)</code>, where <code>N = width * height</code>.
+
+<p>Wire layout matches transport-spec §4.16-§4.18. All
+multi-byte integers are LITTLE-ENDIAN (spec §1.7). Each pixel
+rides as a continuous-mode IMAGE_PIXEL — the shared m/z axis
+lives on the IMAGE_HEADER, and every pixel carries only its
+intensities (FLOAT64, uncompressed). The pixel index rides in
+the packet header's <code>auSequence</code> field
+(<code>y * width + x</code>; 0-based).</p>
+
+<p>Processed-mode (per-pixel axis, signalled by
+<code>is_continuous == 0</code>) is not yet emitted by this writer;
+the corresponding decoder path in <a href="TransportReader.html" title="class in global.thalion.ttio.transport"><code>TransportReader</code></a> is
+also continuous-only at Task 1.7. Adding processed-mode is
+deferred to a follow-up task once a Java MSImage value type
+exposes per-pixel axes (the current <a href="../MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> model is
+continuous by construction: one <code>mzAxis</code> shared by all
+pixels).</p>
+
+<p>Reader-side materialisation is added by Task 1.7 in
+<a href="TransportReader.html" title="class in global.thalion.ttio.transport"><code>TransportReader</code></a>; this method only emits the wire
+bytes.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeRamanImage(global.thalion.ttio.RamanImage)">
+<h3>writeRamanImage</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeRamanImage</span><wbr><span class="parameters">(<a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;img)</span>
+                     throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 5.3 (Deferral 1): emit a <a href="../RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> with <code>modality=1</code>.
+
+<p>Wire layout per transport-spec §4.16. The shared axis on
+the IMAGE_HEADER carries the Raman wavenumbers vector
+(<code>axis_kind = 1 = wavenumber</code>). The
+<code>modality_extras</code> slot at the tail of the IMAGE_HEADER
+carries the Raman-specific fields:</p>
+<pre>
+  excitation_wavelength_nm:  float64
+  laser_power_mw:            float64
+</pre>
+<p>(16 bytes total.)</p>
+
+<p>Each pixel rides as a continuous-mode IMAGE_PIXEL whose
+<code>payload_bytes</code> is a dense vector of
+<code>spectrum_bins</code> FLOAT64 intensities at the shared
+wavenumber axis.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeIRImage(global.thalion.ttio.IRImage)">
+<h3>writeIRImage</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeIRImage</span><wbr><span class="parameters">(<a href="../IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;img)</span>
+                  throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 5.3 (Deferral 1): emit an <a href="../IRImage.html" title="class in global.thalion.ttio"><code>IRImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> with <code>modality=2</code>.
+
+<p>Wire layout per transport-spec §4.16. The shared axis on
+the IMAGE_HEADER carries the IR wavenumbers vector
+(<code>axis_kind = 1 = wavenumber</code>). The
+<code>modality_extras</code> slot at the tail of the IMAGE_HEADER
+carries the IR-specific fields:</p>
+<pre>
+  ir_mode:            uint8   # 0=transmittance, 1=absorbance
+  resolution_cm_inv:  float64
+</pre>
+<p>(9 bytes total.)</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeImageProcessed(global.thalion.ttio.MSImage)">
+<h3>writeImageProcessed</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeImageProcessed</span><wbr><span class="parameters">(<a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;img)</span>
+                         throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 5.1 (Deferral 1): emit an <a href="../MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> in <b>processed mode</b>
+(sparse), where each pixel carries only its nonzero
+<code>(channel_index, intensity)</code> pairs indexed into the
+shared <code>mzAxis</code>. The dense cube is reconstructed by the
+reader.
+
+<p>Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+IMAGE_HEADER is identical to <a href="#writeImage(global.thalion.ttio.MSImage)"><code>writeImage(MSImage)</code></a> except for
+<code>is_continuous = 0</code>; each IMAGE_PIXEL payload is</p>
+<pre>
+  x(u32) + y(u32) + precision(u8) + compression(u8)
+    + payload_length(u32)
+    + payload_bytes = nonzero_count(u32)
+        + nonzero_count × { channel_index(u32) + intensity(f64) }
+</pre>
+
+<p>Nonzero is defined strictly as <code>v != 0.0</code>; NaN is
+preserved (NaN compares unequal to 0.0, so it is emitted
+verbatim as a nonzero entry). The MSImage data model stays
+dense; processed mode is purely a wire optimisation for sparse
+cubes.</p>
+
+<p>This is an opt-in sibling of <a href="#writeImage(global.thalion.ttio.MSImage)"><code>writeImage(MSImage)</code></a>. Callers
+pick continuous vs processed mode explicitly today; the
+automatic heuristic (emit whichever is smaller) lands in a
+follow-up task.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeIdentifications(java.util.List)">
+<h3>writeIdentifications</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeIdentifications</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications)</span>
+                          throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 1.8: emit an <code>IDENTIFICATIONS_TABLE</code> (0x16)
+packet carrying the full identifications table as a single
+length-prefixed Apache Arrow IPC stream. Wire layout per
+transport-spec §4.19:
+
+<pre>
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC stream
+</pre>
+
+<p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+IPC stream carries its own schema, row count, and null bitmaps,
+so no per-row TLV envelope is needed. Empty lists MUST NOT
+invoke this method — callers (see <a href="#writeDataset(global.thalion.ttio.SpectralDataset)"><code>writeDataset(SpectralDataset)</code></a>) gate on
+<code>!list.isEmpty()</code> per §5.4 step 6 ("zero or more").</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeQuantifications(java.util.List)">
+<h3>writeQuantifications</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeQuantifications</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications)</span>
+                          throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">v0.11 Task 1.8: emit a <code>QUANTIFICATIONS_TABLE</code> (0x17)
+packet carrying the full quantifications table as a single
+length-prefixed Apache Arrow IPC stream. Wire layout per
+transport-spec §4.20 — identical shape to §4.19 but with a
+distinct packet type so receivers can dispatch without parsing
+the IPC payload first.
+
+<pre>
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]
+</pre>
+
+<p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+lists MUST NOT invoke this method (§5.4 step 6).</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeSubjectMetadata(java.util.List)">
+<h3>writeSubjectMetadata</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeSubjectMetadata</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects)</span>
+                          throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage 6 / Task 6.2: emit a <code>SUBJECT_METADATA</code> (0x19) packet
+carrying the full <a href="../Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> table as a single length-
+prefixed Apache Arrow IPC stream. Wire layout per transport-spec
+§4.22:
+
+<pre>
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC stream
+</pre>
+
+<p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+payload schema and null-handling conventions live in
+<a href="ArrowIpcCodec.html" title="class in global.thalion.ttio.transport"><code>ArrowIpcCodec</code></a>. Empty lists MUST NOT invoke this method —
+callers (see <a href="#writeDataset(global.thalion.ttio.SpectralDataset)"><code>writeDataset(SpectralDataset)</code></a>) gate on
+<code>!list.isEmpty()</code> per §5.4 step 5 ("zero or more").</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeSampleMetadata(java.util.List)">
+<h3>writeSampleMetadata</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeSampleMetadata</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples)</span>
+                         throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage 6 / Task 6.2: emit a <code>SAMPLE_METADATA</code> (0x1A) packet
+carrying the full <a href="../Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a> table as a single length-prefixed
+Apache Arrow IPC stream. Wire layout per transport-spec §4.22 —
+identical shape to the SUBJECT_METADATA framing with a distinct
+packet type so receivers can dispatch without parsing the IPC
+payload first.
+
+<pre>
+arrow_ipc_length:    uint32
+arrow_ipc:           bytes[arrow_ipc_length]
+</pre>
+
+<p>All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+lists MUST NOT invoke this method (§5.4 step 5).</p></div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>

@@ -1,0 +1,225 @@
+ttio.workbench.session_proxy
+============================
+
+.. py:module:: ttio.workbench.session_proxy
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.session_proxy -- WS attach helper for interactive sessions.
+
+   Opens `wss://host:port/v1/sessions/{id}/` with the
+   `ttio-session-proxy` subprotocol, sends the JSON attach frame,
+   then pumps raw bytes bidirectionally between the engine subprocess
+   (server-side) and a user-supplied byte stream pair (typically
+   stdin/stdout, but could be in-memory queues for testing).
+
+   Wire shape (per the v1.0 wire-contract survey + `Documentation/
+   session-protocol.md`):
+
+     Subprotocol: `ttio-session-proxy`
+     URL:         `wss://<host>:<port>/v1/sessions/{id}/`
+
+     First frame (TEXT, JSON):
+       {
+         "action": "attach",     # required, must be literally "attach"
+         "token":  "ttiowbs_...", # required
+         "path":   "/api/kernels" # optional, defaults to "/"
+       }
+
+     Subsequent frames: raw BINARY bytes from the engine subprocess
+     (stdout/stderr) in one direction; raw BINARY bytes from the
+     caller (stdin) in the other. No framing on top.
+
+   Close codes:
+     1000 -- clean close (either side initiated)
+     1008 -- auth / policy (5 decisions: missing token, session not
+             found, forbidden, not running, malformed handshake)
+     1011 -- server error (session not running at attach, backend
+             subprocess connect failed)
+
+   The server applies ring-buffer backpressure (4 MB rings with
+   75/25 hysteresis) to either direction. The client doesn't need
+   to implement matching logic; the WS library's flow-control
+   hooks pause RX automatically when the OS socket buffer fills.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.session_proxy.SESSION_PROXY_SUBPROTOCOL
+   ttio.workbench.session_proxy.SessionProxy
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.session_proxy.SessionProxyResult
+   ttio.workbench.session_proxy.SessionProxyAttach
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.session_proxy.build_attach_handshake
+   ttio.workbench.session_proxy.session_proxy_url
+
+
+Module Contents
+---------------
+
+.. py:data:: SESSION_PROXY_SUBPROTOCOL
+   :value: 'ttio-session-proxy'
+
+
+.. py:function:: build_attach_handshake(*, token: str, path: str = '/') -> dict
+
+   Build the JSON attach-frame body.
+
+   Args:
+       token: workbench bearer (`ttiowbs_...`).
+       path: optional sub-path the proxy forwards to inside the
+           engine. Defaults to `/`. The server applies a defensive
+           leading-slash prepend if absent (see
+           `Source/Sessions/TTIOWBSessionProxy.m:54-62`).
+
+   Returns:
+       dict ready for `json.dumps(..., separators=(",", ":"))`.
+
+
+.. py:function:: session_proxy_url(*, host: str, port: int, session_id: str, scheme: str = 'ws') -> str
+
+   Build the WS proxy URL. Mirrors the server's mount path on
+   `/v1/sessions/{id}/`.
+
+   The server's mount config requires the trailing slash; we
+   always emit it.
+
+
+.. py:class:: SessionProxyResult
+
+   Outcome of an attach session.
+
+   Args:
+       close_code: WS close code (1000 / 1008 / 1011).
+       close_reason: server-supplied reason text (may be empty).
+       bytes_to_backend: total bytes pumped from client to engine.
+       bytes_from_backend: total bytes received from engine.
+
+
+   .. py:attribute:: close_code
+      :type:  int
+
+
+   .. py:attribute:: close_reason
+      :type:  str
+
+
+   .. py:attribute:: bytes_to_backend
+      :type:  int
+
+
+   .. py:attribute:: bytes_from_backend
+      :type:  int
+
+
+.. py:class:: SessionProxyAttach(*, host: str, port: int, session_id: str, token: str, path: str = '/', scheme: str = 'ws', ssl_context=None, connect_timeout: float = 10.0)
+
+   Async helper that attaches to a session and proxies bytes.
+
+   Usage:
+
+       async with SessionProxyAttach(host, port, session_id, token) as proxy:
+           await proxy.run(
+               stdin_reader=sys.stdin.buffer,
+               stdout_writer=sys.stdout.buffer,
+           )
+
+   For non-stdin-based use (e.g. a Jupyter HTTP-over-WS bridge),
+   pass any object with `read(n)` / `write(b)` shape; the helper
+   pumps in 16 KB chunks.
+
+   Bind the helper to a session-proxy endpoint.
+
+   :param host: Workbench server hostname.
+   :type host: str
+   :param port: WS listener port.
+   :type port: int
+   :param session_id: Target session identifier; the session must be in the
+                      ``running`` state at attach time.
+   :type session_id: str
+   :param token: Workbench bearer (``ttiowbs_...``).
+   :type token: str
+   :param path: Sub-path the proxy forwards to inside the engine.
+                Default ``"/"``.
+   :type path: str, optional
+   :param scheme: ``"ws"`` or ``"wss"``. Default ``"ws"``.
+   :type scheme: str, optional
+   :param ssl_context: Required when ``scheme == "wss"``. Pass a configured
+                       context for cert pinning; None falls back to default
+                       verification.
+   :type ssl_context: ssl.SSLContext, optional
+   :param connect_timeout: Max wall-clock seconds to wait for the WS open
+                           handshake. Default 10.
+   :type connect_timeout: float, optional
+
+
+   .. py:attribute:: DEFAULT_CHUNK_SIZE
+      :value: 16384
+
+
+
+   .. py:method:: __aenter__() -> SessionProxyAttach
+      :async:
+
+
+      Open the WS connection and send the attach handshake.
+
+      :returns: *SessionProxyAttach* -- Self, ready for :meth:`run`.
+
+      :raises RuntimeError: If the WS open fails for any reason (network, TLS,
+          timeout). The underlying exception is chained.
+
+
+
+   .. py:method:: __aexit__(exc_type, exc, tb)
+      :async:
+
+
+      Close the WS connection on context exit.
+
+      :param exc_type: Standard async context-manager exit triple. Exceptions
+                       from the user block propagate after the WS is closed.
+      :param exc: Standard async context-manager exit triple. Exceptions
+                  from the user block propagate after the WS is closed.
+      :param tb: Standard async context-manager exit triple. Exceptions
+                 from the user block propagate after the WS is closed.
+
+
+
+   .. py:method:: run(*, stdin_reader, stdout_writer, chunk_size: int = DEFAULT_CHUNK_SIZE) -> SessionProxyResult
+      :async:
+
+
+      Pump bytes between `stdin_reader` -> WS and WS -> `stdout_writer`
+      until the WS closes.
+
+      Args:
+          stdin_reader: file-like with `.read(n)`-returning bytes
+              or an asyncio Queue with `await get()` -> bytes.
+          stdout_writer: file-like with `.write(b)` + `.flush()`.
+          chunk_size: per-WS-frame budget for outbound bytes.
+
+      Returns:
+          `SessionProxyResult` with close info + byte counts.
+
+
+
+.. py:data:: SessionProxy
+

@@ -5,7 +5,7 @@ ttio.tools.ttio_pqc_cli
 
 .. autoapi-nested-parse::
 
-   ``ttio-pqc`` — Python post-quantum crypto CLI (M75).
+   ``ttio-pqc`` — Python post-quantum crypto CLI.
 
    Python equivalent of the Objective-C ``TtioPQCTool`` (``objc/Tools/
    TtioPQCTool.m``) and Java ``global.thalion.ttio.tools.PQCTool``. The
@@ -85,4 +85,18 @@ Module Contents
 
 
 .. py:function:: main(argv: list[str] | None = None) -> int
+
+   Dispatch a ``ttio-pqc`` subcommand.
+
+   Reads the first positional argument as the subcommand name and
+   looks it up in the :data:`_DISPATCH` table; the remainder of
+   ``argv`` is forwarded to the per-subcommand handler.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: list[str], optional
+
+   :returns: *int* -- The handler's return code. ``0`` for success, ``1`` for an
+             invalid signature in the verify subcommands, ``2`` for usage
+             errors and unexpected exceptions.
+
 

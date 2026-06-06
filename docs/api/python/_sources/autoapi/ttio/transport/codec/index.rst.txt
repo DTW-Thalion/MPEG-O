@@ -24,6 +24,20 @@ ttio.transport.codec
    - Selective-access filtering lives in M68 (server) and M71 (filter
      enforcement).
 
+   This module is a thin re-export facade (OO-assessment P3.10): the
+   :class:`TransportWriter` lives in :mod:`ttio.transport._writer`, the
+   :class:`TransportReader` in :mod:`ttio.transport._reader`, and the
+   shared helpers in :mod:`ttio.transport._common`. Every historical
+   ``from ttio.transport.codec import ...`` import path is preserved here.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.transport.codec.TRANSPORT_V0_11_FEATURE
 
 
 Classes
@@ -40,6 +54,7 @@ Functions
 
 .. autoapisummary::
 
+   ttio.transport.codec.unpack_string
    ttio.transport.codec.file_to_transport
    ttio.transport.codec.transport_to_file
 
@@ -47,47 +62,491 @@ Functions
 Module Contents
 ---------------
 
-.. py:class:: TransportWriter(output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False)
+.. py:data:: TRANSPORT_V0_11_FEATURE
+   :value: 'transport_v0_11'
+
+
+.. py:function:: unpack_string(buf: bytes, offset: int, *, width: int = 2) -> tuple[str, int]
+
+   Inverse of :func:`pack_string`.
+
+
+.. py:class:: TransportWriter(output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False, use_bulk_mode: bool = False)
 
    Serialize a :class:`SpectralDataset` as a transport byte stream.
+
+   Construct a writer targeting ``output``.
+
+   :param output: Destination. A path is opened in ``"wb"`` mode and
+                  closed by :meth:`close`; a file-like object is borrowed
+                  (not closed by the writer).
+   :type output: BinaryIO, str, or pathlib.Path
+   :param use_checksum: When ``True``, every emitted packet carries a trailing
+                        CRC-32C of its payload and the ``HAS_CHECKSUM`` flag is
+                        set on the header. Default ``False``.
+   :type use_checksum: bool, optional
+   :param use_compression: When ``True``, signal channels in spectral access units
+                           are zlib-compressed before emission. The reader detects
+                           the per-channel compression byte and decompresses
+                           transparently. Default ``False``.
+   :type use_compression: bool, optional
+   :param use_bulk_mode: When ``True``, the writer probes each genomic run for
+                         v2 codec blobs on disk and emits ``BlobV2*`` packets
+                         carrying them verbatim, preserving SAM mate sentinels
+                         byte-for-byte. Adds the
+                         :data:`BULK_MODE_V2_BLOBS_FEATURE` to the
+                         ``StreamHeader`` feature list when any blob is emitted.
+                         Default ``False``.
+   :type use_bulk_mode: bool, optional
 
 
    .. py:property:: use_compression
       :type: bool
 
 
+      Whether per-channel zlib compression is enabled for signal data.
+
 
    .. py:method:: __enter__() -> TransportWriter
+
+      Return ``self`` so the writer can be used as a context manager.
+
 
 
    .. py:method:: __exit__(*exc: object) -> None
 
+      Close the writer on context exit (delegates to :meth:`close`).
+
+
 
    .. py:method:: close() -> None
+
+      Close the underlying stream if the writer opened it.
+
+      No-op when the caller passed an externally-managed file-like
+      object at construction. Safe to call more than once.
+
 
 
    .. py:method:: write_stream_header(*, format_version: str, title: str, isa_investigation: str, features: list[str], n_datasets: int) -> None
 
+      Emit the leading :data:`PacketType.STREAM_HEADER` packet.
+
+      Must be the first packet on the wire (transport-spec §5.4).
+      The reader uses :paramref:`features` to enable opt-in wire
+      modes such as ``BULK_MODE_V2_BLOBS_FEATURE``.
+
+      :param format_version: Container format version string (e.g. ``"1.2"``).
+      :type format_version: str
+      :param title: Free-form container title.
+      :type title: str
+      :param isa_investigation: ISA-Tab investigation identifier (may be empty).
+      :type isa_investigation: str
+      :param features: Feature flag strings declaring optional wire-format
+                       extensions present in the stream.
+      :type features: list of str
+      :param n_datasets: Number of dataset blocks (spectral + genomic) the
+                         stream contains.
+      :type n_datasets: int
+
+
 
    .. py:method:: write_dataset_header(*, dataset_id: int, name: str, acquisition_mode: int, spectrum_class: str, channel_names: list[str], instrument_json: str, expected_au_count: int = 0) -> None
+
+      Emit a :data:`PacketType.DATASET_HEADER` packet.
+
+      One :data:`DATASET_HEADER` precedes every dataset's access
+      units. The packet declares the dataset's identity, schema,
+      and instrument metadata so the reader can allocate
+      per-dataset buffers before AU ingest.
+
+      :param dataset_id: 1-based dataset identifier within the stream
+                         (``uint16``).
+      :type dataset_id: int
+      :param name: Dataset name (run name) as exposed by the source
+                   container.
+      :type name: str
+      :param acquisition_mode: Wire encoding of :class:`ttio.AcquisitionMode`.
+      :type acquisition_mode: int
+      :param spectrum_class: ObjC class name for the spectrum type (e.g.
+                             ``"TTIOMassSpectrum"``).
+      :type spectrum_class: str
+      :param channel_names: Ordered signal-channel names.
+      :type channel_names: list of str
+      :param instrument_json: JSON-encoded instrument configuration (mass-spectrum
+                              runs) or genomic-run metadata.
+      :type instrument_json: str
+      :param expected_au_count: Total AU count for the dataset (``uint32``). ``0``
+                                (default) when unknown.
+      :type expected_au_count: int, optional
+
 
 
    .. py:method:: write_access_unit(*, dataset_id: int, au_sequence: int, au: ttio.transport.packets.AccessUnit) -> None
 
+      Emit one :data:`PacketType.ACCESS_UNIT` packet.
+
+      The :class:`AccessUnit` is serialised via
+      :meth:`AccessUnit.to_bytes`. The hot per-spectrum path is in
+      :meth:`_emit_run_access_units`; this method is the
+      general-purpose entry point used by genomic runs and by
+      callers driving emission manually.
+
+      :param dataset_id: Owning dataset id (matches the prior
+                         ``DATASET_HEADER``).
+      :type dataset_id: int
+      :param au_sequence: 0-based monotonically increasing AU index within the
+                          dataset.
+      :type au_sequence: int
+      :param au: The unit to emit.
+      :type au: AccessUnit
+
+
+
+   .. py:method:: write_blob_v2_mate_info(*, dataset_id: int, chrom_names: list[str], blob: bytes) -> None
+
+      Emit a :data:`PacketType.BLOB_V2_MATE_INFO` packet (§4.10).
+
+
+
+   .. py:method:: write_blob_v2_ref_diff(*, dataset_id: int, reference_uri: str, blob: bytes) -> None
+
+      Emit a :data:`PacketType.BLOB_V2_REF_DIFF` packet (§4.11).
+
+
+
+   .. py:method:: write_blob_v2_name_tok(*, dataset_id: int, blob: bytes) -> None
+
+      Emit a :data:`PacketType.BLOB_V2_NAME_TOK` packet (§4.12).
+
+
+
+   .. py:method:: write_dataset_provenance(records) -> None
+
+      v0.11 Task 2.5: emit a
+      :data:`PacketType.DATASET_PROVENANCE` (0x18) packet carrying
+      the dataset-level provenance chain (format-spec §6.3).
+
+      One packet carries all records. Wire layout per transport-spec
+      §4.21::
+
+          record_count:        uint32
+          # repeated record_count times:
+          timestamp_unix:      int64
+          software_length:     uint16, software bytes[..]   (UTF-8)
+          parameters_length:   uint16, parameters_json[..]  (UTF-8 JSON)
+          input_refs_length:   uint16, input_refs_csv[..]   (UTF-8 CSV)
+          output_refs_length:  uint16, output_refs_csv[..]  (UTF-8 CSV)
+
+      All multi-byte integers LITTLE-ENDIAN per spec §1.7. The
+      input_refs / output_refs lists ride as comma-joined UTF-8 — a
+      single empty string for an empty list (no separators).
+
+      Distinct from the per-run ``Provenance`` (0x06) packet which
+      carries one JSON record per packet.
+
+      Java parity: :meth:`TransportWriter.writeDatasetProvenance`
+      (commit ``563e09c3``). Per-field empty handling matches Java:
+      empty parameters render as ``"{}"`` (not omitted); empty refs
+      render as ``""`` (the empty-join result).
+
+      :param records: iterable of :class:`ttio.provenance.ProvenanceRecord`.
+          ``None`` raises ``ValueError``; an empty list is a no-op
+          (no packet emitted) per spec §5.4 "zero or more".
+
+
+
+   .. py:method:: write_encryption_algorithm(algorithm: str) -> None
+
+      v0.11 Task 2.4: emit an
+      :data:`PacketType.ENCRYPTION_ALGORITHM` (0x1B) packet carrying
+      the dataset-level ``@encrypted`` algorithm name
+      (e.g. ``"aes-256-gcm"``).
+
+      Wire layout per transport-spec §4.23::
+
+          algorithm_length:  uint16
+          algorithm_utf8:    bytes[algorithm_length]
+
+      All multi-byte integers are LITTLE-ENDIAN (spec §1.7). This
+      packet only conveys the algorithm-name string; per-AU key
+      material continues to ride on ``ProtectionMetadata`` (0x04).
+
+      Java parity: :meth:`TransportWriter.writeEncryptionAlgorithm`
+      (commit ``530a5833``).
+
+
+
+   .. py:attribute:: REFERENCE_CHROMOSOME_ZLIB_THRESHOLD
+      :value: 4096
+
+
+
+   .. py:method:: write_reference_group(ref) -> None
+
+      v0.11 Stage 1: emit a :class:`ReferenceImport` as the packet
+      sequence
+      ``REFERENCE_GROUP_HEADER (0x10) -> N x REFERENCE_CHROMOSOME (0x11)
+      -> END_OF_REFERENCE_GROUP (0x12)``.
+
+      Wire layout matches transport-spec §4.13-§4.15. All multi-byte
+      integers are LITTLE-ENDIAN (spec §1.7). The chromosome index
+      rides in the packet header's ``au_sequence`` field (0-based).
+      The MD5 hex string from ``ReferenceImport.md5.hex()`` is
+      emitted verbatim as 32 ASCII bytes.
+
+      The encoding byte on each chromosome record is 0 (uncompressed
+      UINT8) when the raw sequence is shorter than
+      :attr:`REFERENCE_CHROMOSOME_ZLIB_THRESHOLD`, otherwise 1
+      (zlib via :func:`zlib.compress` with default settings).
+
+      Reader-side materialisation is added by Task 2.3; this method
+      only emits the wire bytes. Java parity:
+      :meth:`TransportWriter.writeReferenceGroup`
+      (commit ``622aa8bd``).
+
+      :param ref: :class:`ttio.genomic.reference_import.ReferenceImport`
+          to emit. ``ref.md5`` must be the 16-byte digest the
+          constructor populates by default.
+
+
+
+   .. py:method:: write_image(image) -> None
+
+      v0.11 Task 2.6: emit an :class:`~ttio.MSImage` as the packet
+      sequence
+      ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14)
+      -> END_OF_IMAGE (0x15)``, where ``N = width * height``.
+
+      Wire layout matches transport-spec §4.16-§4.18 byte-for-byte
+      with Java's :meth:`TransportWriter.writeImage` (commit
+      ``a6b1e5d9``). All multi-byte integers are LITTLE-ENDIAN
+      (spec §1.7).
+
+      Continuous-mode only — the shared m/z axis rides on the
+      IMAGE_HEADER and every IMAGE_PIXEL carries only its
+      intensities (FLOAT64, uncompressed). For sparse cubes the
+      opt-in :meth:`write_image_processed` sibling emits the same
+      packet sequence with ``is_continuous=0`` and per-pixel
+      ``(channel_index, intensity)`` pairs (spec §4.17).
+
+      :param image: :class:`ttio.MSImage` to emit. ``image`` must
+          not be ``None`` (caller's responsibility to gate on
+          :meth:`SpectralDataset.image_for_kind` is not None).
+
+
+
+   .. py:method:: write_image_processed(image) -> None
+
+      v0.11 Task 5.1 (Deferral 1): emit an :class:`~ttio.MSImage`
+      as the packet sequence
+      ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+      (0x15)`` in **processed mode** (sparse), where each pixel
+      carries only its nonzero ``(channel_index, intensity)`` pairs
+      indexed into the shared ``mz_axis``. The dense cube is
+      reconstructed by the reader.
+
+      Wire layout per transport-spec §4.17 (LITTLE-ENDIAN). The
+      IMAGE_HEADER is identical to :meth:`write_image` except for
+      ``is_continuous=0``; each IMAGE_PIXEL payload is::
+
+        x(u32) + y(u32) + precision(u8) + compression(u8)
+          + payload_length(u32)
+          + payload_bytes = nonzero_count(u32)
+              + nonzero_count × { channel_index(u32) + intensity(f64) }
+
+      Nonzero is defined strictly as ``v != 0.0``; NaN is preserved
+      verbatim (NaN compares unequal to 0.0). The MSImage data model
+      stays dense; processed mode is purely a wire optimisation for
+      sparse cubes.
+
+      This is an opt-in sibling of :meth:`write_image`. Callers pick
+      continuous vs processed mode explicitly today; an automatic
+      heuristic (emit whichever is smaller) is a follow-up. Java
+      parity: :meth:`TransportWriter.writeImageProcessed` (commit
+      ``1889343e``).
+
+      :param image: :class:`ttio.MSImage` to emit. ``image`` must
+          not be ``None``.
+
+
+
+   .. py:method:: write_raman_image(image) -> None
+
+      v0.11 Task 5.3 (Deferral 1): emit a :class:`~ttio.RamanImage`
+      as the packet sequence
+      ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+      (0x15)`` with ``modality=1``.
+
+      Wire layout per transport-spec §4.16. The shared axis on the
+      IMAGE_HEADER carries the Raman wavenumbers vector
+      (``axis_kind = 1 = wavenumber``). The ``modality_extras`` slot
+      at the tail of the IMAGE_HEADER carries the Raman-specific
+      fields::
+
+          excitation_wavelength_nm:  float64
+          laser_power_mw:            float64
+
+      (16 bytes total.)
+
+      Each pixel rides as a continuous-mode IMAGE_PIXEL whose
+      ``payload_bytes`` is a dense vector of ``spectrum_bins``
+      FLOAT64 intensities at the shared wavenumber axis. Java
+      parity: :meth:`TransportWriter.writeRamanImage` (commit
+      ``f99ec47d``).
+
+
+
+   .. py:method:: write_ir_image(image) -> None
+
+      v0.11 Task 5.3 (Deferral 1): emit an :class:`~ttio.IRImage`
+      as the packet sequence
+      ``IMAGE_HEADER (0x13) -> N x IMAGE_PIXEL (0x14) -> END_OF_IMAGE
+      (0x15)`` with ``modality=2``.
+
+      Wire layout per transport-spec §4.16. The shared axis on the
+      IMAGE_HEADER carries the IR wavenumbers vector
+      (``axis_kind = 1 = wavenumber``). The ``modality_extras`` slot
+      at the tail of the IMAGE_HEADER carries the IR-specific
+      fields::
+
+          ir_mode:            uint8   # 0=transmittance, 1=absorbance
+          resolution_cm_inv:  float64
+
+      (9 bytes total.) Java parity:
+      :meth:`TransportWriter.writeIRImage` (commit ``f99ec47d``).
+
+
+
+   .. py:method:: write_identifications_table(rows) -> None
+
+      v0.11 Task 2.7: emit an
+      :data:`PacketType.IDENTIFICATIONS_TABLE` (0x16) packet carrying
+      the full identifications table as a single length-prefixed
+      Apache Arrow IPC stream. Wire layout per transport-spec §4.19::
+
+          arrow_ipc_length:    uint32
+          arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+
+      All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+      IPC stream carries its own schema, row count, and null bitmaps,
+      so no per-row TLV envelope is needed. Empty lists are a no-op
+      (no packet emitted) per spec §5.4 step 6 ("zero or more").
+
+      Java parity: :meth:`TransportWriter.writeIdentifications`
+      (commit ``a6faab16``).
+
+      :param rows: iterable of
+          :class:`ttio.identification.Identification`. ``None``
+          raises ``ValueError``.
+
+
+
+   .. py:method:: write_quantifications_table(rows) -> None
+
+      v0.11 Task 2.7: emit a
+      :data:`PacketType.QUANTIFICATIONS_TABLE` (0x17) packet carrying
+      the full quantifications table as a single length-prefixed
+      Apache Arrow IPC stream. Wire layout per transport-spec §4.20 —
+      identical shape to §4.19 but with a distinct packet type so
+      receivers can dispatch without parsing the IPC payload first.
+
+      All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+      lists are a no-op (spec §5.4 step 6).
+
+      Java parity: :meth:`TransportWriter.writeQuantifications`
+      (commit ``a6faab16``).
+
+      :param rows: iterable of
+          :class:`ttio.quantification.Quantification`. ``None``
+          raises ``ValueError``.
+
+
+
+   .. py:method:: write_subject_metadata(rows) -> None
+
+      Stage 6 / Task 6.3: emit a
+      :data:`PacketType.SUBJECT_METADATA` (0x19) packet carrying the
+      full Subject table as a single length-prefixed Apache Arrow
+      IPC stream. Wire layout per transport-spec §4.22::
+
+          arrow_ipc_length:    uint32
+          arrow_ipc:           bytes[arrow_ipc_length]   # self-describing IPC
+
+      All multi-byte integers LITTLE-ENDIAN per spec §1.7. The Arrow
+      IPC stream carries its own schema, row count, and null bitmaps,
+      so no per-row TLV envelope is needed. Empty lists are a no-op
+      (spec §5.4 step 5: "zero or more").
+
+      Java parity: :meth:`TransportWriter.writeSubjectMetadata`
+      (commit ``dd211600``).
+
+      :param rows: iterable of :class:`ttio.subject.Subject`.
+          ``None`` raises ``ValueError``.
+
+
+
+   .. py:method:: write_sample_metadata(rows) -> None
+
+      Stage 6 / Task 6.3: emit a
+      :data:`PacketType.SAMPLE_METADATA` (0x1A) packet carrying the
+      full Sample table as a single length-prefixed Apache Arrow IPC
+      stream. Wire layout per transport-spec §4.22 — identical shape
+      to the SUBJECT_METADATA framing with a distinct packet type so
+      receivers can dispatch without parsing the IPC payload first.
+
+      All multi-byte integers LITTLE-ENDIAN per spec §1.7. Empty
+      lists are a no-op (spec §5.4 step 5).
+
+      Java parity: :meth:`TransportWriter.writeSampleMetadata`
+      (commit ``dd211600``).
+
+      :param rows: iterable of :class:`ttio.sample.Sample`. ``None``
+          raises ``ValueError``.
+
+
 
    .. py:method:: write_end_of_dataset(*, dataset_id: int, final_au_sequence: int) -> None
+
+      Emit a :data:`PacketType.END_OF_DATASET` sentinel packet.
+
+      Terminates a dataset's access-unit run. The reader uses
+      :paramref:`final_au_sequence` to verify it observed every
+      expected AU.
+
+      :param dataset_id: Owning dataset id.
+      :type dataset_id: int
+      :param final_au_sequence: One past the last ``au_sequence`` emitted for the
+                                dataset (i.e. the dataset's AU count).
+      :type final_au_sequence: int
+
 
 
    .. py:method:: write_end_of_stream() -> None
 
+      Emit a :data:`PacketType.END_OF_STREAM` sentinel packet.
+
+      Marks the end of the transport stream. The reader stops
+      ingesting after this packet.
+
+
 
    .. py:method:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset) -> None
 
-      Walk ``dataset`` and emit the full packet sequence.
+      Walk ``dataset`` and emit the complete transport packet sequence.
 
-      Spectral runs are emitted first (dataset_ids 1..N), then
-      genomic runs (dataset_ids N+1..N+M). M89.2 added the genomic
-      flow.
+      The emission order follows the v0.11 prelude rules:
+      ``StreamHeader`` then the optional v0.11 prelude
+      (encryption algorithm, dataset provenance, subjects,
+      samples, reference groups, image cubes, identifications,
+      quantifications) then per-dataset
+      ``DatasetHeader`` / access-unit run /
+      ``EndOfDataset``, finishing with ``EndOfStream``.
+      Spectral runs are emitted with dataset ids ``1..N`` and
+      genomic runs with ``N+1..N+M``.
+
+      :param dataset: Source container to serialise. Borrowed; not closed.
+      :type dataset: SpectralDataset
 
 
 
@@ -109,28 +568,95 @@ Module Contents
    pairs. The high-level :meth:`read_to_dataset` materializes the
    stream into a new ``.tio`` file.
 
+   Construct a reader sourcing from a path or file-like object.
+
+   :param source: A path is opened in ``"rb"`` mode and closed by
+                  :meth:`close`; a file-like object is borrowed (not
+                  closed by the reader).
+   :type source: BinaryIO, str, or pathlib.Path
+
 
    .. py:method:: __enter__() -> TransportReader
+
+      Return ``self`` so the reader can be used as a context manager.
+
 
 
    .. py:method:: __exit__(*exc: object) -> None
 
+      Close the reader on context exit (delegates to :meth:`close`).
+
+
 
    .. py:method:: close() -> None
+
+      Close the underlying stream if the reader opened it.
+
+      No-op when the caller passed an externally-managed file-like
+      object at construction. Safe to call more than once.
+
 
 
    .. py:method:: iter_packets() -> Iterator[tuple[ttio.transport.packets.PacketHeader, bytes]]
 
+      Yield ``(header, payload)`` for every packet in the stream.
+
+      Reads sequentially, verifying any CRC-32C trailer when the
+      ``HAS_CHECKSUM`` flag is set. Unknown packet types are
+      logged at DEBUG level and still yielded (forward-compat per
+      transport-spec §6). Iteration terminates after an
+      ``END_OF_STREAM`` packet or when the stream is exhausted.
+
+      :Yields: *tuple of (PacketHeader, bytes)*
+
+      :raises ValueError: On truncated header, truncated payload, missing CRC, or
+          CRC mismatch.
+
+
+
+   .. py:method:: records_for_test() -> list[ttio.transport.ingest.PacketRecord]
+
+      Materialise :meth:`iter_packets` into a list of
+      :class:`PacketRecord` values. Test-only inspection hook
+      mirroring Java's ``recordsForTest`` (forward-compat skip-unknown
+      path, v0.11 task 0.5). Underscore semantics: this is not
+      part of the stable transport-reader surface — production
+      consumers should drive :meth:`iter_packets` directly.
+
+
 
    .. py:method:: read_to_dataset(*, output_path: str | pathlib.Path, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset
 
-      Materialize the stream into a ``.tio`` file at ``output_path``.
+      Materialise the stream into a ``.tio`` file.
+
+      Drains :meth:`iter_packets`, accumulates per-dataset state
+      (spectral runs, genomic runs, references, images,
+      identifications, quantifications, subjects, samples,
+      provenance, encryption algorithm), then materialises the
+      result via :meth:`SpectralDataset.write_minimal`. The
+      returned dataset is freshly opened on the written file.
+
+      :param output_path: Destination ``.tio`` path. Created if absent; truncated
+                          if present.
+      :type output_path: str or pathlib.Path
+      :param provider: Storage provider name. Default ``"hdf5"``.
+      :type provider: str, optional
+
+      :returns: *SpectralDataset* -- Reopened on the freshly written container.
+
+      :raises ValueError: On duplicate ``StreamHeader``, missing ``StreamHeader``,
+          non-monotonic ``au_sequence``, malformed prelude
+          packets, or a ``bulk_v2_blobs`` feature declaration
+          without matching ``BlobV2*`` packets.
 
 
 
-.. py:function:: file_to_transport(ttio_path: str | pathlib.Path, output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False) -> None
+.. py:function:: file_to_transport(ttio_path: str | pathlib.Path, output: BinaryIO | str | pathlib.Path, *, use_checksum: bool = False, use_compression: bool = False, use_bulk_mode: bool = False) -> None
 
    Convert a ``.tio`` file to a transport stream.
+
+   ``use_bulk_mode=True`` enables Phase 2c-T verbatim v2-blob
+   carriage for genomic runs. See ``docs/transport-spec.md`` §6.4.
 
 
 .. py:function:: transport_to_file(source: BinaryIO | str | pathlib.Path, ttio_path: str | pathlib.Path, *, provider: str = 'hdf5') -> ttio.spectral_dataset.SpectralDataset

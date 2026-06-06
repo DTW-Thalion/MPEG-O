@@ -24,14 +24,37 @@ Module Contents
 
    Connect to a :class:`TransportServer` and receive a filtered stream.
 
-   ``url`` must be a ``ws://`` or ``wss://`` URI.
+   Construct a client bound to a transport-server endpoint.
+
+   :param url: A ``ws://`` or ``wss://`` URI naming the
+               :class:`TransportServer` endpoint. The URL is stored
+               verbatim; the WebSocket is opened on each
+               :meth:`iter_packets` / :meth:`fetch_packets` /
+               :meth:`stream_to_file` call.
+   :type url: str
 
 
    .. py:method:: fetch_packets(*, filters: dict[str, Any] | None = None) -> list[tuple[ttio.transport.packets.PacketHeader, bytes]]
       :async:
 
 
-      Open one connection, send the query, collect all packets.
+      Open one connection, send the query, return every packet.
+
+      Convenience wrapper around :meth:`iter_packets` that drains the
+      iterator into a list. Suitable for small streams; large streams
+      should iterate to keep peak memory bounded.
+
+      :param filters: Server-side filter dictionary forwarded as the query JSON
+                      body. ``None`` (default) downloads the full stream.
+      :type filters: dict, optional
+
+      :returns: *list of (PacketHeader, bytes)* -- All packets in emission order, including the terminal
+                ``EndOfStream`` frame.
+
+      :raises websockets.exceptions.ConnectionClosed: If the server closes the connection before
+          ``EndOfStream``.
+      :raises ValueError: On a malformed wire frame (short header, truncated
+          payload, or CRC-32C mismatch).
 
 
 
@@ -41,8 +64,25 @@ Module Contents
 
       Connect, send the query, yield ``(header, payload)`` pairs.
 
-      The iterator terminates after ``EndOfStream`` or when the
-      connection closes.
+      Opens a fresh WebSocket to the configured URL with
+      ``permessage-deflate`` disabled, sends the JSON query frame,
+      and yields each binary packet the server emits in order.
+      Iteration terminates after the server emits an
+      ``EndOfStream`` packet or closes the connection.
+
+      :param filters: Server-side filter dictionary forwarded as the query JSON
+                      body. ``None`` (default) downloads the full stream.
+      :type filters: dict, optional
+
+      :Yields: *tuple of (PacketHeader, bytes)* -- One pair per server-emitted binary frame. The header is
+               decoded from the leading :data:`HEADER_SIZE` bytes; the
+               payload is the raw bytes immediately after. If the frame
+               carries a CRC-32C trailer it is verified before the pair
+               is yielded.
+
+      :raises ValueError: On a short header, truncated payload, missing CRC, or
+          CRC-32C mismatch.
+      :raises websockets.exceptions.ConnectionClosed: If the connection drops mid-stream.
 
 
 
@@ -51,6 +91,28 @@ Module Contents
 
 
       Stream a filtered dataset directly into a ``.tio`` file.
+
+      Drains :meth:`fetch_packets`, replays the captured bytes
+      through a :class:`TransportReader`, and writes the result via
+      :meth:`SpectralDataset.write_minimal` under the chosen
+      provider.
+
+      :param output_path: Destination ``.tio`` path. Created if absent; truncated if
+                          present.
+      :type output_path: str or pathlib.Path
+      :param filters: Server-side filter dictionary forwarded to the server.
+                      ``None`` (default) downloads the full stream.
+      :type filters: dict, optional
+      :param provider: Storage provider name to materialise into (default
+                       ``"hdf5"``). See :class:`ttio.providers.base.StorageProvider`.
+      :type provider: str, optional
+
+      :returns: *SpectralDataset* -- Freshly materialised dataset opened for read.
+
+      :raises websockets.exceptions.ConnectionClosed: If the server closes the connection before
+          ``EndOfStream``.
+      :raises ValueError: On a malformed wire frame propagated up from
+          :meth:`iter_packets`.
 
 
 

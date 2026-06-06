@@ -97,6 +97,8 @@ loadScripts(document, 'script');</script>
 <div class="horizontal-scroll">
 <div class="type-signature"><span class="modifiers">public static class </span><span class="element-name type-name-label">Hdf5Errors.Hdf5Exception</span>
 <span class="extends-implements">extends <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/RuntimeException.html" title="class or interface in java.lang" class="external-link">RuntimeException</a></span></div>
+<div class="block">Base unchecked exception for any failure raised by the HDF5
+  wrapper layer. All other exceptions in this class extend it.</div>
 <dl class="notes">
 <dt>See Also:</dt>
 <dd>
@@ -151,6 +153,10 @@ loadScripts(document, 'script');</script>
 <h3>Hdf5Exception</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">Hdf5Exception</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;message)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>message</code> - human-readable description of the failure</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -160,6 +166,11 @@ loadScripts(document, 'script');</script>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">Hdf5Exception</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;message,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Throwable.html" title="class or interface in java.lang" class="external-link">Throwable</a>&nbsp;cause)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>message</code> - human-readable description of the failure</dd>
+<dd><code>cause</code> - the underlying native exception, may be <code>null</code></dd>
+</dl>
 </div>
 </section>
 </li>

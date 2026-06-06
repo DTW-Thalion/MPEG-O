@@ -104,6 +104,19 @@ loadScripts(document, 'script');</script>
 the order they are declared.</div>
 </div>
 </div>
+<div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio</a> with parameters of type <a href="../Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AcquisitionRun.</span><code><a href="../AcquisitionRun.html#setIRMetadata(global.thalion.ttio.Enums.IRMode,double,long)" class="member-name-link">setIRMetadata</a><wbr>(<a href="../Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a>&nbsp;mode,
+ double&nbsp;resolutionCmInv,
+ long&nbsp;numberOfScans)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Mark this run as IR and attach its metadata.</div>
+</div>
+</div>
 <div class="caption"><span>Constructors in <a href="../package-summary.html">global.thalion.ttio</a> with parameters of type <a href="../Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier</div>
@@ -120,7 +133,10 @@ the order they are declared.</div>
  double&nbsp;resolutionCmInv,
  double[]&nbsp;intensityCube,
  double[]&nbsp;wavenumbers)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Convenience constructor that omits study-level annotation lists
+(title, identifications, etc.) and uses full-image chunking.</div>
+</div>
 <div class="col-first odd-row-color"><code>&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../IRImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,global.thalion.ttio.Enums.IRMode,double,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">IRImage</a><wbr>(int&nbsp;width,
  int&nbsp;height,
@@ -138,7 +154,10 @@ the order they are declared.</div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Full constructor capturing every cube dimension and study-level
+annotation.</div>
+</div>
 <div class="col-first even-row-color"><code>&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../IRSpectrum.html#%3Cinit%3E(double%5B%5D,double%5B%5D,int,double,global.thalion.ttio.Enums.IRMode,double,long)" class="member-name-link">IRSpectrum</a><wbr>(double[]&nbsp;wavenumberValues,
  double[]&nbsp;intensityValues,
@@ -147,7 +166,10 @@ the order they are declared.</div>
  <a href="../Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a>&nbsp;mode,
  double&nbsp;resolutionCmInv,
  long&nbsp;numberOfScans)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct an IR spectrum from parallel wavenumber and intensity
+arrays.</div>
+</div>
 </div>
 </section>
 </li>

@@ -87,9 +87,19 @@ Module Contents
       :type: int
 
 
+      Number of rows (F1 dimension) in the intensity matrix.
+
+      :returns: *int* -- ``intensity_matrix.shape[0]``; corresponds to the F1 axis
+                (indirect dimension).
+
 
    .. py:property:: matrix_width
       :type: int
 
+
+      Number of columns (F2 dimension) in the intensity matrix.
+
+      :returns: *int* -- ``intensity_matrix.shape[1]``; corresponds to the F2 axis
+                (direct dimension).
 
 

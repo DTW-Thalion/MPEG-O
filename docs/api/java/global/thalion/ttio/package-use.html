@@ -62,9 +62,13 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><a href="#global.thalion.ttio.analysis">global.thalion.ttio.analysis</a></div>
 <div class="col-last odd-row-color">
-<div class="block">Analysis primitives (v0.12.0+).</div>
+<div class="block">Analysis primitives.</div>
 </div>
-<div class="col-first even-row-color"><a href="#global.thalion.ttio.exporters">global.thalion.ttio.exporters</a></div>
+<div class="col-first even-row-color"><a href="#global.thalion.ttio.codecs.registry">global.thalion.ttio.codecs.registry</a></div>
+<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.exporters">global.thalion.ttio.exporters</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><a href="#global.thalion.ttio.exporters.writers">global.thalion.ttio.exporters.writers</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><a href="#global.thalion.ttio.genomics">global.thalion.ttio.genomics</a></div>
 <div class="col-last odd-row-color">&nbsp;</div>
@@ -81,7 +85,7 @@ loadScripts(document, 'script');</script>
 </div>
 <div class="col-first even-row-color"><a href="#global.thalion.ttio.providers">global.thalion.ttio.providers</a></div>
 <div class="col-last even-row-color">
-<div class="block">Storage/transport provider abstraction — .</div>
+<div class="block">Storage/transport provider abstraction.</div>
 </div>
 <div class="col-first odd-row-color"><a href="#global.thalion.ttio.transport">global.thalion.ttio.transport</a></div>
 <div class="col-last odd-row-color">&nbsp;</div>
@@ -141,34 +145,52 @@ numeric precision, compression algorithm, and byte order.</div>
 <div class="col-last even-row-color">
 <div class="block">Multi-level protection granularity (MPEG-G style).</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/Enums.IRMode.html#global.thalion.ttio">Enums.IRMode</a></div>
+<div class="col-first odd-row-color"><a href="class-use/Enums.ImageKind.html#global.thalion.ttio">Enums.ImageKind</a></div>
 <div class="col-last odd-row-color">
+<div class="block">Modality of a spatial image cube (MS / Raman / IR).</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Enums.IRMode.html#global.thalion.ttio">Enums.IRMode</a></div>
+<div class="col-last even-row-color">
 <div class="block">Infrared y-axis interpretation (transmittance vs.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/Enums.Polarity.html#global.thalion.ttio">Enums.Polarity</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/Enums.Polarity.html#global.thalion.ttio">Enums.Polarity</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Ion polarity for mass spectrometry.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/Enums.Precision.html#global.thalion.ttio">Enums.Precision</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/Enums.Precision.html#global.thalion.ttio">Enums.Precision</a></div>
+<div class="col-last even-row-color">
 <div class="block">Numeric precision of a signal buffer.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/Enums.SamplingMode.html#global.thalion.ttio">Enums.SamplingMode</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/Enums.SamplingMode.html#global.thalion.ttio">Enums.SamplingMode</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Axis sampling regularity.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/Feature.html#global.thalion.ttio">Feature</a></div>
+<div class="col-first even-row-color"><a href="class-use/Enums.SpectralAxisKind.html#global.thalion.ttio">Enums.SpectralAxisKind</a></div>
+<div class="col-last even-row-color">
+<div class="block">Physical interpretation of an image's spectral axis.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/Enums.SpectrumKind.html#global.thalion.ttio">Enums.SpectrumKind</a></div>
 <div class="col-last odd-row-color">
+<div class="block">Kind of spectrum, derived from the persisted <code>@spectrum_class</code>
+attribute string.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Feature.html#global.thalion.ttio">Feature</a></div>
+<div class="col-last even-row-color">
 <div class="block">A feature-level observation: a peak detected in one run, with
 retention time + m/z + charge + per-sample abundances.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/FeatureFlags.html#global.thalion.ttio">FeatureFlags</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/FeatureFlags.html#global.thalion.ttio">FeatureFlags</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Reader/writer for TTI-O feature flags stored as root group attributes.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/Identification.html#global.thalion.ttio">Identification</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/Identification.html#global.thalion.ttio">Identification</a></div>
+<div class="col-last even-row-color">
 <div class="block">A spectrum-level chemical-entity identification.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/Image.html#global.thalion.ttio">Image</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Shared base for the three spatial image-cube modalities
+(<a href="MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a>, <a href="RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a>, <a href="IRImage.html" title="class in global.thalion.ttio"><code>IRImage</code></a>).</div>
 </div>
 <div class="col-first even-row-color"><a href="class-use/InstrumentConfig.html#global.thalion.ttio">InstrumentConfig</a></div>
 <div class="col-last even-row-color">
@@ -215,21 +237,31 @@ transformed.</div>
 grid, each pixel a Raman spectrum of <code>spectralPoints</code>
 intensity values sampled at a shared wavenumber axis.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/SignalArray.html#global.thalion.ttio">SignalArray</a></div>
+<div class="col-first even-row-color"><a href="class-use/Sample.html#global.thalion.ttio">Sample</a></div>
 <div class="col-last even-row-color">
+<div class="block">A biological / material Sample collected from a <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a>, or
+a standalone sample with no recorded subject.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/SignalArray.html#global.thalion.ttio">SignalArray</a></div>
+<div class="col-last odd-row-color">
 <div class="block">The atomic unit of measured signal in TTI-O.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/SpectralDataset.html#global.thalion.ttio">SpectralDataset</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/SpectralDataset.html#global.thalion.ttio">SpectralDataset</a></div>
+<div class="col-last even-row-color">
 <div class="block">Root reader/writer for TTI-O <code>.tio</code> files.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/Spectrum.html#global.thalion.ttio">Spectrum</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/Spectrum.html#global.thalion.ttio">Spectrum</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Base class for any spectrum.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/SpectrumIndex.html#global.thalion.ttio">SpectrumIndex</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/SpectrumIndex.html#global.thalion.ttio">SpectrumIndex</a></div>
+<div class="col-last even-row-color">
 <div class="block">Compressed-domain query index for spectra in an acquisition run.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/Subject.html#global.thalion.ttio">Subject</a></div>
+<div class="col-last odd-row-color">
+<div class="block">A study Subject: the donor / patient / animal / object the sample
+was drawn from.</div>
 </div>
 <div class="col-first even-row-color"><a href="class-use/TransitionList.Transition.html#global.thalion.ttio">TransitionList.Transition</a></div>
 <div class="col-last even-row-color">
@@ -258,6 +290,19 @@ unit, numeric range, and sampling mode.</div>
 <div class="block">2D correlation spectrum (Noda 2D-COS): synchronous + asynchronous
 rank-2 correlation matrices sharing a single spectral-variable axis
 (ν<sub>1</sub> = ν<sub>2</sub>).</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.codecs.registry">
+<div class="caption"><span>Classes in <a href="package-summary.html">global.thalion.ttio</a> used by <a href="codecs/registry/package-summary.html">global.thalion.ttio.codecs.registry</a></span></div>
+<div class="summary-table two-column-summary">
+<div class="table-header col-first">Class</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><a href="class-use/Enums.Compression.html#global.thalion.ttio.codecs.registry">Enums.Compression</a></div>
+<div class="col-last even-row-color">
+<div class="block">Compression algorithm applied to a signal buffer.</div>
 </div>
 </div>
 </section>
@@ -300,6 +345,19 @@ excitation / power / integration metadata.</div>
 <div class="col-last even-row-color">
 <div class="block">1-D UV-visible absorption spectrum: wavelength (nm) and absorbance
 channels plus path-length and solvent metadata.</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.exporters.writers">
+<div class="caption"><span>Classes in <a href="package-summary.html">global.thalion.ttio</a> used by <a href="exporters/writers/package-summary.html">global.thalion.ttio.exporters.writers</a></span></div>
+<div class="summary-table two-column-summary">
+<div class="table-header col-first">Class</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><a href="class-use/SpectralDataset.html#global.thalion.ttio.exporters.writers">SpectralDataset</a></div>
+<div class="col-last even-row-color">
+<div class="block">Root reader/writer for TTI-O <code>.tio</code> files.</div>
 </div>
 </div>
 </section>
@@ -383,6 +441,16 @@ retention time + m/z + charge + per-sample abundances.</div>
 <div class="col-last even-row-color">
 <div class="block">A spectrum-level chemical-entity identification.</div>
 </div>
+<div class="col-first odd-row-color"><a href="class-use/IRImage.html#global.thalion.ttio.importers">IRImage</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Infrared hyperspectral imaging dataset: <code>width × height</code>
+pixel grid, each pixel an IR spectrum of <code>spectralPoints</code>
+intensity values sampled at a shared wavenumber axis.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/MSImage.html#global.thalion.ttio.importers">MSImage</a></div>
+<div class="col-last even-row-color">
+<div class="block">Imaging mass spectrometry dataset with spatial grid and tile access.</div>
+</div>
 <div class="col-first odd-row-color"><a href="class-use/ProvenanceRecord.html#global.thalion.ttio.importers">ProvenanceRecord</a></div>
 <div class="col-last odd-row-color">
 <div class="block">A single provenance step describing how data was produced or
@@ -392,9 +460,25 @@ transformed.</div>
 <div class="col-last even-row-color">
 <div class="block">An abundance observation for a chemical entity in a sample.</div>
 </div>
+<div class="col-first odd-row-color"><a href="class-use/RamanImage.html#global.thalion.ttio.importers">RamanImage</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Raman hyperspectral imaging dataset: <code>width × height</code> pixel
+grid, each pixel a Raman spectrum of <code>spectralPoints</code>
+intensity values sampled at a shared wavenumber axis.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Sample.html#global.thalion.ttio.importers">Sample</a></div>
+<div class="col-last even-row-color">
+<div class="block">A biological / material Sample collected from a <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a>, or
+a standalone sample with no recorded subject.</div>
+</div>
 <div class="col-first odd-row-color"><a href="class-use/Spectrum.html#global.thalion.ttio.importers">Spectrum</a></div>
 <div class="col-last odd-row-color">
 <div class="block">Base class for any spectrum.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Subject.html#global.thalion.ttio.importers">Subject</a></div>
+<div class="col-last even-row-color">
+<div class="block">A study Subject: the donor / patient / animal / object the sample
+was drawn from.</div>
 </div>
 </div>
 </section>
@@ -461,9 +545,48 @@ transformed.</div>
 <div class="summary-table two-column-summary">
 <div class="table-header col-first">Class</div>
 <div class="table-header col-last">Description</div>
-<div class="col-first even-row-color"><a href="class-use/SpectralDataset.html#global.thalion.ttio.transport">SpectralDataset</a></div>
+<div class="col-first even-row-color"><a href="class-use/Identification.html#global.thalion.ttio.transport">Identification</a></div>
 <div class="col-last even-row-color">
+<div class="block">A spectrum-level chemical-entity identification.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/IRImage.html#global.thalion.ttio.transport">IRImage</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Infrared hyperspectral imaging dataset: <code>width × height</code>
+pixel grid, each pixel an IR spectrum of <code>spectralPoints</code>
+intensity values sampled at a shared wavenumber axis.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/MSImage.html#global.thalion.ttio.transport">MSImage</a></div>
+<div class="col-last even-row-color">
+<div class="block">Imaging mass spectrometry dataset with spatial grid and tile access.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/ProvenanceRecord.html#global.thalion.ttio.transport">ProvenanceRecord</a></div>
+<div class="col-last odd-row-color">
+<div class="block">A single provenance step describing how data was produced or
+transformed.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Quantification.html#global.thalion.ttio.transport">Quantification</a></div>
+<div class="col-last even-row-color">
+<div class="block">An abundance observation for a chemical entity in a sample.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/RamanImage.html#global.thalion.ttio.transport">RamanImage</a></div>
+<div class="col-last odd-row-color">
+<div class="block">Raman hyperspectral imaging dataset: <code>width × height</code> pixel
+grid, each pixel a Raman spectrum of <code>spectralPoints</code>
+intensity values sampled at a shared wavenumber axis.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Sample.html#global.thalion.ttio.transport">Sample</a></div>
+<div class="col-last even-row-color">
+<div class="block">A biological / material Sample collected from a <a href="Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a>, or
+a standalone sample with no recorded subject.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/SpectralDataset.html#global.thalion.ttio.transport">SpectralDataset</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Root reader/writer for TTI-O <code>.tio</code> files.</div>
+</div>
+<div class="col-first even-row-color"><a href="class-use/Subject.html#global.thalion.ttio.transport">Subject</a></div>
+<div class="col-last even-row-color">
+<div class="block">A study Subject: the donor / patient / animal / object the sample
+was drawn from.</div>
 </div>
 </div>
 </section>

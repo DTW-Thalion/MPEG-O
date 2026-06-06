@@ -138,7 +138,9 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
  <a href="EncodingSpec.html" title="class in global.thalion.ttio">EncodingSpec</a>&nbsp;encoding,
  <a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a>&nbsp;axis,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="CVParam.html" title="class in global.thalion.ttio">CVParam</a>&gt;&nbsp;cvParams)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Primary constructor.</div>
+</div>
 </div>
 </section>
 </li>
@@ -238,6 +240,19 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
  <a href="EncodingSpec.html" title="class in global.thalion.ttio">EncodingSpec</a>&nbsp;encoding,
  <a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a>&nbsp;axis,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="CVParam.html" title="class in global.thalion.ttio">CVParam</a>&gt;&nbsp;cvParams)</span></div>
+<div class="block">Primary constructor.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>buffer</code> - backing array (<code>float[]</code>, <code>double[]</code>,
+                <code>int[]</code>, <code>long[]</code>, or <code>byte[]</code>)</dd>
+<dd><code>length</code> - logical element count (may be shorter than the
+                raw backing array when the buffer is shared)</dd>
+<dd><code>encoding</code> - precision/compression/byte-order descriptor</dd>
+<dd><code>axis</code> - optional axis descriptor for this array; may be
+                <code>null</code> for unlabelled buffers</dd>
+<dd><code>cvParams</code> - optional CV annotations; null is treated as an
+                empty list. Defensively copied.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -272,6 +287,10 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>buffer</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span>&nbsp;<span class="element-name">buffer</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The raw backing array; caller must cast to the type matching <a href="#encoding()"><code>encoding()</code></a>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -280,6 +299,10 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>length</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">length</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Logical element count of the array.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -288,6 +311,10 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>encoding</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="EncodingSpec.html" title="class in global.thalion.ttio">EncodingSpec</a></span>&nbsp;<span class="element-name">encoding</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The encoding descriptor (precision, compression, byte order).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -296,6 +323,10 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>axis</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a></span>&nbsp;<span class="element-name">axis</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Optional axis descriptor (label, unit, spacing); <code>null</code> when unlabelled.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -316,6 +347,12 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>asDoubles</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">asDoubles</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a defensive copy of the backing array as <code>double[]</code>.</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ClassCastException.html" title="class or interface in java.lang" class="external-link">ClassCastException</a></code> - when the buffer is not a <code>double[]</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -324,6 +361,12 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>asFloats</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">float[]</span>&nbsp;<span class="element-name">asFloats</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a defensive copy of the backing array as <code>float[]</code>.</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ClassCastException.html" title="class or interface in java.lang" class="external-link">ClassCastException</a></code> - when the buffer is not a <code>float[]</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -332,6 +375,12 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>asInts</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int[]</span>&nbsp;<span class="element-name">asInts</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a defensive copy of the backing array as <code>int[]</code>.</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ClassCastException.html" title="class or interface in java.lang" class="external-link">ClassCastException</a></code> - when the buffer is not an <code>int[]</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -340,6 +389,12 @@ Objective-C: <code>TTIOSignalArray</code></p></div>
 <h3>asLongs</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">long[]</span>&nbsp;<span class="element-name">asLongs</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>a defensive copy of the backing array as <code>long[]</code>.</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ClassCastException.html" title="class or interface in java.lang" class="external-link">ClassCastException</a></code> - when the buffer is not a <code>long[]</code></dd>
+</dl>
 </div>
 </section>
 </li>

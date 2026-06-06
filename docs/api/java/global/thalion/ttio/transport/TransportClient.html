@@ -66,7 +66,9 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#fetchPackets(java.util.Map,long)" tabindex="0">fetchPackets(Map, long)</a></li>
 <li><a href="#fetchPackets(java.util.Map)" tabindex="0">fetchPackets(Map)</a></li>
+<li><a href="#fetchPackets(java.util.Map,long,java.util.function.LongConsumer)" tabindex="0">fetchPackets(Map, long, LongConsumer)</a></li>
 <li><a href="#streamToFile(java.lang.String,java.util.Map)" tabindex="0">streamToFile(String, Map)</a></li>
+<li><a href="#streamToFile(java.lang.String,java.util.Map,java.util.function.LongConsumer)" tabindex="0">streamToFile(String, Map, LongConsumer)</a></li>
 </ol>
 </li>
 </ol>
@@ -132,12 +134,29 @@ binary transport packets.</p>
 <div class="block">Open a connection, send the query, collect all packets up to
 and including <code>EndOfStream</code>.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#streamToFile(java.lang.String,java.util.Map)" class="member-name-link">streamToFile</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outputPath,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters)</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportReader.PacketRecord</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#fetchPackets(java.util.Map,long,java.util.function.LongConsumer)" class="member-name-link">fetchPackets</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters,
+ long&nbsp;timeoutMs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/function/LongConsumer.html" title="class or interface in java.util.function" class="external-link">LongConsumer</a>&nbsp;onBytesReceived)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Open a connection, send the query, collect all packets up to and including
+<code>EndOfStream</code>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#streamToFile(java.lang.String,java.util.Map)" class="member-name-link">streamToFile</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outputPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Stream a filtered dataset into a new <code>.tio</code> file via the
 offline <a href="TransportReader.html" title="class in global.thalion.ttio.transport"><code>TransportReader</code></a> materializer.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#streamToFile(java.lang.String,java.util.Map,java.util.function.LongConsumer)" class="member-name-link">streamToFile</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outputPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/function/LongConsumer.html" title="class or interface in java.util.function" class="external-link">LongConsumer</a>&nbsp;onBytesReceived)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Stream a filtered dataset into a new <code>.tio</code> file via the offline
+<a href="TransportReader.html" title="class in global.thalion.ttio.transport"><code>TransportReader</code></a> materializer, reporting cumulative bytes received
+to <code>onBytesReceived</code> after each binary frame.</div>
 </div>
 </div>
 </div>
@@ -203,6 +222,27 @@ and including <code>EndOfStream</code>. Blocks up to
 </section>
 </li>
 <li>
+<section class="detail" id="fetchPackets(java.util.Map,long,java.util.function.LongConsumer)">
+<h3>fetchPackets</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportReader.PacketRecord</a>&gt;</span>&nbsp;<span class="element-name">fetchPackets</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters,
+ long&nbsp;timeoutMs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/function/LongConsumer.html" title="class or interface in java.util.function" class="external-link">LongConsumer</a>&nbsp;onBytesReceived)</span>
+                                                throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></span></div>
+<div class="block">Open a connection, send the query, collect all packets up to and including
+<code>EndOfStream</code>. Blocks up to <code>timeoutMs</code> milliseconds.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>onBytesReceived</code> - optional callback invoked after each binary frame with
+                       the cumulative byte count received so far (header +
+                       payload + optional CRC). May be <code>null</code>.</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="streamToFile(java.lang.String,java.util.Map)">
 <h3>streamToFile</h3>
 <div class="horizontal-scroll">
@@ -212,6 +252,27 @@ and including <code>EndOfStream</code>. Blocks up to
 <div class="block">Stream a filtered dataset into a new <code>.tio</code> file via the
 offline <a href="TransportReader.html" title="class in global.thalion.ttio.transport"><code>TransportReader</code></a> materializer.</div>
 <dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="streamToFile(java.lang.String,java.util.Map,java.util.function.LongConsumer)">
+<h3>streamToFile</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></span>&nbsp;<span class="element-name">streamToFile</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outputPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/function/LongConsumer.html" title="class or interface in java.util.function" class="external-link">LongConsumer</a>&nbsp;onBytesReceived)</span>
+                             throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></span></div>
+<div class="block">Stream a filtered dataset into a new <code>.tio</code> file via the offline
+<a href="TransportReader.html" title="class in global.thalion.ttio.transport"><code>TransportReader</code></a> materializer, reporting cumulative bytes received
+to <code>onBytesReceived</code> after each binary frame.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>onBytesReceived</code> - optional callback invoked with cumulative bytes received
+                       per binary frame; <code>null</code> disables the hook.</dd>
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code></dd>
 </dl>

@@ -1,0 +1,80 @@
+ttio.workbench.federation
+=========================
+
+.. py:module:: ttio.workbench.federation
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.federation -- /v1/federation REST client.
+
+   Federation is a v1.1+ server feature (spec §12.3). The v1.0 server is
+   single-node and does **not** expose ``/v1/federation/peers``. This
+   client degrades gracefully: :meth:`FederationClient.peers` returns an
+   empty list on a 404 instead of raising, so callers can treat a v1.0
+   server as a single-node federation of one.
+
+   Cross-language equivalent: Java
+   ``global.thalion.ttio.workbench.federation.FederationClient``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.federation.Peer
+   ttio.workbench.federation.FederationClient
+
+
+Module Contents
+---------------
+
+.. py:class:: Peer
+
+   A federation peer node from ``GET /v1/federation/peers``.
+
+
+   .. py:attribute:: peer_id
+      :type:  str
+
+
+   .. py:attribute:: url
+      :type:  str
+
+
+   .. py:attribute:: status
+      :type:  str
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> Peer
+      :classmethod:
+
+
+
+.. py:class:: FederationClient(host: str, port: int, scheme: str, token: str)
+
+   Client for the workbench federation endpoint.
+
+   Bound to a session + endpoint. Construct via
+   ``WorkbenchClient.federation()``.
+
+
+   .. py:method:: peers() -> List[Peer]
+
+      List federation peers.
+
+      Returns an empty list when the server does not expose the
+      federation endpoint (HTTP 404 -- a v1.0 single-node server),
+      so the caller never has to special-case version detection.
+      Any other non-2xx status raises :class:`WorkbenchHttpError`.
+
+
+
+   .. py:method:: is_federated() -> bool
+
+      True iff the server reports at least one federation peer.
+      A v1.0 single-node server reports none.
+
+
+

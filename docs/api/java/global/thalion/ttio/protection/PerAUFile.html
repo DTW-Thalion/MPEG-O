@@ -67,6 +67,7 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#encryptFile(java.lang.String,byte%5B%5D,boolean,java.lang.String)" tabindex="0">encryptFile(String, byte[], boolean, String)</a></li>
 <li><a href="#decryptFile(java.lang.String,byte%5B%5D,java.lang.String)" tabindex="0">decryptFile(String, byte[], String)</a></li>
+<li><a href="#decryptFileInPlace(java.lang.String,byte%5B%5D,java.lang.String)" tabindex="0">decryptFileInPlace(String, byte[], String)</a></li>
 <li><a href="#encryptByRegion(java.lang.String,java.util.Map,java.lang.String)" tabindex="0">encryptByRegion(String, Map, String)</a></li>
 <li><a href="#decryptByRegion(java.lang.String,java.util.Map,java.lang.String)" tabindex="0">decryptByRegion(String, Map, String)</a></li>
 </ol>
@@ -183,19 +184,27 @@ Objective-C <code>TTIOPerAUFile</code>.</div>
 <div class="block">Read-only decrypt.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#encryptByRegion(java.lang.String,java.util.Map,java.lang.String)" class="member-name-link">encryptByRegion</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr>byte[]&gt;&nbsp;keyMap,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#decryptFileInPlace(java.lang.String,byte%5B%5D,java.lang.String)" class="member-name-link">decryptFileInPlace</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ byte[]&nbsp;key,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Persist-to-disk per-AU decrypt counterpart to
+<a href="#encryptFile(java.lang.String,byte%5B%5D,boolean,java.lang.String)"><code>encryptFile(String, byte[], boolean, String)</code></a>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#encryptByRegion(java.lang.String,java.util.Map,java.lang.String)" class="member-name-link">encryptByRegion</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr>byte[]&gt;&nbsp;keyMap,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">encrypt genomic signal channels with a per-chromosome
   key map.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#encryptFile(java.lang.String,byte%5B%5D,boolean,java.lang.String)" class="member-name-link">encryptFile</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#encryptFile(java.lang.String,byte%5B%5D,boolean,java.lang.String)" class="member-name-link">encryptFile</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
  byte[]&nbsp;key,
  boolean&nbsp;encryptHeaders,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Encrypt <code>path</code> in place.</div>
 </div>
 </div>
@@ -261,6 +270,51 @@ Objective-C <code>TTIOPerAUFile</code>.</div>
  byte[]&nbsp;key,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</span></div>
 <div class="block">Read-only decrypt. Returns a map keyed by run name.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="decryptFileInPlace(java.lang.String,byte[],java.lang.String)">
+<h3>decryptFileInPlace</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">decryptFileInPlace</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ byte[]&nbsp;key,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</span></div>
+<div class="block">Persist-to-disk per-AU decrypt counterpart to
+<a href="#encryptFile(java.lang.String,byte%5B%5D,boolean,java.lang.String)"><code>encryptFile(String, byte[], boolean, String)</code></a>.
+
+<p>The legacy
+<a href="../SpectralDataset.html#decryptInPlace(java.lang.String,byte%5B%5D)"><code>SpectralDataset.decryptInPlace(String, byte[])</code></a>
+(mirror of ObjC <code>+[TTIOSpectralDataset decryptInPlaceAtPath:withKey:]</code>)
+only handles the <code>intensity_values_encrypted</code> single-dataset layout
+and is a silent idempotent no-op on per-AU files. This method is the
+per-AU equivalent.</p>
+
+<p>For each MS run with <code>&lt;channel&gt;_segments</code> under
+<code>signal_channels</code>, decrypts each spectrum row with the per-AU GCM
+scheme (AAD = <code>dataset_id || au_sequence || channel_name</code>), writes
+the concatenated plaintext back as <code>&lt;channel&gt;_values</code> (float64),
+removes <code>&lt;channel&gt;_segments</code> and the <code>&lt;channel&gt;_algorithm</code>
+attribute. When the file carries <code>opt_encrypted_au_headers</code> the
+six plaintext index datasets are restored from
+<code>au_header_segments</code> and the encrypted compound is removed.</p>
+
+<p>Genomic runs are handled the same way:
+<code>study/genomic_runs/&lt;name&gt;/signal_channels/&lt;sequences|qualities&gt;_segments</code>
+is decrypted (uint8) and written back as the bare
+<code>&lt;sequences|qualities&gt;</code> dataset. <code>dataset_id</code> continues
+from where the MS loop left off, mirroring <a href="#encryptFile(java.lang.String,byte%5B%5D,boolean,java.lang.String)"><code>encryptFile(String, byte[], boolean, String)</code></a>'s
+AAD numbering exactly.</p>
+
+<p>Strips the <code>opt_per_au_encryption</code> /
+<code>opt_encrypted_au_headers</code> feature flags and the root
+<code>@encrypted</code> attribute on completion, so subsequent readers
+see a fully unprotected file. Idempotent on already-plaintext files
+(returns without throwing).</p>
+
+<p>Cross-language equivalents:
+Python <code>ttio.encryption_per_au.decrypt_per_au_in_place</code>;
+ObjC <code>+[TTIOPerAUFile decryptFilePathInPlace:withKey:providerName:error:]</code>.</p></div>
 </div>
 </section>
 </li>

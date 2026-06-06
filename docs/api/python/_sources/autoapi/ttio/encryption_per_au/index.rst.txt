@@ -69,6 +69,7 @@ Functions
    ttio.encryption_per_au.decrypt_header_segments
    ttio.encryption_per_au.encrypt_per_au
    ttio.encryption_per_au.decrypt_per_au
+   ttio.encryption_per_au.decrypt_per_au_in_place
    ttio.encryption_per_au.encrypt_per_au_by_region
    ttio.encryption_per_au.decrypt_per_au_by_region
 
@@ -243,6 +244,44 @@ Module Contents
 
 
 .. py:data:: decrypt_per_au_file
+
+.. py:function:: decrypt_per_au_in_place(path: str, key: bytes, *, provider: str | None = None) -> None
+
+   Persist-to-disk per-AU decrypt counterpart to
+   :func:`encrypt_per_au`.
+
+   The legacy :func:`ttio.encryption.decrypt_in_place_at_path` (mirror of
+   ObjC ``+[TTIOSpectralDataset decryptInPlaceAtPath:withKey:]``) only
+   handles the ``intensity_values_encrypted`` single-dataset layout and
+   is a silent idempotent no-op on per-AU files. This function is the
+   per-AU equivalent.
+
+   For each MS run with ``<channel>_segments`` under ``signal_channels``,
+   decrypts each spectrum row with the per-AU GCM scheme
+   (AAD = ``dataset_id || au_sequence || channel_name``), writes the
+   concatenated plaintext back as ``<channel>_values`` (float64), removes
+   ``<channel>_segments`` and the ``<channel>_algorithm`` attribute. When
+   the file carries ``opt_encrypted_au_headers`` the six plaintext index
+   datasets (``retention_times``, ``ms_levels``, ``polarities``,
+   ``precursor_mzs``, ``precursor_charges``, ``base_peak_intensities``)
+   are restored from ``au_header_segments`` and the encrypted compound
+   is removed.
+
+   Genomic runs are handled the same way: ``study/genomic_runs/<name>/
+   signal_channels/<sequences|qualities>_segments`` is decrypted (uint8)
+   and written back as the bare ``<sequences|qualities>`` dataset.
+   ``dataset_id`` continues from where the MS loop left off, mirroring
+   ``encrypt_per_au``'s AAD numbering exactly.
+
+   Strips the ``opt_per_au_encryption`` / ``opt_encrypted_au_headers``
+   feature flags and the root ``@encrypted`` attribute on completion, so
+   subsequent readers see a fully unprotected file. Idempotent on
+   already-plaintext files.
+
+   Cross-language equivalents:
+     ObjC: ``+[TTIOPerAUFile decryptFilePathInPlace:withKey:providerName:error:]``
+     Java: ``PerAUFile.decryptFilePathInPlace``
+
 
 .. py:function:: encrypt_per_au_by_region(path: str, key_map: dict[str, bytes], *, provider: str | None = None) -> None
 

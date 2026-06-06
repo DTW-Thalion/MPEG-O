@@ -118,7 +118,9 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
  double&nbsp;targetMz,
  double&nbsp;precursorMz,
  double&nbsp;productMz)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct a chromatogram from parallel time and intensity arrays.</div>
+</div>
 </div>
 </section>
 </li>
@@ -151,7 +153,9 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="Chromatogram.html" title="class in global.thalion.ttio">Chromatogram</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#tic(double%5B%5D,double%5B%5D)" class="member-name-link">tic</a><wbr>(double[]&nbsp;time,
  double[]&nbsp;intensity)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Convenience factory for a total ion current trace.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="SignalArray.html" title="class in global.thalion.ttio">SignalArray</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#timeArray()" class="member-name-link">timeArray</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -191,6 +195,16 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
  double&nbsp;targetMz,
  double&nbsp;precursorMz,
  double&nbsp;productMz)</span></div>
+<div class="block">Construct a chromatogram from parallel time and intensity arrays.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>timeValues</code> - per-point retention times in seconds</dd>
+<dd><code>intensityValues</code> - per-point intensities, parallel to <code>timeValues</code></dd>
+<dd><code>type</code> - TIC, XIC, or SRM</dd>
+<dd><code>targetMz</code> - target m/z for XIC; 0 for TIC</dd>
+<dd><code>precursorMz</code> - precursor m/z for SRM transitions; 0 otherwise</dd>
+<dd><code>productMz</code> - product m/z for SRM transitions; 0 otherwise</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -208,6 +222,14 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="Chromatogram.html" title="class in global.thalion.ttio">Chromatogram</a></span>&nbsp;<span class="element-name">tic</span><wbr><span class="parameters">(double[]&nbsp;time,
  double[]&nbsp;intensity)</span></div>
+<div class="block">Convenience factory for a total ion current trace.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>time</code> - retention times in seconds</dd>
+<dd><code>intensity</code> - TIC intensities parallel to <code>time</code></dd>
+<dt>Returns:</dt>
+<dd>chromatogram with <a href="Enums.ChromatogramType.html#TIC"><code>Enums.ChromatogramType.TIC</code></a></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -216,6 +238,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>timeArray</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="SignalArray.html" title="class in global.thalion.ttio">SignalArray</a></span>&nbsp;<span class="element-name">timeArray</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The signal array carrying retention-time values.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -224,6 +250,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>intensityArray</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="SignalArray.html" title="class in global.thalion.ttio">SignalArray</a></span>&nbsp;<span class="element-name">intensityArray</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The signal array carrying intensity values.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -232,6 +262,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>timeValues</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">timeValues</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Retention-time values as a <code>double[]</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -240,6 +274,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>intensityValues</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">intensityValues</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Intensity values as a <code>double[]</code> parallel to <a href="#timeValues()"><code>timeValues()</code></a>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -248,6 +286,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>type</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Enums.ChromatogramType.html" title="enum class in global.thalion.ttio">Enums.ChromatogramType</a></span>&nbsp;<span class="element-name">type</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The chromatogram kind (TIC, XIC, or SRM).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -256,6 +298,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>targetMz</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">targetMz</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Target m/z for XIC traces; 0 for non-XIC chromatograms.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -264,6 +310,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>productMz</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">productMz</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Product m/z for SRM transitions; 0 for non-SRM chromatograms.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -272,6 +322,10 @@ of <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</
 <h3>length</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">length</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Number of points in the chromatogram.</dd>
+</dl>
 </div>
 </section>
 </li>

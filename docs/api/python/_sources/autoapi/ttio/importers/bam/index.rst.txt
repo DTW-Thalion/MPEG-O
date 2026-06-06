@@ -32,6 +32,14 @@ ttio.importers.bam
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.bam.PROGRESS_INTERVAL_READS
+
+
 Exceptions
 ----------
 
@@ -50,6 +58,10 @@ Classes
 
 Module Contents
 ---------------
+
+.. py:data:: PROGRESS_INTERVAL_READS
+   :value: 1000
+
 
 .. py:exception:: SamtoolsNotFoundError
 
@@ -80,13 +92,24 @@ Module Contents
    :meth:`to_genomic_run` raises :class:`SamtoolsNotFoundError` when
    samtools cannot be located at first use ().
 
+   Configure the reader; does not invoke samtools.
+
+   :param path: Filesystem path to a SAM or BAM file. The path is stored
+                verbatim — existence is not checked until
+                :meth:`to_genomic_run` runs.
+   :type path: str or os.PathLike
+
 
    .. py:property:: path
       :type: pathlib.Path
 
 
+      Return the SAM/BAM input path as a :class:`pathlib.Path`.
 
-   .. py:method:: to_genomic_run(name: str = 'genomic_0001', region: str | None = None, sample_name: str | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
+      :returns: *pathlib.Path* -- The path supplied at construction, unchanged.
+
+
+   .. py:method:: to_genomic_run(name: str = 'genomic_0001', region: str | None = None, sample_name: str | None = None, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
 
       Read the BAM/SAM and return a :class:`WrittenGenomicRun`.
 

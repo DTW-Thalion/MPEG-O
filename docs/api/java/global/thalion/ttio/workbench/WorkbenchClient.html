@@ -70,6 +70,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#transportClient()" tabindex="0">transportClient()</a></li>
 <li><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)" tabindex="0">upload(String, String, byte[])</a></li>
 <li><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.TransferProgress)" tabindex="0">upload(String, String, byte[], TransferProgress)</a></li>
+<li><a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.TransferProgress)" tabindex="0">upload(String, String, Path, TransferProgress)</a></li>
 <li><a href="#download(java.lang.String)" tabindex="0">download(String)</a></li>
 <li><a href="#download(java.lang.String,global.thalion.ttio.workbench.transport.TransferProgress)" tabindex="0">download(String, TransferProgress)</a></li>
 <li><a href="#download(java.lang.String,java.util.Map,global.thalion.ttio.workbench.transport.WorkbenchHandshake.OutputMode,int)" tabindex="0">download(String, Map, WorkbenchHandshake.OutputMode, int)</a></li>
@@ -80,6 +81,9 @@ loadScripts(document, 'script');</script>
 <li><a href="#downloadDecryptedPqc(java.lang.String,byte%5B%5D,java.lang.String,boolean)" tabindex="0">downloadDecryptedPqc(String, byte[], String, boolean)</a></li>
 <li><a href="#uploadEncryptedEnvelope(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)" tabindex="0">uploadEncryptedEnvelope(String, String, String, byte[], boolean)</a></li>
 <li><a href="#downloadDecryptedEnvelope(java.lang.String,byte%5B%5D,java.lang.String)" tabindex="0">downloadDecryptedEnvelope(String, byte[], String)</a></li>
+<li><a href="#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,boolean,boolean)" tabindex="0">uploadEncryptedMulti(String, String, String, List, boolean, boolean)</a></li>
+<li><a href="#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.lang.String,boolean,boolean)" tabindex="0">uploadEncryptedMulti(String, String, String, List, String, boolean, boolean)</a></li>
+<li><a href="#downloadDecryptedMulti(java.lang.String,byte%5B%5D,java.lang.String,java.lang.String,boolean)" tabindex="0">downloadDecryptedMulti(String, byte[], String, String, boolean)</a></li>
 <li><a href="#query(global.thalion.ttio.workbench.cohort.CohortQuery)" tabindex="0">query(CohortQuery)</a></li>
 <li><a href="#previewCount(global.thalion.ttio.workbench.cohort.CohortQuery)" tabindex="0">previewCount(CohortQuery)</a></li>
 <li><a href="#containers()" tabindex="0">containers()</a></li>
@@ -153,6 +157,11 @@ can hook in without breaking callers.</p></div>
 <div class="col-last even-row-color">
 <div class="block">Resolved server endpoint.</div>
 </div>
+<div class="col-first odd-row-color"><code>static final record&nbsp;</code></div>
+<div class="col-second odd-row-color"><code><a href="WorkbenchClient.EnvelopeRecipient.html" class="type-name-link" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">One recipient of a multi-recipient encrypted upload (FD-1 Phase B).</div>
+</div>
 </div>
 </section>
 </li>
@@ -161,7 +170,7 @@ can hook in without breaking callers.</p></div>
 <section class="method-summary" id="method-summary">
 <h2>Method Summary</h2>
 <div id="method-summary-table">
-<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="method-summary-table-tab0" role="tab" aria-selected="true" aria-controls="method-summary-table.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table', 3)" class="active-table-tab">All Methods</button><button id="method-summary-table-tab1" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab1', 3)" class="table-tab">Static Methods</button><button id="method-summary-table-tab2" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab2', 3)" class="table-tab">Instance Methods</button><button id="method-summary-table-tab4" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab4', 3)" class="table-tab">Concrete Methods</button></div>
+<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="method-summary-table-tab0" role="tab" aria-selected="true" aria-controls="method-summary-table.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table', 3)" class="active-table-tab">All Methods</button><button id="method-summary-table-tab1" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab1', 3)" class="table-tab">Static Methods</button><button id="method-summary-table-tab2" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab2', 3)" class="table-tab">Instance Methods</button><button id="method-summary-table-tab4" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab4', 3)" class="table-tab">Concrete Methods</button><button id="method-summary-table-tab6" role="tab" aria-selected="false" aria-controls="method-summary-table.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('method-summary-table', 'method-summary-table-tab6', 3)" class="table-tab">Deprecated Methods</button></div>
 <div id="method-summary-table.tabpanel" role="tabpanel" aria-labelledby="method-summary-table-tab0">
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -224,95 +233,117 @@ can hook in without breaking callers.</p></div>
 <div class="block">Download an envelope per-AU-encrypted container and decrypt it.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="../protection/PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#downloadDecryptedPqc(java.lang.String,byte%5B%5D,java.lang.String,boolean)" class="member-name-link">downloadDecryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#downloadDecryptedMulti(java.lang.String,byte%5B%5D,java.lang.String,java.lang.String,boolean)" class="member-name-link">downloadDecryptedMulti</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ byte[]&nbsp;key,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outTioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;recipientId,
+ boolean&nbsp;preview)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Download a multi-recipient encrypted container and decrypt it using
+  the recipient entry the caller holds a key for (FD-1 Phase B).</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="../protection/PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#downloadDecryptedPqc(java.lang.String,byte%5B%5D,java.lang.String,boolean)" class="member-name-link">downloadDecryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;recipientPrivateKey,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outTioPath,
  boolean&nbsp;preview)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Download a PQC per-AU-encrypted container and decrypt it.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchClient.Endpoint.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.Endpoint</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#endpoint()" class="member-name-link">endpoint</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="federation/FederationClient.html" title="class in global.thalion.ttio.workbench.federation">FederationClient</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#federation()" class="member-name-link">federation</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="WorkbenchClient.Endpoint.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.Endpoint</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#endpoint()" class="member-name-link">endpoint</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="federation/FederationClient.html" title="class in global.thalion.ttio.workbench.federation">FederationClient</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#federation()" class="member-name-link">federation</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Build a <a href="federation/FederationClient.html" title="class in global.thalion.ttio.workbench.federation"><code>FederationClient</code></a> bound to this session.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#host()" class="member-name-link">host</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpScheme()" class="member-name-link">httpScheme</a>()</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#host()" class="member-name-link">host</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="jobs/JobsClient.html" title="class in global.thalion.ttio.workbench.jobs">JobsClient</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#jobs()" class="member-name-link">jobs</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#httpScheme()" class="member-name-link">httpScheme</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="jobs/JobsClient.html" title="class in global.thalion.ttio.workbench.jobs">JobsClient</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#jobs()" class="member-name-link">jobs</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Build a <a href="jobs/JobsClient.html" title="class in global.thalion.ttio.workbench.jobs"><code>JobsClient</code></a> bound to this session.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="WorkbenchClient.Endpoint.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.Endpoint</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#parseUrl(java.lang.String)" class="member-name-link">parseUrl</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="WorkbenchClient.Endpoint.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.Endpoint</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#parseUrl(java.lang.String)" class="member-name-link">parseUrl</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;url)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Parse the user-facing connect URL into host + port + schemes.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="pipeline/PipelinesClient.html" title="class in global.thalion.ttio.workbench.pipeline">PipelinesClient</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#pipelines()" class="member-name-link">pipelines</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="pipeline/PipelinesClient.html" title="class in global.thalion.ttio.workbench.pipeline">PipelinesClient</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#pipelines()" class="member-name-link">pipelines</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Build a <a href="pipeline/PipelinesClient.html" title="class in global.thalion.ttio.workbench.pipeline"><code>PipelinesClient</code></a> bound to this session.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#port()" class="member-name-link">port</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>long</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#previewCount(global.thalion.ttio.workbench.cohort.CohortQuery)" class="member-name-link">previewCount</a><wbr>(<a href="cohort/CohortQuery.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery</a>&nbsp;query)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#port()" class="member-name-link">port</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>long</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#previewCount(global.thalion.ttio.workbench.cohort.CohortQuery)" class="member-name-link">previewCount</a><wbr>(<a href="cohort/CohortQuery.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery</a>&nbsp;query)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block"><code>POST /v1/cohorts/preview-count</code>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="cohort/CohortResult.html" title="class in global.thalion.ttio.workbench.cohort">CohortResult</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#query(global.thalion.ttio.workbench.cohort.CohortQuery)" class="member-name-link">query</a><wbr>(<a href="cohort/CohortQuery.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery</a>&nbsp;query)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="cohort/CohortResult.html" title="class in global.thalion.ttio.workbench.cohort">CohortResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#query(global.thalion.ttio.workbench.cohort.CohortQuery)" class="member-name-link">query</a><wbr>(<a href="cohort/CohortQuery.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery</a>&nbsp;query)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block"><code>POST /v1/cohorts/query</code>.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#reauth()" class="member-name-link">reauth</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#reauth()" class="member-name-link">reauth</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Re-authenticate using the stored provider.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="auth/Session.html" title="class in global.thalion.ttio.workbench.auth">Session</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#session()" class="member-name-link">session</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="sessions/SessionProxyAttach.html" title="class in global.thalion.ttio.workbench.sessions">SessionProxyAttach</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#sessionProxy(java.lang.String,java.lang.String)" class="member-name-link">sessionProxy</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sessionId,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="auth/Session.html" title="class in global.thalion.ttio.workbench.auth">Session</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#session()" class="member-name-link">session</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="sessions/SessionProxyAttach.html" title="class in global.thalion.ttio.workbench.sessions">SessionProxyAttach</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#sessionProxy(java.lang.String,java.lang.String)" class="member-name-link">sessionProxy</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sessionId,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Build a <a href="sessions/SessionProxyAttach.html" title="class in global.thalion.ttio.workbench.sessions"><code>SessionProxyAttach</code></a> bound to this session +
   endpoint.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="sessions/SessionsClient.html" title="class in global.thalion.ttio.workbench.sessions">SessionsClient</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#sessions()" class="member-name-link">sessions</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="sessions/SessionsClient.html" title="class in global.thalion.ttio.workbench.sessions">SessionsClient</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#sessions()" class="member-name-link">sessions</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Build a <a href="sessions/SessionsClient.html" title="class in global.thalion.ttio.workbench.sessions"><code>SessionsClient</code></a> bound to this session.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#transportClient()" class="member-name-link">transportClient</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#transportClient()" class="member-name-link">transportClient</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Build a <a href="transport/WorkbenchTransportClient.html" title="class in global.thalion.ttio.workbench.transport"><code>WorkbenchTransportClient</code></a> bound to this
   session + endpoint.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Convenience: one-shot upload via the transport client.</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6"><code><a href="#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload,
  <a href="transport/TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4 method-summary-table-tab6">
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="transport/TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Convenience: one-shot upload reporting byte progress.</div>
+<div class="block">Convenience: one-shot streaming upload from a file on disk.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#uploadEncrypted(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)" class="member-name-link">uploadEncrypted</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
@@ -332,6 +363,30 @@ can hook in without breaking callers.</p></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Per-AU encrypt a <code>.tio</code> with a fresh DEK, wrap that DEK under
   a symmetric AES-256-GCM key-encryption key (KEK), and upload it.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,boolean,boolean)" class="member-name-link">uploadEncryptedMulti</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a>&gt;&nbsp;recipients,
+ boolean&nbsp;preview,
+ boolean&nbsp;encryptHeaders)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Per-AU encrypt a <code>.tio</code> with a fresh DEK, wrap that DEK under
+  <em>each</em> recipient's key, and upload it (FD-1 Phase B).</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.lang.String,boolean,boolean)" class="member-name-link">uploadEncryptedMulti</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a>&gt;&nbsp;recipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;serverKekId,
+ boolean&nbsp;preview,
+ boolean&nbsp;encryptHeaders)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">FD-1 C-2a overload: declares the container server-processable under
+  <code>serverKekId</code> (stamped into the ProtectionMetadata packet so
+  the daemon can resolve it).</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#uploadEncryptedPqc(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean,boolean)" class="member-name-link">uploadEncryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
@@ -446,9 +501,17 @@ can hook in without breaking callers.</p></div>
 <section class="detail" id="upload(java.lang.String,java.lang.String,byte[])">
 <h3>upload</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#since()" title="class or interface in java.lang" class="external-link">since</a>="1.5.0",
+            <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=false)
+</span><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload)</span></div>
+<div class="deprecation-block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0. Prefer
+      <a href="#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.TransferProgress)"><code>upload(String, String, Path, TransferProgress)</code></a>
+      which streams from disk — peak heap O(<code>chunkSize</code>)
+      instead of O(<code>payload.length</code>).</div>
+</div>
 <div class="block">Convenience: one-shot upload via the transport client.</div>
 </div>
 </section>
@@ -457,13 +520,42 @@ can hook in without breaking callers.</p></div>
 <section class="detail" id="upload(java.lang.String,java.lang.String,byte[],global.thalion.ttio.workbench.transport.TransferProgress)">
 <h3>upload</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+<div class="member-signature"><span class="annotations"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html" title="class or interface in java.lang" class="external-link">@Deprecated</a>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#since()" title="class or interface in java.lang" class="external-link">since</a>="1.5.0",
+            <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Deprecated.html#forRemoval()" title="class or interface in java.lang" class="external-link">forRemoval</a>=false)
+</span><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;payload,
  <a href="transport/TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</span></div>
+<div class="deprecation-block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0. See
+      <a href="#upload(java.lang.String,java.lang.String,byte%5B%5D)"><code>upload(String, String, byte[])</code></a>.</div>
+</div>
 <div class="block">Convenience: one-shot upload reporting byte progress.
   <code>progress</code> receives <code>(bytesSent, payload.length)</code>
   per chunk — a determinate fraction.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.TransferProgress)">
+<h3>upload</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">upload</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="transport/TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</span>
+                                             throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Convenience: one-shot streaming upload from a file on disk.
+
+  <p>Reads the payload in <code>chunkSize</code>-bounded slices via
+  <a href="transport/WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)"><code>WorkbenchTransportClient.upload(String, String, java.nio.file.Path, global.thalion.ttio.workbench.transport.ResumeState, TransferProgress)</code></a> — peak heap during the
+  upload is O(<code>chunkSize</code>), independent of file size.
+  Prefer this entry point over the <code>byte[]</code> overload for
+  multi-MB payloads.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -659,6 +751,89 @@ can hook in without breaking callers.</p></div>
   per-run DEK from the ProtectionMetadata with the symmetric
   AES-256-GCM <code>kek</code>, then returns the decrypted channels per
   run. Counterpart to <a href="#uploadEncryptedEnvelope(java.lang.String,java.lang.String,java.lang.String,byte%5B%5D,boolean)"><code>uploadEncryptedEnvelope(String, String, String, byte[], boolean)</code></a>.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,boolean,boolean)">
+<h3>uploadEncryptedMulti</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">uploadEncryptedMulti</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a>&gt;&nbsp;recipients,
+ boolean&nbsp;preview,
+ boolean&nbsp;encryptHeaders)</span>
+                                                           throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Per-AU encrypt a <code>.tio</code> with a fresh DEK, wrap that DEK under
+  <em>each</em> recipient's key, and upload it (FD-1 Phase B).
+
+  <p>One per-run DEK is generated and wrapped once per recipient
+  (symmetric <code>aes-256-gcm</code> KEK or <code>ml-kem-1024</code> public key,
+  per <a href="WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench"><code>WorkbenchClient.EnvelopeRecipient</code></a>). <code>recipients.get(0)</code> becomes the
+  packet's primary (its id is <code>""</code> on the wire); the rest travel
+  in the Phase A append-only trailing block. Any holder of a
+  recipient's key recovers the DEK via <a href="#downloadDecryptedMulti(java.lang.String,byte%5B%5D,java.lang.String,java.lang.String,boolean)"><code>downloadDecryptedMulti(String, byte[], String, String, boolean)</code></a>;
+  the daemon never holds a key.</p>
+
+  <p>This is the FD-1 output shape: wrap for both a server KEK
+  (re-processable) and the researcher's key (client-side decryptable).
+  Preview-gated iff any recipient uses <code>ml-kem-1024</code>, mirroring
+  the server's <code>opt_pqc_preview</code>. Cross-language equivalent:
+  Python <code>WorkbenchClient.upload_encrypted_multi</code>.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.lang.String,boolean,boolean)">
+<h3>uploadEncryptedMulti</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="transport/WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></span>&nbsp;<span class="element-name">uploadEncryptedMulti</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;tioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a>&gt;&nbsp;recipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;serverKekId,
+ boolean&nbsp;preview,
+ boolean&nbsp;encryptHeaders)</span>
+                                                           throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">FD-1 C-2a overload: declares the container server-processable under
+  <code>serverKekId</code> (stamped into the ProtectionMetadata packet so
+  the daemon can resolve it). null ⇒ BYOK / not server-processable.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="downloadDecryptedMulti(java.lang.String,byte[],java.lang.String,java.lang.String,boolean)">
+<h3>downloadDecryptedMulti</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="../protection/PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a>&gt;</span>&nbsp;<span class="element-name">downloadDecryptedMulti</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ byte[]&nbsp;key,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outTioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;recipientId,
+ boolean&nbsp;preview)</span>
+                                                           throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Download a multi-recipient encrypted container and decrypt it using
+  the recipient entry the caller holds a key for (FD-1 Phase B).
+
+  <p><code>recipientId</code> selects the entry to unwrap: <code>""</code> is the
+  primary (e.g. the server KEK); pass the label given at upload (e.g.
+  <code>"researcher"</code>) for an additional recipient. <code>key</code> is the
+  matching symmetric KEK or ML-KEM-1024 private key. Preview-gated iff
+  the selected entry uses <code>ml-kem-1024</code>. Counterpart to
+  <a href="#uploadEncryptedMulti(java.lang.String,java.lang.String,java.lang.String,java.util.List,boolean,boolean)"><code>uploadEncryptedMulti(String, String, String, List, boolean, boolean)</code></a>; cross-language equivalent: Python
+  <code>WorkbenchClient.download_decrypted_multi</code>.</p></div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>

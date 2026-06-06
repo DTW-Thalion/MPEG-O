@@ -1,0 +1,254 @@
+ttio.tools.workbench_cli
+========================
+
+.. py:module:: ttio.tools.workbench_cli
+
+.. autoapi-nested-parse::
+
+   ttio.tools.workbench_cli -- `ttio` umbrella command.
+
+   Implements the spec section 8.2 CLI shape verbatim. Subcommands:
+
+       ttio login    --server <url> [--username U --password P --totp T |
+                                       --staging-root <path>]
+       ttio upload   --file <path> --server <url> --project P
+                     [--container-uri uri:tio:...] [--token T | --staging-root <path>]
+       ttio download --server <url> --container <uri> [--filter k=v]...
+                     [--output <path>] [--max-au N]
+                     [--token T | --staging-root <path>]
+       ttio stream   --server <url> --container <uri> [--filter k=v]...
+                     --output <.tis path>
+                     [--token T | --staging-root <path>]
+       ttio inspect  --server <url> --container <uri>
+                     [--token T | --staging-root <path>]
+       ttio encode   --input <path>... --format <fmt> --output <path> ...
+                     -- delegates to ttio.tools.{fastq,fasta}_import_cli
+       ttio export   --input <path> --layer <name> --format <fmt> --output <path>
+                     -- delegates to ttio.tools.{fastq,fasta}_export_cli
+
+       ttio query / submit / jobs / sessions / cohorts
+                     -- W3/W4 surfaces; today these print a clear
+                     "available in W3" / "W4" message + exit 2.
+
+   The umbrella delegates to the SDK (`ttio.workbench.connect`,
+   `UploadClient`, `DownloadClient`) for everything network-facing.
+   Format-specific CLIs stay reachable via their existing import
+   paths; the umbrella `encode`/`export` subcommands dispatch by
+   detected format.
+
+   Exit codes:
+       0  success
+       1  remote / SDK failure (auth, transport, server-side error)
+       2  usage error (bad CLI flags, future-milestone subcommand)
+       3  local file / format error (input missing, unknown format)
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.tools.workbench_cli.PROG
+   ttio.tools.workbench_cli.__version__
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.tools.workbench_cli.cmd_login
+   ttio.tools.workbench_cli.cmd_upload
+   ttio.tools.workbench_cli.cmd_download
+   ttio.tools.workbench_cli.cmd_stream
+   ttio.tools.workbench_cli.cmd_inspect
+   ttio.tools.workbench_cli.cmd_encode
+   ttio.tools.workbench_cli.cmd_export
+   ttio.tools.workbench_cli.cmd_query
+   ttio.tools.workbench_cli.cmd_submit
+   ttio.tools.workbench_cli.cmd_jobs
+   ttio.tools.workbench_cli.cmd_pipelines
+   ttio.tools.workbench_cli.cmd_provenance
+   ttio.tools.workbench_cli.cmd_sessions
+   ttio.tools.workbench_cli.build_parser
+   ttio.tools.workbench_cli.main
+
+
+Module Contents
+---------------
+
+.. py:data:: PROG
+   :value: 'ttio'
+
+
+.. py:data:: __version__
+   :value: '1.1.0'
+
+
+.. py:function:: cmd_login(args) -> int
+
+   Handle ``ttio login`` — authenticate against a workbench server
+   and emit the resulting session token + project list as JSON on
+   stdout.
+
+   Returns ``0`` on success; raises :class:`WorkbenchAuthError` (caught
+   by :func:`main` for exit code ``1``) when auth fails.
+
+
+.. py:function:: cmd_upload(args) -> int
+
+   Handle ``ttio upload`` — push a local ``.tio`` file to a
+   workbench project and report the new container URI + uploaded
+   byte count as JSON on stdout.
+
+   Returns ``0`` on success, ``1`` on transport failure, ``3`` when
+   the local input file is missing.
+
+
+.. py:function:: cmd_download(args) -> int
+
+   Handle ``ttio download`` — materialise a remote container to a
+   local ``.tio`` file. Thin wrapper around :func:`_download_impl`
+   in binary, output-required mode.
+
+
+.. py:function:: cmd_stream(args) -> int
+
+   Handle ``ttio stream`` — save a remote container's raw ``.tis``
+   bytes verbatim, without local materialisation. Same wire as
+   :func:`cmd_download`; the only delta is the user signals they
+   want the ``.tis`` stream as-is.
+
+
+.. py:function:: cmd_inspect(args) -> int
+
+   Handle ``ttio inspect`` — request a stats-only download for the
+   container and print every stats frame plus the terminal frame as
+   JSON on stdout. No data bytes are written to disk.
+
+   Returns ``0`` on success, ``1`` on transport failure.
+
+
+.. py:function:: cmd_encode(args) -> int
+
+   Handle ``ttio encode`` — convert one or more input files of a
+   given source format into a ``.tio`` container.
+
+   FASTA and FASTQ delegate to their richer dedicated CLIs (which
+   surface reference/unaligned modes and PHRED options); other
+   formats dispatch through :mod:`ttio.importers.registry`.
+
+   Returns ``0`` on success, ``2`` on tool failure, ``3`` when the
+   requested format is unsupported.
+
+
+.. py:function:: cmd_export(args) -> int
+
+   Handle ``ttio export`` — emit one layer of a ``.tio`` container
+   in a supported external format.
+
+   FASTA and FASTQ delegate to their richer dedicated CLIs (which
+   surface line-width / PHRED options); other formats dispatch
+   through :mod:`ttio.exporters.registry`.
+
+   Returns ``0`` on success, ``2`` on tool failure, ``3`` when the
+   requested format is unsupported.
+
+
+.. py:function:: cmd_query(args) -> int
+
+   Handle ``ttio query`` — run a cohort query against a workbench
+   server and emit the JSON response.
+
+   The predicate is sourced from ``--predicate-json`` or
+   ``--predicate-file``; ``--no-predicate`` opts out of the predicate
+   requirement (used for unbounded counts). The optional
+   ``--count-only`` flag routes through the ``preview-count``
+   endpoint instead of the full cohort query.
+
+   Returns ``0`` on success, ``1`` on remote failure, ``2`` on bad
+   predicate or missing required arguments.
+
+
+.. py:function:: cmd_submit(args) -> int
+
+   Handle ``ttio submit`` — enqueue a new pipeline job on a
+   workbench server.
+
+   Reads ``--inputs-file`` (required JSON map of pipeline-input
+   names to container URIs) and the optional ``--params-file``
+   (JSON map of free-form parameters), then calls
+   :meth:`Jobs.submit`.
+
+   Returns ``0`` on success, ``1`` on remote failure, ``2`` when
+   the inputs/params files are unreadable or invalid JSON.
+
+
+.. py:function:: cmd_jobs(args) -> int
+
+   Handle ``ttio jobs`` — list, inspect, cancel, or stream events
+   for pipeline jobs on a workbench server. Dispatches on
+   ``args.action`` (one of ``ls``, ``status``, ``cancel``,
+   ``events``).
+
+   Returns ``0`` on success, ``1`` on remote failure, ``2`` for an
+   unknown action.
+
+
+.. py:function:: cmd_pipelines(args) -> int
+
+   Handle ``ttio pipelines`` — list, inspect, or register
+   pipelines on a workbench server. Dispatches on ``args.action``
+   (one of ``ls``, ``get``, ``register``).
+
+   Returns ``0`` on success, ``1`` on remote failure, ``2`` for an
+   unknown action.
+
+
+.. py:function:: cmd_provenance(args) -> int
+
+   Handle ``ttio provenance`` — provenance lookup for a container.
+
+   Today this requires a server-side endpoint that is not exposed;
+   the handler prints a workaround note (query the
+   ``provenance_edges`` table directly) and returns ``2``.
+
+
+.. py:function:: cmd_sessions(args) -> int
+
+   Handle ``ttio sessions`` — list, inspect, terminate, create, or
+   attach interactive analysis sessions on a workbench server.
+   Dispatches on ``args.action`` (one of ``ls``, ``status``,
+   ``terminate``, ``create``, ``attach``).
+
+   Returns ``0`` on success, ``1`` on remote failure, ``2`` for an
+   unknown action.
+
+
+.. py:function:: build_parser() -> argparse.ArgumentParser
+
+   Construct the top-level argparse tree for the ``ttio`` CLI.
+
+   Each subcommand is registered with its handler via
+   ``set_defaults(func=...)``; the dispatch happens in :func:`main`.
+
+   :returns: *argparse.ArgumentParser* -- A fully-configured parser ready to consume an argv list.
+
+
+.. py:function:: main(argv: Optional[Iterable[str]] = None) -> int
+
+   Dispatch a ``ttio`` umbrella-command invocation.
+
+   Builds the argparse tree via :func:`build_parser`, parses
+   ``argv``, then calls the subcommand handler stored under
+   ``args.func``.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: Iterable[str], optional
+
+   :returns: *int* -- The subcommand handler's return code: ``0`` success, ``1``
+             remote / SDK failure (including auth), ``2`` usage error,
+             ``3`` local file / format error, ``130`` keyboard interrupt.
+
+

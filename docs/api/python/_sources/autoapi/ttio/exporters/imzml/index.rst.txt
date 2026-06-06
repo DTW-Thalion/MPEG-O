@@ -33,6 +33,14 @@ ttio.exporters.imzml
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.imzml.PROGRESS_INTERVAL_SPECTRA
+
+
 Classes
 -------
 
@@ -52,6 +60,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: PROGRESS_INTERVAL_SPECTRA
+   :value: 100
+
 
 .. py:class:: WriteResult
 
@@ -79,7 +91,7 @@ Module Contents
       :type:  int
 
 
-.. py:function:: write(pixels: Iterable[ttio.importers.imzml.ImzMLPixelSpectrum], imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None, *, mode: str = 'continuous', grid_max_x: int = 0, grid_max_y: int = 0, grid_max_z: int = 1, pixel_size_x: float = 0.0, pixel_size_y: float = 0.0, scan_pattern: str = 'flyback', uuid_hex: str | None = None) -> WriteResult
+.. py:function:: write(pixels: Iterable[ttio.importers.imzml.ImzMLPixelSpectrum], imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None, *, mode: str = 'continuous', grid_max_x: int = 0, grid_max_y: int = 0, grid_max_z: int = 1, pixel_size_x: float = 0.0, pixel_size_y: float = 0.0, scan_pattern: str = 'flyback', uuid_hex: str | None = None, progress: ttio.io.progress.ProgressSinkLike | None = None) -> WriteResult
 
    Write ``pixels`` as an imzML + .ibd pair.
 
@@ -108,7 +120,7 @@ Module Contents
                     generated.
 
 
-.. py:function:: write_from_import(import_result: ttio.importers.imzml.ImzMLImport, imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None) -> WriteResult
+.. py:function:: write_from_import(import_result: ttio.importers.imzml.ImzMLImport, imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> WriteResult
 
    Re-emit an :class:`ImzMLImport` to disk.
 

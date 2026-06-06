@@ -67,6 +67,8 @@ loadScripts(document, 'script');</script>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><a href="#global.thalion.ttio.importers">global.thalion.ttio.importers</a></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><a href="#global.thalion.ttio.transport">global.thalion.ttio.transport</a></div>
+<div class="col-last even-row-color">&nbsp;</div>
 </div>
 <section class="class-uses">
 <ul class="block-list">
@@ -108,6 +110,19 @@ loadScripts(document, 'script');</script>
 <div class="col-last odd-row-color">
 <div class="block">Write a reference import to a FASTA file.</div>
 </div>
+<div class="col-first even-row-color"><code>static void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">FastaWriter.</span><code><a href="../../exporters/FastaWriter.html#writeReference(global.thalion.ttio.genomics.ReferenceImport,java.nio.file.Path,int,java.lang.Boolean,boolean,global.thalion.ttio.io.ProgressSink)" class="member-name-link">writeReference</a><wbr>(<a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&nbsp;reference,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ int&nbsp;lineWidth,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ boolean&nbsp;writeFai,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D overload of
+<a href="../../exporters/FastaWriter.html#writeReference(global.thalion.ttio.genomics.ReferenceImport,java.nio.file.Path,int,java.lang.Boolean,boolean)"><code>FastaWriter.writeReference(ReferenceImport, Path, int, Boolean, boolean)</code></a>
+that fires <code>progress.onProgress(chromsDone, totalChroms)</code>
+once per chromosome record and a final fire when bytes hit disk.</div>
+</div>
 </div>
 </section>
 </li>
@@ -144,6 +159,31 @@ loadScripts(document, 'script');</script>
 <div class="col-second odd-row-color"><span class="type-name-label">FastaReader.</span><code><a href="../../importers/FastaReader.html#readReference(java.lang.String)" class="member-name-link">readReference</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;uri)</code></div>
 <div class="col-last odd-row-color">
 <div class="block">Parse the file as a reference genome.</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.transport">
+<h2>Uses of <a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a> in <a href="../../transport/package-summary.html">global.thalion.ttio.transport</a></h2>
+<div class="caption"><span>Methods in <a href="../../transport/package-summary.html">global.thalion.ttio.transport</a> with parameters of type <a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../../transport/AccessUnitVisitor.html#visitReferenceGroup(global.thalion.ttio.transport.DatasetWalker,global.thalion.ttio.genomics.ReferenceImport)" class="member-name-link">visitReferenceGroup</a><wbr>(<a href="../../transport/DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&nbsp;reference)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.4 — one embedded <a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics"><code>ReferenceImport</code></a> per call.</div>
+</div>
+<div class="col-first odd-row-color"><code>void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">TransportWriter.</span><code><a href="../../transport/TransportWriter.html#writeReferenceGroup(global.thalion.ttio.genomics.ReferenceImport)" class="member-name-link">writeReferenceGroup</a><wbr>(<a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&nbsp;ref)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">v0.11 Stage 1: emit a <a href="../ReferenceImport.html" title="class in global.thalion.ttio.genomics"><code>ReferenceImport</code></a> as the packet
+sequence
+<code>REFERENCE_GROUP_HEADER (0x10) → N × REFERENCE_CHROMOSOME (0x11)
+ → END_OF_REFERENCE_GROUP (0x12)</code>.</div>
 </div>
 </div>
 </section>

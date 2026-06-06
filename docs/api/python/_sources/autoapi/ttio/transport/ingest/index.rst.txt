@@ -1,0 +1,150 @@
+ttio.transport.ingest
+=====================
+
+.. py:module:: ttio.transport.ingest
+
+.. autoapi-nested-parse::
+
+   Callback-driven incremental transport-stream parser.
+
+   Sits next to :class:`ttio.transport.codec.TransportReader`: where the
+   reader assumes you have the whole stream up front and want every
+   packet back at once, the ingest is for callers (e.g. the TTI-O
+   Workbench Server's WebSocket upload session) that feed bytes in
+   chunks as they arrive and want each packet delivered as soon as it's
+   complete.
+
+   Lifecycle::
+
+       ingest = TransportIngest(
+           on_packet=handle_packet,
+           on_end_of_stream=handle_eos,
+           on_error=handle_error,
+       )
+       # ... when bytes arrive ...
+       ingest.feed(chunk)            # callbacks fire per packet
+       # ... on producer EOF ...
+       ingest.finish()               # raises if trailing partial
+
+   Validates everything :class:`TransportReader` validates — magic,
+   version, header CRC, payload CRC when the ``HAS_CHECKSUM`` flag is
+   set, AU-sequence monotonicity, StreamHeader-first — but does so
+   packet-by-packet instead of in one pass. A failed validation halts
+   the ingest; the rolling buffer is discarded and any subsequent
+   :meth:`feed` raises :class:`TransportIngestError`.
+
+   Not thread-safe: a single ingest instance must be driven from one
+   thread. The server pattern is one ingest per WS connection, owned by
+   the worker task that accepted the connection.
+
+   Cross-language equivalents:
+     - Objective-C: ``TTIOTransportIngest``
+     - Java:        ``global.thalion.ttio.transport.TransportIngest``
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.transport.ingest.TransportIngestError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.transport.ingest.PacketRecord
+   ttio.transport.ingest.TransportIngest
+
+
+Module Contents
+---------------
+
+.. py:exception:: TransportIngestError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised by :class:`TransportIngest` for any parse failure.
+
+   Inherits :class:`ValueError` so callers using the same
+   ``except ValueError:`` blocks as :class:`TransportReader` keep
+   working unchanged.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: PacketRecord
+
+   One complete packet delivered to the ``on_packet`` callback.
+
+
+   .. py:attribute:: header
+      :type:  ttio.transport.packets.PacketHeader
+
+
+   .. py:attribute:: payload
+      :type:  bytes
+
+
+.. py:class:: TransportIngest(*, on_packet: PacketCallback, on_end_of_stream: Optional[EndOfStreamCallback] = None, on_error: Optional[ErrorCallback] = None)
+
+   Incremental packet parser. See module docstring.
+
+
+   .. py:attribute:: __slots__
+      :value: ('_on_packet', '_on_end_of_stream', '_on_error', '_buffer', '_last_au_sequence_by_dataset',...
+
+
+
+   .. py:property:: packet_count
+      :type: int
+
+
+      Total packets emitted so far. Useful for resumable-upload
+      progress reporting.
+
+
+   .. py:property:: buffered_bytes
+      :type: int
+
+
+      Bytes currently buffered awaiting a complete packet.
+
+
+   .. py:property:: is_finished
+      :type: bool
+
+
+      ``True`` once the ingest has received and emitted an
+      EndOfStream packet, or has been put into the failed state by a
+      parse error. Further :meth:`feed` calls on a finished ingest
+      raise.
+
+
+   .. py:method:: feed(data: bytes) -> None
+
+      Feed a chunk of transport bytes.
+
+      As packets complete, delivers each to ``on_packet`` synchronously
+      on the calling thread. Raises :class:`TransportIngestError` on
+      the first parse error; the ``on_error`` callback is also invoked
+      in that case (so callers may choose either failure-handling
+      style).
+
+
+
+   .. py:method:: finish() -> None
+
+      Signal end-of-input.
+
+      If the rolling buffer contains a partial packet (header without
+      payload, payload without CRC, …) raises with a "truncated"
+      message and fires the error callback. If the last successfully
+      parsed packet was EndOfStream this is a no-op.
+
+
+

@@ -47,5 +47,5 @@ include $(GNUSTEP_MAKEFILES)/documentation.make
 # class page carries the sidebar, but we still want a single-URL entry
 # point for the doc site.
 after-all::
-	@cp index.html.in libTTIO/index.html
-	@echo " Installed landing page: libTTIO/index.html"
+	@cp index.html.in html/index.html
+	@echo " Installed landing page: html/index.html"

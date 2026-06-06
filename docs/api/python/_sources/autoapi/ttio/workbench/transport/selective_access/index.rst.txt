@@ -1,0 +1,90 @@
+ttio.workbench.transport.selective_access
+=========================================
+
+.. py:module:: ttio.workbench.transport.selective_access
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.transport.selective_access -- typed builder for the
+   download-handshake filter map.
+
+   The underlying handshake already validates filter keys against
+   `ALLOWED_DOWNLOAD_FILTER_KEYS` -- this builder narrows the API to
+   typed setters so a GUI consumer (W5.3 in tio-browser) cannot
+   accidentally produce a key the server will reject.
+
+   Cross-language equivalent: Java
+   `global.thalion.ttio.workbench.transport.SelectiveAccessFilter`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.selective_access.ALLOWED_POLARITIES
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.selective_access.SelectiveAccessFilter
+
+
+Module Contents
+---------------
+
+.. py:data:: ALLOWED_POLARITIES
+
+.. py:class:: SelectiveAccessFilter
+
+   Fluent builder for a download-handshake filter dict.
+
+
+   .. py:method:: ms_level(level: int) -> SelectiveAccessFilter
+
+
+   .. py:method:: polarity(value: Optional[str]) -> SelectiveAccessFilter
+
+
+   .. py:method:: retention_time_min(seconds: float) -> SelectiveAccessFilter
+
+
+   .. py:method:: retention_time_max(seconds: float) -> SelectiveAccessFilter
+
+
+   .. py:method:: precursor_mz_min(mz: float) -> SelectiveAccessFilter
+
+
+   .. py:method:: precursor_mz_max(mz: float) -> SelectiveAccessFilter
+
+
+   .. py:method:: precursor_charge(charge: int) -> SelectiveAccessFilter
+
+
+   .. py:method:: max_au(n: int) -> SelectiveAccessFilter
+
+
+   .. py:method:: validate() -> SelectiveAccessFilter
+
+      Validate cross-key constraints (rt_max >= rt_min,
+      mz_max >= mz_min). Per-key range checks are already enforced
+      by the typed setters.
+
+
+
+   .. py:method:: build() -> Dict[str, Any]
+
+      Return a shallow copy of the accumulated filter dict.
+
+
+
+   .. py:method:: is_empty() -> bool
+
+
+   .. py:method:: __len__() -> int
+
+

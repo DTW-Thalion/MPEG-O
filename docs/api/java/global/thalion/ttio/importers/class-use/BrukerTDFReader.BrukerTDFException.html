@@ -81,9 +81,15 @@ loadScripts(document, 'script');</script>
 by delegating binary extraction to the Python helper
 <code>ttio.importers.bruker_tdf</code>.</div>
 </div>
-<div class="col-first odd-row-color"><code>static <a href="../BrukerTDFReader.Metadata.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.Metadata</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">BrukerTDFReader.</span><code><a href="../BrukerTDFReader.html#readMetadata(java.nio.file.Path)" class="member-name-link">readMetadata</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</code></div>
+<div class="col-first odd-row-color"><code>static <a href="../ImportedDataset.html" title="class in global.thalion.ttio.importers">ImportedDataset</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">BrukerTDFReader.</span><code><a href="../BrukerTDFReader.html#readDataset(java.nio.file.Path)" class="member-name-link">readDataset</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</code></div>
 <div class="col-last odd-row-color">
+<div class="block">Build a write-through <a href="../ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a> draft for a Bruker
+<code>.d</code> directory.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../BrukerTDFReader.Metadata.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.Metadata</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">BrukerTDFReader.</span><code><a href="../BrukerTDFReader.html#readMetadata(java.nio.file.Path)" class="member-name-link">readMetadata</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</code></div>
+<div class="col-last even-row-color">
 <div class="block">Read the SQLite metadata from a Bruker <code>.d</code> directory
 without touching the binary blob.</div>
 </div>

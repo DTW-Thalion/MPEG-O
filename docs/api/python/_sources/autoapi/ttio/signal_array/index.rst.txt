@@ -25,8 +25,9 @@ Module Contents
    A named 1-D numeric signal buffer paired with axis and encoding
    metadata, with CV annotation support.
 
-   :param data: 1-D numeric array holding the raw signal values. Callers should
-                treat the array contents as immutable after construction.
+   :param data: 1-D numeric array holding the raw signal values. Stored as a
+                zero-copy, read-only (flags.writeable=False) view so callers
+                cannot mutate this value object in place after construction.
    :type data: numpy.ndarray
    :param axis: Descriptor of the physical dimension represented by ``data``
                 (e.g. m/z, ppm). ``None`` when the axis is not yet known or not
@@ -69,6 +70,9 @@ Module Contents
 
 
 
+   .. py:method:: __post_init__() -> None
+
+
    .. py:method:: add_cv_param(param: ttio.cv_param.CVParam) -> None
 
       Attach *param* to this array in insertion order.
@@ -107,6 +111,23 @@ Module Contents
 
    .. py:method:: from_numpy(array: numpy.ndarray, axis: ttio.axis_descriptor.AxisDescriptor | None = None, encoding: ttio.encoding_spec.EncodingSpec | None = None) -> SignalArray
       :classmethod:
+
+
+      Wrap a NumPy array as a :class:`SignalArray`.
+
+      :param array: 1-D NumPy array carrying the signal values. Made contiguous
+                    via :func:`numpy.ascontiguousarray` before storage.
+      :type array: numpy.ndarray
+      :param axis: Optional descriptor for the array's axis (label, unit,
+                   spacing). Default ``None``.
+      :type axis: AxisDescriptor, optional
+      :param encoding: Optional encoding hint (compression, precision). Defaults
+                       to a fresh :class:`EncodingSpec` when omitted.
+      :type encoding: EncodingSpec, optional
+
+      :returns: *SignalArray* -- Newly constructed signal array wrapping ``array``.
+
+      :raises ValueError: If ``array.ndim != 1``.
 
 
 

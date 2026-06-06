@@ -1,0 +1,70 @@
+ttio.io.progress
+================
+
+.. py:module:: ttio.io.progress
+
+.. autoapi-nested-parse::
+
+   ProgressSink Protocol mirroring Java's ``global.thalion.ttio.io.ProgressSink``.
+
+   Two-long progress callback. ``total == -1`` means unknown.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.io.progress.ProgressSinkLike
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.io.progress.ProgressSink
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.io.progress.discard
+
+
+Module Contents
+---------------
+
+.. py:class:: ProgressSink
+
+   Bases: :py:obj:`Protocol`
+
+
+   Two-long progress callback. ``total == -1`` means unknown.
+
+   Mirrors Java's ``global.thalion.ttio.io.ProgressSink``.
+
+   Implementations should be cheap and non-blocking; they may be
+   called many times per second from the worker thread. ``done`` is
+   always monotonically non-decreasing within a single operation.
+   Producers fire at meaningful chunk boundaries (per chromosome,
+   per N reads, per spectrum) -- not per byte -- to keep the rate
+   manageable.
+
+
+   .. py:method:: on_progress(done: int, total: int) -> None
+
+
+.. py:function:: discard() -> ProgressSink
+
+   Return a ProgressSink that drops every callback.
+
+   Use when a caller doesn't care about progress; saves a None check
+   at every emit site.
+
+
+.. py:data:: ProgressSinkLike
+

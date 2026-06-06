@@ -84,6 +84,7 @@ Functions
 .. autoapisummary::
 
    ttio.importers.bruker_tdf.read_metadata
+   ttio.importers.bruker_tdf.read_dataset
    ttio.importers.bruker_tdf.read
 
 
@@ -163,9 +164,16 @@ Module Contents
    :mod:`sqlite3` module — no ``opentimspy`` required.
 
 
-.. py:function:: read(d_dir: str | pathlib.Path, output_path: str | pathlib.Path, *, title: str | None = None, ms2: bool = False) -> pathlib.Path
+.. py:function:: read_dataset(d_dir: str | pathlib.Path, *, title: str | None = None, ms2: bool = False) -> ttio.importers.imported_dataset.ImportedDataset
 
-   Import a Bruker ``.d`` directory to an ``.tio`` file.
+   Import a Bruker ``.d`` directory into an in-memory draft.
+
+   Performs every step :func:`read` does up to (but not including) the
+   write, returning an :class:`~ttio.importers.imported_dataset.ImportedDataset`
+   populated with the same field values :func:`read` would hand to
+   :meth:`SpectralDataset.write_minimal`. Call ``.write(output_path)``
+   on the result to materialize the ``.tio`` file (this is what
+   :func:`read` does).
 
    Requires the optional ``opentimspy`` + ``opentims-bruker-bridge``
    dependencies (``pip install 'ttio[bruker]'``). Raises
@@ -177,6 +185,25 @@ Module Contents
    ``mz`` / ``intensity`` / ``inv_ion_mobility``. The last is the
    new v0.8 addition — ion mobility is preserved per-peak so the
    2-D tims geometry survives the round trip.
+
+   Args:
+       d_dir: Path to the Bruker ``.d`` directory.
+       title: Optional study title; defaults to the ``.d`` stem.
+       ms2: If True, also emit MS2 fragment frames as a second run.
+            Defaults to MS1-only; MS2 precursor threading is a v0.9
+            concern (see module docstring).
+
+
+.. py:function:: read(d_dir: str | pathlib.Path, output_path: str | pathlib.Path, *, title: str | None = None, ms2: bool = False) -> pathlib.Path
+
+   Import a Bruker ``.d`` directory to an ``.tio`` file.
+
+   Thin wrapper over :func:`read_dataset` that materializes the draft
+   to disk. Requires the optional ``opentimspy`` +
+   ``opentims-bruker-bridge`` dependencies
+   (``pip install 'ttio[bruker]'``). Raises
+   :class:`BrukerTDFUnavailableError` otherwise — use
+   :func:`read_metadata` for the metadata-only fallback.
 
    Args:
        d_dir: Path to the Bruker ``.d`` directory.

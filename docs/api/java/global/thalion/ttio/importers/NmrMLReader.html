@@ -56,11 +56,19 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
 <li><a href="#nested-class-summary" tabindex="0">Nested Class Summary</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_SPECTRA" tabindex="0">PROGRESS_INTERVAL_SPECTRA</a></li>
+</ol>
+</li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#read(java.lang.String)" tabindex="0">read(String)</a></li>
+<li><a href="#read(java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">read(String, ProgressSink)</a></li>
 <li><a href="#read(java.io.InputStream,java.lang.String)" tabindex="0">read(InputStream, String)</a></li>
+<li><a href="#read(java.io.InputStream,java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">read(InputStream, String, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -114,6 +122,24 @@ Python: <code>ttio.importers.nmrml</code></p></div>
 </div>
 </section>
 </li>
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_SPECTRA" class="member-name-link">PROGRESS_INTERVAL_SPECTRA</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">nmrML files canonically carry one 1-D spectrum (and optionally a
+  FID).</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ========== METHOD SUMMARY =========== -->
 <li>
 <section class="method-summary" id="method-summary">
@@ -132,9 +158,24 @@ Python: <code>ttio.importers.nmrml</code></p></div>
 <div class="block">Read an nmrML document from an input stream.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#read(java.io.InputStream,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a>&nbsp;is,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Overload of <a href="#read(java.io.InputStream,java.lang.String)"><code>read(InputStream, String)</code></a> that accepts a
+<a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Read an nmrML file from the given path.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#read(java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Overload of <a href="#read(java.lang.String)"><code>read(String)</code></a> that accepts a
+  <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
 </div>
 </div>
 </div>
@@ -148,6 +189,33 @@ Python: <code>ttio.importers.nmrml</code></p></div>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_SPECTRA">
+<h3>PROGRESS_INTERVAL_SPECTRA</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_SPECTRA</span></div>
+<div class="block">nmrML files canonically carry one 1-D spectrum (and optionally a
+  FID). The progress contract for this reader is therefore a single
+  final fire of <code>(1, 1)</code> after the parse succeeds.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.importers.NmrMLReader.PROGRESS_INTERVAL_SPECTRA">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ============ METHOD DETAIL ========== -->
 <li>
 <section class="method-details" id="method-detail">
@@ -171,6 +239,24 @@ Python: <code>ttio.importers.nmrml</code></p></div>
 </section>
 </li>
 <li>
+<section class="detail" id="read(java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>read</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></span>&nbsp;<span class="element-name">read</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                                    throws <span class="exceptions"><a href="NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></span></div>
+<div class="block">Overload of <a href="#read(java.lang.String)"><code>read(String)</code></a> that accepts a
+  <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>. nmrML produces a single 1-D spectrum, so
+  the sink fires exactly once with <code>(1, 1)</code> after a
+  successful parse.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="read(java.io.InputStream,java.lang.String)">
 <h3>read</h3>
 <div class="horizontal-scroll">
@@ -181,6 +267,28 @@ Python: <code>ttio.importers.nmrml</code></p></div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></code> - if the document is malformed.</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="read(java.io.InputStream,java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>read</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></span>&nbsp;<span class="element-name">read</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/InputStream.html" title="class or interface in java.io" class="external-link">InputStream</a>&nbsp;is,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                                    throws <span class="exceptions"><a href="NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></span></div>
+<div class="block">Overload of <a href="#read(java.io.InputStream,java.lang.String)"><code>read(InputStream, String)</code></a> that accepts a
+<a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>. Fires <code>progress.onProgress(1, 1)</code> once
+the spectrum has been parsed; total is always <code>1</code> because
+nmrML's canonical structure holds a single 1-D spectrum (plus an
+optional FID, which is part of the same logical acquisition).</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

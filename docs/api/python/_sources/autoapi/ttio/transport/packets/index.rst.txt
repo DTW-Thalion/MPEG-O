@@ -21,12 +21,17 @@ Attributes
    ttio.transport.packets.HEADER_MAGIC
    ttio.transport.packets.VERSION
    ttio.transport.packets.HEADER_SIZE
+   ttio.transport.packets.BULK_MODE_V2_BLOBS_FEATURE
+   ttio.transport.packets.TRANSPORT_V0_11_FEATURE
    ttio.transport.packets.SPECTRUM_CLASS_MASS_SPECTRUM
    ttio.transport.packets.SPECTRUM_CLASS_NMR_SPECTRUM
    ttio.transport.packets.SPECTRUM_CLASS_NMR_2D
    ttio.transport.packets.SPECTRUM_CLASS_FID
    ttio.transport.packets.SPECTRUM_CLASS_MS_IMAGE_PIXEL
    ttio.transport.packets.SPECTRUM_CLASS_GENOMIC_READ
+   ttio.transport.packets.CODEC_ID_MATE_INLINE_V2
+   ttio.transport.packets.CODEC_ID_REF_DIFF_V2
+   ttio.transport.packets.CODEC_ID_NAME_TOKENIZED_V2
 
 
 Classes
@@ -46,10 +51,17 @@ Functions
 
 .. autoapisummary::
 
+   ttio.transport.packets.is_known_packet_type
    ttio.transport.packets.crc32c
    ttio.transport.packets.now_ns
    ttio.transport.packets.pack_string
    ttio.transport.packets.unpack_string
+   ttio.transport.packets.pack_blob_mate_info
+   ttio.transport.packets.unpack_blob_mate_info
+   ttio.transport.packets.pack_blob_ref_diff
+   ttio.transport.packets.unpack_blob_ref_diff
+   ttio.transport.packets.pack_blob_name_tok
+   ttio.transport.packets.unpack_blob_name_tok
 
 
 Module Contents
@@ -117,9 +129,102 @@ Module Contents
 
 
 
+   .. py:attribute:: BLOB_V2_MATE_INFO
+      :value: 9
+
+
+
+   .. py:attribute:: BLOB_V2_REF_DIFF
+      :value: 10
+
+
+
+   .. py:attribute:: BLOB_V2_NAME_TOK
+      :value: 11
+
+
+
+   .. py:attribute:: REFERENCE_GROUP_HEADER
+      :value: 16
+
+
+
+   .. py:attribute:: REFERENCE_CHROMOSOME
+      :value: 17
+
+
+
+   .. py:attribute:: END_OF_REFERENCE_GROUP
+      :value: 18
+
+
+
+   .. py:attribute:: IMAGE_HEADER
+      :value: 19
+
+
+
+   .. py:attribute:: IMAGE_PIXEL
+      :value: 20
+
+
+
+   .. py:attribute:: END_OF_IMAGE
+      :value: 21
+
+
+
+   .. py:attribute:: IDENTIFICATIONS_TABLE
+      :value: 22
+
+
+
+   .. py:attribute:: QUANTIFICATIONS_TABLE
+      :value: 23
+
+
+
+   .. py:attribute:: DATASET_PROVENANCE
+      :value: 24
+
+
+
+   .. py:attribute:: SUBJECT_METADATA
+      :value: 25
+
+
+
+   .. py:attribute:: SAMPLE_METADATA
+      :value: 26
+
+
+
+   .. py:attribute:: ENCRYPTION_ALGORITHM
+      :value: 27
+
+
+
    .. py:attribute:: END_OF_STREAM
       :value: 255
 
+
+
+.. py:function:: is_known_packet_type(type_byte: int) -> bool
+
+   Return True iff ``type_byte`` is a defined :class:`PacketType`.
+
+   Used by the reader's forward-compat path (v0.11 task 0.5 / Java
+   parity ``PacketType.fromWireOrNull``) to decide whether to skip an
+   unrecognised packet rather than fail. The header has already been
+   length-prefix-decoded; only the dispatch arm differs.
+
+
+.. py:data:: BULK_MODE_V2_BLOBS_FEATURE
+   :value: 'bulk_mode_v2_blobs'
+
+
+.. py:data:: TRANSPORT_V0_11_FEATURE
+   :value: 'transport_v0_11'
 
 
 .. py:class:: PacketFlag
@@ -164,6 +269,12 @@ Module Contents
 
    24-byte transport packet header.
 
+   :attr:`packet_type` is stored as a raw uint8 wire byte (not the
+   :class:`PacketType` enum) so headers decoded from forward-compat
+   streams whose type byte is outside the enum still round-trip
+   cleanly. See :attr:`packet_type_byte` and the v0.11 skip-unknown
+   contract (``transport-spec`` §6 / task 0.5).
+
 
    .. py:attribute:: packet_type
       :type:  int
@@ -197,6 +308,15 @@ Module Contents
       :type:  int
       :value: 0
 
+
+
+   .. py:property:: packet_type_byte
+      :type: int
+
+
+      Raw uint8 wire byte for the packet type. Always populated,
+      regardless of whether the byte names a known :class:`PacketType`.
+      Java parity: :meth:`PacketHeader.packetTypeByte`.
 
 
    .. py:method:: to_bytes() -> bytes
@@ -392,5 +512,54 @@ Module Contents
 .. py:function:: unpack_string(buf: bytes, offset: int, *, width: int = 2) -> tuple[str, int]
 
    Inverse of :func:`pack_string`.
+
+
+.. py:data:: CODEC_ID_MATE_INLINE_V2
+   :value: 13
+
+
+.. py:data:: CODEC_ID_REF_DIFF_V2
+   :value: 14
+
+
+.. py:data:: CODEC_ID_NAME_TOKENIZED_V2
+   :value: 15
+
+
+.. py:function:: pack_blob_mate_info(*, dataset_id: int, chrom_names: list[str], blob: bytes) -> bytes
+
+   Encode a :data:`PacketType.BLOB_V2_MATE_INFO` payload.
+
+   Mirrors transport-spec §4.10. The chromosome name table is the
+   one written alongside ``signal_channels/mate_info/inline_v2`` and
+   is required to resolve mate chromosome ids back to strings.
+
+
+.. py:function:: unpack_blob_mate_info(payload: bytes) -> tuple[int, list[str], bytes]
+
+   Inverse of :func:`pack_blob_mate_info`. Returns
+   ``(dataset_id, chrom_names, blob)``.
+
+
+.. py:function:: pack_blob_ref_diff(*, dataset_id: int, reference_uri: str, blob: bytes) -> bytes
+
+   Encode a :data:`PacketType.BLOB_V2_REF_DIFF` payload (§4.11).
+
+
+.. py:function:: unpack_blob_ref_diff(payload: bytes) -> tuple[int, str, bytes]
+
+   Inverse of :func:`pack_blob_ref_diff`. Returns
+   ``(dataset_id, reference_uri, blob)``.
+
+
+.. py:function:: pack_blob_name_tok(*, dataset_id: int, blob: bytes) -> bytes
+
+   Encode a :data:`PacketType.BLOB_V2_NAME_TOK` payload (§4.12).
+
+
+.. py:function:: unpack_blob_name_tok(payload: bytes) -> tuple[int, bytes]
+
+   Inverse of :func:`pack_blob_name_tok`. Returns
+   ``(dataset_id, blob)``.
 
 

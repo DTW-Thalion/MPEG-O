@@ -117,7 +117,10 @@ loadScripts(document, 'script');</script>
  <a href="Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a>&nbsp;mode,
  double&nbsp;resolutionCmInv,
  long&nbsp;numberOfScans)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct an IR spectrum from parallel wavenumber and intensity
+arrays.</div>
+</div>
 </div>
 </section>
 </li>
@@ -198,6 +201,22 @@ loadScripts(document, 'script');</script>
  <a href="Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a>&nbsp;mode,
  double&nbsp;resolutionCmInv,
  long&nbsp;numberOfScans)</span></div>
+<div class="block">Construct an IR spectrum from parallel wavenumber and intensity
+arrays.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>wavenumberValues</code> - per-point wavenumbers in <code>cm^-1</code></dd>
+<dd><code>intensityValues</code> - per-point intensities or absorbances,
+                        parallel to <code>wavenumberValues</code></dd>
+<dd><code>indexPosition</code> - zero-based position in the parent
+                        <a href="AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a></dd>
+<dd><code>scanTimeSeconds</code> - scan time in seconds from run start</dd>
+<dd><code>mode</code> - IR acquisition mode (TRANSMITTANCE or
+                        ABSORBANCE); null defaults to
+                        TRANSMITTANCE</dd>
+<dd><code>resolutionCmInv</code> - spectral resolution in <code>cm^-1</code></dd>
+<dd><code>numberOfScans</code> - number of co-added scans</dd>
+</dl>
 </div>
 </section>
 </li>

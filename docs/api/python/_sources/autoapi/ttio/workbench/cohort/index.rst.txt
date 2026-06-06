@@ -1,0 +1,619 @@
+ttio.workbench.cohort
+=====================
+
+.. py:module:: ttio.workbench.cohort
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.cohort -- cohort query client surface.
+
+   Builds a JSON predicate tree that round-trips through the workbench
+   server's `POST /v1/cohorts/query` and `POST /v1/cohorts/preview-count`
+   endpoints (server-side: `TTIOWBCohortQuery` + `TTIOWBCohortService`).
+
+   Wire shape per the v1.0 wire-contract survey (see
+   `docs/workbench-client/W3-progress.md`):
+
+     {
+       "select":    "containers" | "subjects" | "samples",
+       "predicate": <predicate-tree>,            # optional
+       "order_by":  [{"field":"<table>.<col>","descending":bool}, ...],  # optional
+       "limit":     <int 1..1000>,               # optional, default 100
+       "cursor":    "<opaque base64 from prior response>",   # optional
+     }
+
+   Predicate leaves (4 kinds; allow-listed fields in each):
+
+     {"container_field": "<col>", "op": "<op>", "value": <v>}
+     {"subject_field":   "<col>", "op": "<op>", "value": <v>}
+     {"sample_field":    "<col>", "op": "<op>", "value": <v>}
+     {"phenotype":       "<name>", "op": "<op>", "value": <v>}
+
+   Composites:
+
+     {"op": "and", "children": [<pred>, ...]}
+     {"op": "or",  "children": [<pred>, ...]}        -- phenotype leaves rejected
+     {"op": "not", "child":     <pred>}              -- phenotype leaves rejected
+
+   Operators: eq, ne, lt, gt, le, ge, in (value=array), like (string only),
+   exists (no value).
+
+   v1.0 server does NOT expose:
+     - `GET /v1/cohorts` / `POST /v1/cohorts` (saved cohorts) -- ephemeral
+       queries only.
+     - `has_layer(...)` assay-availability filters.
+     - Cohort-membership filters as a separate leaf kind.
+
+   Future v1.x server upgrades may add these; the client is forward-
+   compatible because predicate composition is purely additive.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.cohort.ALLOWED_CONTAINER_FIELDS
+   ttio.workbench.cohort.ALLOWED_SUBJECT_FIELDS
+   ttio.workbench.cohort.ALLOWED_SAMPLE_FIELDS
+   ttio.workbench.cohort.ALLOWED_OPS
+   ttio.workbench.cohort.ALLOWED_SELECT
+   ttio.workbench.cohort.OrderBy
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.cohort.CohortPredicate
+   ttio.workbench.cohort.ContainerFieldPredicate
+   ttio.workbench.cohort.SubjectFieldPredicate
+   ttio.workbench.cohort.SampleFieldPredicate
+   ttio.workbench.cohort.PhenotypePredicate
+   ttio.workbench.cohort.AndPredicate
+   ttio.workbench.cohort.OrPredicate
+   ttio.workbench.cohort.NotPredicate
+   ttio.workbench.cohort.CohortQuery
+   ttio.workbench.cohort.CohortResult
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.cohort.container
+   ttio.workbench.cohort.subject
+   ttio.workbench.cohort.sample
+   ttio.workbench.cohort.phenotype
+
+
+Module Contents
+---------------
+
+.. py:data:: ALLOWED_CONTAINER_FIELDS
+
+.. py:data:: ALLOWED_SUBJECT_FIELDS
+
+.. py:data:: ALLOWED_SAMPLE_FIELDS
+
+.. py:data:: ALLOWED_OPS
+
+.. py:data:: ALLOWED_SELECT
+
+.. py:class:: CohortPredicate
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+      :abstractmethod:
+
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+   .. py:method:: __and__(other: CohortPredicate) -> AndPredicate
+
+      Compose two predicates as an AND.
+
+      :param other: Right-hand predicate.
+      :type other: CohortPredicate
+
+      :returns: *AndPredicate* -- New conjunction. When the left side is already an AND
+                the children are flattened in-place.
+
+
+
+   .. py:method:: __or__(other: CohortPredicate) -> OrPredicate
+
+      Compose two predicates as an OR.
+
+      :param other: Right-hand predicate.
+      :type other: CohortPredicate
+
+      :returns: *OrPredicate* -- New disjunction. When the left side is already an OR
+                the children are flattened in-place. Phenotype leaves
+                on either side trigger a ``ValueError`` (the server
+                rejects phenotype-under-OR with 422).
+
+
+
+   .. py:method:: __invert__() -> NotPredicate
+
+      Wrap the predicate in a logical NOT.
+
+      :returns: *NotPredicate* -- New negation. Phenotype leaves under NOT raise
+                ``ValueError`` (the server rejects with 422).
+
+
+
+.. py:class:: ContainerFieldPredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:attribute:: field
+      :type:  str
+
+
+   .. py:attribute:: op
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  Any
+      :value: None
+
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:class:: SubjectFieldPredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:attribute:: field
+      :type:  str
+
+
+   .. py:attribute:: op
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  Any
+      :value: None
+
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:class:: SampleFieldPredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:attribute:: field
+      :type:  str
+
+
+   .. py:attribute:: op
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  Any
+      :value: None
+
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:class:: PhenotypePredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Phenotype-keyed leaf. Server-side joins to
+   `subject_phenotypes` table. **Cannot appear under `or` / `not`
+   composites** -- the server rejects with 422 (the column join
+   can't reason about NULL the same way as a structural field).
+
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: op
+      :type:  str
+
+
+   .. py:attribute:: value
+      :type:  Any
+      :value: None
+
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:class:: AndPredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:attribute:: children
+      :type:  Sequence[CohortPredicate]
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:class:: OrPredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:attribute:: children
+      :type:  Sequence[CohortPredicate]
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:class:: NotPredicate
+
+   Bases: :py:obj:`CohortPredicate`
+
+
+   Abstract base for cohort-query predicate nodes.
+
+   Pure data; no I/O. Subclasses (`ContainerFieldPredicate`,
+   `SubjectFieldPredicate`, `SampleFieldPredicate`,
+   `PhenotypePredicate`, `AndPredicate`, `OrPredicate`,
+   `NotPredicate`) each know how to serialise themselves to the
+   server's JSON shape via `to_json()`.
+
+
+   .. py:attribute:: child
+      :type:  CohortPredicate
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the predicate to the server's JSON shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching the wire contract documented
+                at the top of this module.
+
+      :raises NotImplementedError: Subclasses must override; the abstract base never
+          serialises directly.
+
+
+
+.. py:function:: container(field: str, op: str = 'eq', value: Any = None) -> ContainerFieldPredicate
+
+   Construct a container-field predicate leaf.
+
+   :param field: One of the allow-listed container columns
+                 (see :data:`ALLOWED_CONTAINER_FIELDS`).
+   :type field: str
+   :param op: Comparison operator. Default ``"eq"``.
+   :type op: str, optional
+   :param value: Right-hand value. Omitted when ``op == "exists"``.
+   :type value: Any, optional
+
+   :returns: *ContainerFieldPredicate* -- Validated leaf node.
+
+
+.. py:function:: subject(field: str, op: str = 'eq', value: Any = None) -> SubjectFieldPredicate
+
+   Construct a subject-field predicate leaf.
+
+   :param field: One of the allow-listed subject columns
+                 (see :data:`ALLOWED_SUBJECT_FIELDS`).
+   :type field: str
+   :param op: Comparison operator. Default ``"eq"``.
+   :type op: str, optional
+   :param value: Right-hand value. Omitted when ``op == "exists"``.
+   :type value: Any, optional
+
+   :returns: *SubjectFieldPredicate* -- Validated leaf node.
+
+
+.. py:function:: sample(field: str, op: str = 'eq', value: Any = None) -> SampleFieldPredicate
+
+   Construct a sample-field predicate leaf.
+
+   :param field: One of the allow-listed sample columns
+                 (see :data:`ALLOWED_SAMPLE_FIELDS`).
+   :type field: str
+   :param op: Comparison operator. Default ``"eq"``.
+   :type op: str, optional
+   :param value: Right-hand value. Omitted when ``op == "exists"``.
+   :type value: Any, optional
+
+   :returns: *SampleFieldPredicate* -- Validated leaf node.
+
+
+.. py:function:: phenotype(name: str, op: str = 'eq', value: Any = None) -> PhenotypePredicate
+
+   Construct a phenotype-keyed predicate leaf.
+
+   :param name: Phenotype name; joined server-side to the
+                ``subject_phenotypes`` table.
+   :type name: str
+   :param op: Comparison operator. Default ``"eq"``.
+   :type op: str, optional
+   :param value: Right-hand value. Omitted when ``op == "exists"``.
+   :type value: Any, optional
+
+   :returns: *PhenotypePredicate* -- Validated leaf node. Cannot appear under ``or`` / ``not``
+             composites.
+
+
+.. py:data:: OrderBy
+
+   either a bare `"table.column"` (ascending) or a
+   2-tuple `("table.column", descending: bool)`.
+
+   :type: Order-by clause
+
+.. py:class:: CohortQuery
+
+   Full request body for `POST /v1/cohorts/query` and
+   `POST /v1/cohorts/preview-count`.
+
+   Args:
+       select: `"containers"`, `"subjects"`, or `"samples"`.
+       predicate: optional `CohortPredicate` tree.
+       order_by: optional list of order-by clauses. Each is either
+           `"table.column"` (asc) or `("table.column", True)`
+           (desc).
+       limit: result row cap. Server max is 1000; default 100.
+       cursor: opaque base64url cursor from a prior response's
+           `next_cursor` field.
+
+
+   .. py:attribute:: select
+      :type:  str
+      :value: 'containers'
+
+
+
+   .. py:attribute:: predicate
+      :type:  Optional[CohortPredicate]
+      :value: None
+
+
+
+   .. py:attribute:: order_by
+      :type:  Sequence[OrderBy]
+      :value: ()
+
+
+
+   .. py:attribute:: limit
+      :type:  int
+      :value: 100
+
+
+
+   .. py:attribute:: cursor
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:method:: __post_init__()
+
+
+   .. py:method:: to_json() -> dict[str, Any]
+
+      Serialise the query to the server's JSON request shape.
+
+      :returns: *dict[str, Any]* -- JSON-ready dict matching ``POST /v1/cohorts/query`` and
+                ``POST /v1/cohorts/preview-count``. Omits ``limit`` when
+                it equals the default (100) so the wire bytes stay
+                compact.
+
+
+
+.. py:class:: CohortResult
+
+   Parsed `POST /v1/cohorts/query` response.
+
+   Args:
+       rows: result rows as dicts; shape varies by `select`.
+       next_cursor: opaque cursor for the next page; None on the
+           final page.
+       select: echoed select value.
+       stats: optional server-side stats dict (`rows_examined_estimate`
+           etc.). Present in some v1 responses.
+
+
+   .. py:attribute:: rows
+      :type:  tuple[Mapping[str, Any], Ellipsis]
+
+
+   .. py:attribute:: next_cursor
+      :type:  Optional[str]
+
+
+   .. py:attribute:: select
+      :type:  str
+
+
+   .. py:attribute:: stats
+      :type:  Mapping[str, Any]
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> CohortResult
+      :classmethod:
+
+
+      Build a :class:`CohortResult` from a parsed JSON body.
+
+      :param body: Decoded JSON object from ``POST /v1/cohorts/query``.
+      :type body: Mapping[str, Any]
+
+      :returns: *CohortResult* -- Rows + optional ``next_cursor`` + echoed select.
+
+
+
+   .. py:method:: __iter__() -> Iterable[Mapping[str, Any]]
+
+      Iterate over result rows in their wire order.
+
+      :returns: *Iterable[Mapping[str, Any]]* -- Iterator over the parsed row dicts.
+
+
+
+   .. py:method:: __len__() -> int
+
+      Return the number of rows on this page.
+
+      :returns: *int* -- Row count. Does not include rows on subsequent pages.
+
+
+

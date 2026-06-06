@@ -1,0 +1,138 @@
+ttio.importers.registry
+=======================
+
+.. py:module:: ttio.importers.registry
+
+.. autoapi-nested-parse::
+
+   Encode-format registry: the single source of truth for the formats
+   ``ttio encode --format <fmt>`` accepts and how each maps to a `.tio`.
+
+   Mirrors the tio-browser GUI ``ImportFormatRegistry`` so the CLI and the
+   desktop app cover the same spec §4 format set (W6.4). Each spec pairs a
+   format with a :class:`ttio.importers.base.Reader` instance; ``encode``
+   dispatches via ``reader.read(inputs, opts) -> ImportedDataset`` then
+   ``.write(output)``.
+
+   Two formats stand apart and are intentionally NOT in this registry:
+
+   * ``fasta`` / ``fastq`` keep their richer dedicated CLIs
+     (``ttio.tools.{fasta,fastq}_import_cli`` -- reference vs. unaligned
+     modes, PHRED options); ``ttio encode`` delegates to those directly.
+   Runtime tool availability (samtools for BAM/SAM/CRAM, the vendor
+   converters for Thermo / Waters / Bruker) is the importer's concern: the
+   reader dispatches and the importer raises its own clear error when the
+   tool is missing. "Has a codec" (registered here) is distinct from "the
+   external tool is installed right now".
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.importers.registry.CLI_DELEGATED
+   ttio.importers.registry.DEFERRED_PYTHON
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.importers.registry.UnknownFormatError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.registry.FormatSpec
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.importers.registry.normalize
+   ttio.importers.registry.is_registry_format
+   ttio.importers.registry.spec_for
+   ttio.importers.registry.registry_keys
+   ttio.importers.registry.supported_encode_formats
+   ttio.importers.registry.encode
+
+
+Module Contents
+---------------
+
+.. py:data:: CLI_DELEGATED
+   :value: ('fasta', 'fastq')
+
+
+.. py:data:: DEFERRED_PYTHON
+   :type:  tuple[str, Ellipsis]
+   :value: ()
+
+
+.. py:exception:: UnknownFormatError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised for a ``--format`` value that maps to no known codec.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: FormatSpec
+
+   .. py:attribute:: key
+      :type:  str
+
+
+   .. py:attribute:: display_name
+      :type:  str
+
+
+   .. py:attribute:: extensions
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: required_tool
+      :type:  str | None
+
+
+   .. py:attribute:: reader
+      :type:  ttio.importers.base.Reader
+
+
+.. py:function:: normalize(fmt: str) -> str
+
+   Canonicalise a user-supplied format token (lowercase, alias-mapped).
+
+
+.. py:function:: is_registry_format(fmt: str) -> bool
+
+.. py:function:: spec_for(fmt: str) -> FormatSpec
+
+.. py:function:: registry_keys() -> list[str]
+
+   Canonical keys handled by this registry (sorted).
+
+
+.. py:function:: supported_encode_formats() -> list[str]
+
+   All formats ``ttio encode`` accepts: registry + CLI-delegated.
+
+
+.. py:function:: encode(fmt: str, inputs, output, **opts) -> None
+
+   Dispatch ``inputs`` -> ``output`` `.tio` for a registry format.
+
+   Raises :class:`UnknownFormatError` for non-registry formats (the CLI
+   handles the ``fasta`` / ``fastq`` delegation separately).
+
+

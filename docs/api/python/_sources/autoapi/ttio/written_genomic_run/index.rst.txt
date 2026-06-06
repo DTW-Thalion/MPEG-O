@@ -18,11 +18,62 @@ Classes
 
 .. autoapisummary::
 
+   ttio.written_genomic_run.BulkV2Blobs
    ttio.written_genomic_run.WrittenGenomicRun
 
 
 Module Contents
 ---------------
+
+.. py:class:: BulkV2Blobs
+
+   Verbatim v2 codec blobs for direct on-disk write.
+
+   Set on a :class:`WrittenGenomicRun` to bypass the v2 codec encode
+   step in ``write_minimal`` and write the blob bytes directly to
+   the matching HDF5 paths. Used by the transport bulk-mode receiver
+   (see ``docs/transport-spec.md`` §6.4).
+
+   Each field is independently optional. When ``mate_info_blob`` is
+   set the writer also requires ``mate_info_chrom_names``.
+   ``ref_diff_blob`` requires ``ref_diff_reference_uri`` to validate
+   against the run's ``reference_uri`` attribute.
+
+   Cross-language: ObjC ``TTIOBulkV2Blobs`` · Java ``BulkV2Blobs``.
+
+
+   .. py:attribute:: mate_info_blob
+      :type:  bytes | None
+      :value: None
+
+
+
+   .. py:attribute:: mate_info_chrom_names
+      :type:  list[str] | None
+      :value: None
+
+
+
+   .. py:attribute:: name_tok_blob
+      :type:  bytes | None
+      :value: None
+
+
+
+   .. py:attribute:: ref_diff_blob
+      :type:  bytes | None
+      :value: None
+
+
+
+   .. py:attribute:: ref_diff_reference_uri
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:method:: __post_init__() -> None
+
 
 .. py:class:: WrittenGenomicRun
 
@@ -127,6 +178,12 @@ Module Contents
 
    .. py:attribute:: external_reference_path
       :type:  pathlib.Path | None
+      :value: None
+
+
+
+   .. py:attribute:: bulk_v2_blobs
+      :type:  BulkV2Blobs | None
       :value: None
 
 

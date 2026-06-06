@@ -61,6 +61,7 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#readMetadata(java.nio.file.Path)" tabindex="0">readMetadata(Path)</a></li>
 <li><a href="#read(java.nio.file.Path,java.nio.file.Path)" tabindex="0">read(Path, Path)</a></li>
+<li><a href="#readDataset(java.nio.file.Path)" tabindex="0">readDataset(Path)</a></li>
 </ol>
 </li>
 </ol>
@@ -153,9 +154,15 @@ on <code>PATH</code> or via the <code>TTIO_PYTHON</code> env var.</p>
 by delegating binary extraction to the Python helper
 <code>ttio.importers.bruker_tdf</code>.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="BrukerTDFReader.Metadata.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.Metadata</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readMetadata(java.nio.file.Path)" class="member-name-link">readMetadata</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="ImportedDataset.html" title="class in global.thalion.ttio.importers">ImportedDataset</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readDataset(java.nio.file.Path)" class="member-name-link">readDataset</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Build a write-through <a href="ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a> draft for a Bruker
+<code>.d</code> directory.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="BrukerTDFReader.Metadata.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.Metadata</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readMetadata(java.nio.file.Path)" class="member-name-link">readMetadata</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Read the SQLite metadata from a Bruker <code>.d</code> directory
 without touching the binary blob.</div>
 </div>
@@ -213,6 +220,30 @@ by delegating binary extraction to the Python helper
 <dt>Throws:</dt>
 <dd><code><a href="BrukerTDFReader.BrukerTDFException.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.BrukerTDFException</a></code> - if the helper is unreachable or
         exits non-zero.</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="readDataset(java.nio.file.Path)">
+<h3>readDataset</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="ImportedDataset.html" title="class in global.thalion.ttio.importers">ImportedDataset</a></span>&nbsp;<span class="element-name">readDataset</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;dDir)</span>
+                                   throws <span class="exceptions"><a href="BrukerTDFReader.BrukerTDFException.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.BrukerTDFException</a></span></div>
+<div class="block">Build a write-through <a href="ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a> draft for a Bruker
+<code>.d</code> directory. The draft carries a <a href="ImportedDataset.WriteDelegate.html" title="interface in global.thalion.ttio.importers">write delegate</a> that, on
+<code>write(output)</code>, spawns the Python <code>bruker_tdf</code>
+helper to produce the <code>.tio</code> directly — there is no
+in-Java run data to assemble.
+
+<p>The same up-front <a href="#readMetadata(java.nio.file.Path)"><code>readMetadata(Path)</code></a> validation that
+<a href="#read(java.nio.file.Path,java.nio.file.Path)"><code>read(Path, Path)</code></a> performs is done here so the draft
+fails fast on a malformed directory.</p></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>dDir</code> - Bruker <code>.d</code> directory.</dd>
+<dt>Throws:</dt>
+<dd><code><a href="BrukerTDFReader.BrukerTDFException.html" title="class in global.thalion.ttio.importers">BrukerTDFReader.BrukerTDFException</a></code> - if the directory is malformed.</dd>
 </dl>
 </div>
 </section>

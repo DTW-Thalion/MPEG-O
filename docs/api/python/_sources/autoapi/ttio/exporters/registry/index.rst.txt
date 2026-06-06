@@ -1,0 +1,126 @@
+ttio.exporters.registry
+=======================
+
+.. py:module:: ttio.exporters.registry
+
+.. autoapi-nested-parse::
+
+   Export-format registry: the formats ``ttio export --format <fmt>``
+   accepts and how each maps a `.tio` layer to an output file.
+
+   Export mirror of :mod:`ttio.importers.registry` (W6.4). Each spec pairs a
+   format with a :class:`ttio.exporters.base.Writer` instance; ``export``
+   opens the `.tio` and dispatches via ``writer.write(ds, layer, output, opts)``.
+
+   Formats handled elsewhere / not yet reachable:
+
+   * ``fasta`` / ``fastq`` keep their richer dedicated CLIs
+     (``ttio.tools.{fasta,fastq}_export_cli`` -- reference vs. run modes,
+     line-width / PHRED options); ``ttio export`` delegates to those.
+   * ``nmrML`` / ``JCAMP-DX`` / ``imzML`` export from per-spectrum /
+     per-pixel objects (``NMRSpectrum``, ``IRSpectrum`` / ``RamanSpectrum``
+     / ``UVVisSpectrum``, ``ImzMLPixelSpectrum``) rather than a whole
+     dataset, and the Python side has no `.tio`-layer→object extraction
+     helper yet (the GUI does this in Java). Tracked as a parity gap; not
+     yet reachable from the CLI.
+
+   Runtime tool availability (samtools for BAM/CRAM) is the exporter's
+   concern: the writer dispatches and raises its own clear error when the
+   tool is missing.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.registry.CLI_DELEGATED
+   ttio.exporters.registry.DEFERRED_PYTHON
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.registry.UnknownFormatError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.exporters.registry.ExportSpec
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.exporters.registry.normalize
+   ttio.exporters.registry.is_registry_format
+   ttio.exporters.registry.spec_for
+   ttio.exporters.registry.registry_keys
+   ttio.exporters.registry.supported_export_formats
+   ttio.exporters.registry.export
+
+
+Module Contents
+---------------
+
+.. py:data:: CLI_DELEGATED
+   :value: ('fasta', 'fastq')
+
+
+.. py:data:: DEFERRED_PYTHON
+   :type:  tuple[str, Ellipsis]
+   :value: ()
+
+
+.. py:exception:: UnknownFormatError
+
+   Bases: :py:obj:`ValueError`
+
+
+   Raised for a ``--format`` value that maps to no known exporter.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:class:: ExportSpec
+
+   .. py:attribute:: key
+      :type:  str
+
+
+   .. py:attribute:: display_name
+      :type:  str
+
+
+   .. py:attribute:: extensions
+      :type:  tuple[str, Ellipsis]
+
+
+   .. py:attribute:: required_tool
+      :type:  str | None
+
+
+   .. py:attribute:: writer
+      :type:  ttio.exporters.base.Writer
+
+
+.. py:function:: normalize(fmt: str) -> str
+
+.. py:function:: is_registry_format(fmt: str) -> bool
+
+.. py:function:: spec_for(fmt: str) -> ExportSpec
+
+.. py:function:: registry_keys() -> list[str]
+
+.. py:function:: supported_export_formats() -> list[str]
+
+.. py:function:: export(fmt: str, tio_path, layer, output, **opts) -> None
+

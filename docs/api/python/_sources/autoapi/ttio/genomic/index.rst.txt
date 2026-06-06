@@ -115,31 +115,81 @@ Package Contents
 
 
 
-   .. py:method:: write_to_dataset(dataset: ttio.spectral_dataset.SpectralDataset, *, overwrite: bool = False) -> None
+   .. py:method:: read_from_group(ref_group: ttio.providers.base.StorageGroup) -> ReferenceImport
+      :classmethod:
+
+
+      Read an embedded reference from ``/study/references/<uri>/``.
+
+      Inverse of :func:`ttio.spectral_dataset._embed_references_for_runs`.
+      Per-chromosome sequences live at
+      ``<uri>/chromosomes/<name>/data`` (UINT8); the URI group
+      carries ``@reference_uri`` (the canonical URI string) and
+      ``@md5`` (32-character lowercase hex). The MD5 is preserved
+      verbatim from the on-disk attribute when present, so the
+      read-back value carries the same digest bytes the writer used —
+      load-bearing for cross-language byte-exact round-trip. When the
+      attribute is absent or malformed, the constructor falls back to
+      recomputing via :func:`compute_reference_md5`.
+
+      Chromosome names are returned in the order
+      :meth:`StorageGroup.child_names` yields them, which for the
+      canonical writer is alphabetic (the embed helper sorts before
+      persisting).
+
+      Cross-language equivalents
+      --------------------------
+      Java: ``ReferenceImport.readFromGroup(StorageGroup)``.
+
+      :since: 1.1.0
+
+
+
+   .. py:method:: write_to_dataset(dataset: ttio.spectral_dataset.SpectralDataset, *, overwrite: bool = False, progress: ProgressSinkLike | None = None) -> None
 
       Embed this reference at ``/study/references/<uri>/``
       inside ``dataset``'s open HDF5 file.
 
-      Layout (cross-language byte-equal):
+      Layout (cross-language byte-equal — matches Java's
+      ``SpectralDataset.embedReferencesForRuns`` and Python's
+      :func:`ttio.spectral_dataset._embed_references_for_runs`,
+      the canonical writer used by ``embedReference=True`` runs):
 
       ``/study/references/<uri>/``
-        attr ``md5``: 32-character lowercase hex string
-        attr ``total_bases``: int64 sum of sequence lengths
-        ``chromosomes/<name>/data``  uint8 dataset of the
-            chromosome's sequence bytes (case-preserving, no
-            newlines).
+        attr ``md5`` : 32-character lowercase hex string.
+        attr ``reference_uri`` : the URI string (mirrors the leaf
+            path; ``read_from_group`` falls back to the leaf when
+            absent, but the canonical writer always emits this).
+        ``chromosomes/<name>/`` one sub-group per chromosome, in
+            alphabetic order:
+
+          attr ``length`` : int64 sequence length in bytes.
+          ``data`` : UINT8 dataset of the chromosome's sequence
+              bytes (case-preserving, no newlines), ZLIB-compressed.
+
+      ``@total_bases`` (a v1.1.0-era attribute written here only,
+      never by the canonical embed-helper / Java writer) is no
+      longer emitted; ``ReferenceImport.read_from_group`` recomputes
+      it from the per-chromosome data, so the on-disk attribute
+      carried no information that wasn't also derivable.
 
       :param dataset: Open dataset (writable HDF5 backing).
       :type dataset: SpectralDataset
       :param overwrite: If ``True``, replace any existing reference under the same
                         URI; if ``False``, raise on collision.
       :type overwrite: bool
+      :param progress: Optional runtime progress callback. Fires ``(0, N)`` before
+                       the embed loop then ``(i+1, N)`` after each contig (N =
+                       sorted contig count), mirroring Java's
+                       ``ReferenceImport.writeToDataset(..., ProgressSink)``. A
+                       bare ``(done, total) -> None`` callable is also accepted.
+                       Progress is a runtime callback only -- no on-disk change.
+      :type progress: ProgressSinkLike or None
 
       :raises FileExistsError: If a reference with the same ``uri`` is already embedded
           and ``overwrite`` is ``False``.
-      :raises RuntimeError: If ``dataset``'s storage backend doesn't expose an open
-          HDF5 group (only HDF5-backed datasets support reference
-          embed).
+      :raises RuntimeError: If ``dataset``'s storage backend doesn't expose a provider
+          (an open dataset always does).
 
 
 
@@ -150,27 +200,29 @@ Package Contents
    Algorithm (cross-language byte-exact):
        for each (name, seq) in sorted(zip(chromosomes, sequences),
                                       key=name):
-           h.update(name_utf8 + b"\n")
            h.update(seq)
-           h.update(b"\n")
        return h.digest()
 
-   Sorting by name makes the MD5 invariant to FASTA record order.
-   Names are encoded UTF-8; sequences are passed through verbatim
-   (case-preserving). The trailing ``\n`` separators are pure
-   framing and never appear inside sequence bytes (FASTA forbids
-   embedded newlines per record).
+   Sorting by name makes the MD5 invariant to FASTA record order;
+   sequence bytes are concatenated verbatim (case-preserving) without
+   any framing. This is the single canonical form used both by the
+   REF_DIFF_V2 auto-embed writer (``_reference_md5_for_run``) and by
+   the FASTA-import path's ``@md5`` stamping — unified in v1.1.0
+   (previously the FASTA-import / public-helper path used a
+   name-framed form that disagreed with the writer; see CHANGELOG).
 
    :returns: *bytes* -- 16-byte MD5 digest.
 
 
-.. py:class:: ReferenceResolver(h5_file: h5py.File, external_reference_path: pathlib.Path | None = None)
+.. py:class:: ReferenceResolver(references_group: StorageGroup | None = None, external_reference_path: pathlib.Path | None = None)
 
    Resolve a reference chromosome sequence for REF_DIFF decode.
 
    Args:
-       h5_file: open ``h5py.File`` handle in read mode. The resolver
-           looks for ``/study/references/<uri>/`` as the primary source.
+       references_group: the ``/study/references`` group as a
+           :class:`~ttio.providers.base.StorageGroup`, or ``None`` when
+           no embedded references are available. The resolver looks for
+           ``<uri>/`` children under this group as the primary source.
        external_reference_path: optional explicit path to a FASTA file.
            If unset, the ``REF_PATH`` environment variable is consulted.
 

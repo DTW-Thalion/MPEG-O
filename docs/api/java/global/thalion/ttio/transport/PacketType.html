@@ -72,12 +72,25 @@ loadScripts(document, 'script');</script>
 <li><a href="#BLOB_V2_MATE_INFO" tabindex="0">BLOB_V2_MATE_INFO</a></li>
 <li><a href="#BLOB_V2_REF_DIFF" tabindex="0">BLOB_V2_REF_DIFF</a></li>
 <li><a href="#BLOB_V2_NAME_TOK" tabindex="0">BLOB_V2_NAME_TOK</a></li>
+<li><a href="#REFERENCE_GROUP_HEADER" tabindex="0">REFERENCE_GROUP_HEADER</a></li>
+<li><a href="#REFERENCE_CHROMOSOME" tabindex="0">REFERENCE_CHROMOSOME</a></li>
+<li><a href="#END_OF_REFERENCE_GROUP" tabindex="0">END_OF_REFERENCE_GROUP</a></li>
+<li><a href="#IMAGE_HEADER" tabindex="0">IMAGE_HEADER</a></li>
+<li><a href="#IMAGE_PIXEL" tabindex="0">IMAGE_PIXEL</a></li>
+<li><a href="#END_OF_IMAGE" tabindex="0">END_OF_IMAGE</a></li>
+<li><a href="#IDENTIFICATIONS_TABLE" tabindex="0">IDENTIFICATIONS_TABLE</a></li>
+<li><a href="#QUANTIFICATIONS_TABLE" tabindex="0">QUANTIFICATIONS_TABLE</a></li>
+<li><a href="#DATASET_PROVENANCE" tabindex="0">DATASET_PROVENANCE</a></li>
+<li><a href="#SUBJECT_METADATA" tabindex="0">SUBJECT_METADATA</a></li>
+<li><a href="#SAMPLE_METADATA" tabindex="0">SAMPLE_METADATA</a></li>
+<li><a href="#ENCRYPTION_ALGORITHM" tabindex="0">ENCRYPTION_ALGORITHM</a></li>
 <li><a href="#END_OF_STREAM" tabindex="0">END_OF_STREAM</a></li>
 </ol>
 </li>
 <li><a href="#field-detail" tabindex="0">Field Details</a>
 <ol class="toc-list">
 <li><a href="#BULK_MODE_V2_BLOBS_FEATURE" tabindex="0">BULK_MODE_V2_BLOBS_FEATURE</a></li>
+<li><a href="#TRANSPORT_V0_11_FEATURE" tabindex="0">TRANSPORT_V0_11_FEATURE</a></li>
 <li><a href="#CODEC_ID_MATE_INLINE_V2" tabindex="0">CODEC_ID_MATE_INLINE_V2</a></li>
 <li><a href="#CODEC_ID_REF_DIFF_V2" tabindex="0">CODEC_ID_REF_DIFF_V2</a></li>
 <li><a href="#CODEC_ID_NAME_TOKENIZED_V2" tabindex="0">CODEC_ID_NAME_TOKENIZED_V2</a></li>
@@ -89,6 +102,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#valueOf(java.lang.String)" tabindex="0">valueOf(String)</a></li>
 <li><a href="#wire()" tabindex="0">wire()</a></li>
 <li><a href="#fromWire(int)" tabindex="0">fromWire(int)</a></li>
+<li><a href="#fromWireOrNull(int)" tabindex="0">fromWireOrNull(int)</a></li>
 </ol>
 </li>
 </ol>
@@ -161,16 +175,64 @@ loadScripts(document, 'script');</script>
 <div class="col-last odd-row-color">&nbsp;</div>
 <div class="col-first even-row-color"><code><a href="#DATASET_HEADER" class="member-name-link">DATASET_HEADER</a></code></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><code><a href="#DATASET_PROVENANCE" class="member-name-link">DATASET_PROVENANCE</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Dataset-level provenance chain.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="#ENCRYPTION_ALGORITHM" class="member-name-link">ENCRYPTION_ALGORITHM</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Dataset-level @encrypted algorithm name.</div>
+</div>
 <div class="col-first odd-row-color"><code><a href="#END_OF_DATASET" class="member-name-link">END_OF_DATASET</a></code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code><a href="#END_OF_IMAGE" class="member-name-link">END_OF_IMAGE</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Terminator of an image cube.</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="#END_OF_REFERENCE_GROUP" class="member-name-link">END_OF_REFERENCE_GROUP</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Terminator of a reference group.</div>
+</div>
 <div class="col-first even-row-color"><code><a href="#END_OF_STREAM" class="member-name-link">END_OF_STREAM</a></code></div>
 <div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><code><a href="#PROTECTION_METADATA" class="member-name-link">PROTECTION_METADATA</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
-<div class="col-first even-row-color"><code><a href="#PROVENANCE" class="member-name-link">PROVENANCE</a></code></div>
+<div class="col-first odd-row-color"><code><a href="#IDENTIFICATIONS_TABLE" class="member-name-link">IDENTIFICATIONS_TABLE</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Identifications table — Arrow IPC stream.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="#IMAGE_HEADER" class="member-name-link">IMAGE_HEADER</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Image-cube header (MSImage / vibrational / UV-Vis imaging).</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="#IMAGE_PIXEL" class="member-name-link">IMAGE_PIXEL</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Single pixel of an image cube.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="#PROTECTION_METADATA" class="member-name-link">PROTECTION_METADATA</a></code></div>
 <div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><code><a href="#STREAM_HEADER" class="member-name-link">STREAM_HEADER</a></code></div>
+<div class="col-first odd-row-color"><code><a href="#PROVENANCE" class="member-name-link">PROVENANCE</a></code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code><a href="#QUANTIFICATIONS_TABLE" class="member-name-link">QUANTIFICATIONS_TABLE</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Quantifications table — Arrow IPC stream.</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="#REFERENCE_CHROMOSOME" class="member-name-link">REFERENCE_CHROMOSOME</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Per-chromosome record inside a reference group.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="#REFERENCE_GROUP_HEADER" class="member-name-link">REFERENCE_GROUP_HEADER</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Per-reference group header.</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="#SAMPLE_METADATA" class="member-name-link">SAMPLE_METADATA</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Samples metadata — Arrow IPC stream.</div>
+</div>
+<div class="col-first even-row-color"><code><a href="#STREAM_HEADER" class="member-name-link">STREAM_HEADER</a></code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><code><a href="#SUBJECT_METADATA" class="member-name-link">SUBJECT_METADATA</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Subjects metadata — Arrow IPC stream.</div>
+</div>
 </div>
 </section>
 </li>
@@ -199,6 +261,11 @@ loadScripts(document, 'script');</script>
 <div class="col-first odd-row-color"><code>static final int</code></div>
 <div class="col-second odd-row-color"><code><a href="#CODEC_ID_REF_DIFF_V2" class="member-name-link">CODEC_ID_REF_DIFF_V2</a></code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>static final <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color"><code><a href="#TRANSPORT_V0_11_FEATURE" class="member-name-link">TRANSPORT_V0_11_FEATURE</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">v0.11 feature flag in StreamHeader features list.</div>
+</div>
 </div>
 </section>
 </li>
@@ -217,19 +284,25 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#fromWire(int)" class="member-name-link">fromWire</a><wbr>(int&nbsp;v)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#valueOf(java.lang.String)" class="member-name-link">valueOf</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#fromWireOrNull(int)" class="member-name-link">fromWireOrNull</a><wbr>(int&nbsp;v)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Like <a href="#fromWire(int)"><code>fromWire(int)</code></a> but returns <code>null</code> for unknown
+  packet type bytes.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#valueOf(java.lang.String)" class="member-name-link">valueOf</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Returns the enum constant of this class with the specified name.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a>[]</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#values()" class="member-name-link">values</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a>[]</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#values()" class="member-name-link">values</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Returns an array containing the constants of this enum class, in
 the order they are declared.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#wire()" class="member-name-link">wire</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#wire()" class="member-name-link">wire</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Wire byte value for this packet type.</div>
 </div>
 </div>
@@ -349,6 +422,114 @@ the StreamHeader features list contains
 </section>
 </li>
 <li>
+<section class="detail" id="REFERENCE_GROUP_HEADER">
+<h3>REFERENCE_GROUP_HEADER</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">REFERENCE_GROUP_HEADER</span></div>
+<div class="block">Per-reference group header. See transport-spec §4.13.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="REFERENCE_CHROMOSOME">
+<h3>REFERENCE_CHROMOSOME</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">REFERENCE_CHROMOSOME</span></div>
+<div class="block">Per-chromosome record inside a reference group. §4.14.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="END_OF_REFERENCE_GROUP">
+<h3>END_OF_REFERENCE_GROUP</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">END_OF_REFERENCE_GROUP</span></div>
+<div class="block">Terminator of a reference group. §4.15.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="IMAGE_HEADER">
+<h3>IMAGE_HEADER</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">IMAGE_HEADER</span></div>
+<div class="block">Image-cube header (MSImage / vibrational / UV-Vis imaging). §4.16.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="IMAGE_PIXEL">
+<h3>IMAGE_PIXEL</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">IMAGE_PIXEL</span></div>
+<div class="block">Single pixel of an image cube. §4.17.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="END_OF_IMAGE">
+<h3>END_OF_IMAGE</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">END_OF_IMAGE</span></div>
+<div class="block">Terminator of an image cube. §4.18.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="IDENTIFICATIONS_TABLE">
+<h3>IDENTIFICATIONS_TABLE</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">IDENTIFICATIONS_TABLE</span></div>
+<div class="block">Identifications table — Arrow IPC stream. §4.19.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="QUANTIFICATIONS_TABLE">
+<h3>QUANTIFICATIONS_TABLE</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">QUANTIFICATIONS_TABLE</span></div>
+<div class="block">Quantifications table — Arrow IPC stream. §4.20.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="DATASET_PROVENANCE">
+<h3>DATASET_PROVENANCE</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">DATASET_PROVENANCE</span></div>
+<div class="block">Dataset-level provenance chain. §4.21.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="SUBJECT_METADATA">
+<h3>SUBJECT_METADATA</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">SUBJECT_METADATA</span></div>
+<div class="block">Subjects metadata — Arrow IPC stream. §4.22.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="SAMPLE_METADATA">
+<h3>SAMPLE_METADATA</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">SAMPLE_METADATA</span></div>
+<div class="block">Samples metadata — Arrow IPC stream. §4.22.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="ENCRYPTION_ALGORITHM">
+<h3>ENCRYPTION_ALGORITHM</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">ENCRYPTION_ALGORITHM</span></div>
+<div class="block">Dataset-level @encrypted algorithm name. §4.23.</div>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="END_OF_STREAM">
 <h3>END_OF_STREAM</h3>
 <div class="horizontal-scroll">
@@ -375,6 +556,23 @@ the StreamHeader features list contains
 <dd>
 <ul class="tag-list">
 <li><a href="../../../../constant-values.html#global.thalion.ttio.transport.PacketType.BULK_MODE_V2_BLOBS_FEATURE">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="TRANSPORT_V0_11_FEATURE">
+<h3>TRANSPORT_V0_11_FEATURE</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">TRANSPORT_V0_11_FEATURE</span></div>
+<div class="block">v0.11 feature flag in StreamHeader features list.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.transport.PacketType.TRANSPORT_V0_11_FEATURE">Constant Field Values</a></li>
 </ul>
 </dd>
 </dl>
@@ -487,6 +685,18 @@ not permitted.)</div>
 <h3>fromWire</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">fromWire</span><wbr><span class="parameters">(int&nbsp;v)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="fromWireOrNull(int)">
+<h3>fromWireOrNull</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span>&nbsp;<span class="element-name">fromWireOrNull</span><wbr><span class="parameters">(int&nbsp;v)</span></div>
+<div class="block">Like <a href="#fromWire(int)"><code>fromWire(int)</code></a> but returns <code>null</code> for unknown
+  packet type bytes. Used by the reader's skip-unknown path so
+  v0.10 readers can tolerate v0.11+ packet types they don't
+  recognise (see transport-spec §6 / spec coverage v0.11).</div>
 </div>
 </section>
 </li>

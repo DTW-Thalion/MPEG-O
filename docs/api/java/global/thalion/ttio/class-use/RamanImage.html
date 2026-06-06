@@ -61,6 +61,10 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><a href="#global.thalion.ttio">global.thalion.ttio</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.importers">global.thalion.ttio.importers</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><a href="#global.thalion.ttio.transport">global.thalion.ttio.transport</a></div>
+<div class="col-last even-row-color">&nbsp;</div>
 </div>
 <section class="class-uses">
 <ul class="block-list">
@@ -72,15 +76,83 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-first">Modifier and Type</div>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
-<div class="col-first even-row-color"><code><a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
-<div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#ramanImage()" class="member-name-link">ramanImage</a>()</code></div>
+<div class="col-first even-row-color"><code>static <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">RamanImage.</span><code><a href="../RamanImage.html#readFrom(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">readFrom</a><wbr>(<a href="../providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
 <div class="col-last even-row-color">
-<div class="block">The embedded RamanImage when /study/raman_image_cube is present; null otherwise.</div>
-</div>
-<div class="col-first odd-row-color"><code>static <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">RamanImage.</span><code><a href="../RamanImage.html#readFrom(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">readFrom</a><wbr>(<a href="../providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
-<div class="col-last odd-row-color">
 <div class="block">Read a Raman image cube from a study group, or <code>null</code> if absent.</div>
+</div>
+</div>
+<div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio</a> with parameters of type <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples,
+ <a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="../IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">JT2: one-shot, image-aware create used by the importer/exporter
+  registry.</div>
+</div>
+<div class="col-first odd-row-color"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#createWithImages(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage)" class="member-name-link">createWithImages</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="../IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">JT1: one-shot writer for an image-bearing dataset.</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.importers">
+<h2>Uses of <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a> in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a></h2>
+<div class="caption"><span>Fields in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> declared as <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code><a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ImportedDataset.</span><code><a href="../importers/ImportedDataset.html#ramanImage" class="member-name-link">ramanImage</a></code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.transport">
+<h2>Uses of <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a> in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a></h2>
+<div class="caption"><span>Methods in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a> with parameters of type <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../transport/AccessUnitVisitor.html#visitRamanImage(global.thalion.ttio.transport.DatasetWalker,global.thalion.ttio.RamanImage)" class="member-name-link">visitRamanImage</a><wbr>(<a href="../transport/DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;image)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.5 — embedded <a href="../RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a> cube.</div>
+</div>
+<div class="col-first odd-row-color"><code>void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">TransportWriter.</span><code><a href="../transport/TransportWriter.html#writeRamanImage(global.thalion.ttio.RamanImage)" class="member-name-link">writeRamanImage</a><wbr>(<a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;img)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">v0.11 Task 5.3 (Deferral 1): emit a <a href="../RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a> as the
+packet sequence <code>IMAGE_HEADER (0x13) → N × IMAGE_PIXEL
+(0x14) → END_OF_IMAGE (0x15)</code> with <code>modality=1</code>.</div>
 </div>
 </div>
 </section>
