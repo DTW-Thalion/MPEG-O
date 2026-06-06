@@ -1,28 +1,22 @@
-"""TTI-O M94.Z — CRAM-mimic FQZCOMP_NX16 (rANS-Nx16) reference codec.
+"""TTI-O M94.Z (``FQZCOMP_NX16.Z``) quality-score codec front-end.
 
-This is a NEW codec module, parallel to (and independent from) the M94
-v1 implementation in :mod:`ttio.codecs.fqzcomp_nx16`. M94.Z follows the
-CRAM 3.1 ``rANS-Nx16`` discipline:
+This module is a thin Python wrapper over the native ``libttio_rans``
+CRAM 3.1 ``fqzcomp_qual`` core. It speaks a single wire format, **V4**
+(version byte ``4``, magic ``M94Z``); the earlier V1 (pure-Python static
+rANS), V2 (native-body) and V3 (adaptive Range Coder) formats were
+removed in the v1.0 reset.
 
-* **Static-per-block** frequency tables (built in a forward pre-pass
-  over the input, normalised once to ``T = 4096``, held constant for
-  the entire block).
-* **L = 2^15**, **B = 16** (16-bit renormalisation chunks),
-  ``b·L = 2^31``.
-* **N = 4** interleaved rANS states.
-* **Bit-pack context** (CRAM-style) — no SplitMix64 hash. Layout:
-  12 bits ``prev_q`` | 2 bits position bucket | 1 bit revcomp.
+The native library is **required** — there is no pure-Python or Cython
+fallback for top-level encode/decode:
 
-The wire-format magic is ``M94Z`` (replaces M94 v1's ``FQZN``).
+* :func:`encode` (``qualities, read_lengths, revcomp_flags, *,
+  v4_strategy_hint=-1, ...``) emits only V4 and raises ``RuntimeError``
+  when ``libttio_rans`` is not loaded.
+* :func:`decode_with_metadata` (``encoded, revcomp_flags=None``) decodes
+  V4 blobs and rejects legacy v1/v2/v3 blobs with a clear migration error.
 
-This is the **pure-Python prototype** for byte-exact algorithm
-validation. Cython acceleration is a follow-on phase (M94.Z.2).
-
-Spec: ``docs/superpowers/specs/2026-04-29-m94z-cram-mimic-design.md``.
-
-Public API:
-    encode(qualities, read_lengths, revcomp_flags, *, params=None) -> bytes
-    decode_with_metadata(blob, revcomp_flags=None) -> (qualities, read_lengths, revcomp_flags_used)
+The legacy version-byte constants are retained only so the decoder can
+recognise and reject old blobs.
 """
 from __future__ import annotations
 
@@ -49,27 +43,19 @@ except ImportError:  # pragma: no cover
     _ext = None  # type: ignore[assignment]
 
 
-# ── libttio_rans native library loader (Task 15) ────────────────────────
+# ── libttio_rans native library loader ──────────────────────────────────
 #
-# Three-tier acceleration: native (libttio_rans via ctypes) → Cython
-# (_fqzcomp_nx16_z) → pure Python. The native library implements the
-# inner rANS hot loop with cpuid-dispatched scalar/SSE4.1/AVX2 kernels.
+# The native libttio_rans library (loaded via ctypes) implements the
+# CRAM 3.1 fqzcomp_qual core behind the V4 wire format, with the inner
+# rANS hot loop using cpuid-dispatched scalar/SSE4.1/AVX2 kernels. It is
+# REQUIRED for top-level encode/decode — there is no pure-Python or
+# Cython fallback (those V1/V2/V3 paths were removed in the v1.0 reset).
 #
-# IMPORTANT scope limits:
-#   * The native library produces a SELF-CONTAINED V2 byte format with
-#     embedded lane sizes that DOES NOT match the V1 wire format used by
-#     the Cython / pure-Python paths. So we cannot simply swap the native
-#     entrypoints into the V1 encode/decode dispatch — V1 streams remain
-#     canonical and continue to flow through Cython/pure-Python.
-#   * What this module currently exposes from the native lib:
-#       - the loader (_HAVE_NATIVE_LIB flag, _native_lib handle)
-#       - ctypes argtype/restype configuration for the public C API
-#       - thin _encode_via_native / _decode_via_native helpers for callers
-#         that want to use the V2 native path explicitly
-#       - get_backend_name() introspection
-#   * Wiring native acceleration into a V2-aware top-level dispatch is a
-#     follow-on task once Task 14's V2 encoder/decoder is plumbed through
-#     the Python wire layer.
+# What this module exposes from the native lib:
+#   * the loader (_HAVE_NATIVE_LIB flag, _native_lib handle)
+#   * ctypes argtype/restype configuration for the public C API
+#   * the V4 encode/decode helpers used by encode()/decode_with_metadata()
+#   * get_backend_name() introspection
 
 import array  # noqa: E402
 import ctypes  # noqa: E402  (kept here so lib loader stays close to flag)
@@ -416,11 +402,11 @@ def get_backend_name() -> str:
         ``"cython"``           (Cython extension available)
         ``"pure-python"``      (fallback)
 
-    Selection precedence is determined at module-import time. Note that
-    the V1 M94.Z encode/decode top-level functions currently always
-    dispatch via Cython/pure-Python regardless of native availability —
-    this introspector just reports the *highest tier loaded*. A V2-aware
-    encode/decode dispatch will use the native path in a follow-on task.
+    Selection precedence is determined at module-import time; this
+    introspector reports the *highest tier loaded*. Top-level V4
+    encode/decode require the native library (``"native-<kernel>"``);
+    the Cython/pure-Python tiers, if present, are reported here for
+    diagnostics only.
     """
     if _HAVE_NATIVE_LIB:
         kernel = _native_kernel_name() or "unknown"
@@ -618,9 +604,9 @@ def encode(
     revcomp_flags: list[int],
     *,
     v4_strategy_hint: int = -1,
-    # Legacy keyword arguments accepted but ignored (Phase 2c: V1/V2/V3
-    # encoders deleted; only V4 remains). Surface a deprecation message
-    # below to make the removal visible to callers.
+    # Legacy keyword arguments accepted but ignored, for backward
+    # compatibility with old call sites (Phase 2c: V1/V2/V3 encoders
+    # deleted; only V4 remains, so these no longer affect the output).
     context_params: object | None = None,
     prefer_native: bool | None = None,
     prefer_v3: bool | None = None,

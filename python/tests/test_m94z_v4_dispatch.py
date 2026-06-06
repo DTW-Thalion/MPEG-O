@@ -171,7 +171,7 @@ def test_v4_encode_rejects_length_mismatch():
     """read_lengths summing to != len(qualities) is rejected."""
     if not _HAVE_NATIVE_LIB:
         pytest.skip("native libttio_rans not available")
-    with pytest.raises((ValueError, RuntimeError)):
+    with pytest.raises(ValueError):
         encode(bytes([40, 40, 40]), [2], [0])  # sum(lengths)=2 != 3
 
 
@@ -187,7 +187,7 @@ def test_v4_decode_rejects_truncated_blob():
     """A blob shorter than magic+version is rejected."""
     if not _HAVE_NATIVE_LIB:
         pytest.skip("native libttio_rans not available")
-    with pytest.raises((ValueError, RuntimeError)):
+    with pytest.raises(ValueError):
         decode_with_metadata(b"\x00\x01")
 
 
@@ -195,5 +195,5 @@ def test_v4_decode_rejects_bad_magic():
     """A blob whose first 4 bytes are not the M94Z magic is rejected."""
     if not _HAVE_NATIVE_LIB:
         pytest.skip("native libttio_rans not available")
-    with pytest.raises((ValueError, RuntimeError)):
+    with pytest.raises(ValueError):
         decode_with_metadata(b"XXXX" + bytes(32))
