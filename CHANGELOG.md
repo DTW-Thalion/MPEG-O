@@ -11,17 +11,32 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-### Changed — `TTIOAcquisitionRun` spectrum-class dispatch now goes through `TTIOSpectrumKind` (ObjC)
+## [1.7.0] - 2026-06-05
 
-ObjC `TTIOAcquisitionRun`'s stringly-typed `spectrum_class` dispatch (the
-materialize, vibrational-metadata, and read chains) now routes through a new
-`TTIOSpectrumKind` `NS_ENUM` (`TTIOSpectrumKindFromPersisted` /
-`TTIOSpectrumKindPersisted`, in `ValueClasses/TTIOEnums.{h,m}`); the persisted
-`@spectrum_class` attribute string remains the source of truth and is written
-verbatim. `TTIOMzMLWriter`'s MS discriminant was converted to the same enum. No
-`.tio` wire, transport, or API change. (OO-assessment P3.8.)
+Object-oriented design sweep: completes the entire 2026-06-02 OO design-assessment
+backlog across the Python, Java, and Objective-C SDKs, plus the associated
+performance work. Pure-refactor / additive release — **no `.tio` on-disk, transport
+wire, or breaking public-API change**; cross-language conformance preserved throughout.
 
-### Changed — `AcquisitionRun` spectrum-class dispatch now goes through `Enums.SpectrumKind` (Java)
+Highlights:
+- **P2.6** importer/exporter `Reader`/`Writer` registry parity across all 3 SDKs +
+  tio-browser delegation.
+- **P1.2–P1.4** perf: Java/ObjC GenomicIndex region/flag vectorization; Python
+  DELTA_RANS numpy vectorization; GenomicRun signal-channel handle caching.
+- **P2.5** shared `Image` base + `ImageKind`/generic spectral axis (MS/Raman/IR).
+- **P2.7** Java `SqliteProvider` compound-JSON reader → Jackson.
+- **P3.8** `SpectrumKind` enum + factory dispatch (replaces stringly-typed
+  `spectrum_class` dispatch; the persisted string stays the source of truth).
+- **P3.9** retire the raw-`h5py` leak (Python): `SpectralDataset.file` removed,
+  signatures + provenance + genomic reference resolution routed through the
+  StorageProvider protocol, `native_handle()` **deprecated**.
+- **P3.10** split the `SpectralDataset` / `transport/codec.py` god-files into focused
+  units (public APIs byte-identical).
+- **P3.11** encapsulation parity: read-only zero-copy `SignalArray.data` view +
+  `Run` protocol promoted to Stable (Python); `SignalArray.asX()` defensive copies
+  (Java).
+
+PRs: #213–#237.
 
 Java `AcquisitionRun`'s stringly-typed `spectrum_class` dispatch (the
 materialize switch and the read/write `equals` chains) now routes through a new
