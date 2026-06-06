@@ -35,16 +35,21 @@ Line-only gates pass code whose error/edge branches are untested.
 real, testable codec logic (the pure-language reference encoder/decoder), not glue —
 the highest-value place to add tests.
 
-### F3 — CLI tools / probes read as 0–50% everywhere (subprocess-blind)
-The coverage tools don't credit code run in a **subprocess**, and the CLIs are
-tested by spawning the built binary:
-- **Java 0%**: `NmrMLProbe`, `TransportEncodeCli`, `MzMLProbe`, `FastaImportBench`;
-  + `PerAUCli` 51%, `RefDiffV2Cli` 57%.
-- **ObjC 0–24%**: `Tools/Ttio{Sign,Simulator,TransportServer,TransportEncode,ToMzML,
-  JcampDxDump}.m`, `MakeFixtures.m`.
-- **Python 44–73%**: `tools/{transport_server,transport_encode,ttio_pqc,ttio_verify}_cli.py`.
-These are cheap to recover by invoking `main()` **in-process** (already a recorded
-lesson: JaCoCo/llvm are blind to subprocess CLI runs).
+### F3 — CLI tools / probes read as 0–50% — but the cause differs by SDK
+- **Java 0%** (`NmrMLProbe`, `TransportEncodeCli`, `MzMLProbe`, `FastaImportBench`;
+  + `PerAUCli` 51%, `RefDiffV2Cli` 57%) and **Python 44–73%**
+  (`tools/{transport_server,transport_encode,ttio_pqc,ttio_verify}_cli.py`) are
+  genuinely **subprocess-blind**: the CLIs are tested by spawning a child JVM /
+  `python -m`, and JaCoCo/pytest-cov only instrument the test process. Recover by
+  invoking `main()` **in-process** (recorded lesson: JaCoCo blind to subprocess CLI).
+- **ObjC 0–24%** (`Tools/Ttio{Sign,Simulator,TransportServer,TransportEncode,ToMzML,
+  JcampDxDump}.m`, `MakeFixtures.m`) is **NOT** subprocess-blind. `build.sh --coverage`
+  passes every `Tools/obj/*` binary to `llvm-cov` as `-object`, and the NSTask child
+  processes inherit `LLVM_PROFILE_FILE`, so subprocess runs **are** credited. The low
+  numbers mean the existing tests only exercise no-args/error branches. Recover by
+  **adding happy-path NSTask invocations** (no in-process refactor needed — the tools
+  are `main()`-only with no header-exposed logic, and there is no precedent for a
+  `tool_main()` seam).
 
 ### F4 — External-tool importers are half-covered
 Bruker/Thermo/Waters readers sit ~47–59% (Python `importers/{bruker_tdf,thermo_raw,
@@ -80,11 +85,11 @@ xlang failures contribute nothing).
 ## 3. Recommendations (prioritized)
 
 ### High value, low effort
-- **R1 — In-process `main()` tests for the CLI tools (F3).** Convert the 0%/low CLI
-  coverage by invoking each tool's `main()`/entry in-process (capture argv + stdout)
-  instead of (or in addition to) the subprocess smoke. Targets: the 4 Java 0% tools,
-  the ObjC `Tools/*`, the Python `tools/*_cli`. The logic already works (smokes pass);
-  this just makes coverage *see* it. Big % jump for little code.
+- **R1 — Exercise the CLI tools so coverage credits them (F3).** Java + Python: invoke
+  each tool's `main()` **in-process** (capture argv + stdout) instead of (or in addition
+  to) the subprocess smoke — the 4 Java 0% tools and the Python `tools/*_cli`. ObjC:
+  add **happy-path NSTask invocations** (subprocess already credited). The logic already
+  works (smokes pass); this just makes coverage *see* it. Big % jump for little code.
 - **R2 — Fix ObjC measurement + add a gate (F5).** Scope the lcov to `objc/Source`
   (drop `/usr/GNUstep/...` system headers), then add a CI line-rate threshold so ObjC
   is gated like the others. Cheap, closes the "one SDK ungated" hole.
