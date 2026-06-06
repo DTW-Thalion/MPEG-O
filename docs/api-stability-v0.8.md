@@ -18,6 +18,14 @@ This document is advisory: the authoritative annotations live in
 the source (`@since`, `@Deprecated`, `TTIO_DEPRECATED_MSG`,
 `warnings.warn`).
 
+> **Maintained through v1.7.0.** The "v0.8" title is retained for git
+> continuity; the table below is kept current through the v1.x line.
+> The 1.x releases are additive / non-breaking, so the original
+> classification still holds — v1.7.0 (the OO design-assessment sweep,
+> 2026-06-05) added the rows tagged `@since v1.7.0` and updated the
+> `native_handle()` and `Run` statuses below. No `.tio` / wire /
+> breaking-API change.
+
 ---
 
 ## 1. Core dataset model
@@ -51,6 +59,19 @@ the source (`@since`, `@Deprecated`, `TTIO_DEPRECATED_MSG`,
 | `compound_per_run_provenance` flag | **Stable** | v0.3 (M17) | |
 | `CompoundField` protocol / record | **Stable** | v0.6 (M39) | Four supported kinds: UINT32, INT64, FLOAT64, VL_STRING. |
 
+### 1.4 OO design-assessment additions (v1.7.0)
+
+The v1.7.0 sweep (OO design assessment) added the following typed
+surfaces. None change the `.tio` / wire format; all are additive.
+
+| API | Status | Since | Notes |
+|---|---|---|---|
+| `SpectrumKind` enum (Python `ttio.enums.SpectrumKind`; Java nested `Enums.SpectrumKind`; ObjC `TTIOSpectrumKind` in `ValueClasses/TTIOEnums.h`) | **Stable** | v1.7.0 | Replaces stringly-typed `spectrum_class` dispatch. The persisted `@spectrum_class` HDF5 string is UNCHANGED and remains the source of truth. Conversion via `from_persisted`/`persisted` (Python/Java) and `TTIOSpectrumKindFromPersisted`/`TTIOSpectrumKindPersisted` (ObjC). |
+| `Run` protocol (Python `ttio.protocols.run.Run`) | **Stable** | v0.6 / promoted v1.7.0 | Was the only structural Protocol still marked **Provisional** in Python. Promoted to **Stable** in v1.7.0 to match the load-bearing `Run` abstraction in Java (`AcquisitionRun`) and ObjC (`TTIOAcquisitionRun`). |
+| Shared `Image` base + `ImageKind` enum (MS / RAMAN / IR) + generic spectral axis (P2.5) | **Stable** | v1.7.0 | `MSImage` / `RamanImage` / `IRImage` now share a common `Image` base with a uniform spectral axis. |
+| `SpectralDataset.imageForKind(kind)` / `images` accessors (Python `image_for_kind` / `images`; Java `imageForKind` / `images`; ObjC `imageForKind:` / `images`) | **Stable** | v1.7.0 | **Replaces** the old per-modality accessors `image()` / `ramanImage()` / `irImage()`, which are removed. Look up by `ImageKind`, or enumerate via the `images` collection. |
+| `SignalArray` encapsulation (P3.11) | **Stable behaviour change** | v1.7.0 | Python `SignalArray.data` is now a read-only zero-copy numpy view (`flags.writeable=False`). Java `SignalArray.asDoubles()/asFloats()/asInts()/asLongs()` return defensive copies. ObjC was already `(readonly, copy)`. |
+
 ---
 
 ## 2. Storage providers
@@ -64,7 +85,7 @@ the source (`@since`, `@Deprecated`, `TTIO_DEPRECATED_MSG`,
 | `StorageDataset.readCanonicalBytes` | **Stable** | v0.7 (M43) | Byte-level signature / encryption contract. |
 | `StorageDataset.readRows` (compound) | **Stable** | v0.7 (M50) | Promoted from `@optional` to `@required` on the ObjC protocol. |
 | `ProviderRegistry.open(url, mode)` / `open_provider` | **Stable** | v0.6 | URL-scheme dispatch. |
-| **`StorageProvider.native_handle()` / `nativeHandle`** | **Deprecated (v1.0 removal)** | v0.6 | Escape hatch from provider abstraction. M43-M45 eliminated every internal caller; any external use should migrate to the protocol. Scheduled for removal at v1.0 per HANDOFF M55 review. |
+| **`StorageProvider.native_handle()` / `nativeHandle`** | **Deprecated** | v0.6 | Escape hatch from provider abstraction. M43-M45 eliminated every internal caller. **v1.7.0:** now actively deprecated — Python emits a `DeprecationWarning`; Java is `@Deprecated(forRemoval=true)`; ObjC retained (not annotated). Still functional; callers should use `root_group()` / the StorageGroup protocol. Removal deferred to a future major. |
 
 ### 2.2 Per-backend status
 
@@ -169,6 +190,7 @@ for safety.
 | FASTQ writer | **Stable** | v1.0 | `FastqWriter` with selectable Phred output offset. Internal `0xFF` "qualities unknown" sentinel maps to Phred 0 on output. |
 | `ReferenceImport` value class + `write_to_dataset()` | **Stable** | v1.0 | Embeds a reference at `/study/references/<uri>/` using the canonical 3-level layout (unified with the REF_DIFF_V2 auto-embed path in v1.1.1). See `docs/format-spec.md` §10.10. |
 | FASTA / FASTQ CLIs (`fasta_import_cli`, `fasta_export_cli`, `fastq_import_cli`, `fastq_export_cli`, `FastaRoundTrip`, `FastqRoundTrip`, `TtioFastaRoundTrip`, `TtioFastqRoundTrip`) | **Stable** | v1.0 | One CLI surface per language; same byte-output contract as the in-process API. |
+| `Reader` / `Writer` registry (P2.6, all three languages) | **Stable** | v1.6.5 / v1.7.0 | Unified importer/exporter `Reader` / `Writer` interfaces with one registry entry per format. Readers return an `ImportedDataset` draft with a write-through delegate. Exposes a per-language `requiredTool` notion (genomic readers report `"samtools"` in Python / ObjC; Java uses htsjdk and reports `null`). |
 
 ### 4.1 Transport (v0.10)
 
@@ -244,7 +266,11 @@ a deprecation warning when invoked in v0.8.
    migrate to `TTIOAcquisitionRun.accessPolicy`.
 4. `StorageProvider.native_handle()` / `nativeHandle` — M43-M45
    eliminated every internal caller. External callers should drop
-   direct backend handles in favour of the provider protocol.
+   direct backend handles in favour of the provider protocol
+   (`root_group()` / StorageGroup). **Updated v1.7.0:** now actively
+   deprecated (Python `DeprecationWarning`; Java
+   `@Deprecated(forRemoval=true)`; ObjC retained), still functional;
+   hard removal deferred from v1.0 to a future major.
 5. Unprefixed v1 HMAC signatures (read fallback). v0.2 fixtures
    that still use this layout should be re-signed with `v2:` before
    v1.0. No writer emits v1 since v0.3; the v1.0 freeze removes the
