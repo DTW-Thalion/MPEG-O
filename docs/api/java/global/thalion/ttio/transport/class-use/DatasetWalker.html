@@ -89,6 +89,18 @@ loadScripts(document, 'script');</script>
  int&nbsp;expectedAUCount)</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
 <div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitDatasetProvenance(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitDatasetProvenance</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;records)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.2 — dataset-level provenance chain.</div>
+</div>
+<div class="col-first odd-row-color"><code>default void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitEncryptionAlgorithm(global.thalion.ttio.transport.DatasetWalker,java.lang.String)" class="member-name-link">visitEncryptionAlgorithm</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;algorithm)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">§5.4.1 — dataset-level <code>@encrypted</code> algorithm name.</div>
+</div>
+<div class="col-first even-row-color"><code>default void</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitEndOfDataset(global.thalion.ttio.transport.DatasetWalker,int,int)" class="member-name-link">visitEndOfDataset</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
  int&nbsp;datasetId,
  int&nbsp;finalAUSequence)</code></div>
@@ -97,13 +109,63 @@ loadScripts(document, 'script');</script>
 <div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitEndOfStream(global.thalion.ttio.transport.DatasetWalker)" class="member-name-link">visitEndOfStream</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker)</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
 <div class="col-first even-row-color"><code>default void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitStreamHeader(global.thalion.ttio.transport.DatasetWalker,java.lang.String,java.lang.String,java.lang.String,java.util.List,int)" class="member-name-link">visitStreamHeader</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitIdentificationsTable(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitIdentificationsTable</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;rows)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.6 — <a href="../../Identification.html" title="class in global.thalion.ttio"><code>Identification</code></a> rows.</div>
+</div>
+<div class="col-first odd-row-color"><code>default void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitImage(global.thalion.ttio.transport.DatasetWalker,global.thalion.ttio.MSImage)" class="member-name-link">visitImage</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="../../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">§5.4.5 — embedded <a href="../../MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a> cube.</div>
+</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitIRImage(global.thalion.ttio.transport.DatasetWalker,global.thalion.ttio.IRImage)" class="member-name-link">visitIRImage</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="../../IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;image)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.5 — embedded <a href="../../IRImage.html" title="class in global.thalion.ttio"><code>IRImage</code></a> cube.</div>
+</div>
+<div class="col-first odd-row-color"><code>default void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitQuantificationsTable(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitQuantificationsTable</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;rows)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">§5.4.6 — <a href="../../Quantification.html" title="class in global.thalion.ttio"><code>Quantification</code></a> rows.</div>
+</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitRamanImage(global.thalion.ttio.transport.DatasetWalker,global.thalion.ttio.RamanImage)" class="member-name-link">visitRamanImage</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="../../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;image)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.5 — embedded <a href="../../RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a> cube.</div>
+</div>
+<div class="col-first odd-row-color"><code>default void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitReferenceGroup(global.thalion.ttio.transport.DatasetWalker,global.thalion.ttio.genomics.ReferenceImport)" class="member-name-link">visitReferenceGroup</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="../../genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a>&nbsp;reference)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">§5.4.4 — one embedded <a href="../../genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics"><code>ReferenceImport</code></a> per call.</div>
+</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitSampleMetadata(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitSampleMetadata</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;rows)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.3 — <a href="../../Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a> rows.</div>
+</div>
+<div class="col-first odd-row-color"><code>default void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitStreamHeader(global.thalion.ttio.transport.DatasetWalker,java.lang.String,java.lang.String,java.lang.String,java.util.List,int)" class="member-name-link">visitStreamHeader</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;formatVersion,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigation,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;features,
  int&nbsp;nDatasets)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>default void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../AccessUnitVisitor.html#visitSubjectMetadata(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitSubjectMetadata</a><wbr>(<a href="../DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../../Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;rows)</code></div>
+<div class="col-last even-row-color">
+<div class="block">§5.4.3 — <a href="../../Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> rows (subjects emit BEFORE samples
+  so a soft-FK target is visible ahead of any sample row that
+  references it).</div>
+</div>
 </div>
 </section>
 </li>

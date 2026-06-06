@@ -201,6 +201,26 @@ Module Contents
 
 
 
+   .. py:attribute:: spectrometer_frequency_mhz
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: number_of_scans
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: fid_real
+      :type:  numpy.ndarray
+
+
+   .. py:attribute:: fid_imag
+      :type:  numpy.ndarray
+
+
    .. py:method:: __iter__() -> Iterator[ImportedSpectrum]
 
 
@@ -214,6 +234,9 @@ Module Contents
       Convert the parsed spectra into ``WrittenRun`` buffers ready for
       :func:`SpectralDataset.write_minimal`.
 
+
+
+   .. py:method:: to_imported_dataset() -> ttio.importers.imported_dataset.ImportedDataset
 
 
    .. py:method:: to_ttio(path: str | pathlib.Path, features: list[str] | None = None, *, provider: str = 'hdf5') -> pathlib.Path

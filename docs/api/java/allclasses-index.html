@@ -105,63 +105,83 @@ config, spectrum index, and optional chromatograms.</div>
 <div class="block">a single masked region (chromosome + half-open
   interval).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/AUFilter.html" title="class in global.thalion.ttio.transport">AUFilter</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/ArrowIpcCodec.html" title="class in global.thalion.ttio.transport">ArrowIpcCodec</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Stateless encoder/decoder for tabular transport-spec v0.11 packet
+payloads — <a href="global/thalion/ttio/Identification.html" title="class in global.thalion.ttio"><code>Identification</code></a> (packet 0x16 IDENTIFICATIONS_TABLE),
+<a href="global/thalion/ttio/Quantification.html" title="class in global.thalion.ttio"><code>Quantification</code></a> (packet 0x17 QUANTIFICATIONS_TABLE),
+<a href="global/thalion/ttio/Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> (packet 0x19 SUBJECT_METADATA), and <a href="global/thalion/ttio/Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a>
+(packet 0x1A SAMPLE_METADATA) — as Apache Arrow IPC streams.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/AUFilter.html" title="class in global.thalion.ttio.transport">AUFilter</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Server-side filter predicate applied to every <a href="global/thalion/ttio/transport/AccessUnit.html" title="class in global.thalion.ttio.transport"><code>AccessUnit</code></a>
 before serialisation.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/AUStats.html" title="class in global.thalion.ttio.transport">AUStats</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/AUStats.html" title="class in global.thalion.ttio.transport">AUStats</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Per-AccessUnit summary statistics — every field is derivable from
 an <a href="global/thalion/ttio/transport/AccessUnit.html" title="class in global.thalion.ttio.transport"><code>AccessUnit</code></a> without decoding signal-channel payload.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/workbench/auth/AuthProvider.html" title="interface in global.thalion.ttio.workbench.auth">AuthProvider</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab1">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/workbench/auth/AuthProvider.html" title="interface in global.thalion.ttio.workbench.auth">AuthProvider</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
 <div class="block">Pluggable auth provider for the W2 SDK.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Describes a single axis of a <a href="global/thalion/ttio/SignalArray.html" title="class in global.thalion.ttio"><code>SignalArray</code></a>: its semantic name,
 unit, numeric range, and sampling mode.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/BamDump.html" title="class in global.thalion.ttio.importers">BamDump</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/BamDump.html" title="class in global.thalion.ttio.importers">BamDump</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">BamDump — canonical-JSON dump of a SAM/BAM file for the M87
 cross-language conformance harness.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/BamReader.html" title="class in global.thalion.ttio.importers">BamReader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/BamReader.html" title="class in global.thalion.ttio.importers">BamReader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">SAM/BAM importer — M87.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/BamReader.SamtoolsNotFoundException.html" title="class in global.thalion.ttio.importers">BamReader.SamtoolsNotFoundException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/BamReader.SamtoolsNotFoundException.html" title="class in global.thalion.ttio.importers">BamReader.SamtoolsNotFoundException</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Historical exception type from the samtools-subprocess era.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/BamReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">BamReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for BAM.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/BamWriter.html" title="class in global.thalion.ttio.exporters">BamWriter</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">BAM exporter — M88.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/BasePack.html" title="class in global.thalion.ttio.codecs">BasePack</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/BamWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">BamWriterAdapter</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for BAM export.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/BasePack.html" title="class in global.thalion.ttio.codecs">BasePack</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">BASE_PACK genomic-sequence codec — 2-bit ACGT + sidecar mask.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/BearerAuth.html" title="class in global.thalion.ttio.workbench.auth">BearerAuth</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/BearerAuth.html" title="class in global.thalion.ttio.workbench.auth">BearerAuth</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Pre-acquired bearer-token provider.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/Benchmark.html" title="class in global.thalion.ttio.tools">Benchmark</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/Benchmark.html" title="class in global.thalion.ttio.tools">Benchmark</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Java microbenchmark harness for transport encode + decode.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/sessions/BindMountValidator.html" title="class in global.thalion.ttio.workbench.sessions">BindMountValidator</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/sessions/BindMountValidator.html" title="class in global.thalion.ttio.workbench.sessions">BindMountValidator</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Client-side mirror of the daemon's bind-mount validation.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/BootstrapAdminAuth.html" title="class in global.thalion.ttio.workbench.auth">BootstrapAdminAuth</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/BootstrapAdminAuth.html" title="class in global.thalion.ttio.workbench.auth">BootstrapAdminAuth</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Reads <code>&lt;staging_root&gt;/bootstrap-credentials.json</code> (mode
 0600, written by <code>tti-workbench-server</code> on first boot)
 and logs in as the bootstrap admin.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/BrukerReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">BrukerReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for Bruker timsTOF <code>.d</code> directories.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/BrukerTDFReader.html" title="class in global.thalion.ttio.importers">BrukerTDFReader</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
@@ -190,155 +210,213 @@ byte-parity.</div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">One signal channel inside an <a href="global/thalion/ttio/transport/AccessUnit.html" title="class in global.thalion.ttio.transport"><code>AccessUnit</code></a>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/Chromatogram.html" title="class in global.thalion.ttio">Chromatogram</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/codecs/registry/ChannelPayload.html" title="interface in global.thalion.ttio.codecs.registry">ChannelPayload</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Encoded payload: either flat dataset bytes or a storage group (ref_diff).</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/ChannelPayload.BytesPayload.html" title="class in global.thalion.ttio.codecs.registry">ChannelPayload.BytesPayload</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/ChannelPayload.GroupPayload.html" title="class in global.thalion.ttio.codecs.registry">ChannelPayload.GroupPayload</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/Chromatogram.html" title="class in global.thalion.ttio">Chromatogram</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Chromatogram: time-vs-intensity trace.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/CipherSuite.html" title="class in global.thalion.ttio.protection">CipherSuite</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/CipherSuite.html" title="class in global.thalion.ttio.protection">CipherSuite</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Cipher-suite catalog and algorithm-dispatched parameter helpers
 ().</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/protection/CipherSuite.Category.html" title="enum class in global.thalion.ttio.protection">CipherSuite.Category</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/protection/CipherSuite.Category.html" title="enum class in global.thalion.ttio.protection">CipherSuite.Category</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Category tag for catalog entries.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/CipherSuite.Entry.html" title="class in global.thalion.ttio.protection">CipherSuite.Entry</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/CipherSuite.Entry.html" title="class in global.thalion.ttio.protection">CipherSuite.Entry</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Catalog entry.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/protection/CipherSuite.InvalidKeyException.html" title="class in global.thalion.ttio.protection">CipherSuite.InvalidKeyException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/protection/CipherSuite.InvalidKeyException.html" title="class in global.thalion.ttio.protection">CipherSuite.InvalidKeyException</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Thrown when a key's length does not match the selected
   algorithm.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/protection/CipherSuite.Status.html" title="enum class in global.thalion.ttio.protection">CipherSuite.Status</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/protection/CipherSuite.Status.html" title="enum class in global.thalion.ttio.protection">CipherSuite.Status</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Status tag; only <a href="global/thalion/ttio/protection/CipherSuite.Status.html#ACTIVE"><code>CipherSuite.Status.ACTIVE</code></a> algorithms may be
   used for encrypt / sign / wrap operations.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/protection/CipherSuite.UnsupportedAlgorithmException.html" title="class in global.thalion.ttio.protection">CipherSuite.UnsupportedAlgorithmException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/protection/CipherSuite.UnsupportedAlgorithmException.html" title="class in global.thalion.ttio.protection">CipherSuite.UnsupportedAlgorithmException</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Thrown when a caller specifies an algorithm not in the
   catalog, or one with status RESERVED (activates in a later
   milestone).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/CohortPredicate.html" title="class in global.thalion.ttio.workbench.cohort">CohortPredicate</a></div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/codecs/registry/Codec.html" title="interface in global.thalion.ttio.codecs.registry">Codec</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="block">A codec adapter: uniform decode/encode over the closed channel unions.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/CodecContext.html" title="class in global.thalion.ttio.codecs.registry">CodecContext</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="block">Run-derived context for codecs.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/registry/CodecContext.Builder.html" title="class in global.thalion.ttio.codecs.registry">CodecContext.Builder</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/registry/CodecRegistry.html" title="class in global.thalion.ttio.codecs.registry">CodecRegistry</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Maps Compression ids to Codec adapters.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/CohortPredicate.html" title="class in global.thalion.ttio.workbench.cohort">CohortPredicate</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Abstract cohort-query predicate node.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/CohortQuery.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/CohortQuery.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Full request body for <code>POST /v1/cohorts/query</code> and
 <code>POST /v1/cohorts/preview-count</code>.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/CohortQuery.Builder.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery.Builder</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/cohort/CohortQuery.OrderBy.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery.OrderBy</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/CohortQuery.Builder.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery.Builder</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/cohort/CohortQuery.OrderBy.html" title="class in global.thalion.ttio.workbench.cohort">CohortQuery.OrderBy</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One <code>order_by</code> clause: `"table.column"` and a direction.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/cohort/CohortResult.html" title="class in global.thalion.ttio.workbench.cohort">CohortResult</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/cohort/CohortResult.html" title="class in global.thalion.ttio.workbench.cohort">CohortResult</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Parsed <code>POST /v1/cohorts/query</code> response.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/providers/CompoundField.html" title="class in global.thalion.ttio.providers">CompoundField</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/providers/CompoundField.html" title="class in global.thalion.ttio.providers">CompoundField</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One field inside a compound-dataset record.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/providers/CompoundField.Kind.html" title="enum class in global.thalion.ttio.providers">CompoundField.Kind</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/providers/CompoundField.Kind.html" title="enum class in global.thalion.ttio.providers">CompoundField.Kind</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Field kinds supported by the capability floor.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/Container.html" title="class in global.thalion.ttio.workbench.containers">Container</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/Container.html" title="class in global.thalion.ttio.workbench.containers">Container</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A container row as returned by <code>GET /v1/containers</code>.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerDetail.html" title="class in global.thalion.ttio.workbench.containers">ContainerDetail</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerDetail.html" title="class in global.thalion.ttio.workbench.containers">ContainerDetail</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Per-container detail row as returned by
 <code>GET /v1/containers/{uri}</code>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/ContainerFieldPredicate.html" title="class in global.thalion.ttio.workbench.cohort">ContainerFieldPredicate</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerLayer.html" title="class in global.thalion.ttio.workbench.containers">ContainerLayer</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/ContainerFieldPredicate.html" title="class in global.thalion.ttio.workbench.cohort">ContainerFieldPredicate</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerLayer.html" title="class in global.thalion.ttio.workbench.containers">ContainerLayer</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One layer entry from <code>GET /v1/containers/{uri}/layers</code>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerListPage.html" title="class in global.thalion.ttio.workbench.containers">ContainerListPage</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerListPage.html" title="class in global.thalion.ttio.workbench.containers">ContainerListPage</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One page of <code>GET /v1/containers</code> results.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Container manifest returned by
 <code>GET /v1/containers/{uri}/manifest</code>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.GenomicRunSummary.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest.GenomicRunSummary</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.MsRunSummary.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest.MsRunSummary</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.GenomicRunSummary.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest.GenomicRunSummary</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.NmrRunSummary.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest.NmrRunSummary</a></div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.MsRunSummary.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest.MsRunSummary</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/containers/ContainersClient.html" title="class in global.thalion.ttio.workbench.containers">ContainersClient</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/containers/ContainerManifest.NmrRunSummary.html" title="class in global.thalion.ttio.workbench.containers">ContainerManifest.NmrRunSummary</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/containers/ContainersClient.html" title="class in global.thalion.ttio.workbench.containers">ContainersClient</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">REST client for the <code>/v1/containers</code> endpoint.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/CramReader.html" title="class in global.thalion.ttio.importers">CramReader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/CramReader.html" title="class in global.thalion.ttio.importers">CramReader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">CRAM importer — M88.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/CramReader.InMemoryFastaReferenceSource.html" title="class in global.thalion.ttio.importers">CramReader.InMemoryFastaReferenceSource</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/CramReader.InMemoryFastaReferenceSource.html" title="class in global.thalion.ttio.importers">CramReader.InMemoryFastaReferenceSource</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Minimal CRAMReferenceSource that loads the FASTA bases into a map
 at construction and serves them by name lookup.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/CramReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">CramReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for CRAM.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/CramWriter.html" title="class in global.thalion.ttio.exporters">CramWriter</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">CRAM exporter — M88.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/CVAnnotatable.html" title="interface in global.thalion.ttio.protocols">CVAnnotatable</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab1">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/CramWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">CramWriterAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for CRAM export.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/CVAnnotatable.html" title="interface in global.thalion.ttio.protocols">CVAnnotatable</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
 <div class="block">Objects implementing <code>CVAnnotatable</code> can be tagged with
 controlled-vocabulary parameters from any ontology (PSI-MS, nmrCV,
 CHEBI, BFO, ...).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/CVParam.html" title="class in global.thalion.ttio">CVParam</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/CVParam.html" title="class in global.thalion.ttio">CVParam</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A single controlled-vocabulary parameter reference.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/CVTermMapper.html" title="class in global.thalion.ttio.importers">CVTermMapper</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/CVTermMapper.html" title="class in global.thalion.ttio.importers">CVTermMapper</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Maps PSI-MS and nmrCV controlled-vocabulary accessions to TTIO model
 values (precision, compression, array role, spectrum metadata).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Walks a <a href="global/thalion/ttio/SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a>, applying an optional
 <a href="global/thalion/ttio/transport/AUFilter.html" title="class in global.thalion.ttio.transport"><code>AUFilter</code></a> and dispatching transport-stream events to an
 <a href="global/thalion/ttio/transport/AccessUnitVisitor.html" title="interface in global.thalion.ttio.transport"><code>AccessUnitVisitor</code></a>.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/DeltaRans.html" title="class in global.thalion.ttio.codecs">DeltaRans</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/codecs/registry/DecodedChannel.html" title="interface in global.thalion.ttio.codecs.registry">DecodedChannel</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Closed union of a decoded channel value: bytes | str-list | mate-info.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/DecodedChannel.Bytes.html" title="class in global.thalion.ttio.codecs.registry">DecodedChannel.Bytes</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/DecodedChannel.MateInfo.html" title="class in global.thalion.ttio.codecs.registry">DecodedChannel.MateInfo</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/DecodedChannel.StrList.html" title="class in global.thalion.ttio.codecs.registry">DecodedChannel.StrList</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/DeltaRans.html" title="class in global.thalion.ttio.codecs">DeltaRans</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">DELTA_RANS_ORDER0 codec (M95, codec id 11).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/DumpIdentifications.html" title="class in global.thalion.ttio.tools">DumpIdentifications</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/DumpIdentifications.html" title="class in global.thalion.ttio.tools">DumpIdentifications</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">— compound parity dumper.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/EncodingSpec.html" title="class in global.thalion.ttio">EncodingSpec</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/EncodeCli.html" title="class in global.thalion.ttio.tools">EncodeCli</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Encode one or more input files of a given source format into a
+<code>.tio</code> container, dispatching through <a href="global/thalion/ttio/importers/ImporterRegistry.html" title="class in global.thalion.ttio.importers"><code>ImporterRegistry</code></a>.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/codecs/registry/EncodedChannel.html" title="interface in global.thalion.ttio.codecs.registry">EncodedChannel</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Closed union of encode output: a flat dataset blob or a group layout (ref_diff).</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/EncodedChannel.DatasetBytes.html" title="class in global.thalion.ttio.codecs.registry">EncodedChannel.DatasetBytes</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/registry/EncodedChannel.GroupLayout.html" title="class in global.thalion.ttio.codecs.registry">EncodedChannel.GroupLayout</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/EncodingSpec.html" title="class in global.thalion.ttio">EncodingSpec</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Describes how a <a href="global/thalion/ttio/SignalArray.html" title="class in global.thalion.ttio"><code>SignalArray</code></a> buffer is encoded on disk:
 numeric precision, compression algorithm, and byte order.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab1">
 <div class="block">Objects implementing <code>Encryptable</code> support MPEG-G-style
 multi-level content protection.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/EncryptedTransport.html" title="class in global.thalion.ttio.protection">EncryptedTransport</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/EncryptedTransport.html" title="class in global.thalion.ttio.protection">EncryptedTransport</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">v1.0 transport layer for per-AU encrypted files.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="block">One DEK recipient: the same per-run DEK wrapped under this
+  recipient's KEK.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/EncryptedTransport.WrappedDek.html" title="class in global.thalion.ttio.protection">EncryptedTransport.WrappedDek</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
@@ -384,74 +462,113 @@ multi-level content protection.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Multi-level protection granularity (MPEG-G style).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab3">
+<div class="block">Modality of a spatial image cube (MS / Raman / IR).</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Infrared y-axis interpretation (transmittance vs.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.Polarity.html" title="enum class in global.thalion.ttio">Enums.Polarity</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.Polarity.html" title="enum class in global.thalion.ttio">Enums.Polarity</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Ion polarity for mass spectrometry.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.Precision.html" title="enum class in global.thalion.ttio">Enums.Precision</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.Precision.html" title="enum class in global.thalion.ttio">Enums.Precision</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Numeric precision of a signal buffer.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.SamplingMode.html" title="enum class in global.thalion.ttio">Enums.SamplingMode</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.SamplingMode.html" title="enum class in global.thalion.ttio">Enums.SamplingMode</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Axis sampling regularity.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/FastaParseException.html" title="class in global.thalion.ttio.importers">FastaParseException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.SpectralAxisKind.html" title="enum class in global.thalion.ttio">Enums.SpectralAxisKind</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
+<div class="block">Physical interpretation of an image's spectral axis.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/Enums.SpectrumKind.html" title="enum class in global.thalion.ttio">Enums.SpectrumKind</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
+<div class="block">Kind of spectrum, derived from the persisted <code>@spectrum_class</code>
+attribute string.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/ExportCli.html" title="class in global.thalion.ttio.tools">ExportCli</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Emit one layer of a <code>.tio</code> container in a supported external
+format, dispatching through <a href="global/thalion/ttio/exporters/ExporterRegistry.html" title="class in global.thalion.ttio.exporters"><code>ExporterRegistry</code></a>.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/ExporterRegistry.html" title="class in global.thalion.ttio.exporters">ExporterRegistry</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Export-format registry: the formats <code>ttio export --format &lt;fmt&gt;</code>
+  accepts and how each maps a <code>.tio</code> layer to an output file.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/exporters/ExportSpec.html" title="class in global.thalion.ttio.exporters">ExportSpec</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="block">One export-format entry: a canonical key paired with its display label,
+  filename extensions, optional external tool, and the <a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> that
+  serializes one layer of an opened dataset to an output file.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/FastaImportBench.html" title="class in global.thalion.ttio.tools">FastaImportBench</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Standalone perf bench for FASTA → reference HDF5 encoding.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/FastaParseException.html" title="class in global.thalion.ttio.importers">FastaParseException</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Raised on malformed FASTA / FASTQ input (missing header, embedded
 null byte, header without sequence, SEQ/QUAL length mismatch).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/FastaReader.html" title="class in global.thalion.ttio.importers">FastaReader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/FastaReader.html" title="class in global.thalion.ttio.importers">FastaReader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">FASTA importer.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/FastaRoundTrip.html" title="class in global.thalion.ttio.tools">FastaRoundTrip</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/FastaRoundTrip.html" title="class in global.thalion.ttio.tools">FastaRoundTrip</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Java mirror of <code>python -m ttio.tools.fasta_export_cli</code> for
 the cross-language FASTA round-trip conformance harness.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/FastaWriter.html" title="class in global.thalion.ttio.exporters">FastaWriter</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/FastaWriter.html" title="class in global.thalion.ttio.exporters">FastaWriter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">FASTA exporter.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/FastqParseException.html" title="class in global.thalion.ttio.importers">FastqParseException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/FastqParseException.html" title="class in global.thalion.ttio.importers">FastqParseException</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Raised on malformed FASTQ input (not a multiple of 4 lines,
 SEQ/QUAL length mismatch, missing <code>+</code> separator).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/FastqReader.html" title="class in global.thalion.ttio.importers">FastqReader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/FastqReader.html" title="class in global.thalion.ttio.importers">FastqReader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">FASTQ importer.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/FastqRoundTrip.html" title="class in global.thalion.ttio.tools">FastqRoundTrip</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/FastqRoundTrip.html" title="class in global.thalion.ttio.tools">FastqRoundTrip</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Java mirror of <code>python -m ttio.tools.fastq_export_cli</code> for
 the cross-language FASTQ round-trip conformance harness.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/FastqWriter.html" title="class in global.thalion.ttio.exporters">FastqWriter</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/FastqWriter.html" title="class in global.thalion.ttio.exporters">FastqWriter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">FASTQ exporter.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/Feature.html" title="class in global.thalion.ttio">Feature</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/Feature.html" title="class in global.thalion.ttio">Feature</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A feature-level observation: a peak detected in one run, with
 retention time + m/z + charge + per-sample abundances.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Reader/writer for TTI-O feature flags stored as root group attributes.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/federation/FederationClient.html" title="class in global.thalion.ttio.workbench.federation">FederationClient</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/federation/FederationClient.html" title="class in global.thalion.ttio.workbench.federation">FederationClient</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">REST client for the <code>/v1/federation</code> endpoint.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/federation/FederationClient.Peer.html" title="class in global.thalion.ttio.workbench.federation">FederationClient.Peer</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/federation/FederationClient.Peer.html" title="class in global.thalion.ttio.workbench.federation">FederationClient.Peer</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A federation peer node from <code>GET /v1/federation/peers</code>.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/importers/FormatSpec.html" title="class in global.thalion.ttio.importers">FormatSpec</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="block">One import-format entry: a canonical key paired with its display label,
+  filename extensions, optional external tool, and the <a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> that
+  parses inputs into an <a href="global/thalion/ttio/importers/ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a>.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/FqzcompNx16Z.html" title="class in global.thalion.ttio.codecs">FqzcompNx16Z</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
@@ -486,15 +603,21 @@ chromosome strings for one <a href="global/thalion/ttio/genomics/GenomicRun.html
 in format-spec section 6.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/hdf5/Hdf5CompoundIO.Field.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Field</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="block">One field in a compound schema, paired with its on-disk kind.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/hdf5/Hdf5CompoundIO.FieldKind.html" title="enum class in global.thalion.ttio.hdf5">Hdf5CompoundIO.FieldKind</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
+<div class="block">Field kinds covered by the compound-IO helper.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/hdf5/Hdf5CompoundIO.RowPacker.html" title="interface in global.thalion.ttio.hdf5">Hdf5CompoundIO.RowPacker</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab1">
 <div class="block">Packs row values into the compound value array.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/hdf5/Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Immutable layout description for a compound dataset.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/hdf5/Hdf5CompoundType.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundType</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Thin wrapper around an HDF5 compound datatype (H5T_COMPOUND).</div>
@@ -508,29 +631,61 @@ in format-spec section 6.</div>
 <div class="block">Exception hierarchy for HDF5 wrapper operations.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.AttributeException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.AttributeException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when an attribute create / read / write / delete call
+  fails on a group or dataset.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.DatasetCreateException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetCreateException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when dataset creation fails — type setup, dataspace setup,
+  or the <code>H5Dcreate2</code> call itself.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.DatasetOpenException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetOpenException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Dopen2</code> returns a negative dataset id.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.DatasetReadException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetReadException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Dread</code> (or any of its split-read variants)
+  reports failure.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.DatasetWriteException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetWriteException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Dwrite</code> (or any of its split-write variants)
+  reports failure.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.FileCreateException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileCreateException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Fcreate</code> returns a negative file id, typically
+  due to permissions or a missing parent directory.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.FileNotFoundException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileNotFoundException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when an HDF5 file path is requested but the file does not
+  exist on disk.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.FileOpenException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileOpenException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Fopen</code> returns a negative file id, typically
+  due to a corrupt header or a non-HDF5 file.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.GroupCreateException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.GroupCreateException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Gcreate2</code> returns a negative group id.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.GroupOpenException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.GroupOpenException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when <code>H5Gopen2</code> returns a negative group id.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.Hdf5Exception.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.Hdf5Exception</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Base unchecked exception for any failure raised by the HDF5
+  wrapper layer.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/hdf5/Hdf5Errors.OutOfRangeException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.OutOfRangeException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised when a hyperslab request extends past the dataset extent.</div>
+</div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/hdf5/Hdf5File.html" title="class in global.thalion.ttio.hdf5">Hdf5File</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Thin wrapper around an HDF5 file handle.</div>
@@ -546,6 +701,26 @@ in format-spec section 6.</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/Identification.html" title="class in global.thalion.ttio">Identification</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A spectrum-level chemical-entity identification.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/Image.html" title="class in global.thalion.ttio">Image</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Shared base for the three spatial image-cube modalities
+(<a href="global/thalion/ttio/MSImage.html" title="class in global.thalion.ttio"><code>MSImage</code></a>, <a href="global/thalion/ttio/RamanImage.html" title="class in global.thalion.ttio"><code>RamanImage</code></a>, <a href="global/thalion/ttio/IRImage.html" title="class in global.thalion.ttio"><code>IRImage</code></a>).</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/ImportedDataset.html" title="class in global.thalion.ttio.importers">ImportedDataset</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Normalized in-memory draft every importer produces; <a href="global/thalion/ttio/importers/ImportedDataset.html#write(java.nio.file.Path)"><code>ImportedDataset.write(Path)</code></a> is
+  the single dataset-write call site.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/importers/ImportedDataset.WriteDelegate.html" title="interface in global.thalion.ttio.importers">ImportedDataset.WriteDelegate</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Optional write-through delegate.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/ImporterRegistry.html" title="class in global.thalion.ttio.importers">ImporterRegistry</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Encode-format registry: the single source of truth for the formats
+  <code>ttio encode --format &lt;fmt&gt;</code> accepts and how each maps to a
+  <code>.tio</code>.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/ImzMLReader.html" title="class in global.thalion.ttio.importers">ImzMLReader</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
@@ -568,13 +743,21 @@ in format-spec section 6.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One pixel's spatial coordinates plus its m/z + intensity arrays.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/ImzMLWriter.html" title="class in global.thalion.ttio.exporters">ImzMLWriter</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/ImzMLReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">ImzMLReaderAdapter</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for imzML (continuous mode only).</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/ImzMLWriter.html" title="class in global.thalion.ttio.exporters">ImzMLWriter</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">imzML + .ibd exporter — v0.9+.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/exporters/ImzMLWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/exporters/ImzMLWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">ImzMLWriter.WriteResult</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Return value of <a href="global/thalion/ttio/exporters/ImzMLWriter.html#write(java.util.List,java.nio.file.Path,java.nio.file.Path,java.lang.String,int,int,int,double,double,java.lang.String,java.lang.String)"><code>ImzMLWriter.write(List, Path, Path, String, int, int, int, double, double, String, String)</code></a>: resolved paths + UUID.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/ImzMLWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">ImzMLWriterAdapter</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for imzML export.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/Indexable.html" title="interface in global.thalion.ttio.protocols">Indexable&lt;T&gt;</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab1">
@@ -606,116 +789,140 @@ intensity values sampled at a shared wavenumber axis.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Exports a <a href="global/thalion/ttio/SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> to ISA-Tab TSV files and ISA-JSON.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/IsolationWindow.html" title="class in global.thalion.ttio">IsolationWindow</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/IsaWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">IsaWriterAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for ISA-Tab / ISA-JSON export.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/IsolationWindow.html" title="class in global.thalion.ttio">IsolationWindow</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Precursor isolation window for MS/MS scans, expressed as a target
 m/z with asymmetric lower/upper offsets in Th (Da).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/JcampDxDecode.html" title="class in global.thalion.ttio.importers">JcampDxDecode</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/JcampDxDecode.html" title="class in global.thalion.ttio.importers">JcampDxDecode</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">JCAMP-DX 5.01 compressed-XYDATA decoder (SQZ / DIF / DUP / PAC).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/JcampDxDecode.DecodedXY.html" title="class in global.thalion.ttio.importers">JcampDxDecode.DecodedXY</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/JcampDxDecode.DecodedXY.html" title="class in global.thalion.ttio.importers">JcampDxDecode.DecodedXY</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Decoded XYDATA: two equal-length primitive arrays.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/exporters/JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/exporters/JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
 <div class="block">JCAMP-DX 5.01 <code>##XYDATA=(X++(Y..Y))</code> encoding modes supported
 by <a href="global/thalion/ttio/exporters/JcampDxWriter.html" title="class in global.thalion.ttio.exporters"><code>JcampDxWriter</code></a>.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/JcampDxReader.html" title="class in global.thalion.ttio.importers">JcampDxReader</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/JcampDxReader.html" title="class in global.thalion.ttio.importers">JcampDxReader</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">JCAMP-DX 5.01 reader for 1-D vibrational and UV-Vis spectra.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/JcampDxReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">JcampDxReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for JCAMP-DX.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/JcampDxWriter.html" title="class in global.thalion.ttio.exporters">JcampDxWriter</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">JCAMP-DX 5.01 writer for 1-D Raman, IR, and UV-Vis spectra.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/jobs/Job.html" title="class in global.thalion.ttio.workbench.jobs">Job</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/JcampDxWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">JcampDxWriterAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for JCAMP-DX export.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/jobs/Job.html" title="class in global.thalion.ttio.workbench.jobs">Job</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A pipeline job as returned by <code>GET /v1/jobs{,/{id}}</code>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/jobs/JobEvent.html" title="class in global.thalion.ttio.workbench.jobs">JobEvent</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/jobs/JobEvent.html" title="class in global.thalion.ttio.workbench.jobs">JobEvent</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One SSE frame from <code>GET /v1/jobs/{id}/events</code>.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/jobs/JobsClient.html" title="class in global.thalion.ttio.workbench.jobs">JobsClient</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/jobs/JobsClient.html" title="class in global.thalion.ttio.workbench.jobs">JobsClient</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Job submit + tracking surface.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/KeyRotationManager.html" title="class in global.thalion.ttio.protection">KeyRotationManager</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/KeyRotationManager.html" title="class in global.thalion.ttio.protection">KeyRotationManager</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Envelope encryption and key rotation for TTI-O datasets.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/Login.html" title="class in global.thalion.ttio.workbench.auth">Login</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/Login.html" title="class in global.thalion.ttio.workbench.auth">Login</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block"><code>POST /v1/auth/login</code> client.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/M94zV4Cli.html" title="class in global.thalion.ttio.tools">M94zV4Cli</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/M94zV4Cli.html" title="class in global.thalion.ttio.tools">M94zV4Cli</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Tiny CLI mirroring objc/Tools/TtioM94zV4Cli.m and the Python harness
 for cross-language byte-equality tests.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/MassSpectrum.html" title="class in global.thalion.ttio">MassSpectrum</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/MassSpectrum.html" title="class in global.thalion.ttio">MassSpectrum</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">A mass spectrum: m/z + intensity arrays plus MS level, polarity,
 scan window, and optional precursor activation / isolation metadata.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/MateInfoV2.html" title="class in global.thalion.ttio.codecs">MateInfoV2</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/MateInfoV2.html" title="class in global.thalion.ttio.codecs">MateInfoV2</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">mate_info v2 — CRAM-style inline mate-pair codec (codec id 13).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/MateInfoV2.Triple.html" title="class in global.thalion.ttio.codecs">MateInfoV2.Triple</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/MateInfoV2.Triple.html" title="class in global.thalion.ttio.codecs">MateInfoV2.Triple</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Decoded result tuple.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/MateInfoV2Cli.html" title="class in global.thalion.ttio.tools">MateInfoV2Cli</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/MateInfoV2Cli.html" title="class in global.thalion.ttio.tools">MateInfoV2Cli</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Tiny CLI mirroring objc/Tools/TtioMateInfoV2Cli.m (T10) and the
 Python ctypes path for cross-language byte-equality tests (T11).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/providers/MemoryProvider.html" title="class in global.thalion.ttio.providers">MemoryProvider</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/providers/MemoryProvider.html" title="class in global.thalion.ttio.providers">MemoryProvider</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">In-memory storage provider.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/MiniJson.html" title="class in global.thalion.ttio">MiniJson</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/MiniJson.html" title="class in global.thalion.ttio">MiniJson</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Minimal JSON parser/encoder for the compound-metadata JSON attribute
 fallback path (§6 of format-spec).</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/MSImage.html" title="class in global.thalion.ttio">MSImage</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/MSImage.html" title="class in global.thalion.ttio">MSImage</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Imaging mass spectrometry dataset with spatial grid and tile access.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/MzMLParseException.html" title="class in global.thalion.ttio.importers">MzMLParseException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/MzMLParseException.html" title="class in global.thalion.ttio.importers">MzMLParseException</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Thrown when an mzML document cannot be parsed: malformed XML,
 missing required elements, or unsupported schema features.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/MzMLProbe.html" title="class in global.thalion.ttio.tools">MzMLProbe</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/MzMLProbe.html" title="class in global.thalion.ttio.tools">MzMLProbe</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Cross-language mzML parity probe.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/MzMLReader.html" title="class in global.thalion.ttio.importers">MzMLReader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/MzMLReader.html" title="class in global.thalion.ttio.importers">MzMLReader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">SAX-based mzML 1.1 parser.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/MzMLReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">MzMLReaderAdapter</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for mzML.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/MzMLWriter.html" title="class in global.thalion.ttio.exporters">MzMLWriter</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Writes an <a href="global/thalion/ttio/AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a> as indexedmzML.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/MzTabReader.html" title="class in global.thalion.ttio.importers">MzTabReader</a></div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/MzMLWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">MzMLWriterAdapter</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for indexed mzML export.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/MzTabReader.html" title="class in global.thalion.ttio.importers">MzTabReader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">mzTab importer</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/importers/MzTabReader.MzTabImport.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabImport</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/importers/MzTabReader.MzTabImport.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabImport</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">In-memory representation of a parsed mzTab document.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/MzTabReader.MzTabParseException.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabParseException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/MzTabReader.MzTabParseException.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabParseException</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Raised when the mzTab document is structurally invalid.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/MzTabReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">MzTabReaderAdapter</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for mzTab.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/MzTabWriter.html" title="class in global.thalion.ttio.exporters">MzTabWriter</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
@@ -725,144 +932,160 @@ missing required elements, or unsupported schema features.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Paths + per-section row counts.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/NameTokenizedV2Cli.html" title="class in global.thalion.ttio.tools">NameTokenizedV2Cli</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/MzTabWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">MzTabWriterAdapter</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for mzTab export.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/NameTokenizedV2Cli.html" title="class in global.thalion.ttio.tools">NameTokenizedV2Cli</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">NAME_TOKENIZED v2 CLI for cross-language byte-equality tests.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/NameTokenizerV2.html" title="class in global.thalion.ttio.codecs">NameTokenizerV2</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/NameTokenizerV2.html" title="class in global.thalion.ttio.codecs">NameTokenizerV2</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">NAME_TOKENIZED v2 (codec id 15) — column-aware tokenised read-name codec.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/hdf5/NativeStringPool.html" title="class in global.thalion.ttio.hdf5">NativeStringPool</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/hdf5/NativeStringPool.html" title="class in global.thalion.ttio.hdf5">NativeStringPool</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">String pass-through for HDF5 1.14 compatibility.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/NMR2DSpectrum.html" title="class in global.thalion.ttio">NMR2DSpectrum</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/NMR2DSpectrum.html" title="class in global.thalion.ttio">NMR2DSpectrum</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">2-D NMR spectrum: row-major <code>double[]</code> intensity matrix of
 <code>width × height</code> points plus F1 and F2 axis descriptors.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/NmrMLParseException.html" title="class in global.thalion.ttio.importers">NmrMLParseException</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Thrown when an nmrML document cannot be parsed.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/NmrMLProbe.html" title="class in global.thalion.ttio.tools">NmrMLProbe</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/NmrMLProbe.html" title="class in global.thalion.ttio.tools">NmrMLProbe</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Cross-language nmrML parity probe.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/NmrMLReader.html" title="class in global.thalion.ttio.importers">NmrMLReader</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/NmrMLReader.html" title="class in global.thalion.ttio.importers">NmrMLReader</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">SAX-based parser for nmrML files.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/NmrMLReader.NmrMLResult.html" title="class in global.thalion.ttio.importers">NmrMLReader.NmrMLResult</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Parse result bundling the AcquisitionRun and optional FID,
   plus the acquisition-parameter scalars surfaced for parity
   with the Python <code>ImportResult</code> fields added 2026-05-05.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/NmrMLReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">NmrMLReaderAdapter</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for nmrML.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/NmrMLWriter.html" title="class in global.thalion.ttio.exporters">NmrMLWriter</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Writes an <a href="global/thalion/ttio/AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a> as nmrML.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/NMRSpectrum.html" title="class in global.thalion.ttio">NMRSpectrum</a></div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/writers/NmrMLWriterAdapter.html" title="class in global.thalion.ttio.exporters.writers">NmrMLWriterAdapter</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> adapter for nmrML export.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/NMRSpectrum.html" title="class in global.thalion.ttio">NMRSpectrum</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">1-D NMR spectrum: chemical-shift + intensity arrays plus nucleus
 type and spectrometer frequency in MHz.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/NotPredicate.html" title="class in global.thalion.ttio.workbench.cohort">NotPredicate</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/NumpressCodec.html" title="class in global.thalion.ttio">NumpressCodec</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/NotPredicate.html" title="class in global.thalion.ttio.workbench.cohort">NotPredicate</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/NumpressCodec.html" title="class in global.thalion.ttio">NumpressCodec</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Numpress-delta codec for near-lossless compression of spectral data.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/NumpressCodec.EncodedResult.html" title="class in global.thalion.ttio">NumpressCodec.EncodedResult</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/OIDCAuth.html" title="class in global.thalion.ttio.workbench.auth">OIDCAuth</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/NumpressCodec.EncodedResult.html" title="class in global.thalion.ttio">NumpressCodec.EncodedResult</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/OIDCAuth.html" title="class in global.thalion.ttio.workbench.auth">OIDCAuth</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">v1.1 stub.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/OrPredicate.html" title="class in global.thalion.ttio.workbench.cohort">OrPredicate</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/PacketHeader.html" title="class in global.thalion.ttio.transport">PacketHeader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/OrPredicate.html" title="class in global.thalion.ttio.workbench.cohort">OrPredicate</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/PacketHeader.html" title="class in global.thalion.ttio.transport">PacketHeader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">24-byte packet header for the TTI-O transport format.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/transport/PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab3">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab3"><a href="global/thalion/ttio/transport/PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab3">
 <div class="block">Transport packet types.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/PasswordTotpAuth.html" title="class in global.thalion.ttio.workbench.auth">PasswordTotpAuth</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/PasswordTotpAuth.html" title="class in global.thalion.ttio.workbench.auth">PasswordTotpAuth</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Interactive credentials provider.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/PerAUCli.html" title="class in global.thalion.ttio.tools">PerAUCli</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/PerAUCli.html" title="class in global.thalion.ttio.tools">PerAUCli</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Cross-language conformance CLI for v1.0 per-AU encryption.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/PerAUEncryption.html" title="class in global.thalion.ttio.protection">PerAUEncryption</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/PerAUEncryption.html" title="class in global.thalion.ttio.protection">PerAUEncryption</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">v1.0 per-Access-Unit encryption primitives.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.AUHeaderPlaintext.html" title="class in global.thalion.ttio.protection">PerAUEncryption.AUHeaderPlaintext</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.AUHeaderPlaintext.html" title="class in global.thalion.ttio.protection">PerAUEncryption.AUHeaderPlaintext</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Plaintext form of the 36-byte AU semantic header.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.ChannelSegment.html" title="class in global.thalion.ttio.protection">PerAUEncryption.ChannelSegment</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.ChannelSegment.html" title="class in global.thalion.ttio.protection">PerAUEncryption.ChannelSegment</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One encrypted row of a <code>&lt;channel&gt;_segments</code> compound
   dataset.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.GcmResult.html" title="class in global.thalion.ttio.protection">PerAUEncryption.GcmResult</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.GcmResult.html" title="class in global.thalion.ttio.protection">PerAUEncryption.GcmResult</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Result of a per-AU encryption: (iv, tag, ciphertext).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.HeaderSegment.html" title="class in global.thalion.ttio.protection">PerAUEncryption.HeaderSegment</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUEncryption.HeaderSegment.html" title="class in global.thalion.ttio.protection">PerAUEncryption.HeaderSegment</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">One encrypted row of <code>spectrum_index/au_header_segments</code>.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/PerAUFile.html" title="class in global.thalion.ttio.protection">PerAUFile</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/PerAUFile.html" title="class in global.thalion.ttio.protection">PerAUFile</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">v1.0 file-level per-Access-Unit encryption orchestrator.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Result of <a href="global/thalion/ttio/protection/PerAUFile.html#decryptFile(java.lang.String,byte%5B%5D,java.lang.String)"><code>PerAUFile.decryptFile(String, byte[], String)</code></a>: per-run, per-channel plaintext
   bytes; optional <code>auHeaders</code> list when
   <code>opt_encrypted_au_headers</code> is set.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUFile.GenomicIndexPlain.html" title="class in global.thalion.ttio.protection">PerAUFile.GenomicIndexPlain</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PerAUFile.GenomicIndexPlain.html" title="class in global.thalion.ttio.protection">PerAUFile.GenomicIndexPlain</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">plaintext genomic_index columns recovered from a file
   encrypted with the reserved <code>"_headers"</code> key.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/PhenotypePredicate.html" title="class in global.thalion.ttio.workbench.cohort">PhenotypePredicate</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/PhenotypePredicate.html" title="class in global.thalion.ttio.workbench.cohort">PhenotypePredicate</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Phenotype-keyed leaf.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/pipeline/Pipeline.html" title="class in global.thalion.ttio.workbench.pipeline">Pipeline</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/pipeline/Pipeline.html" title="class in global.thalion.ttio.workbench.pipeline">Pipeline</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">A pipeline as returned by <code>GET /v1/pipelines{,/{id}}</code>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/pipeline/PipelinesClient.html" title="class in global.thalion.ttio.workbench.pipeline">PipelinesClient</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/pipeline/PipelinesClient.html" title="class in global.thalion.ttio.workbench.pipeline">PipelinesClient</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Pipeline registry surface.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/PostQuantumCrypto.html" title="class in global.thalion.ttio.protection">PostQuantumCrypto</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/protection/PostQuantumCrypto.html" title="class in global.thalion.ttio.protection">PostQuantumCrypto</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Post-quantum crypto primitives — ML-KEM-1024 (FIPS 203) and
 ML-DSA-87 (FIPS 204).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PostQuantumCrypto.KemEncapResult.html" title="class in global.thalion.ttio.protection">PostQuantumCrypto.KemEncapResult</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PostQuantumCrypto.KemEncapResult.html" title="class in global.thalion.ttio.protection">PostQuantumCrypto.KemEncapResult</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Encapsulation result: KEM ciphertext and the shared secret.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PostQuantumCrypto.KeyPair.html" title="class in global.thalion.ttio.protection">PostQuantumCrypto.KeyPair</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/protection/PostQuantumCrypto.KeyPair.html" title="class in global.thalion.ttio.protection">PostQuantumCrypto.KeyPair</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Immutable raw-bytes keypair.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/PQCTool.html" title="class in global.thalion.ttio.tools">PQCTool</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/PQCTool.html" title="class in global.thalion.ttio.tools">PQCTool</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Cross-language PQC conformance CLI</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Receives progress updates from long-running SDK readers + writers.</div>
 </div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/transport/ProtectionMetadata.html" title="class in global.thalion.ttio.transport">ProtectionMetadata</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
@@ -922,49 +1145,68 @@ excitation / power / integration metadata.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">HTTP 429 on login -- the daemon's per-IP auth bucket is empty.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/RefDiffV2.html" title="class in global.thalion.ttio.codecs">RefDiffV2</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers">Reader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Uniform importer interface: parse one or more sources into an
+  <a href="global/thalion/ttio/importers/ImportedDataset.html" title="class in global.thalion.ttio.importers"><code>ImportedDataset</code></a>.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/RefDiffV2.html" title="class in global.thalion.ttio.codecs">RefDiffV2</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">REF_DIFF v2 — CRAM-style bit-packed sequence diff codec (codec id 14).</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/RefDiffV2.BlobHeader.html" title="class in global.thalion.ttio.codecs">RefDiffV2.BlobHeader</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/codecs/RefDiffV2.BlobHeader.html" title="class in global.thalion.ttio.codecs">RefDiffV2.BlobHeader</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Minimal header extracted from a <code>refdiff_v2</code> blob.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/RefDiffV2.Pair.html" title="class in global.thalion.ttio.codecs">RefDiffV2.Pair</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/RefDiffV2.Pair.html" title="class in global.thalion.ttio.codecs">RefDiffV2.Pair</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Decoded result pair: concatenated sequences and offset table.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/RefDiffV2Cli.html" title="class in global.thalion.ttio.tools">RefDiffV2Cli</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/tools/RefDiffV2Cli.html" title="class in global.thalion.ttio.tools">RefDiffV2Cli</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">CLI tool for ref_diff v2 cross-language byte-equality tests.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/genomics/ReferenceImport.html" title="class in global.thalion.ttio.genomics">ReferenceImport</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Reference-FASTA value class staged for embedding into a <code>.tio</code>
 container.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/ReferenceResolver.html" title="class in global.thalion.ttio.codecs">ReferenceResolver</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/codecs/ReferenceResolver.html" title="class in global.thalion.ttio.codecs">ReferenceResolver</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Resolve a reference chromosome sequence for REF_DIFF decode.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/codecs/RefMissingException.html" title="class in global.thalion.ttio.codecs">RefMissingException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/codecs/RefMissingException.html" title="class in global.thalion.ttio.codecs">RefMissingException</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Raised when a reference required for REF_DIFF decode cannot be resolved.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/transport/ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/transport/ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Resume bookkeeping for a partial workbench upload.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab1">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
 <div class="block">Modality-agnostic surface shared by every run type — mass-spectrometry,
 NMR, FID, MSImage, and genomic.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/SampleFieldPredicate.html" title="class in global.thalion.ttio.workbench.cohort">SampleFieldPredicate</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/SamReader.html" title="class in global.thalion.ttio.importers">SamReader</a></div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/exporters/RunSelection.html" title="class in global.thalion.ttio.exporters">RunSelection</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block">Run-selection helpers shared by the export registry and the per-format
+<code>Writer</code> adapters.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/Sample.html" title="class in global.thalion.ttio">Sample</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="block">A biological / material Sample collected from a <a href="global/thalion/ttio/Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a>, or
+a standalone sample with no recorded subject.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/SampleFieldPredicate.html" title="class in global.thalion.ttio.workbench.cohort">SampleFieldPredicate</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/SamReader.html" title="class in global.thalion.ttio.importers">SamReader</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Convenience subclass of <a href="global/thalion/ttio/importers/BamReader.html" title="class in global.thalion.ttio.importers"><code>BamReader</code></a> for SAM input.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/SamReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">SamReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for SAM.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/transport/SelectiveAccessFilter.html" title="class in global.thalion.ttio.workbench.transport">SelectiveAccessFilter</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
@@ -1059,17 +1301,26 @@ file.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Incrementally append mass spectra to an <code>.tio</code> file.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/SubjectFieldPredicate.html" title="class in global.thalion.ttio.workbench.cohort">SubjectFieldPredicate</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/ThermoRawException.html" title="class in global.thalion.ttio.importers">ThermoRawException</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/Subject.html" title="class in global.thalion.ttio">Subject</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="block">A study Subject: the donor / patient / animal / object the sample
+was drawn from.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/cohort/SubjectFieldPredicate.html" title="class in global.thalion.ttio.workbench.cohort">SubjectFieldPredicate</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">&nbsp;</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/ThermoRawException.html" title="class in global.thalion.ttio.importers">ThermoRawException</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Thrown when the ThermoRawFileParser delegation fails: binary not
 found, unsupported <code>.raw</code> file, or conversion produces
 unparseable mzML.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/ThermoRawReader.html" title="class in global.thalion.ttio.importers">ThermoRawReader</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/ThermoRawReader.html" title="class in global.thalion.ttio.importers">ThermoRawReader</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Thermo <code>.raw</code> importer — M38.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/ThermoRawReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">ThermoRawReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for Thermo <code>.raw</code>.</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/auth/Totp.html" title="class in global.thalion.ttio.workbench.auth">Totp</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
@@ -1171,6 +1422,14 @@ decomposition from a perturbation series (Hilbert-transform approach).</div>
 rank-2 correlation matrices sharing a single spectral-variable axis
 (ν<sub>1</sub> = ν<sub>2</sub>).</div>
 </div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/exporters/UnknownFormatError.html" title="class in global.thalion.ttio.exporters">UnknownFormatError</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised for a <code>--format</code> value that maps to no known exporter.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/importers/UnknownFormatError.html" title="class in global.thalion.ttio.importers">UnknownFormatError</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
+<div class="block">Raised for a <code>--format</code> value that maps to no known codec.</div>
+</div>
 <div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/UVVisSpectrum.html" title="class in global.thalion.ttio">UVVisSpectrum</a></div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">1-D UV-visible absorption spectrum: wavelength (nm) and absorbance
@@ -1196,18 +1455,26 @@ channels plus path-length and solvent metadata.</div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Raised when the converter exits non-zero or produces no mzML.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/workbench/auth/WorkbenchAuthException.html" title="class in global.thalion.ttio.workbench.auth">WorkbenchAuthException</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab5">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/importers/readers/WatersMassLynxReaderAdapter.html" title="class in global.thalion.ttio.importers.readers">WatersMassLynxReaderAdapter</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="block"><a href="global/thalion/ttio/importers/Reader.html" title="interface in global.thalion.ttio.importers"><code>Reader</code></a> adapter for Waters MassLynx <code>.raw</code> directories.</div>
+</div>
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab5"><a href="global/thalion/ttio/workbench/auth/WorkbenchAuthException.html" title="class in global.thalion.ttio.workbench.auth">WorkbenchAuthException</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Base class for <code>/v1/auth/login</code> failures against
 <code>tti-workbench-server</code>.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/WorkbenchClient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/WorkbenchClient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Top-level SDK entry for the workbench client.</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/WorkbenchClient.Endpoint.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.Endpoint</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/WorkbenchClient.Endpoint.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.Endpoint</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Resolved server endpoint.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/workbench/WorkbenchClient.EnvelopeRecipient.html" title="class in global.thalion.ttio.workbench">WorkbenchClient.EnvelopeRecipient</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
+<div class="block">One recipient of a multi-recipient encrypted upload (FD-1 Phase B).</div>
 </div>
 <div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/workbench/transport/WorkbenchHandshake.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchHandshake</a></div>
 <div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
@@ -1284,8 +1551,13 @@ handshake + ack frames.</div>
 <div class="col-last even-row-color all-classes-table all-classes-table-tab5">
 <div class="block">Upload failed mid-stream.</div>
 </div>
-<div class="col-first odd-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></div>
-<div class="col-last odd-row-color all-classes-table all-classes-table-tab4">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab1"><a href="global/thalion/ttio/exporters/Writer.html" title="interface in global.thalion.ttio.exporters">Writer</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab1">
+<div class="block">Uniform exporter interface: serialize one layer of an <em>opened</em>
+  <a href="global/thalion/ttio/SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> to <code>output</code>.</div>
+</div>
+<div class="col-first even-row-color all-classes-table all-classes-table-tab4"><a href="global/thalion/ttio/genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></div>
+<div class="col-last even-row-color all-classes-table all-classes-table-tab4">
 <div class="block">Write-side container for a single genomic run, passed to
 <details class="invalid-tag">
 <summary>invalid reference</summary>
@@ -1293,8 +1565,8 @@ handshake + ack frames.</div>
 </details>
 .</div>
 </div>
-<div class="col-first even-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/providers/ZarrProvider.html" title="class in global.thalion.ttio.providers">ZarrProvider</a></div>
-<div class="col-last even-row-color all-classes-table all-classes-table-tab2">
+<div class="col-first odd-row-color all-classes-table all-classes-table-tab2"><a href="global/thalion/ttio/providers/ZarrProvider.html" title="class in global.thalion.ttio.providers">ZarrProvider</a></div>
+<div class="col-last odd-row-color all-classes-table all-classes-table-tab2">
 <div class="block">Zarr v3 storage provider.</div>
 </div>
 </div>

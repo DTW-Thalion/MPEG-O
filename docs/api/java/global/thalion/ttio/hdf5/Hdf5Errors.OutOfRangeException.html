@@ -94,6 +94,7 @@ loadScripts(document, 'script');</script>
 <div class="horizontal-scroll">
 <div class="type-signature"><span class="modifiers">public static class </span><span class="element-name type-name-label">Hdf5Errors.OutOfRangeException</span>
 <span class="extends-implements">extends <a href="Hdf5Errors.Hdf5Exception.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.Hdf5Exception</a></span></div>
+<div class="block">Raised when a hyperslab request extends past the dataset extent.</div>
 <dl class="notes">
 <dt>See Also:</dt>
 <dd>
@@ -149,6 +150,12 @@ loadScripts(document, 'script');</script>
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">OutOfRangeException</span><wbr><span class="parameters">(long&nbsp;offset,
  long&nbsp;count,
  long&nbsp;length)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>offset</code> - the starting element index of the request</dd>
+<dd><code>count</code> - the number of elements requested</dd>
+<dd><code>length</code> - the total element count of the dataset</dd>
+</dl>
 </div>
 </section>
 </li>

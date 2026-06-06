@@ -75,37 +75,66 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../Hdf5Errors.AttributeException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.AttributeException</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Raised when an attribute create / read / write / delete call
+  fails on a group or dataset.</div>
+</div>
 <div class="col-first odd-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../Hdf5Errors.DatasetCreateException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetCreateException</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Raised when dataset creation fails — type setup, dataspace setup,
+  or the <code>H5Dcreate2</code> call itself.</div>
+</div>
 <div class="col-first even-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../Hdf5Errors.DatasetOpenException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetOpenException</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Raised when <code>H5Dopen2</code> returns a negative dataset id.</div>
+</div>
 <div class="col-first odd-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../Hdf5Errors.DatasetReadException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetReadException</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Raised when <code>H5Dread</code> (or any of its split-read variants)
+  reports failure.</div>
+</div>
 <div class="col-first even-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../Hdf5Errors.DatasetWriteException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetWriteException</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Raised when <code>H5Dwrite</code> (or any of its split-write variants)
+  reports failure.</div>
+</div>
 <div class="col-first odd-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../Hdf5Errors.FileCreateException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileCreateException</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Raised when <code>H5Fcreate</code> returns a negative file id, typically
+  due to permissions or a missing parent directory.</div>
+</div>
 <div class="col-first even-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../Hdf5Errors.FileNotFoundException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileNotFoundException</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Raised when an HDF5 file path is requested but the file does not
+  exist on disk.</div>
+</div>
 <div class="col-first odd-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../Hdf5Errors.FileOpenException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileOpenException</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Raised when <code>H5Fopen</code> returns a negative file id, typically
+  due to a corrupt header or a non-HDF5 file.</div>
+</div>
 <div class="col-first even-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../Hdf5Errors.GroupCreateException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.GroupCreateException</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Raised when <code>H5Gcreate2</code> returns a negative group id.</div>
+</div>
 <div class="col-first odd-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second odd-row-color"><code><a href="../Hdf5Errors.GroupOpenException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.GroupOpenException</a></code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Raised when <code>H5Gopen2</code> returns a negative group id.</div>
+</div>
 <div class="col-first even-row-color"><code>static class&nbsp;</code></div>
 <div class="col-second even-row-color"><code><a href="../Hdf5Errors.OutOfRangeException.html" class="type-name-link" title="class in global.thalion.ttio.hdf5">Hdf5Errors.OutOfRangeException</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Raised when a hyperslab request extends past the dataset extent.</div>
+</div>
 </div>
 </section>
 </li>

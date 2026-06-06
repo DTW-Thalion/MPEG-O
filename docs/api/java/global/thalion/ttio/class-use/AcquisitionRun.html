@@ -112,6 +112,42 @@ loadScripts(document, 'script');</script>
   alongside MS runs.</div>
 </div>
 <div class="col-first odd-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="../FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a>&nbsp;featureFlags,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D overload of the genomic-aware
+<a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)"><code>SpectralDataset.create(String, String, String, List, List, List, List, List, FeatureFlags)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.MSImage,global.thalion.ttio.RamanImage,global.thalion.ttio.IRImage,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples,
+ <a href="../MSImage.html" title="class in global.thalion.ttio">MSImage</a>&nbsp;image,
+ <a href="../RamanImage.html" title="class in global.thalion.ttio">RamanImage</a>&nbsp;ramanImage,
+ <a href="../IRImage.html" title="class in global.thalion.ttio">IRImage</a>&nbsp;irImage,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">JT2: one-shot, image-aware create used by the importer/exporter
+  registry.</div>
+</div>
+<div class="col-first odd-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
@@ -135,12 +171,61 @@ loadScripts(document, 'script');</script>
 <div class="block">Convenience overload that delegates to the
   <code>genomicRuns</code>-aware variant with an empty genomic list.</div>
 </div>
+<div class="col-first odd-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D overload of
+<a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List)"><code>SpectralDataset.create(String, String, String, List, List, List, List)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Subject.html" title="class in global.thalion.ttio">Subject</a>&gt;&nbsp;subjects,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Sample.html" title="class in global.thalion.ttio">Sample</a>&gt;&nbsp;samples)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage 6 (transport-spec v0.11, Deferral 2): create a .tio file
+  with first-class <a href="../Subject.html" title="class in global.thalion.ttio"><code>Subject</code></a> + <a href="../Sample.html" title="class in global.thalion.ttio"><code>Sample</code></a> lists.</div>
+</div>
 </div>
 </section>
 </li>
 <li>
 <section class="detail" id="global.thalion.ttio.exporters">
 <h2>Uses of <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a> in <a href="../exporters/package-summary.html">global.thalion.ttio.exporters</a></h2>
+<div class="caption"><span>Methods in <a href="../exporters/package-summary.html">global.thalion.ttio.exporters</a> that return <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">RunSelection.</span><code><a href="../exporters/RunSelection.html#analyticalRun(global.thalion.ttio.SpectralDataset,java.lang.String)" class="member-name-link">analyticalRun</a><wbr>(<a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a>&nbsp;ds,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;layer)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Select an analytical run (any spectrum class — MS or NMR) by
+<code>layer</code> name, or the single run when unambiguous.</div>
+</div>
+<div class="col-first odd-row-color"><code>static <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">RunSelection.</span><code><a href="../exporters/RunSelection.html#nmrRun(global.thalion.ttio.SpectralDataset,java.lang.String)" class="member-name-link">nmrRun</a><wbr>(<a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a>&nbsp;ds,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;layer)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Select an NMR run, preferring the NMR-classed run, falling back to
+the sole analytical run.</div>
+</div>
+</div>
 <div class="caption"><span>Methods in <a href="../exporters/package-summary.html">global.thalion.ttio.exporters</a> with parameters of type <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -160,10 +245,30 @@ loadScripts(document, 'script');</script>
 <div class="block">Write an AcquisitionRun as indexedmzML.</div>
 </div>
 <div class="col-first even-row-color"><code>static void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">NmrMLWriter.</span><code><a href="../exporters/NmrMLWriter.html#write(global.thalion.ttio.AcquisitionRun,java.lang.String)" class="member-name-link">write</a><wbr>(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">MzMLWriter.</span><code><a href="../exporters/MzMLWriter.html#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ boolean&nbsp;zlibCompress,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
 <div class="col-last even-row-color">
+<div class="block">Stage D overload of <a href="../exporters/MzMLWriter.html#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean)"><code>MzMLWriter.write(AcquisitionRun, String, boolean)</code></a>
+that fires <code>progress.onProgress(specsDone, totalSpecs)</code>
+every <a href="../exporters/MzMLWriter.html#PROGRESS_INTERVAL_SPECTRA"><code>MzMLWriter.PROGRESS_INTERVAL_SPECTRA</code></a> spectra and a final fire
+once the file is flushed.</div>
+</div>
+<div class="col-first odd-row-color"><code>static void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">NmrMLWriter.</span><code><a href="../exporters/NmrMLWriter.html#write(global.thalion.ttio.AcquisitionRun,java.lang.String)" class="member-name-link">write</a><wbr>(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
+<div class="col-last odd-row-color">
 <div class="block">Write an NMR AcquisitionRun as nmrML.</div>
+</div>
+<div class="col-first even-row-color"><code>static void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">NmrMLWriter.</span><code><a href="../exporters/NmrMLWriter.html#write(global.thalion.ttio.AcquisitionRun,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D overload of <a href="../exporters/NmrMLWriter.html#write(global.thalion.ttio.AcquisitionRun,java.lang.String)"><code>NmrMLWriter.write(AcquisitionRun, String)</code></a> that
+fires a single <code>progress.onProgress(1, 1)</code> once the file
+is on disk.</div>
 </div>
 </div>
 </section>
@@ -171,6 +276,15 @@ loadScripts(document, 'script');</script>
 <li>
 <section class="detail" id="global.thalion.ttio.importers">
 <h2>Uses of <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a> in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a></h2>
+<div class="caption"><span>Fields in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> with type parameters of type <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>final <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ImportedDataset.</span><code><a href="../importers/ImportedDataset.html#runs" class="member-name-link">runs</a></code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+</div>
 <div class="caption"><span>Methods in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> that return <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -180,8 +294,24 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../importers/MzMLReader.html#read(java.io.File)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/File.html" title="class or interface in java.io" class="external-link">File</a>&nbsp;file)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><code>static <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../importers/MzMLReader.html#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-second odd-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../importers/MzMLReader.html#read(java.io.File,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/File.html" title="class or interface in java.io" class="external-link">File</a>&nbsp;file,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Parse an mzML file, firing
+<code>progress.onProgress(spectraDone, -1L)</code> every
+<a href="../importers/MzMLReader.html#PROGRESS_INTERVAL_SPECTRA"><code>MzMLReader.PROGRESS_INTERVAL_SPECTRA</code></a> <code>&lt;spectrum&gt;</code> closing tags
+and a final <code>onProgress(total, total)</code> once the spectrum
+count is known.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../importers/MzMLReader.html#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><code>static <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../importers/MzMLReader.html#read(java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Overload of <a href="../importers/MzMLReader.html#read(java.lang.String)"><code>MzMLReader.read(String)</code></a> that accepts a <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
 <div class="col-first even-row-color"><code>static <a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">ThermoRawReader.</span><code><a href="../importers/ThermoRawReader.html#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>

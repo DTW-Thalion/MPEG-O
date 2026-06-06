@@ -1,0 +1,261 @@
+ttio.workbench.transport.upload
+===============================
+
+.. py:module:: ttio.workbench.transport.upload
+
+.. autoapi-nested-parse::
+
+   Workbench-aware upload over the `ttio-transport` WebSocket subprotocol.
+
+   `UploadClient` is an async context manager that opens the WS to
+   `/transport`, performs the handshake, streams `.tis` bytes via
+   BINARY frames, drains per-AU acks, and returns the terminal `done`
+   frame's payload (container URI, total bytes).
+
+   Resumable uploads: pass a `ResumeState` into `upload_bytes` /
+   `upload_iter` to continue from a previously-interrupted attempt.
+   The client transparently skips bytes the server has already
+   acknowledged.
+
+   Error contract: every failure raises a typed exception
+   (`HandshakeError` / `UploadError`) carrying the WS close code +
+   the server's free-text reason when available.
+
+   The wire details match `tti-workbench-server/Source/WS/TTIOWBWsUploadSession.m`
+   behaviour as of v1.0.0 (commit `1a58779`).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.upload.DEFAULT_CHUNK_SIZE
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.upload.UploadResult
+   ttio.workbench.transport.upload.UploadClient
+
+
+Module Contents
+---------------
+
+.. py:data:: DEFAULT_CHUNK_SIZE
+   :value: 65536
+
+
+.. py:class:: UploadResult
+
+   Successful upload outcome.
+
+   Args:
+       container_uri: the URI the server registered the container
+           under. Identical to the URI the client sent in the
+           handshake (the server doesn't rewrite it; conflicts
+           would have closed the WS with code 1002 during
+           handshake).
+       last_acked_au_sequence: the highest `au_sequence` the server
+           ack'd during this upload. Useful for telemetry and as
+           input to a future resume attempt of a DIFFERENT
+           container that shares state with this one (rare).
+       resume_handle: the `stg-...` handle the server issued at
+           handshake time. Returned on success too so callers can
+           log it for incident review.
+
+
+   .. py:attribute:: container_uri
+      :type:  str
+
+
+   .. py:attribute:: last_acked_au_sequence
+      :type:  int
+
+
+   .. py:attribute:: resume_handle
+      :type:  str
+
+
+.. py:class:: UploadClient(*, host: str, port: int, session: Optional[ttio.workbench.auth.Session] = None, token: Optional[str] = None, owner: Optional[str] = None, project: str, container_uri: str, scheme: str = 'ws', ssl_context=None, chunk_size: int = DEFAULT_CHUNK_SIZE, connect_timeout: float = 10.0, recv_timeout: float = 30.0)
+
+   Async context manager for one upload.
+
+   Usage:
+
+       async with UploadClient(host="...", port=8443, session=...,
+                                project="alpha",
+                                container_uri="uri:tio:demo-001") as client:
+           result = await client.upload_bytes(tis_bytes)
+           print(result.container_uri)
+
+   The client opens the WebSocket and performs the handshake on
+   `__aenter__`. The terminal `done` frame is consumed and the WS
+   is closed on `__aexit__` (or earlier, when `upload_bytes` /
+   `upload_iter` returns).
+
+   Construct the upload client.
+
+   Either `session` OR (`token` + `owner`) must be supplied.
+   `session` is preferred -- it carries the resolved username
+   the daemon's auth gate expects as `owner`. Passing both
+   raises ValueError.
+
+   Args:
+       host, port: server WebSocket endpoint.
+       session: an authenticated `Session` from `login_password`.
+           When supplied, the bearer + username are taken from
+           here.
+       token: bearer token (string). Required if `session` is
+           None.
+       owner: username to attribute the upload to. Required if
+           `session` is None; defaults to `session.username`.
+           Must match the daemon's auth gate (see
+           `Documentation/auth.md` -- the daemon refuses
+           `owner != session.username` unless the caller has
+           `containers.write.any_project`).
+       project: project name the container belongs to. Required.
+       container_uri: client-minted container URI (e.g.
+           `uri:tio:demo-001`). The daemon refuses duplicates.
+       scheme: `"ws"` for development; `"wss"` for production.
+       ssl_context: optional `ssl.SSLContext` for the WSS handshake.
+       chunk_size: per-WS-frame byte budget when iterating the
+           payload. Defaults to 64 KB.
+       connect_timeout: WS open + initial-ack timeout.
+       recv_timeout: per-recv timeout once the upload is in
+           flight.
+
+
+   .. py:property:: last_acked_au_sequence
+      :type: int
+
+
+      Highest ``au_sequence`` the server has acknowledged.
+
+      Starts at ``-1`` before the handshake completes; advances as
+      the server emits per-AU ack frames during the upload. Useful
+      for progress reporting and as a resume hint.
+
+
+   .. py:property:: resume_handle
+      :type: Optional[str]
+
+
+      Server-issued ``stg-...`` resume handle.
+
+      ``None`` until the handshake ack has been received, then a
+      non-empty string identifying the staged container on the
+      server. Stash it in a :class:`ResumeState` to resume a
+      subsequent attempt if this upload is interrupted.
+
+
+   .. py:method:: __aenter__() -> UploadClient
+      :async:
+
+
+      Open the WebSocket to the ``/transport`` endpoint.
+
+      Connects with the ``ttio-transport`` subprotocol negotiated
+      and the configured ``open_timeout``. The handshake JSON is
+      sent later by :meth:`upload_bytes` / :meth:`upload_path` /
+      :meth:`upload_iter` so the WS is open but the upload session
+      is not yet initiated on return.
+
+      :returns: *UploadClient* -- ``self``, ready for an ``upload_*`` call.
+
+      :raises HandshakeError: If the WS connect fails (timeout, refused, TLS error).
+
+
+
+   .. py:method:: __aexit__(exc_type, exc, tb)
+      :async:
+
+
+      Close the WebSocket if still open.
+
+      Idempotent; safe to call after the connection has already
+      been closed by :meth:`_wait_for_done` or by a server-initiated
+      close. Suppresses close errors so an exception in the body of
+      the ``async with`` is not masked.
+
+
+
+   .. py:method:: upload_bytes(data: bytes | bytearray | memoryview, *, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None, progress: Optional[Callable[[int, int], None]] = None) -> UploadResult
+      :async:
+
+
+      Upload a fully-buffered `.tis` byte string.
+
+      Args:
+          data: the complete transport stream.
+          resume: if set, the client re-handshakes with this
+              resume handle and skips the prefix the server has
+              already acknowledged. The skip is BYTE-based, not
+              AU-based -- we don't have an AU-to-byte-offset
+              map client-side, so resume is most useful with
+              `upload_iter` where the caller controls AU
+              boundaries.
+          progress: optional callback invoked `(bytes_sent,
+              bytes_total)` as chunks are sent, plus a final
+              `(total, total)`. Cross-language equivalent of the
+              Java `TransferProgress` callback. A throwing
+              callback is swallowed so it cannot abort the
+              upload.
+
+      Returns:
+          `UploadResult` on success.
+
+      Raises:
+          HandshakeError: on handshake-time failures.
+          UploadError: on mid-stream failures.
+
+
+
+   .. py:method:: upload_path(path: str | os.PathLike[str], *, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None, progress: Optional[Callable[[int, int], None]] = None) -> UploadResult
+      :async:
+
+
+      Upload a ``.tis`` file directly from disk in chunkSize-bounded
+      slices. Peak memory is O(``chunk_size``) -- the file is **never**
+      fully buffered into RAM via :meth:`Path.read_bytes`.
+
+      Mirrors Java's ``WorkbenchTransportClient.upload(Path)``.
+
+      Args:
+          path: filesystem path to the ``.tis`` file.
+          resume: see :meth:`upload_bytes`.
+          progress: see :meth:`upload_bytes` -- fires
+              ``(bytes_sent, bytes_total)`` per chunk plus a final
+              ``(total, total)``. ``total`` is the file size from
+              :meth:`Path.stat`.
+
+      Returns:
+          :class:`UploadResult` on success.
+
+
+
+   .. py:method:: upload_iter(chunks: Iterable[bytes], *, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None) -> UploadResult
+      :async:
+
+
+      Upload an iterable of `.tis` byte chunks.
+
+      Useful when streaming from a file (`(open(path,'rb').read(N)
+      for ...)`) or from an in-memory generator (the existing
+      `ttio.transport.simulator.synth_stream` works -- treat its
+      return value as one big bytes blob and pass to
+      `upload_bytes`, OR re-yield it in chunks).
+
+      Args:
+          chunks: iterable yielding `bytes`. Empty bytes are
+              skipped. The iterator is fully consumed before
+              `done` is awaited.
+
+      Returns / Raises: same as `upload_bytes`.
+
+
+

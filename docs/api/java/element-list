@@ -1,10 +1,14 @@
 global.thalion.ttio
 global.thalion.ttio.analysis
 global.thalion.ttio.codecs
+global.thalion.ttio.codecs.registry
 global.thalion.ttio.exporters
+global.thalion.ttio.exporters.writers
 global.thalion.ttio.genomics
 global.thalion.ttio.hdf5
 global.thalion.ttio.importers
+global.thalion.ttio.importers.readers
+global.thalion.ttio.io
 global.thalion.ttio.protection
 global.thalion.ttio.protocols
 global.thalion.ttio.providers

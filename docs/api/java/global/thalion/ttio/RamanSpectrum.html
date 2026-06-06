@@ -117,7 +117,10 @@ excitation / power / integration metadata.
  double&nbsp;excitationWavelengthNm,
  double&nbsp;laserPowerMw,
  double&nbsp;integrationTimeSec)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct a Raman spectrum from parallel wavenumber and
+intensity arrays.</div>
+</div>
 </div>
 </section>
 </li>
@@ -198,6 +201,21 @@ excitation / power / integration metadata.
  double&nbsp;excitationWavelengthNm,
  double&nbsp;laserPowerMw,
  double&nbsp;integrationTimeSec)</span></div>
+<div class="block">Construct a Raman spectrum from parallel wavenumber and
+intensity arrays.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>wavenumberValues</code> - per-point Raman shifts in <code>cm^-1</code></dd>
+<dd><code>intensityValues</code> - per-point intensities parallel to
+                             <code>wavenumberValues</code></dd>
+<dd><code>indexPosition</code> - zero-based position in the parent
+                             <a href="AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a></dd>
+<dd><code>scanTimeSeconds</code> - scan time in seconds from run start</dd>
+<dd><code>excitationWavelengthNm</code> - laser excitation wavelength in nm</dd>
+<dd><code>laserPowerMw</code> - laser power at the sample in mW</dd>
+<dd><code>integrationTimeSec</code> - per-spectrum integration time in
+                             seconds</dd>
+</dl>
 </div>
 </section>
 </li>

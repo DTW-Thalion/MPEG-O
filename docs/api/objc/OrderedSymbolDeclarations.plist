@@ -7,6 +7,13 @@
 	"-cvParamsForOntologyRef:",
 	"-hasCVParamWithAccession:"
     );
+    "(TTIOCodec)" = (
+	"-codecId",
+	"-isContextAware",
+	"-needsEmbeddedReference",
+	"-decode:context:error:",
+	"-encode:context:error:"
+    );
     "(TTIOEncryptable)" = (
 	"-encryptWithKey:level:error:",
 	"-decryptWithKey:error:",
@@ -24,6 +31,9 @@
 	"-provenanceChain",
 	"-inputEntities",
 	"-outputEntities"
+    );
+    "(TTIOReader)" = (
+	"-readInputs:options:progress:error:"
     );
     "(TTIORun)" = (
 	"-name",
@@ -88,6 +98,34 @@
 	"-seekToPosition:",
 	"-reset"
     );
+    "(TTIOTransportEventVisitor)" = (
+	"-walker:visitStreamHeaderWithFormatVersion:title:isaInvestigation:features:nDatasets:",
+	"-walker:visitDatasetHeaderWithDatasetId:name:acquisitionMode:spectrumClass:channelNames:instrumentJSON:expectedAUCount:",
+	"-walker:visitAccessUnit:datasetId:auSequence:",
+	"-walker:visitEndOfDatasetWithDatasetId:finalAUSequence:",
+	"-walkerVisitEndOfStream:",
+	"-walker:visitEncryptionAlgorithm:",
+	"-walker:visitDatasetProvenance:",
+	"-walker:visitSubjectMetadata:",
+	"-walker:visitSampleMetadata:",
+	"-walker:visitReferenceGroup:",
+	"-walker:visitImage:",
+	"-walker:visitRamanImage:",
+	"-walker:visitIRImage:",
+	"-walker:visitIdentificationsTable:",
+	"-walker:visitQuantificationsTable:"
+    );
+    "(TTIOTransportIngestDelegate)" = (
+	"-ingest:didReceivePacket:",
+	"-ingestDidReceiveEndOfStream:",
+	"-ingest:didFailWithError:"
+    );
+    "(TTIOTransportWriterSink)" = (
+	"-writeData:"
+    );
+    "(TTIOWriter)" = (
+	"-writeDataset:layer:toOutput:options:error:"
+    );
     TTIOAUFilter = (
 	"+emptyFilter",
 	"+filterFromQueryJSON:",
@@ -110,6 +148,29 @@
 	"-setIonMobility:",
 	"-basePeakIntensity",
 	"-setBasePeakIntensity:"
+    );
+    TTIOAUStats = (
+	"-auSequence",
+	"-spectrumClass",
+	"-msLevel",
+	"-polarity",
+	"-retentionTime",
+	"-precursorMz",
+	"-precursorCharge",
+	"-ionMobility",
+	"-basePeakIntensity",
+	"-channelCount",
+	"-totalElements",
+	"-payloadBytes",
+	"-position",
+	"-mappingQuality",
+	"-flags",
+	"-pixelX",
+	"-pixelY",
+	"-pixelZ",
+	"+statsForAccessUnit:auSequence:",
+	"-JSONDictionary",
+	"+JSONStringForAccessUnit:auSequence:"
     );
     TTIOAccessPolicy = (
 	"-policy",
@@ -152,6 +213,7 @@
 	"-modality",
 	"-nucleusType",
 	"-spectrometerFrequencyMHz",
+	"-solvent",
 	"-signalCompression",
 	"-setSignalCompression:",
 	"-chromatograms",
@@ -161,6 +223,7 @@
 	"+readFromGroup:name:error:",
 	"+readFromStorageGroup:name:error:",
 	"-spectrumAtIndex:error:",
+	"-spectra",
 	"-indicesInRetentionTimeRange:",
 	"-setPersistenceFilePath:runName:",
 	"-releaseHDF5Handles",
@@ -258,6 +321,16 @@
     TTIOAnonymizer = (
 	"+anonymizeDataset:outputPath:policy:error:"
     );
+    TTIOArrowIpcCodec = (
+	"+encodeIdentifications:",
+	"+decodeIdentifications:",
+	"+encodeQuantifications:",
+	"+decodeQuantifications:",
+	"+encodeSubjects:",
+	"+decodeSubjects:",
+	"+encodeSamples:",
+	"+decodeSamples:"
+    );
     TTIOAxisDescriptor = (
 	"-name",
 	"-unit",
@@ -270,12 +343,14 @@
 	"-path",
 	"-provenanceRecords",
 	"-initWithPath:",
-	"-toGenomicRunWithName:region:sampleName:error:"
+	"-toGenomicRunWithName:region:sampleName:error:",
+	"-toGenomicRunWithName:region:sampleName:progress:error:"
     );
     TTIOBamWriter = (
 	"-path",
 	"-initWithPath:",
-	"-writeRun:provenanceRecords:sort:error:"
+	"-writeRun:provenanceRecords:sort:error:",
+	"-writeRun:provenanceRecords:sort:progress:error:"
     );
     TTIOBase64 = (
 	"+decodeString:",
@@ -297,7 +372,12 @@
     );
     TTIOBrukerTDFReader = (
 	"+readMetadataAtPath:error:",
-	"+importFromPath:toOutput:error:"
+	"+importFromPath:toOutput:error:",
+	"+readDatasetFromPath:error:"
+    );
+    TTIOBytesPayload = (
+	"-bytes",
+	"-initWithBytes:"
     );
     TTIOCVParam = (
 	"-ontologyRef",
@@ -374,6 +454,12 @@
 	"+validatePrivateKey:algorithm:error:",
 	"+allAlgorithms"
     );
+    TTIOCodecContext = (
+	"+emptyContext"
+    );
+    TTIOCodecRegistry = (
+	"+codecForId:"
+    );
     TTIOCompoundField = (
 	"-name",
 	"-kind",
@@ -402,6 +488,32 @@
 	"-initWithPath:referenceFasta:",
 	"-initWithPath:NS_UNAVAILABLE"
     );
+    TTIODatasetWalker = (
+	"-walkDataset:filter:visitor:error:"
+    );
+    TTIODecodedBytes = (
+	"-data",
+	"-initWithData:"
+    );
+    TTIODecodedMateInfo = (
+	"-mateChromIds",
+	"-matePositions",
+	"-templateLengths",
+	"-initWithMateChromIds:matePositions:templateLengths:"
+    );
+    TTIODecodedStringList = (
+	"-names",
+	"-initWithNames:"
+    );
+    TTIOEncodedDatasetBytes = (
+	"-bytes",
+	"-initWithBytes:"
+    );
+    TTIOEncodedGroupLayout = (
+	"-children",
+	"-attrs",
+	"-initWithChildren:attrs:"
+    );
     TTIOEncodingSpec = (
 	"-precision",
 	"-compressionAlgorithm",
@@ -415,6 +527,11 @@
 	"+writeEncryptedDataset:writer:providerName:error:",
 	"+readEncryptedToPath:fromStream:providerName:error:"
     );
+    "TTIOEncryptedTransport(Conformance)" = (
+	"+ttioConformanceEncodeRecipientBlock:",
+	"+ttioConformanceDecodeRecipientBlock:",
+	"+ttioConformanceEncodeTrailing:serverKekId:"
+    );
     TTIOEncryptionManager = (
 	"+encryptData:withKey:iv:authTag:error:",
 	"+decryptData:withKey:iv:authTag:error:",
@@ -422,6 +539,44 @@
 	"+decryptIntensityChannelInRun:atFilePath:withKey:error:",
 	"+isIntensityChannelEncryptedInRun:atFilePath:",
 	"+decryptIntensityChannelInRunInPlace:atFilePath:withKey:error:"
+    );
+    TTIOExporterFormatSpec = (
+	"-key",
+	"-displayName",
+	"-extensions",
+	"-writer"
+    );
+    TTIOExporterRegistry = (
+	"+normalizeFormat:",
+	"+isRegistryFormat:",
+	"+specForFormat:error:",
+	"+registryKeys",
+	"+supportedExportFormats",
+	"+exportFormat:tioPath:layer:output:options:error:"
+    );
+    TTIOFastaReader = (
+	"+readReferenceFromPath:uri:error:",
+	"+readUnalignedFromPath:sampleName:platform:referenceUri:acquisitionMode:error:",
+	"+readUnalignedFromPath:sampleName:platform:referenceUri:acquisitionMode:progress:error:"
+    );
+    TTIOFastaWriter = (
+	"+writeReference:toPath:lineWidth:gzipOutput:writeFai:error:",
+	"+writeReference:toPath:lineWidth:gzipOutput:writeFai:progress:error:",
+	"+writeRun:toPath:lineWidth:gzipOutput:writeFai:error:",
+	"+writeRun:toPath:lineWidth:gzipOutput:writeFai:progress:error:",
+	"+writeReadSideRun:toPath:lineWidth:gzipOutput:writeFai:error:",
+	"+writeReadSideRun:toPath:lineWidth:gzipOutput:writeFai:progress:error:"
+    );
+    TTIOFastqReader = (
+	"+detectPhredOffsetFromBytes:",
+	"+readFromPath:forcedPhred:sampleName:platform:referenceUri:acquisitionMode:outDetected:error:",
+	"+readFromPath:forcedPhred:sampleName:platform:referenceUri:acquisitionMode:outDetected:progress:error:"
+    );
+    TTIOFastqWriter = (
+	"+writeRun:toPath:gzipOutput:phredOffset:error:",
+	"+writeRun:toPath:gzipOutput:phredOffset:progress:error:",
+	"+writeReadSideRun:toPath:gzipOutput:phredOffset:error:",
+	"+writeReadSideRun:toPath:gzipOutput:phredOffset:progress:error:"
     );
     TTIOFeature = (
 	"-featureId",
@@ -500,6 +655,7 @@
 	"-index",
 	"-readCount",
 	"-count",
+	"-_codecContext",
 	"-objectAtIndex:",
 	"-provenanceChain",
 	"-readAtIndex:error:",
@@ -507,7 +663,18 @@
 	"-cigarAtIndex:error:",
 	"-readsInRegion:start:end:",
 	"+openFromGroup:name:error:",
-	"-wireCompressionForChannel:"
+	"-wireCompressionForChannel:",
+	"-readMateInfoInlineV2BlobBytes",
+	"-readMateInfoChromNamesTable",
+	"-readNameTokV2BlobBytes",
+	"-readRefDiffV2BlobBytes",
+	"-wholeSequencesData",
+	"-wholeQualitiesData",
+	"-allReadNames"
+    );
+    TTIOGroupPayload = (
+	"-group",
+	"-initWithGroup:"
     );
     TTIOHDF5CompoundType = (
 	"-initWithSize:",
@@ -554,6 +721,10 @@
 	"-createDatasetNamed:precision:length:chunkSize:compression:compressionLevel:error:",
 	"-openDatasetNamed:error:",
 	"-setStringAttribute:value:error:",
+	"-setDataAttribute:value:error:",
+	"-dataAttributeNamed:error:",
+	"-setDoubleAttribute:value:error:",
+	"-doubleAttributeNamed:exists:error:",
 	"-stringAttributeNamed:error:",
 	"-setIntegerAttribute:value:error:",
 	"-integerAttributeNamed:exists:error:",
@@ -575,19 +746,13 @@
 	"-initWithIV:tag:ciphertext:"
     );
     TTIOIRImage = (
-	"-width",
-	"-height",
-	"-spectralPoints",
-	"-tileSize",
-	"-cube",
 	"-wavenumbers",
-	"-pixelSizeX",
-	"-pixelSizeY",
-	"-scanPattern",
 	"-mode",
 	"-resolutionCmInv",
 	"-initWithWidth:height:spectralPoints:tileSize:cube:wavenumbers:mode:resolutionCmInv:",
-	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:mode:resolutionCmInv:cube:wavenumbers:"
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:mode:resolutionCmInv:cube:wavenumbers:",
+	"+readFromFilePath:error:",
+	"-writeToFilePath:error:"
     );
     TTIOIRSpectrum = (
 	"-wavenumberArray",
@@ -599,7 +764,8 @@
     );
     TTIOISAExporter = (
 	"+bundleForDataset:error:",
-	"+writeBundleForDataset:toDirectory:error:"
+	"+writeBundleForDataset:toDirectory:error:",
+	"+writeBundleForDataset:toDirectory:progress:error:"
     );
     TTIOIdentification = (
 	"-runName",
@@ -610,6 +776,38 @@
 	"-initWithRunName:spectrumIndex:chemicalEntity:confidenceScore:evidenceChain:",
 	"-asPlist",
 	"+fromPlist:"
+    );
+    TTIOImage = (
+	"-title",
+	"-isaInvestigationId",
+	"-identifications",
+	"-quantifications",
+	"-provenanceRecords",
+	"-width",
+	"-height",
+	"-spectralPoints",
+	"-tileSize",
+	"-cube",
+	"-pixelSizeX",
+	"-pixelSizeY",
+	"-scanPattern",
+	"-kind",
+	"-spectralAxisKind",
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:cube:"
+    );
+    TTIOImporterFormatSpec = (
+	"-key",
+	"-displayName",
+	"-extensions",
+	"-reader"
+    );
+    TTIOImporterRegistry = (
+	"+normalizeFormat:",
+	"+isRegistryFormat:",
+	"+specForFormat:error:",
+	"+registryKeys",
+	"+supportedEncodeFormats",
+	"+encodeFormat:inputs:output:options:error:"
     );
     TTIOImzMLImport = (
 	"-mode",
@@ -634,7 +832,8 @@
 	"-initWithX:y:z:mzArray:intensityArray:error:"
     );
     TTIOImzMLReader = (
-	"+readFromImzMLPath:ibdPath:error:"
+	"+readFromImzMLPath:ibdPath:error:",
+	"+readFromImzMLPath:ibdPath:progress:error:"
     );
     TTIOImzMLWriteResult = (
 	"-imzmlPath",
@@ -645,7 +844,9 @@
     );
     TTIOImzMLWriter = (
 	"+writePixels:toImzMLPath:ibdPath:mode:gridMaxX:gridMaxY:gridMaxZ:pixelSizeX:pixelSizeY:scanPattern:uuidHex:error:",
-	"+writeFromImport:toImzMLPath:ibdPath:error:"
+	"+writeFromImport:toImzMLPath:ibdPath:error:",
+	"+writePixels:toImzMLPath:ibdPath:mode:gridMaxX:gridMaxY:gridMaxZ:pixelSizeX:pixelSizeY:scanPattern:uuidHex:progress:error:",
+	"+writeFromImport:toImzMLPath:ibdPath:progress:error:"
     );
     TTIOInstrumentConfig = (
 	"-manufacturer",
@@ -673,7 +874,8 @@
 	"+decodeLines:firstx:deltax:xfactor:yfactor:outXs:outYs:error:"
     );
     TTIOJcampDxReader = (
-	"+readSpectrumFromPath:error:"
+	"+readSpectrumFromPath:error:",
+	"+readSpectrumFromPath:progress:error:"
     );
     TTIOJcampDxWriter = (
 	"+writeRamanSpectrum:toPath:title:error:",
@@ -681,7 +883,10 @@
 	"+writeUVVisSpectrum:toPath:title:error:",
 	"+writeRamanSpectrum:toPath:title:encoding:error:",
 	"+writeIRSpectrum:toPath:title:encoding:error:",
-	"+writeUVVisSpectrum:toPath:title:encoding:error:"
+	"+writeUVVisSpectrum:toPath:title:encoding:error:",
+	"+writeRamanSpectrum:toPath:title:encoding:progress:error:",
+	"+writeIRSpectrum:toPath:title:encoding:progress:error:",
+	"+writeUVVisSpectrum:toPath:title:encoding:progress:error:"
     );
     TTIOKeyRotationManager = (
 	"+managerWithFile:",
@@ -689,6 +894,8 @@
 	"-rotateToKEK:kekId:oldKEK:error:",
 	"-unwrapDEKWithKEK:error:",
 	"-wrapDEK:withKEK:legacyV1:error:",
+	"+wrapKey:withKEK:algorithm:error:",
+	"+unwrapKey:withKEK:algorithm:error:",
 	"-enableEnvelopeEncryptionWithKEK:kekId:algorithm:error:",
 	"-unwrapDEKWithKEK:algorithm:error:",
 	"-rotateToKEK:kekId:oldKEK:oldAlgorithm:newAlgorithm:error:",
@@ -696,17 +903,12 @@
 	"-keyHistory"
     );
     TTIOMSImage = (
-	"-width",
-	"-height",
-	"-spectralPoints",
-	"-tileSize",
-	"-cube",
-	"-pixelSizeX",
-	"-pixelSizeY",
-	"-scanPattern",
 	"-initWithWidth:height:spectralPoints:tileSize:cube:",
 	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:cube:",
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:cube:mzAxis:",
+	"-pixelSpectra",
 	"+readFromFilePath:error:",
+	"-writeToFilePath:error:",
 	"+readTileFromFilePath:atX:y:width:height:error:"
     );
     TTIOMassSpectrum = (
@@ -717,6 +919,8 @@
 	"-scanWindow",
 	"-activationMethod",
 	"-isolationWindow",
+	"-isCentroided",
+	"-setIsCentroided:",
 	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:activationMethod:isolationWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:",
 	"-initWithMzArray:intensityArray:msLevel:polarity:scanWindow:indexPosition:scanTimeSeconds:precursorMz:precursorCharge:error:"
     );
@@ -728,18 +932,28 @@
     TTIOMemoryProvider = (
 	"+discardStore:"
     );
+    TTIOMutableDataSink = (
+	"-data",
+	"+sink",
+	"-initWithData:"
+    );
     TTIOMzMLReader = (
 	"+readFromFilePath:error:",
 	"+readFromURL:error:",
 	"+readFromData:error:",
+	"+readFromFilePath:progress:error:",
 	"+parseFilePath:error:",
 	"+parseData:error:",
+	"+parseFilePath:progress:error:",
+	"+parseData:progress:error:",
 	"-dataset",
 	"-chromatograms"
     );
     TTIOMzMLWriter = (
 	"+dataForDataset:zlibCompression:error:",
-	"+writeDataset:toPath:zlibCompression:error:"
+	"+dataForDataset:zlibCompression:progress:error:",
+	"+writeDataset:toPath:zlibCompression:error:",
+	"+writeDataset:toPath:zlibCompression:progress:error:"
     );
     TTIOMzTabImport = (
 	"-version",
@@ -756,7 +970,8 @@
 	"-isMetabolomics"
     );
     TTIOMzTabReader = (
-	"+readFromFilePath:error:"
+	"+readFromFilePath:error:",
+	"+readFromFilePath:progress:error:"
     );
     TTIOMzTabWriteResult = (
 	"-path",
@@ -770,7 +985,8 @@
     );
     TTIOMzTabWriter = (
 	"+writeToPath:identifications:quantifications:version:title:description:error:",
-	"+writeToPath:identifications:quantifications:features:version:title:description:error:"
+	"+writeToPath:identifications:quantifications:features:version:title:description:error:",
+	"+writeToPath:identifications:quantifications:features:version:title:description:progress:error:"
     );
     TTIONMR2DSpectrum = (
 	"-intensityMatrix",
@@ -799,19 +1015,26 @@
 	"+readFromFilePath:error:",
 	"+readFromURL:error:",
 	"+readFromData:error:",
+	"+readFromFilePath:progress:error:",
 	"+parseFilePath:error:",
 	"+parseData:error:",
+	"+parseFilePath:progress:error:",
+	"+parseData:progress:error:",
 	"-dataset",
 	"-fids",
 	"-spectrometerFrequencyMHz",
 	"-nucleusType",
 	"-numberOfScans",
 	"-dwellTimeSeconds",
-	"-sweepWidthPpm"
+	"-sweepWidthPpm",
+	"-fidReal",
+	"-fidImag"
     );
     TTIONmrMLWriter = (
 	"+dataForSpectrum:fid:sweepWidthPPM:error:",
-	"+writeSpectrum:fid:sweepWidthPPM:toPath:error:"
+	"+dataForSpectrum:fid:sweepWidthPPM:progress:error:",
+	"+writeSpectrum:fid:sweepWidthPPM:toPath:error:",
+	"+writeSpectrum:fid:sweepWidthPPM:toPath:progress:error:"
     );
     TTIONumpress = (
 	"+scaleForValueRangeMin:max:",
@@ -847,8 +1070,17 @@
     TTIOPerAUFile = (
 	"+encryptFilePath:key:encryptHeaders:providerName:error:",
 	"+decryptFilePath:key:providerName:error:",
+	"+decryptFilePathInPlace:key:providerName:error:",
 	"+encryptFilePathByRegion:keyMap:providerName:error:",
 	"+decryptFilePathByRegion:keyMap:providerName:error:"
+    );
+    TTIOPixelSpectrum = (
+	"-x",
+	"-y",
+	"-z",
+	"-mz",
+	"-intensity",
+	"-initWithX:y:z:mz:intensity:"
     );
     TTIOPostQuantumCrypto = (
 	"+isAvailable",
@@ -891,7 +1123,9 @@
 	"-sampleRef",
 	"-abundance",
 	"-normalizationMethod",
+	"-unit",
 	"-initWithChemicalEntity:sampleRef:abundance:normalizationMethod:",
+	"-initWithChemicalEntity:sampleRef:abundance:normalizationMethod:unit:",
 	"-asPlist",
 	"+fromPlist:"
     );
@@ -905,19 +1139,13 @@
 	"-matchingIndices"
     );
     TTIORamanImage = (
-	"-width",
-	"-height",
-	"-spectralPoints",
-	"-tileSize",
-	"-cube",
 	"-wavenumbers",
-	"-pixelSizeX",
-	"-pixelSizeY",
-	"-scanPattern",
 	"-excitationWavelengthNm",
 	"-laserPowerMw",
 	"-initWithWidth:height:spectralPoints:tileSize:cube:wavenumbers:excitationWavelengthNm:laserPowerMw:",
-	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:excitationWavelengthNm:laserPowerMw:cube:wavenumbers:"
+	"-initWithTitle:isaInvestigationId:identifications:quantifications:provenanceRecords:width:height:spectralPoints:tileSize:pixelSizeX:pixelSizeY:scanPattern:excitationWavelengthNm:laserPowerMw:cube:wavenumbers:",
+	"+readFromFilePath:error:",
+	"-writeToFilePath:error:"
     );
     TTIORamanSpectrum = (
 	"-wavenumberArray",
@@ -932,9 +1160,40 @@
 	"+encodeSequences:offsets:positions:cigarStrings:reference:referenceMd5:referenceUri:readsPerSlice:error:",
 	"+decodeData:positions:cigarStrings:reference:nReads:totalBases:outSequences:outOffsets:error:"
     );
+    TTIOReferenceImport = (
+	"-uri",
+	"-chromosomes",
+	"-sequences",
+	"-md5",
+	"-initWithUri:chromosomes:sequences:md5:",
+	"-initWithUri:chromosomes:sequences:",
+	"+computeMd5WithChromosomes:sequences:",
+	"+readFromGroup:",
+	"-writeToDataset:overwrite:error:",
+	"-writeToDataset:overwrite:progress:error:",
+	"-writeToDataset:error:",
+	"-totalBases",
+	"-chromosomeNamed:",
+	"-md5Hex"
+    );
     TTIOReferenceResolver = (
 	"-initWithRootGroup:externalReferencePath:",
 	"-resolveURI:expectedMD5:chromosome:error:"
+    );
+    TTIORunSelection = (
+	"+analyticalRunIn:layer:error:",
+	"+nmrRunIn:layer:error:",
+	"+genomicRunIn:layer:error:",
+	"+writtenFromGenomicRun:"
+    );
+    TTIOSample = (
+	"-sampleId",
+	"-subjectExternalId",
+	"-sampleKind",
+	"-collectedAt",
+	"-attributes",
+	"-initWithSampleId:subjectExternalId:sampleKind:collectedAt:attributes:",
+	"-attributesJson"
     );
     TTIOSignalArray = (
 	"-buffer",
@@ -964,6 +1223,7 @@
 	"-msRuns",
 	"-nmrRuns",
 	"-genomicRuns",
+	"-references",
 	"-identifications",
 	"-quantifications",
 	"-provenanceRecords",
@@ -976,6 +1236,7 @@
 	"+writeMinimalToPath:title:isaInvestigationId:msRuns:identifications:quantifications:provenanceRecords:error:",
 	"+writeMinimalToPath:title:isaInvestigationId:msRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:",
 	"+writeMinimalToPath:title:isaInvestigationId:mixedRuns:genomicRuns:identifications:quantifications:provenanceRecords:error:",
+	"+writeMinimalToPath:title:isaInvestigationId:mixedRuns:genomicRuns:identifications:quantifications:provenanceRecords:progress:error:",
 	"-closeFile",
 	"-filePath",
 	"-provider",
@@ -988,9 +1249,16 @@
 	"-decryptWithKey:error:",
 	"-accessPolicy",
 	"-setAccessPolicy:",
-	"+decryptInPlaceAtPath:withKey:error:",
-	"-writeAdditionalStudyContent:error:",
-	"-readAdditionalStudyContent:error:"
+	"+decryptInPlaceAtPath:withKey:error:"
+    );
+    "TTIOSpectralDataset(Image)" = (
+	"-imageForKind:",
+	"-images"
+    );
+    "TTIOSpectralDataset(SubjectsSamples)" = (
+	"-subjects",
+	"-samples",
+	"+validateSubjects:samples:"
     );
     TTIOSpectrum = (
 	"-signalArrays",
@@ -1022,6 +1290,9 @@
 	"-indicesForMsLevel:",
 	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:",
 	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:activationMethods:isolationTargetMzs:isolationLowerOffsets:isolationUpperOffsets:",
+	"-initWithOffsets:lengths:retentionTimes:msLevels:polarities:precursorMzs:precursorCharges:basePeakIntensities:activationMethods:isolationTargetMzs:isolationLowerOffsets:isolationUpperOffsets:centroideds:",
+	"-centroidedAt:",
+	"-hasCentroided",
 	"-writeToGroup:error:",
 	"+readFromGroup:error:",
 	"+readFromStorageGroup:error:"
@@ -1041,6 +1312,15 @@
 	"-flushWithError:",
 	"-flushAndCloseWithError:",
 	"-spectrumCount"
+    );
+    TTIOSubject = (
+	"-externalId",
+	"-project",
+	"-sex",
+	"-birthYear",
+	"-attributes",
+	"-initWithExternalId:project:sex:birthYear:attributes:",
+	"-attributesJson"
     );
     TTIOThermoRawReader = (
 	"+readFromFilePath:error:"
@@ -1075,8 +1355,14 @@
 	"-fetchPacketsWithFilters:timeout:error:",
 	"-streamToFilePath:filters:error:"
     );
+    TTIOTransportIngest = (
+	"-packetCount",
+	"-bufferedBytes",
+	"-isFinished"
+    );
     TTIOTransportPacketHeader = (
 	"-packetType",
+	"-packetTypeByte",
 	"-flags",
 	"-datasetId",
 	"-auSequence",
@@ -1085,6 +1371,10 @@
 	"-initWithPacketType:flags:datasetId:auSequence:payloadLength:timestampNs:",
 	"-encode",
 	"+decodeFromBytes:length:error:"
+    );
+    "TTIOTransportPacketHeader(Internal)" = (
+	"-initWithPacketTypeByte:flags:datasetId:auSequence:payloadLength:timestampNs:",
+	"+encodeRawWithTypeByte:flags:datasetId:auSequence:payloadLength:timestampNs:"
     );
     TTIOTransportPacketRecord = (
 	"-header",
@@ -1097,6 +1387,9 @@
 	"-readAllPacketsWithError:",
 	"-writeTtioToPath:error:"
     );
+    "TTIOTransportReader(Internal)" = (
+	"-recordsForTest"
+    );
     TTIOTransportServer = (
 	"-initWithDatasetPath:host:port:",
 	"-startAndReturnError:",
@@ -1108,13 +1401,30 @@
 	"-setUseChecksum:",
 	"-useCompression",
 	"-setUseCompression:",
+	"-useBulkMode",
+	"-setUseBulkMode:",
 	"-initWithOutputPath:",
 	"-initWithMutableData:",
+	"-initWithSink:",
 	"-writeDataset:error:",
 	"-writeStreamHeaderWithFormatVersion:title:isaInvestigation:features:nDatasets:error:",
 	"-writeDatasetHeaderWithDatasetId:name:acquisitionMode:spectrumClass:channelNames:instrumentJSON:expectedAUCount:error:",
 	"-writeAccessUnit:datasetId:auSequence:error:",
 	"-writeEndOfDatasetWithDatasetId:finalAUSequence:error:",
+	"-writeBlobV2MateInfoWithDatasetId:chromNames:blob:error:",
+	"-writeBlobV2RefDiffWithDatasetId:referenceUri:blob:error:",
+	"-writeBlobV2NameTokWithDatasetId:blob:error:",
+	"-writeReferenceGroup:error:",
+	"-writeEncryptionAlgorithm:error:",
+	"-writeDatasetProvenance:error:",
+	"-writeImage:error:",
+	"-writeImageProcessed:error:",
+	"-writeRamanImage:error:",
+	"-writeIRImage:error:",
+	"-writeIdentificationsTable:error:",
+	"-writeQuantificationsTable:error:",
+	"-writeSubjectMetadata:error:",
+	"-writeSampleMetadata:error:",
 	"-writeEndOfStreamWithError:",
 	"-writeGenomicRun:datasetId:name:error:",
 	"-close"

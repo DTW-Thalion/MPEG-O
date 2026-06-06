@@ -115,7 +115,10 @@ channels plus path-length and solvent metadata.
  double&nbsp;scanTimeSeconds,
  double&nbsp;pathLengthCm,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;solvent)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct a UV-Vis spectrum from parallel wavelength and
+absorbance arrays.</div>
+</div>
 </div>
 </section>
 </li>
@@ -190,6 +193,20 @@ channels plus path-length and solvent metadata.
  double&nbsp;scanTimeSeconds,
  double&nbsp;pathLengthCm,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;solvent)</span></div>
+<div class="block">Construct a UV-Vis spectrum from parallel wavelength and
+absorbance arrays.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>wavelengthValues</code> - per-point wavelengths in nm</dd>
+<dd><code>absorbanceValues</code> - per-point absorbance parallel to
+                        <code>wavelengthValues</code></dd>
+<dd><code>indexPosition</code> - zero-based position in the parent
+                        <a href="AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a></dd>
+<dd><code>scanTimeSeconds</code> - scan time in seconds from run start</dd>
+<dd><code>pathLengthCm</code> - optical path length in cm</dd>
+<dd><code>solvent</code> - solvent label (e.g. <code>"water"</code>);
+                        null becomes empty</dd>
+</dl>
 </div>
 </section>
 </li>

@@ -1,0 +1,77 @@
+ttio.workbench.pqc
+==================
+
+.. py:module:: ttio.workbench.pqc
+
+.. autoapi-nested-parse::
+
+   Workbench client post-quantum protection (ML-KEM-1024).
+
+   A thin client surface over the core :mod:`ttio.pqc` (liboqs). PQC support
+   is **preview-gated**: every entry point refuses unless the caller opts in
+   via ``preview=True``, mirroring the server's ``opt_pqc_preview``
+   feature-flag gating (spec Decision 9).
+
+   The per-AU encrypted-upload path (``WorkbenchClient.upload_encrypted_pqc``
+   / ``download_decrypted_pqc``) wraps a per-run DEK under an ML-KEM-1024
+   encapsulation public key and carries it in the transport
+   ``ProtectionMetadata`` packet. This module supplies the keypair generator
+   and the preview gate that path uses; the wrap/unwrap itself lives in
+   :mod:`ttio.key_rotation` (``_wrap_dek`` / ``_unwrap_dek``).
+
+   Cross-language equivalent: Java
+   ``global.thalion.ttio.workbench.pqc.WorkbenchPqc``.
+
+   API status: Preview (W6.3, behind ``opt_pqc_preview``).
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.pqc.ML_KEM_1024
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.pqc.PQCPreviewDisabledError
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.pqc.kem_keygen
+
+
+Module Contents
+---------------
+
+.. py:data:: ML_KEM_1024
+   :value: 'ml-kem-1024'
+
+
+.. py:exception:: PQCPreviewDisabledError
+
+   Bases: :py:obj:`RuntimeError`
+
+
+   Raised when a PQC entry point is used without opting into the
+   preview. Mirrors the server refusing PQC unless ``opt_pqc_preview``
+   is set on the stream.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:function:: kem_keygen() -> ttio.pqc.KeyPair
+
+   Generate an ML-KEM-1024 encapsulation keypair (passthrough to
+   :func:`ttio.pqc.kem_keygen`).
+
+

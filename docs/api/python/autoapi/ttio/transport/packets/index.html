@@ -3,13 +3,14 @@
   <head><meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="light dark"><meta name="viewport" content="width=device-width, initial-scale=1" />
-<link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html"><link rel="next" title="ttio.transport.server" href="../server/index.html"><link rel="prev" title="ttio.transport.filters" href="../filters/index.html">
+<link rel="index" title="Index" href="../../../../genindex.html"><link rel="search" title="Search" href="../../../../search.html"><link rel="next" title="ttio.transport.server" href="../server/index.html"><link rel="prev" title="ttio.transport.ingest" href="../ingest/index.html">
 
     <!-- Generated with Sphinx 9.1.0 and Furo 2025.12.19 -->
         <title>ttio.transport.packets - TTI-O Python API</title>
       <link rel="stylesheet" type="text/css" href="../../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css?v=8cd3d715" />
     <link rel="stylesheet" type="text/css" href="../../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -191,7 +192,11 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../tutorials/workbench_quickstart.html">Workbench client quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul class="current">
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../../index.html">ttio</a><input aria-label="Toggle navigation of ttio" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../../access_policy/index.html">ttio.access_policy</a></li>
@@ -223,6 +228,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../enums/index.html">ttio.enums</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/bam/index.html">ttio.exporters.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exporters/base/index.html">ttio.exporters.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/cram/index.html">ttio.exporters.cram</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/fasta/index.html">ttio.exporters.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/fastq/index.html">ttio.exporters.fastq</a></li>
@@ -232,6 +238,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/mzml/index.html">ttio.exporters.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/mztab/index.html">ttio.exporters.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exporters/registry/index.html">ttio.exporters.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../exporters/writers/index.html">ttio.exporters.writers</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../feature/index.html">ttio.feature</a></li>
@@ -245,9 +253,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../../genomic_index/index.html">ttio.genomic_index</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../genomic_run/index.html">ttio.genomic_run</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../image/index.html">ttio.image</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../../importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bam/index.html">ttio.importers.bam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bam_dump/index.html">ttio.importers.bam_dump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/base/index.html">ttio.importers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/cram/index.html">ttio.importers.cram</a></li>
@@ -255,17 +265,24 @@
 <li class="toctree-l3"><a class="reference internal" href="../../importers/fasta/index.html">ttio.importers.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/fastq/index.html">ttio.importers.fastq</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/imported_dataset/index.html">ttio.importers.imported_dataset</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/imzml/index.html">ttio.importers.imzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/mzml/index.html">ttio.importers.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/mztab/index.html">ttio.importers.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/readers/index.html">ttio.importers.readers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../importers/registry/index.html">ttio.importers.registry</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/sam/index.html">ttio.importers.sam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../io/index.html">ttio.io</a><input aria-label="Toggle navigation of ttio.io" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../io/progress/index.html">ttio.io.progress</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../ir_image/index.html">ttio.ir_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../ir_spectrum/index.html">ttio.ir_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../isolation_window/index.html">ttio.isolation_window</a></li>
@@ -275,7 +292,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../../nmr_2d/index.html">ttio.nmr_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../pqc/index.html">ttio.pqc</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../protocols/indexable/index.html">ttio.protocols.indexable</a></li>
@@ -285,7 +302,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../provenance/index.html">ttio.provenance</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../providers/base/index.html">ttio.providers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../providers/hdf5/index.html">ttio.providers.hdf5</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../providers/memory/index.html">ttio.providers.memory</a></li>
@@ -299,13 +316,15 @@
 <li class="toctree-l2"><a class="reference internal" href="../../raman_image/index.html">ttio.raman_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../raman_spectrum/index.html">ttio.raman_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../../sample/index.html">ttio.sample</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../signal_array/index.html">ttio.signal_array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../signatures/index.html">ttio.signatures</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../spectral_dataset/index.html">ttio.spectral_dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../spectrum/index.html">ttio.spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../stream_reader/index.html">ttio.stream_reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../stream_writer/index.html">ttio.stream_writer</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../../subject/index.html">ttio.subject</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/fasta_export_cli/index.html">ttio.tools.fasta_export_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/fasta_import_cli/index.html">ttio.tools.fasta_import_cli</a></li>
@@ -319,23 +338,51 @@
 <li class="toctree-l3"><a class="reference internal" href="../../tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../../tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../tools/workbench_cli/index.html">ttio.tools.workbench_cli</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../transition_list/index.html">ttio.transition_list</a></li>
-<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" checked="" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l2 current has-children"><a class="reference internal" href="../index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" checked="" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
+<li class="toctree-l3"><a class="reference internal" href="../arrow_ipc/index.html">ttio.transport.arrow_ipc</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../client/index.html">ttio.transport.client</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../codec/index.html">ttio.transport.codec</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../encrypted/index.html">ttio.transport.encrypted</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../ingest/index.html">ttio.transport.ingest</a></li>
 <li class="toctree-l3 current current-page"><a class="current reference internal" href="#">ttio.transport.packets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../server/index.html">ttio.transport.server</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../simulator/index.html">ttio.transport.simulator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../stats/index.html">ttio.transport.stats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../walker/index.html">ttio.transport.walker</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../../two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../value_range/index.html">ttio.value_range</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../../verifier/index.html">ttio.verifier</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../../workbench/index.html">ttio.workbench</a><input aria-label="Toggle navigation of ttio.workbench" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/auth/index.html">ttio.workbench.auth</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/auth_providers/index.html">ttio.workbench.auth_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/client/index.html">ttio.workbench.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/cohort/index.html">ttio.workbench.cohort</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/containers/index.html">ttio.workbench.containers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/federation/index.html">ttio.workbench.federation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/jobs/index.html">ttio.workbench.jobs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/pipeline/index.html">ttio.workbench.pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/pqc/index.html">ttio.workbench.pqc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/session_proxy/index.html">ttio.workbench.session_proxy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../../workbench/sessions/index.html">ttio.workbench.sessions</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../../workbench/transport/index.html">ttio.workbench.transport</a><input aria-label="Toggle navigation of ttio.workbench.transport" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/download/index.html">ttio.workbench.transport.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/errors/index.html">ttio.workbench.transport.errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/handshake/index.html">ttio.workbench.transport.handshake</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/resume/index.html">ttio.workbench.transport.resume</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/selective_access/index.html">ttio.workbench.transport.selective_access</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../../workbench/transport/upload/index.html">ttio.workbench.transport.upload</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../../written_genomic_run/index.html">ttio.written_genomic_run</a></li>
 </ul>
 </li>
@@ -397,6 +444,12 @@ NOT NUL-terminated.</p>
 <tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.HEADER_SIZE" title="ttio.transport.packets.HEADER_SIZE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">HEADER_SIZE</span></code></a></p></td>
 <td><p></p></td>
 </tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.BULK_MODE_V2_BLOBS_FEATURE" title="ttio.transport.packets.BULK_MODE_V2_BLOBS_FEATURE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">BULK_MODE_V2_BLOBS_FEATURE</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.TRANSPORT_V0_11_FEATURE" title="ttio.transport.packets.TRANSPORT_V0_11_FEATURE"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TRANSPORT_V0_11_FEATURE</span></code></a></p></td>
+<td><p></p></td>
+</tr>
 <tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.SPECTRUM_CLASS_MASS_SPECTRUM" title="ttio.transport.packets.SPECTRUM_CLASS_MASS_SPECTRUM"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SPECTRUM_CLASS_MASS_SPECTRUM</span></code></a></p></td>
 <td><p></p></td>
 </tr>
@@ -413,6 +466,15 @@ NOT NUL-terminated.</p>
 <td><p></p></td>
 </tr>
 <tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.SPECTRUM_CLASS_GENOMIC_READ" title="ttio.transport.packets.SPECTRUM_CLASS_GENOMIC_READ"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SPECTRUM_CLASS_GENOMIC_READ</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.CODEC_ID_MATE_INLINE_V2" title="ttio.transport.packets.CODEC_ID_MATE_INLINE_V2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CODEC_ID_MATE_INLINE_V2</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.CODEC_ID_REF_DIFF_V2" title="ttio.transport.packets.CODEC_ID_REF_DIFF_V2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CODEC_ID_REF_DIFF_V2</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.CODEC_ID_NAME_TOKENIZED_V2" title="ttio.transport.packets.CODEC_ID_NAME_TOKENIZED_V2"><code class="xref py py-obj docutils literal notranslate"><span class="pre">CODEC_ID_NAME_TOKENIZED_V2</span></code></a></p></td>
 <td><p></p></td>
 </tr>
 </tbody>
@@ -448,17 +510,38 @@ NOT NUL-terminated.</p>
 <div class="table-wrapper autosummary longtable docutils container">
 <table class="autosummary longtable docutils align-default">
 <tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.crc32c" title="ttio.transport.packets.crc32c"><code class="xref py py-obj docutils literal notranslate"><span class="pre">crc32c</span></code></a>(→ int)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.is_known_packet_type" title="ttio.transport.packets.is_known_packet_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">is_known_packet_type</span></code></a>(→ bool)</p></td>
+<td><p>Return True iff <code class="docutils literal notranslate"><span class="pre">type_byte</span></code> is a defined <a class="reference internal" href="#ttio.transport.packets.PacketType" title="ttio.transport.packets.PacketType"><code class="xref py py-class docutils literal notranslate"><span class="pre">PacketType</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.crc32c" title="ttio.transport.packets.crc32c"><code class="xref py py-obj docutils literal notranslate"><span class="pre">crc32c</span></code></a>(→ int)</p></td>
 <td><p>CRC-32C (Castagnoli, reflected) of <code class="docutils literal notranslate"><span class="pre">data</span></code>.</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.now_ns" title="ttio.transport.packets.now_ns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">now_ns</span></code></a>(→ int)</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.now_ns" title="ttio.transport.packets.now_ns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">now_ns</span></code></a>(→ int)</p></td>
 <td><p></p></td>
 </tr>
-<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.pack_string" title="ttio.transport.packets.pack_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack_string</span></code></a>(→ bytes)</p></td>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.pack_string" title="ttio.transport.packets.pack_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack_string</span></code></a>(→ bytes)</p></td>
 <td><p>Encode a UTF-8 string with a length prefix (<code class="docutils literal notranslate"><span class="pre">width=2</span></code> → uint16,</p></td>
 </tr>
-<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.unpack_string" title="ttio.transport.packets.unpack_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack_string</span></code></a>(→ tuple[str, int])</p></td>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.unpack_string" title="ttio.transport.packets.unpack_string"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack_string</span></code></a>(→ tuple[str, int])</p></td>
 <td><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_string" title="ttio.transport.packets.pack_string"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_string()</span></code></a>.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.pack_blob_mate_info" title="ttio.transport.packets.pack_blob_mate_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack_blob_mate_info</span></code></a>(→ bytes)</p></td>
+<td><p>Encode a <a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO" title="ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO"><code class="xref py py-data docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_MATE_INFO</span></code></a> payload.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.unpack_blob_mate_info" title="ttio.transport.packets.unpack_blob_mate_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack_blob_mate_info</span></code></a>(→ tuple[int, list[str], bytes])</p></td>
+<td><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_blob_mate_info" title="ttio.transport.packets.pack_blob_mate_info"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_blob_mate_info()</span></code></a>. Returns</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.pack_blob_ref_diff" title="ttio.transport.packets.pack_blob_ref_diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack_blob_ref_diff</span></code></a>(→ bytes)</p></td>
+<td><p>Encode a <a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF" title="ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF"><code class="xref py py-data docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_REF_DIFF</span></code></a> payload (§4.11).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.unpack_blob_ref_diff" title="ttio.transport.packets.unpack_blob_ref_diff"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack_blob_ref_diff</span></code></a>(→ tuple[int, str, bytes])</p></td>
+<td><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_blob_ref_diff" title="ttio.transport.packets.pack_blob_ref_diff"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_blob_ref_diff()</span></code></a>. Returns</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#ttio.transport.packets.pack_blob_name_tok" title="ttio.transport.packets.pack_blob_name_tok"><code class="xref py py-obj docutils literal notranslate"><span class="pre">pack_blob_name_tok</span></code></a>(→ bytes)</p></td>
+<td><p>Encode a <a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK" title="ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK"><code class="xref py py-data docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_NAME_TOK</span></code></a> payload (§4.12).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.transport.packets.unpack_blob_name_tok" title="ttio.transport.packets.unpack_blob_name_tok"><code class="xref py py-obj docutils literal notranslate"><span class="pre">unpack_blob_name_tok</span></code></a>(→ tuple[int, bytes])</p></td>
+<td><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_blob_name_tok" title="ttio.transport.packets.pack_blob_name_tok"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_blob_name_tok()</span></code></a>. Returns</p></td>
 </tr>
 </tbody>
 </table>
@@ -528,11 +611,106 @@ NOT NUL-terminated.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO">
+<span class="sig-name descname"><span class="pre">BLOB_V2_MATE_INFO</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">9</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.BLOB_V2_MATE_INFO"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF">
+<span class="sig-name descname"><span class="pre">BLOB_V2_REF_DIFF</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">10</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.BLOB_V2_REF_DIFF"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK">
+<span class="sig-name descname"><span class="pre">BLOB_V2_NAME_TOK</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">11</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.BLOB_V2_NAME_TOK"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.REFERENCE_GROUP_HEADER">
+<span class="sig-name descname"><span class="pre">REFERENCE_GROUP_HEADER</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">16</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.REFERENCE_GROUP_HEADER"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.REFERENCE_GROUP_HEADER" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.REFERENCE_CHROMOSOME">
+<span class="sig-name descname"><span class="pre">REFERENCE_CHROMOSOME</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">17</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.REFERENCE_CHROMOSOME"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.REFERENCE_CHROMOSOME" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.END_OF_REFERENCE_GROUP">
+<span class="sig-name descname"><span class="pre">END_OF_REFERENCE_GROUP</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">18</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.END_OF_REFERENCE_GROUP"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.END_OF_REFERENCE_GROUP" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.IMAGE_HEADER">
+<span class="sig-name descname"><span class="pre">IMAGE_HEADER</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">19</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.IMAGE_HEADER"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.IMAGE_HEADER" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.IMAGE_PIXEL">
+<span class="sig-name descname"><span class="pre">IMAGE_PIXEL</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">20</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.IMAGE_PIXEL"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.IMAGE_PIXEL" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.END_OF_IMAGE">
+<span class="sig-name descname"><span class="pre">END_OF_IMAGE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">21</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.END_OF_IMAGE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.END_OF_IMAGE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.IDENTIFICATIONS_TABLE">
+<span class="sig-name descname"><span class="pre">IDENTIFICATIONS_TABLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">22</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.IDENTIFICATIONS_TABLE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.IDENTIFICATIONS_TABLE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.QUANTIFICATIONS_TABLE">
+<span class="sig-name descname"><span class="pre">QUANTIFICATIONS_TABLE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">23</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.QUANTIFICATIONS_TABLE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.QUANTIFICATIONS_TABLE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.DATASET_PROVENANCE">
+<span class="sig-name descname"><span class="pre">DATASET_PROVENANCE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">24</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.DATASET_PROVENANCE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.DATASET_PROVENANCE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.SUBJECT_METADATA">
+<span class="sig-name descname"><span class="pre">SUBJECT_METADATA</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">25</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.SUBJECT_METADATA"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.SUBJECT_METADATA" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.SAMPLE_METADATA">
+<span class="sig-name descname"><span class="pre">SAMPLE_METADATA</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">26</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.SAMPLE_METADATA"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.SAMPLE_METADATA" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketType.ENCRYPTION_ALGORITHM">
+<span class="sig-name descname"><span class="pre">ENCRYPTION_ALGORITHM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">27</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.ENCRYPTION_ALGORITHM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.ENCRYPTION_ALGORITHM" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
 <dt class="sig sig-object py" id="ttio.transport.packets.PacketType.END_OF_STREAM">
 <span class="sig-name descname"><span class="pre">END_OF_STREAM</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">255</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketType.END_OF_STREAM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketType.END_OF_STREAM" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 </dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.is_known_packet_type">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">is_known_packet_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">type_byte</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#is_known_packet_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.is_known_packet_type" title="Link to this definition">¶</a></dt>
+<dd><p>Return True iff <code class="docutils literal notranslate"><span class="pre">type_byte</span></code> is a defined <a class="reference internal" href="#ttio.transport.packets.PacketType" title="ttio.transport.packets.PacketType"><code class="xref py py-class docutils literal notranslate"><span class="pre">PacketType</span></code></a>.</p>
+<p>Used by the reader’s forward-compat path (v0.11 task 0.5 / Java
+parity <code class="docutils literal notranslate"><span class="pre">PacketType.fromWireOrNull</span></code>) to decide whether to skip an
+unrecognised packet rather than fail. The header has already been
+length-prefix-decoded; only the dispatch arm differs.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="ttio.transport.packets.BULK_MODE_V2_BLOBS_FEATURE">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">BULK_MODE_V2_BLOBS_FEATURE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'bulk_mode_v2_blobs'</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#BULK_MODE_V2_BLOBS_FEATURE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.BULK_MODE_V2_BLOBS_FEATURE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="ttio.transport.packets.TRANSPORT_V0_11_FEATURE">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">TRANSPORT_V0_11_FEATURE</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'transport_v0_11'</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#TRANSPORT_V0_11_FEATURE"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.TRANSPORT_V0_11_FEATURE" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
 
 <dl class="py class">
 <dt class="sig sig-object py" id="ttio.transport.packets.PacketFlag">
@@ -574,6 +752,11 @@ Used when <a class="reference internal" href="#ttio.transport.packets.PacketFlag
 <dt class="sig sig-object py" id="ttio.transport.packets.PacketHeader">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">PacketHeader</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketHeader"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketHeader" title="Link to this definition">¶</a></dt>
 <dd><p>24-byte transport packet header.</p>
+<p><a class="reference internal" href="#ttio.transport.packets.PacketHeader.packet_type" title="ttio.transport.packets.PacketHeader.packet_type"><code class="xref py py-attr docutils literal notranslate"><span class="pre">packet_type</span></code></a> is stored as a raw uint8 wire byte (not the
+<a class="reference internal" href="#ttio.transport.packets.PacketType" title="ttio.transport.packets.PacketType"><code class="xref py py-class docutils literal notranslate"><span class="pre">PacketType</span></code></a> enum) so headers decoded from forward-compat
+streams whose type byte is outside the enum still round-trip
+cleanly. See <a class="reference internal" href="#ttio.transport.packets.PacketHeader.packet_type_byte" title="ttio.transport.packets.PacketHeader.packet_type_byte"><code class="xref py py-attr docutils literal notranslate"><span class="pre">packet_type_byte</span></code></a> and the v0.11 skip-unknown
+contract (<code class="docutils literal notranslate"><span class="pre">transport-spec</span></code> §6 / task 0.5).</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="ttio.transport.packets.PacketHeader.packet_type">
 <span class="sig-name descname"><span class="pre">packet_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketHeader.packet_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketHeader.packet_type" title="Link to this definition">¶</a></dt>
@@ -603,6 +786,14 @@ Used when <a class="reference internal" href="#ttio.transport.packets.PacketFlag
 <dt class="sig sig-object py" id="ttio.transport.packets.PacketHeader.timestamp_ns">
 <span class="sig-name descname"><span class="pre">timestamp_ns</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketHeader.timestamp_ns"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketHeader.timestamp_ns" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.transport.packets.PacketHeader.packet_type_byte">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">packet_type_byte</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#PacketHeader.packet_type_byte"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.PacketHeader.packet_type_byte" title="Link to this definition">¶</a></dt>
+<dd><p>Raw uint8 wire byte for the packet type. Always populated,
+regardless of whether the byte names a known <a class="reference internal" href="#ttio.transport.packets.PacketType" title="ttio.transport.packets.PacketType"><code class="xref py py-class docutils literal notranslate"><span class="pre">PacketType</span></code></a>.
+Java parity: <code class="xref py py-meth docutils literal notranslate"><span class="pre">PacketHeader.packetTypeByte()</span></code>.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.transport.packets.PacketHeader.to_bytes">
@@ -822,6 +1013,63 @@ wire convention used throughout the transport format.</p>
 <dd><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_string" title="ttio.transport.packets.pack_string"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_string()</span></code></a>.</p>
 </dd></dl>
 
+<dl class="py data">
+<dt class="sig sig-object py" id="ttio.transport.packets.CODEC_ID_MATE_INLINE_V2">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">CODEC_ID_MATE_INLINE_V2</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">13</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#CODEC_ID_MATE_INLINE_V2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.CODEC_ID_MATE_INLINE_V2" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="ttio.transport.packets.CODEC_ID_REF_DIFF_V2">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">CODEC_ID_REF_DIFF_V2</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">14</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#CODEC_ID_REF_DIFF_V2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.CODEC_ID_REF_DIFF_V2" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="ttio.transport.packets.CODEC_ID_NAME_TOKENIZED_V2">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">CODEC_ID_NAME_TOKENIZED_V2</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">15</span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#CODEC_ID_NAME_TOKENIZED_V2"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.CODEC_ID_NAME_TOKENIZED_V2" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.pack_blob_mate_info">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">pack_blob_mate_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">chrom_names</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">blob</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#pack_blob_mate_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.pack_blob_mate_info" title="Link to this definition">¶</a></dt>
+<dd><p>Encode a <a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO" title="ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO"><code class="xref py py-data docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_MATE_INFO</span></code></a> payload.</p>
+<p>Mirrors transport-spec §4.10. The chromosome name table is the
+one written alongside <code class="docutils literal notranslate"><span class="pre">signal_channels/mate_info/inline_v2</span></code> and
+is required to resolve mate chromosome ids back to strings.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.unpack_blob_mate_info">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">unpack_blob_mate_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#unpack_blob_mate_info"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.unpack_blob_mate_info" title="Link to this definition">¶</a></dt>
+<dd><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_blob_mate_info" title="ttio.transport.packets.pack_blob_mate_info"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_blob_mate_info()</span></code></a>. Returns
+<code class="docutils literal notranslate"><span class="pre">(dataset_id,</span> <span class="pre">chrom_names,</span> <span class="pre">blob)</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.pack_blob_ref_diff">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">pack_blob_ref_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">reference_uri</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">blob</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#pack_blob_ref_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.pack_blob_ref_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Encode a <a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF" title="ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF"><code class="xref py py-data docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_REF_DIFF</span></code></a> payload (§4.11).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.unpack_blob_ref_diff">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">unpack_blob_ref_diff</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#unpack_blob_ref_diff"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.unpack_blob_ref_diff" title="Link to this definition">¶</a></dt>
+<dd><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_blob_ref_diff" title="ttio.transport.packets.pack_blob_ref_diff"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_blob_ref_diff()</span></code></a>. Returns
+<code class="docutils literal notranslate"><span class="pre">(dataset_id,</span> <span class="pre">reference_uri,</span> <span class="pre">blob)</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.pack_blob_name_tok">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">pack_blob_name_tok</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataset_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">blob</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#pack_blob_name_tok"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.pack_blob_name_tok" title="Link to this definition">¶</a></dt>
+<dd><p>Encode a <a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK" title="ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK"><code class="xref py py-data docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_NAME_TOK</span></code></a> payload (§4.12).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="ttio.transport.packets.unpack_blob_name_tok">
+<span class="sig-prename descclassname"><span class="pre">ttio.transport.packets.</span></span><span class="sig-name descname"><span class="pre">unpack_blob_name_tok</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">payload</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.14)"><span class="pre">tuple</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../../_modules/ttio/transport/packets.html#unpack_blob_name_tok"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.transport.packets.unpack_blob_name_tok" title="Link to this definition">¶</a></dt>
+<dd><p>Inverse of <a class="reference internal" href="#ttio.transport.packets.pack_blob_name_tok" title="ttio.transport.packets.pack_blob_name_tok"><code class="xref py py-func docutils literal notranslate"><span class="pre">pack_blob_name_tok()</span></code></a>. Returns
+<code class="docutils literal notranslate"><span class="pre">(dataset_id,</span> <span class="pre">blob)</span></code>.</p>
+</dd></dl>
+
 </section>
 </section>
 
@@ -839,14 +1087,14 @@ wire convention used throughout the transport format.</p>
               </div>
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
             </a>
-          <a class="prev-page" href="../filters/index.html">
+          <a class="prev-page" href="../ingest/index.html">
               <svg class="furo-related-icon"><use href="#svg-arrow-right"></use></svg>
               <div class="page-info">
                 <div class="context">
                   <span>Previous</span>
                 </div>
                 
-                <div class="title">ttio.transport.filters</div>
+                <div class="title">ttio.transport.ingest</div>
                 
               </div>
             </a>
@@ -897,9 +1145,27 @@ wire convention used throughout the transport format.</p>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketType.PROVENANCE"><code class="docutils literal notranslate"><span class="pre">PacketType.PROVENANCE</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketType.CHROMATOGRAM"><code class="docutils literal notranslate"><span class="pre">PacketType.CHROMATOGRAM</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketType.END_OF_DATASET"><code class="docutils literal notranslate"><span class="pre">PacketType.END_OF_DATASET</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_MATE_INFO"><code class="docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_MATE_INFO</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_REF_DIFF"><code class="docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_REF_DIFF</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.BLOB_V2_NAME_TOK"><code class="docutils literal notranslate"><span class="pre">PacketType.BLOB_V2_NAME_TOK</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.REFERENCE_GROUP_HEADER"><code class="docutils literal notranslate"><span class="pre">PacketType.REFERENCE_GROUP_HEADER</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.REFERENCE_CHROMOSOME"><code class="docutils literal notranslate"><span class="pre">PacketType.REFERENCE_CHROMOSOME</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.END_OF_REFERENCE_GROUP"><code class="docutils literal notranslate"><span class="pre">PacketType.END_OF_REFERENCE_GROUP</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.IMAGE_HEADER"><code class="docutils literal notranslate"><span class="pre">PacketType.IMAGE_HEADER</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.IMAGE_PIXEL"><code class="docutils literal notranslate"><span class="pre">PacketType.IMAGE_PIXEL</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.END_OF_IMAGE"><code class="docutils literal notranslate"><span class="pre">PacketType.END_OF_IMAGE</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.IDENTIFICATIONS_TABLE"><code class="docutils literal notranslate"><span class="pre">PacketType.IDENTIFICATIONS_TABLE</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.QUANTIFICATIONS_TABLE"><code class="docutils literal notranslate"><span class="pre">PacketType.QUANTIFICATIONS_TABLE</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.DATASET_PROVENANCE"><code class="docutils literal notranslate"><span class="pre">PacketType.DATASET_PROVENANCE</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.SUBJECT_METADATA"><code class="docutils literal notranslate"><span class="pre">PacketType.SUBJECT_METADATA</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.SAMPLE_METADATA"><code class="docutils literal notranslate"><span class="pre">PacketType.SAMPLE_METADATA</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketType.ENCRYPTION_ALGORITHM"><code class="docutils literal notranslate"><span class="pre">PacketType.ENCRYPTION_ALGORITHM</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketType.END_OF_STREAM"><code class="docutils literal notranslate"><span class="pre">PacketType.END_OF_STREAM</span></code></a></li>
 </ul>
 </li>
+<li><a class="reference internal" href="#ttio.transport.packets.is_known_packet_type"><code class="docutils literal notranslate"><span class="pre">is_known_packet_type()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.BULK_MODE_V2_BLOBS_FEATURE"><code class="docutils literal notranslate"><span class="pre">BULK_MODE_V2_BLOBS_FEATURE</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.TRANSPORT_V0_11_FEATURE"><code class="docutils literal notranslate"><span class="pre">TRANSPORT_V0_11_FEATURE</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketFlag"><code class="docutils literal notranslate"><span class="pre">PacketFlag</span></code></a><ul>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketFlag.ENCRYPTED"><code class="docutils literal notranslate"><span class="pre">PacketFlag.ENCRYPTED</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketFlag.COMPRESSED"><code class="docutils literal notranslate"><span class="pre">PacketFlag.COMPRESSED</span></code></a></li>
@@ -915,6 +1181,7 @@ wire convention used throughout the transport format.</p>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketHeader.au_sequence"><code class="docutils literal notranslate"><span class="pre">PacketHeader.au_sequence</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketHeader.payload_length"><code class="docutils literal notranslate"><span class="pre">PacketHeader.payload_length</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketHeader.timestamp_ns"><code class="docutils literal notranslate"><span class="pre">PacketHeader.timestamp_ns</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.PacketHeader.packet_type_byte"><code class="docutils literal notranslate"><span class="pre">PacketHeader.packet_type_byte</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketHeader.to_bytes"><code class="docutils literal notranslate"><span class="pre">PacketHeader.to_bytes()</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.PacketHeader.from_bytes"><code class="docutils literal notranslate"><span class="pre">PacketHeader.from_bytes()</span></code></a></li>
 </ul>
@@ -962,6 +1229,15 @@ wire convention used throughout the transport format.</p>
 <li><a class="reference internal" href="#ttio.transport.packets.now_ns"><code class="docutils literal notranslate"><span class="pre">now_ns()</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.pack_string"><code class="docutils literal notranslate"><span class="pre">pack_string()</span></code></a></li>
 <li><a class="reference internal" href="#ttio.transport.packets.unpack_string"><code class="docutils literal notranslate"><span class="pre">unpack_string()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.CODEC_ID_MATE_INLINE_V2"><code class="docutils literal notranslate"><span class="pre">CODEC_ID_MATE_INLINE_V2</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.CODEC_ID_REF_DIFF_V2"><code class="docutils literal notranslate"><span class="pre">CODEC_ID_REF_DIFF_V2</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.CODEC_ID_NAME_TOKENIZED_V2"><code class="docutils literal notranslate"><span class="pre">CODEC_ID_NAME_TOKENIZED_V2</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.pack_blob_mate_info"><code class="docutils literal notranslate"><span class="pre">pack_blob_mate_info()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.unpack_blob_mate_info"><code class="docutils literal notranslate"><span class="pre">unpack_blob_mate_info()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.pack_blob_ref_diff"><code class="docutils literal notranslate"><span class="pre">pack_blob_ref_diff()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.unpack_blob_ref_diff"><code class="docutils literal notranslate"><span class="pre">unpack_blob_ref_diff()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.pack_blob_name_tok"><code class="docutils literal notranslate"><span class="pre">pack_blob_name_tok()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.transport.packets.unpack_blob_name_tok"><code class="docutils literal notranslate"><span class="pre">unpack_blob_name_tok()</span></code></a></li>
 </ul>
 </li>
 </ul>

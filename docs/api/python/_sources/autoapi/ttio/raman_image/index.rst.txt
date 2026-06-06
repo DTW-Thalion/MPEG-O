@@ -22,6 +22,9 @@ Module Contents
 
 .. py:class:: RamanImage
 
+   Bases: :py:obj:`ttio.image.Image`
+
+
    Raman hyperspectral imaging dataset: a ``width × height`` grid of
    pixels, each pixel a spectrum of ``spectral_points`` intensity values
    sampled at a shared rank-1 ``wavenumbers`` axis.
@@ -72,54 +75,8 @@ Module Contents
    ``global.thalion.ttio.RamanImage``.
 
 
-   .. py:attribute:: width
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: height
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: spectral_points
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: pixel_size_x
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: pixel_size_y
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: intensity
-      :type:  numpy.ndarray
-
-
    .. py:attribute:: wavenumbers
       :type:  numpy.ndarray
-
-
-   .. py:attribute:: scan_pattern
-      :type:  str
-      :value: ''
-
-
-
-   .. py:attribute:: tile_size
-      :type:  int
-      :value: 0
-
 
 
    .. py:attribute:: excitation_wavelength_nm
@@ -134,36 +91,50 @@ Module Contents
 
 
 
-   .. py:attribute:: title
-      :type:  str
-      :value: ''
+   .. py:attribute:: kind
+      :type:  ClassVar[ttio.enums.ImageKind]
 
 
-
-   .. py:attribute:: isa_investigation_id
-      :type:  str
-      :value: ''
+   .. py:property:: spectral_axis
+      :type: numpy.ndarray
 
 
-
-   .. py:attribute:: identifications
-      :type:  list
-      :value: []
+      The wavenumber axis (alias of :attr:`wavenumbers`).
 
 
-
-   .. py:attribute:: quantifications
-      :type:  list
-      :value: []
+   .. py:property:: spectral_axis_kind
+      :type: ttio.enums.SpectralAxisKind
 
 
-
-   .. py:attribute:: provenance_records
-      :type:  list
-      :value: []
-
+      Interpretation of :attr:`spectral_axis` for this modality.
 
 
    .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: write_to(study_group) -> None
+
+      Write this Raman image cube under ``<study_group>/raman_image_cube/``.
+
+      Mirrors :meth:`global.thalion.ttio.RamanImage.writeTo` — intensity
+      as a 3-D ``[h, w, sp]`` dataset, ``wavenumbers`` 1-D dataset,
+      and Raman-specific scalar attributes.
+
+      Pixel size attributes are written as **native double** (not strings),
+      applying the PR #31 lesson immediately so legacy-string reads remain
+      backwards-compatible via :meth:`read_from`.
+
+
+
+   .. py:method:: read_from(study_group) -> RamanImage | None
+      :classmethod:
+
+
+      Read a Raman image cube from a study group; return None if absent.
+
+      Accepts both the native-double form (written by this class) and
+      the legacy string form for pixel_size_x/y,
+      excitation_wavelength_nm, and laser_power_mw.
+
 
 

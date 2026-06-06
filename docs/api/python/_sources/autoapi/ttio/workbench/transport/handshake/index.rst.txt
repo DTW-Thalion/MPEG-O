@@ -1,0 +1,163 @@
+ttio.workbench.transport.handshake
+==================================
+
+.. py:module:: ttio.workbench.transport.handshake
+
+.. autoapi-nested-parse::
+
+   Pure JSON builders + parsers for the `ttio-transport` WS subprotocol.
+
+   No I/O. The async upload + download clients import these to construct
+   their first frame and to interpret server replies. Tests reuse them
+   without standing up a daemon, and the Java port mirrors the same
+   shapes verbatim.
+
+   Wire shapes are defined in `tti-workbench-server/Documentation/
+   {upload-protocol,download-protocol,auth}.md` and confirmed in
+   `Source/WS/TTIOWBWsUploadSession.m` + `Source/WS/TTIOWBWsDownloadSession.m`.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.handshake.WS_SUBPROTOCOL
+   ttio.workbench.transport.handshake.ALLOWED_DOWNLOAD_FILTER_KEYS
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.handshake.OutputModeLiteral
+   ttio.workbench.transport.handshake.ServerFrameKind
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.handshake.build_upload_handshake
+   ttio.workbench.transport.handshake.build_download_handshake
+   ttio.workbench.transport.handshake.parse_server_frame
+
+
+Module Contents
+---------------
+
+.. py:data:: WS_SUBPROTOCOL
+   :value: 'ttio-transport'
+
+
+.. py:function:: build_upload_handshake(*, owner: str, project: str, container_uri: str, token: Optional[str] = None, resume_handle: Optional[str] = None) -> dict[str, Any]
+
+   Build the upload-mode handshake JSON.
+
+   Per `Source/WS/TTIOWBWsUploadSession.m:205-260`, the required
+   fields are `type:"handshake"`, `owner`, `project`, `container_uri`.
+   `token` is required when the daemon has auth wired (i.e., in any
+   real deployment). `resume_handle` switches the server into
+   resumption mode.
+
+   The function does NOT call `json.dumps` -- the caller controls
+   whether to send the dict via `ws.send(json.dumps(...))` or to
+   serialise it themselves (the Java port serialises through its
+   own JSON library, for example).
+
+
+.. py:data:: ALLOWED_DOWNLOAD_FILTER_KEYS
+
+.. py:class:: OutputModeLiteral
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   str(object='') -> str
+   str(bytes_or_buffer[, encoding[, errors]]) -> str
+
+   Create a new string object from the given object. If encoding or
+   errors is specified, then the object must expose a data buffer
+   that will be decoded using the given encoding and error handler.
+   Otherwise, returns the result of object.__str__() (if defined)
+   or repr(object).
+   encoding defaults to sys.getdefaultencoding().
+   errors defaults to 'strict'.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: BINARY
+      :value: 'binary'
+
+
+
+   .. py:attribute:: STATS_ONLY
+      :value: 'stats-only'
+
+
+
+   .. py:attribute:: STATS_WITH_PAYLOAD
+      :value: 'stats-with-payload'
+
+
+
+.. py:function:: build_download_handshake(*, container_uri: str, token: Optional[str] = None, owner: Optional[str] = None, output_mode: str = OutputModeLiteral.BINARY.value, filter: Optional[Mapping[str, Any]] = None, max_au: int = 0) -> dict[str, Any]
+
+   Build the download-mode handshake JSON.
+
+   Per `Source/WS/TTIOWBWsDownloadHandshake.m`, only `type:"handshake"`,
+   `mode:"download"`, and `container_uri` are required. `output_mode`
+   defaults to `"binary"` server-side too, but we pin it client-side
+   so the wire is explicit. `filter` is validated against
+   `ALLOWED_DOWNLOAD_FILTER_KEYS` -- unknown keys raise so the
+   operator catches typos before the WS opens.
+
+   `max_au=0` means "no AU cap"; positive integers cap the emitted
+   stream to that many AUs (handy for spot-checks).
+
+
+.. py:class:: ServerFrameKind
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Discriminator for the daemon's TEXT frames during upload + download.
+
+   `ACK` is the per-AU acknowledgment during upload OR the initial
+   post-handshake ack. `DONE` is the terminal success frame. `ERROR`
+   is a server-emitted failure frame; close codes 1002 / 1011 / 1008
+   follow soon after.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: ACK
+      :value: 'ack'
+
+
+
+   .. py:attribute:: DONE
+      :value: 'done'
+
+
+
+   .. py:attribute:: ERROR
+      :value: 'error'
+
+
+
+.. py:function:: parse_server_frame(raw: str | bytes) -> tuple[ServerFrameKind, dict[str, Any]]
+
+   Parse a TEXT frame from the daemon into (kind, body).
+
+   Raises `ValueError` if the body isn't valid JSON or its `type`
+   field doesn't match a known frame kind. Binary frames (the
+   download path's `.tis` bytes) must NOT be passed to this
+   function -- the caller is responsible for dispatching by frame
+   type before invoking parse.
+
+

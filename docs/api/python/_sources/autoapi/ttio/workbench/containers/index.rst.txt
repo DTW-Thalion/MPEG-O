@@ -1,0 +1,439 @@
+ttio.workbench.containers
+=========================
+
+.. py:module:: ttio.workbench.containers
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.containers -- /v1/containers REST client.
+
+   Wraps the workbench server's container endpoint:
+
+     GET    /v1/containers              -- paginated list
+     GET    /v1/containers/{uri}        -- detail (adds size + mtime)
+     GET    /v1/containers/{uri}/layers -- per-layer breakdown
+     GET    /v1/containers/{uri}/manifest -- run/spectrum summary
+     DELETE /v1/containers/{uri}        -- gated delete (admin / own_uploads)
+
+   Pagination: opaque base64url cursor in the response's `next_cursor`
+   field; pass it back via the `cursor=` query string to fetch the
+   next page. Page size defaults to 50, max 500.
+
+   Cross-language equivalent: Java
+   `global.thalion.ttio.workbench.containers.ContainersClient`.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.containers.Container
+   ttio.workbench.containers.ContainerDetail
+   ttio.workbench.containers.ContainerListPage
+   ttio.workbench.containers.ContainerLayer
+   ttio.workbench.containers.MsRunSummary
+   ttio.workbench.containers.NmrRunSummary
+   ttio.workbench.containers.GenomicRunSummary
+   ttio.workbench.containers.ContainerManifest
+   ttio.workbench.containers.ContainersClient
+
+
+Module Contents
+---------------
+
+.. py:class:: Container
+
+   A row from `GET /v1/containers`.
+
+
+   .. py:attribute:: uri
+      :type:  str
+
+
+   .. py:attribute:: project
+      :type:  str
+
+
+   .. py:attribute:: owner
+      :type:  str
+
+
+   .. py:attribute:: encrypted
+      :type:  bool
+
+
+   .. py:attribute:: storage_path
+      :type:  str
+
+
+   .. py:attribute:: created_at
+      :type:  int
+
+
+   .. py:attribute:: updated_at
+      :type:  int
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> Container
+      :classmethod:
+
+
+      Build a :class:`Container` from a parsed JSON row.
+
+      :param body: Decoded JSON object from the ``containers`` list array.
+      :type body: Mapping[str, Any]
+
+      :returns: *Container* -- Immutable list-row snapshot. Missing fields collapse to
+                empty strings, ``False``, or ``0`` as appropriate.
+
+
+
+.. py:class:: ContainerDetail
+
+   Detail row from `GET /v1/containers/{uri}` -- adds on-disk
+   `size_bytes` + `modified_at` over the list shape.
+
+
+   .. py:attribute:: uri
+      :type:  str
+
+
+   .. py:attribute:: project
+      :type:  str
+
+
+   .. py:attribute:: owner
+      :type:  str
+
+
+   .. py:attribute:: encrypted
+      :type:  bool
+
+
+   .. py:attribute:: storage_path
+      :type:  str
+
+
+   .. py:attribute:: created_at
+      :type:  int
+
+
+   .. py:attribute:: updated_at
+      :type:  int
+
+
+   .. py:attribute:: size_bytes
+      :type:  int
+
+
+   .. py:attribute:: modified_at
+      :type:  int
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> ContainerDetail
+      :classmethod:
+
+
+      Build a :class:`ContainerDetail` from a parsed JSON row.
+
+      :param body: Decoded JSON object from
+                   ``GET /v1/containers/{uri}``.
+      :type body: Mapping[str, Any]
+
+      :returns: *ContainerDetail* -- Immutable detail snapshot including on-disk size and
+                mtime.
+
+
+
+   .. py:method:: as_container() -> Container
+
+      Project the detail row down to a list-shape :class:`Container`.
+
+      :returns: *Container* -- A :class:`Container` carrying only the fields shared with
+                the list endpoint. ``size_bytes`` and ``modified_at``
+                are dropped.
+
+
+
+.. py:class:: ContainerListPage
+
+   One page of `GET /v1/containers`.
+
+
+   .. py:attribute:: containers
+      :type:  List[Container]
+
+
+   .. py:attribute:: next_cursor
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:property:: has_more
+      :type: bool
+
+
+      Return True when another page of results follows.
+
+      :returns: *bool* -- True iff ``next_cursor`` is set, indicating the caller
+                should issue a follow-up ``list(cursor=...)`` call.
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> ContainerListPage
+      :classmethod:
+
+
+      Build a :class:`ContainerListPage` from a parsed JSON page.
+
+      :param body: Decoded JSON object from ``GET /v1/containers``.
+      :type body: Mapping[str, Any]
+
+      :returns: *ContainerListPage* -- Containers plus optional ``next_cursor``.
+
+
+
+.. py:class:: ContainerLayer
+
+   .. py:attribute:: layer_type
+      :type:  str
+
+
+   .. py:attribute:: layer_path
+      :type:  str
+
+
+   .. py:attribute:: byte_size
+      :type:  int
+
+
+   .. py:attribute:: created_at
+      :type:  int
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> ContainerLayer
+      :classmethod:
+
+
+      Build a :class:`ContainerLayer` from a parsed JSON row.
+
+      :param body: Decoded JSON object from
+                   ``GET /v1/containers/{uri}/layers``.
+      :type body: Mapping[str, Any]
+
+      :returns: *ContainerLayer* -- One per-layer breakdown row.
+
+
+
+.. py:class:: MsRunSummary
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: spectrum_class
+      :type:  str
+
+
+   .. py:attribute:: acquisition_mode
+      :type:  int
+
+
+   .. py:attribute:: channel_names
+      :type:  List[str]
+
+
+   .. py:attribute:: spectrum_count
+      :type:  int
+
+
+   .. py:attribute:: ms_level_distribution
+      :type:  Mapping[str, int]
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> MsRunSummary
+      :classmethod:
+
+
+      Build a :class:`MsRunSummary` from a parsed JSON row.
+
+      :param body: Decoded JSON object from the manifest's ``ms_runs``
+                   array.
+      :type body: Mapping[str, Any]
+
+      :returns: *MsRunSummary* -- Per-run summary including spectrum count and MS-level
+                histogram.
+
+
+
+.. py:class:: NmrRunSummary
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: spectrum_count
+      :type:  int
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> NmrRunSummary
+      :classmethod:
+
+
+      Build an :class:`NmrRunSummary` from a parsed JSON row.
+
+      :param body: Decoded JSON object from the manifest's ``nmr_runs``
+                   array.
+      :type body: Mapping[str, Any]
+
+      :returns: *NmrRunSummary* -- Per-run summary with spectrum count.
+
+
+
+.. py:class:: GenomicRunSummary
+
+   .. py:attribute:: name
+      :type:  str
+
+
+   .. py:attribute:: read_count
+      :type:  int
+
+
+   .. py:attribute:: platform
+      :type:  str
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> GenomicRunSummary
+      :classmethod:
+
+
+      Build a :class:`GenomicRunSummary` from a parsed JSON row.
+
+      :param body: Decoded JSON object from the manifest's
+                   ``genomic_runs`` array.
+      :type body: Mapping[str, Any]
+
+      :returns: *GenomicRunSummary* -- Per-run summary with read count and platform label.
+
+
+
+.. py:class:: ContainerManifest
+
+   Manifest from `GET /v1/containers/{uri}/manifest`.
+
+
+   .. py:attribute:: uri
+      :type:  str
+
+
+   .. py:attribute:: title
+      :type:  str
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+
+
+   .. py:attribute:: ms_runs
+      :type:  List[MsRunSummary]
+
+
+   .. py:attribute:: nmr_runs
+      :type:  List[NmrRunSummary]
+
+
+   .. py:attribute:: genomic_runs
+      :type:  List[GenomicRunSummary]
+
+
+   .. py:attribute:: identification_count
+      :type:  int
+
+
+   .. py:attribute:: quantification_count
+      :type:  int
+
+
+   .. py:attribute:: provenance_record_count
+      :type:  int
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> ContainerManifest
+      :classmethod:
+
+
+      Build a :class:`ContainerManifest` from a parsed JSON body.
+
+      :param body: Decoded JSON object from
+                   ``GET /v1/containers/{uri}/manifest``.
+      :type body: Mapping[str, Any]
+
+      :returns: *ContainerManifest* -- Full manifest snapshot including MS / NMR / genomic
+                run summaries and aggregate counts.
+
+
+
+.. py:class:: ContainersClient(host: str, port: int, scheme: str, token: str)
+
+   REST client for `/v1/containers`.
+
+   Cross-language equivalent: Java
+   `global.thalion.ttio.workbench.containers.ContainersClient`.
+
+   Bind the client to a server endpoint and bearer token.
+
+   :param host: Workbench server hostname.
+   :type host: str
+   :param port: TCP port the REST listener is bound to.
+   :type port: int
+   :param scheme: ``"http"`` or ``"https"``.
+   :type scheme: str
+   :param token: Bearer token (``ttiowbs_...``).
+   :type token: str
+
+
+   .. py:attribute:: host
+
+
+   .. py:attribute:: port
+
+
+   .. py:attribute:: scheme
+
+
+   .. py:attribute:: token
+
+
+   .. py:method:: list(project: Optional[str] = None, owner: Optional[str] = None, limit: Optional[int] = None, cursor: Optional[str] = None) -> ContainerListPage
+
+      `GET /v1/containers` with optional filters + pagination.
+
+
+
+   .. py:method:: get(uri: str) -> ContainerDetail
+
+      `GET /v1/containers/{uri}`.
+
+
+
+   .. py:method:: layers(uri: str) -> List[ContainerLayer]
+
+      `GET /v1/containers/{uri}/layers`.
+
+
+
+   .. py:method:: manifest(uri: str) -> ContainerManifest
+
+      `GET /v1/containers/{uri}/manifest`.
+
+
+
+   .. py:method:: delete(uri: str) -> None
+
+      `DELETE /v1/containers/{uri}` -- gated server-side.
+
+
+

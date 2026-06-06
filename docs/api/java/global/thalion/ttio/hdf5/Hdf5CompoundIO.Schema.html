@@ -90,6 +90,9 @@ loadScripts(document, 'script');</script>
 <div class="horizontal-scroll">
 <div class="type-signature"><span class="modifiers">public static final class </span><span class="element-name type-name-label">Hdf5CompoundIO.Schema</span>
 <span class="extends-implements">extends <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span></div>
+<div class="block">Immutable layout description for a compound dataset. Carries the
+  ordered field list, the per-field byte offsets, and the total
+  byte size of one record.</div>
 </div>
 </section>
 <section class="summary">
@@ -124,7 +127,9 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-first">Constructor</div>
 <div class="table-header col-last">Description</div>
 <div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(java.util.List)" class="member-name-link">Schema</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Hdf5CompoundIO.Field.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Field</a>&gt;&nbsp;fields)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Build a schema from an ordered list of fields.</div>
+</div>
 </div>
 </section>
 </li>
@@ -183,6 +188,13 @@ loadScripts(document, 'script');</script>
 <h3>Schema</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">Schema</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Hdf5CompoundIO.Field.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Field</a>&gt;&nbsp;fields)</span></div>
+<div class="block">Build a schema from an ordered list of fields. Byte offsets are
+computed by accumulating <code>Hdf5CompoundIO.FieldKind.byteSize</code> entries in
+field order.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>fields</code> - the ordered list of fields (defensively copied)</dd>
+</dl>
 </div>
 </section>
 </li>

@@ -33,6 +33,9 @@ Classes
    ttio.enums.ChromatogramType
    ttio.enums.AcquisitionMode
    ttio.enums.IRMode
+   ttio.enums.ImageKind
+   ttio.enums.SpectralAxisKind
+   ttio.enums.SpectrumKind
    ttio.enums.EncryptionLevel
    ttio.enums.ActivationMethod
 
@@ -349,6 +352,21 @@ Module Contents
 
 
 
+   .. py:attribute:: RAMAN
+      :value: 9
+
+
+
+   .. py:attribute:: IR
+      :value: 10
+
+
+
+   .. py:attribute:: UV_VIS
+      :value: 11
+
+
+
 .. py:class:: IRMode
 
    Bases: :py:obj:`enum.IntEnum`
@@ -369,6 +387,125 @@ Module Contents
 
    .. py:attribute:: ABSORBANCE
       :value: 1
+
+
+
+.. py:class:: ImageKind
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Discriminator for the shared :class:`ttio.image.Image` base.
+
+   Identifies which concrete imaging modality an :class:`~ttio.image.Image`
+   instance is, without inspecting its distinct fields. Purely an in-memory
+   aid; not written to the ``.tio`` wire format (each image subclass keeps
+   its own on-disk group).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: MS
+      :value: 0
+
+
+
+   .. py:attribute:: RAMAN
+      :value: 1
+
+
+
+   .. py:attribute:: IR
+      :value: 2
+
+
+
+.. py:class:: SpectralAxisKind
+
+   Bases: :py:obj:`enum.IntEnum`
+
+
+   Interpretation of an :class:`~ttio.image.Image`'s generic
+   ``spectral_axis``.
+
+   ``MZ`` for mass-spectrometry m/z axes, ``WAVENUMBER`` for Raman/IR
+   wavenumber axes. In-memory aid only; not part of the wire format.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: MZ
+      :value: 0
+
+
+
+   .. py:attribute:: WAVENUMBER
+      :value: 1
+
+
+
+.. py:class:: SpectrumKind(*args, **kwds)
+
+   Bases: :py:obj:`enum.Enum`
+
+
+   Discriminator for a spectrum run's concrete type, derived from the
+   persisted ``@spectrum_class`` string (which stays the on-disk source of
+   truth — this enum is an in-code dispatch key, P3.8).
+
+
+   .. py:attribute:: MASS
+      :value: 'TTIOMassSpectrum'
+
+
+
+   .. py:attribute:: NMR
+      :value: 'TTIONMRSpectrum'
+
+
+
+   .. py:attribute:: NMR_2D
+      :value: 'TTIONMR2DSpectrum'
+
+
+
+   .. py:attribute:: IR
+      :value: 'TTIOIRSpectrum'
+
+
+
+   .. py:attribute:: RAMAN
+      :value: 'TTIORamanSpectrum'
+
+
+
+   .. py:attribute:: UVVIS
+      :value: 'TTIOUVVisSpectrum'
+
+
+
+   .. py:attribute:: FREE_INDUCTION_DECAY
+      :value: 'TTIOFreeInductionDecay'
+
+
+
+   .. py:attribute:: MS_IMAGE_PIXEL
+      :value: 'TTIOMSImagePixel'
+
+
+
+   .. py:attribute:: UNKNOWN
+      :value: ''
+
+
+
+   .. py:property:: persisted
+      :type: str
+
+
+
+   .. py:method:: from_persisted(s)
+      :classmethod:
 
 
 

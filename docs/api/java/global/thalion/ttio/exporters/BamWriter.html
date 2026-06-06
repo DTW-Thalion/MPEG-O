@@ -65,6 +65,7 @@ loadScripts(document, 'script');</script>
 <li><a href="#field-detail" tabindex="0">Field Details</a>
 <ol class="toc-list">
 <li><a href="#DEFAULT_SQ_LENGTH" tabindex="0">DEFAULT_SQ_LENGTH</a></li>
+<li><a href="#PROGRESS_INTERVAL_READS" tabindex="0">PROGRESS_INTERVAL_READS</a></li>
 </ol>
 </li>
 <li><a href="#constructor-detail" tabindex="0">Constructor Details</a>
@@ -76,6 +77,7 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list">
 <li><a href="#path()" tabindex="0">path()</a></li>
 <li><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean)" tabindex="0">write(WrittenGenomicRun, List, boolean)</a></li>
+<li><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(WrittenGenomicRun, List, boolean, ProgressSink)</a></li>
 <li><a href="#makeWriter(htsjdk.samtools.SAMFileHeader,boolean)" tabindex="0">makeWriter(SAMFileHeader, boolean)</a></li>
 </ol>
 </li>
@@ -143,6 +145,12 @@ BAM output is verified by the <code>cross-compat</code> CI job.</p>
 <div class="block">Default <code>@SQ LN:</code> length when the writer doesn't know the
 true reference length.</div>
 </div>
+<div class="col-first odd-row-color"><code>static final int</code></div>
+<div class="col-second odd-row-color"><code><a href="#PROGRESS_INTERVAL_READS" class="member-name-link">PROGRESS_INTERVAL_READS</a></code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>
+  callbacks during BAM/CRAM record serialisation.</div>
+</div>
 </div>
 </section>
 </li>
@@ -188,6 +196,19 @@ true reference length.</div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Serialise <code>run</code> to the configured output path.</div>
 </div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenance,
+ boolean&nbsp;sort,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean)"><code>write(WrittenGenomicRun, List, boolean)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records during the alignment
+write loop and a final <code>onProgress(total, total)</code> once
+the writer closes.</div>
+</div>
 </div>
 </div>
 </div>
@@ -221,6 +242,25 @@ cross-language byte-equality.</div>
 <dd>
 <ul class="tag-list">
 <li><a href="../../../../constant-values.html#global.thalion.ttio.exporters.BamWriter.DEFAULT_SQ_LENGTH">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_READS">
+<h3>PROGRESS_INTERVAL_READS</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_READS</span></div>
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>
+  callbacks during BAM/CRAM record serialisation. Mirrors
+  <code>BamReader.PROGRESS_INTERVAL_READS = 1000</code>.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.exporters.BamWriter.PROGRESS_INTERVAL_READS">Constant Field Values</a></li>
 </ul>
 </dd>
 </dl>
@@ -292,6 +332,35 @@ cross-language byte-equality.</div>
                   <code>false</code>, output is unsorted.</dd>
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code> - on write failures.</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenance,
+ boolean&nbsp;sort,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+           throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage D overload of
+<a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.util.List,boolean)"><code>write(WrittenGenomicRun, List, boolean)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records during the alignment
+write loop and a final <code>onProgress(total, total)</code> once
+the writer closes.
+
+<p><code>total</code> is known up front (= <code>run.readNames().size()</code>)
+so every mid-emit callback already passes the determinate total —
+listeners can drive a determinate progress bar from the first
+fire.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

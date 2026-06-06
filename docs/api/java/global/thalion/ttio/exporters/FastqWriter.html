@@ -55,12 +55,20 @@ loadScripts(document, 'script');</script>
 <div class="toc-header">Contents&nbsp;<input type="text" class="filter-input" disabled placeholder="Filter contents (type .)" aria-label="Filter table of contents" autocomplete="off" spellcheck="false"><input type="reset" class="reset-filter" disabled tabindex="-1" value="Reset"></div>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_READS" tabindex="0">PROGRESS_INTERVAL_READS</a></li>
+</ol>
+</li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path)" tabindex="0">write(WrittenGenomicRun, Path)</a></li>
 <li><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int)" tabindex="0">write(WrittenGenomicRun, Path, Boolean, int)</a></li>
+<li><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(WrittenGenomicRun, Path, Boolean, int, ProgressSink)</a></li>
 <li><a href="#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)" tabindex="0">write(GenomicRun, Path, Boolean, int)</a></li>
+<li><a href="#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(GenomicRun, Path, Boolean, int, ProgressSink)</a></li>
 <li><a href="#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path)" tabindex="0">write(GenomicRun, Path)</a></li>
 </ol>
 </li>
@@ -102,6 +110,24 @@ always a parseable FASTQ.</p>
 </section>
 <section class="summary">
 <ul class="summary-list">
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_READS" class="member-name-link">PROGRESS_INTERVAL_READS</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during FASTQ record serialisation.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ========== METHOD SUMMARY =========== -->
 <li>
 <section class="method-summary" id="method-summary">
@@ -126,15 +152,41 @@ always a parseable FASTQ.</p>
 <div class="block">Write a read-side <a href="../genomics/GenomicRun.html" title="class in global.thalion.ttio.genomics"><code>GenomicRun</code></a> to FASTQ.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../genomics/GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ int&nbsp;phredOffset,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)"><code>write(GenomicRun, Path, Boolean, int)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records and a final fire once
+the buffer is flushed to disk.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
  int&nbsp;phredOffset)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ int&nbsp;phredOffset,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int)"><code>write(WrittenGenomicRun, Path, Boolean, int)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records and a final fire once
+the buffer is flushed to disk.</div>
+</div>
 </div>
 </div>
 </div>
@@ -147,6 +199,33 @@ always a parseable FASTQ.</p>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_READS">
+<h3>PROGRESS_INTERVAL_READS</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_READS</span></div>
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during FASTQ record serialisation. Mirrors
+  <code>FastqReader.PROGRESS_INTERVAL_READS = 1000</code>.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.exporters.FastqWriter.PROGRESS_INTERVAL_READS">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ============ METHOD DETAIL ========== -->
 <li>
 <section class="method-details" id="method-detail">
@@ -189,6 +268,30 @@ always a parseable FASTQ.</p>
 </section>
 </li>
 <li>
+<section class="detail" id="write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ int&nbsp;phredOffset,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                  throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage D overload of
+<a href="#write(global.thalion.ttio.genomics.WrittenGenomicRun,java.nio.file.Path,java.lang.Boolean,int)"><code>write(WrittenGenomicRun, Path, Boolean, int)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records and a final fire once
+the buffer is flushed to disk.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)">
 <h3>write</h3>
 <div class="horizontal-scroll">
@@ -206,6 +309,30 @@ the <a href="../genomics/GenomicRun.html" title="class in global.thalion.ttio.ge
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="../genomics/GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ int&nbsp;phredOffset,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                  throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage D overload of
+<a href="#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)"><code>write(GenomicRun, Path, Boolean, int)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records and a final fire once
+the buffer is flushed to disk.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

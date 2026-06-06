@@ -10,6 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css?v=8cd3d715" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -191,7 +192,11 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/workbench_quickstart.html">Workbench client quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul class="current">
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">ttio</a><input aria-label="Toggle navigation of ttio" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../access_policy/index.html">ttio.access_policy</a></li>
@@ -223,6 +228,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../enums/index.html">ttio.enums</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/bam/index.html">ttio.exporters.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/base/index.html">ttio.exporters.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/cram/index.html">ttio.exporters.cram</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/fasta/index.html">ttio.exporters.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/fastq/index.html">ttio.exporters.fastq</a></li>
@@ -232,6 +238,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../exporters/mzml/index.html">ttio.exporters.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/mztab/index.html">ttio.exporters.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/registry/index.html">ttio.exporters.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/writers/index.html">ttio.exporters.writers</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../feature/index.html">ttio.feature</a></li>
@@ -245,9 +253,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../genomic_index/index.html">ttio.genomic_index</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../genomic_run/index.html">ttio.genomic_run</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../image/index.html">ttio.image</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bam/index.html">ttio.importers.bam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bam_dump/index.html">ttio.importers.bam_dump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/base/index.html">ttio.importers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/cram/index.html">ttio.importers.cram</a></li>
@@ -255,17 +265,24 @@
 <li class="toctree-l3"><a class="reference internal" href="../importers/fasta/index.html">ttio.importers.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/fastq/index.html">ttio.importers.fastq</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/imported_dataset/index.html">ttio.importers.imported_dataset</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/imzml/index.html">ttio.importers.imzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/mzml/index.html">ttio.importers.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/mztab/index.html">ttio.importers.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/readers/index.html">ttio.importers.readers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/registry/index.html">ttio.importers.registry</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/sam/index.html">ttio.importers.sam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../io/index.html">ttio.io</a><input aria-label="Toggle navigation of ttio.io" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../io/progress/index.html">ttio.io.progress</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../ir_image/index.html">ttio.ir_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ir_spectrum/index.html">ttio.ir_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../isolation_window/index.html">ttio.isolation_window</a></li>
@@ -275,7 +292,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../nmr_2d/index.html">ttio.nmr_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../pqc/index.html">ttio.pqc</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../protocols/indexable/index.html">ttio.protocols.indexable</a></li>
@@ -285,7 +302,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../provenance/index.html">ttio.provenance</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../providers/base/index.html">ttio.providers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../providers/hdf5/index.html">ttio.providers.hdf5</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../providers/memory/index.html">ttio.providers.memory</a></li>
@@ -299,13 +316,15 @@
 <li class="toctree-l2"><a class="reference internal" href="../raman_image/index.html">ttio.raman_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../raman_spectrum/index.html">ttio.raman_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sample/index.html">ttio.sample</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../signal_array/index.html">ttio.signal_array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../signatures/index.html">ttio.signatures</a></li>
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">ttio.spectral_dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../spectrum/index.html">ttio.spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stream_reader/index.html">ttio.stream_reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stream_writer/index.html">ttio.stream_writer</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../subject/index.html">ttio.subject</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/fasta_export_cli/index.html">ttio.tools.fasta_export_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/fasta_import_cli/index.html">ttio.tools.fasta_import_cli</a></li>
@@ -319,23 +338,51 @@
 <li class="toctree-l3"><a class="reference internal" href="../tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tools/workbench_cli/index.html">ttio.tools.workbench_cli</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../transition_list/index.html">ttio.transition_list</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../transport/arrow_ipc/index.html">ttio.transport.arrow_ipc</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/client/index.html">ttio.transport.client</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/codec/index.html">ttio.transport.codec</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/encrypted/index.html">ttio.transport.encrypted</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transport/ingest/index.html">ttio.transport.ingest</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/packets/index.html">ttio.transport.packets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/server/index.html">ttio.transport.server</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/simulator/index.html">ttio.transport.simulator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transport/stats/index.html">ttio.transport.stats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transport/walker/index.html">ttio.transport.walker</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../value_range/index.html">ttio.value_range</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../verifier/index.html">ttio.verifier</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../workbench/index.html">ttio.workbench</a><input aria-label="Toggle navigation of ttio.workbench" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/auth/index.html">ttio.workbench.auth</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/auth_providers/index.html">ttio.workbench.auth_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/client/index.html">ttio.workbench.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/cohort/index.html">ttio.workbench.cohort</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/containers/index.html">ttio.workbench.containers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/federation/index.html">ttio.workbench.federation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/jobs/index.html">ttio.workbench.jobs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/pipeline/index.html">ttio.workbench.pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/pqc/index.html">ttio.workbench.pqc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/session_proxy/index.html">ttio.workbench.session_proxy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/sessions/index.html">ttio.workbench.sessions</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../workbench/transport/index.html">ttio.workbench.transport</a><input aria-label="Toggle navigation of ttio.workbench.transport" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/download/index.html">ttio.workbench.transport.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/errors/index.html">ttio.workbench.transport.errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/handshake/index.html">ttio.workbench.transport.handshake</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/resume/index.html">ttio.workbench.transport.resume</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/selective_access/index.html">ttio.workbench.transport.selective_access</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/upload/index.html">ttio.workbench.transport.upload</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../written_genomic_run/index.html">ttio.written_genomic_run</a></li>
 </ul>
 </li>
@@ -380,25 +427,13 @@
           <section id="module-ttio.spectral_dataset">
 <span id="ttio-spectral-dataset"></span><h1>ttio.spectral_dataset<a class="headerlink" href="#module-ttio.spectral_dataset" title="Link to this heading">¶</a></h1>
 <p><code class="docutils literal notranslate"><span class="pre">SpectralDataset</span></code> — root <code class="docutils literal notranslate"><span class="pre">.tio</span></code> reader / writer façade.</p>
-<p>This class is the main public entry point. It owns the underlying
-<code class="docutils literal notranslate"><span class="pre">h5py.File</span></code> handle, provides mapping-style access to runs, and exposes the
+<p>This class is the main public entry point. It delegates storage to a
+<a class="reference internal" href="../providers/base/index.html#ttio.providers.base.StorageProvider" title="ttio.providers.base.StorageProvider"><code class="xref py py-class docutils literal notranslate"><span class="pre">StorageProvider</span></code></a>, provides mapping-style access to runs, and exposes the
 feature-flag / identifications / quantifications / provenance metadata.</p>
 <p>Only reading and minimal writing are implemented in M16. Full writing
 support (feature flags, compound datasets, signal channels for new runs)
 uses the same helpers in <code class="xref py py-mod docutils literal notranslate"><span class="pre">_hdf5_io</span></code> and is fleshed out alongside the
 mzML/nmrML importers in M16.7.</p>
-<section id="attributes">
-<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading">¶</a></h2>
-<div class="table-wrapper autosummary longtable docutils container">
-<table class="autosummary longtable docutils align-default">
-<tbody>
-<tr class="row-odd"><td><p><a class="reference internal" href="#ttio.spectral_dataset.SAM_REVERSE_FLAG" title="ttio.spectral_dataset.SAM_REVERSE_FLAG"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SAM_REVERSE_FLAG</span></code></a></p></td>
-<td><p></p></td>
-</tr>
-</tbody>
-</table>
-</div>
-</section>
 <section id="classes">
 <h2>Classes<a class="headerlink" href="#classes" title="Link to this heading">¶</a></h2>
 <div class="table-wrapper autosummary longtable docutils container">
@@ -437,11 +472,6 @@ slice 41.5 when the encryption manager lands in Python.</p>
 <dl class="py attribute">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.path">
 <span class="sig-name descname"><span class="pre">path</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.path"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.path" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.file">
-<span class="sig-name descname"><span class="pre">file</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><span class="pre">h5py.File</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.file"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.file" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -503,9 +533,8 @@ that in-place operations such as
 same file handle. Ignored for remote URLs (which are always
 read-only). Default: <code class="docutils literal notranslate"><span class="pre">False</span></code>.</p></li>
 <li><p><strong>M39</strong> (a <code class="xref py py-class docutils literal notranslate"><span class="pre">Hdf5Provider</span></code> is constructed for)</p></li>
-<li><p><strong>legacy</strong> (<em>the target and exposed as dataset.provider. The</em>)</p></li>
-<li><p><strong>underlying</strong> (<em>dataset.file attribute continues to point at the</em>)</p></li>
-<li><p><strong>provider.native_handle</strong><strong>(</strong><strong>)</strong><strong>)</strong><strong>.</strong> (<a class="reference external" href="https://docs.h5py.org/en/stable/high/file.html#h5py.File" title="(in h5py v3.16)"><em>h5py.File</em></a><em> (</em><em>=</em>)</p></li>
+<li><p><strong>is</strong> (<em>the target and exposed as dataset.provider. The dataset</em>)</p></li>
+<li><p><strong>dataset.provider.</strong> (<em>provider-backed; reach storage through</em>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -535,7 +564,12 @@ can use <code class="docutils literal notranslate"><span class="pre">with</span>
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.close">
 <span class="sig-name descname"><span class="pre">close</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.close"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.close" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Release the underlying HDF5 file, provider, and remote handles.</p>
+<p>Idempotent: calling <a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.close" title="ttio.spectral_dataset.SpectralDataset.close"><code class="xref py py-meth docutils literal notranslate"><span class="pre">close()</span></code></a> on an already-closed dataset is
+a no-op. Invoked automatically by the context-manager protocol
+(<code class="docutils literal notranslate"><span class="pre">with</span> <span class="pre">SpectralDataset.open(...)</span> <span class="pre">as</span> <span class="pre">ds:</span></code>) and from <code class="docutils literal notranslate"><span class="pre">__del__</span></code>
+as a best-effort safety net.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.__enter__">
@@ -555,7 +589,99 @@ can use <code class="docutils literal notranslate"><span class="pre">with</span>
 <dl class="py property">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.is_encrypted">
 <span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">is_encrypted</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.14)"><span class="pre">bool</span></a></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.is_encrypted"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.is_encrypted" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Whether the dataset’s signal payload is encrypted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>bool</em> – True when an <code class="docutils literal notranslate"><span class="pre">&#64;encrypted_algorithm</span></code> attribute was recorded
+on the root group at write time (regardless of which
+channels carry ciphertext). False for plaintext datasets.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.references">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">references</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../genomic/reference_import/index.html#ttio.genomic.reference_import.ReferenceImport" title="ttio.genomic.reference_import.ReferenceImport"><span class="pre">ttio.genomic.reference_import.ReferenceImport</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.references"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.references" title="Link to this definition">¶</a></dt>
+<dd><p>Embedded references at <code class="docutils literal notranslate"><span class="pre">/study/references/&lt;uri&gt;/</span></code>, keyed
+by URI string.</p>
+<p>Populated on <a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.open" title="ttio.spectral_dataset.SpectralDataset.open"><code class="xref py py-meth docutils literal notranslate"><span class="pre">open()</span></code></a> from the canonical embed layout (see
+<code class="xref py py-func docutils literal notranslate"><span class="pre">_embed_references_for_runs()</span></code>). Empty for files without
+embedded references — including those whose genomic runs use
+<code class="docutils literal notranslate"><span class="pre">embed_reference=False</span></code> (the v1.2+ default), which keep the
+<code class="docutils literal notranslate"><span class="pre">reference_uri</span></code> attribute but rely on the
+<code class="xref py py-class docutils literal notranslate"><span class="pre">ReferenceResolver</span></code> for byte resolution.</p>
+<p>The return is a read-only view: mutations on the returned
+mapping do not affect the dataset. Mirrors Java’s
+<code class="docutils literal notranslate"><span class="pre">SpectralDataset.references()</span></code> (added Phase 0 of
+tio-browser).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Since<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1.1.0</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.image_for_kind">
+<span class="sig-name descname"><span class="pre">image_for_kind</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kind</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../enums/index.html#ttio.enums.ImageKind" title="ttio.enums.ImageKind"><span class="pre">ttio.enums.ImageKind</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="../image/index.html#ttio.image.Image" title="ttio.image.Image"><span class="pre">Image</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.image_for_kind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.image_for_kind" title="Link to this definition">¶</a></dt>
+<dd><p>The embedded <a class="reference internal" href="../image/index.html#ttio.image.Image" title="ttio.image.Image"><code class="xref py py-class docutils literal notranslate"><span class="pre">Image</span></code></a> for the given
+<a class="reference internal" href="../enums/index.html#ttio.enums.ImageKind" title="ttio.enums.ImageKind"><code class="xref py py-class docutils literal notranslate"><span class="pre">ImageKind</span></code></a>, or <code class="docutils literal notranslate"><span class="pre">None</span></code> when that modality
+is absent.</p>
+<p>Lazy per-kind: reads the cube on first access and caches the
+result. Replaces the former typed <code class="docutils literal notranslate"><span class="pre">image</span></code> / <code class="docutils literal notranslate"><span class="pre">raman_image</span></code>
+/ <code class="docutils literal notranslate"><span class="pre">ir_image</span></code> accessors with a uniform lookup.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Since<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1.2.0</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.images">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">images</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../enums/index.html#ttio.enums.ImageKind" title="ttio.enums.ImageKind"><span class="pre">ImageKind</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../image/index.html#ttio.image.Image" title="ttio.image.Image"><span class="pre">Image</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.images"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.images" title="Link to this definition">¶</a></dt>
+<dd><p>Embedded images keyed by <a class="reference internal" href="../enums/index.html#ttio.enums.ImageKind" title="ttio.enums.ImageKind"><code class="xref py py-class docutils literal notranslate"><span class="pre">ImageKind</span></code></a>,
+containing only the modalities present on this dataset.</p>
+<p>Each entry is materialised lazily via <a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.image_for_kind" title="ttio.spectral_dataset.SpectralDataset.image_for_kind"><code class="xref py py-meth docutils literal notranslate"><span class="pre">image_for_kind()</span></code></a>
+(per-kind cache preserved). Absent modalities are omitted.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Since<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1.2.0</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.subjects">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">subjects</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../subject/index.html#ttio.subject.Subject" title="ttio.subject.Subject"><span class="pre">ttio.subject.Subject</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.subjects"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.subjects" title="Link to this definition">¶</a></dt>
+<dd><p>List of <a class="reference internal" href="../subject/index.html#ttio.subject.Subject" title="ttio.subject.Subject"><code class="xref py py-class docutils literal notranslate"><span class="pre">Subject</span></code></a> rows persisted under
+<code class="docutils literal notranslate"><span class="pre">/study/subjects/</span></code> on this dataset, in on-disk iteration
+order. Empty list when no Subjects were written (which is
+most pre-Stage-6 files). Lazily populated on first access.</p>
+<p>Stage 6 (transport-spec v0.11, Deferral 2). Mirrors Java
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">global.thalion.ttio.SpectralDataset.subjects()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Since<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1.4.0</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.samples">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">samples</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../sample/index.html#ttio.sample.Sample" title="ttio.sample.Sample"><span class="pre">ttio.sample.Sample</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.samples"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.samples" title="Link to this definition">¶</a></dt>
+<dd><p>List of <a class="reference internal" href="../sample/index.html#ttio.sample.Sample" title="ttio.sample.Sample"><code class="xref py py-class docutils literal notranslate"><span class="pre">Sample</span></code></a> rows persisted under
+<code class="docutils literal notranslate"><span class="pre">/study/samples/</span></code> on this dataset, in on-disk iteration
+order. Empty list when no Samples were written. Lazily
+populated on first access.</p>
+<p>Stage 6 (transport-spec v0.11, Deferral 2). Mirrors Java
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">global.thalion.ttio.SpectralDataset.samples()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Since<span class="colon">:</span></dt>
+<dd class="field-odd"><p>1.4.0</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py property">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.all_runs">
@@ -623,17 +749,50 @@ to get genomic only. The return is a thin filter over
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.identifications">
 <span class="sig-name descname"><span class="pre">identifications</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../identification/index.html#ttio.identification.Identification" title="ttio.identification.Identification"><span class="pre">ttio.identification.Identification</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.identifications"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.identifications" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return the dataset’s identification records.</p>
+<p>Reads from the compound <code class="docutils literal notranslate"><span class="pre">/study/identifications</span></code> dataset when
+present, falling back to the legacy <code class="docutils literal notranslate"><span class="pre">&#64;identifications_json</span></code>
+attribute on <code class="docutils literal notranslate"><span class="pre">/study</span></code> for older files.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>list[Identification]</em> – Identification records in stored order. Empty when no
+identifications group or JSON attribute is present.</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.quantifications">
 <span class="sig-name descname"><span class="pre">quantifications</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../quantification/index.html#ttio.quantification.Quantification" title="ttio.quantification.Quantification"><span class="pre">ttio.quantification.Quantification</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.quantifications"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.quantifications" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return the dataset’s quantification records.</p>
+<p>Reads from the compound <code class="docutils literal notranslate"><span class="pre">/study/quantifications</span></code> dataset when
+present (with optional per-row units from the
+<code class="docutils literal notranslate"><span class="pre">&#64;quantification_units</span></code> JSON sidecar attribute), falling back
+to the legacy <code class="docutils literal notranslate"><span class="pre">&#64;quantifications_json</span></code> attribute for older
+files.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>list[Quantification]</em> – Quantification records in stored order. Empty when no
+quantifications group or JSON attribute is present.</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.provenance">
 <span class="sig-name descname"><span class="pre">provenance</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../provenance/index.html#ttio.provenance.ProvenanceRecord" title="ttio.provenance.ProvenanceRecord"><span class="pre">ttio.provenance.ProvenanceRecord</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.provenance"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.provenance" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dd><p>Return the dataset-level provenance chain.</p>
+<p>Reads from the compound <code class="docutils literal notranslate"><span class="pre">/study/provenance</span></code> dataset when
+present, falling back to the legacy <code class="docutils literal notranslate"><span class="pre">&#64;provenance_json</span></code>
+attribute on <code class="docutils literal notranslate"><span class="pre">/study</span></code> for older files. Per-run provenance is
+exposed separately by <code class="xref py py-class docutils literal notranslate"><span class="pre">AcquisitionRun.provenance_records</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns<span class="colon">:</span></dt>
+<dd class="field-odd"><p><em>list[ProvenanceRecord]</em> – Provenance records in stored order. Empty when neither the
+compound dataset nor the JSON attribute is present.</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.encrypt_with_key">
@@ -651,13 +810,29 @@ after run-level encryption, marks the root with
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.decrypt_with_key">
 <span class="sig-name descname"><span class="pre">decrypt_with_key</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#dict" title="(in Python v3.14)"><span class="pre">dict</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.14)"><span class="pre">bytes</span></a><span class="p"><span class="pre">]</span></span></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.decrypt_with_key"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.decrypt_with_key" title="Link to this definition">¶</a></dt>
-<dd><p>Decrypt every MS run’s intensity channel.</p>
-<p>Returns a mapping of <code class="docutils literal notranslate"><span class="pre">{run_name:</span> <span class="pre">plaintext_bytes}</span></code>. The on-disk
-file is NOT modified — decryption is read-only.</p>
-<p>Side effect: each run’s decrypted channel is cached in memory so
-<code class="docutils literal notranslate"><span class="pre">run.object_at_index(i).intensity_array</span></code> works without re-decrypting
-(Option 1 of the MCP-Server M5 handoff; mirrors ObjC
-<code class="docutils literal notranslate"><span class="pre">-[TTIOSpectralDataset</span> <span class="pre">decryptWithKey:]</span></code> rehydration semantics).</p>
+<dd><p>Decrypt every MS run’s intensity channel into an in-memory overlay.</p>
+<p>Returns a mapping of <code class="docutils literal notranslate"><span class="pre">{run_name:</span> <span class="pre">plaintext_bytes}</span></code>.</p>
+<p><strong>Read-only / asymmetric</strong>: the on-disk file is NOT modified,
+the root <code class="docutils literal notranslate"><span class="pre">&#64;encrypted</span></code> attribute is left in place, and
+<a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.is_encrypted" title="ttio.spectral_dataset.SpectralDataset.is_encrypted"><code class="xref py py-attr docutils literal notranslate"><span class="pre">is_encrypted</span></code></a> continues to return <code class="docutils literal notranslate"><span class="pre">True</span></code> on this
+instance and on any reopen. This is the asymmetric counterpart
+to <a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.encrypt_with_key" title="ttio.spectral_dataset.SpectralDataset.encrypt_with_key"><code class="xref py py-meth docutils literal notranslate"><span class="pre">encrypt_with_key()</span></code></a> (which IS persistent +
+flag-flipping) by design: in-memory rehydration lets a process
+read encrypted data without rewriting the file.</p>
+<p>To fully reverse encryption on disk and clear the
+<code class="docutils literal notranslate"><span class="pre">&#64;encrypted</span></code> attribute, use the classmethod
+<a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.decrypt_in_place" title="ttio.spectral_dataset.SpectralDataset.decrypt_in_place"><code class="xref py py-meth docutils literal notranslate"><span class="pre">decrypt_in_place()</span></code></a> — close any open instance first.</p>
+<p>Side effect: each run’s decrypted channel is cached in memory
+so <code class="docutils literal notranslate"><span class="pre">run.object_at_index(i).intensity_array</span></code> works without
+re-decrypting (Option 1 of the MCP-Server M5 handoff; mirrors
+ObjC <code class="docutils literal notranslate"><span class="pre">-[TTIOSpectralDataset</span> <span class="pre">decryptWithKey:]</span></code> rehydration
+semantics).</p>
+<section id="id1">
+<h4>Cross-language equivalents<a class="headerlink" href="#id1" title="Link to this heading">¶</a></h4>
+<p>Java: <code class="docutils literal notranslate"><span class="pre">SpectralDataset.decryptWithKey(byte[])</span></code> (same
+in-memory-only semantics) · Objective-C:
+<code class="docutils literal notranslate"><span class="pre">-[TTIOSpectralDataset</span> <span class="pre">decryptWithKey:error:]</span></code> (same).</p>
+</section>
 </dd></dl>
 
 <dl class="py method">
@@ -692,7 +867,7 @@ does not verify.</p>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.SpectralDataset.write_minimal">
-<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">write_minimal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">isa_investigation_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">runs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun" title="ttio.spectral_dataset.WrittenRun"><span class="pre">WrittenRun</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">genomic_runs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../written_genomic_run/index.html#ttio.written_genomic_run.WrittenGenomicRun" title="ttio.written_genomic_run.WrittenGenomicRun"><span class="pre">ttio.written_genomic_run.WrittenGenomicRun</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identifications</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../identification/index.html#ttio.identification.Identification" title="ttio.identification.Identification"><span class="pre">ttio.identification.Identification</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quantifications</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../quantification/index.html#ttio.quantification.Quantification" title="ttio.quantification.Quantification"><span class="pre">ttio.quantification.Quantification</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provenance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../provenance/index.html#ttio.provenance.ProvenanceRecord" title="ttio.provenance.ProvenanceRecord"><span class="pre">ttio.provenance.ProvenanceRecord</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../providers/index.html#ttio.providers.StorageProvider" title="ttio.providers.StorageProvider"><span class="pre">ttio.providers.StorageProvider</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'hdf5'</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.write_minimal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.write_minimal" title="Link to this definition">¶</a></dt>
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">write_minimal</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">path</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span></em>, <em class="sig-param"><span class="keyword-only-separator o"><abbr title="Keyword-only parameters separator (PEP 3102)"><span class="pre">*</span></abbr></span></em>, <em class="sig-param"><span class="n"><span class="pre">title</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">isa_investigation_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span></em>, <em class="sig-param"><span class="n"><span class="pre">runs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun" title="ttio.spectral_dataset.WrittenRun"><span class="pre">WrittenRun</span></a><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">genomic_runs</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Mapping</span><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">,</span></span><span class="w"> </span><a class="reference internal" href="../written_genomic_run/index.html#ttio.written_genomic_run.WrittenGenomicRun" title="ttio.written_genomic_run.WrittenGenomicRun"><span class="pre">ttio.written_genomic_run.WrittenGenomicRun</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">identifications</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../identification/index.html#ttio.identification.Identification" title="ttio.identification.Identification"><span class="pre">ttio.identification.Identification</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">quantifications</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../quantification/index.html#ttio.quantification.Quantification" title="ttio.quantification.Quantification"><span class="pre">ttio.quantification.Quantification</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provenance</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../provenance/index.html#ttio.provenance.ProvenanceRecord" title="ttio.provenance.ProvenanceRecord"><span class="pre">ttio.provenance.ProvenanceRecord</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">features</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">provider</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference internal" href="../providers/index.html#ttio.providers.StorageProvider" title="ttio.providers.StorageProvider"><span class="pre">ttio.providers.StorageProvider</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">'hdf5'</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../index.html#ttio.MSImage" title="ttio.MSImage"><span class="pre">MSImage</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">raman_image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../index.html#ttio.RamanImage" title="ttio.RamanImage"><span class="pre">RamanImage</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ir_image</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../index.html#ttio.IRImage" title="ttio.IRImage"><span class="pre">IRImage</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">subjects</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../subject/index.html#ttio.subject.Subject" title="ttio.subject.Subject"><span class="pre">ttio.subject.Subject</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">samples</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../sample/index.html#ttio.sample.Sample" title="ttio.sample.Sample"><span class="pre">ttio.sample.Sample</span></a><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">progress</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><a class="reference internal" href="../io/index.html#ttio.io.ProgressSinkLike" title="ttio.io.ProgressSinkLike"><span class="pre">ProgressSinkLike</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/pathlib.html#pathlib.Path" title="(in Python v3.14)"><span class="pre">pathlib.Path</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SpectralDataset.write_minimal"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SpectralDataset.write_minimal" title="Link to this definition">¶</a></dt>
 <dd><p>Write a minimal v1.1 <code class="docutils literal notranslate"><span class="pre">.tio</span></code> file from in-memory data.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -790,8 +965,53 @@ owns its lifecycle in that case.</p>
 <dd></dd></dl>
 
 <dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.centroideds">
+<span class="sig-name descname"><span class="pre">centroideds</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">numpy.ndarray</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.centroideds"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.centroideds" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
 <dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.nucleus_type">
 <span class="sig-name descname"><span class="pre">nucleus_type</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.nucleus_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.nucleus_type" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.solvent">
+<span class="sig-name descname"><span class="pre">solvent</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.solvent"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.solvent" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.ir_mode">
+<span class="sig-name descname"><span class="pre">ir_mode</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.ir_mode"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.ir_mode" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.ir_resolution_cm_inv">
+<span class="sig-name descname"><span class="pre">ir_resolution_cm_inv</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.ir_resolution_cm_inv"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.ir_resolution_cm_inv" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.ir_number_of_scans">
+<span class="sig-name descname"><span class="pre">ir_number_of_scans</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.ir_number_of_scans"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.ir_number_of_scans" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.raman_excitation_wavelength_nm">
+<span class="sig-name descname"><span class="pre">raman_excitation_wavelength_nm</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.raman_excitation_wavelength_nm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.raman_excitation_wavelength_nm" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.raman_laser_power_mw">
+<span class="sig-name descname"><span class="pre">raman_laser_power_mw</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.raman_laser_power_mw"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.raman_laser_power_mw" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.raman_integration_time_sec">
+<span class="sig-name descname"><span class="pre">raman_integration_time_sec</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.raman_integration_time_sec"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.raman_integration_time_sec" title="Link to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="ttio.spectral_dataset.WrittenRun.uvvis_path_length_cm">
+<span class="sig-name descname"><span class="pre">uvvis_path_length_cm</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#WrittenRun.uvvis_path_length_cm"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.WrittenRun.uvvis_path_length_cm" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -810,11 +1030,6 @@ owns its lifecycle in that case.</p>
 <dd></dd></dl>
 
 </dd></dl>
-
-<dl class="py data">
-<dt class="sig sig-object py" id="ttio.spectral_dataset.SAM_REVERSE_FLAG">
-<span class="sig-prename descclassname"><span class="pre">ttio.spectral_dataset.</span></span><span class="sig-name descname"><span class="pre">SAM_REVERSE_FLAG</span></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">16</span></span><a class="reference internal" href="../../../_modules/ttio/spectral_dataset.html#SAM_REVERSE_FLAG"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.spectral_dataset.SAM_REVERSE_FLAG" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
 
 </section>
 </section>
@@ -875,12 +1090,10 @@ owns its lifecycle in that case.</p>
           <div class="toc-tree">
             <ul>
 <li><a class="reference internal" href="#">ttio.spectral_dataset</a><ul>
-<li><a class="reference internal" href="#attributes">Attributes</a></li>
 <li><a class="reference internal" href="#classes">Classes</a></li>
 <li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset"><code class="docutils literal notranslate"><span class="pre">SpectralDataset</span></code></a><ul>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.path"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.path</span></code></a></li>
-<li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.file"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.file</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.feature_flags"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.feature_flags</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.title"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.title</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.isa_investigation_id"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.isa_investigation_id</span></code></a></li>
@@ -898,6 +1111,11 @@ owns its lifecycle in that case.</p>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.__exit__"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.__exit__()</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.__del__"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.__del__()</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.is_encrypted"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.is_encrypted</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.references"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.references</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.image_for_kind"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.image_for_kind()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.images"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.images</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.subjects"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.subjects</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.samples"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.samples</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.all_runs"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.all_runs</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.runs"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.runs</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.SpectralDataset.all_runs_unified"><code class="docutils literal notranslate"><span class="pre">SpectralDataset.all_runs_unified</span></code></a></li>
@@ -930,13 +1148,21 @@ owns its lifecycle in that case.</p>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.isolation_target_mzs"><code class="docutils literal notranslate"><span class="pre">WrittenRun.isolation_target_mzs</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.isolation_lower_offsets"><code class="docutils literal notranslate"><span class="pre">WrittenRun.isolation_lower_offsets</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.isolation_upper_offsets"><code class="docutils literal notranslate"><span class="pre">WrittenRun.isolation_upper_offsets</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.centroideds"><code class="docutils literal notranslate"><span class="pre">WrittenRun.centroideds</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.nucleus_type"><code class="docutils literal notranslate"><span class="pre">WrittenRun.nucleus_type</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.solvent"><code class="docutils literal notranslate"><span class="pre">WrittenRun.solvent</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.ir_mode"><code class="docutils literal notranslate"><span class="pre">WrittenRun.ir_mode</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.ir_resolution_cm_inv"><code class="docutils literal notranslate"><span class="pre">WrittenRun.ir_resolution_cm_inv</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.ir_number_of_scans"><code class="docutils literal notranslate"><span class="pre">WrittenRun.ir_number_of_scans</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.raman_excitation_wavelength_nm"><code class="docutils literal notranslate"><span class="pre">WrittenRun.raman_excitation_wavelength_nm</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.raman_laser_power_mw"><code class="docutils literal notranslate"><span class="pre">WrittenRun.raman_laser_power_mw</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.raman_integration_time_sec"><code class="docutils literal notranslate"><span class="pre">WrittenRun.raman_integration_time_sec</span></code></a></li>
+<li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.uvvis_path_length_cm"><code class="docutils literal notranslate"><span class="pre">WrittenRun.uvvis_path_length_cm</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.provenance_records"><code class="docutils literal notranslate"><span class="pre">WrittenRun.provenance_records</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.signal_compression"><code class="docutils literal notranslate"><span class="pre">WrittenRun.signal_compression</span></code></a></li>
 <li><a class="reference internal" href="#ttio.spectral_dataset.WrittenRun.chromatograms"><code class="docutils literal notranslate"><span class="pre">WrittenRun.chromatograms</span></code></a></li>
 </ul>
 </li>
-<li><a class="reference internal" href="#ttio.spectral_dataset.SAM_REVERSE_FLAG"><code class="docutils literal notranslate"><span class="pre">SAM_REVERSE_FLAG</span></code></a></li>
 </ul>
 </li>
 </ul>

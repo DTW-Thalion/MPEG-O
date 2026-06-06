@@ -27,6 +27,7 @@ Submodules
    :maxdepth: 1
 
    /autoapi/ttio/exporters/bam/index
+   /autoapi/ttio/exporters/base/index
    /autoapi/ttio/exporters/cram/index
    /autoapi/ttio/exporters/fasta/index
    /autoapi/ttio/exporters/fastq/index
@@ -36,5 +37,7 @@ Submodules
    /autoapi/ttio/exporters/mzml/index
    /autoapi/ttio/exporters/mztab/index
    /autoapi/ttio/exporters/nmrml/index
+   /autoapi/ttio/exporters/registry/index
+   /autoapi/ttio/exporters/writers/index
 
 

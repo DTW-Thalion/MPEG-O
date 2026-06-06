@@ -230,6 +230,18 @@ explicit reference spectrum.</div>
 <div class="block">Return <code>|Φ| / (|Φ| + |Ψ|)</code> — synchronous dominance in
 <code>[0, 1]</code>. Cells where both matrices vanish yield
 <code>Double.NaN</code>.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>synchronous</code> - the <code>Φ</code> matrix in row-major form</dd>
+<dd><code>asynchronous</code> - the <code>Ψ</code> matrix in row-major form
+                     (must match <code>synchronous</code> in length)</dd>
+<dt>Returns:</dt>
+<dd>a new row-major matrix of the same length carrying the
+         per-cell synchronous dominance ratio</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalArgumentException.html" title="class or interface in java.lang" class="external-link">IllegalArgumentException</a></code> - if either input is <code>null</code>
+        or their lengths differ</dd>
+</dl>
 </div>
 </section>
 </li>

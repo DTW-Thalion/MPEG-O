@@ -92,15 +92,21 @@ loadScripts(document, 'script');</script>
 in format-spec section 6.</div>
 </div>
 <div class="col-first odd-row-color class-summary class-summary-tab4"><a href="Hdf5CompoundIO.Field.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Field</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab4">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab4">
+<div class="block">One field in a compound schema, paired with its on-disk kind.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab3"><a href="Hdf5CompoundIO.FieldKind.html" title="enum class in global.thalion.ttio.hdf5">Hdf5CompoundIO.FieldKind</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab3">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab3">
+<div class="block">Field kinds covered by the compound-IO helper.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Hdf5CompoundIO.RowPacker.html" title="interface in global.thalion.ttio.hdf5">Hdf5CompoundIO.RowPacker</a></div>
 <div class="col-last odd-row-color class-summary class-summary-tab1">
 <div class="block">Packs row values into the compound value array.</div>
 </div>
 <div class="col-first even-row-color class-summary class-summary-tab2"><a href="Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab2">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="block">Immutable layout description for a compound dataset.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab2"><a href="Hdf5CompoundType.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundType</a></div>
 <div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">Thin wrapper around an HDF5 compound datatype (H5T_COMPOUND).</div>
@@ -114,29 +120,61 @@ in format-spec section 6.</div>
 <div class="block">Exception hierarchy for HDF5 wrapper operations.</div>
 </div>
 <div class="col-first even-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.AttributeException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.AttributeException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Raised when an attribute create / read / write / delete call
+  fails on a group or dataset.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.DatasetCreateException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetCreateException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="block">Raised when dataset creation fails — type setup, dataspace setup,
+  or the <code>H5Dcreate2</code> call itself.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.DatasetOpenException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetOpenException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Dopen2</code> returns a negative dataset id.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.DatasetReadException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetReadException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Dread</code> (or any of its split-read variants)
+  reports failure.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.DatasetWriteException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.DatasetWriteException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Dwrite</code> (or any of its split-write variants)
+  reports failure.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.FileCreateException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileCreateException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Fcreate</code> returns a negative file id, typically
+  due to permissions or a missing parent directory.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.FileNotFoundException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileNotFoundException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Raised when an HDF5 file path is requested but the file does not
+  exist on disk.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.FileOpenException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.FileOpenException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Fopen</code> returns a negative file id, typically
+  due to a corrupt header or a non-HDF5 file.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.GroupCreateException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.GroupCreateException</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Gcreate2</code> returns a negative group id.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.GroupOpenException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.GroupOpenException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="block">Raised when <code>H5Gopen2</code> returns a negative group id.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.Hdf5Exception.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.Hdf5Exception</a></div>
-<div class="col-last even-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Base unchecked exception for any failure raised by the HDF5
+  wrapper layer.</div>
+</div>
 <div class="col-first odd-row-color class-summary class-summary-tab5"><a href="Hdf5Errors.OutOfRangeException.html" title="class in global.thalion.ttio.hdf5">Hdf5Errors.OutOfRangeException</a></div>
-<div class="col-last odd-row-color class-summary class-summary-tab5">&nbsp;</div>
+<div class="col-last odd-row-color class-summary class-summary-tab5">
+<div class="block">Raised when a hyperslab request extends past the dataset extent.</div>
+</div>
 <div class="col-first even-row-color class-summary class-summary-tab2"><a href="Hdf5File.html" title="class in global.thalion.ttio.hdf5">Hdf5File</a></div>
 <div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">Thin wrapper around an HDF5 file handle.</div>

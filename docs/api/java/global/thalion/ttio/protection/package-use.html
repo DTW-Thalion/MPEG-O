@@ -97,60 +97,65 @@ loadScripts(document, 'script');</script>
 <div class="block">Status tag; only <a href="CipherSuite.Status.html#ACTIVE"><code>CipherSuite.Status.ACTIVE</code></a> algorithms may be
   used for encrypt / sign / wrap operations.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/EncryptedTransport.WrappedDek.html#global.thalion.ttio.protection">EncryptedTransport.WrappedDek</a></div>
+<div class="col-first even-row-color"><a href="class-use/EncryptedTransport.Recipient.html#global.thalion.ttio.protection">EncryptedTransport.Recipient</a></div>
 <div class="col-last even-row-color">
+<div class="block">One DEK recipient: the same per-run DEK wrapped under this
+  recipient's KEK.</div>
+</div>
+<div class="col-first odd-row-color"><a href="class-use/EncryptedTransport.WrappedDek.html#global.thalion.ttio.protection">EncryptedTransport.WrappedDek</a></div>
+<div class="col-last odd-row-color">
 <div class="block">A wrapped DEK + the KEK algorithm that unwraps it.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/EncryptionManager.EncryptResult.html#global.thalion.ttio.protection">EncryptionManager.EncryptResult</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/EncryptionManager.EncryptResult.html#global.thalion.ttio.protection">EncryptionManager.EncryptResult</a></div>
+<div class="col-last even-row-color">
 <div class="block">Result of an encryption operation.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/EncryptionManager.WrappedBlobV2.html#global.thalion.ttio.protection">EncryptionManager.WrappedBlobV2</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/EncryptionManager.WrappedBlobV2.html#global.thalion.ttio.protection">EncryptionManager.WrappedBlobV2</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Parsed v1.2 wrapped-key blob fields.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/KeyRotationManager.html#global.thalion.ttio.protection">KeyRotationManager</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/KeyRotationManager.html#global.thalion.ttio.protection">KeyRotationManager</a></div>
+<div class="col-last even-row-color">
 <div class="block">Envelope encryption and key rotation for TTI-O datasets.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/PerAUEncryption.AUHeaderPlaintext.html#global.thalion.ttio.protection">PerAUEncryption.AUHeaderPlaintext</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/PerAUEncryption.AUHeaderPlaintext.html#global.thalion.ttio.protection">PerAUEncryption.AUHeaderPlaintext</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Plaintext form of the 36-byte AU semantic header.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/PerAUEncryption.ChannelSegment.html#global.thalion.ttio.protection">PerAUEncryption.ChannelSegment</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/PerAUEncryption.ChannelSegment.html#global.thalion.ttio.protection">PerAUEncryption.ChannelSegment</a></div>
+<div class="col-last even-row-color">
 <div class="block">One encrypted row of a <code>&lt;channel&gt;_segments</code> compound
   dataset.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/PerAUEncryption.GcmResult.html#global.thalion.ttio.protection">PerAUEncryption.GcmResult</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/PerAUEncryption.GcmResult.html#global.thalion.ttio.protection">PerAUEncryption.GcmResult</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Result of a per-AU encryption: (iv, tag, ciphertext).</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/PerAUEncryption.HeaderSegment.html#global.thalion.ttio.protection">PerAUEncryption.HeaderSegment</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/PerAUEncryption.HeaderSegment.html#global.thalion.ttio.protection">PerAUEncryption.HeaderSegment</a></div>
+<div class="col-last even-row-color">
 <div class="block">One encrypted row of <code>spectrum_index/au_header_segments</code>.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/PerAUFile.DecryptedRun.html#global.thalion.ttio.protection">PerAUFile.DecryptedRun</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/PerAUFile.DecryptedRun.html#global.thalion.ttio.protection">PerAUFile.DecryptedRun</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Result of <a href="PerAUFile.html#decryptFile(java.lang.String,byte%5B%5D,java.lang.String)"><code>PerAUFile.decryptFile(String, byte[], String)</code></a>: per-run, per-channel plaintext
   bytes; optional <code>auHeaders</code> list when
   <code>opt_encrypted_au_headers</code> is set.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/PerAUFile.GenomicIndexPlain.html#global.thalion.ttio.protection">PerAUFile.GenomicIndexPlain</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/PerAUFile.GenomicIndexPlain.html#global.thalion.ttio.protection">PerAUFile.GenomicIndexPlain</a></div>
+<div class="col-last even-row-color">
 <div class="block">plaintext genomic_index columns recovered from a file
   encrypted with the reserved <code>"_headers"</code> key.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/PostQuantumCrypto.KemEncapResult.html#global.thalion.ttio.protection">PostQuantumCrypto.KemEncapResult</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/PostQuantumCrypto.KemEncapResult.html#global.thalion.ttio.protection">PostQuantumCrypto.KemEncapResult</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Encapsulation result: KEM ciphertext and the shared secret.</div>
 </div>
-<div class="col-first odd-row-color"><a href="class-use/PostQuantumCrypto.KeyPair.html#global.thalion.ttio.protection">PostQuantumCrypto.KeyPair</a></div>
-<div class="col-last odd-row-color">
+<div class="col-first even-row-color"><a href="class-use/PostQuantumCrypto.KeyPair.html#global.thalion.ttio.protection">PostQuantumCrypto.KeyPair</a></div>
+<div class="col-last even-row-color">
 <div class="block">Immutable raw-bytes keypair.</div>
 </div>
-<div class="col-first even-row-color"><a href="class-use/Verifier.Status.html#global.thalion.ttio.protection">Verifier.Status</a></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><a href="class-use/Verifier.Status.html#global.thalion.ttio.protection">Verifier.Status</a></div>
+<div class="col-last odd-row-color">
 <div class="block">Sign-and-verify cycle outcome.</div>
 </div>
 </div>

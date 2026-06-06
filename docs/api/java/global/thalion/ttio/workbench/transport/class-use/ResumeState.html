@@ -91,7 +91,9 @@ loadScripts(document, 'script');</script>
  byte[]&nbsp;payload,
  <a href="../ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Upload with optional resume state.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
 </div>
 <div class="col-first odd-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">WorkbenchTransportClient.</span><code><a href="../WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,byte%5B%5D,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
@@ -100,7 +102,20 @@ loadScripts(document, 'script');</script>
  <a href="../ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
  <a href="../TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
 <div class="col-last odd-row-color">
-<div class="block">Upload with optional resume state + a progress callback.</div>
+<div class="block"><span class="deprecated-label">Deprecated.</span>
+<div class="deprecation-comment">since 1.5.0.</div>
+</div>
+</div>
+<div class="col-first even-row-color"><code><a href="../WorkbenchTransportClient.UploadResult.html" title="class in global.thalion.ttio.workbench.transport">WorkbenchTransportClient.UploadResult</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">WorkbenchTransportClient.</span><code><a href="../WorkbenchTransportClient.html#upload(java.lang.String,java.lang.String,java.nio.file.Path,global.thalion.ttio.workbench.transport.ResumeState,global.thalion.ttio.workbench.transport.TransferProgress)" class="member-name-link">upload</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;project,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;payloadFile,
+ <a href="../ResumeState.html" title="class in global.thalion.ttio.workbench.transport">ResumeState</a>&nbsp;resume,
+ <a href="../TransferProgress.html" title="interface in global.thalion.ttio.workbench.transport">TransferProgress</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Streaming upload — read the <code>.tis</code> payload from a file
+  on disk in <code>chunkSize</code>-bounded slices instead of slurping
+  the whole thing into a <code>byte[]</code>.</div>
 </div>
 </div>
 </section>

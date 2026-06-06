@@ -55,6 +55,7 @@ loadScripts(document, 'script');</script>
 <div class="toc-header">Contents&nbsp;<input type="text" class="filter-input" disabled placeholder="Filter contents (type .)" aria-label="Filter table of contents" autocomplete="off" spellcheck="false"><input type="reset" class="reset-filter" disabled tabindex="-1" value="Reset"></div>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#constructor-summary" tabindex="0">Constructor Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
 <li><a href="#constructor-detail" tabindex="0">Constructor Details</a>
@@ -65,24 +66,12 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
-<li><a href="#width()" tabindex="0">width()</a></li>
-<li><a href="#height()" tabindex="0">height()</a></li>
-<li><a href="#spectralPoints()" tabindex="0">spectralPoints()</a></li>
-<li><a href="#tileSize()" tabindex="0">tileSize()</a></li>
-<li><a href="#pixelSizeX()" tabindex="0">pixelSizeX()</a></li>
-<li><a href="#pixelSizeY()" tabindex="0">pixelSizeY()</a></li>
-<li><a href="#scanPattern()" tabindex="0">scanPattern()</a></li>
 <li><a href="#excitationWavelengthNm()" tabindex="0">excitationWavelengthNm()</a></li>
 <li><a href="#laserPowerMw()" tabindex="0">laserPowerMw()</a></li>
-<li><a href="#intensityCube()" tabindex="0">intensityCube()</a></li>
 <li><a href="#wavenumbers()" tabindex="0">wavenumbers()</a></li>
-<li><a href="#title()" tabindex="0">title()</a></li>
-<li><a href="#isaInvestigationId()" tabindex="0">isaInvestigationId()</a></li>
-<li><a href="#identifications()" tabindex="0">identifications()</a></li>
-<li><a href="#quantifications()" tabindex="0">quantifications()</a></li>
-<li><a href="#provenanceRecords()" tabindex="0">provenanceRecords()</a></li>
-<li><a href="#valueAt(int,int,int)" tabindex="0">valueAt(int, int, int)</a></li>
-<li><a href="#spectrumAt(int,int)" tabindex="0">spectrumAt(int, int)</a></li>
+<li><a href="#kind()" tabindex="0">kind()</a></li>
+<li><a href="#spectralAxis()" tabindex="0">spectralAxis()</a></li>
+<li><a href="#spectralAxisKind()" tabindex="0">spectralAxisKind()</a></li>
 <li><a href="#writeTo(global.thalion.ttio.providers.StorageGroup)" tabindex="0">writeTo(StorageGroup)</a></li>
 <li><a href="#readFrom(global.thalion.ttio.providers.StorageGroup)" tabindex="0">readFrom(StorageGroup)</a></li>
 </ol>
@@ -95,13 +84,15 @@ loadScripts(document, 'script');</script>
 <h1 title="Class RamanImage" class="title">Class RamanImage</h1>
 </div>
 <div class="inheritance" title="Inheritance Tree"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">java.lang.Object</a>
+<div class="inheritance"><a href="Image.html" title="class in global.thalion.ttio">global.thalion.ttio.Image</a>
 <div class="inheritance">global.thalion.ttio.RamanImage</div>
+</div>
 </div>
 <section class="class-description" id="class-description">
 <hr>
 <div class="horizontal-scroll">
 <div class="type-signature"><span class="modifiers">public class </span><span class="element-name type-name-label">RamanImage</span>
-<span class="extends-implements">extends <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span></div>
+<span class="extends-implements">extends <a href="Image.html" title="class in global.thalion.ttio">Image</a></span></div>
 <div class="block">Raman hyperspectral imaging dataset: <code>width × height</code> pixel
 grid, each pixel a Raman spectrum of <code>spectralPoints</code>
 intensity values sampled at a shared wavenumber axis.
@@ -120,6 +111,15 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
 </section>
 <section class="summary">
 <ul class="summary-list">
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="inherited-list">
+<h3 id="fields-inherited-from-class-global.thalion.ttio.Image">Fields inherited from class&nbsp;<a href="Image.html#field-summary" title="class in global.thalion.ttio">Image</a></h3>
+<code><a href="Image.html#height">height</a>, <a href="Image.html#identifications">identifications</a>, <a href="Image.html#intensityCube">intensityCube</a>, <a href="Image.html#isaInvestigationId">isaInvestigationId</a>, <a href="Image.html#pixelSizeX">pixelSizeX</a>, <a href="Image.html#pixelSizeY">pixelSizeY</a>, <a href="Image.html#provenanceRecords">provenanceRecords</a>, <a href="Image.html#quantifications">quantifications</a>, <a href="Image.html#scanPattern">scanPattern</a>, <a href="Image.html#spectralPoints">spectralPoints</a>, <a href="Image.html#tileSize">tileSize</a>, <a href="Image.html#title">title</a>, <a href="Image.html#width">width</a></code></div>
+</section>
+</li>
 <!-- ======== CONSTRUCTOR SUMMARY ======== -->
 <li>
 <section class="constructor-summary" id="constructor-summary">
@@ -157,7 +157,10 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Full constructor capturing every cube dimension, laser metadata,
+and study-level annotation.</div>
+</div>
 </div>
 </section>
 </li>
@@ -175,68 +178,25 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#excitationWavelengthNm()" class="member-name-link">excitationWavelengthNm</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#height()" class="member-name-link">height</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#identifications()" class="member-name-link">identifications</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double[]</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#intensityCube()" class="member-name-link">intensityCube</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isaInvestigationId()" class="member-name-link">isaInvestigationId</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#laserPowerMw()" class="member-name-link">laserPowerMw</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#kind()" class="member-name-link">kind</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#pixelSizeX()" class="member-name-link">pixelSizeX</a>()</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#laserPowerMw()" class="member-name-link">laserPowerMw</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#pixelSizeY()" class="member-name-link">pixelSizeY</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#provenanceRecords()" class="member-name-link">provenanceRecords</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#quantifications()" class="member-name-link">quantifications</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readFrom(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">readFrom</a><wbr>(<a href="providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="RamanImage.html" title="class in global.thalion.ttio">RamanImage</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readFrom(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">readFrom</a><wbr>(<a href="providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Read a Raman image cube from a study group, or <code>null</code> if absent.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#scanPattern()" class="member-name-link">scanPattern</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectralPoints()" class="member-name-link">spectralPoints</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double[]</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectralAxis()" class="member-name-link">spectralAxis</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double[]</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumAt(int,int)" class="member-name-link">spectrumAt</a><wbr>(int&nbsp;row,
- int&nbsp;col)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Full spectrum at pixel (<code>row</code>, <code>col</code>).</div>
-</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#tileSize()" class="member-name-link">tileSize</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#title()" class="member-name-link">title</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="Enums.SpectralAxisKind.html" title="enum class in global.thalion.ttio">Enums.SpectralAxisKind</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectralAxisKind()" class="member-name-link">spectralAxisKind</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#valueAt(int,int,int)" class="member-name-link">valueAt</a><wbr>(int&nbsp;row,
- int&nbsp;col,
- int&nbsp;s)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Intensity at pixel (<code>row</code>, <code>col</code>), spectral index <code>s</code>.</div>
-</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double[]</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#wavenumbers()" class="member-name-link">wavenumbers</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#width()" class="member-name-link">width</a>()</code></div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double[]</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#wavenumbers()" class="member-name-link">wavenumbers</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeTo(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">writeTo</a><wbr>(<a href="providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
@@ -246,6 +206,9 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
 </div>
 </div>
 </div>
+<div class="inherited-list">
+<h3 id="methods-inherited-from-class-global.thalion.ttio.Image">Methods inherited from class&nbsp;<a href="Image.html#method-summary" title="class in global.thalion.ttio">Image</a></h3>
+<code><a href="Image.html#height()" title="height()">height</a>, <a href="Image.html#identifications()" title="identifications()">identifications</a>, <a href="Image.html#intensityCube()" title="intensityCube()">intensityCube</a>, <a href="Image.html#isaInvestigationId()" title="isaInvestigationId()">isaInvestigationId</a>, <a href="Image.html#pixelSizeX()" title="pixelSizeX()">pixelSizeX</a>, <a href="Image.html#pixelSizeY()" title="pixelSizeY()">pixelSizeY</a>, <a href="Image.html#provenanceRecords()" title="provenanceRecords()">provenanceRecords</a>, <a href="Image.html#quantifications()" title="quantifications()">quantifications</a>, <a href="Image.html#scanPattern()" title="scanPattern()">scanPattern</a>, <a href="Image.html#spectralPoints()" title="spectralPoints()">spectralPoints</a>, <a href="Image.html#spectrumAt(int,int)" title="spectrumAt(int, int)">spectrumAt</a>, <a href="Image.html#tileSize()" title="tileSize()">tileSize</a>, <a href="Image.html#title()" title="title()">title</a>, <a href="Image.html#valueAt(int,int,int)" title="valueAt(int, int, int)">valueAt</a>, <a href="Image.html#width()" title="width()">width</a></code></div>
 <div class="inherited-list">
 <h3 id="methods-inherited-from-class-java.lang.Object">Methods inherited from class&nbsp;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#method-summary" title="class or interface in java.lang" class="external-link">Object</a></h3>
 <code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#clone()" title="class or interface in java.lang" class="external-link">clone</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#equals(java.lang.Object)" title="class or interface in java.lang" class="external-link">equals</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#finalize()" title="class or interface in java.lang" class="external-link">finalize</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#getClass()" title="class or interface in java.lang" class="external-link">getClass</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#hashCode()" title="class or interface in java.lang" class="external-link">hashCode</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#notify()" title="class or interface in java.lang" class="external-link">notify</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#notifyAll()" title="class or interface in java.lang" class="external-link">notifyAll</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#toString()" title="class or interface in java.lang" class="external-link">toString</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#wait()" title="class or interface in java.lang" class="external-link">wait</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#wait(long)" title="class or interface in java.lang" class="external-link">wait</a>, <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html#wait(long,int)" title="class or interface in java.lang" class="external-link">wait</a></code></div>
@@ -280,6 +243,33 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</span></div>
+<div class="block">Full constructor capturing every cube dimension, laser metadata,
+and study-level annotation.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>width</code> - image width in pixels</dd>
+<dd><code>height</code> - image height in pixels</dd>
+<dd><code>spectralPoints</code> - points along the Raman shift axis</dd>
+<dd><code>tileSize</code> - HDF5 chunk side; 0 means full-image
+                               chunking</dd>
+<dd><code>pixelSizeX</code> - pixel pitch in micrometres along X</dd>
+<dd><code>pixelSizeY</code> - pixel pitch in micrometres along Y</dd>
+<dd><code>scanPattern</code> - free-form scan-pattern label</dd>
+<dd><code>excitationWavelengthNm</code> - laser excitation wavelength in nm</dd>
+<dd><code>laserPowerMw</code> - laser power at the sample in mW</dd>
+<dd><code>intensityCube</code> - row-major flat cube of shape
+                               <code>[height, width, spectralPoints]</code></dd>
+<dd><code>wavenumbers</code> - per-band Raman-shift values</dd>
+<dd><code>title</code> - study title; null becomes empty</dd>
+<dd><code>isaInvestigationId</code> - ISA investigation identifier; null
+                               becomes empty</dd>
+<dd><code>identifications</code> - dataset-level identifications;
+                               null becomes empty</dd>
+<dd><code>quantifications</code> - dataset-level quantifications;
+                               null becomes empty</dd>
+<dd><code>provenanceRecords</code> - dataset-level provenance chain;
+                               null becomes empty</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -310,66 +300,14 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
 <h2>Method Details</h2>
 <ul class="member-list">
 <li>
-<section class="detail" id="width()">
-<h3>width</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">width</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="height()">
-<h3>height</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">height</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="spectralPoints()">
-<h3>spectralPoints</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">spectralPoints</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="tileSize()">
-<h3>tileSize</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">tileSize</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="pixelSizeX()">
-<h3>pixelSizeX</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">pixelSizeX</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="pixelSizeY()">
-<h3>pixelSizeY</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">pixelSizeY</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="scanPattern()">
-<h3>scanPattern</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">scanPattern</span>()</div>
-</div>
-</section>
-</li>
-<li>
 <section class="detail" id="excitationWavelengthNm()">
 <h3>excitationWavelengthNm</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">excitationWavelengthNm</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Laser excitation wavelength in nm.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -378,14 +316,10 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
 <h3>laserPowerMw</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">laserPowerMw</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="intensityCube()">
-<h3>intensityCube</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">intensityCube</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Laser power at the sample in mW.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -394,67 +328,52 @@ float64 intensity cube with a 1-D <code>wavenumbers</code> axis.</p>
 <h3>wavenumbers</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">wavenumbers</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-band Raman-shift values in <code>cm^-1</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
 <li>
-<section class="detail" id="title()">
-<h3>title</h3>
+<section class="detail" id="kind()">
+<h3>kind</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">title</span>()</div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Enums.ImageKind.html" title="enum class in global.thalion.ttio">Enums.ImageKind</a></span>&nbsp;<span class="element-name">kind</span>()</div>
+<dl class="notes">
+<dt>Specified by:</dt>
+<dd><code><a href="Image.html#kind()">kind</a></code>&nbsp;in class&nbsp;<code><a href="Image.html" title="class in global.thalion.ttio">Image</a></code></dd>
+<dt>Returns:</dt>
+<dd>the modality of this image cube.</dd>
+</dl>
 </div>
 </section>
 </li>
 <li>
-<section class="detail" id="isaInvestigationId()">
-<h3>isaInvestigationId</h3>
+<section class="detail" id="spectralAxis()">
+<h3>spectralAxis</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">isaInvestigationId</span>()</div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">spectralAxis</span>()</div>
+<dl class="notes">
+<dt>Specified by:</dt>
+<dd><code><a href="Image.html#spectralAxis()">spectralAxis</a></code>&nbsp;in class&nbsp;<code><a href="Image.html" title="class in global.thalion.ttio">Image</a></code></dd>
+<dt>Returns:</dt>
+<dd>the per-band spectral axis (m/z for MS, wavenumbers for Raman/IR).</dd>
+</dl>
 </div>
 </section>
 </li>
 <li>
-<section class="detail" id="identifications()">
-<h3>identifications</h3>
+<section class="detail" id="spectralAxisKind()">
+<h3>spectralAxisKind</h3>
 <div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</span>&nbsp;<span class="element-name">identifications</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="quantifications()">
-<h3>quantifications</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;</span>&nbsp;<span class="element-name">quantifications</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="provenanceRecords()">
-<h3>provenanceRecords</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</span>&nbsp;<span class="element-name">provenanceRecords</span>()</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="valueAt(int,int,int)">
-<h3>valueAt</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">valueAt</span><wbr><span class="parameters">(int&nbsp;row,
- int&nbsp;col,
- int&nbsp;s)</span></div>
-<div class="block">Intensity at pixel (<code>row</code>, <code>col</code>), spectral index <code>s</code>.</div>
-</div>
-</section>
-</li>
-<li>
-<section class="detail" id="spectrumAt(int,int)">
-<h3>spectrumAt</h3>
-<div class="horizontal-scroll">
-<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">spectrumAt</span><wbr><span class="parameters">(int&nbsp;row,
- int&nbsp;col)</span></div>
-<div class="block">Full spectrum at pixel (<code>row</code>, <code>col</code>).</div>
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Enums.SpectralAxisKind.html" title="enum class in global.thalion.ttio">Enums.SpectralAxisKind</a></span>&nbsp;<span class="element-name">spectralAxisKind</span>()</div>
+<dl class="notes">
+<dt>Specified by:</dt>
+<dd><code><a href="Image.html#spectralAxisKind()">spectralAxisKind</a></code>&nbsp;in class&nbsp;<code><a href="Image.html" title="class in global.thalion.ttio">Image</a></code></dd>
+<dt>Returns:</dt>
+<dd>the physical interpretation of <a href="Image.html#spectralAxis()"><code>Image.spectralAxis()</code></a>.</dd>
+</dl>
 </div>
 </section>
 </li>

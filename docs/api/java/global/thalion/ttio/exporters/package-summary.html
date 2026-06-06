@@ -76,12 +76,14 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><a href="../package-summary.html">global.thalion.ttio</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><a href="writers/package-summary.html">global.thalion.ttio.exporters.writers</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
 </div>
 </div>
 </li>
 <li>
 <div id="class-summary">
-<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="class-summary-tab0" role="tab" aria-selected="true" aria-controls="class-summary.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary', 2)" class="active-table-tab">All Classes and Interfaces</button><button id="class-summary-tab2" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab2', 2)" class="table-tab">Classes</button><button id="class-summary-tab3" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab3', 2)" class="table-tab">Enum Classes</button><button id="class-summary-tab4" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab4', 2)" class="table-tab">Record Classes</button></div>
+<div class="table-tabs" role="tablist" aria-orientation="horizontal"><button id="class-summary-tab0" role="tab" aria-selected="true" aria-controls="class-summary.tabpanel" tabindex="0" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary', 2)" class="active-table-tab">All Classes and Interfaces</button><button id="class-summary-tab1" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab1', 2)" class="table-tab">Interfaces</button><button id="class-summary-tab2" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab2', 2)" class="table-tab">Classes</button><button id="class-summary-tab3" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab3', 2)" class="table-tab">Enum Classes</button><button id="class-summary-tab4" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab4', 2)" class="table-tab">Record Classes</button><button id="class-summary-tab5" role="tab" aria-selected="false" aria-controls="class-summary.tabpanel" tabindex="-1" onkeydown="switchTab(event)" onclick="show('class-summary', 'class-summary-tab5', 2)" class="table-tab">Exception Classes</button></div>
 <div id="class-summary.tabpanel" role="tabpanel" aria-labelledby="class-summary-tab0">
 <div class="summary-table two-column-summary">
 <div class="table-header col-first">Class</div>
@@ -93,6 +95,17 @@ loadScripts(document, 'script');</script>
 <div class="col-first odd-row-color class-summary class-summary-tab2"><a href="CramWriter.html" title="class in global.thalion.ttio.exporters">CramWriter</a></div>
 <div class="col-last odd-row-color class-summary class-summary-tab2">
 <div class="block">CRAM exporter — M88.</div>
+</div>
+<div class="col-first even-row-color class-summary class-summary-tab2"><a href="ExporterRegistry.html" title="class in global.thalion.ttio.exporters">ExporterRegistry</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab2">
+<div class="block">Export-format registry: the formats <code>ttio export --format &lt;fmt&gt;</code>
+  accepts and how each maps a <code>.tio</code> layer to an output file.</div>
+</div>
+<div class="col-first odd-row-color class-summary class-summary-tab4"><a href="ExportSpec.html" title="class in global.thalion.ttio.exporters">ExportSpec</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab4">
+<div class="block">One export-format entry: a canonical key paired with its display label,
+  filename extensions, optional external tool, and the <a href="Writer.html" title="interface in global.thalion.ttio.exporters"><code>Writer</code></a> that
+  serializes one layer of an opened dataset to an output file.</div>
 </div>
 <div class="col-first even-row-color class-summary class-summary-tab2"><a href="FastaWriter.html" title="class in global.thalion.ttio.exporters">FastaWriter</a></div>
 <div class="col-last even-row-color class-summary class-summary-tab2">
@@ -138,6 +151,20 @@ by <a href="JcampDxWriter.html" title="class in global.thalion.ttio.exporters"><
 <div class="col-first even-row-color class-summary class-summary-tab2"><a href="NmrMLWriter.html" title="class in global.thalion.ttio.exporters">NmrMLWriter</a></div>
 <div class="col-last even-row-color class-summary class-summary-tab2">
 <div class="block">Writes an <a href="../AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a> as nmrML.</div>
+</div>
+<div class="col-first odd-row-color class-summary class-summary-tab2"><a href="RunSelection.html" title="class in global.thalion.ttio.exporters">RunSelection</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab2">
+<div class="block">Run-selection helpers shared by the export registry and the per-format
+<code>Writer</code> adapters.</div>
+</div>
+<div class="col-first even-row-color class-summary class-summary-tab5"><a href="UnknownFormatError.html" title="class in global.thalion.ttio.exporters">UnknownFormatError</a></div>
+<div class="col-last even-row-color class-summary class-summary-tab5">
+<div class="block">Raised for a <code>--format</code> value that maps to no known exporter.</div>
+</div>
+<div class="col-first odd-row-color class-summary class-summary-tab1"><a href="Writer.html" title="interface in global.thalion.ttio.exporters">Writer</a></div>
+<div class="col-last odd-row-color class-summary class-summary-tab1">
+<div class="block">Uniform exporter interface: serialize one layer of an <em>opened</em>
+  <a href="../SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> to <code>output</code>.</div>
 </div>
 </div>
 </div>

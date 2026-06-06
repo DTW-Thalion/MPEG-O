@@ -1,0 +1,754 @@
+ttio.workbench.client
+=====================
+
+.. py:module:: ttio.workbench.client
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.client -- top-level SDK factory + WorkbenchClient.
+
+   The spec section 8.3 sample:
+
+       import ttio
+       client = ttio.connect("wss://biobank.thalion.org/transport",
+                               auth=ttio.OIDCAuth())
+       cohort = client.query(diagnosis="Alzheimer's disease", ...)
+       stream = client.stream(container=cohort[0].uri,
+                               filters={"chromosome":"chr6", ...})
+       subset = stream.materialize()
+       job = client.submit_pipeline(pipeline="eqtl-analysis", ...)
+       results = job.output_container()
+
+   W2 (this module) ships:
+
+     - `connect(url, auth=...)` factory returning `WorkbenchClient`.
+     - `WorkbenchClient.upload(...)` / `.download(...)` / `.stream(...)`
+       backed by the W1 transport client.
+     - `.query()`, `.submit_pipeline()`, `.session_create()` placeholders
+       that raise `NotImplementedError` with a clear "W3" / "W4" pointer.
+     - `Stream.materialize()` helper that materialises a streamed
+       download to a local `.tio` file.
+
+   URL parsing: `connect` accepts `wss://host:port/transport`,
+   `ws://host:port/transport`, `https://host:port`, or
+   `http://host:port`. The control plane (REST) uses the http/https
+   sibling of whatever WS scheme is given; the data plane (WS) uses
+   the WS scheme. Operators typically deploy with shared host:port
+   and TLS-or-no-TLS for both planes -- the SDK assumes this.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.client.EnvelopeRecipient
+   ttio.workbench.client.ServerRecipient
+   ttio.workbench.client.WorkbenchClient
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.client.connect
+   ttio.workbench.client.parse_filter_kv
+
+
+Module Contents
+---------------
+
+.. py:class:: EnvelopeRecipient
+
+   One recipient of a multi-recipient encrypted upload (FD-1 Phase B).
+
+   The same per-run DEK is wrapped once per recipient under ``key``:
+
+   * ``algorithm="aes-256-gcm"`` -- ``key`` is a 32-byte symmetric KEK.
+   * ``algorithm="ml-kem-1024"`` -- ``key`` is a 1568-byte ML-KEM-1024
+     public key.
+
+   ``recipient_id`` is an opaque label the downloader uses to select its
+   entry; ids must be unique within an upload. The first recipient passed
+   to :meth:`WorkbenchClient.upload_encrypted_multi` becomes the packet's
+   *primary* (its id is normalised to ``""`` on the wire, per the Phase A
+   spec); recover it on download with ``recipient_id=""``.
+
+
+   .. py:attribute:: recipient_id
+      :type:  str
+
+
+   .. py:attribute:: key
+      :type:  bytes
+
+
+   .. py:attribute:: algorithm
+      :type:  str
+      :value: 'aes-256-gcm'
+
+
+
+.. py:class:: ServerRecipient
+
+   A recipient that delegates the DEK wrap to the daemon's
+   server-side key custody (FD-1-PF-4).
+
+   Instead of the caller supplying the KEK bytes (which they won't
+   have, since the KEK is HSM-resident), the daemon wraps the DEK on
+   the client's behalf via the ``/v1/key-custody/wrap-for-server``
+   REST endpoint. The resulting wrapped blob is indistinguishable at
+   the packet level from an :class:`EnvelopeRecipient` with
+   ``algorithm="aes-256-gcm"``.
+
+   ``recipient_id`` follows the same convention as
+   :class:`EnvelopeRecipient`: ``""`` for the primary (first)
+   recipient; non-empty unique strings for additional ones.
+
+   ``kek_id`` is an opaque string naming the PKCS#11 key on the
+   daemon; the daemon resolves it to the actual key material. The
+   same ``kek_id`` is stamped into the ``server_kek_id`` field of
+   ``ProtectionMetadata`` so the daemon can identify which key to
+   use on the re-processing path.
+
+
+   .. py:attribute:: recipient_id
+      :type:  str
+
+
+   .. py:attribute:: kek_id
+      :type:  str
+
+
+   .. py:attribute:: algorithm
+      :type:  str
+      :value: 'aes-256-gcm'
+
+
+
+.. py:class:: WorkbenchClient(endpoint: _Endpoint, session: ttio.workbench.auth.Session, auth: ttio.workbench.auth_providers.AuthProvider)
+
+   High-level SDK entry point. Holds the authenticated session
+   plus the endpoint resolution; spawns short-lived
+   `UploadClient` / `DownloadClient` instances per operation.
+
+   Construction is via `ttio.connect(...)` rather than direct
+   instantiation; the constructor is `__init__`-public for
+   completeness but the factory does the auth round-trip.
+
+   Construct a workbench client from a resolved endpoint + session.
+
+   Instances are normally produced by :func:`connect`, which does
+   the URL parse, runs the auth round-trip via ``auth``, then
+   passes both into this constructor. Direct construction is
+   valid when the caller already holds a :class:`Session` (e.g.
+   when adopting a token-paste session).
+
+   :param endpoint: Resolved host / port / WS scheme / HTTP scheme tuple.
+   :type endpoint: _Endpoint
+   :param session: Authenticated session backing every outbound request.
+   :type session: Session
+   :param auth: Provider stored for use by :meth:`reauth`.
+   :type auth: AuthProvider
+
+
+   .. py:property:: session
+      :type: ttio.workbench.auth.Session
+
+
+      The current authenticated :class:`Session`.
+
+      Read-only from the caller's perspective. Use :meth:`reauth`
+      rather than mutating this property when the session expires.
+
+
+   .. py:property:: host
+      :type: str
+
+
+      Server hostname resolved from the connect URL.
+
+
+   .. py:property:: port
+      :type: int
+
+
+      Server TCP port (default ``8443`` when the URL omits one).
+
+
+   .. py:property:: ws_scheme
+      :type: str
+
+
+      WebSocket URL scheme — ``"ws"`` or ``"wss"``.
+
+
+   .. py:property:: http_scheme
+      :type: str
+
+
+      REST URL scheme — ``"http"`` or ``"https"``.
+
+
+   .. py:method:: reauth() -> None
+
+      Re-authenticate using the stored auth provider.
+
+      Calls ``auth.authenticate`` against the same endpoint and
+      replaces :attr:`session` with the result. Use when
+      :attr:`Session.expired` flips ``True`` mid-script (e.g.
+      long-running ingest loops outliving the token TTL).
+
+      :raises WorkbenchAuthError: From the underlying provider, e.g. on bad credentials.
+
+
+
+   .. py:method:: upload_client(*, project: str, container_uri: str, chunk_size: Optional[int] = None) -> ttio.workbench.transport.upload.UploadClient
+
+      Construct an unopened :class:`UploadClient` for one transfer.
+
+      :param project: Project the container belongs to.
+      :type project: str
+      :param container_uri: Client-minted container URI (e.g.
+                            ``"uri:tio:demo-001"``).
+      :type container_uri: str
+      :param chunk_size: Per-WS-frame byte budget. ``None`` (default) lets
+                         :class:`UploadClient` pick its built-in default
+                         (64 KiB).
+      :type chunk_size: int, optional
+
+      :returns: *UploadClient* -- The client is *not* yet opened; the caller drives
+                ``async with`` to perform the handshake and upload.
+
+
+
+   .. py:method:: download_client() -> ttio.workbench.transport.download.DownloadClient
+
+      Construct an unopened :class:`DownloadClient` for one transfer.
+
+      :returns: *DownloadClient* -- Bound to this session and endpoint. The caller drives
+                ``async with`` to perform the handshake and download.
+
+
+
+   .. py:method:: upload_bytes(*, project: str, container_uri: str, data: bytes, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None) -> ttio.workbench.transport.upload.UploadResult
+      :async:
+
+
+      Upload a fully-buffered ``.tis`` byte string in one call.
+
+      Convenience wrapper that opens an :class:`UploadClient` and
+      calls :meth:`UploadClient.upload_bytes`.
+
+      :param project: Project the container belongs to.
+      :type project: str
+      :param container_uri: Client-minted container URI.
+      :type container_uri: str
+      :param data: Complete transport stream to upload.
+      :type data: bytes
+      :param resume: Continue a previously-interrupted upload of the same
+                     container; the server skips bytes it has already
+                     acknowledged.
+      :type resume: ResumeState, optional
+
+      :returns: *UploadResult*
+
+      :raises HandshakeError: On handshake-time failures.
+      :raises UploadError: On mid-stream failures.
+
+
+
+   .. py:method:: upload_path(*, project: str, container_uri: str, path: str | os.PathLike[str], resume: Optional[ttio.workbench.transport.resume.ResumeState] = None, progress: Optional[Callable[[int, int], None]] = None, chunk_size: Optional[int] = None) -> ttio.workbench.transport.upload.UploadResult
+      :async:
+
+
+      Stream a ``.tis`` file from disk to the server in
+      chunkSize-bounded slices. Peak memory is O(``chunk_size``);
+      the file is **never** fully buffered in RAM.
+
+      Mirrors Java's ``WorkbenchClient.upload(Path)``.
+
+
+
+   .. py:method:: download_bytes(*, container_uri: str, filters: Optional[ttio.workbench.transport.download.FilterDict] = None, output_mode: ttio.workbench.transport.download.OutputMode = OutputModeLiteral.BINARY.value, max_au: int = 0) -> ttio.workbench.transport.download.DownloadResult
+      :async:
+
+
+      Download a container into a fully-buffered byte string in one call.
+
+      Convenience wrapper that opens a :class:`DownloadClient` and
+      calls :meth:`DownloadClient.download`.
+
+      :param container_uri: URI of the container to fetch.
+      :type container_uri: str
+      :param filters: Server-side filter dictionary (e.g. ``{"chromosome":
+                      "chr6"}``). ``None`` (default) downloads the full
+                      container.
+      :type filters: FilterDict, optional
+      :param output_mode: Wire output mode. Default is binary (``.tis`` bytes).
+      :type output_mode: OutputMode, optional
+      :param max_au: Cap on the number of access units to return. ``0``
+                     (default) means no cap.
+      :type max_au: int, optional
+
+      :returns: *DownloadResult* -- Bytes plus any post-transfer metadata.
+
+
+
+   .. py:method:: upload_encrypted(*, project: str, container_uri: str, tio_path: str, key: bytes, encrypt_headers: bool = False, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None) -> ttio.workbench.transport.upload.UploadResult
+      :async:
+
+
+      Encrypt a plaintext `.tio` per-AU and upload it.
+
+      The channel payloads (and AU headers when `encrypt_headers`) are
+      AES-256-GCM-encrypted *inside* a valid `.tis` transport stream
+      that also carries a `ProtectionMetadata` packet, so the daemon
+      ingests and re-emits it like any stream (it never sees plaintext
+      and holds no key). Recover the data with `download_decrypted`
+      using the same `key`.
+
+      The source `.tio` is never mutated -- a temp copy is encrypted.
+
+
+
+   .. py:method:: download_decrypted(*, container_uri: str, key: bytes, out_tio_path: str, filters: Optional[ttio.workbench.transport.download.FilterDict] = None, max_au: int = 0)
+      :async:
+
+
+      Download a per-AU-encrypted container and decrypt it.
+
+      Materialises the still-encrypted `.tio` to `out_tio_path`
+      (ciphertext preserved, `opt_per_au_encryption` set) and returns
+      the decrypted channel values as
+      `{run_name: {channel_name: ndarray}}`. The same `key` used by
+      `upload_encrypted` is required.
+
+
+
+   .. py:method:: upload_encrypted_pqc(*, project: str, container_uri: str, tio_path: str, recipient_public_key: bytes, preview: bool = False, encrypt_headers: bool = False, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None) -> ttio.workbench.transport.upload.UploadResult
+      :async:
+
+
+      Per-AU encrypt a `.tio` with a fresh DEK, wrap that DEK under
+      the recipient's ML-KEM-1024 public key, and upload.
+
+      Same daemon-faithful path as :meth:`upload_encrypted` (per-AU
+      AES-256-GCM inside a valid `.tis`), but the per-run DEK is not
+      caller-held: it is randomly generated, ML-KEM-wrapped, and carried
+      in the `ProtectionMetadata` packet. Only the holder of the matching
+      ML-KEM private key can recover it via
+      :meth:`download_decrypted_pqc`. The daemon never holds a key.
+
+      Preview-gated to mirror the server's ``opt_pqc_preview``: raises
+      :class:`~ttio.workbench.pqc.PQCPreviewDisabledError` unless
+      ``preview=True``.
+
+
+
+   .. py:method:: download_decrypted_pqc(*, container_uri: str, recipient_private_key: bytes, out_tio_path: str, preview: bool = False, filters: Optional[ttio.workbench.transport.download.FilterDict] = None, max_au: int = 0)
+      :async:
+
+
+      Download a PQC per-AU-encrypted container and decrypt it.
+
+      Materialises the still-encrypted `.tio`, unwraps the per-run DEK
+      from the `ProtectionMetadata` using the recipient's ML-KEM-1024
+      private key, then returns the decrypted channel values as
+      `{run_name: {channel_name: ndarray}}`. Counterpart to
+      :meth:`upload_encrypted_pqc`; preview-gated the same way.
+
+
+
+   .. py:method:: upload_encrypted_envelope(*, project: str, container_uri: str, tio_path: str, kek: bytes, encrypt_headers: bool = False, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None) -> ttio.workbench.transport.upload.UploadResult
+      :async:
+
+
+      Per-AU encrypt a `.tio` with a fresh DEK, wrap that DEK under a
+      symmetric AES-256-GCM key-encryption key (KEK), and upload.
+
+      Same daemon-faithful path as :meth:`upload_encrypted_pqc`, but the
+      per-run DEK is wrapped with a 32-byte symmetric KEK
+      (``aes-256-gcm``) instead of an ML-KEM public key. The wrapped DEK
+      travels in the `ProtectionMetadata` packet; the daemon never holds
+      the KEK. Recover the data with :meth:`download_decrypted_envelope`
+      using the same `kek`. Not preview-gated (unlike the PQC variant).
+
+
+
+   .. py:method:: download_decrypted_envelope(*, container_uri: str, kek: bytes, out_tio_path: str, filters: Optional[ttio.workbench.transport.download.FilterDict] = None, max_au: int = 0)
+      :async:
+
+
+      Download an envelope per-AU-encrypted container and decrypt it.
+
+      Materialises the still-encrypted `.tio`, unwraps the per-run DEK
+      from the `ProtectionMetadata` with the symmetric AES-256-GCM `kek`,
+      then returns the decrypted channel values as
+      `{run_name: {channel_name: ndarray}}`. Counterpart to
+      :meth:`upload_encrypted_envelope`.
+
+
+
+   .. py:method:: wrap_for_server(*, dek: bytes, kek_id: str) -> bytes
+      :async:
+
+
+      Wrap a DEK under a server-controlled KEK via the daemon's
+      PKCS#11-backed key custody (FD-1-PF-4 endpoint).
+
+      Returns the wrapped DEK blob — byte-equivalent to what
+      ``ttio.key_rotation._wrap_dek(dek, kek_bytes, "aes-256-gcm")``
+      would produce locally if the caller had the KEK bytes (which
+      they won't, since the KEK is HSM-resident).
+
+      POSTs to ``/v1/key-custody/wrap-for-server`` using the current
+      session's bearer token. The ``dek`` is base64-encoded on the
+      wire; the daemon returns the wrapped blob as a base64-encoded
+      ``wrapped_dek`` field in the JSON response body.
+
+      :param dek: 32-byte Data Encryption Key to wrap.
+      :type dek: bytes
+      :param kek_id: Opaque identifier for the PKCS#11 key the daemon should use.
+      :type kek_id: str
+
+      :returns: *bytes* -- Wrapped DEK blob (the daemon's AES-256-GCM ciphertext over
+                the DEK, same format as a local ``_wrap_dek`` call).
+
+      :raises ValueError: If ``dek`` is not exactly 32 bytes.
+      :raises WorkbenchHttpError: * status 401/403 — authentication failed or token lacks the
+            ``key_custody.wrap`` capability.
+          * status 404 — ``kek_id`` is not registered on the daemon.
+          * status 409 — ``kek_id`` is on the read-only list (cannot
+            be used for new wraps).
+          * Any other non-200 status from the daemon.
+
+
+
+   .. py:method:: unwrap_for_server(*, wrapped_dek: bytes, kek_id: str) -> bytes
+      :async:
+
+
+      Recover the plaintext DEK from a server-wrapped blob via the
+      daemon's HSM-backed key custody (FD-1-PF-7 endpoint).
+
+      The inverse of :meth:`wrap_for_server`. Returns the 32-byte DEK
+      bytes -- equivalent to what
+      ``ttio.key_rotation._unwrap_dek(wrapped, kek_bytes, "aes-256-gcm")``
+      would produce locally if the caller had the KEK bytes (which they
+      won't, since the KEK is HSM-resident).
+
+      POSTs to ``/v1/key-custody/unwrap-for-server`` using the current
+      session's bearer token. The ``wrapped_dek`` is base64-encoded on
+      the wire; the daemon returns the plaintext DEK as a base64-encoded
+      ``dek`` field in the JSON response body.
+
+      :param wrapped_dek: Wrapped DEK blob (produced by a previous :meth:`wrap_for_server`
+                          call or by an :meth:`upload_encrypted_multi` with a
+                          :class:`ServerRecipient`).
+      :type wrapped_dek: bytes
+      :param kek_id: Opaque identifier for the PKCS#11 key the daemon should use to
+                     unwrap.  Must match the ``server_kek_id`` stamped into the
+                     ``ProtectionMetadata`` at upload time.
+      :type kek_id: str
+
+      :returns: *bytes* -- 32-byte plaintext DEK.
+
+      :raises ValueError: If the daemon returns a DEK that is not exactly 32 bytes (should
+          never happen with a conformant daemon -- fail loud if it does).
+      :raises WorkbenchHttpError: * status 401/403 -- authentication failed or token lacks the
+            ``key_custody.unwrap`` capability.
+          * status 404 -- ``kek_id`` is not registered on the daemon.
+          * status 422 -- ``wrapped_dek`` fails authentication under the
+            configured KEK (tampered blob or wrong ``kek_id``).
+          * Any other non-200 status from the daemon.
+
+
+
+   .. py:method:: download_via_server(*, container_uri: str, out_tio_path: str, filters: Optional[FilterDict] = None, max_au: int = 0) -> dict
+      :async:
+
+
+      Download a server-recipient container and decrypt it via the
+      daemon's server-side DEK unwrap (FD-1-PF-7).
+
+      For containers uploaded with :class:`ServerRecipient` (FD-1-PF-6)
+      -- the client never held the KEK bytes, so it cannot decrypt locally.
+      This method:
+
+      1. Downloads the container's ``.tis`` bytes via
+         :meth:`download_bytes`.
+      2. Materialises the still-encrypted ``.tio`` to ``out_tio_path``
+         (same pattern as :meth:`download_decrypted_envelope`).
+      3. Reads the server-recipient's ``wrapped_dek`` and ``server_kek_id``
+         from the ``ProtectionMetadata`` (via
+         :func:`~ttio.transport.encrypted.read_transport_recipients` and
+         :func:`~ttio.transport.encrypted.read_transport_server_kek_id`).
+      4. Calls :meth:`unwrap_for_server` to recover the plaintext DEK.
+      5. Decrypts each access unit's payload client-side with the
+         recovered DEK (via
+         :func:`~ttio.encryption_per_au.decrypt_per_au`).
+
+      Use this method when the container's primary recipient is a
+      :class:`ServerRecipient` and the caller does **not** hold the KEK
+      bytes.  If the container uses BYOK or a researcher-held key, use
+      :meth:`download_decrypted_envelope` or
+      :meth:`download_decrypted_multi` instead.
+
+      :param container_uri: URI of the container to fetch.
+      :type container_uri: str
+      :param out_tio_path: File path where the decrypted-in-place ``.tio`` will be written.
+      :type out_tio_path: str
+      :param filters: Server-side filter dictionary (e.g.
+                      ``{"chromosome": "chr6"}``).
+      :type filters: FilterDict, optional
+      :param max_au: Cap on the number of access units to return.  ``0`` (default)
+                     means no cap.
+      :type max_au: int, optional
+
+      :returns: *dict* -- Decrypted channel values as
+                ``{run_name: {channel_name: ndarray}}``, as returned by
+                :func:`~ttio.encryption_per_au.decrypt_per_au`.
+
+      :raises ValueError: If the container carries no server-recipient entry (operator
+          error -- wrong download method for this container type).  The
+          error message explicitly names the alternative methods to use.
+      :raises WorkbenchHttpError: From :meth:`unwrap_for_server` when the daemon rejects the
+          unwrap request (auth failure, unknown ``kek_id``, tampered blob).
+
+
+
+   .. py:method:: upload_encrypted_multi(*, project: str, container_uri: str, tio_path: str, recipients: list[Union[EnvelopeRecipient, ServerRecipient]], server_kek_id: Optional[str] = None, encrypt_headers: bool = False, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None, preview: bool = False) -> ttio.workbench.transport.upload.UploadResult
+      :async:
+
+
+      Per-AU encrypt a `.tio` with a fresh DEK, wrap that DEK under
+      *each* recipient's key, and upload (FD-1 Phase B).
+
+      One per-run DEK is generated and wrapped once per recipient.
+      Each recipient is either an :class:`EnvelopeRecipient` (caller
+      supplies the KEK bytes: symmetric ``aes-256-gcm`` or
+      ``ml-kem-1024`` public key) or a :class:`ServerRecipient`
+      (the daemon wraps the DEK via the
+      ``/v1/key-custody/wrap-for-server`` endpoint so the KEK can
+      be HSM-resident — see :meth:`wrap_for_server`).
+
+      ``recipients[0]`` becomes the packet's primary (its id is
+      ``""`` on the wire); the rest travel in the append-only
+      trailing block. Any holder of a recipient's key recovers the
+      DEK via :meth:`download_decrypted_multi`; the daemon never
+      holds a key in plaintext form.
+
+      ``server_kek_id`` is stamped into ``ProtectionMetadata`` to
+      identify the primary-recipient's KEK on the daemon's
+      re-processing path. If any :class:`ServerRecipient` is present
+      in ``recipients``, its ``kek_id`` is used automatically — the
+      caller need not pass ``server_kek_id`` separately. Passing
+      both is allowed only when they are consistent; a mismatch
+      raises :exc:`ValueError`.
+
+      This is the FD-1 output shape: wrap for both a server KEK
+      (re-processable) and the researcher's key (client-side
+      decryptable). Preview-gated iff any recipient uses
+      ``ml-kem-1024``, mirroring the server's ``opt_pqc_preview``.
+
+
+
+   .. py:method:: download_decrypted_multi(*, container_uri: str, key: bytes, out_tio_path: str, recipient_id: str = '', preview: bool = False, filters: Optional[ttio.workbench.transport.download.FilterDict] = None, max_au: int = 0)
+      :async:
+
+
+      Download a multi-recipient encrypted container and decrypt it
+      using the recipient entry the caller holds a key for (FD-1 Phase B).
+
+      ``recipient_id`` selects the entry to unwrap: ``""`` (the default)
+      is the primary (e.g. the server KEK); pass the label given at
+      upload (e.g. ``"researcher"``) for an additional recipient. ``key``
+      is the matching symmetric KEK or ML-KEM-1024 private key.
+      Counterpart to :meth:`upload_encrypted_multi`.
+
+
+
+   .. py:method:: query(query) -> ttio.workbench.cohort.CohortResult
+
+      Run a cohort query against the workbench control plane.
+
+      POSTs to ``/v1/cohorts/query`` with the session's bearer
+      token and parses the JSON reply into a :class:`CohortResult`.
+
+      :param query: A :class:`CohortQuery` instance, or a dict already in the
+                    server's JSON request shape.
+      :type query: CohortQuery or dict
+
+      :returns: *CohortResult*
+
+      :raises WorkbenchHttpError: If the server returns a non-200 status code.
+
+
+
+   .. py:method:: preview_count(query) -> int
+
+      Return the predicted row count for a cohort query.
+
+      POSTs to ``/v1/cohorts/preview-count`` and returns the
+      server's ``count`` field. Lets the GUI / CLI show "this will
+      return N rows" before committing to a full :meth:`query`.
+
+      :param query: Same shape accepted by :meth:`query`.
+      :type query: CohortQuery or dict
+
+      :returns: *int* -- Predicted row count (``0`` when the field is absent).
+
+      :raises WorkbenchHttpError: On non-200 responses.
+
+
+
+   .. py:method:: containers()
+
+      Return a :class:`ContainersClient` bound to this session.
+
+      The returned client exposes the ``/v1/containers`` REST
+      surface (list, fetch metadata, delete). Each call constructs
+      a fresh client; there is no shared state to manage.
+
+
+
+   .. py:method:: pipelines()
+
+      Return a :class:`PipelinesClient` bound to this session.
+
+      Exposes the ``/v1/pipelines`` REST surface (list available
+      pipelines, fetch pipeline definitions). Used by the GUI's
+      pipeline picker and by :meth:`submit_pipeline`.
+
+
+
+   .. py:method:: submit_pipeline(*, pipeline_id: str, inputs, params=None)
+
+      Submit a pipeline job and return its handle.
+
+      Convenience over :meth:`jobs` for the common
+      single-pipeline-submit case. For richer control (status
+      filtering on list, SSE long-poll for completion), call
+      :meth:`jobs` and drive the :class:`JobsClient` directly.
+
+      :param pipeline_id: Identifier of the registered pipeline to run.
+      :type pipeline_id: str
+      :param inputs: Input specification accepted by the pipeline (usually a
+                     list or dict of container URIs).
+      :type inputs: Any
+      :param params: Pipeline parameter overrides.
+      :type params: Any, optional
+
+      :returns: *Job*
+
+
+
+   .. py:method:: jobs()
+
+      Return a :class:`JobsClient` bound to this session.
+
+      Exposes the ``/v1/jobs`` REST surface (submit, list, fetch,
+      cancel, SSE long-poll for status).
+
+
+
+   .. py:method:: sessions()
+
+      Return a :class:`SessionsClient` bound to this session.
+
+      Exposes the ``/v1/sessions`` REST surface (start, list,
+      attach to, terminate interactive analysis sessions).
+
+
+
+   .. py:method:: federation()
+
+      Return a :class:`FederationClient` bound to this session.
+
+      Exposes the federation peer list / health endpoints. The
+      client degrades gracefully against a single-node server: an
+      empty peer list rather than an error.
+
+
+
+   .. py:method:: session_create(*, project: str, engine_pin: str, image=None, command=None, env=None, bind_mounts=None, container_storage_root=None)
+
+      Create a new interactive analysis session.
+
+      Convenience over :meth:`sessions`: POSTs ``/v1/sessions``
+      with the given project + engine + container spec and returns
+      a :class:`Session` handle in ``starting`` state.
+
+      :param project: Project the session belongs to.
+      :type project: str
+      :param engine_pin: Pinned engine version identifier the session must run.
+      :type engine_pin: str
+      :param image: Container image override.
+      :type image: str, optional
+      :param command: Custom entry-point command.
+      :type command: list of str, optional
+      :param env: Environment variables to inject.
+      :type env: dict, optional
+      :param bind_mounts: Bind-mount specifications passed through to the runtime.
+      :type bind_mounts: list, optional
+      :param container_storage_root: Root path for the session's storage volume.
+      :type container_storage_root: str, optional
+
+      :returns: *Session* -- Handle in ``starting`` state; poll via the sessions
+                client for readiness.
+
+
+
+   .. py:method:: session_proxy(session_id: str, *, path: str = '/')
+
+      Return an unopened :class:`SessionProxyAttach` for a session.
+
+      The proxy lets the caller open a WebSocket directly to the
+      running session (e.g. for JupyterLab attach). The caller
+      drives ``async with`` to open the connection.
+
+      :param session_id: Identifier of the running session.
+      :type session_id: str
+      :param path: Path prefix forwarded into the session's HTTP server.
+                   Default ``"/"``.
+      :type path: str, optional
+
+      :returns: *SessionProxyAttach*
+
+
+
+.. py:function:: connect(url: str, *, auth: ttio.workbench.auth_providers.AuthProvider) -> WorkbenchClient
+
+   SDK entry point. Resolve the endpoint, authenticate via the
+   given provider, return a `WorkbenchClient`.
+
+   Args:
+       url: `wss://host:port/transport`, `ws://host:port/transport`,
+           `https://host:port`, `http://host:port`, or bare
+           `host:port` (defaults to `ws://` and port 8443).
+       auth: an `AuthProvider` (typically
+           `PasswordTotpAuth(...)` for v1.0, or `BearerAuth(...)`
+           when the caller already holds a token).
+
+   Returns:
+       `WorkbenchClient` with the auth round-trip completed.
+
+   Raises:
+       `WorkbenchAuthError` and subclasses on auth failure.
+       `ValueError` on URL parse failure.
+
+
+.. py:function:: parse_filter_kv(values: Iterable[str]) -> dict[str, Any]
+
+   Parse repeated `--filter k=v` CLI arguments into a dict.
+
+   Used by `ttio download --filter chromosome=chr6 --filter
+   position_min=28000000`. Values are auto-coerced to int / float
+   when they look numeric; otherwise kept as strings. The server-
+   side handshake validator (`build_download_handshake`) catches
+   unknown keys with a clear ValueError before opening the WS.
+
+

@@ -1,0 +1,110 @@
+ttio.sample
+===========
+
+.. py:module:: ttio.sample
+
+.. autoapi-nested-parse::
+
+   ``Sample`` — biological / material sample first-class entity.
+
+   See design spec ``docs/superpowers/specs/2026-05-26-subjects-samples-design.md``
+   sections 4.2 and 5 for the data model and on-disk layout. Stage 6 of
+   transport-spec v0.11 (Deferral 2) makes this a first-class TTI-O entity
+   persisted as ``/study/samples/<sample_id>/`` per-row HDF5 groups.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.sample.Sample
+
+
+Module Contents
+---------------
+
+.. py:class:: Sample
+
+   A biological / material Sample collected from a
+   :class:`~ttio.subject.Subject`, or a standalone sample with no
+   recorded subject.
+
+   The :attr:`sample_id` matches
+   :attr:`~ttio.acquisition_run.AcquisitionRun.sample_name` for the
+   run → sample link; that string remains the canonical link (no
+   breaking change in Stage 6). When both Sample rows and
+   ``AcquisitionRun.sample_name`` are present, applications SHOULD
+   treat ``sample_name`` as a foreign key into the Sample list. No
+   automatic enrichment.
+
+   :param sample_id: Stable, depositor-controlled identifier; primary key within
+                     the dataset. Required, non-empty, must not contain ``'/'``
+                     (HDF5 group-name restriction, see format-spec §11).
+   :type sample_id: str
+   :param subject_external_id: Soft foreign key into the Subject list of the same dataset.
+                               Absent / unset = ``""``. A mismatch (non-empty value but no
+                               matching Subject) logs a WARNING during write; it is not an
+                               error.
+   :type subject_external_id: str, default ""
+   :param sample_kind: Free string (e.g. ``"tissue"``, ``"plasma"``). ``""`` = unset.
+   :type sample_kind: str, default ""
+   :param collected_at: Unix seconds since epoch when the sample was collected, or
+                        ``0`` sentinel for unknown. Stored as int64 on disk and in
+                        the ``SAMPLE_METADATA`` Arrow transport payload.
+   :type collected_at: int, default 0
+   :param attributes: Open extension slot. Keys are free strings; values are
+                      stringified. Serialised on disk as a sort-keys JSON object so
+                      the bytes are deterministic across Python / ObjC / Java.
+   :type attributes: dict[str, str], default {}
+
+   .. rubric:: Notes
+
+   API status: Stable.
+
+   Cross-language equivalents
+   --------------------------
+   Objective-C: ``TTIOSample`` · Java:
+   ``global.thalion.ttio.Sample``.
+
+
+   .. py:attribute:: sample_id
+      :type:  str
+
+
+   .. py:attribute:: subject_external_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: sample_kind
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: collected_at
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: attributes
+      :type:  dict[str, str]
+
+
+   .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: attributes_json() -> str
+
+      Return the JSON serialisation of :attr:`attributes` with
+      sorted keys. Matches Java's ``Sample.attributesJson()`` and
+      ObjC ``NSJSONWritingSortedKeys`` byte-for-byte — required for
+      cross-language transport-spec v0.11 conformance. Returns
+      ``"{}"`` for an empty map.
+
+
+

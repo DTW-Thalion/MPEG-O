@@ -122,7 +122,9 @@ doubles in the buffer).</p>
  int&nbsp;scanCount,
  double&nbsp;dwellTimeSeconds,
  double&nbsp;receiverGain)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct an FID from interleaved real/imaginary samples.</div>
+</div>
 </div>
 </section>
 </li>
@@ -183,6 +185,14 @@ doubles in the buffer).</p>
  int&nbsp;scanCount,
  double&nbsp;dwellTimeSeconds,
  double&nbsp;receiverGain)</span></div>
+<div class="block">Construct an FID from interleaved real/imaginary samples.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>complexData</code> - interleaved <code>[re0, im0, re1, im1, ...]</code> samples</dd>
+<dd><code>scanCount</code> - number of complex samples; <code>complexData.length == 2 * scanCount</code></dd>
+<dd><code>dwellTimeSeconds</code> - time between consecutive samples in seconds</dd>
+<dd><code>receiverGain</code> - receiver gain factor recorded by the spectrometer</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -199,6 +209,10 @@ doubles in the buffer).</p>
 <h3>complexData</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">complexData</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Interleaved real/imaginary FID samples as <code>[re, im, re, im, ...]</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -207,6 +221,10 @@ doubles in the buffer).</p>
 <h3>scanCount</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">scanCount</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Number of complex samples in the FID.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -215,6 +233,10 @@ doubles in the buffer).</p>
 <h3>dwellTimeSeconds</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">dwellTimeSeconds</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Dwell time (sample spacing) in seconds.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -223,6 +245,10 @@ doubles in the buffer).</p>
 <h3>receiverGain</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">receiverGain</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Receiver gain factor recorded at acquisition time.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -231,6 +257,12 @@ doubles in the buffer).</p>
 <h3>realAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">realAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - sample index in <code>[0, scanCount)</code></dd>
+<dt>Returns:</dt>
+<dd>real component of complex sample <code>i</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -239,6 +271,12 @@ doubles in the buffer).</p>
 <h3>imagAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">imagAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - sample index in <code>[0, scanCount)</code></dd>
+<dt>Returns:</dt>
+<dd>imaginary component of complex sample <code>i</code></dd>
+</dl>
 </div>
 </section>
 </li>

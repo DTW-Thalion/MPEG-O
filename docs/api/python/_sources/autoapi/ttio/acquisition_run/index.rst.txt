@@ -135,9 +135,21 @@ Module Contents
 
 
 
+   .. py:attribute:: centroideds
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
    .. py:property:: count
       :type: int
 
+
+      Number of spectra indexed.
+
+      :returns: *int* -- Length of the parallel ``offsets`` array; equals the number
+                of spectra resolvable through :meth:`offset_at` /
+                :meth:`length_at`.
 
 
    .. py:method:: offset_at(index: int) -> int
@@ -204,6 +216,20 @@ Module Contents
 
 
 
+   .. py:method:: centroided_at(index: int) -> bool
+
+      Return whether spectrum ``index`` is centroided (mzML
+      MS:1000127). Returns ``False`` when the column is absent —
+      callers needing to distinguish "unknown" from "profile" should
+      check ``self.centroideds is None``.
+
+      Cross-language equivalents
+      --------------------------
+      Java: ``SpectrumIndex.centroidedAt(i)`` · Objective-C:
+      ``-[TTIOSpectrumIndex centroidedAt:]``.
+
+
+
    .. py:method:: indices_in_retention_time_range(value_range: ttio.value_range.ValueRange) -> list[int]
 
       Return indices whose retention time lies in
@@ -224,9 +250,9 @@ Module Contents
       Load all index columns.
 
       Accepts either a :class:`StorageGroup` (protocol path)
-      or an :class:`h5py.Group` (legacy). The h5py path is retained
-      via ``_native_h5py`` so existing callers that dereferenced
-      child groups with ``group["spectrum_index"]`` continue to work.
+      or an :class:`h5py.Group` (legacy). The legacy h5py path uses
+      direct ``group[name]`` indexing so existing callers that
+      dereferenced child groups continue to work.
 
 
 
@@ -301,10 +327,73 @@ Module Contents
 
 
 
+   .. py:attribute:: solvent
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: ir_mode
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: ir_resolution_cm_inv
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: ir_number_of_scans
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: raman_excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: raman_laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: raman_integration_time_sec
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: uvvis_path_length_cm
+      :type:  float
+      :value: 0.0
+
+
+
    .. py:attribute:: chromatograms
       :type:  list[ttio.chromatogram.Chromatogram]
       :value: []
 
+
+
+   .. py:property:: kind
+      :type: ttio.enums.SpectrumKind
+
+
+      The :class:`~ttio.enums.SpectrumKind` derived from the persisted
+      ``@spectrum_class`` string.
+
+      In-code dispatch key only (P3.8). The ``spectrum_class`` field stays
+      the on-disk source of truth and is never normalized through this
+      enum; an unrecognized class maps to
+      :attr:`~ttio.enums.SpectrumKind.UNKNOWN` and dispatches to the
+      :class:`~ttio.mass_spectrum.MassSpectrum` default, preserving the
+      v0.1 fallback behavior.
 
 
    .. py:method:: open(group: ttio.providers.base.StorageGroup | h5py.Group, name: str) -> AcquisitionRun
@@ -325,6 +414,17 @@ Module Contents
 
 
    .. py:method:: __iter__() -> Iterator[ttio.spectrum.Spectrum]
+
+
+   .. py:method:: spectra() -> list[ttio.spectrum.Spectrum]
+
+      Return all spectra as a list.
+
+      Convenience for parity with the Java ``AcquisitionRun.spectra()``
+      and Objective-C ``-[TTIOAcquisitionRun spectra]`` accessors.
+      Equivalent to ``list(run)`` but provided as a named method so
+      cross-language code reads the same.
+
 
 
    .. py:method:: provenance() -> list[ttio.provenance.ProvenanceRecord]

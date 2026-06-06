@@ -206,8 +206,8 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int[]</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#activationMethods()" class="member-name-link">activationMethods</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">(M74) Optional parallel columns; <code>null</code> when the file
-  was written without <code>opt_ms2_activation_detail</code>.</div>
+<div class="block">Optional parallel columns; <code>null</code> when the file was
+  written without <code>opt_ms2_activation_detail</code>.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double[]</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#basePeakIntensities()" class="member-name-link">basePeakIntensities</a>()</code></div>
@@ -399,6 +399,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>count</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">count</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Number of spectra indexed; equals the length of every parallel column.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -407,6 +411,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>offsets</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">long[]</span>&nbsp;<span class="element-name">offsets</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum element offsets into the run's concatenated channel buffers.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -415,6 +423,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>lengths</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int[]</span>&nbsp;<span class="element-name">lengths</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum element counts (peaks) parallel to <a href="#offsets()"><code>offsets()</code></a>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -423,6 +435,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>retentionTimes</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">retentionTimes</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum retention times in seconds.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -431,6 +447,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>msLevels</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int[]</span>&nbsp;<span class="element-name">msLevels</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum MS levels (1 for MS1, 2 for MS2, ...).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -439,6 +459,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>polarities</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int[]</span>&nbsp;<span class="element-name">polarities</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum polarity codes; decode via <a href="Enums.Polarity.html#fromInt(int)"><code>Enums.Polarity.fromInt(int)</code></a>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -447,6 +471,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>precursorMzs</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">precursorMzs</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum precursor m/z; 0.0 for MS1 entries.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -455,6 +483,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>precursorCharges</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int[]</span>&nbsp;<span class="element-name">precursorCharges</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum precursor charge states; 0 for MS1 entries.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -463,6 +495,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>basePeakIntensities</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">basePeakIntensities</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Per-spectrum base-peak intensities.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -471,6 +507,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>offsetAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">long</span>&nbsp;<span class="element-name">offsetAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return element offset of spectrum <code>i</code> into the channel buffers.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -479,6 +519,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>lengthAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">lengthAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return element count (peaks) of spectrum <code>i</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -487,6 +531,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>retentionTimeAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">retentionTimeAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return retention time of spectrum <code>i</code> in seconds.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -495,6 +543,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>msLevelAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">msLevelAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return MS level of spectrum <code>i</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -503,6 +555,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>polarityAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Enums.Polarity.html" title="enum class in global.thalion.ttio">Enums.Polarity</a></span>&nbsp;<span class="element-name">polarityAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return polarity enum value of spectrum <code>i</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -511,6 +567,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>precursorMzAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">precursorMzAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return precursor m/z of spectrum <code>i</code> (0.0 for MS1).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -519,6 +579,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>precursorChargeAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">precursorChargeAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return precursor charge state of spectrum <code>i</code> (0 for MS1).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -527,6 +591,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>basePeakIntensityAt</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">basePeakIntensityAt</span><wbr><span class="parameters">(int&nbsp;i)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>i</code> - spectrum index. @return base-peak intensity of spectrum <code>i</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -535,8 +603,12 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>activationMethods</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int[]</span>&nbsp;<span class="element-name">activationMethods</span>()</div>
-<div class="block">(M74) Optional parallel columns; <code>null</code> when the file
-  was written without <code>opt_ms2_activation_detail</code>.</div>
+<div class="block">Optional parallel columns; <code>null</code> when the file was
+  written without <code>opt_ms2_activation_detail</code>.</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>per-spectrum activation method codes, or <code>null</code></dd>
+</dl>
 </div>
 </section>
 </li>
@@ -545,6 +617,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>isolationTargetMzs</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">isolationTargetMzs</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>per-spectrum precursor isolation target m/z, or <code>null</code> when absent.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -553,6 +629,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>isolationLowerOffsets</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">isolationLowerOffsets</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>per-spectrum lower-side isolation offset in m/z, or <code>null</code> when absent.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -561,6 +641,10 @@ Kept entirely in memory; signal channels remain lazy on disk.</p>
 <h3>isolationUpperOffsets</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">isolationUpperOffsets</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>per-spectrum upper-side isolation offset in m/z, or <code>null</code> when absent.</dd>
+</dl>
 </div>
 </section>
 </li>

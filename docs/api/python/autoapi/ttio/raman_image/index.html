@@ -10,6 +10,7 @@
       <link rel="stylesheet" type="text/css" href="../../../_static/pygments.css?v=d111a655" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo.css?v=7bdb33bb" />
     <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css?v=4ae1632d" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/mystnb.11b39860a7a0cbfd473a3ad8a317855267ff0bd372690045ca344a6b62be495e.css?v=8cd3d715" />
     <link rel="stylesheet" type="text/css" href="../../../_static/styles/furo-extensions.css?v=8dab3a3b" />
     
     
@@ -191,7 +192,11 @@
   <input type="hidden" name="area" value="default">
 </form>
 <div id="searchbox"></div><div class="sidebar-scroll"><div class="sidebar-tree">
-  <p class="caption" role="heading"><span class="caption-text">Contents</span></p>
+  <p class="caption" role="heading"><span class="caption-text">Tutorials</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../tutorials/workbench_quickstart.html">Workbench client quickstart</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Contents</span></p>
 <ul class="current">
 <li class="toctree-l1 current has-children"><a class="reference internal" href="../index.html">ttio</a><input aria-label="Toggle navigation of ttio" checked="" class="toctree-checkbox" id="toctree-checkbox-1" name="toctree-checkbox-1" role="switch" type="checkbox"/><label for="toctree-checkbox-1"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul class="current">
 <li class="toctree-l2"><a class="reference internal" href="../access_policy/index.html">ttio.access_policy</a></li>
@@ -223,6 +228,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../enums/index.html">ttio.enums</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../exporters/index.html">ttio.exporters</a><input aria-label="Toggle navigation of ttio.exporters" class="toctree-checkbox" id="toctree-checkbox-4" name="toctree-checkbox-4" role="switch" type="checkbox"/><label for="toctree-checkbox-4"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/bam/index.html">ttio.exporters.bam</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/base/index.html">ttio.exporters.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/cram/index.html">ttio.exporters.cram</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/fasta/index.html">ttio.exporters.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/fastq/index.html">ttio.exporters.fastq</a></li>
@@ -232,6 +238,8 @@
 <li class="toctree-l3"><a class="reference internal" href="../exporters/mzml/index.html">ttio.exporters.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/mztab/index.html">ttio.exporters.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../exporters/nmrml/index.html">ttio.exporters.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/registry/index.html">ttio.exporters.registry</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../exporters/writers/index.html">ttio.exporters.writers</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../feature/index.html">ttio.feature</a></li>
@@ -245,9 +253,11 @@
 <li class="toctree-l2"><a class="reference internal" href="../genomic_index/index.html">ttio.genomic_index</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../genomic_run/index.html">ttio.genomic_run</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../identification/index.html">ttio.identification</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../image/index.html">ttio.image</a></li>
 <li class="toctree-l2 has-children"><a class="reference internal" href="../importers/index.html">ttio.importers</a><input aria-label="Toggle navigation of ttio.importers" class="toctree-checkbox" id="toctree-checkbox-6" name="toctree-checkbox-6" role="switch" type="checkbox"/><label for="toctree-checkbox-6"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bam/index.html">ttio.importers.bam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bam_dump/index.html">ttio.importers.bam_dump</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/base/index.html">ttio.importers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bruker_tdf/index.html">ttio.importers.bruker_tdf</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/bruker_tdf_cli/index.html">ttio.importers.bruker_tdf_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/cram/index.html">ttio.importers.cram</a></li>
@@ -255,17 +265,24 @@
 <li class="toctree-l3"><a class="reference internal" href="../importers/fasta/index.html">ttio.importers.fasta</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/fastq/index.html">ttio.importers.fastq</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/import_result/index.html">ttio.importers.import_result</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/imported_dataset/index.html">ttio.importers.imported_dataset</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/imzml/index.html">ttio.importers.imzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/jcamp_dx/index.html">ttio.importers.jcamp_dx</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/mzml/index.html">ttio.importers.mzml</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/mztab/index.html">ttio.importers.mztab</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/nmrml/index.html">ttio.importers.nmrml</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/readers/index.html">ttio.importers.readers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../importers/registry/index.html">ttio.importers.registry</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/sam/index.html">ttio.importers.sam</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/thermo_raw/index.html">ttio.importers.thermo_raw</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../importers/waters_masslynx/index.html">ttio.importers.waters_masslynx</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../instrument_config/index.html">ttio.instrument_config</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../io/index.html">ttio.io</a><input aria-label="Toggle navigation of ttio.io" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../io/progress/index.html">ttio.io.progress</a></li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../ir_image/index.html">ttio.ir_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../ir_spectrum/index.html">ttio.ir_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../isolation_window/index.html">ttio.isolation_window</a></li>
@@ -275,7 +292,7 @@
 <li class="toctree-l2"><a class="reference internal" href="../nmr_2d/index.html">ttio.nmr_2d</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../nmr_spectrum/index.html">ttio.nmr_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../pqc/index.html">ttio.pqc</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-7" name="toctree-checkbox-7" role="switch" type="checkbox"/><label for="toctree-checkbox-7"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../protocols/index.html">ttio.protocols</a><input aria-label="Toggle navigation of ttio.protocols" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../protocols/cv_annotatable/index.html">ttio.protocols.cv_annotatable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../protocols/encryptable/index.html">ttio.protocols.encryptable</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../protocols/indexable/index.html">ttio.protocols.indexable</a></li>
@@ -285,7 +302,7 @@
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../provenance/index.html">ttio.provenance</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-8" name="toctree-checkbox-8" role="switch" type="checkbox"/><label for="toctree-checkbox-8"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../providers/index.html">ttio.providers</a><input aria-label="Toggle navigation of ttio.providers" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../providers/base/index.html">ttio.providers.base</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../providers/hdf5/index.html">ttio.providers.hdf5</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../providers/memory/index.html">ttio.providers.memory</a></li>
@@ -299,13 +316,15 @@
 <li class="toctree-l2 current current-page"><a class="current reference internal" href="#">ttio.raman_image</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../raman_spectrum/index.html">ttio.raman_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../remote/index.html">ttio.remote</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../sample/index.html">ttio.sample</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../signal_array/index.html">ttio.signal_array</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../signatures/index.html">ttio.signatures</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../spectral_dataset/index.html">ttio.spectral_dataset</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../spectrum/index.html">ttio.spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stream_reader/index.html">ttio.stream_reader</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../stream_writer/index.html">ttio.stream_writer</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-9" name="toctree-checkbox-9" role="switch" type="checkbox"/><label for="toctree-checkbox-9"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2"><a class="reference internal" href="../subject/index.html">ttio.subject</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../tools/index.html">ttio.tools</a><input aria-label="Toggle navigation of ttio.tools" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
 <li class="toctree-l3"><a class="reference internal" href="../tools/dump_identifications/index.html">ttio.tools.dump_identifications</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/fasta_export_cli/index.html">ttio.tools.fasta_export_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/fasta_import_cli/index.html">ttio.tools.fasta_import_cli</a></li>
@@ -319,23 +338,51 @@
 <li class="toctree-l3"><a class="reference internal" href="../tools/ttio_pqc_cli/index.html">ttio.tools.ttio_pqc_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/ttio_sign_cli/index.html">ttio.tools.ttio_sign_cli</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../tools/ttio_verify_cli/index.html">ttio.tools.ttio_verify_cli</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../tools/workbench_cli/index.html">ttio.tools.workbench_cli</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../transition_list/index.html">ttio.transition_list</a></li>
-<li class="toctree-l2 has-children"><a class="reference internal" href="../transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-10" name="toctree-checkbox-10" role="switch" type="checkbox"/><label for="toctree-checkbox-10"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../transport/index.html">ttio.transport</a><input aria-label="Toggle navigation of ttio.transport" class="toctree-checkbox" id="toctree-checkbox-11" name="toctree-checkbox-11" role="switch" type="checkbox"/><label for="toctree-checkbox-11"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../transport/arrow_ipc/index.html">ttio.transport.arrow_ipc</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/client/index.html">ttio.transport.client</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/codec/index.html">ttio.transport.codec</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/encrypted/index.html">ttio.transport.encrypted</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/filters/index.html">ttio.transport.filters</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transport/ingest/index.html">ttio.transport.ingest</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/packets/index.html">ttio.transport.packets</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/server/index.html">ttio.transport.server</a></li>
 <li class="toctree-l3"><a class="reference internal" href="../transport/simulator/index.html">ttio.transport.simulator</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transport/stats/index.html">ttio.transport.stats</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../transport/walker/index.html">ttio.transport.walker</a></li>
 </ul>
 </li>
 <li class="toctree-l2"><a class="reference internal" href="../two_dimensional_correlation_spectrum/index.html">ttio.two_dimensional_correlation_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../uv_vis_spectrum/index.html">ttio.uv_vis_spectrum</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../value_range/index.html">ttio.value_range</a></li>
 <li class="toctree-l2"><a class="reference internal" href="../verifier/index.html">ttio.verifier</a></li>
+<li class="toctree-l2 has-children"><a class="reference internal" href="../workbench/index.html">ttio.workbench</a><input aria-label="Toggle navigation of ttio.workbench" class="toctree-checkbox" id="toctree-checkbox-12" name="toctree-checkbox-12" role="switch" type="checkbox"/><label for="toctree-checkbox-12"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/auth/index.html">ttio.workbench.auth</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/auth_providers/index.html">ttio.workbench.auth_providers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/client/index.html">ttio.workbench.client</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/cohort/index.html">ttio.workbench.cohort</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/containers/index.html">ttio.workbench.containers</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/federation/index.html">ttio.workbench.federation</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/jobs/index.html">ttio.workbench.jobs</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/pipeline/index.html">ttio.workbench.pipeline</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/pqc/index.html">ttio.workbench.pqc</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/session_proxy/index.html">ttio.workbench.session_proxy</a></li>
+<li class="toctree-l3"><a class="reference internal" href="../workbench/sessions/index.html">ttio.workbench.sessions</a></li>
+<li class="toctree-l3 has-children"><a class="reference internal" href="../workbench/transport/index.html">ttio.workbench.transport</a><input aria-label="Toggle navigation of ttio.workbench.transport" class="toctree-checkbox" id="toctree-checkbox-13" name="toctree-checkbox-13" role="switch" type="checkbox"/><label for="toctree-checkbox-13"><span class="icon"><svg><use href="#svg-arrow-right"></use></svg></span></label><ul>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/download/index.html">ttio.workbench.transport.download</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/errors/index.html">ttio.workbench.transport.errors</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/handshake/index.html">ttio.workbench.transport.handshake</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/resume/index.html">ttio.workbench.transport.resume</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/selective_access/index.html">ttio.workbench.transport.selective_access</a></li>
+<li class="toctree-l4"><a class="reference internal" href="../workbench/transport/upload/index.html">ttio.workbench.transport.upload</a></li>
+</ul>
+</li>
+</ul>
+</li>
 <li class="toctree-l2"><a class="reference internal" href="../written_genomic_run/index.html">ttio.written_genomic_run</a></li>
 </ul>
 </li>
@@ -397,7 +444,8 @@
 <dl class="py class">
 <dt class="sig sig-object py" id="ttio.raman_image.RamanImage">
 <span class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></span><span class="sig-prename descclassname"><span class="pre">ttio.raman_image.</span></span><span class="sig-name descname"><span class="pre">RamanImage</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage" title="Link to this definition">¶</a></dt>
-<dd><p>Raman hyperspectral imaging dataset: a <code class="docutils literal notranslate"><span class="pre">width</span> <span class="pre">×</span> <span class="pre">height</span></code> grid of
+<dd><p>Bases: <a class="reference internal" href="../image/index.html#ttio.image.Image" title="ttio.image.Image"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ttio.image.Image</span></code></a></p>
+<p>Raman hyperspectral imaging dataset: a <code class="docutils literal notranslate"><span class="pre">width</span> <span class="pre">×</span> <span class="pre">height</span></code> grid of
 pixels, each pixel a spectrum of <code class="docutils literal notranslate"><span class="pre">spectral_points</span></code> intensity values
 sampled at a shared rank-1 <code class="docutils literal notranslate"><span class="pre">wavenumbers</span></code> axis.</p>
 <dl class="field-list simple">
@@ -432,48 +480,8 @@ sampled at a shared rank-1 <code class="docutils literal notranslate"><span clas
 <p>Objective-C: <code class="docutils literal notranslate"><span class="pre">TTIORamanImage</span></code> · Java:
 <code class="docutils literal notranslate"><span class="pre">global.thalion.ttio.RamanImage</span></code>.</p>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.width">
-<span class="sig-name descname"><span class="pre">width</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.width"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.width" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.height">
-<span class="sig-name descname"><span class="pre">height</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.height"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.height" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.spectral_points">
-<span class="sig-name descname"><span class="pre">spectral_points</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.spectral_points"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.spectral_points" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.pixel_size_x">
-<span class="sig-name descname"><span class="pre">pixel_size_x</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.pixel_size_x"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.pixel_size_x" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.pixel_size_y">
-<span class="sig-name descname"><span class="pre">pixel_size_y</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#float" title="(in Python v3.14)"><span class="pre">float</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0.0</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.pixel_size_y"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.pixel_size_y" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.intensity">
-<span class="sig-name descname"><span class="pre">intensity</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">numpy.ndarray</span></a></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.intensity"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.intensity" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
 <dt class="sig sig-object py" id="ttio.raman_image.RamanImage.wavenumbers">
 <span class="sig-name descname"><span class="pre">wavenumbers</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">numpy.ndarray</span></a></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.wavenumbers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.wavenumbers" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.scan_pattern">
-<span class="sig-name descname"><span class="pre">scan_pattern</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.scan_pattern"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.scan_pattern" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.tile_size">
-<span class="sig-name descname"><span class="pre">tile_size</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.14)"><span class="pre">int</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">0</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.tile_size"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.tile_size" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
@@ -487,34 +495,47 @@ sampled at a shared rank-1 <code class="docutils literal notranslate"><span clas
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.title">
-<span class="sig-name descname"><span class="pre">title</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.title"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.title" title="Link to this definition">¶</a></dt>
+<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.kind">
+<span class="sig-name descname"><span class="pre">kind</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">ClassVar</span><span class="p"><span class="pre">[</span></span><a class="reference internal" href="../enums/index.html#ttio.enums.ImageKind" title="ttio.enums.ImageKind"><span class="pre">ttio.enums.ImageKind</span></a><span class="p"><span class="pre">]</span></span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.kind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.kind" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.isa_investigation_id">
-<span class="sig-name descname"><span class="pre">isa_investigation_id</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.14)"><span class="pre">str</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.isa_investigation_id"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.isa_investigation_id" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.spectral_axis">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">spectral_axis</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v2.4)"><span class="pre">numpy.ndarray</span></a></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.spectral_axis"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.spectral_axis" title="Link to this definition">¶</a></dt>
+<dd><p>The wavenumber axis (alias of <a class="reference internal" href="#ttio.raman_image.RamanImage.wavenumbers" title="ttio.raman_image.RamanImage.wavenumbers"><code class="xref py py-attr docutils literal notranslate"><span class="pre">wavenumbers</span></code></a>).</p>
+</dd></dl>
 
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.identifications">
-<span class="sig-name descname"><span class="pre">identifications</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.identifications"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.identifications" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.quantifications">
-<span class="sig-name descname"><span class="pre">quantifications</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.quantifications"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.quantifications" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
-
-<dl class="py attribute">
-<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.provenance_records">
-<span class="sig-name descname"><span class="pre">provenance_records</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.14)"><span class="pre">list</span></a></span><span class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.provenance_records"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.provenance_records" title="Link to this definition">¶</a></dt>
-<dd></dd></dl>
+<dl class="py property">
+<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.spectral_axis_kind">
+<span class="property"><span class="k"><span class="pre">property</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">spectral_axis_kind</span></span><span class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="../enums/index.html#ttio.enums.SpectralAxisKind" title="ttio.enums.SpectralAxisKind"><span class="pre">ttio.enums.SpectralAxisKind</span></a></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.spectral_axis_kind"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.spectral_axis_kind" title="Link to this definition">¶</a></dt>
+<dd><p>Interpretation of <a class="reference internal" href="#ttio.raman_image.RamanImage.spectral_axis" title="ttio.raman_image.RamanImage.spectral_axis"><code class="xref py py-attr docutils literal notranslate"><span class="pre">spectral_axis</span></code></a> for this modality.</p>
+</dd></dl>
 
 <dl class="py method">
 <dt class="sig sig-object py" id="ttio.raman_image.RamanImage.__post_init__">
 <span class="sig-name descname"><span class="pre">__post_init__</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.__post_init__"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.__post_init__" title="Link to this definition">¶</a></dt>
 <dd></dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.write_to">
+<span class="sig-name descname"><span class="pre">write_to</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">study_group</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.write_to"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.write_to" title="Link to this definition">¶</a></dt>
+<dd><p>Write this Raman image cube under <code class="docutils literal notranslate"><span class="pre">&lt;study_group&gt;/raman_image_cube/</span></code>.</p>
+<p>Mirrors <code class="xref py py-meth docutils literal notranslate"><span class="pre">global.thalion.ttio.RamanImage.writeTo()</span></code> — intensity
+as a 3-D <code class="docutils literal notranslate"><span class="pre">[h,</span> <span class="pre">w,</span> <span class="pre">sp]</span></code> dataset, <code class="docutils literal notranslate"><span class="pre">wavenumbers</span></code> 1-D dataset,
+and Raman-specific scalar attributes.</p>
+<p>Pixel size attributes are written as <strong>native double</strong> (not strings),
+applying the PR #31 lesson immediately so legacy-string reads remain
+backwards-compatible via <a class="reference internal" href="#ttio.raman_image.RamanImage.read_from" title="ttio.raman_image.RamanImage.read_from"><code class="xref py py-meth docutils literal notranslate"><span class="pre">read_from()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt class="sig sig-object py" id="ttio.raman_image.RamanImage.read_from">
+<span class="property"><span class="k"><span class="pre">classmethod</span></span><span class="w"> </span></span><span class="sig-name descname"><span class="pre">read_from</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">study_group</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><a class="reference internal" href="#ttio.raman_image.RamanImage" title="ttio.raman_image.RamanImage"><span class="pre">RamanImage</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><a class="reference external" href="https://docs.python.org/3/library/constants.html#None" title="(in Python v3.14)"><span class="pre">None</span></a></span></span><a class="reference internal" href="../../../_modules/ttio/raman_image.html#RamanImage.read_from"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#ttio.raman_image.RamanImage.read_from" title="Link to this definition">¶</a></dt>
+<dd><p>Read a Raman image cube from a study group; return None if absent.</p>
+<p>Accepts both the native-double form (written by this class) and
+the legacy string form for pixel_size_x/y,
+excitation_wavelength_nm, and laser_power_mw.</p>
+</dd></dl>
 
 </section>
 </dd></dl>
@@ -581,23 +602,15 @@ sampled at a shared rank-1 <code class="docutils literal notranslate"><span clas
 <li><a class="reference internal" href="#classes">Classes</a></li>
 <li><a class="reference internal" href="#module-contents">Module Contents</a><ul>
 <li><a class="reference internal" href="#ttio.raman_image.RamanImage"><code class="docutils literal notranslate"><span class="pre">RamanImage</span></code></a><ul>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.width"><code class="docutils literal notranslate"><span class="pre">RamanImage.width</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.height"><code class="docutils literal notranslate"><span class="pre">RamanImage.height</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.spectral_points"><code class="docutils literal notranslate"><span class="pre">RamanImage.spectral_points</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.pixel_size_x"><code class="docutils literal notranslate"><span class="pre">RamanImage.pixel_size_x</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.pixel_size_y"><code class="docutils literal notranslate"><span class="pre">RamanImage.pixel_size_y</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.intensity"><code class="docutils literal notranslate"><span class="pre">RamanImage.intensity</span></code></a></li>
 <li><a class="reference internal" href="#ttio.raman_image.RamanImage.wavenumbers"><code class="docutils literal notranslate"><span class="pre">RamanImage.wavenumbers</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.scan_pattern"><code class="docutils literal notranslate"><span class="pre">RamanImage.scan_pattern</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.tile_size"><code class="docutils literal notranslate"><span class="pre">RamanImage.tile_size</span></code></a></li>
 <li><a class="reference internal" href="#ttio.raman_image.RamanImage.excitation_wavelength_nm"><code class="docutils literal notranslate"><span class="pre">RamanImage.excitation_wavelength_nm</span></code></a></li>
 <li><a class="reference internal" href="#ttio.raman_image.RamanImage.laser_power_mw"><code class="docutils literal notranslate"><span class="pre">RamanImage.laser_power_mw</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.title"><code class="docutils literal notranslate"><span class="pre">RamanImage.title</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.isa_investigation_id"><code class="docutils literal notranslate"><span class="pre">RamanImage.isa_investigation_id</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.identifications"><code class="docutils literal notranslate"><span class="pre">RamanImage.identifications</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.quantifications"><code class="docutils literal notranslate"><span class="pre">RamanImage.quantifications</span></code></a></li>
-<li><a class="reference internal" href="#ttio.raman_image.RamanImage.provenance_records"><code class="docutils literal notranslate"><span class="pre">RamanImage.provenance_records</span></code></a></li>
+<li><a class="reference internal" href="#ttio.raman_image.RamanImage.kind"><code class="docutils literal notranslate"><span class="pre">RamanImage.kind</span></code></a></li>
+<li><a class="reference internal" href="#ttio.raman_image.RamanImage.spectral_axis"><code class="docutils literal notranslate"><span class="pre">RamanImage.spectral_axis</span></code></a></li>
+<li><a class="reference internal" href="#ttio.raman_image.RamanImage.spectral_axis_kind"><code class="docutils literal notranslate"><span class="pre">RamanImage.spectral_axis_kind</span></code></a></li>
 <li><a class="reference internal" href="#ttio.raman_image.RamanImage.__post_init__"><code class="docutils literal notranslate"><span class="pre">RamanImage.__post_init__()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.raman_image.RamanImage.write_to"><code class="docutils literal notranslate"><span class="pre">RamanImage.write_to()</span></code></a></li>
+<li><a class="reference internal" href="#ttio.raman_image.RamanImage.read_from"><code class="docutils literal notranslate"><span class="pre">RamanImage.read_from()</span></code></a></li>
 </ul>
 </li>
 </ul>

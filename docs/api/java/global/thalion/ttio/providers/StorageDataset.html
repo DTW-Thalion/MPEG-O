@@ -97,8 +97,7 @@ loadScripts(document, 'script');</script>
 extends <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></span></div>
 <div class="block">One 1-D typed array or compound-record array.
 
-<p><b>API status:</b> Stable (Provisional per M39 — may change
-before v1.0).</p>
+<p><b>API status:</b> Stable.</p>
 
 <p><b>Cross-language equivalents:</b> Objective-C
 <code>TTIOStorageDataset</code>, Python
@@ -127,14 +126,14 @@ before v1.0).</p>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1"><code><a href="#canonicaliseCompoundRows(java.util.List,java.util.List)" class="member-name-link">canonicaliseCompoundRows</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&gt;&nbsp;rows,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="CompoundField.html" title="class in global.thalion.ttio.providers">CompoundField</a>&gt;&nbsp;fields)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1">
-<div class="block">— helper exposed for providers that want to override
+<div class="block">Helper exposed for providers that want to override
   <a href="#readCanonicalBytes()"><code>readCanonicalBytes()</code></a> but share the compound path.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1"><code>static byte[]</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1"><code><a href="#canonicalisePrimitive(java.lang.Object,global.thalion.ttio.Enums.Precision)" class="member-name-link">canonicalisePrimitive</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;raw,
  <a href="../Enums.Precision.html" title="enum class in global.thalion.ttio">Enums.Precision</a>&nbsp;p)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1">
-<div class="block">— helper for the primitive canonical path.</div>
+<div class="block">Helper for the primitive canonical path.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default long[]</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#chunks()" class="member-name-link">chunks</a>()</code></div>
@@ -143,7 +142,9 @@ before v1.0).</p>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code>default void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab5">
+<div class="block">Release per-dataset native handles.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="CompoundField.html" title="class in global.thalion.ttio.providers">CompoundField</a>&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#compoundFields()" class="member-name-link">compoundFields</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
@@ -156,7 +157,9 @@ before v1.0).</p>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#getAttribute(java.lang.String)" class="member-name-link">getAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Read an attribute value.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>boolean</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#hasAttribute(java.lang.String)" class="member-name-link">hasAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
@@ -201,7 +204,9 @@ before v1.0).</p>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#setAttribute(java.lang.String,java.lang.Object)" class="member-name-link">setAttribute</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;value)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Write an attribute.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>long[]</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#shape()" class="member-name-link">shape</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
@@ -209,7 +214,9 @@ before v1.0).</p>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3"><code><a href="#writeAll(java.lang.Object)" class="member-name-link">writeAll</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;data)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab3">
+<div class="block">Write all elements.</div>
+</div>
 </div>
 </div>
 </div>
@@ -229,6 +236,10 @@ before v1.0).</p>
 <h3>name</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">name</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the short (last-path-segment) name of this dataset.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -320,6 +331,14 @@ before v1.0).</p>
 <h3>writeAll</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">writeAll</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;data)</span></div>
+<div class="block">Write all elements.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>data</code> - primitive array matching <a href="#precision()"><code>precision()</code></a> for
+               primitive datasets, or a list of records for
+               compound datasets (shape matches the value returned
+               by <a href="#readAll()"><code>readAll()</code></a>)</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -333,10 +352,14 @@ before v1.0).</p>
   implementation converts the HDF5 <code>List&lt;Object[]&gt;</code> shape;
   SQLite and other map-backed providers pass through.
 
-  <p>Throws <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link"><code>IllegalStateException</code></a> if called on a primitive
-  dataset.</p>
-
-  <p>— backend-agnostic compound access.</p></div>
+  <p>Backend-agnostic compound access — callers do not need to
+  branch on provider type.</p></div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>one map per record, keyed by field name</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link">IllegalStateException</a></code> - when called on a primitive dataset</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -371,8 +394,15 @@ before v1.0).</p>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type">byte[]</span>&nbsp;<span class="element-name">canonicaliseCompoundRows</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&gt;&nbsp;rows,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="CompoundField.html" title="class in global.thalion.ttio.providers">CompoundField</a>&gt;&nbsp;fields)</span></div>
-<div class="block">— helper exposed for providers that want to override
+<div class="block">Helper exposed for providers that want to override
   <a href="#readCanonicalBytes()"><code>readCanonicalBytes()</code></a> but share the compound path.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>rows</code> - the records to serialise</dd>
+<dd><code>fields</code> - the field schema (drives encoding order and type)</dd>
+<dt>Returns:</dt>
+<dd>the canonical byte serialisation</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -382,7 +412,14 @@ before v1.0).</p>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">static</span>&nbsp;<span class="return-type">byte[]</span>&nbsp;<span class="element-name">canonicalisePrimitive</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;raw,
  <a href="../Enums.Precision.html" title="enum class in global.thalion.ttio">Enums.Precision</a>&nbsp;p)</span></div>
-<div class="block">— helper for the primitive canonical path.</div>
+<div class="block">Helper for the primitive canonical path.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>raw</code> - the array returned by <a href="#readAll()"><code>readAll()</code></a></dd>
+<dd><code>p</code> - the precision of <code>raw</code></dd>
+<dt>Returns:</dt>
+<dd>the canonical little-endian byte serialisation</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -391,6 +428,12 @@ before v1.0).</p>
 <h3>hasAttribute</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">boolean</span>&nbsp;<span class="element-name">hasAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+<dt>Returns:</dt>
+<dd><code>true</code> when the attribute is present on this dataset.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -399,6 +442,14 @@ before v1.0).</p>
 <h3>getAttribute</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></span>&nbsp;<span class="element-name">getAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<div class="block">Read an attribute value.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+<dt>Returns:</dt>
+<dd>the stored value boxed into a Java object, or <code>null</code>
+          if absent</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -408,6 +459,13 @@ before v1.0).</p>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">setAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;value)</span></div>
+<div class="block">Write an attribute. Replaces any existing entry of the same name.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+<dd><code>value</code> - the value to store (string, boxed numeric, or
+                primitive array)</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -417,8 +475,12 @@ before v1.0).</p>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="return-type">void</span>&nbsp;<span class="element-name">deleteAttribute</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
 <div class="block">Remove an attribute. No-op if the attribute does not exist.
-  — added for parity with Python ABC and ObjC
-  <code>-deleteAttributeNamed:error:</code>.</div>
+  Mirrors the Python ABC and ObjC
+  <code>-deleteAttributeNamed:error:</code> surfaces.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - the attribute name</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -437,6 +499,8 @@ before v1.0).</p>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">default</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Release per-dataset native handles. Default no-op for backends
+  that share lifetime with the owning provider.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

@@ -66,6 +66,9 @@ loadScripts(document, 'script');</script>
 </li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
+<li><a href="#setIRMetadata(global.thalion.ttio.Enums.IRMode,double,long)" tabindex="0">setIRMetadata(Enums.IRMode, double, long)</a></li>
+<li><a href="#setRamanMetadata(double,double,double)" tabindex="0">setRamanMetadata(double, double, double)</a></li>
+<li><a href="#setUVVisMetadata(double)" tabindex="0">setUVVisMetadata(double)</a></li>
 <li><a href="#name()" tabindex="0">name()</a></li>
 <li><a href="#acquisitionMode()" tabindex="0">acquisitionMode()</a></li>
 <li><a href="#spectrumIndex()" tabindex="0">spectrumIndex()</a></li>
@@ -165,7 +168,9 @@ config, spectrum index, and optional chromatograms.
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusType,
  double&nbsp;spectrometerFrequencyMHz)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Pre-modality overload retained for backward compatibility.</div>
+</div>
 <div class="col-constructor-name odd-row-color"><code><a href="#%3Cinit%3E(java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.SpectrumIndex,global.thalion.ttio.InstrumentConfig,java.util.Map,java.util.List,java.util.List,java.lang.String,double,java.lang.String)" class="member-name-link">AcquisitionRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
  <a href="SpectrumIndex.html" title="class in global.thalion.ttio">SpectrumIndex</a>&nbsp;spectrumIndex,
@@ -220,7 +225,7 @@ config, spectrum index, and optional chromatograms.
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#addProcessingStep(global.thalion.ttio.ProvenanceRecord)" class="member-name-link">addProcessingStep</a><wbr>(<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&nbsp;step)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Append a processing step to the chain.</div>
+<div class="block">Append a processing step to the run's in-memory provenance chain.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr>double[]&gt;</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#channels()" class="member-name-link">channels</a>()</code></div>
@@ -236,7 +241,9 @@ config, spectrum index, and optional chromatograms.
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block"><code>AutoCloseable</code> hook.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#count()" class="member-name-link">count</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
@@ -248,13 +255,17 @@ config, spectrum index, and optional chromatograms.
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#decryptWithKey(byte%5B%5D)" class="member-name-link">decryptWithKey</a><wbr>(byte[]&nbsp;key)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Decrypt previously-encrypted content.</div>
+<div class="block">In-process decrypt overlay: rehydrates the run's intensity
+channel into an in-memory buffer that subsequent
+<a href="#objectAtIndex(int)"><code>objectAtIndex(int)</code></a> / <a href="#channelSlice(java.lang.String,int)"><code>channelSlice(String, int)</code></a>
+calls read from.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)" class="member-name-link">encryptWithKey</a><wbr>(byte[]&nbsp;key,
  <a href="Enums.EncryptionLevel.html" title="enum class in global.thalion.ttio">Enums.EncryptionLevel</a>&nbsp;level)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Encrypt this object's protectable content at the given granularity.</div>
+<div class="block">Encrypt this run's intensity channel in place on disk using
+AES-256-GCM.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#get(int)" class="member-name-link">get</a><wbr>(int&nbsp;index)</code></div>
@@ -284,13 +295,17 @@ config, spectrum index, and optional chromatograms.
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#nextObject()" class="member-name-link">nextObject</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Advance the stream cursor and return the next spectrum.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#nucleusType()" class="member-name-link">nucleusType</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#objectAtIndex(int)" class="member-name-link">objectAtIndex</a><wbr>(int&nbsp;index)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Materialize the spectrum at the given index.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#outputEntities()" class="member-name-link">outputEntities</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -311,52 +326,72 @@ config, spectrum index, and optional chromatograms.
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#reset()" class="member-name-link">reset</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Reposition the cursor to 0.</div>
+<div class="block">Reset the stream cursor to the beginning of the run.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#seekToPosition(int)" class="member-name-link">seekToPosition</a><wbr>(int&nbsp;position)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Reposition the cursor.</div>
+<div class="block">Reposition the stream cursor.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setAccessPolicy(java.lang.Object)" class="member-name-link">setAccessPolicy</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;policy)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Replace the current access policy.</div>
+<div class="block">Attach an access policy to the run.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setPersistenceContext(java.lang.String,java.lang.String)" class="member-name-link">setPersistenceContext</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;filePath,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName)</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setIRMetadata(global.thalion.ttio.Enums.IRMode,double,long)" class="member-name-link">setIRMetadata</a><wbr>(<a href="Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a>&nbsp;mode,
+ double&nbsp;resolutionCmInv,
+ long&nbsp;numberOfScans)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Mark this run as IR and attach its metadata.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setPersistenceContext(java.lang.String,java.lang.String)" class="member-name-link">setPersistenceContext</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;filePath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Attach the persistence context after loading — used by
 <a href="SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> so <a href="#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)"><code>encryptWithKey(byte[], Enums.EncryptionLevel)</code></a> can delegate.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#solvent()" class="member-name-link">solvent</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setRamanMetadata(double,double,double)" class="member-name-link">setRamanMetadata</a><wbr>(double&nbsp;excitationWavelengthNm,
+ double&nbsp;laserPowerMw,
+ double&nbsp;integrationTimeSec)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Mark this run as Raman and attach its metadata.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#setUVVisMetadata(double)" class="member-name-link">setUVVisMetadata</a><wbr>(double&nbsp;pathLengthCm)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Mark this run as UV-Vis and attach its metadata (the solvent label
+  reuses the <code>solvent</code> field / <code>@solvent</code> attribute).</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#solvent()" class="member-name-link">solvent</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Optional NMR solvent label (e.g.</div>
 </div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectra()" class="member-name-link">spectra</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectra()" class="member-name-link">spectra</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Materialize all spectra in this run into a list.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrometerFrequencyMHz()" class="member-name-link">spectrometerFrequencyMHz</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumClassName()" class="member-name-link">spectrumClassName</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>double</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrometerFrequencyMHz()" class="member-name-link">spectrometerFrequencyMHz</a>()</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumClassName()" class="member-name-link">spectrumClassName</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Get the spectrum class name for HDF5 @spectrum_class attribute.</div>
 </div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumCount()" class="member-name-link">spectrumCount</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="SpectrumIndex.html" title="class in global.thalion.ttio">SpectrumIndex</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumIndex()" class="member-name-link">spectrumIndex</a>()</code></div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumCount()" class="member-name-link">spectrumCount</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeTo(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">writeTo</a><wbr>(<a href="providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;parentGroup)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="SpectrumIndex.html" title="class in global.thalion.ttio">SpectrumIndex</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumIndex()" class="member-name-link">spectrumIndex</a>()</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#writeTo(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">writeTo</a><wbr>(<a href="providers/StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;parentGroup)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Write this run to a parent group (creates <name>/ subgroup).</div>
 </div>
 </div>
@@ -392,6 +427,9 @@ config, spectrum index, and optional chromatograms.
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusType,
  double&nbsp;spectrometerFrequencyMHz)</span></div>
+<div class="block">Pre-modality overload retained for backward compatibility.
+Forwards to the full constructor with
+<code>modality = "mass_spectrometry"</code> and an empty solvent.</div>
 </div>
 </section>
 </li>
@@ -442,6 +480,40 @@ config, spectrum index, and optional chromatograms.
 <h2>Method Details</h2>
 <ul class="member-list">
 <li>
+<section class="detail" id="setIRMetadata(global.thalion.ttio.Enums.IRMode,double,long)">
+<h3>setIRMetadata</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setIRMetadata</span><wbr><span class="parameters">(<a href="Enums.IRMode.html" title="enum class in global.thalion.ttio">Enums.IRMode</a>&nbsp;mode,
+ double&nbsp;resolutionCmInv,
+ long&nbsp;numberOfScans)</span></div>
+<div class="block">Mark this run as IR and attach its metadata. The wavenumber +
+  intensity channels supply the spectrum payload; UV-Vis solvent is
+  carried by the <code>solvent</code> constructor arg.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setRamanMetadata(double,double,double)">
+<h3>setRamanMetadata</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setRamanMetadata</span><wbr><span class="parameters">(double&nbsp;excitationWavelengthNm,
+ double&nbsp;laserPowerMw,
+ double&nbsp;integrationTimeSec)</span></div>
+<div class="block">Mark this run as Raman and attach its metadata.</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="setUVVisMetadata(double)">
+<h3>setUVVisMetadata</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setUVVisMetadata</span><wbr><span class="parameters">(double&nbsp;pathLengthCm)</span></div>
+<div class="block">Mark this run as UV-Vis and attach its metadata (the solvent label
+  reuses the <code>solvent</code> field / <code>@solvent</code> attribute).</div>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="name()">
 <h3>name</h3>
 <div class="horizontal-scroll">
@@ -452,6 +524,8 @@ config, spectrum index, and optional chromatograms.
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Run.html#name()">name</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a></code></dd>
+<dt>Returns:</dt>
+<dd>The run's identifier, unique within its parent <a href="SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a>.</dd>
 </dl>
 </div>
 </section>
@@ -467,6 +541,8 @@ config, spectrum index, and optional chromatograms.
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Run.html#acquisitionMode()">acquisitionMode</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a></code></dd>
+<dt>Returns:</dt>
+<dd>The mode used to acquire the spectra (DDA, DIA, NMR_1D, etc.).</dd>
 </dl>
 </div>
 </section>
@@ -476,6 +552,10 @@ config, spectrum index, and optional chromatograms.
 <h3>spectrumIndex</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="SpectrumIndex.html" title="class in global.thalion.ttio">SpectrumIndex</a></span>&nbsp;<span class="element-name">spectrumIndex</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The per-spectrum index columns (offsets, retention times, MS levels, polarities).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -484,6 +564,10 @@ config, spectrum index, and optional chromatograms.
 <h3>instrumentConfig</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="InstrumentConfig.html" title="class in global.thalion.ttio">InstrumentConfig</a></span>&nbsp;<span class="element-name">instrumentConfig</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The instrument configuration that recorded this run.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -492,6 +576,10 @@ config, spectrum index, and optional chromatograms.
 <h3>channels</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr>double[]&gt;</span>&nbsp;<span class="element-name">channels</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable view of the run's concatenated channel buffers keyed by channel name.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -500,6 +588,10 @@ config, spectrum index, and optional chromatograms.
 <h3>chromatograms</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="Chromatogram.html" title="class in global.thalion.ttio">Chromatogram</a>&gt;</span>&nbsp;<span class="element-name">chromatograms</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable list of chromatograms attached to this run.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -508,6 +600,10 @@ config, spectrum index, and optional chromatograms.
 <h3>provenanceRecords</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;</span>&nbsp;<span class="element-name">provenanceRecords</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable list of provenance records for the run-level processing chain.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -516,6 +612,10 @@ config, spectrum index, and optional chromatograms.
 <h3>nucleusType</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">nucleusType</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The NMR nucleus type (e.g. <code>"1H"</code>, <code>"13C"</code>); empty for non-NMR runs.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -524,6 +624,10 @@ config, spectrum index, and optional chromatograms.
 <h3>spectrometerFrequencyMHz</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">spectrometerFrequencyMHz</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Spectrometer Larmor frequency in MHz for NMR runs; zero for non-NMR runs.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -555,6 +659,12 @@ config, spectrum index, and optional chromatograms.
 <h3>spectrumCount</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">spectrumCount</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Number of spectra in the run. Convenience over
+        <code>spectrumIndex().count()</code> for callers that don't
+        need the full index object.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -582,11 +692,21 @@ config, spectrum index, and optional chromatograms.
 <h3>objectAtIndex</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></span>&nbsp;<span class="element-name">objectAtIndex</span><wbr><span class="parameters">(int&nbsp;index)</span></div>
+<div class="block">Materialize the spectrum at the given index.
+
+<p>Dispatches on the stored <code>@spectrum_class</code> override
+(IR/Raman/UV-Vis) and falls back to NMR when a
+<code>chemical_shift</code> channel is present; otherwise returns a
+<a href="MassSpectrum.html" title="class in global.thalion.ttio"><code>MassSpectrum</code></a>. Hyperslabs the run's concatenated channel
+buffers using <a href="SpectrumIndex.html#offsetAt(int)"><code>SpectrumIndex.offsetAt(int)</code></a> +
+<a href="SpectrumIndex.html#lengthAt(int)"><code>SpectrumIndex.lengthAt(int)</code></a>.</p></div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Indexable.html#objectAtIndex(int)">objectAtIndex</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Indexable.html" title="interface in global.thalion.ttio.protocols">Indexable</a>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></dd>
+<dt>Parameters:</dt>
+<dd><code>index</code> - spectrum index in <code>[0, count())</code></dd>
 <dt>Returns:</dt>
-<dd>the element at <code>index</code> (0-based).</dd>
+<dd>newly constructed <a href="Spectrum.html" title="class in global.thalion.ttio"><code>Spectrum</code></a> of the appropriate subtype</dd>
 </dl>
 </div>
 </section>
@@ -607,7 +727,8 @@ config, spectrum index, and optional chromatograms.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Run.html#count()">count</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a></code></dd>
 <dt>Returns:</dt>
-<dd>the total number of elements.</dd>
+<dd>Number of spectra in the run; equivalent to
+        <a href="#spectrumCount()"><code>spectrumCount()</code></a>.</dd>
 </dl>
 </div>
 </section>
@@ -653,11 +774,15 @@ consumers; the returned list is unmodifiable.
 <h3>nextObject</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a></span>&nbsp;<span class="element-name">nextObject</span>()</div>
+<div class="block">Advance the stream cursor and return the next spectrum.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Streamable.html#nextObject()">nextObject</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Streamable.html" title="interface in global.thalion.ttio.protocols">Streamable</a>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></dd>
 <dt>Returns:</dt>
-<dd>the next element and advance the cursor.</dd>
+<dd>the next spectrum in iteration order</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/NoSuchElementException.html" title="class or interface in java.util" class="external-link">NoSuchElementException</a></code> - when the cursor has
+        already reached the end of the run</dd>
 </dl>
 </div>
 </section>
@@ -671,7 +796,7 @@ consumers; the returned list is unmodifiable.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Streamable.html#hasMore()">hasMore</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Streamable.html" title="interface in global.thalion.ttio.protocols">Streamable</a>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></dd>
 <dt>Returns:</dt>
-<dd><code>true</code> if <a href="protocols/Streamable.html#nextObject()"><code>Streamable.nextObject()</code></a> may be called.</dd>
+<dd><code>true</code> when <a href="#nextObject()"><code>nextObject()</code></a> has further spectra to return.</dd>
 </dl>
 </div>
 </section>
@@ -685,7 +810,7 @@ consumers; the returned list is unmodifiable.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Streamable.html#currentPosition()">currentPosition</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Streamable.html" title="interface in global.thalion.ttio.protocols">Streamable</a>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></dd>
 <dt>Returns:</dt>
-<dd>0-based position of the next element to be yielded.</dd>
+<dd>Current zero-based stream cursor position.</dd>
 </dl>
 </div>
 </section>
@@ -695,13 +820,16 @@ consumers; the returned list is unmodifiable.
 <h3>seekToPosition</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">boolean</span>&nbsp;<span class="element-name">seekToPosition</span><wbr><span class="parameters">(int&nbsp;position)</span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Streamable.html#seekToPosition(int)">Streamable</a></code></span></div>
-<div class="block">Reposition the cursor.</div>
+<div class="block">Reposition the stream cursor.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Streamable.html#seekToPosition(int)">seekToPosition</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Streamable.html" title="interface in global.thalion.ttio.protocols">Streamable</a>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></dd>
+<dt>Parameters:</dt>
+<dd><code>position</code> - zero-based target position in <code>[0, count()]</code>;
+                <code>count()</code> parks the cursor at end-of-stream</dd>
 <dt>Returns:</dt>
-<dd><code>true</code> on success, <code>false</code> if out of range.</dd>
+<dd><code>true</code> when the position was accepted,
+                <code>false</code> when out of range</dd>
 </dl>
 </div>
 </section>
@@ -711,8 +839,7 @@ consumers; the returned list is unmodifiable.
 <h3>reset</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">reset</span>()</div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Streamable.html#reset()">Streamable</a></code></span></div>
-<div class="block">Reposition the cursor to 0.</div>
+<div class="block">Reset the stream cursor to the beginning of the run.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Streamable.html#reset()">reset</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Streamable.html" title="interface in global.thalion.ttio.protocols">Streamable</a>&lt;<a href="Spectrum.html" title="class in global.thalion.ttio">Spectrum</a>&gt;</code></dd>
@@ -725,11 +852,15 @@ consumers; the returned list is unmodifiable.
 <h3>addProcessingStep</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">addProcessingStep</span><wbr><span class="parameters">(<a href="ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&nbsp;step)</span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Provenanceable.html#addProcessingStep(global.thalion.ttio.ProvenanceRecord)">Provenanceable</a></code></span></div>
-<div class="block">Append a processing step to the chain.</div>
+<div class="block">Append a processing step to the run's in-memory provenance chain.
+
+<p>Persisted to <code>/study/runs/&lt;name&gt;/@provenance_json</code> the
+next time the dataset is saved.</p></div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Provenanceable.html#addProcessingStep(global.thalion.ttio.ProvenanceRecord)">addProcessingStep</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Provenanceable.html" title="interface in global.thalion.ttio.protocols">Provenanceable</a></code></dd>
+<dt>Parameters:</dt>
+<dd><code>step</code> - provenance record describing the processing step</dd>
 </dl>
 </div>
 </section>
@@ -748,7 +879,9 @@ consumers; the returned list is unmodifiable.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Run.html#provenanceChain()">provenanceChain</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Run.html" title="interface in global.thalion.ttio.protocols">Run</a></code></dd>
 <dt>Returns:</dt>
-<dd>the chain in insertion order.</dd>
+<dd>Immutable view of the run's provenance chain — the
+        on-disk records concatenated with any
+        <a href="#addProcessingStep(global.thalion.ttio.ProvenanceRecord)"><code>addProcessingStep(ProvenanceRecord)</code></a> additions made in memory.</dd>
 </dl>
 </div>
 </section>
@@ -762,7 +895,8 @@ consumers; the returned list is unmodifiable.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Provenanceable.html#inputEntities()">inputEntities</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Provenanceable.html" title="interface in global.thalion.ttio.protocols">Provenanceable</a></code></dd>
 <dt>Returns:</dt>
-<dd>distinct input entity identifiers referenced by the chain.</dd>
+<dd>Deduplicated input entity URIs across every record in the
+        provenance chain, in first-seen order.</dd>
 </dl>
 </div>
 </section>
@@ -776,7 +910,8 @@ consumers; the returned list is unmodifiable.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Provenanceable.html#outputEntities()">outputEntities</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Provenanceable.html" title="interface in global.thalion.ttio.protocols">Provenanceable</a></code></dd>
 <dt>Returns:</dt>
-<dd>distinct output entity identifiers referenced by the chain.</dd>
+<dd>Deduplicated output entity URIs across every record in
+        the provenance chain, in first-seen order.</dd>
 </dl>
 </div>
 </section>
@@ -799,16 +934,18 @@ consumers; the returned list is unmodifiable.
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">encryptWithKey</span><wbr><span class="parameters">(byte[]&nbsp;key,
  <a href="Enums.EncryptionLevel.html" title="enum class in global.thalion.ttio">Enums.EncryptionLevel</a>&nbsp;level)</span>
                     throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Encryptable.html#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)">Encryptable</a></code></span></div>
-<div class="block">Encrypt this object's protectable content at the given granularity.</div>
+<div class="block">Encrypt this run's intensity channel in place on disk using
+AES-256-GCM.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#encryptWithKey(byte%5B%5D,global.thalion.ttio.Enums.EncryptionLevel)">encryptWithKey</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Parameters:</dt>
-<dd><code>key</code> - raw key material; length and format are algorithm-specific</dd>
-<dd><code>level</code> - the granularity at which to apply protection</dd>
+<dd><code>key</code> - 32-byte AES-256 key material</dd>
+<dd><code>level</code> - Encryption granularity hint (run/dataset/per-AU)</dd>
 <dt>Throws:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code> - if encryption fails (key material invalid, I/O error, etc.)</dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link">IllegalStateException</a></code> - when the run was not obtained from a
+        <a href="SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> (no persistence context)</dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code> - on I/O or cipher failure</dd>
 </dl>
 </div>
 </section>
@@ -819,15 +956,19 @@ consumers; the returned list is unmodifiable.
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">decryptWithKey</span><wbr><span class="parameters">(byte[]&nbsp;key)</span>
                     throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Encryptable.html#decryptWithKey(byte%5B%5D)">Encryptable</a></code></span></div>
-<div class="block">Decrypt previously-encrypted content.</div>
+<div class="block">In-process decrypt overlay: rehydrates the run's intensity
+channel into an in-memory buffer that subsequent
+<a href="#objectAtIndex(int)"><code>objectAtIndex(int)</code></a> / <a href="#channelSlice(java.lang.String,int)"><code>channelSlice(String, int)</code></a>
+calls read from. The on-disk file is left untouched.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#decryptWithKey(byte%5B%5D)">decryptWithKey</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Parameters:</dt>
-<dd><code>key</code> - raw key material matching the key used to encrypt</dd>
+<dd><code>key</code> - 32-byte AES-256 key matching the encrypt key</dd>
 <dt>Throws:</dt>
-<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code> - if decryption fails (wrong key, data corrupt, etc.)</dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/IllegalStateException.html" title="class or interface in java.lang" class="external-link">IllegalStateException</a></code> - when the run was not obtained from a
+        <a href="SpectralDataset.html" title="class in global.thalion.ttio"><code>SpectralDataset</code></a> (no persistence context)</dd>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Exception.html" title="class or interface in java.lang" class="external-link">Exception</a></code> - on I/O failure or AES-GCM tag mismatch</dd>
 </dl>
 </div>
 </section>
@@ -841,7 +982,10 @@ consumers; the returned list is unmodifiable.
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#accessPolicy()">accessPolicy</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Returns:</dt>
-<dd>the current access policy, or <code>null</code> if none.</dd>
+<dd>The attached access policy, or <code>null</code> when none is
+        set. Typed as <code>Object</code> to keep the
+        <code>Encryptable</code> protocol free of the protection
+        package dependency.</dd>
 </dl>
 </div>
 </section>
@@ -851,13 +995,16 @@ consumers; the returned list is unmodifiable.
 <h3>setAccessPolicy</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">setAccessPolicy</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&nbsp;policy)</span></div>
-<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="protocols/Encryptable.html#setAccessPolicy(java.lang.Object)">Encryptable</a></code></span></div>
-<div class="block">Replace the current access policy.</div>
+<div class="block">Attach an access policy to the run.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="protocols/Encryptable.html#setAccessPolicy(java.lang.Object)">setAccessPolicy</a></code>&nbsp;in interface&nbsp;<code><a href="protocols/Encryptable.html" title="interface in global.thalion.ttio.protocols">Encryptable</a></code></dd>
 <dt>Parameters:</dt>
-<dd><code>policy</code> - the new policy object, or <code>null</code> to clear</dd>
+<dd><code>policy</code> - a <code>global.thalion.ttio.protection.AccessPolicy</code>
+              instance, or <code>null</code> to clear</dd>
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/ClassCastException.html" title="class or interface in java.lang" class="external-link">ClassCastException</a></code> - when <code>policy</code> is non-null and
+        not an <code>AccessPolicy</code></dd>
 </dl>
 </div>
 </section>
@@ -886,6 +1033,15 @@ consumers; the returned list is unmodifiable.
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block"><code>AutoCloseable</code> hook. A no-op for <a href="AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a>:
+all storage handles are opened and closed inside the
+<a href="#writeTo(global.thalion.ttio.providers.StorageGroup)"><code>writeTo(StorageGroup)</code></a> / 
+<details class="invalid-tag">
+<summary>invalid reference</summary>
+<pre><code>#read(StorageGroup, String)</code></pre>
+</details>
+
+boundaries, so nothing remains to release.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

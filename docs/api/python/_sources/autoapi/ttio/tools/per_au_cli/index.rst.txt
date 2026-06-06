@@ -5,14 +5,14 @@ ttio.tools.per_au_cli
 
 .. autoapi-nested-parse::
 
-   v1.0 per-AU encryption CLI for cross-language conformance testing.
+   Per-AU encryption CLI for cross-language conformance testing.
 
    Provides encrypt/decrypt and transport-stream encrypt/decrypt
    subcommands that mirror the Java ``global.thalion.ttio.tools.PerAUCli``
-   and Objective-C ``TtioPerAU`` tool. All three implementations MUST
-   produce byte-equivalent outputs given identical inputs; the
-   cross-language conformance harness (``tests/integration/
-   test_per_au_cross_language.py``) drives this via subprocess.
+   and Objective-C ``TtioPerAU`` tool. All three implementations produce
+   byte-equivalent outputs given identical inputs; the cross-language
+   conformance harness (``tests/integration/test_per_au_cross_language.py``)
+   drives this via subprocess.
 
    Usage:
        python -m ttio.tools.per_au_cli encrypt   <in.tio> <out.tio> <key-file> [--headers]
@@ -40,4 +40,20 @@ Module Contents
 ---------------
 
 .. py:function:: main(argv: list[str] | None = None) -> int
+
+   Dispatch a ``ttio-per-au`` subcommand.
+
+   The subcommand grammar mirrors the Java and Objective-C peer
+   tools verbatim so the cross-language conformance harness can
+   drive any of the three implementations with identical argument
+   strings. Each subcommand handler is registered via
+   ``set_defaults(func=...)`` and dispatched on parsed ``args.func``.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: list[str], optional
+
+   :returns: *int* -- ``0`` on success. The transcode handler raises
+             :class:`SystemExit` with a migration hint when given a legacy
+             ``opt_dataset_encryption`` source.
+
 

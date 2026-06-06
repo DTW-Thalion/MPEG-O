@@ -116,7 +116,24 @@ loadScripts(document, 'script');</script>
   alongside MS runs.</div>
 </div>
 <div class="col-first odd-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+<div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags,global.thalion.ttio.io.ProgressSink)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a>&gt;&nbsp;genomicRuns,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
+ <a href="../FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a>&nbsp;featureFlags,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D overload of the genomic-aware
+<a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)"><code>SpectralDataset.create(String, String, String, List, List, List, List, List, FeatureFlags)</code></a>
+that fires <code>progress.onProgress(sectionIdx, sectionCount)</code>
+once per §5.4-ordered section as it is materialised.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&gt;&nbsp;runs,
@@ -124,12 +141,12 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
  <a href="../FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a>&nbsp;featureFlags)</code></div>
-<div class="col-last odd-row-color">
+<div class="col-last even-row-color">
 <div class="block">Convenience overload that delegates to the
   <code>genomicRuns</code>-aware variant with an empty genomic list.</div>
 </div>
-<div class="col-first even-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
-<div class="col-second even-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.Map,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
+<div class="col-first odd-row-color"><code>static <a href="../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#create(java.lang.String,java.lang.String,java.lang.String,java.util.Map,java.util.List,java.util.List,java.util.List,global.thalion.ttio.FeatureFlags)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;runs,
@@ -137,7 +154,7 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords,
  <a href="../FeatureFlags.html" title="class in global.thalion.ttio">FeatureFlags</a>&nbsp;featureFlags)</code></div>
-<div class="col-last even-row-color">
+<div class="col-last odd-row-color">
 <div class="block">Phase 2 (post-M91): mixed-Map create.</div>
 </div>
 </div>

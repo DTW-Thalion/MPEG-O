@@ -61,13 +61,15 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><a href="#global.thalion.ttio">global.thalion.ttio</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><a href="#global.thalion.ttio.genomics">global.thalion.ttio.genomics</a></div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.codecs.registry">global.thalion.ttio.codecs.registry</a></div>
 <div class="col-last odd-row-color">&nbsp;</div>
-<div class="col-first even-row-color"><a href="#global.thalion.ttio.protection">global.thalion.ttio.protection</a></div>
+<div class="col-first even-row-color"><a href="#global.thalion.ttio.genomics">global.thalion.ttio.genomics</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><a href="#global.thalion.ttio.providers">global.thalion.ttio.providers</a></div>
-<div class="col-last odd-row-color">
-<div class="block">Storage/transport provider abstraction — .</div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.protection">global.thalion.ttio.protection</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><a href="#global.thalion.ttio.providers">global.thalion.ttio.providers</a></div>
+<div class="col-last even-row-color">
+<div class="block">Storage/transport provider abstraction.</div>
 </div>
 </div>
 <section class="class-uses">
@@ -93,7 +95,10 @@ loadScripts(document, 'script');</script>
 </div>
 <div class="col-first even-row-color"><code>static <a href="../../IRImage.html" title="class in global.thalion.ttio">IRImage</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">IRImage.</span><code><a href="../../IRImage.html#readFrom(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">readFrom</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Load an <code>IRImage</code> from the <code>ir_image</code> subgroup of
+<code>studyGroup</code>.</div>
+</div>
 <div class="col-first odd-row-color"><code>static <a href="../../MSImage.html" title="class in global.thalion.ttio">MSImage</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">MSImage.</span><code><a href="../../MSImage.html#readFrom(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">readFrom</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
 <div class="col-last odd-row-color">
@@ -121,7 +126,10 @@ loadScripts(document, 'script');</script>
 </div>
 <div class="col-first even-row-color"><code>void</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">IRImage.</span><code><a href="../../IRImage.html#writeTo(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">writeTo</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Persist the image and its annotations under the <code>ir_image</code>
+subgroup of <code>studyGroup</code>.</div>
+</div>
 <div class="col-first odd-row-color"><code>void</code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">MSImage.</span><code><a href="../../MSImage.html#writeTo(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">writeTo</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;studyGroup)</code></div>
 <div class="col-last odd-row-color">
@@ -136,6 +144,33 @@ loadScripts(document, 'script');</script>
 <div class="col-second odd-row-color"><span class="type-name-label">SpectrumIndex.</span><code><a href="../../SpectrumIndex.html#writeTo(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">writeTo</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;runGroup)</code></div>
 <div class="col-last odd-row-color">
 <div class="block">Write this index to a storage group (creates spectrum_index/ subgroup).</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.codecs.registry">
+<h2>Uses of <a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a> in <a href="../../codecs/registry/package-summary.html">global.thalion.ttio.codecs.registry</a></h2>
+<div class="caption"><span>Methods in <a href="../../codecs/registry/package-summary.html">global.thalion.ttio.codecs.registry</a> that return <a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code><a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ChannelPayload.GroupPayload.</span><code><a href="../../codecs/registry/ChannelPayload.GroupPayload.html#group()" class="member-name-link">group</a>()</code></div>
+<div class="col-last even-row-color">
+<div class="block">Returns the value of the <code>group</code> record component.</div>
+</div>
+</div>
+<div class="caption"><span>Constructors in <a href="../../codecs/registry/package-summary.html">global.thalion.ttio.codecs.registry</a> with parameters of type <a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier</div>
+<div class="table-header col-second">Constructor</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>&nbsp;</code></div>
+<div class="col-second even-row-color"><code><a href="../../codecs/registry/ChannelPayload.GroupPayload.html#%3Cinit%3E(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">GroupPayload</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;group)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Creates an instance of a <code>GroupPayload</code> record class.</div>
 </div>
 </div>
 </section>
@@ -235,10 +270,14 @@ loadScripts(document, 'script');</script>
 </div>
 <div class="col-first odd-row-color"><code><a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">StorageGroup.</span><code><a href="../StorageGroup.html#createGroup(java.lang.String)" class="member-name-link">createGroup</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Create a new sub-group.</div>
+</div>
 <div class="col-first even-row-color"><code><a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">StorageGroup.</span><code><a href="../StorageGroup.html#openGroup(java.lang.String)" class="member-name-link">openGroup</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Open an existing sub-group.</div>
+</div>
 <div class="col-first odd-row-color"><code><a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">Hdf5Provider.</span><code><a href="../Hdf5Provider.html#rootGroup()" class="member-name-link">rootGroup</a>()</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
@@ -265,9 +304,8 @@ loadScripts(document, 'script');</script>
 <div class="col-first even-row-color"><code>static <a href="../../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5Provider.</span><code><a href="../Hdf5Provider.html#tryUnwrapHdf5Group(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">tryUnwrapHdf5Group</a><wbr>(<a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;group)</code></div>
 <div class="col-last even-row-color">
-<div class="block">Phase 2 (post-M91): if <code>group</code> is an HDF5-backed
-  <a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return the underlying <a href="../../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>;
-  otherwise return <code>null</code>.</div>
+<div class="block">If <code>group</code> is an HDF5-backed <a href="../StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return
+  the underlying <a href="../../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>; otherwise return <code>null</code>.</div>
 </div>
 </div>
 </section>

@@ -76,8 +76,24 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../MzMLReader.html#read(java.io.File)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/File.html" title="class or interface in java.io" class="external-link">File</a>&nbsp;file)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><code>static <a href="../../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../MzMLReader.html#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-second odd-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../MzMLReader.html#read(java.io.File,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/File.html" title="class or interface in java.io" class="external-link">File</a>&nbsp;file,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Parse an mzML file, firing
+<code>progress.onProgress(spectraDone, -1L)</code> every
+<a href="../MzMLReader.html#PROGRESS_INTERVAL_SPECTRA"><code>MzMLReader.PROGRESS_INTERVAL_SPECTRA</code></a> <code>&lt;spectrum&gt;</code> closing tags
+and a final <code>onProgress(total, total)</code> once the spectrum
+count is known.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../MzMLReader.html#read(java.lang.String)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><code>static <a href="../../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">MzMLReader.</span><code><a href="../MzMLReader.html#read(java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Overload of <a href="../MzMLReader.html#read(java.lang.String)"><code>MzMLReader.read(String)</code></a> that accepts a <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
 </div>
 </section>
 </li>

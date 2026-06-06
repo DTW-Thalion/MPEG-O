@@ -246,6 +246,10 @@ precursor fields.</div>
 <h3>signalArrays</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="SignalArray.html" title="class in global.thalion.ttio">SignalArray</a>&gt;</span>&nbsp;<span class="element-name">signalArrays</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable map of named signal arrays (e.g. <code>"mz"</code>, <code>"intensity"</code>).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -254,6 +258,12 @@ precursor fields.</div>
 <h3>signalArray</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="SignalArray.html" title="class in global.thalion.ttio">SignalArray</a></span>&nbsp;<span class="element-name">signalArray</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>name</code> - signal array name (e.g. <code>"intensity"</code>)</dd>
+<dt>Returns:</dt>
+<dd>the signal array under <code>name</code>, or <code>null</code> when absent</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -262,6 +272,10 @@ precursor fields.</div>
 <h3>axes</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a>&gt;</span>&nbsp;<span class="element-name">axes</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable list of axis descriptors paired with the signal arrays.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -270,6 +284,10 @@ precursor fields.</div>
 <h3>indexPosition</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">indexPosition</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Zero-based position of this spectrum in its parent <a href="AcquisitionRun.html" title="class in global.thalion.ttio"><code>AcquisitionRun</code></a>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -278,6 +296,10 @@ precursor fields.</div>
 <h3>scanTimeSeconds</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">scanTimeSeconds</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Scan time in seconds since the start of the parent run; zero for non-time-resolved spectra.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -286,6 +308,10 @@ precursor fields.</div>
 <h3>precursorMz</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double</span>&nbsp;<span class="element-name">precursorMz</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Precursor m/z for MSn spectra; zero for MS1 / non-MS modalities.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -294,6 +320,10 @@ precursor fields.</div>
 <h3>precursorCharge</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">precursorCharge</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Precursor charge state for MSn spectra; zero when unknown or non-MS.</dd>
+</dl>
 </div>
 </section>
 </li>

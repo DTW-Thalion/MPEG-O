@@ -22,7 +22,10 @@ Module Contents
 
 .. py:class:: MSImage
 
-   Mass-spectrometry imaging dataset: a ``width × height`` grid of
+   Bases: :py:obj:`ttio.image.Image`
+
+
+   Mass-spectrometry imaging dataset: a ``width x height`` grid of
    pixels, each pixel a spectral profile of ``spectral_points`` values.
 
    :param width: Image grid dimensions in pixels.
@@ -33,6 +36,11 @@ Module Contents
    :type spectral_points: int, default 0
    :param intensity: Rank-3 intensity cube of shape ``(height, width, spectral_points)``.
    :type intensity: numpy.ndarray, default empty rank-3 array
+   :param mz_axis: 1-D float64 array of length ``spectral_points`` giving the m/z
+                   calibration for each spectral bin.  Empty when the file was
+                   written before format v1.2 (legacy files); use
+                   :meth:`to_pixel_spectra` only when this is populated.
+   :type mz_axis: numpy.ndarray, default empty 1-D array
    :param pixel_size_x: Spatial pixel size (implementation-defined units).
    :type pixel_size_x: float, default 0.0
    :param pixel_size_y: Spatial pixel size (implementation-defined units).
@@ -49,7 +57,7 @@ Module Contents
                                 from ``TTIOSpectralDataset``; in Python they are composed
                                 directly onto ``MSImage``.
    :type isa_investigation_id: str, default ""
-   :param identifications: Dataset-level identifications (composed — see Notes).
+   :param identifications: Dataset-level identifications (composed -- see Notes).
    :type identifications: list, default []
    :param quantifications: Dataset-level quantifications (composed).
    :type quantifications: list, default []
@@ -71,86 +79,62 @@ Module Contents
 
    Cross-language equivalents
    --------------------------
-   Objective-C: ``TTIOMSImage`` · Java:
+   Objective-C: ``TTIOMSImage`` - Java:
    ``global.thalion.ttio.MSImage``.
 
 
-   .. py:attribute:: width
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: height
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: spectral_points
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: pixel_size_x
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: pixel_size_y
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: intensity
+   .. py:attribute:: mz_axis
       :type:  numpy.ndarray
 
 
-   .. py:attribute:: scan_pattern
-      :type:  str
-      :value: ''
+   .. py:attribute:: kind
+      :type:  ClassVar[ttio.enums.ImageKind]
 
 
-
-   .. py:attribute:: tile_size
-      :type:  int
-      :value: 0
+   .. py:property:: spectral_axis
+      :type: numpy.ndarray
 
 
-
-   .. py:attribute:: title
-      :type:  str
-      :value: ''
+      The m/z calibration axis (alias of :attr:`mz_axis`).
 
 
-
-   .. py:attribute:: isa_investigation_id
-      :type:  str
-      :value: ''
+   .. py:property:: spectral_axis_kind
+      :type: ttio.enums.SpectralAxisKind
 
 
-
-   .. py:attribute:: identifications
-      :type:  list
-      :value: []
-
-
-
-   .. py:attribute:: quantifications
-      :type:  list
-      :value: []
-
-
-
-   .. py:attribute:: provenance_records
-      :type:  list
-      :value: []
-
+      Interpretation of :attr:`spectral_axis` for this modality.
 
 
    .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: write_to(study_group) -> None
+
+      Write this image cube under ``<study_group>/image_cube/``.
+
+      Mirrors :meth:`global.thalion.ttio.MSImage.writeTo` -- intensity
+      as a 3-D ``[h, w, sp]`` dataset, optional ``mz_axis`` 1-D
+      dataset when populated.
+
+
+
+   .. py:method:: read_from(study_group) -> MSImage | None
+      :classmethod:
+
+
+      Read an MSImage cube from a study group; return None if absent.
+
+
+
+   .. py:method:: to_pixel_spectra()
+
+      Project this image as a list of continuous-mode pixel records.
+
+      Returns a list of :class:`ttio.importers.imzml.ImzMLPixelSpectrum`
+      objects, one per pixel, all sharing :attr:`mz_axis` as their
+      ``mz`` array.
+
+      Raises ``RuntimeError`` when ``mz_axis`` is empty (legacy file).
+
 
 

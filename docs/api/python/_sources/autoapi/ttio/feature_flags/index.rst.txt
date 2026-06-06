@@ -142,8 +142,28 @@ Module Contents
       :classmethod:
 
 
+      Build a :class:`FeatureFlags` from any iterable of feature strings.
+
+      :param version: Format version label (e.g. ``"1.1"``, ``"1.5"``).
+      :type version: str
+      :param features: Feature flag names; consumed once and frozen into a tuple
+                       preserving iteration order.
+      :type features: Iterable[str]
+
+      :returns: *FeatureFlags* -- Immutable feature flag set with the given version label.
+
+
 
    .. py:method:: has(name: str) -> bool
+
+      Return whether a feature flag is set.
+
+      :param name: Feature flag string to test (e.g.
+                   ``"opt_ms2_activation_detail"``).
+      :type name: str
+
+      :returns: *bool* -- True when ``name`` is present in :attr:`features`.
+
 
 
    .. py:method:: required() -> tuple[str, Ellipsis]

@@ -90,9 +90,26 @@ Module Contents
       :type:  numpy.ndarray
 
 
+   .. py:attribute:: chromosome_ids
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
+   .. py:attribute:: chromosome_names
+      :type:  list[str] | None
+      :value: None
+
+
+
    .. py:property:: count
       :type: int
 
+
+      Number of aligned reads indexed.
+
+      :returns: *int* -- Length of the parallel ``offsets`` array; equals the number
+                of reads accessible through this index.
 
 
    .. py:method:: indices_for_region(chromosome: str, start: int, end: int) -> list[int]

@@ -25,6 +25,14 @@ ttio.exporters.mzml
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.mzml.PROGRESS_INTERVAL_SPECTRA
+
+
 Functions
 ---------
 
@@ -37,7 +45,11 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset, path: str | pathlib.Path, *, zlib_compression: bool = False) -> pathlib.Path
+.. py:data:: PROGRESS_INTERVAL_SPECTRA
+   :value: 100
+
+
+.. py:function:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset, path: str | pathlib.Path, *, zlib_compression: bool = False, progress: ttio.io.progress.ProgressSinkLike | None = None) -> pathlib.Path
 
    Serialize ``dataset`` to ``path`` as indexed mzML.
 
@@ -46,8 +58,11 @@ Module Contents
    are deliberately skipped for M19; extending the writer to cover them
    is straightforward.
 
+   ``progress`` fires every :data:`PROGRESS_INTERVAL_SPECTRA` spectra
+   and once more at the end with ``(n_spectra, n_spectra)``.
 
-.. py:function:: dataset_to_bytes(dataset: ttio.spectral_dataset.SpectralDataset, *, zlib_compression: bool = False) -> bytes
+
+.. py:function:: dataset_to_bytes(dataset: ttio.spectral_dataset.SpectralDataset, *, zlib_compression: bool = False, progress: ttio.io.progress.ProgressSinkLike | None = None) -> bytes
 
    Build an indexed-mzML byte blob from ``dataset``.
 

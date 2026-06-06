@@ -89,22 +89,54 @@ loadScripts(document, 'script');</script>
 <li>
 <section class="detail" id="global.thalion.ttio.exporters">
 <h2>Uses of <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a> in <a href="../../exporters/package-summary.html">global.thalion.ttio.exporters</a></h2>
+<div class="caption"><span>Methods in <a href="../../exporters/package-summary.html">global.thalion.ttio.exporters</a> that return <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">RunSelection.</span><code><a href="../../exporters/RunSelection.html#genomicRun(global.thalion.ttio.SpectralDataset,java.lang.String)" class="member-name-link">genomicRun</a><wbr>(<a href="../../SpectralDataset.html" title="class in global.thalion.ttio">SpectralDataset</a>&nbsp;ds,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;layer)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Select a genomic run by <code>layer</code> name, or the single run when
+unambiguous.</div>
+</div>
+</div>
 <div class="caption"><span>Methods in <a href="../../exporters/package-summary.html">global.thalion.ttio.exporters</a> with parameters of type <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
-<div class="col-first even-row-color"><code>static void</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">FastqWriter.</span><code><a href="../../exporters/FastqWriter.html#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path)" class="member-name-link">write</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>static <a href="../WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">RunSelection.</span><code><a href="../../exporters/RunSelection.html#toWritten(global.thalion.ttio.genomics.GenomicRun)" class="member-name-link">toWritten</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Materialise a read-side <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics"><code>GenomicRun</code></a> into a write-side
+<a href="../WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a> for BAM / CRAM export.</div>
+</div>
 <div class="col-first odd-row-color"><code>static void</code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">FastqWriter.</span><code><a href="../../exporters/FastqWriter.html#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)" class="member-name-link">write</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
+<div class="col-second odd-row-color"><span class="type-name-label">FastqWriter.</span><code><a href="../../exporters/FastqWriter.html#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path)" class="member-name-link">write</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path)</code></div>
+<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>static void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">FastqWriter.</span><code><a href="../../exporters/FastqWriter.html#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)" class="member-name-link">write</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
  int&nbsp;phredOffset)</code></div>
-<div class="col-last odd-row-color">
+<div class="col-last even-row-color">
 <div class="block">Write a read-side <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics"><code>GenomicRun</code></a> to FASTQ.</div>
+</div>
+<div class="col-first odd-row-color"><code>static void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">FastqWriter.</span><code><a href="../../exporters/FastqWriter.html#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ int&nbsp;phredOffset,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Stage D overload of
+<a href="../../exporters/FastqWriter.html#write(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,java.lang.Boolean,int)"><code>FastqWriter.write(GenomicRun, Path, Boolean, int)</code></a> that fires
+<code>progress.onProgress(readsDone, totalReads)</code> every
+<a href="../../exporters/FastqWriter.html#PROGRESS_INTERVAL_READS"><code>FastqWriter.PROGRESS_INTERVAL_READS</code></a> records and a final fire once
+the buffer is flushed to disk.</div>
 </div>
 <div class="col-first even-row-color"><code>static void</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">FastaWriter.</span><code><a href="../../exporters/FastaWriter.html#writeRun(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path)" class="member-name-link">writeRun</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
@@ -118,6 +150,20 @@ loadScripts(document, 'script');</script>
  boolean&nbsp;writeFai)</code></div>
 <div class="col-last odd-row-color">
 <div class="block">Write a read-side <a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics"><code>GenomicRun</code></a> to FASTA.</div>
+</div>
+<div class="col-first even-row-color"><code>static void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">FastaWriter.</span><code><a href="../../exporters/FastaWriter.html#writeRun(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,int,java.lang.Boolean,boolean,global.thalion.ttio.io.ProgressSink)" class="member-name-link">writeRun</a><wbr>(<a href="../GenomicRun.html" title="class in global.thalion.ttio.genomics">GenomicRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ int&nbsp;lineWidth,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Boolean.html" title="class or interface in java.lang" class="external-link">Boolean</a>&nbsp;gzipOutput,
+ boolean&nbsp;writeFai,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D overload of
+<a href="../../exporters/FastaWriter.html#writeRun(global.thalion.ttio.genomics.GenomicRun,java.nio.file.Path,int,java.lang.Boolean,boolean)"><code>FastaWriter.writeRun(GenomicRun, Path, int, Boolean, boolean)</code></a>
+that fires <code>progress.onProgress(readsDone, totalReads)</code>
+every <a href="../../exporters/FastaWriter.html#PROGRESS_INTERVAL_READS"><code>FastaWriter.PROGRESS_INTERVAL_READS</code></a> records and a final fire
+when bytes hit disk.</div>
 </div>
 </div>
 </section>

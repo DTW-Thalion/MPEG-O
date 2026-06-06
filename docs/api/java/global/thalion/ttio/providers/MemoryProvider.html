@@ -103,7 +103,7 @@ opening the same name twice returns the same tree until
 <a href="Hdf5Provider.html" title="class in global.thalion.ttio.providers"><code>Hdf5Provider</code></a> and <code>MemoryProvider</code>, the interface is
 correct.</p>
 
-<p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+<p>API status: Stable.</p>
 
 <p>Cross-language equivalents:
 <ul>
@@ -151,7 +151,9 @@ correct.</p>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Release backend resources.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#discardStore(java.lang.String)" class="member-name-link">discardStore</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;pathOrUrl)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
@@ -287,6 +289,9 @@ correct.</p>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="StorageProvider.html#isOpen()">isOpen</a></code>&nbsp;in interface&nbsp;<code><a href="StorageProvider.html" title="interface in global.thalion.ttio.providers">StorageProvider</a></code></dd>
+<dt>Returns:</dt>
+<dd><code>true</code> when the provider is currently open and
+  ready for read / write calls.</dd>
 </dl>
 </div>
 </section>
@@ -296,6 +301,10 @@ correct.</p>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="StorageProvider.html#close()">StorageProvider</a></code></span></div>
+<div class="block">Release backend resources. After this call <a href="StorageProvider.html#isOpen()"><code>StorageProvider.isOpen()</code></a> must
+  return <code>false</code>; calling <code>close</code> a second time is a
+  no-op.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

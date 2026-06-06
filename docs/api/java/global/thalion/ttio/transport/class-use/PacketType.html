@@ -85,7 +85,11 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>final <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">PacketHeader.</span><code><a href="../PacketHeader.html#packetType" class="member-name-link">packetType</a></code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Decoded packet type, or <code>null</code> when the wire byte is not
+  a recognised <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport"><code>PacketType</code></a> (forward-compat skip-unknown
+  path; see transport-spec §6).</div>
+</div>
 </div>
 <div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio.transport</a> that return <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></span></div>
 <div class="summary-table three-column-summary">
@@ -96,13 +100,19 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color"><span class="type-name-label">PacketType.</span><code><a href="../PacketType.html#fromWire(int)" class="member-name-link">fromWire</a><wbr>(int&nbsp;v)</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><code>static <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">PacketType.</span><code><a href="../PacketType.html#valueOf(java.lang.String)" class="member-name-link">valueOf</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">PacketType.</span><code><a href="../PacketType.html#fromWireOrNull(int)" class="member-name-link">fromWireOrNull</a><wbr>(int&nbsp;v)</code></div>
 <div class="col-last odd-row-color">
+<div class="block">Like <a href="../PacketType.html#fromWire(int)"><code>PacketType.fromWire(int)</code></a> but returns <code>null</code> for unknown
+  packet type bytes.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">PacketType.</span><code><a href="../PacketType.html#valueOf(java.lang.String)" class="member-name-link">valueOf</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name)</code></div>
+<div class="col-last even-row-color">
 <div class="block">Returns the enum constant of this class with the specified name.</div>
 </div>
-<div class="col-first even-row-color"><code>static <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a>[]</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">PacketType.</span><code><a href="../PacketType.html#values()" class="member-name-link">values</a>()</code></div>
-<div class="col-last even-row-color">
+<div class="col-first odd-row-color"><code>static <a href="../PacketType.html" title="enum class in global.thalion.ttio.transport">PacketType</a>[]</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">PacketType.</span><code><a href="../PacketType.html#values()" class="member-name-link">values</a>()</code></div>
+<div class="col-last odd-row-color">
 <div class="block">Returns an array containing the constants of this enum class, in
 the order they are declared.</div>
 </div>
