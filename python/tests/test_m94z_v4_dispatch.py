@@ -158,3 +158,42 @@ def test_v4_mixed_revcomp_roundtrip():
     qual_back, lens, _ = decode_with_metadata(out, rcs)
     assert qual_back == qualities
     assert list(lens) == rls
+
+
+# ── V4 edge / error-path coverage (live native path) ────────────────────
+# These exercise the kept encode()/decode_with_metadata() validation
+# branches that the round-trip tests above never hit. They are gated by
+# the module-level ``pytestmark`` skip (native lib required); the explicit
+# guards below are belt-and-braces so the functions stand alone.
+
+
+def test_v4_encode_rejects_length_mismatch():
+    """read_lengths summing to != len(qualities) is rejected."""
+    if not _HAVE_NATIVE_LIB:
+        pytest.skip("native libttio_rans not available")
+    with pytest.raises(ValueError):
+        encode(bytes([40, 40, 40]), [2], [0])  # sum(lengths)=2 != 3
+
+
+def test_v4_encode_rejects_revcomp_length_mismatch():
+    """len(revcomp_flags) != len(read_lengths) is rejected."""
+    if not _HAVE_NATIVE_LIB:
+        pytest.skip("native libttio_rans not available")
+    with pytest.raises((ValueError, RuntimeError)):
+        encode(bytes([40, 40, 40, 40]), [2, 2], [0])  # 1 flag for 2 reads
+
+
+def test_v4_decode_rejects_truncated_blob():
+    """A blob shorter than magic+version is rejected."""
+    if not _HAVE_NATIVE_LIB:
+        pytest.skip("native libttio_rans not available")
+    with pytest.raises(ValueError):
+        decode_with_metadata(b"\x00\x01")
+
+
+def test_v4_decode_rejects_bad_magic():
+    """A blob whose first 4 bytes are not the M94Z magic is rejected."""
+    if not _HAVE_NATIVE_LIB:
+        pytest.skip("native libttio_rans not available")
+    with pytest.raises(ValueError):
+        decode_with_metadata(b"XXXX" + bytes(32))

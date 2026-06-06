@@ -21,6 +21,26 @@
  *
  * Wire format (little-endian):
  *
+ *   This codec is V4-only under v1.0: encode ALWAYS emits a V4 stream
+ *   (version byte = 4) and decode accepts ONLY V4. Decode of any stream
+ *   whose version byte is 1, 2, or 3 returns nil with error 203 ("no
+ *   longer supported in v1.0"); the V1/V2/V3 emitters were DELETED in
+ *   v1.0. The legacy layouts are retained below purely as forensic
+ *   reference for understanding why such old streams are rejected — they
+ *   are NEVER emitted.
+ *
+ * Wire format V4 (LIVE — version byte = 4; CRAM 3.1 fqzcomp port via
+ * libttio_rans). This is the only format the codec emits and decodes:
+ *   Outer header  : magic "M94Z", version=4, flags (bits 4-5 = pad_count),
+ *                   num_qualities (uint64 LE), num_reads (uint64 LE),
+ *                   rlt_compressed_len (uint32 LE), cram_body_len (uint32 LE).
+ *   Body          : deflated RLT followed by htscodecs-byte-equal
+ *                   fqzcomp_qual stream (auto-tune by default).
+ *   See native/src/m94z_v4_wire.h for full layout.
+ *
+ * Legacy wire format V1 (DELETED in v1.0 — decode-rejected with error 203):
+ *   Retained for forensic reference only; NOT emitted.
+ *
  *   Header:
  *     0       4    magic "M94Z"
  *     4       1    version = 1
@@ -51,21 +71,14 @@
  *       4     4    ctx_id            (uint32 LE)
  *       8     512  freq[256]         (256 × uint16 LE)
  *
- * Wire format V2 (version byte = 2; body produced by libttio_rans):
+ * Legacy wire format V2 (DELETED in v1.0 — decode-rejected with error 203):
+ *   Retained for forensic reference only; NOT emitted.
  *   Header: same fields as V1 EXCEPT no 16-byte state_init suffix
  *           (V2 body embeds final states at its own offset 0..15).
  *   Body  : raw output of ttio_rans_encode_block — self-contained
  *             [4 × uint32 LE final states][4 × uint32 LE lane sizes]
  *             [per-lane 16-bit LE chunks]
  *   No trailer.
- *
- * Wire format V4 (version byte = 4; CRAM 3.1 fqzcomp port via libttio_rans):
- *   Outer header  : magic "M94Z", version=4, flags (bits 4-5 = pad_count),
- *                   num_qualities (uint64 LE), num_reads (uint64 LE),
- *                   rlt_compressed_len (uint32 LE), cram_body_len (uint32 LE).
- *   Body          : deflated RLT followed by htscodecs-byte-equal
- *                   fqzcomp_qual stream (auto-tune by default).
- *   See native/src/m94z_v4_wire.h for full layout.
  *
  * Cross-language equivalents:
  *   Python: ttio.codecs.fqzcomp_nx16_z
@@ -102,24 +115,25 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                                     error:(NSError * _Nullable *)error;
 
 /**
- * Encode with optional V2 native dispatch.
+ * Encode, with an options dictionary.
  *
- * Mirrors the four-arg variant but accepts an options dictionary. The
- * recognised key is:
+ * Mirrors the four-arg variant but accepts an options dictionary.
  *
- *   - @c "preferNative" (NSNumber BOOL): when @c YES (and libttio_rans
- *     is linked in), emit a V2 wire-format stream (version byte = 2)
- *     whose body is produced by the native rANS encoder. When @c NO,
- *     force the V1 path. When the key is absent, the encoder consults
- *     the environment variable @c TTIO_M94Z_USE_NATIVE — values
- *     @c "1", @c "true", @c "yes", @c "on" (case-insensitive) enable
- *     V2 dispatch, otherwise V1 (the default).
+ * Under v1.0 this codec is V4-only: encode ALWAYS emits a V4 (CRAM 3.1
+ * fqzcomp_qual) stream and REQUIRES libttio_rans — it returns nil + an
+ * error if the native library is not linked. There is no pure-ObjC
+ * V1/V2 fallback.
  *
- * V2 streams are decoded transparently by @c +decodeData:revcompFlags:error:
- * (the version byte is auto-detected). V2 decode is currently
- * pure-ObjC because contexts in M94.Z are derived from previously-
- * decoded symbols, which the C library's pre-computed-contexts API
- * cannot supply (option E: V2 encode native, V2 decode pure-ObjC).
+ * The only recognised key is:
+ *
+ *   - @c "v4StrategyHint" (NSNumber): -1 = auto-tune (default), 0..4 =
+ *     explicit fqzcomp preset.
+ *
+ * Legacy keys such as @c "preferNative" / @c "preferV4" and the
+ * V1/V2 context-table parameters (qbits/pbits/dbits/sloc) are accepted
+ * and IGNORED for source/ABI compatibility; they no longer select a
+ * wire format. The environment variables @c TTIO_M94Z_USE_NATIVE and
+ * @c TTIO_M94Z_USE_NATIVE_STREAMING are likewise ignored.
  */
 + (nullable NSData *)encodeWithQualities:(NSData *)qualities
                               readLengths:(NSArray<NSNumber *> *)readLengths
@@ -206,12 +220,10 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
  *   - @"pure-objc" — when libttio_rans is not linked; the codec uses the
  *     pure-ObjC implementation in this file.
  *
- * Backend selection only affects V2 (native-body) dispatch — see the
- * @c options dictionary on the encode method or the
- * @c TTIO_M94Z_USE_NATIVE environment variable. V1 streams are always
- * encoded and decoded via pure-ObjC. V2 decode is also pure-ObjC
- * (option E) because the C library cannot derive M94.Z contexts on
- * the fly — it requires a fully pre-computed contexts vector.
+ * The codec is V4-only: when the backend is @"pure-objc" (libttio_rans
+ * not linked) both encode and decode fail with an error, because V4 is
+ * the only supported wire format and it is implemented entirely in the
+ * native library.
  */
 + (NSString *)backendName;
 

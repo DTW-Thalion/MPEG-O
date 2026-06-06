@@ -5,9 +5,6 @@
  */
 package global.thalion.ttio.codecs;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
@@ -15,9 +12,7 @@ import org.junit.jupiter.api.condition.EnabledIf;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * FQZCOMP_NX16.Z unit tests — Java parity for the M94.Z (CRAM-mimic) codec.
@@ -33,33 +28,16 @@ final class FqzcompNx16ZUnitTest {
         return TtioRansNative.isAvailable();
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────
-
-    private static byte[] loadFixture(String name) throws IOException {
-        String path = "/ttio/codecs/" + name;
-        try (InputStream in = FqzcompNx16ZUnitTest.class.getResourceAsStream(path)) {
-            assertNotNull(in, "fixture missing on classpath: " + path);
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buf = new byte[8192];
-            int n;
-            while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
-            return out.toByteArray();
-        }
-    }
-
-    // ── Constants and helpers ──────────────────────────────────────
+    // ── Constants ──────────────────────────────────────────────────
 
     @Test
     void constantsMatchSpec() {
-        assertEquals(32_768, FqzcompNx16Z.L);
-        assertEquals(16, FqzcompNx16Z.B_BITS);
-        assertEquals(65_536, FqzcompNx16Z.B);
-        assertEquals(0xFFFF, FqzcompNx16Z.B_MASK);
-        assertEquals(4096, FqzcompNx16Z.T);
-        assertEquals(12, FqzcompNx16Z.T_BITS);
-        assertEquals(4, FqzcompNx16Z.NUM_STREAMS);
-        // X_MAX_PREFACTOR = 2^19.
-        assertEquals(1 << 19, FqzcompNx16Z.X_MAX_PREFACTOR);
+        // Wire-format version constants (the dispatch + legacy-rejection
+        // surface). VERSION / VERSION_V2_NATIVE are retained only so
+        // decode() can recognise and reject legacy streams.
+        assertEquals(1, FqzcompNx16Z.VERSION);
+        assertEquals(2, FqzcompNx16Z.VERSION_V2_NATIVE);
+        assertEquals(4, FqzcompNx16Z.VERSION_V4_FQZCOMP);
     }
 
     @Test
@@ -69,62 +47,6 @@ final class FqzcompNx16ZUnitTest {
         assertEquals('4', FqzcompNx16Z.MAGIC[2]);
         assertEquals('Z', FqzcompNx16Z.MAGIC[3]);
         assertEquals(1, FqzcompNx16Z.VERSION);
-    }
-
-    @Test
-    void positionBucketPbitsBasics() {
-        // Pos 0 → bucket 0.
-        assertEquals(0, FqzcompNx16Z.positionBucketPbits(0, 100, 2));
-        // Pos at end → bucket 3 (= 2^pbits - 1).
-        assertEquals(3, FqzcompNx16Z.positionBucketPbits(100, 100, 2));
-        assertEquals(3, FqzcompNx16Z.positionBucketPbits(105, 100, 2));
-        // Mid → 2.
-        assertEquals(2, FqzcompNx16Z.positionBucketPbits(50, 100, 2));
-        // pbits=0 always → 0.
-        assertEquals(0, FqzcompNx16Z.positionBucketPbits(50, 100, 0));
-        // Empty / negative.
-        assertEquals(0, FqzcompNx16Z.positionBucketPbits(10, 0, 2));
-        assertEquals(0, FqzcompNx16Z.positionBucketPbits(-1, 100, 2));
-    }
-
-    @Test
-    void contextBitPackBasics() {
-        // qbits=12, pbits=2, sloc=14; revcomp=1, prevQ=0xABC, posBucket=2
-        // → ctx = 0xABC | (2 << 12) | (1 << 14) = 0xABC | 0x2000 | 0x4000
-        // Then & 0x3FFF (mask to 14 bits) → 0xABC | 0x2000 = 0x2ABC.
-        int ctx = FqzcompNx16Z.m94zContext(0xABC, 2, 1, 12, 2, 14);
-        // 0xABC | (2 << 12) | (1 << 14) = 0xABC | 0x2000 | 0x4000 = 0x6ABC,
-        // masked to 14 bits = 0x2ABC.
-        assertEquals(0x2ABC, ctx);
-    }
-
-    // ── ContextParams pack/unpack ───────────────────────────────────
-
-    @Test
-    void contextParamsRoundTrip() {
-        FqzcompNx16Z.ContextParams p = FqzcompNx16Z.ContextParams.defaults();
-        byte[] packed = FqzcompNx16Z.packContextParams(p);
-        assertEquals(FqzcompNx16Z.CONTEXT_PARAMS_SIZE, packed.length);
-        FqzcompNx16Z.ContextParams round = FqzcompNx16Z.unpackContextParams(packed, 0);
-        assertEquals(p, round);
-    }
-
-    // ── Read-length sidecar ─────────────────────────────────────────
-
-    @Test
-    void readLengthsRoundTripEmpty() {
-        int[] empty = new int[0];
-        byte[] enc = FqzcompNx16Z.encodeReadLengths(empty);
-        int[] back = FqzcompNx16Z.decodeReadLengths(enc, 0);
-        assertArrayEquals(empty, back);
-    }
-
-    @Test
-    void readLengthsRoundTrip() {
-        int[] lens = {100, 100, 75, 250, 100};
-        byte[] enc = FqzcompNx16Z.encodeReadLengths(lens);
-        int[] back = FqzcompNx16Z.decodeReadLengths(enc, lens.length);
-        assertArrayEquals(lens, back);
     }
 
     // ── Round-trip smoke tests ──────────────────────────────────────
@@ -187,100 +109,8 @@ final class FqzcompNx16ZUnitTest {
             () -> FqzcompNx16Z.decode(bad, null));
     }
 
-    // ── Canonical fixtures (the byte-exact contract) ────────────────
-
-    private record FixtureInputs(
-        byte[] qualities, int[] readLengths, int[] revcompFlags) { }
-
-    private static FixtureInputs fixtureA() {
-        // 100 reads × 100bp, all Q40.
-        int n = 100, len = 100;
-        byte[] qualities = new byte[n * len];
-        java.util.Arrays.fill(qualities, (byte) (40 + 33));
-        int[] readLengths = new int[n];
-        java.util.Arrays.fill(readLengths, len);
-        int[] revcomp = new int[n];
-        return new FixtureInputs(qualities, readLengths, revcomp);
-    }
-
-    private static FixtureInputs fixtureB() {
-        // Illumina profile — Random(0xBEEF).
-        int n = 100, len = 100;
-        PyRandom rng = new PyRandom(0xBEEFL);
-        byte[] q = new byte[n * len];
-        for (int i = 0; i < q.length; i++) {
-            int qv = (int) Math.max(20, Math.min(40, rng.gauss(30, 5)));
-            q[i] = (byte) (qv + 33);
-        }
-        int[] readLengths = new int[n];
-        java.util.Arrays.fill(readLengths, len);
-        return new FixtureInputs(q, readLengths, new int[n]);
-    }
-
-    private static FixtureInputs fixtureC() {
-        // PacBio HiFi — Random(0xCAFE).
-        int n = 50, len = 100;
-        PyRandom rng = new PyRandom(0xCAFEL);
-        byte[] q = new byte[n * len];
-        for (int i = 0; i < q.length; i++) {
-            int qv;
-            if (rng.random() < 0.7) {
-                qv = 40;
-            } else {
-                qv = rng.randrange(30, 61);
-            }
-            q[i] = (byte) (qv + 33);
-        }
-        int[] readLengths = new int[n];
-        java.util.Arrays.fill(readLengths, len);
-        return new FixtureInputs(q, readLengths, new int[n]);
-    }
-
-    private static FixtureInputs fixtureD() {
-        PyRandom rng = new PyRandom(0xDEADL);
-        byte[] q = new byte[4 * 100];
-        for (int i = 0; i < q.length; i++) {
-            q[i] = (byte) rng.randrange(33, 74);
-        }
-        int[] readLengths = {100, 100, 100, 100};
-        int[] revcomp = {0, 1, 0, 1};
-        return new FixtureInputs(q, readLengths, revcomp);
-    }
-
-    private static FixtureInputs fixtureF() {
-        int n = 100, len = 100;
-        PyRandom rng = new PyRandom(0xF00DL);
-        byte[] q = new byte[n * len];
-        for (int i = 0; i < q.length; i++) {
-            int qv = (int) Math.max(20, Math.min(40, rng.gauss(30, 5)));
-            q[i] = (byte) (qv + 33);
-        }
-        int[] revcomp = new int[n];
-        for (int i = 0; i < n; i++) revcomp[i] = (rng.random() < 0.8) ? 1 : 0;
-        int[] readLengths = new int[n];
-        java.util.Arrays.fill(readLengths, len);
-        return new FixtureInputs(q, readLengths, revcomp);
-    }
-
-    private static FixtureInputs fixtureG() {
-        byte[] q = new byte[5000];
-        java.util.Arrays.fill(q, (byte) (35 + 33));
-        return new FixtureInputs(q, new int[]{5000}, new int[]{0});
-    }
-
-    private static FixtureInputs fixtureH() {
-        byte[] q = new byte[50_000];
-        java.util.Arrays.fill(q, (byte) (40 + 33));
-        return new FixtureInputs(q, new int[]{50_000}, new int[]{0});
-    }
-
-    // canonicalFixtureA..H — REMOVED in Phase 2c.
-    //
-    // The canonical fixtures pinned the V1 (pure-Java) byte-exact
-    // encoding; the V1 encoder dispatch path was deleted. V4
-    // (CRAM 3.1 fqzcomp_qual) byte-exact tests live in
-    // FqzcompNx16ZV4ByteExactTest; the V4 corpus + tooling under
-    // /tmp/py_*_v4.fqz pin the v1.0+ wire format. The V1 fixture
-    // files (m94z_*.bin) are kept on disk for now — Phase 3
-    // regenerates the corpus.
+    // The legacy V1 canonical fixtures (m94z_*.bin) and their builders were
+    // removed alongside the dead V1/V2 codec paths. V4 (CRAM 3.1
+    // fqzcomp_qual) byte-exact coverage lives in FqzcompNx16ZV4ByteExactTest;
+    // live-path edge/error coverage lives in FqzcompNx16ZV4DispatchTest.
 }
