@@ -1,0 +1,225 @@
+ttio.workbench.auth
+===================
+
+.. py:module:: ttio.workbench.auth
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.auth -- workbench-server login flow + TOTP + session.
+
+   Targets `tti-workbench-server` v1.0.0's `/v1/auth/login` endpoint
+   (see `tti-workbench-server/Documentation/auth.md`). Login requires
+   username + password + RFC 6238 TOTP; on success the server returns
+   a bearer token (`ttiowbs_<43-char base64url>`), the user's
+   capability flags, projects, and an `expires_at` unix epoch.
+
+   Capability flags are dot-delimited strings
+   (`containers.write.own_project`, `sessions.start`, etc.). They're
+   opaque to the client but cached on the `Session` so SDK callers can
+   check ahead before issuing a request.
+
+   TOTP semantics: RFC 6238 with HMAC-SHA1, 30-second time-step,
+   6 digits, T0=0. The server tolerates +/- 1 step skew.
+
+   Token storage: in-memory only -- the W1 contract is that bearer
+   tokens are never written to disk. The CLI's `--staging-root` path
+   (bootstrap-admin auto-login) reads the password + TOTP secret from
+   a 0600 file the daemon staged, but the resulting bearer stays
+   in-memory for the CLI invocation's lifetime.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.auth.WorkbenchAuthError
+   ttio.workbench.auth.InvalidCredentials
+   ttio.workbench.auth.AccountDisabled
+   ttio.workbench.auth.RateLimitExceeded
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.auth.Session
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.auth.current_totp
+   ttio.workbench.auth.login_password
+
+
+Module Contents
+---------------
+
+.. py:exception:: WorkbenchAuthError
+
+   Bases: :py:obj:`Exception`
+
+
+   Base class for `/v1/auth/login` failures.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:exception:: InvalidCredentials
+
+   Bases: :py:obj:`WorkbenchAuthError`
+
+
+   HTTP 401 -- username/password/TOTP mismatch (collapsed by the
+   server to defeat brute-force enumeration). Indistinguishable on
+   the wire from unknown-username, so the client surface mirrors
+   that opacity.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:exception:: AccountDisabled
+
+   Bases: :py:obj:`WorkbenchAuthError`
+
+
+   HTTP 423 -- the user row is marked `disabled_at`.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:exception:: RateLimitExceeded(message: str, retry_after_seconds: Optional[int] = None)
+
+   Bases: :py:obj:`WorkbenchAuthError`
+
+
+   HTTP 429 -- the daemon's auth bucket is empty. The exception
+   carries the `retry_after_seconds` hint from the `Retry-After`
+   header when present.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: retry_after_seconds
+      :value: None
+
+
+
+.. py:class:: Session
+
+   Authenticated workbench session.
+
+   Returned from `login_password` (and, in W2, from OIDC + API-key
+   paths). Holds the bearer token plus enough metadata for callers
+   to gate operations without re-hitting the server. Immutable;
+   re-login on expiry rather than mutating in place.
+
+
+   .. py:attribute:: token
+      :type:  str
+
+      Bearer token for `Authorization: Bearer <token>` (REST) and
+      the `token` field in WebSocket handshake JSON. Always prefixed
+      with `ttiowbs_` for v1.0 servers.
+
+
+   .. py:attribute:: username
+      :type:  str
+
+
+   .. py:attribute:: user_id
+      :type:  str
+
+      The server's ULID for the user row. Stable across logins.
+
+
+   .. py:attribute:: capabilities
+      :type:  frozenset[str]
+
+      Capability flags (`containers.write.own_project`, etc.).
+      Opaque to the client; the SDK checks containment ahead of REST
+      calls that need them.
+
+
+   .. py:attribute:: projects
+      :type:  tuple[str, Ellipsis]
+
+      Projects the user is a member of. Required when the user
+      lacks the `containers.*.any_project` flag.
+
+
+   .. py:attribute:: expires_at
+      :type:  int
+
+      Unix epoch seconds at which the server will reject this
+      token. Default v1.0 lifetime is 24 hours.
+
+
+   .. py:attribute:: provider
+      :type:  str
+
+      Auth provider that issued this session. v1.0:
+      `password-totp`. W2+ may add `oidc`, `api-key`.
+
+
+   .. py:attribute:: session_id
+      :type:  str
+
+      ULID of the row in the daemon's `sessions` table. Used by the
+      logout endpoint (W2) to revoke this specific session without
+      touching the user's other sessions.
+
+
+   .. py:property:: expired
+      :type: bool
+
+
+
+   .. py:method:: authorization_header() -> str
+
+
+   .. py:method:: has_capability(name: str) -> bool
+
+
+.. py:function:: current_totp(secret_b32: str, *, t: Optional[float] = None) -> str
+
+   Compute the current RFC 6238 TOTP for `secret_b32`.
+
+   Args:
+       secret_b32: base32-encoded TOTP secret (the format the daemon
+           writes into `bootstrap-credentials.json` and the format
+           authenticator apps consume).
+       t: optional unix epoch override (defaults to `time.time()`).
+           Used by tests to pin a deterministic counter.
+
+   Returns:
+       Six-digit decimal string, zero-padded.
+
+
+.. py:function:: login_password(host: str, port: int, username: str, password: str, totp: str, *, scheme: str = 'http', timeout: float = 5.0) -> Session
+
+   POST `/v1/auth/login` and return a `Session`.
+
+   Args:
+       host: server hostname or IP.
+       port: server REST port.
+       username, password, totp: credentials to post.
+       scheme: `"http"` or `"https"`. Default `"http"` for the
+           development / loopback path; production deployments
+           should always pass `"https"`.
+       timeout: request timeout in seconds.
+
+   Raises:
+       InvalidCredentials: server returned 401.
+       AccountDisabled: server returned 423.
+       RateLimitExceeded: server returned 429.
+       WorkbenchAuthError: any other failure (network, malformed
+           response, unexpected status). The underlying exception is
+           chained via `__cause__`.
+
+

@@ -26,6 +26,10 @@ Functions
    ttio.transport.encrypted.is_per_au_encrypted
    ttio.transport.encrypted.write_encrypted_dataset
    ttio.transport.encrypted.read_encrypted_to_file
+   ttio.transport.encrypted.stamp_transport_wrapped_dek
+   ttio.transport.encrypted.read_transport_wrapped_dek
+   ttio.transport.encrypted.read_transport_recipients
+   ttio.transport.encrypted.read_transport_server_kek_id
 
 
 Module Contents
@@ -68,5 +72,59 @@ Module Contents
    Returns a metadata dict summarising the stream
    (``{"title", "runs": {run_name: {"n_spectra", "channels"}}}``)
    mainly for testing / introspection.
+
+
+.. py:function:: stamp_transport_wrapped_dek(path, wrapped_dek, kek_algorithm, *, additional_recipients=(), server_kek_id=None, provider=None)
+
+   Stamp a wrapped DEK + KEK algorithm onto every run's
+   ``signal_channels`` so :func:`write_encrypted_dataset` emits it in the
+   ProtectionMetadata packet.
+
+   Used for envelope / PQC per-AU upload, where the DEK is wrapped under
+   the recipient's KEK (``aes-256-gcm``) or KEM public key
+   (``ml-kem-1024``). The DEK itself is shared across all channels in a
+   run (v1.0 design), so the wrapper is stamped on each run's first
+   channel -- the same attribute :func:`write_encrypted_dataset` reads.
+
+   ``additional_recipients`` (FD-1 Phase A) is an optional list of
+   ``(recipient_id, kek_algorithm, wrapped_dek)`` for the *same* DEK
+   wrapped under other recipients' keys; it is stamped as the
+   ``<channel>_wrapped_dek_recipients`` attribute and emitted as the
+   packet's trailing block. Empty (the default) keeps single-recipient
+   runs byte-identical to pre-Phase-A.
+
+   ``server_kek_id`` (FD-1 C-2a) is an optional opaque label naming the KEK
+   under which the primary ``wrapped_dek`` is wrapped; it is stamped as
+   ``<channel>_server_kek_id`` and emitted in the packet so the daemon can
+   decide server-processability. ``None`` (the default) marks the container
+   BYOK / not server-processable.
+
+
+.. py:function:: read_transport_wrapped_dek(path, *, provider=None)
+
+   Return ``(wrapped_dek_bytes, kek_algorithm)`` stamped on the first
+   run's ``signal_channels``, or ``(b"", "")`` if none. The receiver
+   unwraps the DEK with its KEK / KEM private key, then calls
+   :func:`ttio.encryption_per_au.decrypt_per_au`.
+
+
+.. py:function:: read_transport_recipients(path, *, provider=None)
+
+   Return the full recipient list stamped on the first run's
+   ``signal_channels`` as ``[(recipient_id, kek_algorithm, wrapped_dek)]``
+   (FD-1 Phase A). The primary recipient is index 0 with id ``""``;
+   additional recipients follow. Empty list if no wrapped DEK is present.
+
+   The single-recipient counterpart :func:`read_transport_wrapped_dek`
+   stays the convenience accessor for the BYOK / envelope / PQC client
+   paths that hold one key.
+
+
+.. py:function:: read_transport_server_kek_id(path, *, provider=None)
+
+   Return the FD-1 C-2a ``server_kek_id`` stamped on the first run's
+   ``signal_channels`` (the KEK the daemon resolves to process the
+   container server-side), or ``None`` if absent (BYOK / not
+   server-processable).
 
 

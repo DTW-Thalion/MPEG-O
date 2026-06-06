@@ -48,10 +48,25 @@ Module Contents
                            time (to compute the deltas) and at read time (to
                            reconstitute the bases).
    :type reference_fasta: str or :class:`pathlib.Path`
+   :param Configure the writer with a CRAM output path and a reference FASTA.:
+   :param :
+   :type : param path: Destination CRAM file path.
+   :param :
+   :type : type path: str or os.PathLike
+   :param : CRAM cannot be encoded without it; samtools is invoked with
+            ``--reference`` on both the ``view -CS`` and ``sort -O cram``
+            stages.
+   :type : param reference_fasta: Reference FASTA used to compute reference-relative deltas.
+   :param :
+   :type : type reference_fasta: str or os.PathLike
 
 
    .. py:property:: reference_fasta
       :type: pathlib.Path
 
+
+      Return the reference-FASTA path.
+
+      :returns: *pathlib.Path* -- The reference path supplied at construction, unchanged.
 
 

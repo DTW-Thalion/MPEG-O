@@ -109,7 +109,7 @@ Module Contents
 
 
 
-   .. py:method:: open(group, name: str) -> GenomicRun
+   .. py:method:: open(group, name: str, *, references_group=None) -> GenomicRun
       :classmethod:
 
 
@@ -119,6 +119,12 @@ Module Contents
       caller resolves the child group before calling this classmethod.
       The genomic index and run-level attributes are loaded eagerly;
       signal channel datasets remain closed until first access.
+
+      Args:
+          references_group: the ``/study/references`` group as a
+              :class:`~ttio.providers.base.StorageGroup`, threaded
+              through to the REF_DIFF :class:`ReferenceResolver`. May
+              be ``None`` when the file carries no embedded references.
 
 
 

@@ -55,8 +55,14 @@ loadScripts(document, 'script');</script>
 <div class="toc-header">Contents&nbsp;<input type="text" class="filter-input" disabled placeholder="Filter contents (type .)" aria-label="Filter table of contents" autocomplete="off" spellcheck="false"><input type="reset" class="reset-filter" disabled tabindex="-1" value="Reset"></div>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#constructor-summary" tabindex="0">Constructor Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_READS" tabindex="0">PROGRESS_INTERVAL_READS</a></li>
+</ol>
+</li>
 <li><a href="#constructor-detail" tabindex="0">Constructor Details</a>
 <ol class="toc-list">
 <li><a href="#%3Cinit%3E(java.nio.file.Path)" tabindex="0">FastaReader(Path)</a></li>
@@ -68,7 +74,9 @@ loadScripts(document, 'script');</script>
 <li><a href="#readReference(java.lang.String)" tabindex="0">readReference(String)</a></li>
 <li><a href="#readReference()" tabindex="0">readReference()</a></li>
 <li><a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode)" tabindex="0">readUnaligned(String, String, String, Enums.AcquisitionMode)</a></li>
+<li><a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)" tabindex="0">readUnaligned(String, String, String, Enums.AcquisitionMode, ProgressSink)</a></li>
 <li><a href="#readUnaligned(java.lang.String)" tabindex="0">readUnaligned(String)</a></li>
+<li><a href="#readUnaligned(java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">readUnaligned(String, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -105,6 +113,25 @@ description (anything after the first whitespace) is dropped.</p>
 </section>
 <section class="summary">
 <ul class="summary-list">
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_READS" class="member-name-link">PROGRESS_INTERVAL_READS</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Default emit-every-N cadence for the
+  <a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)"><code>readUnaligned(String, String, String, AcquisitionMode, ProgressSink)</code></a>
+  <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ======== CONSTRUCTOR SUMMARY ======== -->
 <li>
 <section class="constructor-summary" id="constructor-summary">
@@ -148,12 +175,29 @@ description (anything after the first whitespace) is dropped.</p>
 <div class="block">Convenience overload with no platform / reference URI.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#readUnaligned(java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Convenience overload with no platform / reference URI that
+  accepts a <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;platform,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;referenceUri,
  <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
 <div class="block">Parse the file as a set of unaligned reads.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)" class="member-name-link">readUnaligned</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;platform,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;referenceUri,
+ <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Parse the file as a set of unaligned reads, emitting per-read
+<a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks.</div>
 </div>
 </div>
 </div>
@@ -167,6 +211,33 @@ description (anything after the first whitespace) is dropped.</p>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_READS">
+<h3>PROGRESS_INTERVAL_READS</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_READS</span></div>
+<div class="block">Default emit-every-N cadence for the
+  <a href="#readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)"><code>readUnaligned(String, String, String, AcquisitionMode, ProgressSink)</code></a>
+  <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>. Same default as <a href="FastqReader.html" title="class in global.thalion.ttio.importers"><code>FastqReader</code></a>.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.importers.FastaReader.PROGRESS_INTERVAL_READS">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ========= CONSTRUCTOR DETAIL ======== -->
 <li>
 <section class="constructor-details" id="constructor-detail">
@@ -251,12 +322,54 @@ values. Qualities are filled with <code>0xFF</code> (matching
 </section>
 </li>
 <li>
+<section class="detail" id="readUnaligned(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.Enums.AcquisitionMode,global.thalion.ttio.io.ProgressSink)">
+<h3>readUnaligned</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></span>&nbsp;<span class="element-name">readUnaligned</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;platform,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;referenceUri,
+ <a href="../Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                                throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Parse the file as a set of unaligned reads, emitting per-read
+<a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks.
+
+<p>Fires <code>progress.onProgress(done, -1L)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records during the parse phase
+(total is unknown until the trailing record flushes) and a final
+<code>onProgress(total, total)</code> once the count is known.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="readUnaligned(java.lang.String)">
 <h3>readUnaligned</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></span>&nbsp;<span class="element-name">readUnaligned</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName)</span>
                                 throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
 <div class="block">Convenience overload with no platform / reference URI.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="readUnaligned(java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>readUnaligned</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></span>&nbsp;<span class="element-name">readUnaligned</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                                throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Convenience overload with no platform / reference URI that
+  accepts a <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>

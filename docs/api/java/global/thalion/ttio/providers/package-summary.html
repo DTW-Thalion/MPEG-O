@@ -66,24 +66,27 @@ loadScripts(document, 'script');</script>
 <div class="horizontal-scroll">
 <div class="package-signature">package <span class="element-name">global.thalion.ttio.providers</span></div>
 <section class="package-description" id="package-description">
-<div class="block">Storage/transport provider abstraction — .
+<div class="block">Storage/transport provider abstraction.
 
-The TTI-O data model and API are the standard; the storage
+<p>The TTI-O data model and API are the standard; the storage
 backend is a pluggable implementation detail. Providers register
 via <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/ServiceLoader.html" title="class or interface in java.util" class="external-link"><code>ServiceLoader</code></a> (service interface:
 <a href="StorageProvider.html" title="interface in global.thalion.ttio.providers"><code>StorageProvider</code></a>) and are
-resolved by URL scheme or explicit name.
+resolved by URL scheme or explicit name.</p>
 
-Two providers ship with v0.6:
+<p>Four providers ship in the box:</p>
 <ul>
   <li><a href="Hdf5Provider.html" title="class in global.thalion.ttio.providers"><code>Hdf5Provider</code></a> — wraps
-  the existing <a href="../hdf5/Hdf5File.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5File</code></a>.</li>
+  <a href="../hdf5/Hdf5File.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5File</code></a> for HDF5 containers.</li>
   <li><a href="MemoryProvider.html" title="class in global.thalion.ttio.providers"><code>MemoryProvider</code></a> —
   in-memory tree for tests and transient pipelines.</li>
+  <li><a href="SqliteProvider.html" title="class in global.thalion.ttio.providers"><code>SqliteProvider</code></a> —
+  SQLite-backed containers.</li>
+  <li><a href="ZarrProvider.html" title="class in global.thalion.ttio.providers"><code>ZarrProvider</code></a> —
+  Zarr v3 stores.</li>
 </ul>
 
-<p><b>API status:</b> Stable (Provisional per M39 — may change
-before v1.0).</p></div>
+<p><b>API status:</b> Stable.</p></div>
 </section>
 </div>
 <section class="summary">

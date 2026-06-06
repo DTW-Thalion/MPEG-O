@@ -20,7 +20,7 @@ NS_ASSUME_NONNULL_BEGIN
  * §4.2 and §5.</p>
  *
  * <p>The <code>sampleId</code> matches
- * <code>TTIOAcquisitionRun.sampleName</code> for the run &rarr;
+ * <code>TTIOAcquisitionRun.sampleName</code> for the run →
  * sample link; that string remains the canonical link (no breaking
  * change in Stage 6). When both Sample rows and
  * <code>AcquisitionRun.sampleName</code> are present, applications

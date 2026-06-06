@@ -7,8 +7,8 @@ ttio.spectral_dataset
 
    ``SpectralDataset`` — root ``.tio`` reader / writer façade.
 
-   This class is the main public entry point. It owns the underlying
-   ``h5py.File`` handle, provides mapping-style access to runs, and exposes the
+   This class is the main public entry point. It delegates storage to a
+   :class:`~ttio.providers.base.StorageProvider`, provides mapping-style access to runs, and exposes the
    feature-flag / identifications / quantifications / provenance metadata.
 
    Only reading and minimal writing are implemented in M16. Full writing
@@ -16,14 +16,6 @@ ttio.spectral_dataset
    uses the same helpers in :mod:`_hdf5_io` and is fleshed out alongside the
    mzML/nmrML importers in M16.7.
 
-
-
-Attributes
-----------
-
-.. autoapisummary::
-
-   ttio.spectral_dataset.SAM_REVERSE_FLAG
 
 
 Classes
@@ -64,10 +56,6 @@ Module Contents
 
    .. py:attribute:: path
       :type:  pathlib.Path
-
-
-   .. py:attribute:: file
-      :type:  h5py.File | None
 
 
    .. py:attribute:: feature_flags
@@ -126,9 +114,8 @@ Module Contents
                        read-only). Default: ``False``.
       :param M39:
       :type M39: a :class:`~ttio.providers.Hdf5Provider` is constructed for
-      :param the target and exposed as ``dataset.provider``. The legacy:
-      :param ``dataset.file`` attribute continues to point at the underlying:
-      :param ``h5py.File`` (= ``provider.native_handle()``).:
+      :param the target and exposed as ``dataset.provider``. The dataset is:
+      :param provider-backed; reach storage through ``dataset.provider``.:
 
 
 
@@ -157,6 +144,14 @@ Module Contents
 
    .. py:method:: close() -> None
 
+      Release the underlying HDF5 file, provider, and remote handles.
+
+      Idempotent: calling :meth:`close` on an already-closed dataset is
+      a no-op. Invoked automatically by the context-manager protocol
+      (``with SpectralDataset.open(...) as ds:``) and from ``__del__``
+      as a best-effort safety net.
+
+
 
    .. py:method:: __enter__() -> SpectralDataset
 
@@ -170,6 +165,91 @@ Module Contents
    .. py:property:: is_encrypted
       :type: bool
 
+
+      Whether the dataset's signal payload is encrypted.
+
+      :returns: *bool* -- True when an ``@encrypted_algorithm`` attribute was recorded
+                on the root group at write time (regardless of which
+                channels carry ciphertext). False for plaintext datasets.
+
+
+   .. py:property:: references
+      :type: Mapping[str, ttio.genomic.reference_import.ReferenceImport]
+
+
+      Embedded references at ``/study/references/<uri>/``, keyed
+      by URI string.
+
+      Populated on :meth:`open` from the canonical embed layout (see
+      :func:`_embed_references_for_runs`). Empty for files without
+      embedded references — including those whose genomic runs use
+      ``embed_reference=False`` (the v1.2+ default), which keep the
+      ``reference_uri`` attribute but rely on the
+      :class:`ReferenceResolver` for byte resolution.
+
+      The return is a read-only view: mutations on the returned
+      mapping do not affect the dataset. Mirrors Java's
+      ``SpectralDataset.references()`` (added Phase 0 of
+      tio-browser).
+
+      :since: 1.1.0
+
+
+   .. py:method:: image_for_kind(kind: ttio.enums.ImageKind) -> Image | None
+
+      The embedded :class:`~ttio.image.Image` for the given
+      :class:`~ttio.enums.ImageKind`, or ``None`` when that modality
+      is absent.
+
+      Lazy per-kind: reads the cube on first access and caches the
+      result. Replaces the former typed ``image`` / ``raman_image``
+      / ``ir_image`` accessors with a uniform lookup.
+
+      :since: 1.2.0
+
+
+
+   .. py:property:: images
+      :type: dict[ImageKind, Image]
+
+
+      Embedded images keyed by :class:`~ttio.enums.ImageKind`,
+      containing only the modalities present on this dataset.
+
+      Each entry is materialised lazily via :meth:`image_for_kind`
+      (per-kind cache preserved). Absent modalities are omitted.
+
+      :since: 1.2.0
+
+
+   .. py:property:: subjects
+      :type: list[ttio.subject.Subject]
+
+
+      List of :class:`~ttio.subject.Subject` rows persisted under
+      ``/study/subjects/`` on this dataset, in on-disk iteration
+      order. Empty list when no Subjects were written (which is
+      most pre-Stage-6 files). Lazily populated on first access.
+
+      Stage 6 (transport-spec v0.11, Deferral 2). Mirrors Java
+      :meth:`global.thalion.ttio.SpectralDataset.subjects`.
+
+      :since: 1.4.0
+
+
+   .. py:property:: samples
+      :type: list[ttio.sample.Sample]
+
+
+      List of :class:`~ttio.sample.Sample` rows persisted under
+      ``/study/samples/`` on this dataset, in on-disk iteration
+      order. Empty list when no Samples were written. Lazily
+      populated on first access.
+
+      Stage 6 (transport-spec v0.11, Deferral 2). Mirrors Java
+      :meth:`global.thalion.ttio.SpectralDataset.samples`.
+
+      :since: 1.4.0
 
 
    .. py:property:: all_runs
@@ -244,11 +324,44 @@ Module Contents
 
    .. py:method:: identifications() -> list[ttio.identification.Identification]
 
+      Return the dataset's identification records.
+
+      Reads from the compound ``/study/identifications`` dataset when
+      present, falling back to the legacy ``@identifications_json``
+      attribute on ``/study`` for older files.
+
+      :returns: *list[Identification]* -- Identification records in stored order. Empty when no
+                identifications group or JSON attribute is present.
+
+
 
    .. py:method:: quantifications() -> list[ttio.quantification.Quantification]
 
+      Return the dataset's quantification records.
+
+      Reads from the compound ``/study/quantifications`` dataset when
+      present (with optional per-row units from the
+      ``@quantification_units`` JSON sidecar attribute), falling back
+      to the legacy ``@quantifications_json`` attribute for older
+      files.
+
+      :returns: *list[Quantification]* -- Quantification records in stored order. Empty when no
+                quantifications group or JSON attribute is present.
+
+
 
    .. py:method:: provenance() -> list[ttio.provenance.ProvenanceRecord]
+
+      Return the dataset-level provenance chain.
+
+      Reads from the compound ``/study/provenance`` dataset when
+      present, falling back to the legacy ``@provenance_json``
+      attribute on ``/study`` for older files. Per-run provenance is
+      exposed separately by :class:`AcquisitionRun.provenance_records`.
+
+      :returns: *list[ProvenanceRecord]* -- Provenance records in stored order. Empty when neither the
+                compound dataset nor the JSON attribute is present.
+
 
 
    .. py:method:: encrypt_with_key(key: bytes, level: ttio.enums.EncryptionLevel | None = None) -> None
@@ -268,15 +381,33 @@ Module Contents
 
    .. py:method:: decrypt_with_key(key: bytes) -> dict[str, bytes]
 
-      Decrypt every MS run's intensity channel.
+      Decrypt every MS run's intensity channel into an in-memory overlay.
 
-      Returns a mapping of ``{run_name: plaintext_bytes}``. The on-disk
-      file is NOT modified — decryption is read-only.
+      Returns a mapping of ``{run_name: plaintext_bytes}``.
 
-      Side effect: each run's decrypted channel is cached in memory so
-      ``run.object_at_index(i).intensity_array`` works without re-decrypting
-      (Option 1 of the MCP-Server M5 handoff; mirrors ObjC
-      ``-[TTIOSpectralDataset decryptWithKey:]`` rehydration semantics).
+      **Read-only / asymmetric**: the on-disk file is NOT modified,
+      the root ``@encrypted`` attribute is left in place, and
+      :attr:`is_encrypted` continues to return ``True`` on this
+      instance and on any reopen. This is the asymmetric counterpart
+      to :meth:`encrypt_with_key` (which IS persistent +
+      flag-flipping) by design: in-memory rehydration lets a process
+      read encrypted data without rewriting the file.
+
+      To fully reverse encryption on disk and clear the
+      ``@encrypted`` attribute, use the classmethod
+      :meth:`decrypt_in_place` — close any open instance first.
+
+      Side effect: each run's decrypted channel is cached in memory
+      so ``run.object_at_index(i).intensity_array`` works without
+      re-decrypting (Option 1 of the MCP-Server M5 handoff; mirrors
+      ObjC ``-[TTIOSpectralDataset decryptWithKey:]`` rehydration
+      semantics).
+
+      Cross-language equivalents
+      --------------------------
+      Java: ``SpectralDataset.decryptWithKey(byte[])`` (same
+      in-memory-only semantics) · Objective-C:
+      ``-[TTIOSpectralDataset decryptWithKey:error:]`` (same).
 
 
 
@@ -316,7 +447,7 @@ Module Contents
 
 
 
-   .. py:method:: write_minimal(path: str | pathlib.Path, *, title: str, isa_investigation_id: str, runs: Mapping[str, WrittenRun], genomic_runs: Mapping[str, ttio.written_genomic_run.WrittenGenomicRun] | None = None, identifications: list[ttio.identification.Identification] | None = None, quantifications: list[ttio.quantification.Quantification] | None = None, provenance: list[ttio.provenance.ProvenanceRecord] | None = None, features: list[str] | None = None, provider: str | ttio.providers.StorageProvider = 'hdf5') -> pathlib.Path
+   .. py:method:: write_minimal(path: str | pathlib.Path, *, title: str, isa_investigation_id: str, runs: Mapping[str, WrittenRun], genomic_runs: Mapping[str, ttio.written_genomic_run.WrittenGenomicRun] | None = None, identifications: list[ttio.identification.Identification] | None = None, quantifications: list[ttio.quantification.Quantification] | None = None, provenance: list[ttio.provenance.ProvenanceRecord] | None = None, features: list[str] | None = None, provider: str | ttio.providers.StorageProvider = 'hdf5', image: MSImage | None = None, raman_image: RamanImage | None = None, ir_image: IRImage | None = None, subjects: list[ttio.subject.Subject] | None = None, samples: list[ttio.sample.Sample] | None = None, progress: ProgressSinkLike | None = None) -> pathlib.Path
       :classmethod:
 
 
@@ -405,9 +536,63 @@ Module Contents
 
 
 
+   .. py:attribute:: centroideds
+      :type:  numpy.ndarray | None
+      :value: None
+
+
+
    .. py:attribute:: nucleus_type
       :type:  str
       :value: ''
+
+
+
+   .. py:attribute:: solvent
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: ir_mode
+      :type:  int | None
+      :value: None
+
+
+
+   .. py:attribute:: ir_resolution_cm_inv
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: ir_number_of_scans
+      :type:  int
+      :value: 0
+
+
+
+   .. py:attribute:: raman_excitation_wavelength_nm
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: raman_laser_power_mw
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: raman_integration_time_sec
+      :type:  float
+      :value: 0.0
+
+
+
+   .. py:attribute:: uvvis_path_length_cm
+      :type:  float
+      :value: 0.0
 
 
 
@@ -427,9 +612,5 @@ Module Contents
       :type:  list
       :value: []
 
-
-
-.. py:data:: SAM_REVERSE_FLAG
-   :value: 16
 
 

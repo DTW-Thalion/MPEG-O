@@ -55,11 +55,18 @@ loadScripts(document, 'script');</script>
 <div class="toc-header">Contents&nbsp;<input type="text" class="filter-input" disabled placeholder="Filter contents (type .)" aria-label="Filter table of contents" autocomplete="off" spellcheck="false"><input type="reset" class="reset-filter" disabled tabindex="-1" value="Reset"></div>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_SPECTRA" tabindex="0">PROGRESS_INTERVAL_SPECTRA</a></li>
+</ol>
+</li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String)" tabindex="0">write(AcquisitionRun, String)</a></li>
 <li><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean)" tabindex="0">write(AcquisitionRun, String, boolean)</a></li>
+<li><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(AcquisitionRun, String, boolean, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -91,6 +98,24 @@ Python: <code>ttio.exporters.mzml</code></p></div>
 </section>
 <section class="summary">
 <ul class="summary-list">
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_SPECTRA" class="member-name-link">PROGRESS_INTERVAL_SPECTRA</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during mzML spectrum serialisation.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ========== METHOD SUMMARY =========== -->
 <li>
 <section class="method-summary" id="method-summary">
@@ -115,6 +140,17 @@ Python: <code>ttio.exporters.mzml</code></p></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Write an AcquisitionRun as indexedmzML.</div>
 </div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ boolean&nbsp;zlibCompress,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of <a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean)"><code>write(AcquisitionRun, String, boolean)</code></a>
+that fires <code>progress.onProgress(specsDone, totalSpecs)</code>
+every <a href="#PROGRESS_INTERVAL_SPECTRA"><code>PROGRESS_INTERVAL_SPECTRA</code></a> spectra and a final fire
+once the file is flushed.</div>
+</div>
 </div>
 </div>
 </div>
@@ -127,6 +163,33 @@ Python: <code>ttio.exporters.mzml</code></p></div>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_SPECTRA">
+<h3>PROGRESS_INTERVAL_SPECTRA</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_SPECTRA</span></div>
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during mzML spectrum serialisation. Mirrors
+  <code>MzMLReader.PROGRESS_INTERVAL_SPECTRA = 100</code>.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.exporters.MzMLWriter.PROGRESS_INTERVAL_SPECTRA">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ============ METHOD DETAIL ========== -->
 <li>
 <section class="method-details" id="method-detail">
@@ -155,6 +218,25 @@ Python: <code>ttio.exporters.mzml</code></p></div>
 <dd><code>run</code> - the acquisition run to serialize</dd>
 <dd><code>path</code> - output file path</dd>
 <dd><code>zlibCompress</code> - if true, zlib-compress binary data arrays</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="../AcquisitionRun.html" title="class in global.thalion.ttio">AcquisitionRun</a>&nbsp;run,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path,
+ boolean&nbsp;zlibCompress,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">Stage D overload of <a href="#write(global.thalion.ttio.AcquisitionRun,java.lang.String,boolean)"><code>write(AcquisitionRun, String, boolean)</code></a>
+that fires <code>progress.onProgress(specsDone, totalSpecs)</code>
+every <a href="#PROGRESS_INTERVAL_SPECTRA"><code>PROGRESS_INTERVAL_SPECTRA</code></a> spectra and a final fire
+once the file is flushed.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

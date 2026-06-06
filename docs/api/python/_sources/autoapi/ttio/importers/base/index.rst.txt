@@ -1,0 +1,73 @@
+ttio.importers.base
+===================
+
+.. py:module:: ttio.importers.base
+
+.. autoapi-nested-parse::
+
+   ``Reader`` — uniform importer interface. A reader parses one or more
+   source files into an in-memory :class:`ImportedDataset`; it does NOT
+   write any `.tio` file (the registry / caller calls ``.write()``).
+
+   Cross-language equivalents: Java ``importers.Reader``, Objective-C
+   ``TTIOReader``.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.base.Reader
+
+
+Module Contents
+---------------
+
+.. py:class:: Reader
+
+   Bases: :py:obj:`Protocol`
+
+
+   Base class for protocol classes.
+
+   Protocol classes are defined as::
+
+       class Proto(Protocol):
+           def meth(self) -> int:
+               ...
+
+   Such classes are primarily used with static type checkers that recognize
+   structural subtyping (static duck-typing).
+
+   For example::
+
+       class C:
+           def meth(self) -> int:
+               return 0
+
+       def func(x: Proto) -> int:
+           return x.meth()
+
+       func(C())  # Passes static type check
+
+   See PEP 544 for details. Protocol classes decorated with
+   @typing.runtime_checkable act as simple-minded runtime protocols that check
+   only the presence of given attributes, ignoring their type signatures.
+   Protocol classes can be generic, they are defined as::
+
+       class GenProto[T](Protocol):
+           def meth(self) -> T:
+               ...
+
+
+   .. py:method:: read(inputs: list, opts: Mapping, progress=None) -> ttio.importers.imported_dataset.ImportedDataset
+
+      Parse ``inputs`` into a draft. ``inputs[0]`` is the primary
+      source; extra entries carry secondary files (e.g. imzML ``.ibd``).
+      ``opts`` carries format-specific knobs (``reference``, ``ms2``,
+      ``name``, ``sample``, ``encoding``).
+
+
+

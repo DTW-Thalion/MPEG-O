@@ -22,6 +22,9 @@ Module Contents
 
 .. py:class:: IRImage
 
+   Bases: :py:obj:`ttio.image.Image`
+
+
    Infrared hyperspectral imaging dataset: a ``width × height`` grid
    of pixels, each pixel an IR spectrum of ``spectral_points`` intensity
    values sampled at a shared rank-1 ``wavenumbers`` axis.
@@ -69,54 +72,8 @@ Module Contents
    ``global.thalion.ttio.IRImage``.
 
 
-   .. py:attribute:: width
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: height
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: spectral_points
-      :type:  int
-      :value: 0
-
-
-
-   .. py:attribute:: pixel_size_x
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: pixel_size_y
-      :type:  float
-      :value: 0.0
-
-
-
-   .. py:attribute:: intensity
-      :type:  numpy.ndarray
-
-
    .. py:attribute:: wavenumbers
       :type:  numpy.ndarray
-
-
-   .. py:attribute:: scan_pattern
-      :type:  str
-      :value: ''
-
-
-
-   .. py:attribute:: tile_size
-      :type:  int
-      :value: 0
-
 
 
    .. py:attribute:: mode
@@ -129,36 +86,50 @@ Module Contents
 
 
 
-   .. py:attribute:: title
-      :type:  str
-      :value: ''
+   .. py:attribute:: kind
+      :type:  ClassVar[ttio.enums.ImageKind]
 
 
-
-   .. py:attribute:: isa_investigation_id
-      :type:  str
-      :value: ''
+   .. py:property:: spectral_axis
+      :type: numpy.ndarray
 
 
-
-   .. py:attribute:: identifications
-      :type:  list
-      :value: []
+      The wavenumber axis (alias of :attr:`wavenumbers`).
 
 
-
-   .. py:attribute:: quantifications
-      :type:  list
-      :value: []
+   .. py:property:: spectral_axis_kind
+      :type: ttio.enums.SpectralAxisKind
 
 
-
-   .. py:attribute:: provenance_records
-      :type:  list
-      :value: []
-
+      Interpretation of :attr:`spectral_axis` for this modality.
 
 
    .. py:method:: __post_init__() -> None
+
+
+   .. py:method:: write_to(study_group) -> None
+
+      Write this IR image cube under ``<study_group>/ir_image_cube/``.
+
+      Mirrors :meth:`global.thalion.ttio.IRImage.writeTo` — intensity
+      as a 3-D ``[h, w, sp]`` dataset, ``wavenumbers`` 1-D dataset,
+      and IR-specific scalar attributes (``ir_mode``,
+      ``resolution_cm_inv``).
+
+      Pixel size attributes are written as **native double** (not
+      strings), applying the PR #31 lesson immediately so legacy-string
+      reads remain backwards-compatible via :meth:`read_from`.
+
+
+
+   .. py:method:: read_from(study_group) -> IRImage | None
+      :classmethod:
+
+
+      Read an IR image cube from a study group; return None if absent.
+
+      Accepts both native-double (written by this class) and legacy
+      string forms for ``pixel_size_x/y`` and ``resolution_cm_inv``.
+
 
 

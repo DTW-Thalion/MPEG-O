@@ -1,0 +1,312 @@
+ttio.workbench.sessions
+=======================
+
+.. py:module:: ttio.workbench.sessions
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.sessions -- interactive-session client.
+
+   Wraps the workbench server's REST surface for sessions:
+
+     POST   /v1/sessions       -- create + spawn
+     GET    /v1/sessions       -- list (project-scoped, optional ?status=)
+     GET    /v1/sessions/{id}  -- detail
+     DELETE /v1/sessions/{id}  -- terminate (starting -> failed sync;
+                                   running -> SIGTERM + cancel-grace)
+
+   WS-proxy attach lives in `ttio.workbench.session_proxy`; this module
+   exposes the REST surface only.
+
+   Session state machine (statuses emitted on the wire):
+
+       starting --[spawn]--> running --[exit]--> terminated
+          |                    |                  | failed
+          |                    |
+          +--[cancel]-> failed +--[DELETE]-> terminating --> terminated
+
+   `starting` rows DO NOT count toward the `max_concurrent` cap;
+   `running` + `terminating` do. v1.0 server side caps to 16 by
+   default (config knob `sessions.max_concurrent`).
+
+   Bind-mount validation: server requires every key in `bind_mounts`
+   to sit under `<containerStorageRoot>/<project>/` with no `..`
+   sequences. The client validates the same rules ahead of POST so
+   operators see typos at submit time rather than at 403.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.sessions.SESSION_STATUSES
+   ttio.workbench.sessions.TERMINAL_SESSION_STATUSES
+   ttio.workbench.sessions.InteractiveSession
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.sessions.Session
+   ttio.workbench.sessions.SessionsClient
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.sessions.validate_bind_mounts
+
+
+Module Contents
+---------------
+
+.. py:data:: SESSION_STATUSES
+
+.. py:data:: TERMINAL_SESSION_STATUSES
+
+.. py:class:: Session
+
+   A session as returned by `GET /v1/sessions{,/{id}}`.
+
+   Fields mirror `Source/HTTP/handlers/TTIOWBSessionsHandler.m`'s
+   `_sessionToJson:` output. Fields that the server emits only
+   when non-null come through as `None` in the dataclass.
+
+
+   .. py:attribute:: session_id
+      :type:  str
+
+
+   .. py:attribute:: status
+      :type:  str
+
+
+   .. py:attribute:: project
+      :type:  str
+
+
+   .. py:attribute:: owner
+      :type:  str
+
+
+   .. py:attribute:: engine_identifier
+      :type:  str
+
+
+   .. py:attribute:: started_at
+      :type:  int
+
+
+   .. py:attribute:: host_port
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: pid
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: container_id
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: working_dir
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: ready_at
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: last_seen_at
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: terminated_at
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: exit_code
+      :type:  Optional[int]
+      :value: None
+
+
+
+   .. py:attribute:: error_message
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: image
+      :type:  Optional[str]
+      :value: None
+
+
+
+   .. py:attribute:: command
+      :type:  Sequence[str]
+      :value: ()
+
+
+
+   .. py:attribute:: env
+      :type:  Mapping[str, str]
+
+
+   .. py:attribute:: bind_mounts
+      :type:  Mapping[str, str]
+
+
+   .. py:property:: is_terminal
+      :type: bool
+
+
+      Return True when the session has reached a terminal status.
+
+      :returns: *bool* -- True for ``terminated`` or ``failed``; False for
+                ``starting``, ``running``, or ``terminating``.
+
+
+   .. py:property:: is_attachable
+      :type: bool
+
+
+      Return True when the session accepts a WS attach.
+
+      :returns: *bool* -- True only when ``status == "running"``. The server's
+                session-proxy mount rejects attach in any other state.
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> Session
+      :classmethod:
+
+
+      Construct a :class:`Session` from a parsed server JSON body.
+
+      :param body: Decoded JSON object from ``/v1/sessions{,/{id}}``.
+      :type body: Mapping[str, Any]
+
+      :returns: *Session* -- Immutable snapshot. Optional fields not yet populated by
+                the server are set to ``None`` or their empty default.
+
+
+
+.. py:function:: validate_bind_mounts(bind_mounts: Optional[Mapping[str, str]], *, project: str, container_storage_root: Optional[str] = None) -> None
+
+   Client-side mirror of the daemon's bind-mount validation.
+
+   Server-side rules (from
+   `Source/HTTP/handlers/TTIOWBSessionsHandler.m:111-144`):
+
+     - All keys are host paths; must be absolute.
+     - No `..` segments anywhere in the path.
+     - When `container_storage_root` is known, keys must sit under
+       `<container_storage_root>/<project>/`.
+
+   The client can't know `container_storage_root` without an admin
+   round-trip; when it's None we only check absolute + no `..`.
+   The server will catch any project-scope violation with 403; we
+   just front-run the obvious typos.
+
+
+.. py:class:: SessionsClient(host: str, port: int, *, scheme: str, token: str)
+
+   REST surface for interactive sessions.
+
+   Bind the client to a server endpoint and bearer token.
+
+   :param host: Workbench server hostname.
+   :type host: str
+   :param port: TCP port the REST listener is bound to.
+   :type port: int
+   :param scheme: ``"http"`` or ``"https"``.
+   :type scheme: str
+   :param token: Bearer token (``ttiowbs_...``).
+   :type token: str
+
+
+   .. py:method:: create(*, project: str, engine_pin: str, image: Optional[str] = None, command: Optional[Sequence[str]] = None, env: Optional[Mapping[str, str]] = None, bind_mounts: Optional[Mapping[str, str]] = None, container_storage_root: Optional[str] = None) -> Session
+
+      POST /v1/sessions. Returns the freshly-created session row
+      (status will be `starting`; the lifecycle thread spawns
+      shortly thereafter).
+
+      Capability required server-side: `sessions.start`.
+
+      Args:
+          project: caller must be a member.
+          engine_pin: `shell`, or a descriptor-loaded engine
+              (`apptainer` / `podman` / etc.).
+          image, command, env: engine-specific. Shell engine
+              ignores `image`.
+          bind_mounts: host-path -> container-path map. Validated
+              client-side (absolute, no `..`); server enforces
+              project-scope.
+          container_storage_root: optional; when supplied, client
+              validates that bind-mount host paths sit under
+              `<root>/<project>/` so the operator catches typos
+              before the server returns 403.
+
+
+
+   .. py:method:: list(*, status_filter: Optional[str] = None, limit: Optional[int] = None) -> list[Session]
+
+      List sessions visible to the caller's project scope.
+
+      :param status_filter: One of ``starting``, ``running``, ``terminating``,
+                            ``terminated``, ``failed``. When None, all states are
+                            returned.
+      :type status_filter: str, optional
+      :param limit: Maximum row count.
+      :type limit: int, optional
+
+      :returns: *list[Session]* -- Sessions ordered as the server returns them.
+
+      :raises WorkbenchHttpError: On non-200 response.
+
+
+
+   .. py:method:: get(session_id: str) -> Session
+
+      Fetch a single session by identifier.
+
+      :param session_id: Server-assigned session identifier.
+      :type session_id: str
+
+      :returns: *Session* -- Current snapshot of the session row.
+
+      :raises WorkbenchHttpError: On non-200 response (404 when the id is unknown).
+
+
+
+   .. py:method:: terminate(session_id: str) -> None
+
+      DELETE /v1/sessions/{id}. Returns 204 No Content on
+      success; 409 when the session is already terminal.
+
+      Authorization: session owner OR `sessions.terminate.any`.
+
+
+
+.. py:data:: InteractiveSession
+

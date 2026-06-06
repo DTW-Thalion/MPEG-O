@@ -100,10 +100,27 @@ loadScripts(document, 'script');</script>
   filename rewriting.</div>
 </div>
 <div class="col-first odd-row-color"><code>static <a href="../ImzMLReader.ImzMLImport.html" title="class in global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a></code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">ImzMLReader.</span><code><a href="../ImzMLReader.html#read(java.nio.file.Path,java.nio.file.Path)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath)</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">ImzMLReader.</span><code><a href="../ImzMLReader.html#read(java.nio.file.Path,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
 <div class="col-last odd-row-color">
+<div class="block">Overload of <a href="../ImzMLReader.html#read(java.nio.file.Path)"><code>ImzMLReader.read(Path)</code></a> that accepts a
+  <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
+<div class="col-first even-row-color"><code>static <a href="../ImzMLReader.ImzMLImport.html" title="class in global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ImzMLReader.</span><code><a href="../ImzMLReader.html#read(java.nio.file.Path,java.nio.file.Path)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath)</code></div>
+<div class="col-last even-row-color">
 <div class="block">Parse an imzML metadata file with an explicit .ibd location.</div>
+</div>
+<div class="col-first odd-row-color"><code>static <a href="../ImzMLReader.ImzMLImport.html" title="class in global.thalion.ttio.importers">ImzMLReader.ImzMLImport</a></code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">ImzMLReader.</span><code><a href="../ImzMLReader.html#read(java.nio.file.Path,java.nio.file.Path,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;imzmlPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;ibdPath,
+ <a href="../../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">Parse an imzML metadata file with an explicit .ibd location,
+firing <code>progress.onProgress(pixelsDone, totalPixels)</code> every
+<a href="../ImzMLReader.html#PROGRESS_INTERVAL_SPECTRA"><code>ImzMLReader.PROGRESS_INTERVAL_SPECTRA</code></a> pixels during the .ibd
+materialisation phase.</div>
 </div>
 </div>
 </section>

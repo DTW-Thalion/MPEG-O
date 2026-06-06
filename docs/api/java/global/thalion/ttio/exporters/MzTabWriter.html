@@ -56,11 +56,18 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
 <li><a href="#nested-class-summary" tabindex="0">Nested Class Summary</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_ROWS" tabindex="0">PROGRESS_INTERVAL_ROWS</a></li>
+</ol>
+</li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#write(java.nio.file.Path,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String)" tabindex="0">write(Path, List, List, String, String, String)</a></li>
 <li><a href="#write(java.nio.file.Path,java.util.List,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String)" tabindex="0">write(Path, List, List, List, String, String, String)</a></li>
+<li><a href="#write(java.nio.file.Path,java.util.List,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">write(Path, List, List, List, String, String, String, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -108,6 +115,24 @@ Objective-C: <code>TTIOMzTabWriter</code></p></div>
 </div>
 </section>
 </li>
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_ROWS" class="member-name-link">PROGRESS_INTERVAL_ROWS</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during mzTab row emission.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ========== METHOD SUMMARY =========== -->
 <li>
 <section class="method-summary" id="method-summary">
@@ -138,6 +163,22 @@ Objective-C: <code>TTIOMzTabWriter</code></p></div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="MzTabWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">MzTabWriter.WriteResult</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#write(java.nio.file.Path,java.util.List,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Feature.html" title="class in global.thalion.ttio">Feature</a>&gt;&nbsp;features,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;version,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload that fires
+<code>progress.onProgress(rowsDone, totalRows)</code> every
+<a href="#PROGRESS_INTERVAL_ROWS"><code>PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM /
+SML / SMF / SME) emitted and a final fire once the file is
+flushed to disk.</div>
+</div>
 </div>
 </div>
 </div>
@@ -150,6 +191,33 @@ Objective-C: <code>TTIOMzTabWriter</code></p></div>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_ROWS">
+<h3>PROGRESS_INTERVAL_ROWS</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_ROWS</span></div>
+<div class="block">Stage D: emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during mzTab row emission. Mirrors
+  <code>MzTabReader.PROGRESS_INTERVAL_ROWS = 500</code>.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.exporters.MzTabWriter.PROGRESS_INTERVAL_ROWS">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ============ METHOD DETAIL ========== -->
 <li>
 <section class="method-details" id="method-detail">
@@ -180,6 +248,33 @@ Objective-C: <code>TTIOMzTabWriter</code></p></div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;version,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description)</span></div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="write(java.nio.file.Path,java.util.List,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>write</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="MzTabWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">MzTabWriter.WriteResult</a></span>&nbsp;<span class="element-name">write</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Feature.html" title="class in global.thalion.ttio">Feature</a>&gt;&nbsp;features,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;version,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span></div>
+<div class="block">Stage D overload that fires
+<code>progress.onProgress(rowsDone, totalRows)</code> every
+<a href="#PROGRESS_INTERVAL_ROWS"><code>PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM /
+SML / SMF / SME) emitted and a final fire once the file is
+flushed to disk. <code>totalRows</code> is reported as
+<code>-1L</code> mid-emit because the writer accumulates rows across
+multiple sections before knowing the final count, and the
+final fire stamps both done and total with the exact row count.</div>
+<dl class="notes">
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
 </div>
 </section>
 </li>

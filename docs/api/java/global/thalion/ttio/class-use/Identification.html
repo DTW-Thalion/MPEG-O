@@ -65,12 +65,25 @@ loadScripts(document, 'script');</script>
 <div class="col-last odd-row-color">&nbsp;</div>
 <div class="col-first even-row-color"><a href="#global.thalion.ttio.importers">global.thalion.ttio.importers</a></div>
 <div class="col-last even-row-color">&nbsp;</div>
+<div class="col-first odd-row-color"><a href="#global.thalion.ttio.transport">global.thalion.ttio.transport</a></div>
+<div class="col-last odd-row-color">&nbsp;</div>
 </div>
 <section class="class-uses">
 <ul class="block-list">
 <li>
 <section class="detail" id="global.thalion.ttio">
 <h2>Uses of <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a> in <a href="../package-summary.html">global.thalion.ttio</a></h2>
+<div class="caption"><span>Fields in <a href="../package-summary.html">global.thalion.ttio</a> with type parameters of type <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>protected final <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Image.</span><code><a href="../Image.html#identifications" class="member-name-link">identifications</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Unmodifiable list of dataset-level identifications.</div>
+</div>
+</div>
 <div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio</a> that return <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -92,13 +105,7 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-second">Method</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">IRImage.</span><code><a href="../IRImage.html#identifications()" class="member-name-link">identifications</a>()</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
-<div class="col-second odd-row-color"><span class="type-name-label">MSImage.</span><code><a href="../MSImage.html#identifications()" class="member-name-link">identifications</a>()</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
-<div class="col-first even-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">RamanImage.</span><code><a href="../RamanImage.html#identifications()" class="member-name-link">identifications</a>()</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">Image.</span><code><a href="../Image.html#identifications()" class="member-name-link">identifications</a>()</code></div>
 <div class="col-last even-row-color">&nbsp;</div>
 <div class="col-first odd-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">SpectralDataset.</span><code><a href="../SpectralDataset.html#identifications()" class="member-name-link">identifications</a>()</code></div>
@@ -127,8 +134,25 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-first">Modifier</div>
 <div class="table-header col-second">Constructor</div>
 <div class="table-header col-last">Description</div>
-<div class="col-first even-row-color"><code>&nbsp;</code></div>
-<div class="col-second even-row-color"><code><a href="../IRImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,global.thalion.ttio.Enums.IRMode,double,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">IRImage</a><wbr>(int&nbsp;width,
+<div class="col-first even-row-color"><code>protected </code></div>
+<div class="col-second even-row-color"><code><a href="../Image.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">Image</a><wbr>(int&nbsp;width,
+ int&nbsp;height,
+ int&nbsp;spectralPoints,
+ int&nbsp;tileSize,
+ double&nbsp;pixelSizeX,
+ double&nbsp;pixelSizeY,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;scanPattern,
+ double[]&nbsp;intensityCube,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;isaInvestigationId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Common constructor invoked by every subclass via <code>super(...)</code>.</div>
+</div>
+<div class="col-first odd-row-color"><code>&nbsp;</code></div>
+<div class="col-second odd-row-color"><code><a href="../IRImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,global.thalion.ttio.Enums.IRMode,double,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">IRImage</a><wbr>(int&nbsp;width,
  int&nbsp;height,
  int&nbsp;spectralPoints,
  int&nbsp;tileSize,
@@ -144,9 +168,12 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
-<div class="col-first odd-row-color"><code>&nbsp;</code></div>
-<div class="col-second odd-row-color"><code><a href="../MSImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">MSImage</a><wbr>(int&nbsp;width,
+<div class="col-last odd-row-color">
+<div class="block">Full constructor capturing every cube dimension and study-level
+annotation.</div>
+</div>
+<div class="col-first even-row-color"><code>&nbsp;</code></div>
+<div class="col-second even-row-color"><code><a href="../MSImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">MSImage</a><wbr>(int&nbsp;width,
  int&nbsp;height,
  int&nbsp;spectralPoints,
  int&nbsp;tileSize,
@@ -160,11 +187,11 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
-<div class="col-last odd-row-color">
+<div class="col-last even-row-color">
 <div class="block">Designated constructor (1.2.0): includes mzAxis.</div>
 </div>
-<div class="col-first even-row-color"><code>&nbsp;</code></div>
-<div class="col-second even-row-color"><code><a href="../MSImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">MSImage</a><wbr>(int&nbsp;width,
+<div class="col-first odd-row-color"><code>&nbsp;</code></div>
+<div class="col-second odd-row-color"><code><a href="../MSImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">MSImage</a><wbr>(int&nbsp;width,
  int&nbsp;height,
  int&nbsp;spectralPoints,
  int&nbsp;tileSize,
@@ -177,11 +204,11 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
-<div class="col-last even-row-color">
+<div class="col-last odd-row-color">
 <div class="block">Backwards-compat 13-arg ctor (1.1.x callers): defaults mzAxis to empty.</div>
 </div>
-<div class="col-first odd-row-color"><code>&nbsp;</code></div>
-<div class="col-second odd-row-color"><code><a href="../RamanImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double,double,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">RamanImage</a><wbr>(int&nbsp;width,
+<div class="col-first even-row-color"><code>&nbsp;</code></div>
+<div class="col-second even-row-color"><code><a href="../RamanImage.html#%3Cinit%3E(int,int,int,int,double,double,java.lang.String,double,double,double%5B%5D,double%5B%5D,java.lang.String,java.lang.String,java.util.List,java.util.List,java.util.List)" class="member-name-link">RamanImage</a><wbr>(int&nbsp;width,
  int&nbsp;height,
  int&nbsp;spectralPoints,
  int&nbsp;tileSize,
@@ -197,7 +224,10 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../ProvenanceRecord.html" title="class in global.thalion.ttio">ProvenanceRecord</a>&gt;&nbsp;provenanceRecords)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Full constructor capturing every cube dimension, laser metadata,
+and study-level annotation.</div>
+</div>
 </div>
 </section>
 </li>
@@ -228,12 +258,37 @@ loadScripts(document, 'script');</script>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description)</code></div>
 <div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-first even-row-color"><code>static <a href="../exporters/MzTabWriter.WriteResult.html" title="class in global.thalion.ttio.exporters">MzTabWriter.WriteResult</a></code></div>
+<div class="col-second even-row-color"><span class="type-name-label">MzTabWriter.</span><code><a href="../exporters/MzTabWriter.html#write(java.nio.file.Path,java.util.List,java.util.List,java.util.List,java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">write</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Quantification.html" title="class in global.thalion.ttio">Quantification</a>&gt;&nbsp;quantifications,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Feature.html" title="class in global.thalion.ttio">Feature</a>&gt;&nbsp;features,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;version,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;description,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Stage D overload that fires
+<code>progress.onProgress(rowsDone, totalRows)</code> every
+<a href="../exporters/MzTabWriter.html#PROGRESS_INTERVAL_ROWS"><code>MzTabWriter.PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM /
+SML / SMF / SME) emitted and a final fire once the file is
+flushed to disk.</div>
+</div>
 </div>
 </section>
 </li>
 <li>
 <section class="detail" id="global.thalion.ttio.importers">
 <h2>Uses of <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a> in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a></h2>
+<div class="caption"><span>Fields in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> with type parameters of type <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>final <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ImportedDataset.</span><code><a href="../importers/ImportedDataset.html#identifications" class="member-name-link">identifications</a></code></div>
+<div class="col-last even-row-color">&nbsp;</div>
+</div>
 <div class="caption"><span>Methods in <a href="../importers/package-summary.html">global.thalion.ttio.importers</a> that return types with arguments of type <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a></span></div>
 <div class="summary-table three-column-summary">
 <div class="table-header col-first">Modifier and Type</div>
@@ -243,6 +298,47 @@ loadScripts(document, 'script');</script>
 <div class="col-second even-row-color"><span class="type-name-label">MzTabReader.MzTabImport.</span><code><a href="../importers/MzTabReader.MzTabImport.html#identifications()" class="member-name-link">identifications</a>()</code></div>
 <div class="col-last even-row-color">
 <div class="block">Returns the value of the <code>identifications</code> record component.</div>
+</div>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="global.thalion.ttio.transport">
+<h2>Uses of <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a> in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a></h2>
+<div class="caption"><span>Methods in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a> that return types with arguments of type <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ArrowIpcCodec.</span><code><a href="../transport/ArrowIpcCodec.html#decodeIdentifications(byte%5B%5D)" class="member-name-link">decodeIdentifications</a><wbr>(byte[]&nbsp;ipc)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Decode an Arrow IPC stream into a list of <a href="../Identification.html" title="class in global.thalion.ttio"><code>Identification</code></a>.</div>
+</div>
+</div>
+<div class="caption"><span>Method parameters in <a href="../transport/package-summary.html">global.thalion.ttio.transport</a> with type arguments of type <a href="../Identification.html" title="class in global.thalion.ttio">Identification</a></span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Method</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static byte[]</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">ArrowIpcCodec.</span><code><a href="../transport/ArrowIpcCodec.html#encodeIdentifications(java.util.List)" class="member-name-link">encodeIdentifications</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;rows)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Encode a list of <a href="../Identification.html" title="class in global.thalion.ttio"><code>Identification</code></a> rows as an Arrow IPC
+stream.</div>
+</div>
+<div class="col-first odd-row-color"><code>default void</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">AccessUnitVisitor.</span><code><a href="../transport/AccessUnitVisitor.html#visitIdentificationsTable(global.thalion.ttio.transport.DatasetWalker,java.util.List)" class="member-name-link">visitIdentificationsTable</a><wbr>(<a href="../transport/DatasetWalker.html" title="class in global.thalion.ttio.transport">DatasetWalker</a>&nbsp;walker,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;rows)</code></div>
+<div class="col-last odd-row-color">
+<div class="block">§5.4.6 — <a href="../Identification.html" title="class in global.thalion.ttio"><code>Identification</code></a> rows.</div>
+</div>
+<div class="col-first even-row-color"><code>void</code></div>
+<div class="col-second even-row-color"><span class="type-name-label">TransportWriter.</span><code><a href="../transport/TransportWriter.html#writeIdentifications(java.util.List)" class="member-name-link">writeIdentifications</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="../Identification.html" title="class in global.thalion.ttio">Identification</a>&gt;&nbsp;identifications)</code></div>
+<div class="col-last even-row-color">
+<div class="block">v0.11 Task 1.8: emit an <code>IDENTIFICATIONS_TABLE</code> (0x16)
+packet carrying the full identifications table as a single
+length-prefixed Apache Arrow IPC stream.</div>
 </div>
 </div>
 </section>

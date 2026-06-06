@@ -62,8 +62,11 @@ loadScripts(document, 'script');</script>
 <li><a href="#writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String)" tabindex="0">writeIRSpectrum(IRSpectrum, Path, String)</a></li>
 <li><a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String)" tabindex="0">writeUVVisSpectrum(UVVisSpectrum, Path, String)</a></li>
 <li><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)" tabindex="0">writeRamanSpectrum(RamanSpectrum, Path, String, JcampDxEncoding)</a></li>
+<li><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)" tabindex="0">writeRamanSpectrum(RamanSpectrum, Path, String, JcampDxEncoding, ProgressSink)</a></li>
 <li><a href="#writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)" tabindex="0">writeIRSpectrum(IRSpectrum, Path, String, JcampDxEncoding)</a></li>
+<li><a href="#writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)" tabindex="0">writeIRSpectrum(IRSpectrum, Path, String, JcampDxEncoding, ProgressSink)</a></li>
 <li><a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)" tabindex="0">writeUVVisSpectrum(UVVisSpectrum, Path, String, JcampDxEncoding)</a></li>
+<li><a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)" tabindex="0">writeUVVisSpectrum(UVVisSpectrum, Path, String, JcampDxEncoding, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -130,16 +133,40 @@ Python: <code>ttio.exporters.jcamp_dx</code></p></div>
  <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String)" class="member-name-link">writeRamanSpectrum</a><wbr>(<a href="../RamanSpectrum.html" title="class in global.thalion.ttio">RamanSpectrum</a>&nbsp;spectrum,
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)" class="member-name-link">writeIRSpectrum</a><wbr>(<a href="../IRSpectrum.html" title="class in global.thalion.ttio">IRSpectrum</a>&nbsp;spectrum,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)"><code>writeIRSpectrum(IRSpectrum, Path, String, JcampDxEncoding)</code></a>
+that fires a single <code>progress.onProgress(1, 1)</code> once the
+file is on disk.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String)" class="member-name-link">writeRamanSpectrum</a><wbr>(<a href="../RamanSpectrum.html" title="class in global.thalion.ttio">RamanSpectrum</a>&nbsp;spectrum,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
-<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)" class="member-name-link">writeRamanSpectrum</a><wbr>(<a href="../RamanSpectrum.html" title="class in global.thalion.ttio">RamanSpectrum</a>&nbsp;spectrum,
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)" class="member-name-link">writeRamanSpectrum</a><wbr>(<a href="../RamanSpectrum.html" title="class in global.thalion.ttio">RamanSpectrum</a>&nbsp;spectrum,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding)</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)" class="member-name-link">writeRamanSpectrum</a><wbr>(<a href="../RamanSpectrum.html" title="class in global.thalion.ttio">RamanSpectrum</a>&nbsp;spectrum,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)"><code>writeRamanSpectrum(RamanSpectrum, Path, String, JcampDxEncoding)</code></a>
+that fires a single <code>progress.onProgress(1, 1)</code> once the
+file is on disk.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String)" class="member-name-link">writeUVVisSpectrum</a><wbr>(<a href="../UVVisSpectrum.html" title="class in global.thalion.ttio">UVVisSpectrum</a>&nbsp;spectrum,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
@@ -151,6 +178,18 @@ Python: <code>ttio.exporters.jcamp_dx</code></p></div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
  <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">&nbsp;</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)" class="member-name-link">writeUVVisSpectrum</a><wbr>(<a href="../UVVisSpectrum.html" title="class in global.thalion.ttio">UVVisSpectrum</a>&nbsp;spectrum,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Stage D overload of
+<a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)"><code>writeUVVisSpectrum(UVVisSpectrum, Path, String, JcampDxEncoding)</code></a>
+that fires a single <code>progress.onProgress(1, 1)</code> once the
+file is on disk.</div>
+</div>
 </div>
 </div>
 </div>
@@ -230,6 +269,29 @@ Python: <code>ttio.exporters.jcamp_dx</code></p></div>
 </section>
 </li>
 <li>
+<section class="detail" id="writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)">
+<h3>writeRamanSpectrum</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeRamanSpectrum</span><wbr><span class="parameters">(<a href="../RamanSpectrum.html" title="class in global.thalion.ttio">RamanSpectrum</a>&nbsp;spectrum,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                               throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage D overload of
+<a href="#writeRamanSpectrum(global.thalion.ttio.RamanSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)"><code>writeRamanSpectrum(RamanSpectrum, Path, String, JcampDxEncoding)</code></a>
+that fires a single <code>progress.onProgress(1, 1)</code> once the
+file is on disk. JCAMP-DX stores a single 1-D spectrum per file.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)">
 <h3>writeIRSpectrum</h3>
 <div class="horizontal-scroll">
@@ -246,6 +308,29 @@ Python: <code>ttio.exporters.jcamp_dx</code></p></div>
 </section>
 </li>
 <li>
+<section class="detail" id="writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)">
+<h3>writeIRSpectrum</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeIRSpectrum</span><wbr><span class="parameters">(<a href="../IRSpectrum.html" title="class in global.thalion.ttio">IRSpectrum</a>&nbsp;spectrum,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                            throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage D overload of
+<a href="#writeIRSpectrum(global.thalion.ttio.IRSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)"><code>writeIRSpectrum(IRSpectrum, Path, String, JcampDxEncoding)</code></a>
+that fires a single <code>progress.onProgress(1, 1)</code> once the
+file is on disk.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)">
 <h3>writeUVVisSpectrum</h3>
 <div class="horizontal-scroll">
@@ -257,6 +342,29 @@ Python: <code>ttio.exporters.jcamp_dx</code></p></div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding,global.thalion.ttio.io.ProgressSink)">
+<h3>writeUVVisSpectrum</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">writeUVVisSpectrum</span><wbr><span class="parameters">(<a href="../UVVisSpectrum.html" title="class in global.thalion.ttio">UVVisSpectrum</a>&nbsp;spectrum,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;title,
+ <a href="JcampDxEncoding.html" title="enum class in global.thalion.ttio.exporters">JcampDxEncoding</a>&nbsp;encoding,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                               throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Stage D overload of
+<a href="#writeUVVisSpectrum(global.thalion.ttio.UVVisSpectrum,java.nio.file.Path,java.lang.String,global.thalion.ttio.exporters.JcampDxEncoding)"><code>writeUVVisSpectrum(UVVisSpectrum, Path, String, JcampDxEncoding)</code></a>
+that fires a single <code>progress.onProgress(1, 1)</code> once the
+file is on disk.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

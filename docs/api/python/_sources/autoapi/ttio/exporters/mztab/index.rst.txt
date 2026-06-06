@@ -24,6 +24,14 @@ ttio.exporters.mztab
 
 
 
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.exporters.mztab.PROGRESS_INTERVAL_ROWS
+
+
 Classes
 -------
 
@@ -44,6 +52,10 @@ Functions
 
 Module Contents
 ---------------
+
+.. py:data:: PROGRESS_INTERVAL_ROWS
+   :value: 500
+
 
 .. py:class:: WriteResult
 
@@ -88,7 +100,7 @@ Module Contents
 
 
 
-.. py:function:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset, path: str | pathlib.Path, *, version: str = '1.0', title: str = '', description: str = '', features: Iterable[ttio.feature.Feature] | None = None) -> WriteResult
+.. py:function:: write_dataset(dataset: ttio.spectral_dataset.SpectralDataset, path: str | pathlib.Path, *, version: str = '1.0', title: str = '', description: str = '', features: Iterable[ttio.feature.Feature] | None = None, progress: ttio.io.progress.ProgressSinkLike | None = None) -> WriteResult
 
    Write ``dataset``'s identifications + quantifications as mzTab.
 
@@ -100,13 +112,50 @@ Module Contents
    rows, so callers must thread them in explicitly.
 
 
-.. py:function:: write(path: str | pathlib.Path, *, identifications: Iterable[ttio.identification.Identification] = (), quantifications: Iterable[ttio.quantification.Quantification] = (), provenance: Iterable[ttio.provenance.ProvenanceRecord] = (), features: Iterable[ttio.feature.Feature] = (), version: str = '1.0', title: str = '', description: str = '', ms_run_locations: Mapping[int, str] | None = None) -> WriteResult
+.. py:function:: write(path: str | pathlib.Path, *, identifications: Iterable[ttio.identification.Identification] = (), quantifications: Iterable[ttio.quantification.Quantification] = (), provenance: Iterable[ttio.provenance.ProvenanceRecord] = (), features: Iterable[ttio.feature.Feature] = (), version: str = '1.0', title: str = '', description: str = '', ms_run_locations: Mapping[int, str] | None = None, progress: ttio.io.progress.ProgressSinkLike | None = None) -> WriteResult
 
-   Write mzTab text to ``path``. See :func:`dataset_to_bytes` for
-   the content-model details.
+   Write mzTab text to ``path`` and return a count receipt.
+
+   Thin convenience around :func:`dataset_to_bytes`: serialises the
+   mzTab blob, writes it to ``path``, then tallies emitted row kinds
+   (PSM / PRT / SML / PEP / SMF / SME) for the returned
+   :class:`WriteResult`.
+
+   :param path: Destination file path. Written verbatim — no compression, no
+                suffix coercion.
+   :type path: str or pathlib.Path
+   :param identifications: Sequence of :class:`~ttio.identification.Identification` rows.
+                           Become PSM rows in proteomics dialect.
+   :type identifications: Iterable[Identification], optional
+   :param quantifications: Sequence of :class:`~ttio.quantification.Quantification` rows.
+                           Become PRT rows in proteomics dialect.
+   :type quantifications: Iterable[Quantification], optional
+   :param provenance: Provenance records threaded into the MTD section as
+                      ``software[N]`` lines.
+   :type provenance: Iterable[ProvenanceRecord], optional
+   :param features: Feature rows for metabolomics dialect (SML output).
+   :type features: Iterable[Feature], optional
+   :param version: Either ``"1.0"`` (proteomics; PSM + PRT) or ``"2.0.0-M"``
+                   (metabolomics; SML). Default ``"1.0"``.
+   :type version: str, optional
+   :param title: Free-text title embedded in the MTD header.
+   :type title: str, optional
+   :param description: Free-text description embedded in the MTD header.
+   :type description: str, optional
+   :param ms_run_locations: Optional explicit ``ms_run[N]-location`` overrides. When
+                            ``None``, run names are auto-numbered from the input rows.
+   :type ms_run_locations: Mapping[int, str] or None, optional
+   :param progress: Optional progress sink fired every
+                    :data:`PROGRESS_INTERVAL_ROWS` rows.
+   :type progress: ProgressSinkLike or None, optional
+
+   :returns: *WriteResult* -- Dialect emitted plus per-row-kind counts. The path field
+             echoes the destination as a :class:`pathlib.Path`.
+
+   :raises ValueError: If ``version`` is not one of the supported dialects.
 
 
-.. py:function:: dataset_to_bytes(*, identifications: Iterable[ttio.identification.Identification] = (), quantifications: Iterable[ttio.quantification.Quantification] = (), provenance: Iterable[ttio.provenance.ProvenanceRecord] = (), features: Iterable[ttio.feature.Feature] = (), version: str = '1.0', title: str = '', description: str = '', ms_run_locations: Mapping[int, str] | None = None) -> bytes
+.. py:function:: dataset_to_bytes(*, identifications: Iterable[ttio.identification.Identification] = (), quantifications: Iterable[ttio.quantification.Quantification] = (), provenance: Iterable[ttio.provenance.ProvenanceRecord] = (), features: Iterable[ttio.feature.Feature] = (), version: str = '1.0', title: str = '', description: str = '', ms_run_locations: Mapping[int, str] | None = None, progress: ttio.io.progress.ProgressSinkLike | None = None) -> bytes
 
    Build the mzTab text blob.
 

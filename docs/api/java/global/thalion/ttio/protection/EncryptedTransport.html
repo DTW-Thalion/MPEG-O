@@ -63,7 +63,11 @@ loadScripts(document, 'script');</script>
 <li><a href="#writeEncryptedDataset(java.lang.String,global.thalion.ttio.transport.TransportWriter,java.lang.String)" tabindex="0">writeEncryptedDataset(String, TransportWriter, String)</a></li>
 <li><a href="#readEncryptedToPath(java.lang.String,byte%5B%5D,java.lang.String)" tabindex="0">readEncryptedToPath(String, byte[], String)</a></li>
 <li><a href="#stampTransportWrappedDek(java.lang.String,byte%5B%5D,java.lang.String,java.lang.String)" tabindex="0">stampTransportWrappedDek(String, byte[], String, String)</a></li>
+<li><a href="#stampTransportWrappedDek(java.lang.String,byte%5B%5D,java.lang.String,java.util.List,java.lang.String)" tabindex="0">stampTransportWrappedDek(String, byte[], String, List, String)</a></li>
+<li><a href="#stampTransportWrappedDek(java.lang.String,byte%5B%5D,java.lang.String,java.util.List,java.lang.String,java.lang.String)" tabindex="0">stampTransportWrappedDek(String, byte[], String, List, String, String)</a></li>
+<li><a href="#readTransportServerKekId(java.lang.String,java.lang.String)" tabindex="0">readTransportServerKekId(String, String)</a></li>
 <li><a href="#readTransportWrappedDek(java.lang.String,java.lang.String)" tabindex="0">readTransportWrappedDek(String, String)</a></li>
+<li><a href="#readTransportRecipients(java.lang.String,java.lang.String)" tabindex="0">readTransportRecipients(String, String)</a></li>
 </ol>
 </li>
 </ol>
@@ -105,8 +109,14 @@ bytes verbatim.
 <div class="table-header col-second">Class</div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>static final record&nbsp;</code></div>
-<div class="col-second even-row-color"><code><a href="EncryptedTransport.WrappedDek.html" class="type-name-link" title="class in global.thalion.ttio.protection">EncryptedTransport.WrappedDek</a></code></div>
+<div class="col-second even-row-color"><code><a href="EncryptedTransport.Recipient.html" class="type-name-link" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a></code></div>
 <div class="col-last even-row-color">
+<div class="block">One DEK recipient: the same per-run DEK wrapped under this
+  recipient's KEK.</div>
+</div>
+<div class="col-first odd-row-color"><code>static final record&nbsp;</code></div>
+<div class="col-second odd-row-color"><code><a href="EncryptedTransport.WrappedDek.html" class="type-name-link" title="class in global.thalion.ttio.protection">EncryptedTransport.WrappedDek</a></code></div>
+<div class="col-last odd-row-color">
 <div class="block">A wrapped DEK + the KEK algorithm that unwraps it.</div>
 </div>
 </div>
@@ -137,6 +147,22 @@ bytes verbatim.
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Materialise an encrypted transport stream into <code>outputPath</code>.</div>
 </div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a>&gt;</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readTransportRecipients(java.lang.String,java.lang.String)" class="member-name-link">readTransportRecipients</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Return the full DEK recipient list stamped on the first run's
+  <code>signal_channels</code> (FD-1 Phase A): index 0 is the primary
+  (recipient id <code>""</code>), followed by any additional recipients.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readTransportServerKekId(java.lang.String,java.lang.String)" class="member-name-link">readTransportServerKekId</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">FD-1 C-2a: read the <code>server_kek_id</code> stamped on the first run's
+  signal_channels (the KEK the daemon resolves to process the container
+  server-side), or null if absent (BYOK / not server-processable).</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="EncryptedTransport.WrappedDek.html" title="class in global.thalion.ttio.protection">EncryptedTransport.WrappedDek</a></code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#readTransportWrappedDek(java.lang.String,java.lang.String)" class="member-name-link">readTransportWrappedDek</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
@@ -153,6 +179,31 @@ bytes verbatim.
 <div class="block">Stamp a wrapped DEK + KEK algorithm onto every run's
   <code>signal_channels</code> so <a href="#writeEncryptedDataset(java.lang.String,global.thalion.ttio.transport.TransportWriter,java.lang.String)"><code>writeEncryptedDataset(String, TransportWriter, String)</code></a> emits it
   in the ProtectionMetadata packet.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#stampTransportWrappedDek(java.lang.String,byte%5B%5D,java.lang.String,java.util.List,java.lang.String)" class="member-name-link">stampTransportWrappedDek</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ byte[]&nbsp;wrappedDek,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;kekAlgorithm,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a>&gt;&nbsp;additionalRecipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Multi-recipient overload (FD-1 Phase A): the same DEK wrapped under
+  ``additionalRecipients``' keys is stamped as the
+  <code>&lt;channel&gt;_wrapped_dek_recipients</code> attribute and emitted as
+  the packet's trailing block.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#stampTransportWrappedDek(java.lang.String,byte%5B%5D,java.lang.String,java.util.List,java.lang.String,java.lang.String)" class="member-name-link">stampTransportWrappedDek</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ byte[]&nbsp;wrappedDek,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;kekAlgorithm,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a>&gt;&nbsp;additionalRecipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;serverKekId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">FD-1 C-2a overload: also stamps <code>&lt;channel&gt;_server_kek_id</code> (the
+  opaque label naming the KEK under which the primary wrapped_dek is
+  wrapped), so <code>writeEncryptedDataset</code> emits it in the packet and
+  the daemon can decide server-processability.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#writeEncryptedDataset(java.lang.String,global.thalion.ttio.transport.TransportWriter,java.lang.String)" class="member-name-link">writeEncryptedDataset</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
@@ -255,6 +306,68 @@ bytes verbatim.
 </section>
 </li>
 <li>
+<section class="detail" id="stampTransportWrappedDek(java.lang.String,byte[],java.lang.String,java.util.List,java.lang.String)">
+<h3>stampTransportWrappedDek</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">stampTransportWrappedDek</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ byte[]&nbsp;wrappedDek,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;kekAlgorithm,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a>&gt;&nbsp;additionalRecipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</span>
+                                     throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Multi-recipient overload (FD-1 Phase A): the same DEK wrapped under
+  ``additionalRecipients``' keys is stamped as the
+  <code>&lt;channel&gt;_wrapped_dek_recipients</code> attribute and emitted as
+  the packet's trailing block. Empty list keeps single-recipient runs
+  byte-identical to pre-Phase-A.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="stampTransportWrappedDek(java.lang.String,byte[],java.lang.String,java.util.List,java.lang.String,java.lang.String)">
+<h3>stampTransportWrappedDek</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">stampTransportWrappedDek</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ byte[]&nbsp;wrappedDek,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;kekAlgorithm,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a>&gt;&nbsp;additionalRecipients,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;serverKekId,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</span>
+                                     throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">FD-1 C-2a overload: also stamps <code>&lt;channel&gt;_server_kek_id</code> (the
+  opaque label naming the KEK under which the primary wrapped_dek is
+  wrapped), so <code>writeEncryptedDataset</code> emits it in the packet and
+  the daemon can decide server-processability. <code>serverKekId</code> null
+  marks the container BYOK / not server-processable.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="readTransportServerKekId(java.lang.String,java.lang.String)">
+<h3>readTransportServerKekId</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">readTransportServerKekId</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</span>
+                                       throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">FD-1 C-2a: read the <code>server_kek_id</code> stamped on the first run's
+  signal_channels (the KEK the daemon resolves to process the container
+  server-side), or null if absent (BYOK / not server-processable).</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
 <section class="detail" id="readTransportWrappedDek(java.lang.String,java.lang.String)">
 <h3>readTransportWrappedDek</h3>
 <div class="horizontal-scroll">
@@ -268,6 +381,24 @@ bytes verbatim.
 
   <p>Cross-language equivalent: Python
   <code>transport.encrypted.read_transport_wrapped_dek</code>.</p></div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="readTransportRecipients(java.lang.String,java.lang.String)">
+<h3>readTransportRecipients</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="EncryptedTransport.Recipient.html" title="class in global.thalion.ttio.protection">EncryptedTransport.Recipient</a>&gt;</span>&nbsp;<span class="element-name">readTransportRecipients</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;ttioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;providerName)</span>
+                                                                  throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Return the full DEK recipient list stamped on the first run's
+  <code>signal_channels</code> (FD-1 Phase A): index 0 is the primary
+  (recipient id <code>""</code>), followed by any additional recipients.
+  Empty list when no wrapped DEK is present. <a href="#readTransportWrappedDek(java.lang.String,java.lang.String)"><code>readTransportWrappedDek(String, String)</code></a> stays the single-recipient accessor.</div>
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>

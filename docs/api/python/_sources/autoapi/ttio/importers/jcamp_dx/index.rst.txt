@@ -38,9 +38,12 @@ Functions
 Module Contents
 ---------------
 
-.. py:function:: read_spectrum(path: str | pathlib.Path) -> Spectrum1D
+.. py:function:: read_spectrum(path: str | pathlib.Path, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> Spectrum1D
 
    Parse ``path`` and return an appropriate spectrum subclass.
+
+   Single-spectrum format; ``progress`` fires once with ``(1, 1)`` at
+   completion.
 
    :raises ValueError: If the file is malformed (empty/mismatched XYDATA) or carries a
        ``##DATA TYPE=`` that this reader does not handle.

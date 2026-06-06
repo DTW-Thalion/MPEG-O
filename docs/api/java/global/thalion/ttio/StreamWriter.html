@@ -124,7 +124,10 @@ datasets.</p>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName,
  <a href="Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
  <a href="InstrumentConfig.html" title="class in global.thalion.ttio">InstrumentConfig</a>&nbsp;instrumentConfig)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct a writer targeting a new or existing <code>.tio</code>
+file.</div>
+</div>
 </div>
 </section>
 </li>
@@ -141,10 +144,14 @@ datasets.</p>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#appendSpectrum(global.thalion.ttio.MassSpectrum)" class="member-name-link">appendSpectrum</a><wbr>(<a href="MassSpectrum.html" title="class in global.thalion.ttio">MassSpectrum</a>&nbsp;spectrum)</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Append a spectrum to the in-memory buffer.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Clear the in-memory buffer.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#flush()" class="member-name-link">flush</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
@@ -152,7 +159,10 @@ datasets.</p>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#flushAndClose()" class="member-name-link">flushAndClose</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Convenience wrapper that calls <a href="#flush()"><code>flush()</code></a> and leaves the
+writer in a closeable state.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>int</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#spectrumCount()" class="member-name-link">spectrumCount</a>()</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -181,6 +191,17 @@ datasets.</p>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;runName,
  <a href="Enums.AcquisitionMode.html" title="enum class in global.thalion.ttio">Enums.AcquisitionMode</a>&nbsp;acquisitionMode,
  <a href="InstrumentConfig.html" title="class in global.thalion.ttio">InstrumentConfig</a>&nbsp;instrumentConfig)</span></div>
+<div class="block">Construct a writer targeting a new or existing <code>.tio</code>
+file.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>filePath</code> - absolute path to the target file</dd>
+<dd><code>runName</code> - MS-run name to use inside
+                        <code>/study/ms_runs/</code></dd>
+<dd><code>acquisitionMode</code> - acquisition mode label persisted on the
+                        run group</dd>
+<dd><code>instrumentConfig</code> - instrument config to persist with the run</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -197,6 +218,12 @@ datasets.</p>
 <h3>appendSpectrum</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">appendSpectrum</span><wbr><span class="parameters">(<a href="MassSpectrum.html" title="class in global.thalion.ttio">MassSpectrum</a>&nbsp;spectrum)</span></div>
+<div class="block">Append a spectrum to the in-memory buffer. The buffer is flushed
+to disk by <a href="#flush()"><code>flush()</code></a> / <a href="#flushAndClose()"><code>flushAndClose()</code></a>.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>spectrum</code> - spectrum to append</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -205,6 +232,10 @@ datasets.</p>
 <h3>spectrumCount</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">spectrumCount</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Number of spectra currently buffered in memory.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -227,6 +258,9 @@ valid <code>.tio</code> after each call.</p></div>
 <h3>flushAndClose</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">flushAndClose</span>()</div>
+<div class="block">Convenience wrapper that calls <a href="#flush()"><code>flush()</code></a> and leaves the
+writer in a closeable state. The buffer is not cleared — call
+<a href="#close()"><code>close()</code></a> for that.</div>
 </div>
 </section>
 </li>
@@ -235,6 +269,7 @@ valid <code>.tio</code> after each call.</p></div>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Clear the in-memory buffer. Does not write or remove the file.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

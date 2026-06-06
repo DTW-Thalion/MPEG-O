@@ -207,13 +207,23 @@ Module Contents
 
 
 
+   .. py:method:: to_imported_dataset(*, title: str | None = None, isa_investigation_id: str = '', path: str | pathlib.Path | None = None) -> ttio.importers.imported_dataset.ImportedDataset
+
+      Build the normalized :class:`ImportedDataset` draft.
+
+      ``path`` is recorded in the provenance ``output_refs`` exactly as
+      the legacy :meth:`to_ttio` did; pass the eventual destination so
+      the round-trip provenance is byte-identical.
+
+
+
    .. py:method:: to_ttio(path: str | pathlib.Path, *, title: str | None = None, isa_investigation_id: str = '') -> pathlib.Path
 
       Write the imported pixels to an .tio as a single MS run.
 
 
 
-.. py:function:: read(imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None) -> ImzMLImport
+.. py:function:: read(imzml_path: str | pathlib.Path, ibd_path: str | pathlib.Path | None = None, *, progress: ProgressSinkLike | None = None) -> ImzMLImport
 
    Parse an imzML + .ibd pair and return an :class:`ImzMLImport`.
 
@@ -221,5 +231,10 @@ Module Contents
    :param ibd_path: Optional explicit path to the binary file. When ``None``, the
                     sibling ``<stem>.ibd`` is used. UUID matching is still
                     enforced regardless of how the .ibd was located.
+   :param progress: Optional :class:`~ttio.io.progress.ProgressSink` (or bare
+                    callable). Fires every :data:`PROGRESS_INTERVAL_SPECTRA` pixels
+                    during .ibd materialisation with ``total = -1`` and once more
+                    at the end with ``(n_pixels, n_pixels)``. The hook is inside
+                    the materialise loop, not at the boundary.
 
 

@@ -54,6 +54,7 @@ Attributes
 .. autoapisummary::
 
    ttio.exporters.fasta.DEFAULT_LINE_WIDTH
+   ttio.exporters.fasta.PROGRESS_INTERVAL_READS
 
 
 Classes
@@ -71,6 +72,10 @@ Module Contents
    :value: 60
 
 
+.. py:data:: PROGRESS_INTERVAL_READS
+   :value: 1000
+
+
 .. py:class:: FastaWriter
 
    FASTA exporter for reference imports and unaligned genomic runs.
@@ -78,7 +83,7 @@ Module Contents
    All methods are class-level; instantiation is unnecessary.
 
 
-   .. py:method:: write_reference(reference: ttio.genomic.reference_import.ReferenceImport, path: str | os.PathLike[str], *, line_width: int = DEFAULT_LINE_WIDTH, gzip_output: bool | None = None, write_fai: bool = True) -> None
+   .. py:method:: write_reference(reference: ttio.genomic.reference_import.ReferenceImport, path: str | os.PathLike[str], *, line_width: int = DEFAULT_LINE_WIDTH, gzip_output: bool | None = None, write_fai: bool = True, progress: ttio.io.progress.ProgressSinkLike | None = None) -> None
       :classmethod:
 
 
@@ -105,7 +110,7 @@ Module Contents
 
 
 
-   .. py:method:: write_run(run: ttio.written_genomic_run.WrittenGenomicRun | ttio.genomic_run.GenomicRun, path: str | os.PathLike[str], *, line_width: int = DEFAULT_LINE_WIDTH, gzip_output: bool | None = None, write_fai: bool = True) -> None
+   .. py:method:: write_run(run: ttio.written_genomic_run.WrittenGenomicRun | ttio.genomic_run.GenomicRun, path: str | os.PathLike[str], *, line_width: int = DEFAULT_LINE_WIDTH, gzip_output: bool | None = None, write_fai: bool = True, progress: ttio.io.progress.ProgressSinkLike | None = None) -> None
       :classmethod:
 
 

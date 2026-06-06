@@ -1,0 +1,618 @@
+ttio.workbench.transport
+========================
+
+.. py:module:: ttio.workbench.transport
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.transport -- workbench-aware WebSocket transport.
+
+   Speaks the `ttio-transport` WS subprotocol against
+   `tti-workbench-server` v1.0.0+. Wire contract:
+
+     - `wss://<host>:<port>/transport` (or `ws://` for development)
+     - First frame: TEXT, JSON, `{"type":"handshake", ...}` with
+       `owner` + `project` + `container_uri` (upload) or
+       `mode:"download"` + `container_uri` + optional `filter` /
+       `output_mode` / `max_au` (download).
+     - Server ack: TEXT, JSON, `{"type":"ack","handle":...,"au_sequence":N}`.
+     - Upload payload: BINARY frames carrying raw `.tis` bytes; framing
+       is byte-agnostic (per spec section 9.2 / Documentation/upload-protocol.md).
+     - Per-AU acks during upload (TEXT JSON `{"type":"ack","au_sequence":N}`).
+     - Terminal frame: `{"type":"done","container_uri":...}` (upload) or
+       `{"type":"done", ...}` (download), then WS close 1000.
+     - Error path: `{"type":"error","message":...}` (upload) /
+       `{"type":"error","reason":...}` (download), then WS close 1002 / 1011.
+     - Resume: client sends `resume_handle:"stg-..."` in a fresh
+       handshake; server replies with the persisted `au_sequence` so
+       the client can skip already-acked AUs.
+
+   Exposed types:
+
+     - `UploadClient` / `DownloadClient` -- async context managers.
+     - `build_upload_handshake` / `build_download_handshake` -- pure
+       JSON builders (no I/O), reused by the Java port + tests.
+     - `ResumeState` -- carries the `resume_handle` + last acked
+       sequence between attempts.
+
+   The synthetic-payload helper from `ttio.transport.simulator` works
+   unchanged as an UploadClient payload source (UC-01 "Local Encoding"
+   in the spec is satisfied by `ttio encode`; the transport layer
+   doesn't care where the bytes came from).
+
+
+
+Submodules
+----------
+
+.. toctree::
+   :maxdepth: 1
+
+   /autoapi/ttio/workbench/transport/download/index
+   /autoapi/ttio/workbench/transport/errors/index
+   /autoapi/ttio/workbench/transport/handshake/index
+   /autoapi/ttio/workbench/transport/resume/index
+   /autoapi/ttio/workbench/transport/selective_access/index
+   /autoapi/ttio/workbench/transport/upload/index
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.FilterDict
+   ttio.workbench.transport.OutputMode
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.HandshakeError
+   ttio.workbench.transport.UploadError
+   ttio.workbench.transport.DownloadError
+   ttio.workbench.transport.TransportError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.ServerFrameKind
+   ttio.workbench.transport.ResumeState
+   ttio.workbench.transport.UploadClient
+   ttio.workbench.transport.UploadResult
+   ttio.workbench.transport.DownloadClient
+   ttio.workbench.transport.DownloadResult
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.build_download_handshake
+   ttio.workbench.transport.build_upload_handshake
+   ttio.workbench.transport.parse_server_frame
+
+
+Package Contents
+----------------
+
+.. py:function:: build_download_handshake(*, container_uri: str, token: Optional[str] = None, owner: Optional[str] = None, output_mode: str = OutputModeLiteral.BINARY.value, filter: Optional[Mapping[str, Any]] = None, max_au: int = 0) -> dict[str, Any]
+
+   Build the download-mode handshake JSON.
+
+   Per `Source/WS/TTIOWBWsDownloadHandshake.m`, only `type:"handshake"`,
+   `mode:"download"`, and `container_uri` are required. `output_mode`
+   defaults to `"binary"` server-side too, but we pin it client-side
+   so the wire is explicit. `filter` is validated against
+   `ALLOWED_DOWNLOAD_FILTER_KEYS` -- unknown keys raise so the
+   operator catches typos before the WS opens.
+
+   `max_au=0` means "no AU cap"; positive integers cap the emitted
+   stream to that many AUs (handy for spot-checks).
+
+
+.. py:function:: build_upload_handshake(*, owner: str, project: str, container_uri: str, token: Optional[str] = None, resume_handle: Optional[str] = None) -> dict[str, Any]
+
+   Build the upload-mode handshake JSON.
+
+   Per `Source/WS/TTIOWBWsUploadSession.m:205-260`, the required
+   fields are `type:"handshake"`, `owner`, `project`, `container_uri`.
+   `token` is required when the daemon has auth wired (i.e., in any
+   real deployment). `resume_handle` switches the server into
+   resumption mode.
+
+   The function does NOT call `json.dumps` -- the caller controls
+   whether to send the dict via `ws.send(json.dumps(...))` or to
+   serialise it themselves (the Java port serialises through its
+   own JSON library, for example).
+
+
+.. py:function:: parse_server_frame(raw: str | bytes) -> tuple[ServerFrameKind, dict[str, Any]]
+
+   Parse a TEXT frame from the daemon into (kind, body).
+
+   Raises `ValueError` if the body isn't valid JSON or its `type`
+   field doesn't match a known frame kind. Binary frames (the
+   download path's `.tis` bytes) must NOT be passed to this
+   function -- the caller is responsible for dispatching by frame
+   type before invoking parse.
+
+
+.. py:class:: ServerFrameKind
+
+   Bases: :py:obj:`str`, :py:obj:`enum.Enum`
+
+
+   Discriminator for the daemon's TEXT frames during upload + download.
+
+   `ACK` is the per-AU acknowledgment during upload OR the initial
+   post-handshake ack. `DONE` is the terminal success frame. `ERROR`
+   is a server-emitted failure frame; close codes 1002 / 1011 / 1008
+   follow soon after.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: ACK
+      :value: 'ack'
+
+
+
+   .. py:attribute:: DONE
+      :value: 'done'
+
+
+
+   .. py:attribute:: ERROR
+      :value: 'error'
+
+
+
+.. py:class:: ResumeState
+
+   Resume bookkeeping for a partial upload.
+
+   Args:
+       resume_handle: opaque server-issued handle (e.g.
+           `"stg-7f9e2a14-..."`). The daemon retains this for
+           24 hours after the last activity (configurable via
+           `staging.retention_hours` in `server.json`); after that
+           window the handle is garbage-collected and the resume
+           attempt will fail with a 1002 close.
+       last_acked_au_sequence: highest `au_sequence` the client
+           observed in a per-AU ack during the prior attempt. The
+           daemon will replay from `last_acked_au_sequence + 1` --
+           the client must NOT re-send AUs at or below this value.
+           Convention: `-1` means "no AU was ack'd yet" (the
+           handshake ack carries `au_sequence: 0` on a fresh
+           upload, so this signals the difference between
+           "fresh upload" and "resume from scratch").
+
+
+   .. py:attribute:: resume_handle
+      :type:  str
+
+
+   .. py:attribute:: last_acked_au_sequence
+      :type:  int
+      :value: -1
+
+
+
+.. py:class:: UploadClient(*, host: str, port: int, session: Optional[ttio.workbench.auth.Session] = None, token: Optional[str] = None, owner: Optional[str] = None, project: str, container_uri: str, scheme: str = 'ws', ssl_context=None, chunk_size: int = DEFAULT_CHUNK_SIZE, connect_timeout: float = 10.0, recv_timeout: float = 30.0)
+
+   Async context manager for one upload.
+
+   Usage:
+
+       async with UploadClient(host="...", port=8443, session=...,
+                                project="alpha",
+                                container_uri="uri:tio:demo-001") as client:
+           result = await client.upload_bytes(tis_bytes)
+           print(result.container_uri)
+
+   The client opens the WebSocket and performs the handshake on
+   `__aenter__`. The terminal `done` frame is consumed and the WS
+   is closed on `__aexit__` (or earlier, when `upload_bytes` /
+   `upload_iter` returns).
+
+   Construct the upload client.
+
+   Either `session` OR (`token` + `owner`) must be supplied.
+   `session` is preferred -- it carries the resolved username
+   the daemon's auth gate expects as `owner`. Passing both
+   raises ValueError.
+
+   Args:
+       host, port: server WebSocket endpoint.
+       session: an authenticated `Session` from `login_password`.
+           When supplied, the bearer + username are taken from
+           here.
+       token: bearer token (string). Required if `session` is
+           None.
+       owner: username to attribute the upload to. Required if
+           `session` is None; defaults to `session.username`.
+           Must match the daemon's auth gate (see
+           `Documentation/auth.md` -- the daemon refuses
+           `owner != session.username` unless the caller has
+           `containers.write.any_project`).
+       project: project name the container belongs to. Required.
+       container_uri: client-minted container URI (e.g.
+           `uri:tio:demo-001`). The daemon refuses duplicates.
+       scheme: `"ws"` for development; `"wss"` for production.
+       ssl_context: optional `ssl.SSLContext` for the WSS handshake.
+       chunk_size: per-WS-frame byte budget when iterating the
+           payload. Defaults to 64 KB.
+       connect_timeout: WS open + initial-ack timeout.
+       recv_timeout: per-recv timeout once the upload is in
+           flight.
+
+
+   .. py:property:: last_acked_au_sequence
+      :type: int
+
+
+      Highest ``au_sequence`` the server has acknowledged.
+
+      Starts at ``-1`` before the handshake completes; advances as
+      the server emits per-AU ack frames during the upload. Useful
+      for progress reporting and as a resume hint.
+
+
+   .. py:property:: resume_handle
+      :type: Optional[str]
+
+
+      Server-issued ``stg-...`` resume handle.
+
+      ``None`` until the handshake ack has been received, then a
+      non-empty string identifying the staged container on the
+      server. Stash it in a :class:`ResumeState` to resume a
+      subsequent attempt if this upload is interrupted.
+
+
+   .. py:method:: __aenter__() -> UploadClient
+      :async:
+
+
+      Open the WebSocket to the ``/transport`` endpoint.
+
+      Connects with the ``ttio-transport`` subprotocol negotiated
+      and the configured ``open_timeout``. The handshake JSON is
+      sent later by :meth:`upload_bytes` / :meth:`upload_path` /
+      :meth:`upload_iter` so the WS is open but the upload session
+      is not yet initiated on return.
+
+      :returns: *UploadClient* -- ``self``, ready for an ``upload_*`` call.
+
+      :raises HandshakeError: If the WS connect fails (timeout, refused, TLS error).
+
+
+
+   .. py:method:: __aexit__(exc_type, exc, tb)
+      :async:
+
+
+      Close the WebSocket if still open.
+
+      Idempotent; safe to call after the connection has already
+      been closed by :meth:`_wait_for_done` or by a server-initiated
+      close. Suppresses close errors so an exception in the body of
+      the ``async with`` is not masked.
+
+
+
+   .. py:method:: upload_bytes(data: bytes | bytearray | memoryview, *, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None, progress: Optional[Callable[[int, int], None]] = None) -> UploadResult
+      :async:
+
+
+      Upload a fully-buffered `.tis` byte string.
+
+      Args:
+          data: the complete transport stream.
+          resume: if set, the client re-handshakes with this
+              resume handle and skips the prefix the server has
+              already acknowledged. The skip is BYTE-based, not
+              AU-based -- we don't have an AU-to-byte-offset
+              map client-side, so resume is most useful with
+              `upload_iter` where the caller controls AU
+              boundaries.
+          progress: optional callback invoked `(bytes_sent,
+              bytes_total)` as chunks are sent, plus a final
+              `(total, total)`. Cross-language equivalent of the
+              Java `TransferProgress` callback. A throwing
+              callback is swallowed so it cannot abort the
+              upload.
+
+      Returns:
+          `UploadResult` on success.
+
+      Raises:
+          HandshakeError: on handshake-time failures.
+          UploadError: on mid-stream failures.
+
+
+
+   .. py:method:: upload_path(path: str | os.PathLike[str], *, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None, progress: Optional[Callable[[int, int], None]] = None) -> UploadResult
+      :async:
+
+
+      Upload a ``.tis`` file directly from disk in chunkSize-bounded
+      slices. Peak memory is O(``chunk_size``) -- the file is **never**
+      fully buffered into RAM via :meth:`Path.read_bytes`.
+
+      Mirrors Java's ``WorkbenchTransportClient.upload(Path)``.
+
+      Args:
+          path: filesystem path to the ``.tis`` file.
+          resume: see :meth:`upload_bytes`.
+          progress: see :meth:`upload_bytes` -- fires
+              ``(bytes_sent, bytes_total)`` per chunk plus a final
+              ``(total, total)``. ``total`` is the file size from
+              :meth:`Path.stat`.
+
+      Returns:
+          :class:`UploadResult` on success.
+
+
+
+   .. py:method:: upload_iter(chunks: Iterable[bytes], *, resume: Optional[ttio.workbench.transport.resume.ResumeState] = None) -> UploadResult
+      :async:
+
+
+      Upload an iterable of `.tis` byte chunks.
+
+      Useful when streaming from a file (`(open(path,'rb').read(N)
+      for ...)`) or from an in-memory generator (the existing
+      `ttio.transport.simulator.synth_stream` works -- treat its
+      return value as one big bytes blob and pass to
+      `upload_bytes`, OR re-yield it in chunks).
+
+      Args:
+          chunks: iterable yielding `bytes`. Empty bytes are
+              skipped. The iterator is fully consumed before
+              `done` is awaited.
+
+      Returns / Raises: same as `upload_bytes`.
+
+
+
+.. py:class:: UploadResult
+
+   Successful upload outcome.
+
+   Args:
+       container_uri: the URI the server registered the container
+           under. Identical to the URI the client sent in the
+           handshake (the server doesn't rewrite it; conflicts
+           would have closed the WS with code 1002 during
+           handshake).
+       last_acked_au_sequence: the highest `au_sequence` the server
+           ack'd during this upload. Useful for telemetry and as
+           input to a future resume attempt of a DIFFERENT
+           container that shares state with this one (rare).
+       resume_handle: the `stg-...` handle the server issued at
+           handshake time. Returned on success too so callers can
+           log it for incident review.
+
+
+   .. py:attribute:: container_uri
+      :type:  str
+
+
+   .. py:attribute:: last_acked_au_sequence
+      :type:  int
+
+
+   .. py:attribute:: resume_handle
+      :type:  str
+
+
+.. py:class:: DownloadClient(*, host: str, port: int, session: Optional[ttio.workbench.auth.Session] = None, token: Optional[str] = None, owner: Optional[str] = None, scheme: str = 'ws', ssl_context=None, connect_timeout: float = 10.0, recv_timeout: float = 30.0)
+
+   Async context manager for one download.
+
+   Usage:
+
+       async with DownloadClient(host="...", port=8443,
+                                  session=session) as client:
+           result = await client.download(
+               container_uri="uri:tio:demo-001",
+               filter={"ms_level": 1, "retention_time_min": 12.0},
+           )
+           with open("subset.tio", "wb") as f:
+               f.write(result.payload)
+
+   Construct the download client. Auth wiring mirrors `UploadClient`.
+
+   Args:
+       host, port: server WebSocket endpoint.
+       session: an authenticated `Session`. Either this or
+           `token` is required.
+       token: bearer token; mutually exclusive with `session`.
+       owner: username for the handshake `owner` field. The
+           v1.0 server uses this to gate cross-owner access
+           under the `containers.read.any_project` capability.
+           Defaults to `session.username` when `session` is
+           set; otherwise required.
+       scheme: `"ws"` or `"wss"`.
+       ssl_context: optional `ssl.SSLContext`.
+       connect_timeout: WS open + initial-ack timeout.
+       recv_timeout: per-recv timeout once the download is in
+           flight.
+
+
+   .. py:method:: __aenter__() -> DownloadClient
+      :async:
+
+
+
+   .. py:method:: __aexit__(exc_type, exc, tb)
+      :async:
+
+
+
+   .. py:method:: download(*, container_uri: str, filter: Optional[FilterDict] = None, output_mode: OutputMode = OutputModeLiteral.BINARY.value, max_au: int = 0, progress: Optional[Callable[[int, int], None]] = None) -> DownloadResult
+      :async:
+
+
+      Drive one download to completion.
+
+      Args:
+          container_uri: target container.
+          filter: optional selective-access predicates. Validated
+              client-side against the daemon's accepted filter
+              key set; unknown keys raise `ValueError` rather
+              than letting the server reject the handshake.
+          output_mode: one of the `OutputModeLiteral` strings.
+          max_au: cap the emitted AU count to this number; 0 =
+              no cap.
+
+      Returns:
+          `DownloadResult` on success.
+
+      Raises:
+          HandshakeError: handshake failed (network, auth, bad
+              container URI).
+          DownloadError: server emitted an error frame or closed
+              without `done`. The close code + reason are
+              captured on the exception.
+
+
+
+.. py:class:: DownloadResult
+
+   Outcome of one download.
+
+   Args:
+       container_uri: the URI the server emitted in its `done`
+           frame (will match what the client requested).
+       payload: the concatenated `.tis` byte stream. Empty when
+           `output_mode="stats-only"`.
+       stats_frames: list of per-AU stats objects emitted as TEXT
+           frames. Non-empty only when `output_mode` includes
+           stats. Each entry is the parsed JSON object verbatim
+           (the daemon's stats schema is "anything with
+           `au_sequence` or `dataset_id`" per
+           `Tests/load/download_one.py`'s reference parser).
+       binary_frame_count: number of BINARY frames the server
+           emitted. Helpful for diagnostics.
+       terminal_frame: the parsed `done` frame body.
+
+
+   .. py:attribute:: container_uri
+      :type:  str
+
+
+   .. py:attribute:: payload
+      :type:  bytes
+
+
+   .. py:attribute:: stats_frames
+      :type:  list[dict]
+
+
+   .. py:attribute:: binary_frame_count
+      :type:  int
+
+
+   .. py:attribute:: terminal_frame
+      :type:  dict
+
+
+.. py:data:: FilterDict
+
+.. py:data:: OutputMode
+
+.. py:exception:: HandshakeError(message: str, *, close_code: Optional[int] = None, reason: Optional[str] = None)
+
+   Bases: :py:obj:`TransportError`
+
+
+   The server rejected the handshake JSON.
+
+   Carries the WS close code (1002 for malformed handshake; 1008
+   for auth-policy violations; 1011 for server-side errors during
+   handshake) and the error frame's free-text reason when present.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: close_code
+      :value: None
+
+
+
+   .. py:attribute:: reason
+      :value: None
+
+
+
+.. py:exception:: UploadError(message: str, *, close_code: Optional[int] = None, reason: Optional[str] = None, last_acked_au_sequence: Optional[int] = None, resume_handle: Optional[str] = None)
+
+   Bases: :py:obj:`TransportError`
+
+
+   Upload failed mid-stream (server emitted an `error` frame or
+   the WS closed without `done`).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: close_code
+      :value: None
+
+
+
+   .. py:attribute:: reason
+      :value: None
+
+
+
+   .. py:attribute:: last_acked_au_sequence
+      :value: None
+
+
+
+   .. py:attribute:: resume_handle
+      :value: None
+
+
+
+.. py:exception:: DownloadError(message: str, *, close_code: Optional[int] = None, reason: Optional[str] = None)
+
+   Bases: :py:obj:`TransportError`
+
+
+   Download failed (server emitted an `error` frame, cross-project
+   access denied, or the WS closed without `done`).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: close_code
+      :value: None
+
+
+
+   .. py:attribute:: reason
+      :value: None
+
+
+
+.. py:exception:: TransportError
+
+   Bases: :py:obj:`Exception`
+
+
+   Base class for all workbench-transport client failures.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+

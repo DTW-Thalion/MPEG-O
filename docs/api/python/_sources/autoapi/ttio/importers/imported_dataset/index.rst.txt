@@ -1,0 +1,100 @@
+ttio.importers.imported_dataset
+===============================
+
+.. py:module:: ttio.importers.imported_dataset
+
+.. autoapi-nested-parse::
+
+   ``ImportedDataset`` — the normalized in-memory draft every importer
+   produces. The single call site of :meth:`SpectralDataset.write_minimal`,
+   collapsing the per-format adapter normalization the registry used to do.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.importers.imported_dataset.ImportedDataset
+
+
+Module Contents
+---------------
+
+.. py:class:: ImportedDataset
+
+   In-memory bundle of built runs + dataset metadata, ready to write.
+
+
+   .. py:attribute:: title
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: isa_investigation_id
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: runs
+      :type:  dict[str, ttio.spectral_dataset.WrittenRun]
+
+
+   .. py:attribute:: genomic_runs
+      :type:  dict[str, ttio.written_genomic_run.WrittenGenomicRun]
+
+
+   .. py:attribute:: identifications
+      :type:  list[ttio.identification.Identification]
+      :value: []
+
+
+
+   .. py:attribute:: quantifications
+      :type:  list[ttio.quantification.Quantification]
+      :value: []
+
+
+
+   .. py:attribute:: provenance
+      :type:  list[ttio.provenance.ProvenanceRecord]
+      :value: []
+
+
+
+   .. py:attribute:: image
+      :type:  object | None
+      :value: None
+
+
+
+   .. py:attribute:: raman_image
+      :type:  object | None
+      :value: None
+
+
+
+   .. py:attribute:: ir_image
+      :type:  object | None
+      :value: None
+
+
+
+   .. py:attribute:: subjects
+      :type:  list
+      :value: []
+
+
+
+   .. py:attribute:: samples
+      :type:  list
+      :value: []
+
+
+
+   .. py:method:: write(path: str | pathlib.Path, *, features: list[str] | None = None, provider: str = 'hdf5', progress=None) -> pathlib.Path
+
+

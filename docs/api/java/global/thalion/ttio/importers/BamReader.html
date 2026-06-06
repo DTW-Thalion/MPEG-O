@@ -56,8 +56,14 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
 <li><a href="#nested-class-summary" tabindex="0">Nested Class Summary</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#constructor-summary" tabindex="0">Constructor Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_READS" tabindex="0">PROGRESS_INTERVAL_READS</a></li>
+</ol>
+</li>
 <li><a href="#constructor-detail" tabindex="0">Constructor Details</a>
 <ol class="toc-list">
 <li><a href="#%3Cinit%3E(java.nio.file.Path)" tabindex="0">BamReader(Path)</a></li>
@@ -70,6 +76,8 @@ loadScripts(document, 'script');</script>
 <li><a href="#toGenomicRun(java.lang.String)" tabindex="0">toGenomicRun(String)</a></li>
 <li><a href="#toGenomicRun(java.lang.String,java.lang.String)" tabindex="0">toGenomicRun(String, String)</a></li>
 <li><a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String)" tabindex="0">toGenomicRun(String, String, String)</a></li>
+<li><a href="#toGenomicRun(java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">toGenomicRun(String, ProgressSink)</a></li>
+<li><a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" tabindex="0">toGenomicRun(String, String, String, ProgressSink)</a></li>
 <li><a href="#makeReaderFactory()" tabindex="0">makeReaderFactory()</a></li>
 <li><a href="#iteratorFor(htsjdk.samtools.SamReader,java.lang.String)" tabindex="0">iteratorFor(SamReader, String)</a></li>
 <li><a href="#isSamtoolsAvailable()" tabindex="0">isSamtoolsAvailable()</a></li>
@@ -137,6 +145,25 @@ by the <code>cross-compat</code> CI job.</p>
 </div>
 </section>
 </li>
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_READS" class="member-name-link">PROGRESS_INTERVAL_READS</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Default emit-every-N cadence for the
+  <a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)"><code>toGenomicRun(String, String, String, ProgressSink)</code></a>
+  <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ======== CONSTRUCTOR SUMMARY ======== -->
 <li>
 <section class="constructor-summary" id="constructor-summary">
@@ -191,17 +218,36 @@ an iterator over matching SAMRecords.</div>
 <div class="block">Default name <code>"genomic_0001"</code>, no region filter, no sample override.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
-<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toGenomicRun(java.lang.String,java.lang.String)" class="member-name-link">toGenomicRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
- <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;region)</code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toGenomicRun(java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">toGenomicRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
 <div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">No sample override.</div>
+<div class="block"><code>ProgressSink</code>-accepting overload; defaults region + sample
+  to <code>null</code>.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
-<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String)" class="member-name-link">toGenomicRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toGenomicRun(java.lang.String,java.lang.String)" class="member-name-link">toGenomicRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;region)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">No sample override.</div>
+</div>
+<div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String)" class="member-name-link">toGenomicRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;region,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName)</code></div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Backwards-compatible overload without a <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+</div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)" class="member-name-link">toGenomicRun</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;region,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
-<div class="block">Read the BAM/SAM and return a <a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a>.</div>
+<div class="block">Read the BAM/SAM and return a <a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a>, firing
+<code>progress.onProgress(readsDone, -1L)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records during iteration and a
+final <code>onProgress(total, total)</code> once all records have been
+consumed.</div>
 </div>
 </div>
 </div>
@@ -215,6 +261,35 @@ an iterator over matching SAMRecords.</div>
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_READS">
+<h3>PROGRESS_INTERVAL_READS</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_READS</span></div>
+<div class="block">Default emit-every-N cadence for the
+  <a href="#toGenomicRun(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)"><code>toGenomicRun(String, String, String, ProgressSink)</code></a>
+  <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>. The htsjdk record iterator can chew
+  through several hundred thousand records per second; a tighter
+  cadence drowns the GUI thread without adding info.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.importers.BamReader.PROGRESS_INTERVAL_READS">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ========= CONSTRUCTOR DETAIL ======== -->
 <li>
 <section class="constructor-details" id="constructor-detail">
@@ -298,7 +373,46 @@ an iterator over matching SAMRecords.</div>
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;region,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName)</span>
                                throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
-<div class="block">Read the BAM/SAM and return a <a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a>.</div>
+<div class="block">Backwards-compatible overload without a <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a>.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="toGenomicRun(java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>toGenomicRun</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></span>&nbsp;<span class="element-name">toGenomicRun</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                               throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block"><code>ProgressSink</code>-accepting overload; defaults region + sample
+  to <code>null</code>.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="toGenomicRun(java.lang.String,java.lang.String,java.lang.String,global.thalion.ttio.io.ProgressSink)">
+<h3>toGenomicRun</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics">WrittenGenomicRun</a></span>&nbsp;<span class="element-name">toGenomicRun</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;name,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;region,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;sampleName,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                               throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Read the BAM/SAM and return a <a href="../genomics/WrittenGenomicRun.html" title="class in global.thalion.ttio.genomics"><code>WrittenGenomicRun</code></a>, firing
+<code>progress.onProgress(readsDone, -1L)</code> every
+<a href="#PROGRESS_INTERVAL_READS"><code>PROGRESS_INTERVAL_READS</code></a> records during iteration and a
+final <code>onProgress(total, total)</code> once all records have been
+consumed. Total is unknown mid-iteration because htsjdk's record
+iterator does not expose a cheap count without re-walking the
+file (and the file may be region-filtered).</div>
 <dl class="notes">
 <dt>Parameters:</dt>
 <dd><code>name</code> - run name (becomes <code>/study/genomic_runs/&lt;name&gt;</code>).</dd>
@@ -307,9 +421,13 @@ an iterator over matching SAMRecords.</div>
                    means no filter.</dd>
 <dd><code>sampleName</code> - optional override for <code>sample_name</code>;
                    <code>null</code> means "use first @RG SM:".</dd>
+<dd><code>progress</code> - progress callback; <a href="../io/ProgressSink.html#discard()"><code>ProgressSink.discard()</code></a>
+                   if you don't care.</dd>
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code> - if the file is missing, malformed, or a region
                     filter is requested against an unindexed file.</dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

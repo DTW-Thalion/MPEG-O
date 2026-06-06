@@ -104,7 +104,7 @@ implements <a href="StorageProvider.html" title="interface in global.thalion.tti
 change; callers that used those directly can switch to
 <code>Hdf5Provider.open(path, Mode.READ)</code> and continue.
 
-<p>API status: Stable (Provisional per M39 — may change before v1.0).</p>
+<p>API status: Stable.</p>
 
 <p>Cross-language equivalents:
 <ul>
@@ -167,7 +167,9 @@ change; callers that used those directly can switch to
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Release backend resources.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>boolean</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#isOpen()" class="member-name-link">isOpen</a>()</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
@@ -215,9 +217,8 @@ change; callers that used those directly can switch to
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#tryUnwrapHdf5Group(global.thalion.ttio.providers.StorageGroup)" class="member-name-link">tryUnwrapHdf5Group</a><wbr>(<a href="StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;group)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
-<div class="block">Phase 2 (post-M91): if <code>group</code> is an HDF5-backed
-  <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return the underlying <a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>;
-  otherwise return <code>null</code>.</div>
+<div class="block">If <code>group</code> is an HDF5-backed <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return
+  the underlying <a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>; otherwise return <code>null</code>.</div>
 </div>
 </div>
 </div>
@@ -349,12 +350,19 @@ change; callers that used those directly can switch to
 <h3>tryUnwrapHdf5Group</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a></span>&nbsp;<span class="element-name">tryUnwrapHdf5Group</span><wbr><span class="parameters">(<a href="StorageGroup.html" title="interface in global.thalion.ttio.providers">StorageGroup</a>&nbsp;group)</span></div>
-<div class="block">Phase 2 (post-M91): if <code>group</code> is an HDF5-backed
-  <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return the underlying <a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>;
-  otherwise return <code>null</code>. Lets cross-modality code paths
-  (per-run provenance, etc.) write a native HDF5 compound dataset
-  on the fast path while still falling back to the protocol API
-  for memory/sqlite/zarr providers.</div>
+<div class="block">If <code>group</code> is an HDF5-backed <a href="StorageGroup.html" title="interface in global.thalion.ttio.providers"><code>StorageGroup</code></a>, return
+  the underlying <a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>; otherwise return <code>null</code>.
+  Lets cross-modality code paths (per-run provenance, etc.) write
+  a native HDF5 compound dataset on the fast path while still
+  falling back to the protocol API for memory/sqlite/zarr
+  providers.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>group</code> - the protocol-level group to unwrap</dd>
+<dt>Returns:</dt>
+<dd>the native <a href="../hdf5/Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a>, or <code>null</code> when
+          <code>group</code> is not HDF5-backed</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -366,6 +374,9 @@ change; callers that used those directly can switch to
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="StorageProvider.html#isOpen()">isOpen</a></code>&nbsp;in interface&nbsp;<code><a href="StorageProvider.html" title="interface in global.thalion.ttio.providers">StorageProvider</a></code></dd>
+<dt>Returns:</dt>
+<dd><code>true</code> when the provider is currently open and
+  ready for read / write calls.</dd>
 </dl>
 </div>
 </section>
@@ -430,6 +441,10 @@ change; callers that used those directly can switch to
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block"><span class="description-from-type-label">Description copied from interface:&nbsp;<code><a href="StorageProvider.html#close()">StorageProvider</a></code></span></div>
+<div class="block">Release backend resources. After this call <a href="StorageProvider.html#isOpen()"><code>StorageProvider.isOpen()</code></a> must
+  return <code>false</code>; calling <code>close</code> a second time is a
+  no-op.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

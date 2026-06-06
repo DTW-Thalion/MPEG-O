@@ -95,7 +95,7 @@ implements <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base
 <div class="block">Thin wrapper around an HDF5 file handle. Implements <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link"><code>AutoCloseable</code></a>
 for try-with-resources support.
 
-<p>Thread-safety model (mirrors ObjC M23): each Hdf5File owns a
+<p>Thread-safety model: each Hdf5File owns a
 <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/locks/ReentrantReadWriteLock.html" title="class or interface in java.util.concurrent.locks" class="external-link"><code>ReentrantReadWriteLock</code></a> that serialises access from derived
 <a href="Hdf5Group.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Group</code></a> and <a href="Hdf5Dataset.html" title="class in global.thalion.ttio.hdf5"><code>Hdf5Dataset</code></a> instances. Readers do not
 block readers; writers are exclusive. When the native HDF5 library is
@@ -117,7 +117,10 @@ not thread-safe, readers are promoted to the write (exclusive) lock.</p></div>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#close()" class="member-name-link">close</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Flush pending metadata to the OS buffer, then release the HDF5
+  file id.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="Hdf5File.html" title="class in global.thalion.ttio.hdf5">Hdf5File</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#create(java.lang.String)" class="member-name-link">create</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
@@ -137,10 +140,15 @@ lock initialised.</div>
 </div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#lockForReading()" class="member-name-link">lockForReading</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Acquire the read lock for the duration of an HDF5 read call.</div>
+</div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#lockForWriting()" class="member-name-link">lockForWriting</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Acquire the exclusive write lock for the duration of an HDF5
+  write call.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="Hdf5File.html" title="class in global.thalion.ttio.hdf5">Hdf5File</a></code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#open(java.lang.String)" class="member-name-link">open</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;path)</code></div>
 <div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
@@ -158,10 +166,14 @@ lock initialised.</div>
 </div>
 <div class="col-first even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#unlockForReading()" class="member-name-link">unlockForReading</a>()</code></div>
-<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last even-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Release the lock acquired by <a href="#lockForReading()"><code>lockForReading()</code></a>.</div>
+</div>
 <div class="col-first odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code>void</code></div>
 <div class="col-second odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4"><code><a href="#unlockForWriting()" class="member-name-link">unlockForWriting</a>()</code></div>
-<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">&nbsp;</div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab2 method-summary-table-tab4">
+<div class="block">Release the lock acquired by <a href="#lockForWriting()"><code>lockForWriting()</code></a>.</div>
+</div>
 </div>
 </div>
 </div>
@@ -220,6 +232,10 @@ lock initialised.</div>
 <h3>getPath</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">getPath</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the filesystem path this file was opened from.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -228,6 +244,10 @@ lock initialised.</div>
 <h3>getFileId</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">long</span>&nbsp;<span class="element-name">getFileId</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>the underlying HDF5 file id.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -246,6 +266,9 @@ lock initialised. When false, concurrent use is undefined.</div>
 <h3>lockForReading</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">lockForReading</span>()</div>
+<div class="block">Acquire the read lock for the duration of an HDF5 read call.
+  Promoted to the write (exclusive) lock when the linked libhdf5
+  is not thread-safe. Must be paired with <a href="#unlockForReading()"><code>unlockForReading()</code></a>.</div>
 </div>
 </section>
 </li>
@@ -254,6 +277,7 @@ lock initialised. When false, concurrent use is undefined.</div>
 <h3>unlockForReading</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">unlockForReading</span>()</div>
+<div class="block">Release the lock acquired by <a href="#lockForReading()"><code>lockForReading()</code></a>.</div>
 </div>
 </section>
 </li>
@@ -262,6 +286,8 @@ lock initialised. When false, concurrent use is undefined.</div>
 <h3>lockForWriting</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">lockForWriting</span>()</div>
+<div class="block">Acquire the exclusive write lock for the duration of an HDF5
+  write call. Must be paired with <a href="#unlockForWriting()"><code>unlockForWriting()</code></a>.</div>
 </div>
 </section>
 </li>
@@ -270,6 +296,7 @@ lock initialised. When false, concurrent use is undefined.</div>
 <h3>unlockForWriting</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">unlockForWriting</span>()</div>
+<div class="block">Release the lock acquired by <a href="#lockForWriting()"><code>lockForWriting()</code></a>.</div>
 </div>
 </section>
 </li>
@@ -278,6 +305,8 @@ lock initialised. When false, concurrent use is undefined.</div>
 <h3>close</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">void</span>&nbsp;<span class="element-name">close</span>()</div>
+<div class="block">Flush pending metadata to the OS buffer, then release the HDF5
+  file id. Idempotent.</div>
 <dl class="notes">
 <dt>Specified by:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html#close()" title="class or interface in java.lang" class="external-link">close</a></code>&nbsp;in interface&nbsp;<code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/AutoCloseable.html" title="class or interface in java.lang" class="external-link">AutoCloseable</a></code></dd>

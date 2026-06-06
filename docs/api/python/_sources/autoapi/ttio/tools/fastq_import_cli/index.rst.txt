@@ -36,3 +36,16 @@ Module Contents
 
 .. py:function:: main(argv: list[str] | None = None) -> int
 
+   Convert a FASTQ file into an unaligned genomic run.
+
+   Writes the resulting run under ``/study/genomic_runs/<name>/``
+   inside a freshly created ``.tio`` container. The Phred offset is
+   auto-detected unless ``--phred`` is supplied.
+
+   :param argv: Argument vector. Defaults to ``sys.argv[1:]`` when ``None``.
+   :type argv: list[str], optional
+
+   :returns: *int* -- ``0`` on success, ``2`` on FASTQ parse / I/O failure.
+             Argparse exits with ``2`` on usage errors.
+
+

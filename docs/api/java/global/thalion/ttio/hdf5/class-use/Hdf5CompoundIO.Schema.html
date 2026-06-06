@@ -75,13 +75,25 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-first even-row-color"><code>static <a href="../Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#identificationSchema()" class="member-name-link">identificationSchema</a>()</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Schema for the <code>identifications</code> compound dataset as defined
+in format-spec section 6.1: run name, spectrum index, chemical
+entity, confidence score, and a JSON-encoded evidence chain.</div>
+</div>
 <div class="col-first odd-row-color"><code>static <a href="../Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
 <div class="col-second odd-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#provenanceSchema()" class="member-name-link">provenanceSchema</a>()</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Schema for the <code>provenance</code> compound dataset as defined in
+format-spec section 6.3: Unix timestamp, software identifier, and
+JSON-encoded parameters / input refs / output refs.</div>
+</div>
 <div class="col-first even-row-color"><code>static <a href="../Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#quantificationSchema()" class="member-name-link">quantificationSchema</a>()</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Schema for the <code>quantifications</code> compound dataset as defined
+in format-spec section 6.2: chemical entity, sample reference,
+abundance value, and normalisation method.</div>
+</div>
 </div>
 <div class="caption"><span>Methods in <a href="../package-summary.html">global.thalion.ttio.hdf5</a> with parameters of type <a href="../Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a></span></div>
 <div class="summary-table three-column-summary">
@@ -99,7 +111,10 @@ loadScripts(document, 'script');</script>
 <div class="col-second odd-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#readCompoundPrimitives(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema)" class="member-name-link">readCompoundPrimitives</a><wbr>(<a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,
  <a href="../Hdf5CompoundIO.Schema.html" title="class in global.thalion.ttio.hdf5">Hdf5CompoundIO.Schema</a>&nbsp;schema)</code></div>
-<div class="col-last odd-row-color">&nbsp;</div>
+<div class="col-last odd-row-color">
+<div class="block">Read a compound dataset returning only the primitive (non-VL)
+fields.</div>
+</div>
 <div class="col-first even-row-color"><code>static void</code></div>
 <div class="col-second even-row-color"><span class="type-name-label">Hdf5CompoundIO.</span><code><a href="../Hdf5CompoundIO.html#writeCompoundDataset(global.thalion.ttio.hdf5.Hdf5Group,java.lang.String,global.thalion.ttio.hdf5.Hdf5CompoundIO.Schema,int,global.thalion.ttio.hdf5.Hdf5CompoundIO.RowPacker)" class="member-name-link">writeCompoundDataset</a><wbr>(<a href="../Hdf5Group.html" title="class in global.thalion.ttio.hdf5">Hdf5Group</a>&nbsp;parent,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;datasetName,

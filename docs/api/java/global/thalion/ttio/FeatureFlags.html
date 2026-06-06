@@ -226,7 +226,10 @@ loadScripts(document, 'script');</script>
 <div class="table-header col-last">Description</div>
 <div class="col-constructor-name even-row-color"><code><a href="#%3Cinit%3E(java.lang.String,java.util.Collection)" class="member-name-link">FeatureFlags</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;formatVersion,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;features)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Build a <code>FeatureFlags</code> from a format version label and a
+collection of feature strings.</div>
+</div>
 </div>
 </section>
 </li>
@@ -666,6 +669,14 @@ loadScripts(document, 'script');</script>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="element-name">FeatureFlags</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;formatVersion,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Collection.html" title="class or interface in java.util" class="external-link">Collection</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;&nbsp;features)</span></div>
+<div class="block">Build a <code>FeatureFlags</code> from a format version label and a
+collection of feature strings. The collection is copied into a
+<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/LinkedHashSet.html" title="class or interface in java.util" class="external-link"><code>LinkedHashSet</code></a> preserving iteration order.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>formatVersion</code> - file format version label (e.g. <code>"1.5"</code>)</dd>
+<dd><code>features</code> - collection of feature flag names</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -682,6 +693,10 @@ loadScripts(document, 'script');</script>
 <h3>formatVersion</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">formatVersion</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>The format version label (e.g. <code>"1.5"</code>).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -690,6 +705,10 @@ loadScripts(document, 'script');</script>
 <h3>features</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Set.html" title="class or interface in java.util" class="external-link">Set</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&gt;</span>&nbsp;<span class="element-name">features</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Unmodifiable view of the feature flag set, iteration order preserved.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -698,6 +717,12 @@ loadScripts(document, 'script');</script>
 <h3>has</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">boolean</span>&nbsp;<span class="element-name">has</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;flag)</span></div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>flag</code> - feature flag name to test</dd>
+<dt>Returns:</dt>
+<dd><code>true</code> when the flag is present in this set</dd>
+</dl>
 </div>
 </section>
 </li>

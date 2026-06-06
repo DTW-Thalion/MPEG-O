@@ -84,8 +84,16 @@ loadScripts(document, 'script');</script>
 and including <code>EndOfStream</code>.</div>
 </div>
 <div class="col-first even-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportReader.PacketRecord</a>&gt;</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">TransportReader.</span><code><a href="../TransportReader.html#readAllPackets()" class="member-name-link">readAllPackets</a>()</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-second even-row-color"><span class="type-name-label">TransportClient.</span><code><a href="../TransportClient.html#fetchPackets(java.util.Map,long,java.util.function.LongConsumer)" class="member-name-link">fetchPackets</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>,<wbr><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Object.html" title="class or interface in java.lang" class="external-link">Object</a>&gt;&nbsp;filters,
+ long&nbsp;timeoutMs,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/function/LongConsumer.html" title="class or interface in java.util.function" class="external-link">LongConsumer</a>&nbsp;onBytesReceived)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Open a connection, send the query, collect all packets up to and including
+<code>EndOfStream</code>.</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a><wbr>&lt;<a href="../TransportReader.PacketRecord.html" title="class in global.thalion.ttio.transport">TransportReader.PacketRecord</a>&gt;</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">TransportReader.</span><code><a href="../TransportReader.html#readAllPackets()" class="member-name-link">readAllPackets</a>()</code></div>
+<div class="col-last odd-row-color">&nbsp;</div>
 </div>
 </section>
 </li>

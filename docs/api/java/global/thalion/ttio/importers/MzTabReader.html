@@ -56,10 +56,17 @@ loadScripts(document, 'script');</script>
 <ol class="toc-list" tabindex="-1">
 <li><a href="#" tabindex="0">Description</a></li>
 <li><a href="#nested-class-summary" tabindex="0">Nested Class Summary</a></li>
+<li><a href="#field-summary" tabindex="0">Field Summary</a></li>
 <li><a href="#method-summary" tabindex="0">Method Summary</a></li>
+<li><a href="#field-detail" tabindex="0">Field Details</a>
+<ol class="toc-list">
+<li><a href="#PROGRESS_INTERVAL_ROWS" tabindex="0">PROGRESS_INTERVAL_ROWS</a></li>
+</ol>
+</li>
 <li><a href="#method-detail" tabindex="0">Method Details</a>
 <ol class="toc-list">
 <li><a href="#read(java.nio.file.Path)" tabindex="0">read(Path)</a></li>
+<li><a href="#read(java.nio.file.Path,global.thalion.ttio.io.ProgressSink)" tabindex="0">read(Path, ProgressSink)</a></li>
 </ol>
 </li>
 </ol>
@@ -122,6 +129,24 @@ HANDOFF binding decision 47:
 </div>
 </section>
 </li>
+<!-- =========== FIELD SUMMARY =========== -->
+<li>
+<section class="field-summary" id="field-summary">
+<h2>Field Summary</h2>
+<div class="caption"><span>Fields</span></div>
+<div class="summary-table three-column-summary">
+<div class="table-header col-first">Modifier and Type</div>
+<div class="table-header col-second">Field</div>
+<div class="table-header col-last">Description</div>
+<div class="col-first even-row-color"><code>static final int</code></div>
+<div class="col-second even-row-color"><code><a href="#PROGRESS_INTERVAL_ROWS" class="member-name-link">PROGRESS_INTERVAL_ROWS</a></code></div>
+<div class="col-last even-row-color">
+<div class="block">Default emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during the row-parse phase.</div>
+</div>
+</div>
+</section>
+</li>
 <!-- ========== METHOD SUMMARY =========== -->
 <li>
 <section class="method-summary" id="method-summary">
@@ -138,6 +163,16 @@ HANDOFF binding decision 47:
 <div class="col-last even-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
 <div class="block">Parse an mzTab file.</div>
 </div>
+<div class="col-first odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code>static <a href="MzTabReader.MzTabImport.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabImport</a></code></div>
+<div class="col-second odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4"><code><a href="#read(java.nio.file.Path,global.thalion.ttio.io.ProgressSink)" class="member-name-link">read</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</code></div>
+<div class="col-last odd-row-color method-summary-table method-summary-table-tab1 method-summary-table-tab4">
+<div class="block">Parse an mzTab file, firing
+<code>progress.onProgress(rowsDone, -1L)</code> every
+<a href="#PROGRESS_INTERVAL_ROWS"><code>PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM / SML /
+SMF / SME) and a final <code>onProgress(total, total)</code> once the
+full row count is known.</div>
+</div>
 </div>
 </div>
 </div>
@@ -150,6 +185,34 @@ HANDOFF binding decision 47:
 </section>
 <section class="details">
 <ul class="details-list">
+<!-- ============ FIELD DETAIL =========== -->
+<li>
+<section class="field-details" id="field-detail">
+<h2>Field Details</h2>
+<ul class="member-list">
+<li>
+<section class="detail" id="PROGRESS_INTERVAL_ROWS">
+<h3>PROGRESS_INTERVAL_ROWS</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static final</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">PROGRESS_INTERVAL_ROWS</span></div>
+<div class="block">Default emit-every-N cadence for <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io"><code>ProgressSink</code></a> callbacks
+  during the row-parse phase. mzTab uses tabular rows (PRT / PEP /
+  PSM / SML / SMF / SME), not spectra; 500 rows balances visible
+  per-large-file updates against callback overhead.</div>
+<dl class="notes">
+<dt>See Also:</dt>
+<dd>
+<ul class="tag-list">
+<li><a href="../../../../constant-values.html#global.thalion.ttio.importers.MzTabReader.PROGRESS_INTERVAL_ROWS">Constant Field Values</a></li>
+</ul>
+</dd>
+</dl>
+</div>
+</section>
+</li>
+</ul>
+</section>
+</li>
 <!-- ============ METHOD DETAIL ========== -->
 <li>
 <section class="method-details" id="method-detail">
@@ -165,6 +228,30 @@ HANDOFF binding decision 47:
 <dl class="notes">
 <dt>Throws:</dt>
 <dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+</dl>
+</div>
+</section>
+</li>
+<li>
+<section class="detail" id="read(java.nio.file.Path,global.thalion.ttio.io.ProgressSink)">
+<h3>read</h3>
+<div class="horizontal-scroll">
+<div class="member-signature"><span class="modifiers">public static</span>&nbsp;<span class="return-type"><a href="MzTabReader.MzTabImport.html" title="class in global.thalion.ttio.importers">MzTabReader.MzTabImport</a></span>&nbsp;<span class="element-name">read</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/nio/file/Path.html" title="class or interface in java.nio.file" class="external-link">Path</a>&nbsp;path,
+ <a href="../io/ProgressSink.html" title="interface in global.thalion.ttio.io">ProgressSink</a>&nbsp;progress)</span>
+                                    throws <span class="exceptions"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></span></div>
+<div class="block">Parse an mzTab file, firing
+<code>progress.onProgress(rowsDone, -1L)</code> every
+<a href="#PROGRESS_INTERVAL_ROWS"><code>PROGRESS_INTERVAL_ROWS</code></a> data rows (PRT / PEP / PSM / SML /
+SMF / SME) and a final <code>onProgress(total, total)</code> once the
+full row count is known. Total is reported as <code>-1L</code>
+mid-parse because mzTab gives no row count up front; the final
+fire stamps both <code>done</code> and <code>total</code> with the true
+count.</div>
+<dl class="notes">
+<dt>Throws:</dt>
+<dd><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/io/IOException.html" title="class or interface in java.io" class="external-link">IOException</a></code></dd>
+<dt>Since:</dt>
+<dd>1.5.0</dd>
 </dl>
 </div>
 </section>

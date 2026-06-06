@@ -1,0 +1,167 @@
+ttio.workbench.pipeline
+=======================
+
+.. py:module:: ttio.workbench.pipeline
+
+.. autoapi-nested-parse::
+
+   ttio.workbench.pipeline -- pipeline registry + submit client.
+
+   Wraps the workbench server's REST surface for pipelines:
+
+     POST /v1/pipelines           -- register a pipeline
+     GET  /v1/pipelines           -- list (project-scoped)
+     GET  /v1/pipelines/{id}      -- detail
+
+   (Pipeline disable / delete is server-side `DELETE /v1/pipelines/{id}`;
+   not surfaced in the v1.0 client SDK -- operators manage pipelines via
+   direct REST. Could land in a v1.x client patch if a real workflow
+   needs it.)
+
+   The workbench server's pipeline registry (`TTIOWBPipelineRegistry`)
+   enforces `(project, identifier, version)` uniqueness; duplicate
+   registration returns 409. `inputs_schema` / `outputs_schema` are
+   free-form JSON objects; v1.0 does not validate their shape.
+
+   Capability required: `pipelines.manage` + membership of the target
+   project.
+
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.pipeline.Pipeline
+   ttio.workbench.pipeline.PipelinesClient
+
+
+Module Contents
+---------------
+
+.. py:class:: Pipeline
+
+   A pipeline as returned by `GET /v1/pipelines{,/{id}}`.
+
+
+   .. py:attribute:: pipeline_id
+      :type:  str
+
+
+   .. py:attribute:: identifier
+      :type:  str
+
+
+   .. py:attribute:: version
+      :type:  str
+
+
+   .. py:attribute:: project
+      :type:  str
+
+
+   .. py:attribute:: owner
+      :type:  str
+
+
+   .. py:attribute:: engine_pin
+      :type:  Optional[str]
+
+
+   .. py:attribute:: definition
+      :type:  str
+
+
+   .. py:attribute:: inputs_schema
+      :type:  Mapping[str, Any]
+
+
+   .. py:attribute:: outputs_schema
+      :type:  Mapping[str, Any]
+
+
+   .. py:method:: from_json(body: Mapping[str, Any]) -> Pipeline
+      :classmethod:
+
+
+      Construct a :class:`Pipeline` from a parsed server JSON body.
+
+      :param body: Decoded JSON object from ``/v1/pipelines{,/{id}}``.
+      :type body: Mapping[str, Any]
+
+      :returns: *Pipeline* -- Immutable snapshot. ``inputs_schema`` and
+                ``outputs_schema`` are normalised to dicts even when the
+                server emits them as JSON-text fields.
+
+
+
+.. py:class:: PipelinesClient(host: str, port: int, *, scheme: str, token: str)
+
+   Pipeline registry surface. Constructed via
+   `WorkbenchClient.pipelines()`.
+
+   Bind the client to a server endpoint and bearer token.
+
+   :param host: Workbench server hostname.
+   :type host: str
+   :param port: TCP port the REST listener is bound to.
+   :type port: int
+   :param scheme: ``"http"`` or ``"https"``.
+   :type scheme: str
+   :param token: Bearer token (``ttiowbs_...``).
+   :type token: str
+
+
+   .. py:method:: register(*, identifier: str, version: str, project: str, definition: str, engine_pin: Optional[str] = None, inputs_schema: Optional[Mapping[str, Any]] = None, outputs_schema: Optional[Mapping[str, Any]] = None) -> Pipeline
+
+      Register a new pipeline with the workbench server.
+
+      :param identifier: Human-readable pipeline identifier; unique per
+                         ``(project, version)``.
+      :type identifier: str
+      :param version: Caller-supplied version label (free-form).
+      :type version: str
+      :param project: Target project; caller must be a member.
+      :type project: str
+      :param definition: Pipeline definition body (engine-specific wire shape).
+      :type definition: str
+      :param engine_pin: Engine identifier the pipeline must run under
+                         (``shell``, ``apptainer``, ``podman``, etc.).
+      :type engine_pin: str, optional
+      :param inputs_schema: Free-form JSON object describing input slots. Not
+                            schema-validated by v1.0.
+      :type inputs_schema: Mapping[str, Any], optional
+      :param outputs_schema: Free-form JSON object describing output slots.
+      :type outputs_schema: Mapping[str, Any], optional
+
+      :returns: *Pipeline* -- The freshly registered pipeline row.
+
+      :raises WorkbenchHttpError: If the server returns anything other than 201. 409
+          indicates a duplicate ``(project, identifier, version)``.
+
+
+
+   .. py:method:: list() -> list[Pipeline]
+
+      List pipelines visible to the caller's project scope.
+
+      :returns: *list[Pipeline]* -- All pipelines the caller is permitted to see.
+
+      :raises WorkbenchHttpError: On non-200 response.
+
+
+
+   .. py:method:: get(pipeline_id: str) -> Pipeline
+
+      Fetch a single pipeline by identifier.
+
+      :param pipeline_id: Server-assigned pipeline identifier (UUID).
+      :type pipeline_id: str
+
+      :returns: *Pipeline* -- The pipeline definition row.
+
+      :raises WorkbenchHttpError: On non-200 response (404 when the id is unknown).
+
+
+

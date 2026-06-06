@@ -44,4 +44,11 @@ Module Contents
    way. Use :class:`SamReader` when the calling code wants the type
    name to communicate "this is SAM-text input" to the reader.
 
+   Configure the reader; does not invoke samtools.
+
+   :param path: Filesystem path to a SAM or BAM file. The path is stored
+                verbatim — existence is not checked until
+                :meth:`to_genomic_run` runs.
+   :type path: str or os.PathLike
+
 

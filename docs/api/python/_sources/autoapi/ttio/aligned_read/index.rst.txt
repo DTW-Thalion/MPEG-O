@@ -78,29 +78,55 @@ Module Contents
       :type: bool
 
 
+      Whether the read is aligned to a reference position.
+
+      :returns: *bool* -- True when SAM flag 0x4 (``unmapped``) is cleared.
+
 
    .. py:property:: is_paired
       :type: bool
 
+
+      Whether the read is part of a paired-end template.
+
+      :returns: *bool* -- True when SAM flag 0x1 (``paired``) is set.
 
 
    .. py:property:: is_reverse
       :type: bool
 
 
+      Whether the read aligns to the reverse strand.
+
+      :returns: *bool* -- True when SAM flag 0x10 (``reverse complement``) is set.
+
 
    .. py:property:: is_secondary
       :type: bool
 
+
+      Whether the alignment is a secondary alignment.
+
+      :returns: *bool* -- True when SAM flag 0x100 (``secondary alignment``) is set.
 
 
    .. py:property:: is_supplementary
       :type: bool
 
 
+      Whether the alignment is a supplementary alignment.
+
+      :returns: *bool* -- True when SAM flag 0x800 (``supplementary alignment``) is
+                set; typically marks chimeric / split-read parts.
+
 
    .. py:property:: read_length
       :type: int
 
+
+      Length of the read's sequence in bases.
+
+      :returns: *int* -- ``len(self.sequence)``. Zero when the BAM record stored
+                ``SEQ=*`` (sequence stripped).
 
 

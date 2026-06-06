@@ -1,0 +1,170 @@
+ttio.workbench.transport.download
+=================================
+
+.. py:module:: ttio.workbench.transport.download
+
+.. autoapi-nested-parse::
+
+   Workbench-aware download over the `ttio-transport` WebSocket subprotocol.
+
+   `DownloadClient` is an async context manager that opens the WS to
+   `/transport`, performs the download handshake (with optional
+   selective-access filters), drains the BINARY `.tis` payload + any
+   TEXT stats / progress frames, and returns the full payload plus
+   metadata when the server emits its terminal `done` frame.
+
+   Three output modes mirror the daemon's
+   `Source/WS/TTIOWBWsDownloadHandshake.m`:
+
+     - `"binary"` -- pure `.tis` stream, no stats frames mixed in. The
+       typical fetch-and-save path.
+     - `"stats-only"` -- per-AU stats JSON only, no binary. Useful for
+       UC-05 "container inspection" without downloading the payload.
+     - `"stats-with-payload"` -- both interleaved; the AU stats frames
+       arrive immediately before each AU's binary chunk.
+
+   Cross-project access is policed by the daemon's auth gate and
+   returns WS close code 1011 with `{"type":"error","reason":"container
+   not found"}` (see `Documentation/auth.md`'s "Cross-project = 404,
+   not 403" rule). `DownloadError` carries the close code + reason
+   for inspection.
+
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.download.FilterDict
+   ttio.workbench.transport.download.OutputMode
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.download.DownloadResult
+   ttio.workbench.transport.download.DownloadClient
+
+
+Module Contents
+---------------
+
+.. py:data:: FilterDict
+
+.. py:data:: OutputMode
+
+.. py:class:: DownloadResult
+
+   Outcome of one download.
+
+   Args:
+       container_uri: the URI the server emitted in its `done`
+           frame (will match what the client requested).
+       payload: the concatenated `.tis` byte stream. Empty when
+           `output_mode="stats-only"`.
+       stats_frames: list of per-AU stats objects emitted as TEXT
+           frames. Non-empty only when `output_mode` includes
+           stats. Each entry is the parsed JSON object verbatim
+           (the daemon's stats schema is "anything with
+           `au_sequence` or `dataset_id`" per
+           `Tests/load/download_one.py`'s reference parser).
+       binary_frame_count: number of BINARY frames the server
+           emitted. Helpful for diagnostics.
+       terminal_frame: the parsed `done` frame body.
+
+
+   .. py:attribute:: container_uri
+      :type:  str
+
+
+   .. py:attribute:: payload
+      :type:  bytes
+
+
+   .. py:attribute:: stats_frames
+      :type:  list[dict]
+
+
+   .. py:attribute:: binary_frame_count
+      :type:  int
+
+
+   .. py:attribute:: terminal_frame
+      :type:  dict
+
+
+.. py:class:: DownloadClient(*, host: str, port: int, session: Optional[ttio.workbench.auth.Session] = None, token: Optional[str] = None, owner: Optional[str] = None, scheme: str = 'ws', ssl_context=None, connect_timeout: float = 10.0, recv_timeout: float = 30.0)
+
+   Async context manager for one download.
+
+   Usage:
+
+       async with DownloadClient(host="...", port=8443,
+                                  session=session) as client:
+           result = await client.download(
+               container_uri="uri:tio:demo-001",
+               filter={"ms_level": 1, "retention_time_min": 12.0},
+           )
+           with open("subset.tio", "wb") as f:
+               f.write(result.payload)
+
+   Construct the download client. Auth wiring mirrors `UploadClient`.
+
+   Args:
+       host, port: server WebSocket endpoint.
+       session: an authenticated `Session`. Either this or
+           `token` is required.
+       token: bearer token; mutually exclusive with `session`.
+       owner: username for the handshake `owner` field. The
+           v1.0 server uses this to gate cross-owner access
+           under the `containers.read.any_project` capability.
+           Defaults to `session.username` when `session` is
+           set; otherwise required.
+       scheme: `"ws"` or `"wss"`.
+       ssl_context: optional `ssl.SSLContext`.
+       connect_timeout: WS open + initial-ack timeout.
+       recv_timeout: per-recv timeout once the download is in
+           flight.
+
+
+   .. py:method:: __aenter__() -> DownloadClient
+      :async:
+
+
+
+   .. py:method:: __aexit__(exc_type, exc, tb)
+      :async:
+
+
+
+   .. py:method:: download(*, container_uri: str, filter: Optional[FilterDict] = None, output_mode: OutputMode = OutputModeLiteral.BINARY.value, max_au: int = 0, progress: Optional[Callable[[int, int], None]] = None) -> DownloadResult
+      :async:
+
+
+      Drive one download to completion.
+
+      Args:
+          container_uri: target container.
+          filter: optional selective-access predicates. Validated
+              client-side against the daemon's accepted filter
+              key set; unknown keys raise `ValueError` rather
+              than letting the server reject the handshake.
+          output_mode: one of the `OutputModeLiteral` strings.
+          max_au: cap the emitted AU count to this number; 0 =
+              no cap.
+
+      Returns:
+          `DownloadResult` on success.
+
+      Raises:
+          HandshakeError: handshake failed (network, auth, bad
+              container URI).
+          DownloadError: server emitted an error frame or closed
+              without `done`. The close code + reason are
+              captured on the exception.
+
+
+

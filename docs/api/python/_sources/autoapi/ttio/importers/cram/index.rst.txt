@@ -64,13 +64,27 @@ Module Contents
    :class:`~ttio.importers.bam.SamtoolsNotFoundError` when samtools
    cannot be located at first use (from M87).
 
+   Configure the reader with a CRAM file and its reference FASTA.
+
+   :param path: Filesystem path to a CRAM file.
+   :type path: str or os.PathLike
+   :param reference_fasta: Filesystem path to the reference FASTA the CRAM was aligned
+                           against. Required — CRAM cannot be decoded without it.
+                           samtools auto-builds a ``.fai`` index alongside the FASTA on
+                           first use if one isn't already present.
+   :type reference_fasta: str or os.PathLike
+
 
    .. py:property:: reference_fasta
       :type: pathlib.Path
 
 
+      Return the reference-FASTA path.
 
-   .. py:method:: to_genomic_run(name: str = 'genomic_0001', region: str | None = None, sample_name: str | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
+      :returns: *pathlib.Path* -- The reference path supplied at construction, unchanged.
+
+
+   .. py:method:: to_genomic_run(name: str = 'genomic_0001', region: str | None = None, sample_name: str | None = None, *, progress: ttio.io.progress.ProgressSinkLike | None = None) -> ttio.written_genomic_run.WrittenGenomicRun
 
       Read the CRAM and return a :class:`WrittenGenomicRun`.
 

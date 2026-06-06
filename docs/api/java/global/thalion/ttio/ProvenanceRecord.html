@@ -283,7 +283,11 @@ transformed. W3C PROV-compatible.
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">parametersJson</span>()</div>
 <dl class="notes">
 <dt>Returns:</dt>
-<dd>JSON serialization of <code>parameters</code>.</dd>
+<dd>JSON serialization of <code>parameters</code>. Keys are
+  sorted lexicographically so the output is deterministic and
+  byte-equivalent to Python's <code>json.dumps(d, sort_keys=True)</code>
+  and ObjC's <code>NSJSONWritingSortedKeys</code> — required for
+  cross-language transport-spec v0.11 conformance.</dd>
 </dl>
 </div>
 </section>

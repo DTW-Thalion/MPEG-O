@@ -315,7 +315,15 @@ lengths array.</div>
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/List.html" title="class or interface in java.util" class="external-link">List</a>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/Integer.html" title="class or interface in java.lang" class="external-link">Integer</a>&gt;</span>&nbsp;<span class="element-name">indicesForRegion</span><wbr><span class="parameters">(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;chromosome,
  long&nbsp;start,
  long&nbsp;end)</span></div>
-<div class="block">Read indices on <code>chromosome</code> with <code>start &lt;= position &lt; end</code>.</div>
+<div class="block">Read indices on <code>chromosome</code> with <code>start &lt;= position &lt; end</code>.
+
+  <p>PJ1: on disk-loaded indices (interned <code>chromosome_ids</code>
+  present) the query chromosome is resolved to its uint16 id once,
+  then the per-read id column is scanned with an int comparison —
+  avoiding an O(N) <code>String.equals</code> per read. An absent
+  chromosome resolves to no id and yields the empty list, matching
+  the old never-matched behavior. Results are byte-identical to the
+  string-scan fallback (same indices, same ascending order).</p></div>
 </div>
 </section>
 </li>

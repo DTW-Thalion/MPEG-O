@@ -118,7 +118,9 @@ loadScripts(document, 'script');</script>
  <a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a>&nbsp;f2Axis,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusF1,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusF2)</code></div>
-<div class="col-last even-row-color">&nbsp;</div>
+<div class="col-last even-row-color">
+<div class="block">Construct a 2D NMR spectrum from a row-major intensity matrix.</div>
+</div>
 </div>
 </section>
 </li>
@@ -189,6 +191,20 @@ loadScripts(document, 'script');</script>
  <a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a>&nbsp;f2Axis,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusF1,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;nucleusF2)</span></div>
+<div class="block">Construct a 2D NMR spectrum from a row-major intensity matrix.</div>
+<dl class="notes">
+<dt>Parameters:</dt>
+<dd><code>intensityMatrix</code> - flat row-major matrix of shape
+                       <code>[height, width]</code></dd>
+<dd><code>width</code> - matrix width (F2 direct dimension)</dd>
+<dd><code>height</code> - matrix height (F1 indirect dimension)</dd>
+<dd><code>f1Axis</code> - axis descriptor for the F1 (indirect)
+                       dimension; may be <code>null</code></dd>
+<dd><code>f2Axis</code> - axis descriptor for the F2 (direct)
+                       dimension; may be <code>null</code></dd>
+<dd><code>nucleusF1</code> - nucleus label for F1 (e.g. <code>"1H"</code>)</dd>
+<dd><code>nucleusF2</code> - nucleus label for F2 (e.g. <code>"13C"</code>)</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -205,6 +221,10 @@ loadScripts(document, 'script');</script>
 <h3>intensityMatrix</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">double[]</span>&nbsp;<span class="element-name">intensityMatrix</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Row-major intensity matrix of shape <code>[height, width]</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -213,6 +233,10 @@ loadScripts(document, 'script');</script>
 <h3>width</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">width</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Matrix width (F2 direct dimension).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -221,6 +245,10 @@ loadScripts(document, 'script');</script>
 <h3>height</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type">int</span>&nbsp;<span class="element-name">height</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Matrix height (F1 indirect dimension).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -229,6 +257,10 @@ loadScripts(document, 'script');</script>
 <h3>f1Axis</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a></span>&nbsp;<span class="element-name">f1Axis</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Axis descriptor for the F1 (indirect) dimension, or <code>null</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -237,6 +269,10 @@ loadScripts(document, 'script');</script>
 <h3>f2Axis</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="AxisDescriptor.html" title="class in global.thalion.ttio">AxisDescriptor</a></span>&nbsp;<span class="element-name">f2Axis</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Axis descriptor for the F2 (direct) dimension, or <code>null</code>.</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -245,6 +281,10 @@ loadScripts(document, 'script');</script>
 <h3>nucleusF1</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">nucleusF1</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Nucleus label for the F1 dimension (e.g. <code>"1H"</code>, <code>"13C"</code>).</dd>
+</dl>
 </div>
 </section>
 </li>
@@ -253,6 +293,10 @@ loadScripts(document, 'script');</script>
 <h3>nucleusF2</h3>
 <div class="horizontal-scroll">
 <div class="member-signature"><span class="modifiers">public</span>&nbsp;<span class="return-type"><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a></span>&nbsp;<span class="element-name">nucleusF2</span>()</div>
+<dl class="notes">
+<dt>Returns:</dt>
+<dd>Nucleus label for the F2 dimension.</dd>
+</dl>
 </div>
 </section>
 </li>

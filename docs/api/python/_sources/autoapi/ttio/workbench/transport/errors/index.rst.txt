@@ -1,0 +1,113 @@
+ttio.workbench.transport.errors
+===============================
+
+.. py:module:: ttio.workbench.transport.errors
+
+.. autoapi-nested-parse::
+
+   Typed exceptions for the workbench transport client. Lives in its
+   own module so `ttio.workbench.transport.{upload,download,resume}`
+   can import without cycling through `__init__`.
+
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   ttio.workbench.transport.errors.TransportError
+   ttio.workbench.transport.errors.HandshakeError
+   ttio.workbench.transport.errors.UploadError
+   ttio.workbench.transport.errors.DownloadError
+
+
+Module Contents
+---------------
+
+.. py:exception:: TransportError
+
+   Bases: :py:obj:`Exception`
+
+
+   Base class for all workbench-transport client failures.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+.. py:exception:: HandshakeError(message: str, *, close_code: Optional[int] = None, reason: Optional[str] = None)
+
+   Bases: :py:obj:`TransportError`
+
+
+   The server rejected the handshake JSON.
+
+   Carries the WS close code (1002 for malformed handshake; 1008
+   for auth-policy violations; 1011 for server-side errors during
+   handshake) and the error frame's free-text reason when present.
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: close_code
+      :value: None
+
+
+
+   .. py:attribute:: reason
+      :value: None
+
+
+
+.. py:exception:: UploadError(message: str, *, close_code: Optional[int] = None, reason: Optional[str] = None, last_acked_au_sequence: Optional[int] = None, resume_handle: Optional[str] = None)
+
+   Bases: :py:obj:`TransportError`
+
+
+   Upload failed mid-stream (server emitted an `error` frame or
+   the WS closed without `done`).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: close_code
+      :value: None
+
+
+
+   .. py:attribute:: reason
+      :value: None
+
+
+
+   .. py:attribute:: last_acked_au_sequence
+      :value: None
+
+
+
+   .. py:attribute:: resume_handle
+      :value: None
+
+
+
+.. py:exception:: DownloadError(message: str, *, close_code: Optional[int] = None, reason: Optional[str] = None)
+
+   Bases: :py:obj:`TransportError`
+
+
+   Download failed (server emitted an `error` frame, cross-project
+   access denied, or the WS closed without `done`).
+
+   Initialize self.  See help(type(self)) for accurate signature.
+
+
+   .. py:attribute:: close_code
+      :value: None
+
+
+
+   .. py:attribute:: reason
+      :value: None
+
+
+

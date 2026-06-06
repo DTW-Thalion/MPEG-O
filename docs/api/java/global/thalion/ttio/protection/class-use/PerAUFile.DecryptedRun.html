@@ -118,11 +118,21 @@ loadScripts(document, 'script');</script>
 <div class="block">Download an envelope per-AU-encrypted container and decrypt it.</div>
 </div>
 <div class="col-first even-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="../PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a>&gt;</code></div>
-<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../workbench/WorkbenchClient.html#downloadDecryptedPqc(java.lang.String,byte%5B%5D,java.lang.String,boolean)" class="member-name-link">downloadDecryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+<div class="col-second even-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../workbench/WorkbenchClient.html#downloadDecryptedMulti(java.lang.String,byte%5B%5D,java.lang.String,java.lang.String,boolean)" class="member-name-link">downloadDecryptedMulti</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
+ byte[]&nbsp;key,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outTioPath,
+ <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;recipientId,
+ boolean&nbsp;preview)</code></div>
+<div class="col-last even-row-color">
+<div class="block">Download a multi-recipient encrypted container and decrypt it using
+  the recipient entry the caller holds a key for (FD-1 Phase B).</div>
+</div>
+<div class="col-first odd-row-color"><code><a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/Map.html" title="class or interface in java.util" class="external-link">Map</a><wbr>&lt;<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>, <a href="../PerAUFile.DecryptedRun.html" title="class in global.thalion.ttio.protection">PerAUFile.DecryptedRun</a>&gt;</code></div>
+<div class="col-second odd-row-color"><span class="type-name-label">WorkbenchClient.</span><code><a href="../../workbench/WorkbenchClient.html#downloadDecryptedPqc(java.lang.String,byte%5B%5D,java.lang.String,boolean)" class="member-name-link">downloadDecryptedPqc</a><wbr>(<a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;containerUri,
  byte[]&nbsp;recipientPrivateKey,
  <a href="https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/lang/String.html" title="class or interface in java.lang" class="external-link">String</a>&nbsp;outTioPath,
  boolean&nbsp;preview)</code></div>
-<div class="col-last even-row-color">
+<div class="col-last odd-row-color">
 <div class="block">Download a PQC per-AU-encrypted container and decrypt it.</div>
 </div>
 </div>
