@@ -27,6 +27,7 @@
 #import "Spectra/TTIOUVVisSpectrum.h"
 #import "Spectra/TTIOChromatogram.h"
 #import "Core/TTIOSignalArray.h"
+#import "ValueClasses/TTIOEnums.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
 #import "ValueClasses/TTIOValueRange.h"
 #import "ValueClasses/TTIOIsolationWindow.h"
@@ -337,7 +338,10 @@
     // _write_run). Emitted only for the matching class so MS/NMR runs
     // stay byte-identical; ir_mode is always written for IR (0 =
     // transmittance is meaningful), the float/scan fields only when set.
-    if ([_spectrumClassName isEqualToString:@"TTIOIRSpectrum"]) {
+    // _spectrumClassName remains the persisted source of truth; the enum
+    // is an in-code dispatch key only (P3.8).
+    TTIOSpectrumKind k = TTIOSpectrumKindFromPersisted(_spectrumClassName);
+    if (k == TTIOSpectrumKindIR) {
         if (![runGroup setAttributeValue:@((int64_t)_irMode)
                                  forName:@"ir_mode" error:error]) return NO;
         if (_irResolutionCmInv != 0.0 &&
@@ -346,7 +350,7 @@
         if (_irNumberOfScans != 0 &&
             ![runGroup setAttributeValue:@((int64_t)_irNumberOfScans)
                                  forName:@"ir_number_of_scans" error:error]) return NO;
-    } else if ([_spectrumClassName isEqualToString:@"TTIORamanSpectrum"]) {
+    } else if (k == TTIOSpectrumKindRaman) {
         if (_ramanExcitationWavelengthNm != 0.0 &&
             ![runGroup setAttributeValue:@(_ramanExcitationWavelengthNm)
                                  forName:@"raman_excitation_wavelength_nm" error:error]) return NO;
@@ -356,7 +360,7 @@
         if (_ramanIntegrationTimeSec != 0.0 &&
             ![runGroup setAttributeValue:@(_ramanIntegrationTimeSec)
                                  forName:@"raman_integration_time_sec" error:error]) return NO;
-    } else if ([_spectrumClassName isEqualToString:@"TTIOUVVisSpectrum"]) {
+    } else if (k == TTIOSpectrumKindUVVis) {
         if (_uvvisPathLengthCm != 0.0 &&
             ![runGroup setAttributeValue:@(_uvvisPathLengthCm)
                                  forName:@"uvvis_path_length_cm" error:error]) return NO;
@@ -587,7 +591,10 @@
                                from:(id<TTIOStorageGroup>)runGroup
                           className:(NSString *)className
 {
-    if ([className isEqualToString:@"TTIOIRSpectrum"]) {
+    // className is the persisted spectrum_class string (source of truth);
+    // the enum is an in-code dispatch key only (P3.8).
+    TTIOSpectrumKind k = TTIOSpectrumKindFromPersisted(className);
+    if (k == TTIOSpectrumKindIR) {
         id m = [runGroup attributeValueForName:@"ir_mode" error:NULL];
         run->_irMode = (TTIOIRMode)
             ([m respondsToSelector:@selector(longLongValue)] ? [m longLongValue] : 0);
@@ -595,13 +602,13 @@
         id sc = [runGroup attributeValueForName:@"ir_number_of_scans" error:NULL];
         run->_irNumberOfScans = (NSUInteger)
             ([sc respondsToSelector:@selector(longLongValue)] ? [sc longLongValue] : 0);
-    } else if ([className isEqualToString:@"TTIORamanSpectrum"]) {
+    } else if (k == TTIOSpectrumKindRaman) {
         run->_ramanExcitationWavelengthNm =
             [self doubleAttr:runGroup name:@"raman_excitation_wavelength_nm"];
         run->_ramanLaserPowerMw = [self doubleAttr:runGroup name:@"raman_laser_power_mw"];
         run->_ramanIntegrationTimeSec =
             [self doubleAttr:runGroup name:@"raman_integration_time_sec"];
-    } else if ([className isEqualToString:@"TTIOUVVisSpectrum"]) {
+    } else if (k == TTIOSpectrumKindUVVis) {
         run->_uvvisPathLengthCm = [self doubleAttr:runGroup name:@"uvvis_path_length_cm"];
     }
 }
@@ -1000,7 +1007,11 @@
         channels[chName] = sa;
     }
 
-    if ([_spectrumClassName isEqualToString:@"TTIOMassSpectrum"]) {
+    // _spectrumClassName remains the persisted source of truth; the enum
+    // is an in-code dispatch key only (P3.8). An unrecognised class falls
+    // through to the unknown-class error below, exactly as before.
+    TTIOSpectrumKind k = TTIOSpectrumKindFromPersisted(_spectrumClassName);
+    if (k == TTIOSpectrumKindMass) {
         TTIOMassSpectrum *ms = [[TTIOMassSpectrum alloc]
                 initWithMzArray:channels[@"mz"]
                  intensityArray:channels[@"intensity"]
@@ -1016,7 +1027,7 @@
         return ms;
     }
 
-    if ([_spectrumClassName isEqualToString:@"TTIONMRSpectrum"]) {
+    if (k == TTIOSpectrumKindNMR) {
         return [[TTIONMRSpectrum alloc]
                 initWithChemicalShiftArray:channels[@"chemical_shift"]
                             intensityArray:channels[@"intensity"]
@@ -1030,7 +1041,7 @@
     // Vibrational types dispatch on the stored spectrum_class (parity
     // with Python / Java); channels are wavenumber/intensity (IR/Raman)
     // or wavelength/absorbance (UV-Vis).
-    if ([_spectrumClassName isEqualToString:@"TTIOIRSpectrum"]) {
+    if (k == TTIOSpectrumKindIR) {
         return [[TTIOIRSpectrum alloc]
                 initWithWavenumberArray:channels[@"wavenumber"]
                          intensityArray:channels[@"intensity"]
@@ -1042,7 +1053,7 @@
                                   error:error];
     }
 
-    if ([_spectrumClassName isEqualToString:@"TTIORamanSpectrum"]) {
+    if (k == TTIOSpectrumKindRaman) {
         return [[TTIORamanSpectrum alloc]
                 initWithWavenumberArray:channels[@"wavenumber"]
                          intensityArray:channels[@"intensity"]
@@ -1054,7 +1065,7 @@
                                   error:error];
     }
 
-    if ([_spectrumClassName isEqualToString:@"TTIOUVVisSpectrum"]) {
+    if (k == TTIOSpectrumKindUVVis) {
         return [[TTIOUVVisSpectrum alloc]
                 initWithWavelengthArray:channels[@"wavelength"]
                         absorbanceArray:channels[@"absorbance"]

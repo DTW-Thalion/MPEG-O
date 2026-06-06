@@ -154,6 +154,7 @@ libTTIO_OBJC_FILES = \
 	ValueClasses/TTIOEncodingSpec.m \
 	ValueClasses/TTIOValueRange.m \
 	ValueClasses/TTIOIsolationWindow.m \
+	ValueClasses/TTIOEnums.m \
 	HDF5/TTIOHDF5Errors.m \
 	HDF5/TTIOHDF5Types.m \
 	HDF5/TTIOHDF5File.m \
