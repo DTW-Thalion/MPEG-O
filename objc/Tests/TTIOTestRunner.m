@@ -4,6 +4,7 @@
 extern void testValueRange(void);
 extern void testIsolationWindow(void);
 extern void testActivationMethodEnum(void);
+extern void testSpectrumKind(void);
 extern void testMassSpectrumActivationAndIsolationFields(void);
 extern void testSpectrumIndexM74RoundTrip(void);
 extern void testSpectralDatasetM74FeatureFlag(void);
@@ -174,6 +175,10 @@ int main(int argc, const char *argv[])
         START_SET("TTIOActivationMethod")
             testActivationMethodEnum();
         END_SET("TTIOActivationMethod")
+
+        START_SET("TTIOSpectrumKind")
+            testSpectrumKind();
+        END_SET("TTIOSpectrumKind")
 
         START_SET("TTIOMassSpectrum M74 fields")
             testMassSpectrumActivationAndIsolationFields();
