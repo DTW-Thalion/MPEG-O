@@ -190,8 +190,9 @@ jobs:
         # C7 (coverage workplan): --cov-fail-under gates the build at
         # the post-C-series baseline. Bump in tandem with
         # pyproject.toml's [tool.coverage.report] fail_under after
-        # intentional coverage improvements.
-        run: pytest -v --tb=short --cov=src/ttio --cov-report=term --cov-report=xml --cov-report=html --cov-fail-under=84
+        # intentional coverage improvements. Ratcheted 84 -> 86 in R6
+        # (2026-06-06) to lock in the CI-confirmed ~87% actual.
+        run: pytest -v --tb=short --cov=src/ttio --cov-report=term --cov-report=xml --cov-report=html --cov-fail-under=86
 
       - name: Per-module coverage floor (R5)
         working-directory: python
