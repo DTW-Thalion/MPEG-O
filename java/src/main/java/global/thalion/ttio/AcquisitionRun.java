@@ -300,22 +300,24 @@ public class AcquisitionRun implements
         // are wavenumber/intensity (IR/Raman) or wavelength/absorbance
         // (UV-Vis), not mz/chemical_shift.
         if (spectrumClassOverride != null) {
-            switch (spectrumClassOverride) {
-                case "TTIOIRSpectrum" -> {
+            Enums.SpectrumKind kind =
+                Enums.SpectrumKind.fromPersisted(spectrumClassOverride);
+            switch (kind) {
+                case IR -> {
                     return new IRSpectrum(
                         slice(effectiveChannel("wavenumber"), offset, length),
                         slice(effectiveChannel("intensity"), offset, length),
                         index, scanTime, irMode, irResolutionCmInv,
                         irNumberOfScans);
                 }
-                case "TTIORamanSpectrum" -> {
+                case RAMAN -> {
                     return new RamanSpectrum(
                         slice(effectiveChannel("wavenumber"), offset, length),
                         slice(effectiveChannel("intensity"), offset, length),
                         index, scanTime, ramanExcitationWavelengthNm,
                         ramanLaserPowerMw, ramanIntegrationTimeSec);
                 }
-                case "TTIOUVVisSpectrum" -> {
+                case UVVIS -> {
                     return new UVVisSpectrum(
                         slice(effectiveChannel("wavelength"), offset, length),
                         slice(effectiveChannel("absorbance"), offset, length),
@@ -593,7 +595,9 @@ public class AcquisitionRun implements
             // runs stay byte-identical. ir_mode is always written for IR
             // (0 = TRANSMITTANCE is meaningful); the float/scan fields are
             // written only when non-zero, matching the Python writer.
-            if ("TTIOIRSpectrum".equals(spectrumClassOverride)) {
+            Enums.SpectrumKind writeKind =
+                Enums.SpectrumKind.fromPersisted(spectrumClassOverride);
+            if (writeKind == Enums.SpectrumKind.IR) {
                 runGroup.setAttribute("ir_mode", (long) irMode.ordinal());
                 if (irResolutionCmInv != 0.0) {
                     runGroup.setAttribute("ir_resolution_cm_inv", irResolutionCmInv);
@@ -601,7 +605,7 @@ public class AcquisitionRun implements
                 if (irNumberOfScans != 0) {
                     runGroup.setAttribute("ir_number_of_scans", irNumberOfScans);
                 }
-            } else if ("TTIORamanSpectrum".equals(spectrumClassOverride)) {
+            } else if (writeKind == Enums.SpectrumKind.RAMAN) {
                 if (ramanExcitationWavelengthNm != 0.0) {
                     runGroup.setAttribute("raman_excitation_wavelength_nm",
                                           ramanExcitationWavelengthNm);
@@ -613,7 +617,7 @@ public class AcquisitionRun implements
                     runGroup.setAttribute("raman_integration_time_sec",
                                           ramanIntegrationTimeSec);
                 }
-            } else if ("TTIOUVVisSpectrum".equals(spectrumClassOverride)) {
+            } else if (writeKind == Enums.SpectrumKind.UVVIS) {
                 if (uvvisPathLengthCm != 0.0) {
                     runGroup.setAttribute("uvvis_path_length_cm", uvvisPathLengthCm);
                 }
@@ -693,7 +697,9 @@ public class AcquisitionRun implements
             // Python's AcquisitionRun.open).
             String spectrumClass = runGroup.hasAttribute("spectrum_class")
                     ? (String) runGroup.getAttribute("spectrum_class") : null;
-            if ("TTIOIRSpectrum".equals(spectrumClass)) {
+            Enums.SpectrumKind openKind =
+                Enums.SpectrumKind.fromPersisted(spectrumClass);
+            if (openKind == Enums.SpectrumKind.IR) {
                 int ord = runGroup.hasAttribute("ir_mode")
                         ? ((Number) runGroup.getAttribute("ir_mode")).intValue() : 0;
                 Enums.IRMode[] vals = Enums.IRMode.values();
@@ -701,12 +707,12 @@ public class AcquisitionRun implements
                         vals[ord >= 0 && ord < vals.length ? ord : 0],
                         attrDouble(runGroup, "ir_resolution_cm_inv"),
                         (long) attrDouble(runGroup, "ir_number_of_scans"));
-            } else if ("TTIORamanSpectrum".equals(spectrumClass)) {
+            } else if (openKind == Enums.SpectrumKind.RAMAN) {
                 run.setRamanMetadata(
                         attrDouble(runGroup, "raman_excitation_wavelength_nm"),
                         attrDouble(runGroup, "raman_laser_power_mw"),
                         attrDouble(runGroup, "raman_integration_time_sec"));
-            } else if ("TTIOUVVisSpectrum".equals(spectrumClass)) {
+            } else if (openKind == Enums.SpectrumKind.UVVIS) {
                 run.setUVVisMetadata(attrDouble(runGroup, "uvvis_path_length_cm"));
             }
             return run;

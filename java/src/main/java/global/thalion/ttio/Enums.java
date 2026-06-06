@@ -323,4 +323,71 @@ public final class Enums {
             };
         }
     }
+
+    /**
+     * Kind of spectrum, derived from the persisted {@code @spectrum_class}
+     * attribute string.
+     *
+     * <p>The persisted string remains the source of truth and is written
+     * verbatim; this enum exists only to replace stringly-typed dispatch
+     * with typed switches. Each member carries its canonical persisted
+     * string. {@link #fromPersisted(String)} maps an absent
+     * ({@code null}/empty) class to {@link #MASS} (the v0.1 fallback) and
+     * any unrecognized string to {@link #UNKNOWN}.</p>
+     *
+     * <p><b>Cross-language equivalents:</b> Python {@code SpectrumKind}.</p>
+     */
+    public enum SpectrumKind {
+        /** {@code TTIOMassSpectrum} — also the absent/default fallback. */
+        MASS("TTIOMassSpectrum"),
+        /** {@code TTIONMRSpectrum}. */
+        NMR("TTIONMRSpectrum"),
+        /** {@code TTIONMR2DSpectrum}. */
+        NMR_2D("TTIONMR2DSpectrum"),
+        /** {@code TTIOIRSpectrum}. */
+        IR("TTIOIRSpectrum"),
+        /** {@code TTIORamanSpectrum}. */
+        RAMAN("TTIORamanSpectrum"),
+        /** {@code TTIOUVVisSpectrum}. */
+        UVVIS("TTIOUVVisSpectrum"),
+        /** {@code TTIOFreeInductionDecay}. */
+        FREE_INDUCTION_DECAY("TTIOFreeInductionDecay"),
+        /** {@code TTIOMSImagePixel}. */
+        MS_IMAGE_PIXEL("TTIOMSImagePixel"),
+        /** Unrecognized persisted class string (forward-compatibility). */
+        UNKNOWN(null);
+
+        private final String persisted;
+
+        SpectrumKind(String persisted) {
+            this.persisted = persisted;
+        }
+
+        /**
+         * The canonical persisted {@code @spectrum_class} string for this
+         * kind, or {@code null} for {@link #UNKNOWN}.
+         */
+        public String persisted() {
+            return persisted;
+        }
+
+        /**
+         * Map a persisted {@code @spectrum_class} string to its kind.
+         *
+         * @param s the stored class string; {@code null} or empty maps to
+         *          {@link #MASS} (v0.1 fallback)
+         * @return the matching member, or {@link #UNKNOWN} if unrecognized
+         */
+        public static SpectrumKind fromPersisted(String s) {
+            if (s == null || s.isEmpty()) {
+                return MASS;
+            }
+            for (SpectrumKind k : values()) {
+                if (s.equals(k.persisted)) {
+                    return k;
+                }
+            }
+            return UNKNOWN;
+        }
+    }
 }
