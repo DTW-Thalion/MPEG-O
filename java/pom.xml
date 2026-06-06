@@ -362,10 +362,21 @@
                                                  (J.2), Hdf5CompoundIO VL_BYTES paths (J.3),
                                                  ZarrProvider (J.4), plus Hdf5Dataset/Group and
                                                  SpectralDataset/SqliteProvider helpers (J.4b).
-                                                 Local mvn verify lands at ~84.2%; the 0.84 floor
-                                                 leaves a small buffer. FqzcompNx16Z remains
+                                                 Local mvn verify now lands at ~87% line coverage
+                                                 (after the R1 CLI tests + R3 fqzcomp dead-code
+                                                 removal), so the 0.84 floor has a wider buffer
+                                                 than the earlier ~84.2% figure. FqzcompNx16Z remains
                                                  deferred (needs FASTQ corpus — see plan). -->
                                             <minimum>0.84</minimum>
+                                        </limit>
+                                        <!-- Branch-coverage gate (R4). No-regression floor:
+                                             gated bundle branch ratio is ~0.695 (2026-06-06,
+                                             post-R1/R3). 0.68 leaves ~1pt buffer; ratchet up
+                                             in R6 as branch coverage improves. -->
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.68</minimum>
                                         </limit>
                                     </limits>
                                 </rule>
