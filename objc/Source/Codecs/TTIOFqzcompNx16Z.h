@@ -102,24 +102,25 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                                     error:(NSError * _Nullable *)error;
 
 /**
- * Encode with optional V2 native dispatch.
+ * Encode, with an options dictionary.
  *
- * Mirrors the four-arg variant but accepts an options dictionary. The
- * recognised key is:
+ * Mirrors the four-arg variant but accepts an options dictionary.
  *
- *   - @c "preferNative" (NSNumber BOOL): when @c YES (and libttio_rans
- *     is linked in), emit a V2 wire-format stream (version byte = 2)
- *     whose body is produced by the native rANS encoder. When @c NO,
- *     force the V1 path. When the key is absent, the encoder consults
- *     the environment variable @c TTIO_M94Z_USE_NATIVE — values
- *     @c "1", @c "true", @c "yes", @c "on" (case-insensitive) enable
- *     V2 dispatch, otherwise V1 (the default).
+ * Under v1.0 this codec is V4-only: encode ALWAYS emits a V4 (CRAM 3.1
+ * fqzcomp_qual) stream and REQUIRES libttio_rans — it returns nil + an
+ * error if the native library is not linked. There is no pure-ObjC
+ * V1/V2 fallback.
  *
- * V2 streams are decoded transparently by @c +decodeData:revcompFlags:error:
- * (the version byte is auto-detected). V2 decode is currently
- * pure-ObjC because contexts in M94.Z are derived from previously-
- * decoded symbols, which the C library's pre-computed-contexts API
- * cannot supply (option E: V2 encode native, V2 decode pure-ObjC).
+ * The only recognised key is:
+ *
+ *   - @c "v4StrategyHint" (NSNumber): -1 = auto-tune (default), 0..4 =
+ *     explicit fqzcomp preset.
+ *
+ * Legacy keys such as @c "preferNative" / @c "preferV4" and the
+ * V1/V2 context-table parameters (qbits/pbits/dbits/sloc) are accepted
+ * and IGNORED for source/ABI compatibility; they no longer select a
+ * wire format. The environment variables @c TTIO_M94Z_USE_NATIVE and
+ * @c TTIO_M94Z_USE_NATIVE_STREAMING are likewise ignored.
  */
 + (nullable NSData *)encodeWithQualities:(NSData *)qualities
                               readLengths:(NSArray<NSNumber *> *)readLengths
@@ -206,12 +207,10 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
  *   - @"pure-objc" — when libttio_rans is not linked; the codec uses the
  *     pure-ObjC implementation in this file.
  *
- * Backend selection only affects V2 (native-body) dispatch — see the
- * @c options dictionary on the encode method or the
- * @c TTIO_M94Z_USE_NATIVE environment variable. V1 streams are always
- * encoded and decoded via pure-ObjC. V2 decode is also pure-ObjC
- * (option E) because the C library cannot derive M94.Z contexts on
- * the fly — it requires a fully pre-computed contexts vector.
+ * The codec is V4-only: when the backend is @"pure-objc" (libttio_rans
+ * not linked) both encode and decode fail with an error, because V4 is
+ * the only supported wire format and it is implemented entirely in the
+ * native library.
  */
 + (NSString *)backendName;
 
