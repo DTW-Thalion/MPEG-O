@@ -1518,8 +1518,10 @@ static void printResult(const char *name, NSDictionary *res)
     for (NSString *k in res) {
         id v = res[k];
         if ([v isKindOfClass:[NSNull class]]) {
-            printf("  %-20s       N/A (writer not implemented in ObjC v0.11.1)\n",
-                   [k UTF8String]);
+            // N/A has two causes: a read-only provider with no write half,
+            // or an importer whose external tool (samtools) is absent. Keep
+            // the label cause-neutral; the per-bench note explains specifics.
+            printf("  %-20s       N/A\n", [k UTF8String]);
             continue;
         }
         double s = [(NSNumber *)v doubleValue];
@@ -1669,18 +1671,20 @@ int main(int argc, const char *argv[])
                 continue;
             }
             double total = 0.0;
-            BOOL anyNA = NO;
             NSMutableString *phases = [NSMutableString string];
             for (NSString *p in res) {
                 if ([p hasSuffix:@"_mb"]) continue;
                 id v = res[p];
-                if ([v isKindOfClass:[NSNull class]]) { anyNA = YES; continue; }
+                // Skip N/A phases (no write half, or importer tool absent) but
+                // still report the phases that DID run -- a partially-N/A bench
+                // (e.g. import without samtools) must not hide its valid totals.
+                if ([v isKindOfClass:[NSNull class]]) continue;
                 double ms = [(NSNumber *)v doubleValue] * 1000.0;
                 total += ms;
                 [phases appendFormat:@"%@=%.1f  ", p, ms];
             }
-            if (anyNA) {
-                printf("  %-28s N/A (ObjC v0.11.1)\n", [nm UTF8String]);
+            if ([phases length] == 0) {
+                printf("  %-28s N/A\n", [nm UTF8String]);
             } else {
                 printf("  %-28s total=%7.1f   %s\n",
                        [nm UTF8String], total, [phases UTF8String]);
