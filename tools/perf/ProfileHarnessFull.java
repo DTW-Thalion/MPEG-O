@@ -34,6 +34,9 @@ import global.thalion.ttio.AxisDescriptor;
 import global.thalion.ttio.ValueRange;
 import global.thalion.ttio.exporters.JcampDxWriter;
 import global.thalion.ttio.importers.JcampDxReader;
+import global.thalion.ttio.importers.BamReader;
+import global.thalion.ttio.importers.MzMLReader;
+import global.thalion.ttio.importers.NmrMLReader;
 import global.thalion.ttio.protection.PerAUFile;
 import global.thalion.ttio.protection.SignatureManager;
 import global.thalion.ttio.transport.TransportReader;
@@ -843,6 +846,60 @@ public final class ProfileHarnessFull {
         return r;
     }
 
+    // -- P1c: real-format import benches (read committed fixtures)
+
+    /**
+     * Locate the repo root by walking up from the working directory until
+     * {@code objc/Tests/Fixtures} is found. The harness may be launched
+     * from the perf scratch dir or the repo root, so we probe rather than
+     * assume a fixed relative depth.
+     */
+    private static Path fixturesDir() {
+        Path p = Paths.get("").toAbsolutePath();
+        for (int i = 0; i < 8 && p != null; i++) {
+            Path cand = p.resolve("objc").resolve("Tests").resolve("Fixtures");
+            if (Files.isDirectory(cand)) return cand;
+            p = p.getParent();
+        }
+        throw new IllegalStateException(
+            "could not locate objc/Tests/Fixtures from "
+            + Paths.get("").toAbsolutePath());
+    }
+
+    /**
+     * Read committed vendor fixtures through the public importer API.
+     * Java's BAM path uses htsjdk (no external samtools dependency), so
+     * import.bam always produces a number. Fixtures are fixed-size (do not
+     * scale with --n); the heavy decoders are import.mzml_1min and
+     * import.nmrml. All reads are pure -> rep-safe under timedMinMs.
+     */
+    private static Result benchImport() {
+        Result r = new Result();
+        Path fx = fixturesDir();
+        final Path bam = fx.resolve("genomic").resolve("m87_test.bam");
+        final String mzmlTiny = fx.resolve("tiny.pwiz.1.1.mzML").toString();
+        final String mzml1min = fx.resolve("1min.mzML").toString();
+        final String nmrml = fx.resolve("bmse000325.nmrML").toString();
+
+        r.timingMs("bam", timedMinMs(REPS, () -> {
+            try { new BamReader(bam).toGenomicRun("r"); }
+            catch (Exception e) { throw new RuntimeException(e); }
+        }));
+        r.timingMs("mzml_tiny", timedMinMs(REPS, () -> {
+            try { MzMLReader.read(mzmlTiny); }
+            catch (Exception e) { throw new RuntimeException(e); }
+        }));
+        r.timingMs("mzml_1min", timedMinMs(REPS, () -> {
+            try { MzMLReader.read(mzml1min); }
+            catch (Exception e) { throw new RuntimeException(e); }
+        }));
+        r.timingMs("nmrml", timedMinMs(REPS, () -> {
+            try { NmrMLReader.read(nmrml); }
+            catch (Exception e) { throw new RuntimeException(e); }
+        }));
+        return r;
+    }
+
     // ── Driver ──────────────────────────────────────────────────────
 
     private static final String[] BENCH_ORDER = {
@@ -854,6 +911,7 @@ public final class ProfileHarnessFull {
         "genomic",
         "encryption.genomic",
         "streaming",
+        "import",
     };
 
     private static Result runOne(String name, Path tmpRoot,
@@ -876,6 +934,7 @@ public final class ProfileHarnessFull {
             case "genomic":            return benchGenomic(tmp);
             case "encryption.genomic": return benchEncryptionGenomic();
             case "streaming":          return benchStreaming(tmp);
+            case "import":             return benchImport();
             default: throw new IllegalArgumentException(name);
         }
     }

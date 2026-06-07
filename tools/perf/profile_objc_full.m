@@ -44,6 +44,9 @@
 #import "Transport/TTIOTransportReader.h"
 #import "Export/TTIOJcampDxWriter.h"
 #import "Import/TTIOJcampDxReader.h"
+#import "Import/TTIOBamReader.h"
+#import "Import/TTIOMzMLReader.h"
+#import "Import/TTIONmrMLReader.h"
 #import "ValueClasses/TTIOAxisDescriptor.h"
 #import "ValueClasses/TTIOValueRange.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
@@ -1383,6 +1386,101 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
+/* ── P1c: real-format import benches (read committed fixtures) ──── */
+
+/* Locate objc/Tests/Fixtures by walking up from the current working
+ * directory (the harness runs with CWD at _out_objc_full). Probe rather
+ * than assume a fixed depth so it works from the repo root too. */
+static NSString *fixturesDir(void)
+{
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *p = [fm currentDirectoryPath];
+    for (int i = 0; i < 8 && p.length; i++) {
+        NSString *cand = [[[p stringByAppendingPathComponent:@"objc"]
+                            stringByAppendingPathComponent:@"Tests"]
+                            stringByAppendingPathComponent:@"Fixtures"];
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath:cand isDirectory:&isDir] && isDir) {
+            return cand;
+        }
+        p = [p stringByDeletingLastPathComponent];
+    }
+    NSLog(@"could not locate objc/Tests/Fixtures from %@",
+          [fm currentDirectoryPath]);
+    exit(1);
+}
+
+/* Returns YES iff `samtools` is found on $PATH (BAM import shells out to
+ * it; mirror the Python harness's N/A fallback when it is absent). */
+static BOOL samtoolsOnPath(void)
+{
+    NSString *path = [[NSProcessInfo processInfo] environment][@"PATH"];
+    for (NSString *dir in [path componentsSeparatedByString:@":"]) {
+        if (!dir.length) continue;
+        NSString *cand = [dir stringByAppendingPathComponent:@"samtools"];
+        if ([[NSFileManager defaultManager] isExecutableFileAtPath:cand]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+static void bench_import(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                          NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        NSString *fx = fixturesDir();
+        NSString *bamPath   = [[fx stringByAppendingPathComponent:@"genomic"]
+                                stringByAppendingPathComponent:@"m87_test.bam"];
+        NSString *mzmlTiny  = [fx stringByAppendingPathComponent:@"tiny.pwiz.1.1.mzML"];
+        NSString *mzml1min  = [fx stringByAppendingPathComponent:@"1min.mzML"];
+        NSString *nmrmlPath = [fx stringByAppendingPathComponent:@"bmse000325.nmrML"];
+
+        /* BAM → genomic run (shells out to samtools). Degrade to N/A if
+         * samtools is missing rather than aborting the harness. */
+        if (samtoolsOnPath()) {
+            putSeconds(out, @"bam", timedMin(gReps, ^{
+                NSError *e = nil;
+                TTIOBamReader *rdr = [[TTIOBamReader alloc] initWithPath:bamPath];
+                TTIOWrittenGenomicRun *gr =
+                    [rdr toGenomicRunWithName:@"r"
+                                       region:nil
+                                   sampleName:nil
+                                        error:&e];
+                if (!gr) { NSLog(@"import.bam failed: %@", e); exit(1); }
+            }));
+        } else {
+            printf("  [import.bam] samtools not on PATH — reporting N/A\n");
+            putNA(out, @"bam");
+        }
+
+        /* mzML / nmrML readers return an OPEN TTIOSpectralDataset; close it
+         * inside the timed op so each rep reopens cleanly. */
+        putSeconds(out, @"mzml_tiny", timedMin(gReps, ^{
+            NSError *e = nil;
+            TTIOSpectralDataset *ds =
+                [TTIOMzMLReader readFromFilePath:mzmlTiny error:&e];
+            if (!ds) { NSLog(@"import.mzml_tiny failed: %@", e); exit(1); }
+            [ds closeFile];
+        }));
+        putSeconds(out, @"mzml_1min", timedMin(gReps, ^{
+            NSError *e = nil;
+            TTIOSpectralDataset *ds =
+                [TTIOMzMLReader readFromFilePath:mzml1min error:&e];
+            if (!ds) { NSLog(@"import.mzml_1min failed: %@", e); exit(1); }
+            [ds closeFile];
+        }));
+        putSeconds(out, @"nmrml", timedMin(gReps, ^{
+            NSError *e = nil;
+            TTIOSpectralDataset *ds =
+                [TTIONmrMLReader readFromFilePath:nmrmlPath error:&e];
+            if (!ds) { NSLog(@"import.nmrml failed: %@", e); exit(1); }
+            [ds closeFile];
+        }));
+    }
+}
+
 /* ── Registry + driver ─────────────────────────────────────────── */
 
 typedef struct {
@@ -1406,6 +1504,7 @@ static BenchEntry kBenches[] = {
     { "genomic",              bench_genomic },
     { "encryption.genomic",   bench_encryption_genomic },
     { "streaming",            bench_streaming },
+    { "import",               bench_import },
     { NULL, NULL }
 };
 

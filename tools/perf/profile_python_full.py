@@ -85,6 +85,15 @@ from ttio.codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
 from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata as _fqzcomp_z_decode
 from ttio.codecs.delta_rans import encode as _delta_rans_encode, decode as _delta_rans_decode
 
+# P1c: real-format importers (read committed fixtures through the public API).
+from ttio.importers.bam import BamReader, SamtoolsNotFoundError
+from ttio.importers import mzml as _mzml
+from ttio.importers import nmrml as _nmrml
+
+# Repo root: this file lives at <root>/tools/perf/profile_python_full.py.
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+_FIXTURES = _REPO_ROOT / "objc" / "Tests" / "Fixtures"
+
 # ---------------------------------------------------------------------------
 # Workload helpers
 # ---------------------------------------------------------------------------
@@ -835,6 +844,45 @@ def bench_streaming(tmp: Path, n: int, peaks: int) -> dict[str, float]:
     }
 
 
+def bench_import(_tmp: Path, _n: int) -> dict[str, float]:
+    """Real-format import: read committed vendor fixtures through the
+    public importer API (P1c).
+
+    Fixed-size fixtures (do not scale with --n), so these are
+    informational import-path timings; the heavy decoders
+    (import.mzml_1min, import.nmrml) exercise the XML / base64+zlib paths.
+    All reads are read-only / pure → safe under the min-of-N helper.
+
+    BAM uses samtools; if it is absent, import.bam degrades to None
+    (null in JSON) rather than aborting the harness — Java's htsjdk-based
+    BAM import has no such dependency.
+    """
+    bam_path = str(_FIXTURES / "genomic" / "m87_test.bam")
+    mzml_tiny = str(_FIXTURES / "tiny.pwiz.1.1.mzML")
+    mzml_1min = str(_FIXTURES / "1min.mzML")
+    nmrml_path = str(_FIXTURES / "bmse000325.nmrML")
+
+    result: dict[str, float] = {}
+
+    # BAM → genomic run (shells out to samtools).
+    try:
+        t_bam, _ = _timed(lambda: BamReader(bam_path).to_genomic_run("r"))
+        result["bam"] = t_bam
+    except SamtoolsNotFoundError:
+        print("  [import.bam] samtools not on PATH — reporting N/A")
+        result["bam"] = None  # null in JSON; absent metric
+
+    # mzML / nmrML: .read() fully materializes the parse (eager iterparse).
+    t_mzt, _ = _timed(_mzml.read, mzml_tiny)
+    result["mzml_tiny"] = t_mzt
+    t_mz1, _ = _timed(_mzml.read, mzml_1min)
+    result["mzml_1min"] = t_mz1
+    t_nmr, _ = _timed(_nmrml.read, nmrml_path)
+    result["nmrml"] = t_nmr
+
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Driver
 # ---------------------------------------------------------------------------
@@ -858,13 +906,16 @@ BENCHMARKS: dict[str, Any] = {
     "genomic":           lambda tmp, a: bench_genomic_write_read(tmp, a.n),
     "encryption.genomic": lambda tmp, a: bench_encryption_genomic(tmp, a.n),
     "streaming":          lambda tmp, a: bench_streaming(tmp, a.n, a.peaks),
+    "import":             lambda tmp, a: bench_import(tmp, a.n),
 }
 
 
 def _print_result(name: str, result: dict[str, float]) -> None:
     print(f"\n[{name}]")
     for phase, value in result.items():
-        if phase.endswith("_mb"):
+        if value is None:
+            print(f"  {phase:<20s} {'N/A':>10s}")
+        elif phase.endswith("_mb"):
             print(f"  {phase:<20s} {value:10.2f} MB")
         else:
             print(f"  {phase:<20s} {value * 1000:10.1f} ms")
@@ -924,7 +975,7 @@ def main() -> int:
             print(f"  {name:<28s} FAILED: {res['error']}")
             continue
         times_ms = [(p, v * 1000) for p, v in res.items()
-                    if not p.endswith("_mb")]
+                    if not p.endswith("_mb") and v is not None]
         total_ms = sum(v for _, v in times_ms)
         phases = "  ".join(f"{p}={v:.1f}" for p, v in times_ms)
         print(f"  {name:<28s} total={total_ms:7.1f}   {phases}")
