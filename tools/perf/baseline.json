@@ -7,6 +7,12 @@
     "peaks": 16,
     "regression_threshold_pct": 15.0,
     "min_abs_ms": 5.0,
+    "parity_ratio_threshold": 10.0,
+    "parity_allow": {
+      "import.bam": "ObjC spawns samtools via NSTask (~111ms) while Java uses in-process htsjdk (~0.7ms) and Python pysam (~4.6ms) — different mechanisms, not comparable. Currently below-floor (min 0.7ms) so already suppressed; allow-listed so it stays explained if a larger BAM lifts the fastest SDK above the 5ms floor.",
+      "signatures.pqc.sign": "Java BouncyCastle pure-Java ML-DSA (~2.5ms) vs liboqs C in Python/ObjC (<0.2ms) — different crypto backends. Below-floor today; allow-listed for when the workload grows past the floor.",
+      "signatures.pqc.verify": "Java BouncyCastle pure-Java ML-DSA (~0.8ms) vs liboqs C in Python/ObjC (<0.15ms) — different crypto backends. Below-floor today; allow-listed for when the workload grows past the floor."
+    },
     "metric_overrides": {
       "ms.sqlite.write": 30.0,
       "codecs.rans_o1_decode": 30.0,
@@ -22,6 +28,7 @@
       "regression_threshold_pct tightened 50 -> 15 (P1a): min-of-N + 10x workload cut back-to-back drift on the compute/transport/codec paths to <=8.5%. Two drift runs measured 2026-06-07; full rationale in docs/benchmarks/2026-06-07-perf-min-of-n.md.",
       "min_abs_ms=5.0: sub-5ms metrics swing +100-266% on pure jitter; the floor reports but never fails a metric when BOTH baseline and new are below it (a sub-floor->above-floor jump still fails).",
       "metric_overrides: per-metric thresholds for the few inherently-noisy metrics so the tight global gate still applies to everything else. ms.sqlite.write (~15%, fsync) and codecs.rans_o1_decode (~17%) get 30%. jcamp.compressed_read (~4-6ms) straddles the 5ms floor and jitters ~48% across the boundary -> 60%.",
+      "(P1e) parity_ratio_threshold + parity_allow drive tools/perf/check_parity.py, the cross-SDK perf-parity detector. ratio=max(ms)/min(ms) across python/java/objc; metrics whose fastest SDK is below min_abs_ms are below-floor (never flag); parity_allow names known-legit gaps (different mechanism/backend). The currently-flagged genuine concerns (streaming.write/read, transport.plain.encode, codecs.genomic.delta_rans_*, genomic.read) are deliberately NOT allow-listed — see docs/benchmarks/2026-06-07-perf-xsdk-parity.md, they become follow-up issues.",
       "(P1d) encryption.genomic: the original '3.7ms/10MB impossible' premise was WRONG (that is ~5 GB/s AES-NI, correct). Payload scaled 10 MiB -> 64 MiB to lift it above the 5ms floor. Result: Python/ObjC encrypt+decrypt are now stable (<5% drift) BUT Java still swings +/-100% (encrypt 85<->174ms, decrypt +46%) because the Java path's javax.crypto Cipher.getInstance runs inside the timed call (provider lookup + JIT) plus 64 MiB GC churn -- a product-code issue (hoist getInstance in EncryptionManager) tracked as a follow-up. metric_overrides is per-metric-key (not per-SDK), so encryption.genomic.encrypt/decrypt are set report-only (1000) for all SDKs; a per-SDK override would let Python/ObjC stay gated -- also a follow-up."
     ]
   },
