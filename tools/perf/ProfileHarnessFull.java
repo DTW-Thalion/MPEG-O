@@ -89,6 +89,60 @@ public final class ProfileHarnessFull {
         return best;
     }
 
+    /**
+     * Sum of on-disk (compressed) storage over every dataset in a .tio.
+     *
+     * Reports the real allocated byte cost of the data, not the HDF5 FILE
+     * size — Java's HDF5 layer adds an ~8 MB metadata-aggregation block to
+     * every file, so {@code Files.size} massively overstates the "source
+     * size" and is not comparable to the Python/ObjC harnesses. Walking the
+     * file with {@code H5Ovisit} and summing {@code H5Dget_storage_size}
+     * (compressed allocated bytes per dataset) gives an honest,
+     * methodologically-identical size across all three SDKs. See issue #251.
+     *
+     * @return total compressed dataset storage in BYTES.
+     */
+    static long compressedStorageBytes(Path path) throws Exception {
+        long fid = hdf.hdf5lib.H5.H5Fopen(
+                path.toString(),
+                hdf.hdf5lib.HDF5Constants.H5F_ACC_RDONLY,
+                hdf.hdf5lib.HDF5Constants.H5P_DEFAULT);
+        final long[] total = {0};
+        try {
+            hdf.hdf5lib.callbacks.H5O_iterate_t cb =
+                (long objId, String name,
+                 hdf.hdf5lib.structs.H5O_info_t info,
+                 hdf.hdf5lib.callbacks.H5O_iterate_opdata_t op) -> {
+                    if (info.type == hdf.hdf5lib.HDF5Constants.H5O_TYPE_DATASET) {
+                        long did = -1;
+                        try {
+                            did = hdf.hdf5lib.H5.H5Oopen(
+                                    objId, name,
+                                    hdf.hdf5lib.HDF5Constants.H5P_DEFAULT);
+                            total[0] += hdf.hdf5lib.H5.H5Dget_storage_size(did);
+                        } catch (Exception e) {
+                            // ignore unreadable object; keep walking
+                        } finally {
+                            if (did >= 0) {
+                                try { hdf.hdf5lib.H5.H5Oclose(did); }
+                                catch (Exception ignore) {}
+                            }
+                        }
+                    }
+                    return 0; // H5_ITER_CONT
+                };
+            hdf.hdf5lib.callbacks.H5O_iterate_opdata_t opData =
+                new hdf.hdf5lib.callbacks.H5O_iterate_opdata_t() {};
+            hdf.hdf5lib.H5.H5Ovisit(fid,
+                    hdf.hdf5lib.HDF5Constants.H5_INDEX_NAME,
+                    hdf.hdf5lib.HDF5Constants.H5_ITER_NATIVE,
+                    cb, opData);
+        } finally {
+            hdf.hdf5lib.H5.H5Fclose(fid);
+        }
+        return total[0];
+    }
+
     // ── Workload builders ────────────────────────────────────────────
 
     private static SpectrumIndex makeIndex(int n, int peaks) {
@@ -205,7 +259,9 @@ public final class ProfileHarnessFull {
                 List.of(makeRun(n, peaks)), List.of(), List.of(), List.of())) {
             // close writes
         }
-        r.size("src_mb", Files.size(src));
+        // src_mb: sum of compressed dataset storage, not container file size
+        // (which includes Java HDF5's ~8 MB meta-block). See issue #251.
+        r.size("src_mb", compressedStorageBytes(src));
 
         final Path motsPath = tmp.resolve(useCompression ? "xport-c.mots" : "xport.mots");
         final Path fSrc = src;
@@ -247,7 +303,9 @@ public final class ProfileHarnessFull {
                 src.toString(), "enc", "ISA-ENC",
                 List.of(makeRun(n, peaks)), List.of(), List.of(), List.of())) {
         }
-        r.size("bytes_mb", Files.size(src));
+        // bytes_mb: sum of compressed dataset storage, not container file
+        // size (which includes Java HDF5's ~8 MB meta-block). See issue #251.
+        r.size("bytes_mb", compressedStorageBytes(src));
 
         final byte[] key = new byte[32];
         for (int i = 0; i < 32; i++) key[i] = (byte) i;

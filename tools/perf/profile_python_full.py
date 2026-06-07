@@ -121,6 +121,32 @@ def _build_ms_run(n: int, peaks: int) -> WrittenRun:
     )
 
 
+def _compressed_storage_bytes(path: Path) -> int:
+    """Sum of on-disk (compressed) storage over every dataset in a .tio.
+
+    Reports the real allocated byte cost of the data, not the HDF5 FILE
+    size — the latter includes container/metadata overhead that varies
+    wildly across SDKs (Java's HDF5 layer adds an ~8 MB metadata-
+    aggregation block to every file), making file-size a misleading and
+    non-cross-SDK-comparable "source size". H5Dget_storage_size returns
+    the compressed allocated bytes per dataset; summing those gives an
+    honest, methodologically-identical size across Python/Java/ObjC.
+    See issue #251.
+    """
+    import h5py
+
+    total = 0
+
+    def _visit(_name, obj) -> None:
+        nonlocal total
+        if isinstance(obj, h5py.Dataset):
+            total += obj.id.get_storage_size()
+
+    with h5py.File(str(path), "r") as f:
+        f.visititems(_visit)
+    return total
+
+
 def _timed(fn, *args, **kwargs) -> tuple[float, Any]:
     """Run fn once (warmup, discarded) then _REPS times; return (min_seconds, last_result).
 
@@ -211,7 +237,7 @@ def bench_transport(tmp: Path, n: int, peaks: int,
 
     t_dec, _ = _timed(_decode)
     return {"encode": t_enc, "decode": t_dec,
-            "src_mb": src.stat().st_size / 1e6,
+            "src_mb": _compressed_storage_bytes(src) / 1e6,
             "mots_mb": mots.stat().st_size / 1e6}
 
 
@@ -255,7 +281,7 @@ def bench_per_au_encryption(tmp: Path, n: int,
     t_enc = _min_per_au(encrypt_per_au_file)
     t_dec = _min_per_au(decrypt_per_au_file)
     return {"encrypt": t_enc, "decrypt": t_dec,
-            "bytes_mb": src.stat().st_size / 1e6}
+            "bytes_mb": _compressed_storage_bytes(src) / 1e6}
 
 
 def bench_signatures(tmp: Path, n: int, peaks: int) -> dict[str, float]:
