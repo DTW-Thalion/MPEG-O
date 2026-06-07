@@ -881,11 +881,14 @@ public final class ProfileHarnessFull {
 
     // -- B6: StreamWriter/StreamReader throughput
 
-    private static Result benchStreaming(Path tmp) throws Exception {
+    private static Result benchStreaming(Path tmp, int n, int peaks) throws Exception {
         Result r = new Result();
         final Path tio = tmp.resolve("stream.tio");
-        final int nSpectra = 1_000;
-        final int peaksPerSpectrum = 100;
+        // Honor --n/--peaks like every other bench (was hardcoded 1000/100,
+        // which under-counted Java streaming ~100x vs ObjC/Python and made
+        // the cross-SDK numbers non-comparable).
+        final int nSpectra = n;
+        final int peaksPerSpectrum = peaks;
         final InstrumentConfig ic = new InstrumentConfig("", "", "", "", "", "");
         // write: StreamWriter create truncates the .tio each rep; closed via
         // flushAndClose + try-with-resources -> rep-safe.
@@ -1006,7 +1009,7 @@ public final class ProfileHarnessFull {
             case "codecs.genomic": return benchCodecsGenomic(n);
             case "genomic":            return benchGenomic(tmp);
             case "encryption.genomic": return benchEncryptionGenomic();
-            case "streaming":          return benchStreaming(tmp);
+            case "streaming":          return benchStreaming(tmp, n, peaks);
             case "import":             return benchImport();
             default: throw new IllegalArgumentException(name);
         }
