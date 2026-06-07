@@ -57,6 +57,28 @@ static double nowSeconds(void)
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
+/* Number of timed repetitions per op (default 7). One warmup is run and
+ * discarded before the timed reps; the reported value is the MINIMUM.
+ * Set via the --reps CLI flag before any bench runs. Mirrors the
+ * Python (--reps) and Java harnesses so cross-language deltas line up. */
+static int gReps = 7;
+
+/* Run op once (warmup, discarded) then `reps` times; return the MINIMUM
+ * elapsed seconds. The min is the least-interfered sample (contention only
+ * ever makes an op slower), so it is the most reproducible estimate of true
+ * cost and cuts run-to-run variance far more than the median did. */
+static double timedMin(int reps, void (^op)(void)) {
+    op();  /* warmup, discarded */
+    double best = INFINITY;
+    for (int i = 0; i < reps; i++) {
+        double t0 = nowSeconds();
+        op();
+        double dt = nowSeconds() - t0;
+        if (dt < best) best = dt;
+    }
+    return best;
+}
+
 /* ── Workload builders ─────────────────────────────────────────── */
 
 static TTIOWrittenRun *buildMsRun(NSUInteger n, NSUInteger peaks)
@@ -272,33 +294,36 @@ static void bench_ms_hdf5(NSString *tmp, NSUInteger n, NSUInteger peaks,
         NSString *path = [tmp stringByAppendingPathComponent:@"ms-hdf5.tio"];
         unlink([path fileSystemRepresentation]);
         TTIOWrittenRun *run = buildMsRun(n, peaks);
-        NSError *err = nil;
-        double t0 = nowSeconds();
-        BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
-                                                     title:@"stress"
-                                       isaInvestigationId:@"ISA-PERF"
-                                                   msRuns:@{@"r": run}
-                                           identifications:nil
-                                           quantifications:nil
-                                         provenanceRecords:nil
-                                                     error:&err];
-        if (!ok) { NSLog(@"ms.hdf5 write failed: %@", err); exit(1); }
-        putSeconds(out, @"write", nowSeconds() - t0);
+        putSeconds(out, @"write", timedMin(gReps, ^{
+            /* unlink per rep so writeMinimal recreates a fresh file */
+            unlink([path fileSystemRepresentation]);
+            NSError *err = nil;
+            BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                         title:@"stress"
+                                           isaInvestigationId:@"ISA-PERF"
+                                                       msRuns:@{@"r": run}
+                                               identifications:nil
+                                               quantifications:nil
+                                             provenanceRecords:nil
+                                                         error:&err];
+            if (!ok) { NSLog(@"ms.hdf5 write failed: %@", err); exit(1); }
+        }));
 
-        t0 = nowSeconds();
-        TTIOSpectralDataset *back =
-            [TTIOSpectralDataset readFromFilePath:path error:&err];
-        if (!back) { NSLog(@"ms.hdf5 read failed: %@", err); exit(1); }
-        TTIOAcquisitionRun *r = back.msRuns[@"r"];
-        NSUInteger step = MAX(1UL, (NSUInteger)(n / 100));
-        NSUInteger sampled = 0;
-        for (NSUInteger i = 0; i < n; i += step) {
-            TTIOMassSpectrum *sp = [r objectAtIndex:i];
-            sampled += sp.signalArrays[@"mz"].length;
-        }
-        (void)sampled;
-        [back closeFile];
-        putSeconds(out, @"read", nowSeconds() - t0);
+        putSeconds(out, @"read", timedMin(gReps, ^{
+            NSError *err = nil;
+            TTIOSpectralDataset *back =
+                [TTIOSpectralDataset readFromFilePath:path error:&err];
+            if (!back) { NSLog(@"ms.hdf5 read failed: %@", err); exit(1); }
+            TTIOAcquisitionRun *r = back.msRuns[@"r"];
+            NSUInteger step = MAX(1UL, (NSUInteger)(n / 100));
+            NSUInteger sampled = 0;
+            for (NSUInteger i = 0; i < n; i += step) {
+                TTIOMassSpectrum *sp = [r objectAtIndex:i];
+                sampled += sp.signalArrays[@"mz"].length;
+            }
+            (void)sampled;
+            [back closeFile];   /* close handle so next rep reopens cleanly */
+        }));
     }
 }
 
@@ -311,32 +336,35 @@ static void bench_ms_provider(NSString *tag, NSString *url,
 {
     @autoreleasepool {
         TTIOWrittenRun *run = buildMsRun(n, peaks);
-        NSError *err = nil;
-        double t0 = nowSeconds();
-        BOOL ok = [TTIOSpectralDataset writeMinimalToPath:url
-                                                     title:@"stress"
-                                       isaInvestigationId:@"ISA-PERF"
-                                                   msRuns:@{@"r": run}
-                                           identifications:nil
-                                           quantifications:nil
-                                         provenanceRecords:nil
-                                                     error:&err];
-        if (!ok) { NSLog(@"%@ write failed: %@", tag, err); exit(1); }
-        putSeconds(out, @"write", nowSeconds() - t0);
+        /* writeMinimal opens the provider in Create mode, which recreates
+         * the backing store each rep, so the write op is rep-safe as-is. */
+        putSeconds(out, @"write", timedMin(gReps, ^{
+            NSError *err = nil;
+            BOOL ok = [TTIOSpectralDataset writeMinimalToPath:url
+                                                         title:@"stress"
+                                           isaInvestigationId:@"ISA-PERF"
+                                                       msRuns:@{@"r": run}
+                                               identifications:nil
+                                               quantifications:nil
+                                             provenanceRecords:nil
+                                                         error:&err];
+            if (!ok) { NSLog(@"%@ write failed: %@", tag, err); exit(1); }
+        }));
 
-        t0 = nowSeconds();
-        TTIOSpectralDataset *back =
-            [TTIOSpectralDataset readFromFilePath:url error:&err];
-        if (!back) { NSLog(@"%@ read failed: %@", tag, err); exit(1); }
-        TTIOAcquisitionRun *r = back.msRuns[@"r"];
-        // Sample the spectrum_index to make the read measurement
-        // comparable to bench_ms_hdf5 (which sampled spectra). Provider-
-        // backed reads do not yet construct full TTIOMassSpectrum
-        // objects, so we walk the index instead. The wall-clock work is
-        // dominated by metadata read + index dataset read.
-        NSUInteger total = r.spectrumIndex.count;
-        (void)total;
-        putSeconds(out, @"read", nowSeconds() - t0);
+        putSeconds(out, @"read", timedMin(gReps, ^{
+            NSError *err = nil;
+            TTIOSpectralDataset *back =
+                [TTIOSpectralDataset readFromFilePath:url error:&err];
+            if (!back) { NSLog(@"%@ read failed: %@", tag, err); exit(1); }
+            TTIOAcquisitionRun *r = back.msRuns[@"r"];
+            // Sample the spectrum_index to make the read measurement
+            // comparable to bench_ms_hdf5 (which sampled spectra). Provider-
+            // backed reads do not yet construct full TTIOMassSpectrum
+            // objects, so we walk the index instead. The wall-clock work is
+            // dominated by metadata read + index dataset read.
+            NSUInteger total = r.spectrumIndex.count;
+            (void)total;
+        }));
     }
 }
 
@@ -401,24 +429,31 @@ static void bench_transport(NSString *tmp, NSUInteger n, NSUInteger peaks,
             [TTIOSpectralDataset readFromFilePath:src error:&err];
         if (!ds) { NSLog(@"transport src read failed: %@", err); exit(1); }
 
-        double t0 = nowSeconds();
-        TTIOTransportWriter *w = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
-        w.useCompression = compressed;
-        w.useChecksum = YES;
-        if (![w writeDataset:ds error:&err]) {
-            NSLog(@"transport write failed: %@", err); exit(1);
-        }
-        [w close];
-        putSeconds(out, @"encode", nowSeconds() - t0);
+        /* encode: TransportWriter recreates `mots` each rep (overwrites);
+         * ds stays open across reps and is closed afterwards. */
+        putSeconds(out, @"encode", timedMin(gReps, ^{
+            NSError *e = nil;
+            unlink([mots fileSystemRepresentation]);
+            TTIOTransportWriter *w = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
+            w.useCompression = compressed;
+            w.useChecksum = YES;
+            if (![w writeDataset:ds error:&e]) {
+                NSLog(@"transport write failed: %@", e); exit(1);
+            }
+            [w close];
+        }));
 
         [ds closeFile];
 
-        t0 = nowSeconds();
-        TTIOTransportReader *r = [[TTIOTransportReader alloc] initWithInputPath:mots];
-        if (![r writeTtioToPath:rt error:&err]) {
-            NSLog(@"transport read failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"decode", nowSeconds() - t0);
+        /* decode: TransportReader rewrites `rt` each rep. */
+        putSeconds(out, @"decode", timedMin(gReps, ^{
+            NSError *e = nil;
+            unlink([rt fileSystemRepresentation]);
+            TTIOTransportReader *r = [[TTIOTransportReader alloc] initWithInputPath:mots];
+            if (![r writeTtioToPath:rt error:&e]) {
+                NSLog(@"transport read failed: %@", e); exit(1);
+            }
+        }));
 
         NSDictionary *srcAttrs  = [[NSFileManager defaultManager]
             attributesOfItemAtPath:src error:NULL];
@@ -477,23 +512,43 @@ static void bench_encryption(NSString *tmp, NSUInteger n, NSUInteger peaks,
         for (int i = 0; i < 32; i++) keyBytes[i] = (uint8_t)i;
         NSData *key = [NSData dataWithBytes:keyBytes length:32];
 
-        double t0 = nowSeconds();
-        if (![TTIOPerAUFile encryptFilePath:copy
-                                         key:key
-                              encryptHeaders:NO
-                                providerName:nil
-                                       error:&err]) {
-            NSLog(@"encrypt failed: %@", err); exit(1);
+        /* SPECIAL CASE: encryptFilePath is in-place/consuming — it turns the
+         * plaintext `copy` into an encrypted file. It cannot be re-run on an
+         * already-encrypted file, so timedMin's repeated invocation does
+         * not apply. Mirror the Python/Java special-case: re-stage a fresh
+         * plaintext `copy` from `src` BEFORE each timed encrypt (re-stage is
+         * outside the timed window). Inlined min loop (warmup + gReps). */
+        {
+            NSFileManager *fm = [NSFileManager defaultManager];
+            double encBest = INFINITY;
+            for (int rep = -1; rep < gReps; rep++) {   /* rep == -1 is warmup */
+                unlink([copy fileSystemRepresentation]);
+                if (![fm copyItemAtPath:src toPath:copy error:&err]) {
+                    NSLog(@"encryption re-stage copy failed: %@", err); exit(1);
+                }
+                double t0 = nowSeconds();
+                if (![TTIOPerAUFile encryptFilePath:copy
+                                                 key:key
+                                      encryptHeaders:NO
+                                        providerName:nil
+                                               error:&err]) {
+                    NSLog(@"encrypt failed: %@", err); exit(1);
+                }
+                double dt = nowSeconds() - t0;
+                if (rep >= 0 && dt < encBest) encBest = dt;   /* discard warmup */
+            }
+            putSeconds(out, @"encrypt", encBest);
         }
-        putSeconds(out, @"encrypt", nowSeconds() - t0);
-
-        t0 = nowSeconds();
-        NSDictionary *dec = [TTIOPerAUFile decryptFilePath:copy
-                                                       key:key
-                                              providerName:nil
-                                                     error:&err];
-        if (!dec) { NSLog(@"decrypt failed: %@", err); exit(1); }
-        putSeconds(out, @"decrypt", nowSeconds() - t0);
+        /* `copy` is now encrypted (from the last encrypt rep above), so the
+         * read-only decryptFilePath can use the generic helper. */
+        putSeconds(out, @"decrypt", timedMin(gReps, ^{
+            NSError *e = nil;
+            NSDictionary *dec = [TTIOPerAUFile decryptFilePath:copy
+                                                           key:key
+                                                  providerName:nil
+                                                         error:&e];
+            if (!dec) { NSLog(@"decrypt failed: %@", e); exit(1); }
+        }));
 
         NSDictionary *attrs = [[NSFileManager defaultManager]
             attributesOfItemAtPath:src error:NULL];
@@ -529,23 +584,27 @@ static void bench_signatures(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         NSString *dsPath = @"/study/ms_runs/r/signal_channels/intensity_values";
 
-        double t0 = nowSeconds();
-        if (![TTIOSignatureManager signDataset:dsPath
-                                         inFile:src
-                                        withKey:key
-                                          error:&err]) {
-            NSLog(@"sign failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"sign", nowSeconds() - t0);
+        /* signDataset deletes any pre-existing signature attribute before
+         * writing (idempotent), so repeated invocation is rep-safe. */
+        putSeconds(out, @"sign", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOSignatureManager signDataset:dsPath
+                                             inFile:src
+                                            withKey:key
+                                              error:&e]) {
+                NSLog(@"sign failed: %@", e); exit(1);
+            }
+        }));
 
-        t0 = nowSeconds();
-        if (![TTIOSignatureManager verifyDataset:dsPath
-                                           inFile:src
-                                          withKey:key
-                                            error:&err]) {
-            NSLog(@"verify failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"verify", nowSeconds() - t0);
+        putSeconds(out, @"verify", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOSignatureManager verifyDataset:dsPath
+                                               inFile:src
+                                              withKey:key
+                                                error:&e]) {
+                NSLog(@"verify failed: %@", e); exit(1);
+            }
+        }));
     }
 }
 
@@ -559,51 +618,57 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
         NSError *err = nil;
         TTIOIRSpectrum *ir = makeIRSpectrum(n);
         NSString *jdxIR = [tmp stringByAppendingPathComponent:@"ir.jdx"];
-        double t0 = nowSeconds();
-        if (![TTIOJcampDxWriter writeIRSpectrum:ir
-                                           toPath:jdxIR
-                                            title:@"perf IR"
-                                            error:&err]) {
-            NSLog(@"jcamp ir write failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"ir_write", nowSeconds() - t0);
-        t0 = nowSeconds();
-        if (![TTIOJcampDxReader readSpectrumFromPath:jdxIR error:&err]) {
-            NSLog(@"jcamp ir read failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"ir_read", nowSeconds() - t0);
+        putSeconds(out, @"ir_write", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxWriter writeIRSpectrum:ir
+                                               toPath:jdxIR
+                                                title:@"perf IR"
+                                                error:&e]) {
+                NSLog(@"jcamp ir write failed: %@", e); exit(1);
+            }
+        }));
+        putSeconds(out, @"ir_read", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxReader readSpectrumFromPath:jdxIR error:&e]) {
+                NSLog(@"jcamp ir read failed: %@", e); exit(1);
+            }
+        }));
 
         TTIORamanSpectrum *raman = makeRamanSpectrum(n);
         NSString *jdxR = [tmp stringByAppendingPathComponent:@"raman.jdx"];
-        t0 = nowSeconds();
-        if (![TTIOJcampDxWriter writeRamanSpectrum:raman
-                                              toPath:jdxR
-                                               title:@"perf Raman"
-                                               error:&err]) {
-            NSLog(@"jcamp raman write failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"raman_write", nowSeconds() - t0);
-        t0 = nowSeconds();
-        if (![TTIOJcampDxReader readSpectrumFromPath:jdxR error:&err]) {
-            NSLog(@"jcamp raman read failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"raman_read", nowSeconds() - t0);
+        putSeconds(out, @"raman_write", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxWriter writeRamanSpectrum:raman
+                                                  toPath:jdxR
+                                                   title:@"perf Raman"
+                                                   error:&e]) {
+                NSLog(@"jcamp raman write failed: %@", e); exit(1);
+            }
+        }));
+        putSeconds(out, @"raman_read", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxReader readSpectrumFromPath:jdxR error:&e]) {
+                NSLog(@"jcamp raman read failed: %@", e); exit(1);
+            }
+        }));
 
         TTIOUVVisSpectrum *uv = makeUVVisSpectrum(n);
         NSString *jdxU = [tmp stringByAppendingPathComponent:@"uvvis.jdx"];
-        t0 = nowSeconds();
-        if (![TTIOJcampDxWriter writeUVVisSpectrum:uv
-                                              toPath:jdxU
-                                               title:@"perf UV-Vis"
-                                               error:&err]) {
-            NSLog(@"jcamp uvvis write failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"uvvis_write", nowSeconds() - t0);
-        t0 = nowSeconds();
-        if (![TTIOJcampDxReader readSpectrumFromPath:jdxU error:&err]) {
-            NSLog(@"jcamp uvvis read failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"uvvis_read", nowSeconds() - t0);
+        putSeconds(out, @"uvvis_write", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxWriter writeUVVisSpectrum:uv
+                                                  toPath:jdxU
+                                                   title:@"perf UV-Vis"
+                                                   error:&e]) {
+                NSLog(@"jcamp uvvis write failed: %@", e); exit(1);
+            }
+        }));
+        putSeconds(out, @"uvvis_read", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxReader readSpectrumFromPath:jdxU error:&e]) {
+                NSLog(@"jcamp uvvis read failed: %@", e); exit(1);
+            }
+        }));
 
         // Compressed (SQZ) fixture — hand-rolled so we measure the
         // decompressing read path.
@@ -636,11 +701,12 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
         NSString *jdxC = [tmp stringByAppendingPathComponent:@"compressed.jdx"];
         [full writeToFile:jdxC atomically:YES
                  encoding:NSUTF8StringEncoding error:&err];
-        t0 = nowSeconds();
-        if (![TTIOJcampDxReader readSpectrumFromPath:jdxC error:&err]) {
-            NSLog(@"jcamp compressed read failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"compressed_read", nowSeconds() - t0);
+        putSeconds(out, @"compressed_read", timedMin(gReps, ^{
+            NSError *e = nil;
+            if (![TTIOJcampDxReader readSpectrumFromPath:jdxC error:&e]) {
+                NSLog(@"jcamp compressed read failed: %@", e); exit(1);
+            }
+        }));
     }
 }
 
@@ -651,23 +717,23 @@ static void bench_spectra_build(NSString *tmp, NSUInteger n, NSUInteger peaks,
 {
     (void)tmp; (void)peaks;
     @autoreleasepool {
-        double t0 = nowSeconds();
-        (void)makeIRSpectrum(n);
-        putSeconds(out, @"ir_build", nowSeconds() - t0);
+        putSeconds(out, @"ir_build", timedMin(gReps, ^{
+            (void)makeIRSpectrum(n);
+        }));
 
-        t0 = nowSeconds();
-        (void)makeRamanSpectrum(n);
-        putSeconds(out, @"raman_build", nowSeconds() - t0);
+        putSeconds(out, @"raman_build", timedMin(gReps, ^{
+            (void)makeRamanSpectrum(n);
+        }));
 
-        t0 = nowSeconds();
-        (void)makeUVVisSpectrum(n);
-        putSeconds(out, @"uvvis_build", nowSeconds() - t0);
+        putSeconds(out, @"uvvis_build", timedMin(gReps, ^{
+            (void)makeUVVisSpectrum(n);
+        }));
 
         NSUInteger m = (NSUInteger)sqrt((double)n);
         if (m < 8) m = 8;
-        t0 = nowSeconds();
-        (void)make2DCos(m);
-        putSeconds(out, @"2dcos_build", nowSeconds() - t0);
+        putSeconds(out, @"2dcos_build", timedMin(gReps, ^{
+            (void)make2DCos(m);
+        }));
     }
 }
 
@@ -797,47 +863,53 @@ static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
                          chromosomes:chroms
                   signalCompression:TTIOCompressionZlib];
 
-        /* B2: Write */
+        /* B2: Write (unlink per rep so writeMinimal recreates the file) */
         NSError *err = nil;
-        double t0 = nowSeconds();
-        BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
-                                                     title:@"genomic-perf"
-                                       isaInvestigationId:@"ISA-GENOMIC-PERF"
-                                                   msRuns:@{}
-                                               genomicRuns:@{@"r": wgr}
-                                           identifications:nil
-                                           quantifications:nil
-                                         provenanceRecords:nil
-                                                     error:&err];
-        if (!ok) { NSLog(@"genomic write failed: %@", err); exit(1); }
-        putSeconds(out, @"write", nowSeconds() - t0);
+        putSeconds(out, @"write", timedMin(gReps, ^{
+            NSError *e = nil;
+            unlink([path fileSystemRepresentation]);
+            BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
+                                                         title:@"genomic-perf"
+                                           isaInvestigationId:@"ISA-GENOMIC-PERF"
+                                                       msRuns:@{}
+                                                   genomicRuns:@{@"r": wgr}
+                                               identifications:nil
+                                               quantifications:nil
+                                             provenanceRecords:nil
+                                                         error:&e];
+            if (!ok) { NSLog(@"genomic write failed: %@", e); exit(1); }
+        }));
 
         NSDictionary *attrs = [[NSFileManager defaultManager]
             attributesOfItemAtPath:path error:NULL];
         putSeconds(out, @"write_mb",
                     ((NSNumber *)attrs[NSFileSize]).doubleValue / 1e6);
 
-        /* B3: Sequential read-all (sampled) */
-        t0 = nowSeconds();
+        /* B3: Sequential read-all (sampled). Opens + closes the handle
+         * inside the block so each rep reopens cleanly. */
+        putSeconds(out, @"read", timedMin(gReps, ^{
+            NSError *e = nil;
+            TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&e];
+            if (!ds) { NSLog(@"genomic read open failed: %@", e); exit(1); }
+            TTIOGenomicRun *gr = ds.genomicRuns[@"r"];
+            NSUInteger total = [gr readCount];
+            NSUInteger step = MAX(1UL, total / 100);
+            NSUInteger sampled = 0;
+            for (NSUInteger i = 0; i < total; i += step) {
+                TTIOAlignedRead *ar = [gr objectAtIndex:i];
+                sampled += ar.sequence.length;
+            }
+            (void)sampled;
+            [ds closeFile];
+        }));
+
+        /* B4: Random access p50/p99 latency (1000 reads). The per-read
+         * latency loop below is itself a distribution measurement, not a
+         * single op, so it is not wrapped in timedMin. */
         TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-        if (!ds) { NSLog(@"genomic read open failed: %@", err); exit(1); }
+        if (!ds) { NSLog(@"genomic ra open failed: %@", err); exit(1); }
         TTIOGenomicRun *gr = ds.genomicRuns[@"r"];
         NSUInteger total = [gr readCount];
-        NSUInteger step = MAX(1UL, total / 100);
-        NSUInteger sampled = 0;
-        for (NSUInteger i = 0; i < total; i += step) {
-            TTIOAlignedRead *ar = [gr objectAtIndex:i];
-            sampled += ar.sequence.length;
-        }
-        (void)sampled;
-        [ds closeFile];
-        putSeconds(out, @"read", nowSeconds() - t0);
-
-        /* B4: Random access p50/p99 latency (1000 reads) */
-        ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
-        if (!ds) { NSLog(@"genomic ra open failed: %@", err); exit(1); }
-        gr = ds.genomicRuns[@"r"];
-        total = [gr readCount];
 
         const NSUInteger kRaSamples = 1000;
         srand(99);
@@ -878,26 +950,33 @@ static void bench_encryption_genomic(NSString *tmp, NSUInteger n, NSUInteger pea
         for (int i = 0; i < 32; i++) keyBytes[i] = (uint8_t)i;
         NSData *key = [NSData dataWithBytes:keyBytes length:32];
 
-        NSError *err = nil;
-        NSData *iv = nil, *tag = nil;
+        /* encryptData is non-consuming (payload is read-only); capture the
+         * resulting ciphertext/iv/tag via __block so the decrypt op can use
+         * a valid envelope. Each encrypt rep regenerates them. */
+        __block NSData *ciphertext = nil;
+        __block NSData *iv = nil, *tag = nil;
 
-        double t0 = nowSeconds();
-        NSData *ciphertext = [TTIOEncryptionManager encryptData:payload
-                                                        withKey:key
-                                                             iv:&iv
-                                                        authTag:&tag
-                                                          error:&err];
-        if (!ciphertext) { NSLog(@"enc.genomic encrypt failed: %@", err); exit(1); }
-        putSeconds(out, @"encrypt", nowSeconds() - t0);
+        putSeconds(out, @"encrypt", timedMin(gReps, ^{
+            NSError *e = nil;
+            NSData *liv = nil, *ltag = nil;
+            ciphertext = [TTIOEncryptionManager encryptData:payload
+                                                    withKey:key
+                                                         iv:&liv
+                                                    authTag:&ltag
+                                                      error:&e];
+            if (!ciphertext) { NSLog(@"enc.genomic encrypt failed: %@", e); exit(1); }
+            iv = liv; tag = ltag;
+        }));
 
-        t0 = nowSeconds();
-        NSData *plaintext = [TTIOEncryptionManager decryptData:ciphertext
-                                                       withKey:key
-                                                            iv:iv
-                                                       authTag:tag
-                                                         error:&err];
-        if (!plaintext) { NSLog(@"enc.genomic decrypt failed: %@", err); exit(1); }
-        putSeconds(out, @"decrypt", nowSeconds() - t0);
+        putSeconds(out, @"decrypt", timedMin(gReps, ^{
+            NSError *e = nil;
+            NSData *plaintext = [TTIOEncryptionManager decryptData:ciphertext
+                                                           withKey:key
+                                                                iv:iv
+                                                           authTag:tag
+                                                             error:&e];
+            if (!plaintext) { NSLog(@"enc.genomic decrypt failed: %@", e); exit(1); }
+        }));
 
         putSeconds(out, @"bytes_mb", (double)payloadBytes / 1e6);
     }
@@ -940,46 +1019,51 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
                     analyzerType:@"Orbitrap"
                     detectorType:@"Detector"];
 
-        /* B6 write */
-        double t0 = nowSeconds();
-        TTIOStreamWriter *writer = [[TTIOStreamWriter alloc]
-            initWithFilePath:streamPath
-                     runName:@"r"
-             acquisitionMode:TTIOAcquisitionModeMS1DDA
-            instrumentConfig:cfg
-                       error:&err];
-        if (!writer) { NSLog(@"StreamWriter init failed: %@", err); exit(1); }
+        /* B6 write: StreamWriter flush-closes its handle inside the block;
+         * unlink streamPath per rep so init starts from a fresh file.
+         * srcDs/srcRun stay open across write reps, closed afterwards. */
+        putSeconds(out, @"write", timedMin(gReps, ^{
+            NSError *e = nil;
+            unlink([streamPath fileSystemRepresentation]);
+            TTIOStreamWriter *writer = [[TTIOStreamWriter alloc]
+                initWithFilePath:streamPath
+                         runName:@"r"
+                 acquisitionMode:TTIOAcquisitionModeMS1DDA
+                instrumentConfig:cfg
+                           error:&e];
+            if (!writer) { NSLog(@"StreamWriter init failed: %@", e); exit(1); }
 
-        for (NSUInteger i = 0; i < specCount; i++) {
-            TTIOMassSpectrum *sp = [srcRun objectAtIndex:i];
-            if (![writer appendSpectrum:sp error:&err]) {
-                NSLog(@"StreamWriter append %lu failed: %@", (unsigned long)i, err);
-                exit(1);
+            for (NSUInteger i = 0; i < specCount; i++) {
+                TTIOMassSpectrum *sp = [srcRun objectAtIndex:i];
+                if (![writer appendSpectrum:sp error:&e]) {
+                    NSLog(@"StreamWriter append %lu failed: %@", (unsigned long)i, e);
+                    exit(1);
+                }
             }
-        }
-        if (![writer flushAndCloseWithError:&err]) {
-            NSLog(@"StreamWriter flush failed: %@", err); exit(1);
-        }
-        putSeconds(out, @"write", nowSeconds() - t0);
+            if (![writer flushAndCloseWithError:&e]) {
+                NSLog(@"StreamWriter flush failed: %@", e); exit(1);
+            }
+        }));
         [srcDs closeFile];
 
-        /* B6 read */
-        t0 = nowSeconds();
-        TTIOStreamReader *reader = [[TTIOStreamReader alloc]
-            initWithFilePath:streamPath
-                     runName:@"r"
-                       error:&err];
-        if (!reader) { NSLog(@"StreamReader init failed: %@", err); exit(1); }
+        /* B6 read: StreamReader closes its handle inside the block each rep. */
+        putSeconds(out, @"read", timedMin(gReps, ^{
+            NSError *e = nil;
+            TTIOStreamReader *reader = [[TTIOStreamReader alloc]
+                initWithFilePath:streamPath
+                         runName:@"r"
+                           error:&e];
+            if (!reader) { NSLog(@"StreamReader init failed: %@", e); exit(1); }
 
-        NSUInteger readBack = 0;
-        while (![reader atEnd]) {
-            TTIOMassSpectrum *sp = [reader nextSpectrumWithError:&err];
-            if (!sp) { NSLog(@"StreamReader next failed: %@", err); exit(1); }
-            readBack += sp.signalArrays[@"mz"].length;
-        }
-        (void)readBack;
-        [reader close];
-        putSeconds(out, @"read", nowSeconds() - t0);
+            NSUInteger readBack = 0;
+            while (![reader atEnd]) {
+                TTIOMassSpectrum *sp = [reader nextSpectrumWithError:&e];
+                if (!sp) { NSLog(@"StreamReader next failed: %@", e); exit(1); }
+                readBack += sp.signalArrays[@"mz"].length;
+            }
+            (void)readBack;
+            [reader close];
+        }));
     }
 }
 
@@ -1010,42 +1094,48 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
         unsigned char *p = ransIn.mutableBytes;
         for (NSUInteger i = 0; i < oneMiB; i++) p[i] = (unsigned char)rand();
 
-        double t0 = nowSeconds();
-        NSData *o0 = TTIORansEncode(ransIn, 0);
-        putSeconds(out, @"rans_o0_encode", nowSeconds() - t0);
-        t0 = nowSeconds();
-        (void)TTIORansDecode(o0, NULL);
-        putSeconds(out, @"rans_o0_decode", nowSeconds() - t0);
+        /* encode/decode are pure functions; capture each encoded result via
+         * __block so the decode op uses a valid payload across reps. */
+        __block NSData *o0 = nil;
+        putSeconds(out, @"rans_o0_encode", timedMin(gReps, ^{
+            o0 = TTIORansEncode(ransIn, 0);
+        }));
+        putSeconds(out, @"rans_o0_decode", timedMin(gReps, ^{
+            (void)TTIORansDecode(o0, NULL);
+        }));
 
-        t0 = nowSeconds();
-        NSData *o1 = TTIORansEncode(ransIn, 1);
-        putSeconds(out, @"rans_o1_encode", nowSeconds() - t0);
-        t0 = nowSeconds();
-        (void)TTIORansDecode(o1, NULL);
-        putSeconds(out, @"rans_o1_decode", nowSeconds() - t0);
+        __block NSData *o1 = nil;
+        putSeconds(out, @"rans_o1_encode", timedMin(gReps, ^{
+            o1 = TTIORansEncode(ransIn, 1);
+        }));
+        putSeconds(out, @"rans_o1_decode", timedMin(gReps, ^{
+            (void)TTIORansDecode(o1, NULL);
+        }));
 
         // BASE_PACK on pure ACGT.
         const char alpha[] = "ACGT";
         NSMutableData *bpIn = [NSMutableData dataWithLength:oneMiB];
         unsigned char *bp = bpIn.mutableBytes;
         for (NSUInteger i = 0; i < oneMiB; i++) bp[i] = (unsigned char)alpha[rand() & 3];
-        t0 = nowSeconds();
-        NSData *bpEnc = TTIOBasePackEncode(bpIn);
-        putSeconds(out, @"base_pack_encode", nowSeconds() - t0);
-        t0 = nowSeconds();
-        (void)TTIOBasePackDecode(bpEnc, NULL);
-        putSeconds(out, @"base_pack_decode", nowSeconds() - t0);
+        __block NSData *bpEnc = nil;
+        putSeconds(out, @"base_pack_encode", timedMin(gReps, ^{
+            bpEnc = TTIOBasePackEncode(bpIn);
+        }));
+        putSeconds(out, @"base_pack_decode", timedMin(gReps, ^{
+            (void)TTIOBasePackDecode(bpEnc, NULL);
+        }));
 
         // QUALITY_BINNED on random Phred bytes.
         NSMutableData *qbIn = [NSMutableData dataWithLength:oneMiB];
         unsigned char *qb = qbIn.mutableBytes;
         for (NSUInteger i = 0; i < oneMiB; i++) qb[i] = (unsigned char)(rand() % 94);
-        t0 = nowSeconds();
-        NSData *qbEnc = TTIOQualityEncode(qbIn);
-        putSeconds(out, @"quality_binned_encode", nowSeconds() - t0);
-        t0 = nowSeconds();
-        (void)TTIOQualityDecode(qbEnc, NULL);
-        putSeconds(out, @"quality_binned_decode", nowSeconds() - t0);
+        __block NSData *qbEnc = nil;
+        putSeconds(out, @"quality_binned_encode", timedMin(gReps, ^{
+            qbEnc = TTIOQualityEncode(qbIn);
+        }));
+        putSeconds(out, @"quality_binned_decode", timedMin(gReps, ^{
+            (void)TTIOQualityDecode(qbEnc, NULL);
+        }));
 
         // NAME_TOKENIZED: 10K Illumina-style names.
         NSMutableArray *names = [NSMutableArray arrayWithCapacity:10000];
@@ -1053,12 +1143,13 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
             [names addObject:[NSString stringWithFormat:@"M88_%08lu:%03d:%02d",
                               (unsigned long)i, rand() % 1000, rand() % 100]];
         }
-        t0 = nowSeconds();
-        NSData *ntEnc = [TTIONameTokenizerV2 encodeNames:names];
-        putSeconds(out, @"name_tokenized_encode", nowSeconds() - t0);
-        t0 = nowSeconds();
-        (void)[TTIONameTokenizerV2 decodeData:ntEnc error:NULL];
-        putSeconds(out, @"name_tokenized_decode", nowSeconds() - t0);
+        __block NSData *ntEnc = nil;
+        putSeconds(out, @"name_tokenized_encode", timedMin(gReps, ^{
+            ntEnc = [TTIONameTokenizerV2 encodeNames:names];
+        }));
+        putSeconds(out, @"name_tokenized_decode", timedMin(gReps, ^{
+            (void)[TTIONameTokenizerV2 decodeData:ntEnc error:NULL];
+        }));
     }
 }
 
@@ -1074,8 +1165,6 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
 {
     (void)tmp; (void)n; (void)peaks;
     @autoreleasepool {
-        NSError *err = nil;
-
         // ── REF_DIFF: 100K reads × 100bp against 100Kbp reference ──
         const NSUInteger rdNumReads = 100000;
         const NSUInteger rdReadLen  = 100;
@@ -1139,34 +1228,37 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         }
         const NSUInteger rdTotalBases = (NSUInteger)cumOff;
 
-        double t0 = nowSeconds();
-        NSData *rdEnc = [TTIORefDiffV2 encodeSequences:seqFlat
-                                              offsets:offsets
-                                            positions:positions
-                                         cigarStrings:cigars
-                                            reference:refSeqData
-                                         referenceMd5:refMd5
-                                         referenceUri:@"perf://ref/chr1"
-                                       readsPerSlice:10000
-                                                error:&err];
-        putSeconds(out, @"ref_diff_encode", nowSeconds() - t0);
-        if (!rdEnc) { NSLog(@"ref_diff encode failed: %@", err); }
+        __block NSData *rdEnc = nil;
+        putSeconds(out, @"ref_diff_encode", timedMin(gReps, ^{
+            NSError *e = nil;
+            rdEnc = [TTIORefDiffV2 encodeSequences:seqFlat
+                                           offsets:offsets
+                                         positions:positions
+                                      cigarStrings:cigars
+                                         reference:refSeqData
+                                      referenceMd5:refMd5
+                                      referenceUri:@"perf://ref/chr1"
+                                    readsPerSlice:10000
+                                             error:&e];
+            if (!rdEnc) NSLog(@"ref_diff encode failed: %@", e);
+        }));
 
         if (rdEnc) {
-            NSData *outSeq = nil;
-            NSData *outOff = nil;
-            t0 = nowSeconds();
-            (void)[TTIORefDiffV2 decodeData:rdEnc
-                                  positions:positions
-                               cigarStrings:cigars
-                                  reference:refSeqData
-                                     nReads:rdNumReads
-                                 totalBases:rdTotalBases
-                               outSequences:&outSeq
-                                 outOffsets:&outOff
-                                      error:&err];
-            putSeconds(out, @"ref_diff_decode", nowSeconds() - t0);
-            if (err) NSLog(@"ref_diff decode error: %@", err);
+            putSeconds(out, @"ref_diff_decode", timedMin(gReps, ^{
+                NSError *e = nil;
+                NSData *outSeq = nil;
+                NSData *outOff = nil;
+                (void)[TTIORefDiffV2 decodeData:rdEnc
+                                      positions:positions
+                                   cigarStrings:cigars
+                                      reference:refSeqData
+                                         nReads:rdNumReads
+                                     totalBases:rdTotalBases
+                                   outSequences:&outSeq
+                                     outOffsets:&outOff
+                                          error:&e];
+                if (e) NSLog(@"ref_diff decode error: %@", e);
+            }));
         } else {
             putSeconds(out, @"ref_diff_decode", 0.0);
         }
@@ -1197,21 +1289,24 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
             [revcompFlagsMixed addObject:@((i & 7) == 0 ? 1 : 0)];
         }
 
-        t0 = nowSeconds();
-        NSData *fqzEnc = [TTIOFqzcompNx16Z encodeWithQualities:qualities
-                                                     readLengths:readLengths
-                                                    revcompFlags:revcompFlagsMixed
-                                                           error:&err];
-        putSeconds(out, @"fqzcomp_nx16_z_encode", nowSeconds() - t0);
-        if (!fqzEnc) { NSLog(@"fqzcomp_nx16_z encode failed: %@", err); }
+        __block NSData *fqzEnc = nil;
+        putSeconds(out, @"fqzcomp_nx16_z_encode", timedMin(gReps, ^{
+            NSError *e = nil;
+            fqzEnc = [TTIOFqzcompNx16Z encodeWithQualities:qualities
+                                               readLengths:readLengths
+                                              revcompFlags:revcompFlagsMixed
+                                                     error:&e];
+            if (!fqzEnc) NSLog(@"fqzcomp_nx16_z encode failed: %@", e);
+        }));
 
         if (fqzEnc) {
-            t0 = nowSeconds();
-            (void)[TTIOFqzcompNx16Z decodeData:fqzEnc
-                                   revcompFlags:revcompFlagsMixed
-                                          error:&err];
-            putSeconds(out, @"fqzcomp_nx16_z_decode", nowSeconds() - t0);
-            if (err) NSLog(@"fqzcomp_nx16_z decode error: %@", err);
+            putSeconds(out, @"fqzcomp_nx16_z_decode", timedMin(gReps, ^{
+                NSError *e = nil;
+                (void)[TTIOFqzcompNx16Z decodeData:fqzEnc
+                                       revcompFlags:revcompFlagsMixed
+                                              error:&e];
+                if (e) NSLog(@"fqzcomp_nx16_z decode error: %@", e);
+            }));
         } else {
             putSeconds(out, @"fqzcomp_nx16_z_decode", 0.0);
         }
@@ -1234,16 +1329,19 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         // cumulative sum, but sort defensively).
         qsort(drPtr, drCount, sizeof(int64_t), cmp_int64);
 
-        t0 = nowSeconds();
-        NSData *drEnc = TTIODeltaRansEncode(drData, 8, &err);
-        putSeconds(out, @"delta_rans_encode", nowSeconds() - t0);
-        if (!drEnc) { NSLog(@"delta_rans encode failed: %@", err); }
+        __block NSData *drEnc = nil;
+        putSeconds(out, @"delta_rans_encode", timedMin(gReps, ^{
+            NSError *e = nil;
+            drEnc = TTIODeltaRansEncode(drData, 8, &e);
+            if (!drEnc) NSLog(@"delta_rans encode failed: %@", e);
+        }));
 
         if (drEnc) {
-            t0 = nowSeconds();
-            (void)TTIODeltaRansDecode(drEnc, &err);
-            putSeconds(out, @"delta_rans_decode", nowSeconds() - t0);
-            if (err) NSLog(@"delta_rans decode error: %@", err);
+            putSeconds(out, @"delta_rans_decode", timedMin(gReps, ^{
+                NSError *e = nil;
+                (void)TTIODeltaRansDecode(drEnc, &e);
+                if (e) NSLog(@"delta_rans decode error: %@", e);
+            }));
         } else {
             putSeconds(out, @"delta_rans_decode", 0.0);
         }
@@ -1354,6 +1452,9 @@ int main(int argc, const char *argv[])
                 n = (NSUInteger)atoll(argv[++i]);
             } else if (strcmp(argv[i], "--peaks") == 0 && i + 1 < argc) {
                 peaks = (NSUInteger)atoll(argv[++i]);
+            } else if (strcmp(argv[i], "--reps") == 0 && i + 1 < argc) {
+                int r = atoi(argv[++i]);
+                if (r >= 1) gReps = r;
             } else if (strcmp(argv[i], "--only") == 0 && i + 1 < argc) {
                 NSString *s = [NSString stringWithUTF8String:argv[++i]];
                 for (NSString *t in [s componentsSeparatedByString:@","]) {

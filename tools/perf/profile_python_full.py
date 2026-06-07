@@ -36,6 +36,15 @@ from typing import Any
 
 import numpy as np
 
+# Min-of-N timing: each timed op runs once as warmup (discarded) then
+# ``_REPS`` times, and ``_timed`` returns the MINIMUM. The min is the
+# least-interfered sample (scheduling/contention only ever makes an op
+# slower, never faster), so it is the most reproducible estimate of true
+# cost and cuts the 20-46% run-to-run variance that forced the perf gate
+# to a 50% tolerance far more than the median did.
+# Overridden from ``--reps`` in ``main()``.
+_REPS = 7
+
 from ttio import (
     AxisDescriptor,
     IRSpectrum,
@@ -113,10 +122,24 @@ def _build_ms_run(n: int, peaks: int) -> WrittenRun:
 
 
 def _timed(fn, *args, **kwargs) -> tuple[float, Any]:
-    gc.collect()
-    t0 = time.perf_counter()
-    result = fn(*args, **kwargs)
-    return time.perf_counter() - t0, result
+    """Run fn once (warmup, discarded) then _REPS times; return (min_seconds, last_result).
+
+    NOTE: fn is invoked _REPS+1 times with the SAME args, so every call
+    site must be safe to repeat (pure ops, or writers that truncate/
+    overwrite their target). Sites whose op is destructive after the
+    first call (e.g. in-place encrypt that deletes its plaintext source)
+    must NOT use this helper directly — they run their own per-rep loop
+    with a fresh input each rep. See bench_per_au_encryption.
+    """
+    fn(*args, **kwargs)  # warmup, discarded
+    times = []
+    result = None
+    for _ in range(_REPS):
+        gc.collect()
+        t0 = time.perf_counter()
+        result = fn(*args, **kwargs)
+        times.append(time.perf_counter() - t0)
+    return min(times), result
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +200,16 @@ def bench_transport(tmp: Path, n: int, peaks: int,
         use_compression=use_compression, use_checksum=True,
     )
     rt = tmp / ("rt-c.tio" if use_compression else "rt.tio")
-    t_dec, _ = _timed(transport_to_file, mots, rt)
+
+    def _decode() -> None:
+        # transport_to_file returns an OPEN SpectralDataset handle. Under
+        # min-of-N reps we recreate the same ``rt`` path each call, so
+        # a leaked handle from the prior rep makes h5py fail to truncate
+        # ("file which is already open"). Close it inside the timed op.
+        ds = transport_to_file(mots, rt)
+        ds.close()
+
+    t_dec, _ = _timed(_decode)
     return {"encode": t_enc, "decode": t_dec,
             "src_mb": src.stat().st_size / 1e6,
             "mots_mb": mots.stat().st_size / 1e6}
@@ -192,14 +224,36 @@ def bench_per_au_encryption(tmp: Path, n: int,
     )
     key = bytes(range(32))
 
-    # The encrypt_per_au_file API encrypts a copy in place; make a fresh
-    # copy for the decrypt phase so both measurements start from the
-    # same plaintext state.
+    # encrypt_per_au_file mutates the file in place: it reads each
+    # ``<channel>_values`` dataset, replaces it with encrypted segments,
+    # and DELETES the plaintext source. decrypt_per_au_file is the
+    # inverse and is idempotent on already-plaintext files. Both ops are
+    # therefore destructive-after-first-call, so we CANNOT route them
+    # through _timed (which reuses the same args across reps — the 2nd+
+    # encrypt rep would find no ``_values`` to encrypt and silently
+    # measure a no-op). Instead run our own min-of-_REPS loop with a
+    # freshly-copied plaintext file per rep.
     import shutil
-    copy = tmp / "enc-copy.tio"
-    shutil.copy(src, copy)
-    t_enc, _ = _timed(encrypt_per_au_file, str(copy), key)
-    t_dec, _ = _timed(decrypt_per_au_file, str(copy), key)
+
+    def _min_per_au(op) -> float:
+        times: list[float] = []
+        for i in range(_REPS + 1):  # +1 warmup, discarded
+            work = tmp / f"enc-copy-{i}.tio"
+            shutil.copy(src, work)
+            if op is decrypt_per_au_file:
+                # decrypt needs an encrypted input; prep outside timing.
+                encrypt_per_au_file(str(work), key)
+            gc.collect()
+            t0 = time.perf_counter()
+            op(str(work), key)
+            dt = time.perf_counter() - t0
+            work.unlink(missing_ok=True)
+            if i > 0:  # skip warmup
+                times.append(dt)
+        return min(times)
+
+    t_enc = _min_per_au(encrypt_per_au_file)
+    t_dec = _min_per_au(decrypt_per_au_file)
     return {"encrypt": t_enc, "decrypt": t_dec,
             "bytes_mb": src.stat().st_size / 1e6}
 
@@ -804,7 +858,12 @@ def main() -> int:
                     help="also dump results as JSON to this file")
     ap.add_argument("--out", type=Path,
                     default=Path("/tmp/mpgo_profile_python_full"))
+    ap.add_argument("--reps", type=int, default=7,
+                    help="min-of-N timing reps (default 7)")
     args = ap.parse_args()
+
+    global _REPS
+    _REPS = args.reps
 
     args.out.mkdir(parents=True, exist_ok=True)
 
