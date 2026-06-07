@@ -43,6 +43,25 @@
 #import "HDF5/TTIOHDF5Types.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOHDF5Provider.h"
+#import <pthread.h>
+
+// Shared immutable flyweight for the standard float64 / zlib /
+// little-endian channel encoding used by every spectrum read in
+// -spectrumAtIndex:error:. The spec is value-identical on every call
+// and TTIOEncodingSpec is immutable (all properties readonly, no
+// mutators), so a single process-wide instance is safe to hand to
+// every SignalArray — eliminating one allocation per channel per
+// spectrum on the hot read path. Built once via pthread_once (the
+// codebase's established once-init idiom on GNUstep/Linux).
+static TTIOEncodingSpec *gStdChannelEncoding = nil;
+static pthread_once_t   gStdChannelEncodingOnce = PTHREAD_ONCE_INIT;
+static void _buildStdChannelEncoding(void)
+{
+    gStdChannelEncoding =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+}
 
 @implementation TTIOAcquisitionRun
 {
@@ -924,10 +943,8 @@
     const double   *precursorMzs = precursorData.bytes;
     const double   *productMzs   = productData.bytes;
 
-    TTIOEncodingSpec *enc =
-        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
-                       compressionAlgorithm:TTIOCompressionZlib
-                                  byteOrder:TTIOByteOrderLittleEndian];
+    pthread_once(&gStdChannelEncodingOnce, _buildStdChannelEncoding);
+    TTIOEncodingSpec *enc = gStdChannelEncoding;
 
     NSMutableArray<TTIOChromatogram *> *out =
         [NSMutableArray arrayWithCapacity:(NSUInteger)count];
