@@ -372,6 +372,36 @@ public final class ProfileHarnessFull {
         return r;
     }
 
+    // ── signatures.pqc: ML-DSA-87 sign + verify ─────────────────────
+
+    /**
+     * ML-DSA-87 (FIPS 204) post-quantum sign + verify via Bouncy Castle.
+     * Keygen ONCE outside the timed loop, then time sign + verify via
+     * min-of-N on a fixed small 32-byte message (ML-DSA cost is
+     * message-size-insensitive). BouncyCastle is pure-Java and always
+     * available, so there is no isAvailable() guard on this path.
+     */
+    private static Result benchSignaturesPqc() {
+        Result r = new Result();
+        final byte[] msg = new byte[32];
+        for (int i = 0; i < 32; i++) msg[i] = (byte) i;
+        // keygen outside the timed loop
+        final global.thalion.ttio.protection.PostQuantumCrypto.KeyPair kp =
+            global.thalion.ttio.protection.PostQuantumCrypto.sigKeygen();
+
+        final byte[][] sigBox = new byte[1][];
+        r.timingMs("sign", timedMinMs(REPS, () ->
+            sigBox[0] = global.thalion.ttio.protection.PostQuantumCrypto.sigSign(
+                kp.privateKey(), msg)));
+        final byte[] sig = sigBox[0];
+        final boolean[] okBox = {false};
+        r.timingMs("verify", timedMinMs(REPS, () ->
+            okBox[0] = global.thalion.ttio.protection.PostQuantumCrypto.sigVerify(
+                kp.publicKey(), msg, sig)));
+        if (!okBox[0]) throw new IllegalStateException("pqc verify failed");
+        return r;
+    }
+
     // ── JCAMP-DX write + read ───────────────────────────────────────
 
     private static Result benchJcamp(Path tmp, int n) throws Exception {
@@ -678,6 +708,40 @@ public final class ProfileHarnessFull {
         r.timingMs("delta_rans_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.DeltaRans.decode(drEnc)));
 
+        // ── MATE_INFO_V2: 100K records, parallel mate-pair channels ──
+        // Same native lib (TtioRansNative) as the genomic codecs above;
+        // guard on isAvailable() and skip (0.0) if it is absent.
+        final int nMate = 100_000;
+        final int[]   mateChromIds  = new int[nMate];
+        final long[]  matePositions = new long[nMate];
+        final int[]   tplLengths    = new int[nMate];
+        final short[] ownChromIds   = new short[nMate];
+        final long[]  ownPositions  = new long[nMate];
+        java.util.Random mateRng = new java.util.Random(42);
+        long mp = 1000;
+        for (int i = 0; i < nMate; i++) {
+            mateChromIds[i]  = i % 25;
+            ownChromIds[i]   = (short) (i % 25);
+            mp += 100 + mateRng.nextInt(401);
+            ownPositions[i]  = mp;
+            matePositions[i] = mp + 100 + mateRng.nextInt(400);
+            tplLengths[i]    = 200 + mateRng.nextInt(300);
+        }
+        if (global.thalion.ttio.codecs.MateInfoV2.isAvailable()) {
+            final byte[][] miBox = new byte[1][];
+            r.timingMs("mate_info_v2_encode", timedMinMs(REPS, () ->
+                miBox[0] = global.thalion.ttio.codecs.MateInfoV2.encode(
+                    mateChromIds, matePositions, tplLengths,
+                    ownChromIds, ownPositions)));
+            final byte[] miEnc = miBox[0];
+            r.timingMs("mate_info_v2_decode", timedMinMs(REPS, () ->
+                global.thalion.ttio.codecs.MateInfoV2.decode(
+                    miEnc, ownChromIds, ownPositions, nMate)));
+        } else {
+            r.timingMs("mate_info_v2_encode", 0.0);
+            r.timingMs("mate_info_v2_decode", 0.0);
+        }
+
         return r;
     }
 
@@ -783,16 +847,24 @@ public final class ProfileHarnessFull {
         return r;
     }
 
-    // -- B5: AES-256-GCM encrypt/decrypt on 10 MiB payload
+    // -- B5: AES-256-GCM encrypt/decrypt on 64 MiB payload
 
     private static Result benchEncryptionGenomic() {
         Result r = new Result();
-        final int tenMiB = 10 * 1024 * 1024;
-        final byte[] plaintext = new byte[tenMiB];
+        // 64 MiB (P1d): keeps the op well above the 5ms jitter floor so the
+        // min-of-N timing is stable (10 MiB was a sub-20ms op that swung
+        // +/-25-85% run-to-run).
+        final int sixtyFourMiB = 64 * 1024 * 1024;
+        final byte[] plaintext = new byte[sixtyFourMiB];
         new java.util.Random(42).nextBytes(plaintext);
         final byte[] key = new byte[32];
         for (int i = 0; i < 32; i++) key[i] = (byte) i;
         // pure AES-GCM encrypt/decrypt (no shared state) -> rep-safe.
+        // NOTE: EncryptionManager.encrypt/decrypt call Cipher.getInstance
+        // internally (product code), so the provider-lookup cost is inside
+        // the timed window. We cannot hoist it without editing product code,
+        // which is out of scope for the perf harness; at 64 MiB the
+        // getInstance overhead is a negligible fraction of the doFinal cost.
         final EncryptionManager.EncryptResult[] erBox =
                 new EncryptionManager.EncryptResult[1];
         r.timingMs("encrypt", timedMinMs(REPS, () ->
@@ -802,8 +874,8 @@ public final class ProfileHarnessFull {
         r.timingMs("decrypt", timedMinMs(REPS, () ->
             decBox[0] = EncryptionManager.decrypt(
                 er.ciphertext(), er.iv(), er.tag(), key)));
-        if (decBox[0].length != tenMiB) throw new IllegalStateException("decrypt length mismatch");
-        r.size("bytes_mb", tenMiB);
+        if (decBox[0].length != sixtyFourMiB) throw new IllegalStateException("decrypt length mismatch");
+        r.size("bytes_mb", sixtyFourMiB);
         return r;
     }
 
@@ -905,7 +977,7 @@ public final class ProfileHarnessFull {
     private static final String[] BENCH_ORDER = {
         "ms.hdf5", "ms.memory", "ms.sqlite", "ms.zarr",
         "transport.plain", "transport.compressed",
-        "encryption", "signatures", "jcamp", "spectra.build",
+        "encryption", "signatures", "signatures.pqc", "jcamp", "spectra.build",
         "codecs",
         "codecs.genomic",
         "genomic",
@@ -927,6 +999,7 @@ public final class ProfileHarnessFull {
             case "transport.compressed": return benchTransport(tmp, n, peaks, true);
             case "encryption":   return benchEncryption(tmp, n, peaks);
             case "signatures":   return benchSignature(tmp, n, peaks);
+            case "signatures.pqc": return benchSignaturesPqc();
             case "jcamp":        return benchJcamp(tmp, n);
             case "spectra.build": return benchSpectra(n);
             case "codecs":       return benchCodecs(n);
