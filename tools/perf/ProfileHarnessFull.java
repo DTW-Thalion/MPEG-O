@@ -372,6 +372,36 @@ public final class ProfileHarnessFull {
         return r;
     }
 
+    // ── signatures.pqc: ML-DSA-87 sign + verify ─────────────────────
+
+    /**
+     * ML-DSA-87 (FIPS 204) post-quantum sign + verify via Bouncy Castle.
+     * Keygen ONCE outside the timed loop, then time sign + verify via
+     * min-of-N on a fixed small 32-byte message (ML-DSA cost is
+     * message-size-insensitive). BouncyCastle is pure-Java and always
+     * available, so there is no isAvailable() guard on this path.
+     */
+    private static Result benchSignaturesPqc() {
+        Result r = new Result();
+        final byte[] msg = new byte[32];
+        for (int i = 0; i < 32; i++) msg[i] = (byte) i;
+        // keygen outside the timed loop
+        final global.thalion.ttio.protection.PostQuantumCrypto.KeyPair kp =
+            global.thalion.ttio.protection.PostQuantumCrypto.sigKeygen();
+
+        final byte[][] sigBox = new byte[1][];
+        r.timingMs("sign", timedMinMs(REPS, () ->
+            sigBox[0] = global.thalion.ttio.protection.PostQuantumCrypto.sigSign(
+                kp.privateKey(), msg)));
+        final byte[] sig = sigBox[0];
+        final boolean[] okBox = {false};
+        r.timingMs("verify", timedMinMs(REPS, () ->
+            okBox[0] = global.thalion.ttio.protection.PostQuantumCrypto.sigVerify(
+                kp.publicKey(), msg, sig)));
+        if (!okBox[0]) throw new IllegalStateException("pqc verify failed");
+        return r;
+    }
+
     // ── JCAMP-DX write + read ───────────────────────────────────────
 
     private static Result benchJcamp(Path tmp, int n) throws Exception {
@@ -947,7 +977,7 @@ public final class ProfileHarnessFull {
     private static final String[] BENCH_ORDER = {
         "ms.hdf5", "ms.memory", "ms.sqlite", "ms.zarr",
         "transport.plain", "transport.compressed",
-        "encryption", "signatures", "jcamp", "spectra.build",
+        "encryption", "signatures", "signatures.pqc", "jcamp", "spectra.build",
         "codecs",
         "codecs.genomic",
         "genomic",
@@ -969,6 +999,7 @@ public final class ProfileHarnessFull {
             case "transport.compressed": return benchTransport(tmp, n, peaks, true);
             case "encryption":   return benchEncryption(tmp, n, peaks);
             case "signatures":   return benchSignature(tmp, n, peaks);
+            case "signatures.pqc": return benchSignaturesPqc();
             case "jcamp":        return benchJcamp(tmp, n);
             case "spectra.build": return benchSpectra(n);
             case "codecs":       return benchCodecs(n);

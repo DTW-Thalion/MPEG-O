@@ -61,8 +61,11 @@ if [ "$HAS_JSON" = "0" ]; then
 fi
 
 echo "[run] $OUT_BIN $*"
+# $HOME/_oqs/lib carries liboqs.so so the signatures.pqc bench's PQC
+# calls resolve the OQS_SIG_* symbols at runtime (libTTIO's OQS binding
+# is lazy — the harness loads without it, but a PQC *call* needs the lib).
 (
     cd "$OUT_DIR"
-    LD_LIBRARY_PATH="$LIB_OBJ_DIR:/usr/local/lib:${LD_LIBRARY_PATH:-}" \
+    LD_LIBRARY_PATH="$LIB_OBJ_DIR:/usr/local/lib:$HOME/_oqs/lib:${LD_LIBRARY_PATH:-}" \
         "$OUT_BIN" "$@"
 )

@@ -40,6 +40,7 @@
 #import "Spectra/TTIOTwoDimensionalCorrelationSpectrum.h"
 #import "Protection/TTIOPerAUFile.h"
 #import "Protection/TTIOSignatureManager.h"
+#import "Protection/TTIOPostQuantumCrypto.h"
 #import "Transport/TTIOTransportWriter.h"
 #import "Transport/TTIOTransportReader.h"
 #import "Export/TTIOJcampDxWriter.h"
@@ -642,6 +643,51 @@ static void bench_signatures(NSString *tmp, NSUInteger n, NSUInteger peaks,
                                                 error:&e]) {
                 NSLog(@"verify failed: %@", e); exit(1);
             }
+        }));
+    }
+}
+
+/* ── signatures.pqc benchmark (ML-DSA-87 sign + verify) ─────────── */
+
+static void bench_signatures_pqc(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                                  NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        /* Guard on liboqs availability — N/A if the backend was not linked
+         * at build time (it IS available here via ~/_oqs/lib/liboqs.so). */
+        if (![TTIOPostQuantumCrypto isAvailable]) {
+            printf("  [signatures.pqc] liboqs unavailable — reporting N/A\n");
+            putNA(out, @"sign");
+            putNA(out, @"verify");
+            return;
+        }
+
+        uint8_t msgBytes[32];
+        for (int i = 0; i < 32; i++) msgBytes[i] = (uint8_t)i;
+        NSData *msg = [NSData dataWithBytes:msgBytes length:32];
+
+        /* keygen outside the timed loop */
+        NSError *err = nil;
+        TTIOPQCKeyPair *kp = [TTIOPostQuantumCrypto sigKeygenWithError:&err];
+        if (!kp) { NSLog(@"pqc keygen failed: %@", err); exit(1); }
+
+        __block NSData *sig = nil;
+        putSeconds(out, @"sign", timedMin(gReps, ^{
+            NSError *e = nil;
+            sig = [TTIOPostQuantumCrypto sigSignWithPrivateKey:kp.privateKey
+                                                       message:msg
+                                                         error:&e];
+            if (!sig) { NSLog(@"pqc sign failed: %@", e); exit(1); }
+        }));
+
+        putSeconds(out, @"verify", timedMin(gReps, ^{
+            NSError *e = nil;
+            BOOL ok = [TTIOPostQuantumCrypto sigVerifyWithPublicKey:kp.publicKey
+                                                            message:msg
+                                                          signature:sig
+                                                              error:&e];
+            if (!ok) { NSLog(@"pqc verify failed: %@", e); exit(1); }
         }));
     }
 }
@@ -1566,6 +1612,7 @@ static BenchEntry kBenches[] = {
     { "transport.compressed", bench_transport_compressed },
     { "encryption",           bench_encryption },
     { "signatures",           bench_signatures },
+    { "signatures.pqc",       bench_signatures_pqc },
     { "jcamp",                bench_jcamp },
     { "spectra.build",        bench_spectra_build },
     { "codecs",               bench_codecs },

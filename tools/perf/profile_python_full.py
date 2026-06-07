@@ -71,6 +71,7 @@ from ttio.exporters.jcamp_dx import (
 )
 from ttio.importers.jcamp_dx import read_spectrum as jcamp_read_spectrum
 from ttio.signatures import sign_dataset, verify_dataset
+from ttio import pqc as _pqc
 from ttio.transport import file_to_transport, transport_to_file
 
 # P4 (perf workplan): isolated codec microbenchmarks.
@@ -321,6 +322,28 @@ def bench_signatures(tmp: Path, n: int, peaks: int) -> dict[str, float]:
 
     t_sign, _ = _timed(_sign)
     t_verify, _ = _timed(_verify)
+    return {"sign": t_sign, "verify": t_verify}
+
+
+def bench_signatures_pqc(_tmp: Path, _n: int) -> dict[str, float | None]:
+    """ML-DSA-87 (FIPS 204) post-quantum sign + verify.
+
+    Keygen ONCE outside the timed loop, then time sign + verify via
+    min-of-N on a fixed small 32-byte message (ML-DSA cost is
+    message-size-insensitive). Guarded on pqc.is_available() — phases
+    report None (N/A) if liboqs is unavailable.
+    """
+    if not _pqc.is_available():
+        print("  [signatures.pqc] liboqs unavailable — reporting N/A")
+        return {"sign": None, "verify": None}
+
+    msg = bytes(range(32))
+    kp = _pqc.sig_keygen()  # keygen outside the timed loop
+
+    t_sign, sig = _timed(_pqc.sig_sign, kp.private_key, msg)
+    t_verify, _ = _timed(_pqc.sig_verify, kp.public_key, msg, sig)
+    print(f"  [signatures.pqc] ML-DSA-87  "
+          f"sign={t_sign*1000:.2f}ms  verify={t_verify*1000:.2f}ms")
     return {"sign": t_sign, "verify": t_verify}
 
 
@@ -927,6 +950,7 @@ BENCHMARKS: dict[str, Any] = {
                        lambda tmp, a: bench_transport(tmp, a.n, a.peaks, True),
     "encryption":     lambda tmp, a: bench_per_au_encryption(tmp, a.n, a.peaks),
     "signatures":     lambda tmp, a: bench_signatures(tmp, a.n, a.peaks),
+    "signatures.pqc": lambda tmp, a: bench_signatures_pqc(tmp, a.n),
     "jcamp":          lambda tmp, a: bench_jcamp(tmp, a.n),
     "spectra.build":  lambda tmp, a: bench_spectra_inmemory(a.n),
     "codecs":         lambda tmp, a: bench_codecs(tmp, a.n),
