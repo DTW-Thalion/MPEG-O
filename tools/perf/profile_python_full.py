@@ -71,6 +71,7 @@ from ttio.exporters.jcamp_dx import (
 )
 from ttio.importers.jcamp_dx import read_spectrum as jcamp_read_spectrum
 from ttio.signatures import sign_dataset, verify_dataset
+from ttio import pqc as _pqc
 from ttio.transport import file_to_transport, transport_to_file
 
 # P4 (perf workplan): isolated codec microbenchmarks.
@@ -84,6 +85,7 @@ from ttio.codecs.ref_diff_v2 import encode as _ref_diff_encode, decode as _ref_d
 from ttio.codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
 from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata as _fqzcomp_z_decode
 from ttio.codecs.delta_rans import encode as _delta_rans_encode, decode as _delta_rans_decode
+from ttio.codecs import mate_info_v2 as _mate_info_v2
 
 # P1c: real-format importers (read committed fixtures through the public API).
 from ttio.importers.bam import BamReader, SamtoolsNotFoundError
@@ -320,6 +322,28 @@ def bench_signatures(tmp: Path, n: int, peaks: int) -> dict[str, float]:
 
     t_sign, _ = _timed(_sign)
     t_verify, _ = _timed(_verify)
+    return {"sign": t_sign, "verify": t_verify}
+
+
+def bench_signatures_pqc(_tmp: Path, _n: int) -> dict[str, float | None]:
+    """ML-DSA-87 (FIPS 204) post-quantum sign + verify.
+
+    Keygen ONCE outside the timed loop, then time sign + verify via
+    min-of-N on a fixed small 32-byte message (ML-DSA cost is
+    message-size-insensitive). Guarded on pqc.is_available() — phases
+    report None (N/A) if liboqs is unavailable.
+    """
+    if not _pqc.is_available():
+        print("  [signatures.pqc] liboqs unavailable — reporting N/A")
+        return {"sign": None, "verify": None}
+
+    msg = bytes(range(32))
+    kp = _pqc.sig_keygen()  # keygen outside the timed loop
+
+    t_sign, sig = _timed(_pqc.sig_sign, kp.private_key, msg)
+    t_verify, _ = _timed(_pqc.sig_verify, kp.public_key, msg, sig)
+    print(f"  [signatures.pqc] ML-DSA-87  "
+          f"sign={t_sign*1000:.2f}ms  verify={t_verify*1000:.2f}ms")
     return {"sign": t_sign, "verify": t_verify}
 
 
@@ -596,6 +620,28 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     t_dr_enc, dr_encoded = _timed(_delta_rans_encode, dr_input, 8)
     t_dr_dec, _ = _timed(_delta_rans_decode, dr_encoded)
 
+    # ── MATE_INFO_V2: 100K records, parallel mate-pair channels ──
+    # Same native lib (libttio_rans) as the codecs above; guard on the
+    # native-lib flag and skip (0.0) if it is absent.
+    n_mate = 100_000
+    mate_chrom_ids = (np.arange(n_mate, dtype=np.int32) % 25)
+    own_positions = positions_arr if positions_arr.size == n_mate else \
+        np.sort(rng.integers(1, 1_000_000_000, size=n_mate)).astype(np.int64)
+    mate_positions = (own_positions
+                      + rng.integers(100, 500, size=n_mate)).astype(np.int64)
+    template_lengths = rng.integers(200, 500, size=n_mate).astype(np.int32)
+    own_chrom_ids = (np.arange(n_mate, dtype=np.uint16) % 25)
+    if _mate_info_v2.HAVE_NATIVE_LIB:
+        t_mate_enc, mate_encoded = _timed(
+            _mate_info_v2.encode, mate_chrom_ids, mate_positions,
+            template_lengths, own_chrom_ids, own_positions)
+        t_mate_dec, _ = _timed(
+            _mate_info_v2.decode, mate_encoded, own_chrom_ids,
+            own_positions, n_mate)
+    else:
+        t_mate_enc = 0.0
+        t_mate_dec = 0.0
+
     raw_mb_rd = sum(len(sq) for sq in sequences_rd) / 1e6
     print(f"  [genomic codec] ref_diff   {raw_mb_rd:.1f} MiB  "
           f"enc={t_rd_enc:.2f}s  dec={t_rd_dec:.2f}s")
@@ -603,6 +649,8 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
           f"enc={t_fqz_z_enc:.2f}s  dec={t_fqz_z_dec:.2f}s")
     print(f"  [genomic codec] delta_rans {len(dr_input)/1e6:.1f} MiB  "
           f"enc={t_dr_enc:.2f}s  dec={t_dr_dec:.2f}s")
+    print(f"  [genomic codec] mate_info_v2 {n_mate} records  "
+          f"enc={t_mate_enc:.3f}s  dec={t_mate_dec:.3f}s")
 
     return {
         "ref_diff_encode": t_rd_enc,
@@ -611,6 +659,8 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
         "fqzcomp_nx16_z_decode": t_fqz_z_dec,
         "delta_rans_encode": t_dr_enc,
         "delta_rans_decode": t_dr_dec,
+        "mate_info_v2_encode": t_mate_enc,
+        "mate_info_v2_decode": t_mate_dec,
     }
 
 
@@ -754,12 +804,13 @@ def bench_genomic_write_read(tmp: Path, _n: int) -> dict[str, float]:
 
 
 def bench_encryption_genomic(_tmp: Path, _n: int) -> dict[str, float]:
-    """AES-256-GCM encrypt/decrypt on a 10 MiB payload (V10 B5).
+    """AES-256-GCM encrypt/decrypt on a 64 MiB payload (V10 B5).
 
     Confirms no size-dependent perf cliff vs. the existing ~0.33 MiB
-    spectral encryption benchmark.
+    spectral encryption benchmark. 64 MiB (P1d) keeps the op well above
+    the 5ms jitter floor so the min-of-N timing is stable.
     """
-    payload_size = 10 * 1024 * 1024  # 10 MiB
+    payload_size = 64 * 1024 * 1024  # 64 MiB
     rng = np.random.default_rng(42)
     payload = rng.integers(0, 256, size=payload_size, dtype=np.uint8).tobytes()
     key = bytes(range(32))
@@ -899,6 +950,7 @@ BENCHMARKS: dict[str, Any] = {
                        lambda tmp, a: bench_transport(tmp, a.n, a.peaks, True),
     "encryption":     lambda tmp, a: bench_per_au_encryption(tmp, a.n, a.peaks),
     "signatures":     lambda tmp, a: bench_signatures(tmp, a.n, a.peaks),
+    "signatures.pqc": lambda tmp, a: bench_signatures_pqc(tmp, a.n),
     "jcamp":          lambda tmp, a: bench_jcamp(tmp, a.n),
     "spectra.build":  lambda tmp, a: bench_spectra_inmemory(a.n),
     "codecs":         lambda tmp, a: bench_codecs(tmp, a.n),

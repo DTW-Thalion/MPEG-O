@@ -40,6 +40,7 @@
 #import "Spectra/TTIOTwoDimensionalCorrelationSpectrum.h"
 #import "Protection/TTIOPerAUFile.h"
 #import "Protection/TTIOSignatureManager.h"
+#import "Protection/TTIOPostQuantumCrypto.h"
 #import "Transport/TTIOTransportWriter.h"
 #import "Transport/TTIOTransportReader.h"
 #import "Export/TTIOJcampDxWriter.h"
@@ -646,6 +647,51 @@ static void bench_signatures(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
+/* ── signatures.pqc benchmark (ML-DSA-87 sign + verify) ─────────── */
+
+static void bench_signatures_pqc(NSString *tmp, NSUInteger n, NSUInteger peaks,
+                                  NSMutableDictionary *out)
+{
+    (void)tmp; (void)n; (void)peaks;
+    @autoreleasepool {
+        /* Guard on liboqs availability — N/A if the backend was not linked
+         * at build time (it IS available here via ~/_oqs/lib/liboqs.so). */
+        if (![TTIOPostQuantumCrypto isAvailable]) {
+            printf("  [signatures.pqc] liboqs unavailable — reporting N/A\n");
+            putNA(out, @"sign");
+            putNA(out, @"verify");
+            return;
+        }
+
+        uint8_t msgBytes[32];
+        for (int i = 0; i < 32; i++) msgBytes[i] = (uint8_t)i;
+        NSData *msg = [NSData dataWithBytes:msgBytes length:32];
+
+        /* keygen outside the timed loop */
+        NSError *err = nil;
+        TTIOPQCKeyPair *kp = [TTIOPostQuantumCrypto sigKeygenWithError:&err];
+        if (!kp) { NSLog(@"pqc keygen failed: %@", err); exit(1); }
+
+        __block NSData *sig = nil;
+        putSeconds(out, @"sign", timedMin(gReps, ^{
+            NSError *e = nil;
+            sig = [TTIOPostQuantumCrypto sigSignWithPrivateKey:kp.privateKey
+                                                       message:msg
+                                                         error:&e];
+            if (!sig) { NSLog(@"pqc sign failed: %@", e); exit(1); }
+        }));
+
+        putSeconds(out, @"verify", timedMin(gReps, ^{
+            NSError *e = nil;
+            BOOL ok = [TTIOPostQuantumCrypto sigVerifyWithPublicKey:kp.publicKey
+                                                            message:msg
+                                                          signature:sig
+                                                              error:&e];
+            if (!ok) { NSLog(@"pqc verify failed: %@", e); exit(1); }
+        }));
+    }
+}
+
 /* ── JCAMP benchmark ───────────────────────────────────────────── */
 
 static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
@@ -968,14 +1014,16 @@ static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
-/* B5: Encryption -- AES-256-GCM on 10 MiB payload */
+/* B5: Encryption -- AES-256-GCM on 64 MiB payload */
 
 static void bench_encryption_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
                                       NSMutableDictionary *out)
 {
     (void)tmp; (void)n; (void)peaks;
     @autoreleasepool {
-        const NSUInteger payloadBytes = 10 * 1024 * 1024;
+        /* 64 MiB (P1d): keeps the op well above the 5ms jitter floor so the
+         * min-of-N timing is stable (10 MiB was a sub-5ms op on AES-NI). */
+        const NSUInteger payloadBytes = 64 * 1024 * 1024;
 
         NSMutableData *payload = [NSMutableData dataWithLength:payloadBytes];
         uint8_t *pp = payload.mutableBytes;
@@ -1115,6 +1163,7 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
 #import "Codecs/TTIORefDiffV2.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Codecs/TTIODeltaRans.h"
+#import "Codecs/TTIOMateInfoV2.h"
 #include <openssl/md5.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -1383,6 +1432,72 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         } else {
             putSeconds(out, @"delta_rans_decode", 0.0);
         }
+
+        // ── MATE_INFO_V2: 100K records, parallel mate-pair channels ──
+        // Same native lib (libttio_rans) as the genomic codecs above; guard
+        // on +nativeAvailable and skip (0.0) if it is absent. All inputs are
+        // fixed-width typed NSData buffers (the codec-13 inline-v2 API shape).
+        const NSUInteger miNumRecords = 100000;
+        NSMutableData *miMateChromIds  =
+            [NSMutableData dataWithLength:miNumRecords * sizeof(int32_t)];
+        NSMutableData *miMatePositions =
+            [NSMutableData dataWithLength:miNumRecords * sizeof(int64_t)];
+        NSMutableData *miTplLengths    =
+            [NSMutableData dataWithLength:miNumRecords * sizeof(int32_t)];
+        NSMutableData *miOwnChromIds   =
+            [NSMutableData dataWithLength:miNumRecords * sizeof(uint16_t)];
+        NSMutableData *miOwnPositions  =
+            [NSMutableData dataWithLength:miNumRecords * sizeof(int64_t)];
+        int32_t  *miMcPtr = (int32_t  *)miMateChromIds.mutableBytes;
+        int64_t  *miMpPtr = (int64_t  *)miMatePositions.mutableBytes;
+        int32_t  *miTlPtr = (int32_t  *)miTplLengths.mutableBytes;
+        uint16_t *miOcPtr = (uint16_t *)miOwnChromIds.mutableBytes;
+        int64_t  *miOpPtr = (int64_t  *)miOwnPositions.mutableBytes;
+        lcgState = 0xBEEF;
+        int64_t miPos = 1000;
+        for (NSUInteger i = 0; i < miNumRecords; i++) {
+            miMcPtr[i] = (int32_t)(i % 25);
+            miOcPtr[i] = (uint16_t)(i % 25);
+            lcgState = lcgState * 6364136223846793005ULL + 1442695040888963407ULL;
+            miPos += 100 + (int64_t)((lcgState >> 33) % 401);
+            miOpPtr[i] = miPos;
+            miMpPtr[i] = miPos + 100 + (int64_t)((lcgState >> 17) % 400);
+            miTlPtr[i] = (int32_t)(200 + (lcgState >> 11) % 300);
+        }
+
+        if ([TTIOMateInfoV2 nativeAvailable]) {
+            __block NSData *miEnc = nil;
+            putSeconds(out, @"mate_info_v2_encode", timedMin(gReps, ^{
+                NSError *e = nil;
+                miEnc = [TTIOMateInfoV2 encodeMateChromIds:miMateChromIds
+                                             matePositions:miMatePositions
+                                           templateLengths:miTplLengths
+                                               ownChromIds:miOwnChromIds
+                                              ownPositions:miOwnPositions
+                                                     error:&e];
+                if (!miEnc) NSLog(@"mate_info_v2 encode failed: %@", e);
+            }));
+            if (miEnc) {
+                putSeconds(out, @"mate_info_v2_decode", timedMin(gReps, ^{
+                    NSError *e = nil;
+                    NSData *outMc = nil, *outMp = nil, *outTl = nil;
+                    (void)[TTIOMateInfoV2 decodeData:miEnc
+                                         ownChromIds:miOwnChromIds
+                                        ownPositions:miOwnPositions
+                                            nRecords:miNumRecords
+                                     outMateChromIds:&outMc
+                                    outMatePositions:&outMp
+                                  outTemplateLengths:&outTl
+                                               error:&e];
+                    if (e) NSLog(@"mate_info_v2 decode error: %@", e);
+                }));
+            } else {
+                putSeconds(out, @"mate_info_v2_decode", 0.0);
+            }
+        } else {
+            putSeconds(out, @"mate_info_v2_encode", 0.0);
+            putSeconds(out, @"mate_info_v2_decode", 0.0);
+        }
     }
 }
 
@@ -1497,6 +1612,7 @@ static BenchEntry kBenches[] = {
     { "transport.compressed", bench_transport_compressed },
     { "encryption",           bench_encryption },
     { "signatures",           bench_signatures },
+    { "signatures.pqc",       bench_signatures_pqc },
     { "jcamp",                bench_jcamp },
     { "spectra.build",        bench_spectra_build },
     { "codecs",               bench_codecs },
