@@ -136,104 +136,104 @@
   },
   "java": {
     "ms.hdf5": {
-      "write": 0.4672117,
-      "read": 0.0309488
+      "write": 0.4674306,
+      "read": 0.0300337
     },
     "ms.memory": {
-      "write": 0.0002688,
-      "read": 0.0003517
+      "write": 0.0002381,
+      "read": 0.0004556
     },
     "ms.sqlite": {
-      "write": 0.076754,
-      "read": 0.0151955
+      "write": 0.0790156,
+      "read": 0.016866
     },
     "ms.zarr": {
-      "write": 0.0534869,
-      "read": 0.0432376
+      "write": 0.0533065,
+      "read": 0.0451482
     },
     "transport.plain": {
-      "encode": 0.1634408,
-      "decode": 0.5142498,
+      "encode": 0.1642433,
+      "decode": 0.5092812,
       "src_mb": 2.74369,
       "mots_mb": 35.30029
     },
     "transport.compressed": {
-      "encode": 0.9800003,
-      "decode": 0.6716904,
+      "encode": 0.9868401,
+      "decode": 0.6678376,
       "src_mb": 2.74369,
       "mots_mb": 23.0827
     },
     "encryption": {
-      "encrypt": 0.2684878,
-      "decrypt": 0.1789632,
+      "encrypt": 0.2766554,
+      "decrypt": 0.1821313,
       "bytes_mb": 2.74369
     },
     "signatures": {
-      "sign": 0.0064436,
-      "verify": 0.0065031
+      "sign": 0.0064496,
+      "verify": 0.0064859
     },
     "signatures.pqc": {
-      "sign": 0.0024857,
-      "verify": 0.0007978
+      "sign": 0.0022313,
+      "verify": 0.0007944
     },
     "jcamp": {
-      "ir_write": 0.0133092,
-      "ir_read": 0.0553884,
-      "raman_write": 0.0133932,
-      "raman_read": 0.0556881,
-      "uvvis_write": 0.0137848,
-      "uvvis_read": 0.0542666,
-      "compressed_read": 0.0039239
+      "ir_write": 0.0129624,
+      "ir_read": 0.0548504,
+      "raman_write": 0.0132198,
+      "raman_read": 0.0565948,
+      "uvvis_write": 0.0138121,
+      "uvvis_read": 0.053604,
+      "compressed_read": 0.0038148
     },
     "spectra.build": {
-      "ir_build": 5e-07,
-      "raman_build": 5e-07,
+      "ir_build": 4e-07,
+      "raman_build": 4e-07,
       "uvvis_build": 5e-07,
       "2dcos_build": 3e-07
     },
     "codecs": {
-      "rans_o0_encode": 0.0068485,
-      "rans_o0_decode": 0.004723,
-      "rans_o1_encode": 0.0090188,
-      "rans_o1_decode": 0.0258451,
-      "base_pack_encode": 0.0106304,
-      "base_pack_decode": 0.0056399,
-      "quality_binned_encode": 0.0005371,
-      "quality_binned_decode": 0.0004924,
-      "name_tokenized_encode": 0.0217165,
-      "name_tokenized_decode": 0.0048507
+      "rans_o0_encode": 0.0067333,
+      "rans_o0_decode": 0.0047364,
+      "rans_o1_encode": 0.0088942,
+      "rans_o1_decode": 0.027427,
+      "base_pack_encode": 0.0105644,
+      "base_pack_decode": 0.0055986,
+      "quality_binned_encode": 0.0008583,
+      "quality_binned_decode": 0.000468,
+      "name_tokenized_encode": 0.020256,
+      "name_tokenized_decode": 0.0046329
     },
     "codecs.genomic": {
-      "ref_diff_encode": 0.1123569,
-      "ref_diff_decode": 0.0892658,
-      "fqzcomp_nx16_z_encode": 0.4228505,
-      "fqzcomp_nx16_z_decode": 0.3871583,
-      "delta_rans_encode": 0.0207643,
-      "delta_rans_decode": 0.0205977,
-      "mate_info_v2_encode": 0.0034421,
-      "mate_info_v2_decode": 0.0028887
+      "ref_diff_encode": 0.1124843,
+      "ref_diff_decode": 0.0892805,
+      "fqzcomp_nx16_z_encode": 0.4230477,
+      "fqzcomp_nx16_z_decode": 0.3880893,
+      "delta_rans_encode": 0.0209066,
+      "delta_rans_decode": 0.0202159,
+      "mate_info_v2_encode": 0.0034524,
+      "mate_info_v2_decode": 0.002871
     },
     "genomic": {
-      "write": 0.8448685,
-      "read": 0.5662091,
-      "random_access_p50": 0.0003849,
-      "random_access_p99": 0.0004908,
+      "write": 0.800735,
+      "read": 0.5918886,
+      "random_access_p50": 0.0003803,
+      "random_access_p99": 0.0004542,
       "write_mb": 20.207956
     },
     "encryption.genomic": {
-      "encrypt": 0.0849917,
-      "decrypt": 0.0914929,
+      "encrypt": 0.1760213,
+      "decrypt": 0.0817075,
       "bytes_mb": 67.108864
     },
     "streaming": {
-      "write": 0.0098358,
-      "read": 0.0019126
+      "write": 0.2005711,
+      "read": 0.0272617
     },
     "import": {
-      "bam": 0.0006908,
-      "mzml_tiny": 0.0016827,
-      "mzml_1min": 0.0036671,
-      "nmrml": 0.0008104
+      "bam": 0.0006819,
+      "mzml_tiny": 0.0013316,
+      "mzml_1min": 0.0033388,
+      "nmrml": 0.000951
     }
   },
   "objc": {
