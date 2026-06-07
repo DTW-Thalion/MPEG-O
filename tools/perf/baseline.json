@@ -1,288 +1,296 @@
 {
   "_meta": {
     "version": 1,
-    "generated_at": "2026-06-06",
-    "captured_from": "tools/perf/_out_python_full/full.json + tools/perf/_out_objc_full/full.json",
-    "n": 10000,
+    "generated_at": "2026-06-07",
+    "captured_from": "tools/perf/_out_{python,objc,java}_full/full.json via run_perf_ci.sh --update-baseline",
+    "n": 100000,
     "peaks": 16,
-    "regression_threshold_pct": 50.0,
+    "regression_threshold_pct": 15.0,
+    "min_abs_ms": 5.0,
+    "metric_overrides": {
+      "encryption.genomic.encrypt": 1000.0,
+      "encryption.genomic.decrypt": 1000.0,
+      "ms.sqlite.write": 30.0,
+      "codecs.rans_o1_decode": 30.0
+    },
     "notes": [
-      "Baseline numbers for tools/perf/compare_baseline.py \u2014 V2 of the verification workplan.",
-      "Updated by maintainers when an intentional optimisation or regression is accepted.",
-      "Java JSON output landed via P2 follow-up (2026-04-27); Java numbers below capture the post-V1-deps state.",
+      "Baseline numbers for tools/perf/compare_baseline.py. Updated by maintainers (run_perf_ci.sh --update-baseline) when an intentional optimisation or regression is accepted.",
       "All timing values are seconds (matches harness output). compare_baseline.py converts to milliseconds for display.",
-      "Re-captured 2026-06-06 after P0 harness repair; ref_diff/name_tokenized now measure the v2 codecs (not comparable to the pre-2026-06 v1 numbers).",
-      "threshold widened 10 -> 50% (2026-06-06): the harness runs a SINGLE timed iteration with no warmup, so back-to-back runs on the same machine vary 20-46%. At 50% the enforcing gate catches only gross (~1.5x+) regressions without false-positive spam. P1 TOP ITEM: median-of-N iterations to drop variance and restore a tight (~10%) gate."
+      "NOT a CI gate. This suite is run manually/occasionally (e.g. around a major release) on the maintainer's box; baseline is calibrated to that hardware and is NOT comparable to GitHub-runner numbers. See tools/perf/run_perf_ci.sh header.",
+      "Re-captured 2026-06-07 (P1a): min-of-7 timing (the minimum of 7 reps + 1 warmup, per op) in all three harnesses, at n=100000 (10x the prior 10000). ref_diff/name_tokenized measure the v2 codecs (not comparable to pre-2026-06 v1 numbers).",
+      "regression_threshold_pct tightened 50 -> 15 (P1a): min-of-N + 10x workload cut back-to-back drift on the compute/transport/codec paths to <=8.5%. Two drift runs measured 2026-06-07; full rationale in docs/benchmarks/2026-06-07-perf-min-of-n.md.",
+      "min_abs_ms=5.0: sub-5ms metrics swing +100-266% on pure jitter; the floor reports but never fails a metric when BOTH baseline and new are below it (a sub-floor->above-floor jump still fails).",
+      "metric_overrides: per-metric thresholds for the few inherently-noisy metrics so the tight global gate still applies to everything else. ms.sqlite.write (~15%, fsync) and codecs.rans_o1_decode (~17%) get 30%. encryption.genomic.encrypt/decrypt swing +/-25-85% run-to-run (3.7ms to encrypt 10MB is physically impossible -> the bench measures something degenerate); set to 1000 (report-only) pending a P1d bench-validity fix."
     ]
   },
   "python": {
     "ms.hdf5": {
-      "write": 0.053370626003015786,
-      "read": 0.009611909015802667
+      "write": 0.4785050609789323,
+      "read": 0.03199459600728005
     },
     "ms.memory": {
-      "write": 0.013553425000282004,
-      "read": 0.0008872399921528995
+      "write": 0.0022505980159621686,
+      "read": 0.0010139369987882674
     },
     "ms.sqlite": {
-      "write": 0.045027982007013634,
-      "read": 0.035635348001960665
+      "write": 0.10245384700829163,
+      "read": 0.4817518969939556
     },
     "ms.zarr": {
-      "write": 0.2609742450003978,
-      "read": 0.03864262200659141
+      "write": 0.27970290899975225,
+      "read": 0.1404749980138149
     },
     "transport.plain": {
-      "encode": 0.24771519500063732,
-      "decode": 0.3328378430160228,
-      "src_mb": 0.325096,
-      "mots_mb": 3.570441
+      "encode": 2.437476143008098,
+      "decode": 3.2187564030173235,
+      "src_mb": 2.826898,
+      "mots_mb": 35.700441
     },
     "transport.compressed": {
-      "encode": 0.2417085759807378,
-      "decode": 0.261494890000904,
-      "src_mb": 0.325096,
-      "mots_mb": 2.304445
+      "encode": 2.4503252249851357,
+      "decode": 2.548189616005402,
+      "src_mb": 2.826898,
+      "mots_mb": 23.482851
     },
     "encryption": {
-      "encrypt": 0.255435551982373,
-      "decrypt": 0.13124531201901846,
-      "bytes_mb": 0.325088
+      "encrypt": 2.243924916983815,
+      "decrypt": 1.3398124210070819,
+      "bytes_mb": 2.82689
     },
     "signatures": {
-      "sign": 0.008028520009247586,
-      "verify": 0.004549320001387969
+      "sign": 0.022253429982811213,
+      "verify": 0.022238592995563522
     },
     "jcamp": {
-      "ir_write": 0.005813728988869116,
-      "ir_read": 0.012308517994824797,
-      "raman_write": 0.005592108995188028,
-      "raman_read": 0.01123722200281918,
-      "uvvis_write": 0.006375719007337466,
-      "uvvis_read": 0.012913921003928408,
-      "compressed_read": 0.004250016005244106
+      "ir_write": 0.05660322797484696,
+      "ir_read": 0.12306132397498004,
+      "raman_write": 0.05677920699235983,
+      "raman_read": 0.11351634399034083,
+      "uvvis_write": 0.06312926099053584,
+      "uvvis_read": 0.12974262100760825,
+      "compressed_read": 0.04150347501854412
     },
     "spectra.build": {
-      "ir_build": 0.00015719598741270602,
-      "raman_build": 0.0001223860017489642,
-      "uvvis_build": 0.00010934899910353124,
-      "2dcos_build": 0.00011682300828397274
+      "ir_build": 0.0007113829778973013,
+      "raman_build": 0.0005240739847067744,
+      "uvvis_build": 0.0005004419945180416,
+      "2dcos_build": 0.00023986399173736572
     },
     "codecs": {
-      "rans_o0_encode": 0.006523043004563078,
-      "rans_o0_decode": 0.004998284013709053,
-      "rans_o1_encode": 0.014087679999647662,
-      "rans_o1_decode": 0.02601360098924488,
-      "base_pack_encode": 0.017250080010853708,
-      "base_pack_decode": 0.01400197998736985,
-      "quality_binned_encode": 0.015359551995061338,
-      "quality_binned_decode": 0.0007985559932421893,
-      "name_tokenized_encode": 0.039460387983126566,
-      "name_tokenized_decode": 0.010350614000344649
+      "rans_o0_encode": 0.006107941997470334,
+      "rans_o0_decode": 0.0047671080101281404,
+      "rans_o1_encode": 0.013791297998977825,
+      "rans_o1_decode": 0.02481702098157257,
+      "base_pack_encode": 0.017123963974881917,
+      "base_pack_decode": 0.004889533011009917,
+      "quality_binned_encode": 0.015199220011709258,
+      "quality_binned_decode": 0.0007574280025437474,
+      "name_tokenized_encode": 0.03720380301820114,
+      "name_tokenized_decode": 0.010288577002938837
     },
     "codecs.genomic": {
-      "ref_diff_encode": 0.1816550590156112,
-      "ref_diff_decode": 0.11381825298303738,
-      "fqzcomp_nx16_z_encode": 0.5096508749993518,
-      "fqzcomp_nx16_z_decode": 0.402349971991498,
-      "delta_rans_encode": 0.3538451739877928,
-      "delta_rans_decode": 0.2883865460171364
+      "ref_diff_encode": 0.16023422998841852,
+      "ref_diff_decode": 0.10937434498919174,
+      "fqzcomp_nx16_z_encode": 0.47810242002015,
+      "fqzcomp_nx16_z_decode": 0.3901003880018834,
+      "delta_rans_encode": 0.3371619689860381,
+      "delta_rans_decode": 0.27060861099744216
     },
     "genomic": {
-      "write": 0.9764703889959492,
+      "write": 0.9788123280159198,
       "write_mb": 21.3,
-      "read": 1.9676667019957677,
-      "random_access_p50": 1.8924998585134745e-05,
-      "random_access_p99": 0.0005100519920233637
+      "read": 1.932452954002656,
+      "random_access_p50": 1.8623017240315676e-05,
+      "random_access_p99": 0.0004410390101838857
     },
     "encryption.genomic": {
-      "encrypt": 0.0028288239846006036,
-      "decrypt": 0.0028579600038938224,
+      "encrypt": 0.002592895005363971,
+      "decrypt": 0.0028255229990463704,
       "bytes_mb": 10.48576
     },
     "streaming": {
-      "write": 0.07806499599246308,
-      "read": 0.14016551998793148
+      "write": 0.9417128630157094,
+      "read": 1.371762385009788
     }
   },
   "java": {
     "ms.hdf5": {
-      "write": 0.0494226,
-      "read": 0.0062857
+      "write": 0.4672007,
+      "read": 0.03075
     },
     "ms.memory": {
-      "write": 0.1161899,
-      "read": 0.0013557
+      "write": 0.0002558,
+      "read": 0.0003922
     },
     "ms.sqlite": {
-      "write": 0.1484804,
-      "read": 0.0255535
+      "write": 0.0775257,
+      "read": 0.0154434
     },
     "ms.zarr": {
-      "write": 0.0241617,
-      "read": 0.0167007
+      "write": 0.0529742,
+      "read": 0.0427498
     },
     "transport.plain": {
-      "encode": 0.0681901,
-      "decode": 0.0879534,
-      "src_mb": 8.679795,
-      "mots_mb": 3.53029
+      "encode": 0.1639418,
+      "decode": 0.5098532,
+      "src_mb": 11.136394,
+      "mots_mb": 35.30029
     },
     "transport.compressed": {
-      "encode": 0.131428,
-      "decode": 0.1150117,
-      "src_mb": 8.679795,
-      "mots_mb": 2.264294
+      "encode": 0.9844438,
+      "decode": 0.6666806,
+      "src_mb": 11.136394,
+      "mots_mb": 23.0827
     },
     "encryption": {
-      "encrypt": 0.2462019,
-      "decrypt": 0.0880962,
-      "bytes_mb": 8.679795
+      "encrypt": 0.2663299,
+      "decrypt": 0.1806054,
+      "bytes_mb": 11.136394
     },
     "signatures": {
-      "sign": 0.0108779,
-      "verify": 0.0014367
+      "sign": 0.0064829,
+      "verify": 0.0065257
     },
     "jcamp": {
-      "ir_write": 0.007586,
-      "ir_read": 0.046513,
-      "raman_write": 0.0034754,
-      "raman_read": 0.0186258,
-      "uvvis_write": 0.0060884,
-      "uvvis_read": 0.0205818,
-      "compressed_read": 0.0092105
+      "ir_write": 0.0129628,
+      "ir_read": 0.0484671,
+      "raman_write": 0.0132555,
+      "raman_read": 0.0533253,
+      "uvvis_write": 0.0136517,
+      "uvvis_read": 0.0519071,
+      "compressed_read": 0.0036437
     },
     "spectra.build": {
-      "ir_build": 5.7e-06,
-      "raman_build": 1.5e-06,
-      "uvvis_build": 1.4e-06,
-      "2dcos_build": 0.0005352
+      "ir_build": 5e-07,
+      "raman_build": 4e-07,
+      "uvvis_build": 5e-07,
+      "2dcos_build": 3e-07
     },
     "codecs": {
-      "rans_o0_encode": 0.0211776,
-      "rans_o0_decode": 0.0091913,
-      "rans_o1_encode": 0.0317298,
-      "rans_o1_decode": 0.0366205,
-      "base_pack_encode": 0.0184436,
-      "base_pack_decode": 0.013701,
-      "quality_binned_encode": 0.005537,
-      "quality_binned_decode": 0.0071704,
-      "name_tokenized_encode": 0.0322481,
-      "name_tokenized_decode": 0.0047072
+      "rans_o0_encode": 0.006377,
+      "rans_o0_decode": 0.0053492,
+      "rans_o1_encode": 0.0090182,
+      "rans_o1_decode": 0.0251034,
+      "base_pack_encode": 0.0106435,
+      "base_pack_decode": 0.005562,
+      "quality_binned_encode": 0.0006683,
+      "quality_binned_decode": 0.0004627,
+      "name_tokenized_encode": 0.0200508,
+      "name_tokenized_decode": 0.0046169
     },
     "codecs.genomic": {
-      "ref_diff_encode": 0.1173297,
-      "ref_diff_decode": 0.0985079,
-      "fqzcomp_nx16_z_encode": 0.4423108,
-      "fqzcomp_nx16_z_decode": 0.3941303,
-      "delta_rans_encode": 0.0796881,
-      "delta_rans_decode": 0.047628
+      "ref_diff_encode": 0.1121412,
+      "ref_diff_decode": 0.0887227,
+      "fqzcomp_nx16_z_encode": 0.4237108,
+      "fqzcomp_nx16_z_decode": 0.3862992,
+      "delta_rans_encode": 0.0212854,
+      "delta_rans_decode": 0.0199109
     },
     "genomic": {
-      "write": 0.8718579,
-      "read": 0.663185,
-      "random_access_p50": 0.0003818,
-      "random_access_p99": 0.0004366,
+      "write": 0.7979665,
+      "read": 0.586117,
+      "random_access_p50": 0.0003798,
+      "random_access_p99": 0.0004148,
       "write_mb": 20.207956
     },
     "encryption.genomic": {
-      "encrypt": 0.0274294,
-      "decrypt": 0.0283083,
+      "encrypt": 0.0239948,
+      "decrypt": 0.0296429,
       "bytes_mb": 10.48576
     },
     "streaming": {
-      "write": 0.0174515,
-      "read": 0.0033378
+      "write": 0.0102848,
+      "read": 0.0016883
     }
   },
   "objc": {
     "codecs": {
-      "name_tokenized_decode": 0.00541119,
-      "rans_o0_decode": 0.0043911,
-      "quality_binned_encode": 0.000908182,
-      "rans_o1_decode": 0.012974,
-      "base_pack_decode": 0.000487954,
-      "quality_binned_decode": 0.000917157,
-      "name_tokenized_encode": 0.0290474,
-      "rans_o1_encode": 0.00892449,
-      "base_pack_encode": 0.00207101,
-      "rans_o0_encode": 0.00519841
+      "name_tokenized_decode": 0.00540206,
+      "rans_o0_decode": 0.00435735,
+      "quality_binned_encode": 0.000894577,
+      "rans_o1_decode": 0.0148731,
+      "base_pack_decode": 0.000448339,
+      "quality_binned_decode": 0.000857592,
+      "name_tokenized_encode": 0.0209748,
+      "rans_o1_encode": 0.00856346,
+      "base_pack_encode": 0.00205787,
+      "rans_o0_encode": 0.00510224
     },
     "codecs.genomic": {
-      "delta_rans_encode": 0.0219846,
-      "ref_diff_encode": 0.0946096,
-      "fqzcomp_nx16_z_encode": 0.403322,
-      "ref_diff_decode": 0.0734821,
-      "fqzcomp_nx16_z_decode": 0.354951,
-      "delta_rans_decode": 0.0606501
+      "delta_rans_encode": 0.0215263,
+      "ref_diff_encode": 0.0945559,
+      "fqzcomp_nx16_z_encode": 0.372632,
+      "ref_diff_decode": 0.0727611,
+      "fqzcomp_nx16_z_decode": 0.337481,
+      "delta_rans_decode": 0.0580163
     },
     "encryption": {
-      "encrypt": 0.0878124,
-      "bytes_mb": 0.318739,
-      "decrypt": 0.0668976
+      "encrypt": 0.926353,
+      "bytes_mb": 2.77503,
+      "decrypt": 0.982043
     },
     "encryption.genomic": {
-      "encrypt": 0.00211828,
+      "encrypt": 0.00177291,
       "bytes_mb": 10.4858,
-      "decrypt": 0.00201945
+      "decrypt": 0.00169583
     },
     "genomic": {
       "write_mb": 11.867,
-      "read": 0.16773,
-      "write": 0.841184,
-      "random_access_p99": 0.000439661,
-      "random_access_p50": 0.000387588
+      "read": 0.156204,
+      "write": 0.832754,
+      "random_access_p99": 0.000438139,
+      "random_access_p50": 0.000388969
     },
     "jcamp": {
-      "uvvis_write": 0.00587937,
-      "raman_write": 0.00598439,
-      "uvvis_read": 0.0179148,
-      "compressed_read": 0.00706798,
-      "ir_write": 0.00576082,
-      "ir_read": 0.0179053,
-      "raman_read": 0.0174882
+      "uvvis_write": 0.0597783,
+      "raman_write": 0.0597439,
+      "uvvis_read": 0.19043,
+      "compressed_read": 0.0707698,
+      "ir_write": 0.0567646,
+      "ir_read": 0.177003,
+      "raman_read": 0.173624
     },
     "ms.hdf5": {
-      "read": 0.00580204,
-      "write": 0.0514138
+      "read": 0.0289841,
+      "write": 0.46546
     },
     "ms.memory": {
-      "read": 6.2852e-05,
-      "write": 0.00091449
+      "read": 0.000259192,
+      "write": 0.00825031
     },
     "ms.sqlite": {
-      "read": 0.000611867,
-      "write": 0.0187176
+      "read": 0.00224934,
+      "write": 0.0794374
     },
     "ms.zarr": {
-      "read": 0.0041349,
-      "write": 0.0274227
+      "read": 0.0361814,
+      "write": 0.203739
     },
     "signatures": {
-      "verify": 0.00166469,
-      "sign": 0.00203092
+      "verify": 0.0132649,
+      "sign": 0.0133571
     },
     "spectra.build": {
-      "2dcos_build": 0.000106737,
-      "ir_build": 0.000142685,
-      "uvvis_build": 8.4818e-05,
-      "raman_build": 9.0273e-05
+      "2dcos_build": 0.00088318,
+      "ir_build": 0.0012083,
+      "uvvis_build": 0.000843696,
+      "raman_build": 0.000881368
     },
     "streaming": {
-      "read": 0.0560725,
-      "write": 0.108204
+      "read": 0.559533,
+      "write": 1.12805
     },
     "transport.compressed": {
-      "encode": 0.179504,
-      "decode": 0.0905198,
-      "mots_mb": 2.3043,
-      "src_mb": 0.318747
+      "encode": 1.79745,
+      "decode": 0.868285,
+      "mots_mb": 23.4827,
+      "src_mb": 2.77504
     },
     "transport.plain": {
-      "encode": 0.0997265,
-      "decode": 0.081688,
-      "mots_mb": 3.5703,
-      "src_mb": 0.318747
+      "encode": 0.972848,
+      "decode": 0.767505,
+      "mots_mb": 35.7003,
+      "src_mb": 2.77504
     }
   }
 }

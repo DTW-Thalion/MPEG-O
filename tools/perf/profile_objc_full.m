@@ -57,27 +57,26 @@ static double nowSeconds(void)
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
 }
 
-/* Number of timed repetitions per op (default 5). One warmup is run and
- * discarded before the timed reps; the reported value is the median.
+/* Number of timed repetitions per op (default 7). One warmup is run and
+ * discarded before the timed reps; the reported value is the MINIMUM.
  * Set via the --reps CLI flag before any bench runs. Mirrors the
  * Python (--reps) and Java harnesses so cross-language deltas line up. */
-static int gReps = 5;
+static int gReps = 7;
 
-/* Run op once (warmup, discarded) then `reps` times; return the median elapsed seconds. */
-static double timedMedian(int reps, void (^op)(void)) {
+/* Run op once (warmup, discarded) then `reps` times; return the MINIMUM
+ * elapsed seconds. The min is the least-interfered sample (contention only
+ * ever makes an op slower), so it is the most reproducible estimate of true
+ * cost and cuts run-to-run variance far more than the median did. */
+static double timedMin(int reps, void (^op)(void)) {
     op();  /* warmup, discarded */
-    double *t = malloc(sizeof(double) * reps);
+    double best = INFINITY;
     for (int i = 0; i < reps; i++) {
         double t0 = nowSeconds();
         op();
-        t[i] = nowSeconds() - t0;
+        double dt = nowSeconds() - t0;
+        if (dt < best) best = dt;
     }
-    for (int i = 0; i < reps; i++)              /* insertion sort */
-        for (int j = i + 1; j < reps; j++)
-            if (t[j] < t[i]) { double tmp = t[i]; t[i] = t[j]; t[j] = tmp; }
-    double med = t[reps / 2];
-    free(t);
-    return med;
+    return best;
 }
 
 /* ── Workload builders ─────────────────────────────────────────── */
@@ -295,7 +294,7 @@ static void bench_ms_hdf5(NSString *tmp, NSUInteger n, NSUInteger peaks,
         NSString *path = [tmp stringByAppendingPathComponent:@"ms-hdf5.tio"];
         unlink([path fileSystemRepresentation]);
         TTIOWrittenRun *run = buildMsRun(n, peaks);
-        putSeconds(out, @"write", timedMedian(gReps, ^{
+        putSeconds(out, @"write", timedMin(gReps, ^{
             /* unlink per rep so writeMinimal recreates a fresh file */
             unlink([path fileSystemRepresentation]);
             NSError *err = nil;
@@ -310,7 +309,7 @@ static void bench_ms_hdf5(NSString *tmp, NSUInteger n, NSUInteger peaks,
             if (!ok) { NSLog(@"ms.hdf5 write failed: %@", err); exit(1); }
         }));
 
-        putSeconds(out, @"read", timedMedian(gReps, ^{
+        putSeconds(out, @"read", timedMin(gReps, ^{
             NSError *err = nil;
             TTIOSpectralDataset *back =
                 [TTIOSpectralDataset readFromFilePath:path error:&err];
@@ -339,7 +338,7 @@ static void bench_ms_provider(NSString *tag, NSString *url,
         TTIOWrittenRun *run = buildMsRun(n, peaks);
         /* writeMinimal opens the provider in Create mode, which recreates
          * the backing store each rep, so the write op is rep-safe as-is. */
-        putSeconds(out, @"write", timedMedian(gReps, ^{
+        putSeconds(out, @"write", timedMin(gReps, ^{
             NSError *err = nil;
             BOOL ok = [TTIOSpectralDataset writeMinimalToPath:url
                                                          title:@"stress"
@@ -352,7 +351,7 @@ static void bench_ms_provider(NSString *tag, NSString *url,
             if (!ok) { NSLog(@"%@ write failed: %@", tag, err); exit(1); }
         }));
 
-        putSeconds(out, @"read", timedMedian(gReps, ^{
+        putSeconds(out, @"read", timedMin(gReps, ^{
             NSError *err = nil;
             TTIOSpectralDataset *back =
                 [TTIOSpectralDataset readFromFilePath:url error:&err];
@@ -432,7 +431,7 @@ static void bench_transport(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         /* encode: TransportWriter recreates `mots` each rep (overwrites);
          * ds stays open across reps and is closed afterwards. */
-        putSeconds(out, @"encode", timedMedian(gReps, ^{
+        putSeconds(out, @"encode", timedMin(gReps, ^{
             NSError *e = nil;
             unlink([mots fileSystemRepresentation]);
             TTIOTransportWriter *w = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
@@ -447,7 +446,7 @@ static void bench_transport(NSString *tmp, NSUInteger n, NSUInteger peaks,
         [ds closeFile];
 
         /* decode: TransportReader rewrites `rt` each rep. */
-        putSeconds(out, @"decode", timedMedian(gReps, ^{
+        putSeconds(out, @"decode", timedMin(gReps, ^{
             NSError *e = nil;
             unlink([rt fileSystemRepresentation]);
             TTIOTransportReader *r = [[TTIOTransportReader alloc] initWithInputPath:mots];
@@ -515,13 +514,13 @@ static void bench_encryption(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         /* SPECIAL CASE: encryptFilePath is in-place/consuming — it turns the
          * plaintext `copy` into an encrypted file. It cannot be re-run on an
-         * already-encrypted file, so timedMedian's repeated invocation does
+         * already-encrypted file, so timedMin's repeated invocation does
          * not apply. Mirror the Python/Java special-case: re-stage a fresh
          * plaintext `copy` from `src` BEFORE each timed encrypt (re-stage is
-         * outside the timed window). Inlined median loop (warmup + gReps). */
+         * outside the timed window). Inlined min loop (warmup + gReps). */
         {
             NSFileManager *fm = [NSFileManager defaultManager];
-            double *te = malloc(sizeof(double) * gReps);
+            double encBest = INFINITY;
             for (int rep = -1; rep < gReps; rep++) {   /* rep == -1 is warmup */
                 unlink([copy fileSystemRepresentation]);
                 if (![fm copyItemAtPath:src toPath:copy error:&err]) {
@@ -536,17 +535,13 @@ static void bench_encryption(NSString *tmp, NSUInteger n, NSUInteger peaks,
                     NSLog(@"encrypt failed: %@", err); exit(1);
                 }
                 double dt = nowSeconds() - t0;
-                if (rep >= 0) te[rep] = dt;   /* discard warmup */
+                if (rep >= 0 && dt < encBest) encBest = dt;   /* discard warmup */
             }
-            for (int i = 0; i < gReps; i++)
-                for (int j = i + 1; j < gReps; j++)
-                    if (te[j] < te[i]) { double tmp = te[i]; te[i] = te[j]; te[j] = tmp; }
-            putSeconds(out, @"encrypt", te[gReps / 2]);
-            free(te);
+            putSeconds(out, @"encrypt", encBest);
         }
         /* `copy` is now encrypted (from the last encrypt rep above), so the
          * read-only decryptFilePath can use the generic helper. */
-        putSeconds(out, @"decrypt", timedMedian(gReps, ^{
+        putSeconds(out, @"decrypt", timedMin(gReps, ^{
             NSError *e = nil;
             NSDictionary *dec = [TTIOPerAUFile decryptFilePath:copy
                                                            key:key
@@ -591,7 +586,7 @@ static void bench_signatures(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         /* signDataset deletes any pre-existing signature attribute before
          * writing (idempotent), so repeated invocation is rep-safe. */
-        putSeconds(out, @"sign", timedMedian(gReps, ^{
+        putSeconds(out, @"sign", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOSignatureManager signDataset:dsPath
                                              inFile:src
@@ -601,7 +596,7 @@ static void bench_signatures(NSString *tmp, NSUInteger n, NSUInteger peaks,
             }
         }));
 
-        putSeconds(out, @"verify", timedMedian(gReps, ^{
+        putSeconds(out, @"verify", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOSignatureManager verifyDataset:dsPath
                                                inFile:src
@@ -623,7 +618,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
         NSError *err = nil;
         TTIOIRSpectrum *ir = makeIRSpectrum(n);
         NSString *jdxIR = [tmp stringByAppendingPathComponent:@"ir.jdx"];
-        putSeconds(out, @"ir_write", timedMedian(gReps, ^{
+        putSeconds(out, @"ir_write", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxWriter writeIRSpectrum:ir
                                                toPath:jdxIR
@@ -632,7 +627,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
                 NSLog(@"jcamp ir write failed: %@", e); exit(1);
             }
         }));
-        putSeconds(out, @"ir_read", timedMedian(gReps, ^{
+        putSeconds(out, @"ir_read", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxReader readSpectrumFromPath:jdxIR error:&e]) {
                 NSLog(@"jcamp ir read failed: %@", e); exit(1);
@@ -641,7 +636,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         TTIORamanSpectrum *raman = makeRamanSpectrum(n);
         NSString *jdxR = [tmp stringByAppendingPathComponent:@"raman.jdx"];
-        putSeconds(out, @"raman_write", timedMedian(gReps, ^{
+        putSeconds(out, @"raman_write", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxWriter writeRamanSpectrum:raman
                                                   toPath:jdxR
@@ -650,7 +645,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
                 NSLog(@"jcamp raman write failed: %@", e); exit(1);
             }
         }));
-        putSeconds(out, @"raman_read", timedMedian(gReps, ^{
+        putSeconds(out, @"raman_read", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxReader readSpectrumFromPath:jdxR error:&e]) {
                 NSLog(@"jcamp raman read failed: %@", e); exit(1);
@@ -659,7 +654,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         TTIOUVVisSpectrum *uv = makeUVVisSpectrum(n);
         NSString *jdxU = [tmp stringByAppendingPathComponent:@"uvvis.jdx"];
-        putSeconds(out, @"uvvis_write", timedMedian(gReps, ^{
+        putSeconds(out, @"uvvis_write", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxWriter writeUVVisSpectrum:uv
                                                   toPath:jdxU
@@ -668,7 +663,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
                 NSLog(@"jcamp uvvis write failed: %@", e); exit(1);
             }
         }));
-        putSeconds(out, @"uvvis_read", timedMedian(gReps, ^{
+        putSeconds(out, @"uvvis_read", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxReader readSpectrumFromPath:jdxU error:&e]) {
                 NSLog(@"jcamp uvvis read failed: %@", e); exit(1);
@@ -706,7 +701,7 @@ static void bench_jcamp(NSString *tmp, NSUInteger n, NSUInteger peaks,
         NSString *jdxC = [tmp stringByAppendingPathComponent:@"compressed.jdx"];
         [full writeToFile:jdxC atomically:YES
                  encoding:NSUTF8StringEncoding error:&err];
-        putSeconds(out, @"compressed_read", timedMedian(gReps, ^{
+        putSeconds(out, @"compressed_read", timedMin(gReps, ^{
             NSError *e = nil;
             if (![TTIOJcampDxReader readSpectrumFromPath:jdxC error:&e]) {
                 NSLog(@"jcamp compressed read failed: %@", e); exit(1);
@@ -722,21 +717,21 @@ static void bench_spectra_build(NSString *tmp, NSUInteger n, NSUInteger peaks,
 {
     (void)tmp; (void)peaks;
     @autoreleasepool {
-        putSeconds(out, @"ir_build", timedMedian(gReps, ^{
+        putSeconds(out, @"ir_build", timedMin(gReps, ^{
             (void)makeIRSpectrum(n);
         }));
 
-        putSeconds(out, @"raman_build", timedMedian(gReps, ^{
+        putSeconds(out, @"raman_build", timedMin(gReps, ^{
             (void)makeRamanSpectrum(n);
         }));
 
-        putSeconds(out, @"uvvis_build", timedMedian(gReps, ^{
+        putSeconds(out, @"uvvis_build", timedMin(gReps, ^{
             (void)makeUVVisSpectrum(n);
         }));
 
         NSUInteger m = (NSUInteger)sqrt((double)n);
         if (m < 8) m = 8;
-        putSeconds(out, @"2dcos_build", timedMedian(gReps, ^{
+        putSeconds(out, @"2dcos_build", timedMin(gReps, ^{
             (void)make2DCos(m);
         }));
     }
@@ -870,7 +865,7 @@ static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         /* B2: Write (unlink per rep so writeMinimal recreates the file) */
         NSError *err = nil;
-        putSeconds(out, @"write", timedMedian(gReps, ^{
+        putSeconds(out, @"write", timedMin(gReps, ^{
             NSError *e = nil;
             unlink([path fileSystemRepresentation]);
             BOOL ok = [TTIOSpectralDataset writeMinimalToPath:path
@@ -892,7 +887,7 @@ static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         /* B3: Sequential read-all (sampled). Opens + closes the handle
          * inside the block so each rep reopens cleanly. */
-        putSeconds(out, @"read", timedMedian(gReps, ^{
+        putSeconds(out, @"read", timedMin(gReps, ^{
             NSError *e = nil;
             TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&e];
             if (!ds) { NSLog(@"genomic read open failed: %@", e); exit(1); }
@@ -910,7 +905,7 @@ static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
         /* B4: Random access p50/p99 latency (1000 reads). The per-read
          * latency loop below is itself a distribution measurement, not a
-         * single op, so it is not wrapped in timedMedian. */
+         * single op, so it is not wrapped in timedMin. */
         TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
         if (!ds) { NSLog(@"genomic ra open failed: %@", err); exit(1); }
         TTIOGenomicRun *gr = ds.genomicRuns[@"r"];
@@ -961,7 +956,7 @@ static void bench_encryption_genomic(NSString *tmp, NSUInteger n, NSUInteger pea
         __block NSData *ciphertext = nil;
         __block NSData *iv = nil, *tag = nil;
 
-        putSeconds(out, @"encrypt", timedMedian(gReps, ^{
+        putSeconds(out, @"encrypt", timedMin(gReps, ^{
             NSError *e = nil;
             NSData *liv = nil, *ltag = nil;
             ciphertext = [TTIOEncryptionManager encryptData:payload
@@ -973,7 +968,7 @@ static void bench_encryption_genomic(NSString *tmp, NSUInteger n, NSUInteger pea
             iv = liv; tag = ltag;
         }));
 
-        putSeconds(out, @"decrypt", timedMedian(gReps, ^{
+        putSeconds(out, @"decrypt", timedMin(gReps, ^{
             NSError *e = nil;
             NSData *plaintext = [TTIOEncryptionManager decryptData:ciphertext
                                                            withKey:key
@@ -1027,7 +1022,7 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
         /* B6 write: StreamWriter flush-closes its handle inside the block;
          * unlink streamPath per rep so init starts from a fresh file.
          * srcDs/srcRun stay open across write reps, closed afterwards. */
-        putSeconds(out, @"write", timedMedian(gReps, ^{
+        putSeconds(out, @"write", timedMin(gReps, ^{
             NSError *e = nil;
             unlink([streamPath fileSystemRepresentation]);
             TTIOStreamWriter *writer = [[TTIOStreamWriter alloc]
@@ -1052,7 +1047,7 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
         [srcDs closeFile];
 
         /* B6 read: StreamReader closes its handle inside the block each rep. */
-        putSeconds(out, @"read", timedMedian(gReps, ^{
+        putSeconds(out, @"read", timedMin(gReps, ^{
             NSError *e = nil;
             TTIOStreamReader *reader = [[TTIOStreamReader alloc]
                 initWithFilePath:streamPath
@@ -1102,18 +1097,18 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
         /* encode/decode are pure functions; capture each encoded result via
          * __block so the decode op uses a valid payload across reps. */
         __block NSData *o0 = nil;
-        putSeconds(out, @"rans_o0_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"rans_o0_encode", timedMin(gReps, ^{
             o0 = TTIORansEncode(ransIn, 0);
         }));
-        putSeconds(out, @"rans_o0_decode", timedMedian(gReps, ^{
+        putSeconds(out, @"rans_o0_decode", timedMin(gReps, ^{
             (void)TTIORansDecode(o0, NULL);
         }));
 
         __block NSData *o1 = nil;
-        putSeconds(out, @"rans_o1_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"rans_o1_encode", timedMin(gReps, ^{
             o1 = TTIORansEncode(ransIn, 1);
         }));
-        putSeconds(out, @"rans_o1_decode", timedMedian(gReps, ^{
+        putSeconds(out, @"rans_o1_decode", timedMin(gReps, ^{
             (void)TTIORansDecode(o1, NULL);
         }));
 
@@ -1123,10 +1118,10 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
         unsigned char *bp = bpIn.mutableBytes;
         for (NSUInteger i = 0; i < oneMiB; i++) bp[i] = (unsigned char)alpha[rand() & 3];
         __block NSData *bpEnc = nil;
-        putSeconds(out, @"base_pack_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"base_pack_encode", timedMin(gReps, ^{
             bpEnc = TTIOBasePackEncode(bpIn);
         }));
-        putSeconds(out, @"base_pack_decode", timedMedian(gReps, ^{
+        putSeconds(out, @"base_pack_decode", timedMin(gReps, ^{
             (void)TTIOBasePackDecode(bpEnc, NULL);
         }));
 
@@ -1135,10 +1130,10 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
         unsigned char *qb = qbIn.mutableBytes;
         for (NSUInteger i = 0; i < oneMiB; i++) qb[i] = (unsigned char)(rand() % 94);
         __block NSData *qbEnc = nil;
-        putSeconds(out, @"quality_binned_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"quality_binned_encode", timedMin(gReps, ^{
             qbEnc = TTIOQualityEncode(qbIn);
         }));
-        putSeconds(out, @"quality_binned_decode", timedMedian(gReps, ^{
+        putSeconds(out, @"quality_binned_decode", timedMin(gReps, ^{
             (void)TTIOQualityDecode(qbEnc, NULL);
         }));
 
@@ -1149,10 +1144,10 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
                               (unsigned long)i, rand() % 1000, rand() % 100]];
         }
         __block NSData *ntEnc = nil;
-        putSeconds(out, @"name_tokenized_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"name_tokenized_encode", timedMin(gReps, ^{
             ntEnc = [TTIONameTokenizerV2 encodeNames:names];
         }));
-        putSeconds(out, @"name_tokenized_decode", timedMedian(gReps, ^{
+        putSeconds(out, @"name_tokenized_decode", timedMin(gReps, ^{
             (void)[TTIONameTokenizerV2 decodeData:ntEnc error:NULL];
         }));
     }
@@ -1234,7 +1229,7 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         const NSUInteger rdTotalBases = (NSUInteger)cumOff;
 
         __block NSData *rdEnc = nil;
-        putSeconds(out, @"ref_diff_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"ref_diff_encode", timedMin(gReps, ^{
             NSError *e = nil;
             rdEnc = [TTIORefDiffV2 encodeSequences:seqFlat
                                            offsets:offsets
@@ -1249,7 +1244,7 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         }));
 
         if (rdEnc) {
-            putSeconds(out, @"ref_diff_decode", timedMedian(gReps, ^{
+            putSeconds(out, @"ref_diff_decode", timedMin(gReps, ^{
                 NSError *e = nil;
                 NSData *outSeq = nil;
                 NSData *outOff = nil;
@@ -1295,7 +1290,7 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         }
 
         __block NSData *fqzEnc = nil;
-        putSeconds(out, @"fqzcomp_nx16_z_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"fqzcomp_nx16_z_encode", timedMin(gReps, ^{
             NSError *e = nil;
             fqzEnc = [TTIOFqzcompNx16Z encodeWithQualities:qualities
                                                readLengths:readLengths
@@ -1305,7 +1300,7 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         }));
 
         if (fqzEnc) {
-            putSeconds(out, @"fqzcomp_nx16_z_decode", timedMedian(gReps, ^{
+            putSeconds(out, @"fqzcomp_nx16_z_decode", timedMin(gReps, ^{
                 NSError *e = nil;
                 (void)[TTIOFqzcompNx16Z decodeData:fqzEnc
                                        revcompFlags:revcompFlagsMixed
@@ -1335,14 +1330,14 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
         qsort(drPtr, drCount, sizeof(int64_t), cmp_int64);
 
         __block NSData *drEnc = nil;
-        putSeconds(out, @"delta_rans_encode", timedMedian(gReps, ^{
+        putSeconds(out, @"delta_rans_encode", timedMin(gReps, ^{
             NSError *e = nil;
             drEnc = TTIODeltaRansEncode(drData, 8, &e);
             if (!drEnc) NSLog(@"delta_rans encode failed: %@", e);
         }));
 
         if (drEnc) {
-            putSeconds(out, @"delta_rans_decode", timedMedian(gReps, ^{
+            putSeconds(out, @"delta_rans_decode", timedMin(gReps, ^{
                 NSError *e = nil;
                 (void)TTIODeltaRansDecode(drEnc, &e);
                 if (e) NSLog(@"delta_rans decode error: %@", e);

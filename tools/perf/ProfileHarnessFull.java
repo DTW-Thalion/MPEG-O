@@ -8,7 +8,7 @@
  * and spectrum-class construction (Raman/IR/UV-Vis/2D-COS).
  *
  * Runs are warmed up once to let HotSpot compile, then each
- * op is timed as the median of N reps (--reps, default 5) with a
+ * op is timed as the minimum of N reps (--reps, default 7) with a
  * per-op warmup discarded, to reduce run-to-run variance. Results
  * are emitted as a formatted table on stdout and optionally as JSON.
  *
@@ -66,24 +66,27 @@ import java.util.UUID;
 
 public final class ProfileHarnessFull {
 
-    /** Number of timed repetitions per op (median is reported). Default 5. */
-    static int REPS = 5;
+    /** Number of timed repetitions per op (the minimum is reported). Default 7. */
+    static int REPS = 7;
 
     /**
      * Run {@code op} once (warmup, discarded) then {@code reps} times;
-     * return the median elapsed milliseconds. Reduces single-iteration
-     * run-to-run variance. Mirrors the Python harness (warmup + median).
+     * return the MINIMUM elapsed milliseconds. The min is the
+     * least-interfered sample (contention only ever makes an op slower),
+     * so it is the most reproducible estimate of true cost and cuts
+     * run-to-run variance far more than the median did. Mirrors the
+     * Python harness (warmup + min).
      */
-    static double timedMedianMs(int reps, Runnable op) {
+    static double timedMinMs(int reps, Runnable op) {
         op.run(); // warmup, discarded
-        double[] ms = new double[reps];
+        double best = Double.POSITIVE_INFINITY;
         for (int i = 0; i < reps; i++) {
             long s = System.nanoTime();
             op.run();
-            ms[i] = (System.nanoTime() - s) / 1e6;
+            double ms = (System.nanoTime() - s) / 1e6;
+            if (ms < best) best = ms;
         }
-        java.util.Arrays.sort(ms);
-        return ms[ms.length / 2];
+        return best;
     }
 
     // ── Workload builders ────────────────────────────────────────────
@@ -165,7 +168,7 @@ public final class ProfileHarnessFull {
 
         // write: HDF5/sqlite/zarr create truncates; memory:// re-creates.
         // try-with-resources closes the dataset each rep -> rep-safe.
-        r.timingMs("write", timedMedianMs(REPS, () -> {
+        r.timingMs("write", timedMinMs(REPS, () -> {
             try (SpectralDataset ds = SpectralDataset.create(
                     fUrl, "stress", "ISA-PERF",
                     List.of(run), List.of(), List.of(), List.of())) {
@@ -175,7 +178,7 @@ public final class ProfileHarnessFull {
 
         // read: pure open + sample, rep-safe.
         final long[] sampledBox = {0};
-        r.timingMs("read", timedMedianMs(REPS, () -> {
+        r.timingMs("read", timedMinMs(REPS, () -> {
             long sampled = 0;
             try (SpectralDataset ds = SpectralDataset.open(fUrl)) {
                 AcquisitionRun back = ds.msRuns().get("r");
@@ -209,7 +212,7 @@ public final class ProfileHarnessFull {
         final boolean fComp = useCompression;
         // encode: newOutputStream truncates the .mots each rep; src opened
         // read-only and closed via try-with-resources -> rep-safe.
-        r.timingMs("encode", timedMedianMs(REPS, () -> {
+        r.timingMs("encode", timedMinMs(REPS, () -> {
             try (SpectralDataset srcDs = SpectralDataset.open(fSrc.toString())) {
                 try (java.io.OutputStream out = Files.newOutputStream(motsPath);
                      TransportWriter tw = new TransportWriter(out)) {
@@ -224,7 +227,7 @@ public final class ProfileHarnessFull {
         final byte[] motsBytes = Files.readAllBytes(motsPath);
         // decode: materializeTo returns an open dataset (closed each rep via
         // try-with-resources); rtPath is HDF5-truncated each rep -> rep-safe.
-        r.timingMs("decode", timedMedianMs(REPS, () -> {
+        r.timingMs("decode", timedMinMs(REPS, () -> {
             try (TransportReader tr = new TransportReader(motsBytes)) {
                 try (SpectralDataset rtDs = tr.materializeTo(rtPath.toString())) {
                     // close writes
@@ -253,19 +256,18 @@ public final class ProfileHarnessFull {
         // so it is NOT re-runnable on the same path. Re-target a fresh copy
         // of the plaintext src per rep so each rep encrypts virgin input.
         // The per-rep copy is staged OUTSIDE the timed window so only the
-        // encrypt op is measured (inlined median; the helper would time the
-        // copy too). Includes a discarded warmup rep, matching timedMedianMs.
+        // encrypt op is measured (inlined min; the helper would time the
+        // copy too). Includes a discarded warmup rep, matching timedMinMs.
         final Path encCopy = tmp.resolve("enc-copy.tio");
-        double[] encMs = new double[REPS];
+        double encBest = Double.POSITIVE_INFINITY;
         for (int rep = -1; rep < REPS; rep++) {
             Files.copy(src, encCopy, StandardCopyOption.REPLACE_EXISTING);
             long es = System.nanoTime();
             PerAUFile.encryptFile(encCopy.toString(), key, false, "hdf5");
             double elapsed = (System.nanoTime() - es) / 1e6;
-            if (rep >= 0) encMs[rep] = elapsed; // rep == -1 is warmup
+            if (rep >= 0 && elapsed < encBest) encBest = elapsed; // rep == -1 is warmup
         }
-        Arrays.sort(encMs);
-        r.timingMs("encrypt", encMs[encMs.length / 2]);
+        r.timingMs("encrypt", encBest);
 
         // decrypt: read-only over a stable encrypted file -> rep-safe.
         // (encCopy is left encrypted by the last encrypt rep above.)
@@ -273,7 +275,7 @@ public final class ProfileHarnessFull {
         Files.copy(encCopy, decCopy, StandardCopyOption.REPLACE_EXISTING);
         final Map<String, PerAUFile.DecryptedRun>[] plainBox =
                 new Map[]{ java.util.Map.of() };
-        r.timingMs("decrypt", timedMedianMs(REPS, () -> {
+        r.timingMs("decrypt", timedMinMs(REPS, () -> {
             plainBox[0] = PerAUFile.decryptFile(decCopy.toString(), key, "hdf5");
         }));
         if (plainBox[0].isEmpty()) throw new IllegalStateException("decrypt empty");
@@ -296,13 +298,13 @@ public final class ProfileHarnessFull {
 
         final byte[] fData = data;
         final String[] sigBox = {null};
-        r.timingMs("sign", timedMedianMs(REPS, () -> {
+        r.timingMs("sign", timedMinMs(REPS, () -> {
             sigBox[0] = SignatureManager.sign(fData, key);
         }));
         final String sig = sigBox[0];
 
         final boolean[] okBox = {false};
-        r.timingMs("verify", timedMedianMs(REPS, () -> {
+        r.timingMs("verify", timedMinMs(REPS, () -> {
             okBox[0] = SignatureManager.verify(fData, sig, key);
         }));
         if (!okBox[0]) throw new IllegalStateException("verify failed");
@@ -324,11 +326,11 @@ public final class ProfileHarnessFull {
                 IRMode.ABSORBANCE, 4.0, 32L);
         final Path jdxIr = tmp.resolve("ir.jdx");
         // writes overwrite the same path (truncate-safe); reads pure -> rep-safe.
-        r.timingMs("ir_write", timedMedianMs(REPS, () -> {
+        r.timingMs("ir_write", timedMinMs(REPS, () -> {
             try { JcampDxWriter.writeIRSpectrum(ir, jdxIr, "perf IR"); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
-        r.timingMs("ir_read", timedMedianMs(REPS, () -> {
+        r.timingMs("ir_read", timedMinMs(REPS, () -> {
             try { JcampDxReader.readSpectrum(jdxIr); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
@@ -343,11 +345,11 @@ public final class ProfileHarnessFull {
         final RamanSpectrum raman = new RamanSpectrum(wnR, yR, 0, 0.0,
                 785.0, 20.0, 5.0);
         final Path jdxR = tmp.resolve("raman.jdx");
-        r.timingMs("raman_write", timedMedianMs(REPS, () -> {
+        r.timingMs("raman_write", timedMinMs(REPS, () -> {
             try { JcampDxWriter.writeRamanSpectrum(raman, jdxR, "perf Raman"); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
-        r.timingMs("raman_read", timedMedianMs(REPS, () -> {
+        r.timingMs("raman_read", timedMinMs(REPS, () -> {
             try { JcampDxReader.readSpectrum(jdxR); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
@@ -361,11 +363,11 @@ public final class ProfileHarnessFull {
         }
         final UVVisSpectrum uvvis = new UVVisSpectrum(wl, abs, 0, 0.0, 1.0, "methanol");
         final Path jdxU = tmp.resolve("uvvis.jdx");
-        r.timingMs("uvvis_write", timedMedianMs(REPS, () -> {
+        r.timingMs("uvvis_write", timedMinMs(REPS, () -> {
             try { JcampDxWriter.writeUVVisSpectrum(uvvis, jdxU, "perf UV-Vis"); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
-        r.timingMs("uvvis_read", timedMedianMs(REPS, () -> {
+        r.timingMs("uvvis_read", timedMinMs(REPS, () -> {
             try { JcampDxReader.readSpectrum(jdxU); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
@@ -394,7 +396,7 @@ public final class ProfileHarnessFull {
           + "##END=\n";
         final Path jdxC = tmp.resolve("compressed.jdx");
         Files.writeString(jdxC, jdx);
-        r.timingMs("compressed_read", timedMedianMs(REPS, () -> {
+        r.timingMs("compressed_read", timedMinMs(REPS, () -> {
             try { JcampDxReader.readSpectrum(jdxC); }
             catch (Exception e) { throw new RuntimeException(e); }
         }));
@@ -413,20 +415,20 @@ public final class ProfileHarnessFull {
             y[i] = 0.5;
         }
         // pure constructors -> rep-safe.
-        r.timingMs("ir_build", timedMedianMs(REPS, () ->
+        r.timingMs("ir_build", timedMinMs(REPS, () ->
             new IRSpectrum(wn, y, 0, 0.0, IRMode.ABSORBANCE, 4.0, 32L)));
 
-        r.timingMs("raman_build", timedMedianMs(REPS, () ->
+        r.timingMs("raman_build", timedMinMs(REPS, () ->
             new RamanSpectrum(wn, y, 0, 0.0, 785.0, 20.0, 5.0)));
 
-        r.timingMs("uvvis_build", timedMedianMs(REPS, () ->
+        r.timingMs("uvvis_build", timedMinMs(REPS, () ->
             new UVVisSpectrum(wn, y, 0, 0.0, 1.0, "methanol")));
 
         final int m = Math.max(8, (int) Math.sqrt(n));
         final double[] sync = new double[m * m];
         final double[] asyncM = new double[m * m];
         for (int i = 0; i < m * m; i++) { sync[i] = Math.cos(i); asyncM[i] = Math.sin(i); }
-        r.timingMs("2dcos_build", timedMedianMs(REPS, () ->
+        r.timingMs("2dcos_build", timedMinMs(REPS, () ->
             new TwoDimensionalCorrelationSpectrum(
                 sync, asyncM, m,
                 new AxisDescriptor("wavenumber", "1/cm",
@@ -451,17 +453,17 @@ public final class ProfileHarnessFull {
         // All codec ops below are pure (no shared mutable state) -> rep-safe.
 
         final byte[][] o0Box = new byte[1][];
-        r.timingMs("rans_o0_encode", timedMedianMs(REPS, () ->
+        r.timingMs("rans_o0_encode", timedMinMs(REPS, () ->
             o0Box[0] = global.thalion.ttio.codecs.Rans.encode(ransIn, 0)));
         final byte[] o0 = o0Box[0];
-        r.timingMs("rans_o0_decode", timedMedianMs(REPS, () ->
+        r.timingMs("rans_o0_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.Rans.decode(o0)));
 
         final byte[][] o1Box = new byte[1][];
-        r.timingMs("rans_o1_encode", timedMedianMs(REPS, () ->
+        r.timingMs("rans_o1_encode", timedMinMs(REPS, () ->
             o1Box[0] = global.thalion.ttio.codecs.Rans.encode(ransIn, 1)));
         final byte[] o1 = o1Box[0];
-        r.timingMs("rans_o1_decode", timedMedianMs(REPS, () ->
+        r.timingMs("rans_o1_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.Rans.decode(o1)));
 
         // BASE_PACK on pure ACGT.
@@ -469,20 +471,20 @@ public final class ProfileHarnessFull {
         final byte[] bpIn = new byte[oneMiB];
         for (int i = 0; i < oneMiB; i++) bpIn[i] = alphabet[rng.nextInt(4)];
         final byte[][] bpBox = new byte[1][];
-        r.timingMs("base_pack_encode", timedMedianMs(REPS, () ->
+        r.timingMs("base_pack_encode", timedMinMs(REPS, () ->
             bpBox[0] = global.thalion.ttio.codecs.BasePack.encode(bpIn)));
         final byte[] bpEnc = bpBox[0];
-        r.timingMs("base_pack_decode", timedMedianMs(REPS, () ->
+        r.timingMs("base_pack_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.BasePack.decode(bpEnc)));
 
         // QUALITY_BINNED on random Phred bytes.
         final byte[] qbIn = new byte[oneMiB];
         for (int i = 0; i < oneMiB; i++) qbIn[i] = (byte) rng.nextInt(94);
         final byte[][] qbBox = new byte[1][];
-        r.timingMs("quality_binned_encode", timedMedianMs(REPS, () ->
+        r.timingMs("quality_binned_encode", timedMinMs(REPS, () ->
             qbBox[0] = global.thalion.ttio.codecs.Quality.encode(qbIn)));
         final byte[] qbEnc = qbBox[0];
-        r.timingMs("quality_binned_decode", timedMedianMs(REPS, () ->
+        r.timingMs("quality_binned_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.Quality.decode(qbEnc)));
 
         // NAME_TOKENIZED: 10K Illumina-style names.
@@ -492,10 +494,10 @@ public final class ProfileHarnessFull {
                     i, rng.nextInt(1000), rng.nextInt(100)));
         }
         final byte[][] ntBox = new byte[1][];
-        r.timingMs("name_tokenized_encode", timedMedianMs(REPS, () ->
+        r.timingMs("name_tokenized_encode", timedMinMs(REPS, () ->
             ntBox[0] = global.thalion.ttio.codecs.NameTokenizerV2.encode(names)));
         final byte[] ntEnc = ntBox[0];
-        r.timingMs("name_tokenized_decode", timedMedianMs(REPS, () ->
+        r.timingMs("name_tokenized_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.NameTokenizerV2.decode(ntEnc)));
 
         return r;
@@ -562,12 +564,12 @@ public final class ProfileHarnessFull {
         final long fTotalBasesRd = totalBasesRd;
 
         final byte[][] rdBox = new byte[1][];
-        r.timingMs("ref_diff_encode", timedMedianMs(REPS, () ->
+        r.timingMs("ref_diff_encode", timedMinMs(REPS, () ->
             rdBox[0] = global.thalion.ttio.codecs.RefDiffV2.encode(
                 fSeqsFlat, fOffsetsRd, fPositionsRd, cigarsArr,
                 fRefSeq, fRefMd5, refUri, 10_000)));
         final byte[] rdEnc = rdBox[0];
-        r.timingMs("ref_diff_decode", timedMedianMs(REPS, () ->
+        r.timingMs("ref_diff_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.RefDiffV2.decode(
                 rdEnc, fPositionsRd, cigarsArr, fRefSeq, fNReadsRd, fTotalBasesRd)));
 
@@ -588,11 +590,11 @@ public final class ProfileHarnessFull {
         for (int i = 0; i < 100_000; i++) revcompZ[i] = ((i & 7) == 0) ? 1 : 0;
 
         final byte[][] fqzBox = new byte[1][];
-        r.timingMs("fqzcomp_nx16_z_encode", timedMedianMs(REPS, () ->
+        r.timingMs("fqzcomp_nx16_z_encode", timedMinMs(REPS, () ->
             fqzBox[0] = global.thalion.ttio.codecs.FqzcompNx16Z.encode(
                 fQuals, readLengths, revcompZ)));
         final byte[] fqzZEnc = fqzBox[0];
-        r.timingMs("fqzcomp_nx16_z_decode", timedMedianMs(REPS, () ->
+        r.timingMs("fqzcomp_nx16_z_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.FqzcompNx16Z.decode(fqzZEnc, revcompZ)));
 
         // ── DELTA_RANS: 1.25M sorted int64 positions ──
@@ -609,10 +611,10 @@ public final class ProfileHarnessFull {
         final byte[] drInput = bb.array();
 
         final byte[][] drBox = new byte[1][];
-        r.timingMs("delta_rans_encode", timedMedianMs(REPS, () ->
+        r.timingMs("delta_rans_encode", timedMinMs(REPS, () ->
             drBox[0] = global.thalion.ttio.codecs.DeltaRans.encode(drInput, 8)));
         final byte[] drEnc = drBox[0];
-        r.timingMs("delta_rans_decode", timedMedianMs(REPS, () ->
+        r.timingMs("delta_rans_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.DeltaRans.decode(drEnc)));
 
         return r;
@@ -683,7 +685,7 @@ public final class ProfileHarnessFull {
         final int n = 100_000;
         final WrittenGenomicRun gr = makeGenomicRun();
         // write: HDF5 create truncates each rep; dataset closed -> rep-safe.
-        r.timingMs("write", timedMedianMs(REPS, () -> {
+        r.timingMs("write", timedMinMs(REPS, () -> {
             try (SpectralDataset ds = SpectralDataset.create(
                     tio.toString(), "perf-genomic", "ISA-GENOMIC-PERF",
                     List.of(), List.of(gr),
@@ -694,7 +696,7 @@ public final class ProfileHarnessFull {
         }));
         r.size("write_mb", Files.size(tio));
         // read: open + sequential readAt, closed each rep -> rep-safe.
-        r.timingMs("read", timedMedianMs(REPS, () -> {
+        r.timingMs("read", timedMinMs(REPS, () -> {
             try (SpectralDataset ds = SpectralDataset.open(tio.toString())) {
                 GenomicRun run = ds.genomicRuns().get("genomic_0001");
                 for (int i = 0; i < n; i++) {
@@ -732,11 +734,11 @@ public final class ProfileHarnessFull {
         // pure AES-GCM encrypt/decrypt (no shared state) -> rep-safe.
         final EncryptionManager.EncryptResult[] erBox =
                 new EncryptionManager.EncryptResult[1];
-        r.timingMs("encrypt", timedMedianMs(REPS, () ->
+        r.timingMs("encrypt", timedMinMs(REPS, () ->
             erBox[0] = EncryptionManager.encrypt(plaintext, key)));
         final EncryptionManager.EncryptResult er = erBox[0];
         final byte[][] decBox = new byte[1][];
-        r.timingMs("decrypt", timedMedianMs(REPS, () ->
+        r.timingMs("decrypt", timedMinMs(REPS, () ->
             decBox[0] = EncryptionManager.decrypt(
                 er.ciphertext(), er.iv(), er.tag(), key)));
         if (decBox[0].length != tenMiB) throw new IllegalStateException("decrypt length mismatch");
@@ -754,7 +756,7 @@ public final class ProfileHarnessFull {
         final InstrumentConfig ic = new InstrumentConfig("", "", "", "", "", "");
         // write: StreamWriter create truncates the .tio each rep; closed via
         // flushAndClose + try-with-resources -> rep-safe.
-        r.timingMs("write", timedMedianMs(REPS, () -> {
+        r.timingMs("write", timedMinMs(REPS, () -> {
             try (StreamWriter sw = new StreamWriter(
                     tio.toString(), "stream_run",
                     AcquisitionMode.MS1_DDA, ic)) {
@@ -773,7 +775,7 @@ public final class ProfileHarnessFull {
             } catch (Exception e) { throw new RuntimeException(e); }
         }));
         // read: StreamReader open + drain, closed each rep -> rep-safe.
-        r.timingMs("read", timedMedianMs(REPS, () -> {
+        r.timingMs("read", timedMinMs(REPS, () -> {
             try (StreamReader sr = new StreamReader(tio.toString(), "stream_run")) {
                 while (!sr.atEnd()) {
                     sr.nextSpectrum();

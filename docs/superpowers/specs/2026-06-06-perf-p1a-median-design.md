@@ -73,3 +73,51 @@ data-supported value); numbers report updated. One PR.
 ## Out of scope (later P1 sub-cycles)
 P1b Java transport-input alignment; P1c real-format import benches (BAM/mzML/nmrML); P1d PQC
 + mate_info_v2 benches; P1e cross-SDK perf-parity check.
+
+---
+
+## Addendum (2026-06-07) — empirical pivot: min-of-N + floor + 10× + two-tier, manual-only
+
+Implementation surfaced data that overturned the central assumption above (median-of-N
+would *enable* a ~15% gate). What the measurements showed, and the resulting design:
+
+1. **Median-of-N was insufficient.** After porting median-of-5 to all three harnesses and
+   re-baselining, two back-to-back drift runs (identical code) still showed worst
+   regression-direction drift of **18.6%** and **50.4%** on a real 24ms op
+   (`delta_rans_decode`). The dev box's between-run jitter alone reaches ~50%; median within
+   a single run cannot remove it. The 50% P0 gate was already flaky (both runs FAILed).
+
+2. **Switched median → min-of-N (default reps 5 → 7).** The minimum is the least-interfered
+   sample (contention only ever makes an op slower), so it is the most reproducible estimate
+   of true cost. This cut the noisy-metric count from 32 to ~8 and brought the compute/codec
+   metrics (where real algorithmic regressions show up) to ~6–18% drift.
+
+3. **Added an absolute floor (`_meta.min_abs_ms`, 5ms).** Sub-ms metrics
+   (`spectra.build.*` ~0.0001ms, `ms.memory.*`) swing +100–266% on pure noise. The floor
+   suppresses a metric only when BOTH baseline and new are below it, so a genuine
+   sub-floor→above-floor jump still fails. Implemented + unit-tested in `compare_baseline.py`.
+
+4. **Bigger workload (`PERF_N` 10000 → 100000).** 10× lengthens ops so fixed jitter is a
+   smaller fraction. This stabilised most storage I/O to <3% (`ms.zarr.write` 35%→2%,
+   `ms.hdf5.*`, `ms.sqlite.*`, `jcamp.raman/uvvis_read` ~40%→<1%). A small enumerable tail
+   stays ~30–40% regardless (`ms.zarr.read`, `jcamp.ir_*` — `ir` is first-in-group and eats
+   cold-cache cost): irreducible OS page-cache/ordering jitter on a shared Windows/WSL box.
+
+5. **Two-tier threshold (`_meta.metric_overrides`).** A tight global threshold gates the
+   compute-bound metrics that matter; a small documented per-metric override (~50%) covers
+   the inherently-noisy storage reads so they can't force the global gate loose. Standard
+   practice for perf bots (V8/Chromium). Implemented + unit-tested in `compare_baseline.py`.
+
+6. **Removed from CI; now manual-only.** `baseline.json` is calibrated to the maintainer's
+   local box; GitHub `ubuntu-latest` runners are noisier and would produce non-comparable
+   numbers. The `perf-regression` job is deleted from `.github/workflows/ci.yml`; the suite
+   is run manually/occasionally (e.g. around a major release) via
+   `bash tools/perf/run_perf_ci.sh` on the box that captured the baseline. Removing the
+   runtime constraint is what made the 10× workload affordable.
+
+**Revised success criteria:** min-of-7 in all three harnesses (`--reps`, default 7);
+`compare_baseline.py` gains `min_abs_ms` floor + `metric_overrides` (both unit-tested);
+`PERF_N`/`PERF_PEAKS` configurable (default 100000/16); baseline re-captured at 10×; global
+threshold set to the data-supported value with a short, documented override list for the
+noisy storage reads; perf job removed from CI and documented as a manual command; numbers
+report written. One PR.
