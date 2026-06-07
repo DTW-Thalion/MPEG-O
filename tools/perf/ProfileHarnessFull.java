@@ -432,10 +432,10 @@ public final class ProfileHarnessFull {
                     i, rng.nextInt(1000), rng.nextInt(100)));
         }
         t = System.nanoTime();
-        byte[] ntEnc = global.thalion.ttio.codecs.NameTokenizer.encode(names);
+        byte[] ntEnc = global.thalion.ttio.codecs.NameTokenizerV2.encode(names);
         r.timings.put("name_tokenized_encode", (System.nanoTime() - t) / 1e6);
         t = System.nanoTime();
-        global.thalion.ttio.codecs.NameTokenizer.decode(ntEnc);
+        global.thalion.ttio.codecs.NameTokenizerV2.decode(ntEnc);
         r.timings.put("name_tokenized_decode", (System.nanoTime() - t) / 1e6);
 
         return r;
@@ -478,13 +478,31 @@ public final class ProfileHarnessFull {
         java.util.List<String> cigarsRd = new java.util.ArrayList<>(nReadsRd);
         for (int i = 0; i < nReadsRd; i++) cigarsRd.add(readLen + "M");
 
+        // REF_DIFF v2 wants a flat concatenated sequences buffer plus an
+        // offsets table of n_reads + 1 cumulative read starts.
+        long totalBasesRd = 0;
+        for (byte[] seq : seqsRd) totalBasesRd += seq.length;
+        byte[] seqsFlat = new byte[(int) totalBasesRd];
+        long[] offsetsRd = new long[nReadsRd + 1];
+        int flatPos = 0;
+        for (int i = 0; i < nReadsRd; i++) {
+            byte[] seq = seqsRd.get(i);
+            System.arraycopy(seq, 0, seqsFlat, flatPos, seq.length);
+            flatPos += seq.length;
+            offsetsRd[i + 1] = flatPos;
+        }
+        String[] cigarsArr = cigarsRd.toArray(new String[0]);
+        String refUri = "synthetic://perf-ref";
+
         t = System.nanoTime();
-        byte[] rdEnc = global.thalion.ttio.codecs.RefDiff.encode(
-                seqsRd, cigarsRd, positionsRd, refSeq, refMd5, "perf-ref");
+        byte[] rdEnc = global.thalion.ttio.codecs.RefDiffV2.encode(
+                seqsFlat, offsetsRd, positionsRd, cigarsArr,
+                refSeq, refMd5, refUri, 10_000);
         r.timings.put("ref_diff_encode", (System.nanoTime() - t) / 1e6);
 
         t = System.nanoTime();
-        global.thalion.ttio.codecs.RefDiff.decode(rdEnc, cigarsRd, positionsRd, refSeq);
+        global.thalion.ttio.codecs.RefDiffV2.decode(
+                rdEnc, positionsRd, cigarsArr, refSeq, nReadsRd, totalBasesRd);
         r.timings.put("ref_diff_decode", (System.nanoTime() - t) / 1e6);
 
         // ── Quality test data: 100K × 100bp quality strings ──

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # run_perf_ci.sh — V2 perf-regression CI orchestrator.
 #
-# Runs the Python and ObjC multi-function perf harnesses, then diffs
-# the output against tools/perf/baseline.json via compare_baseline.py.
-# Java is intentionally absent in v1: ProfileHarnessFull emits
-# tabular text + JFR, not JSON; adding JSON output is a V2.1
-# follow-up.
+# Runs the Python, ObjC, and Java multi-function perf harnesses, then
+# diffs the output against tools/perf/baseline.json via
+# compare_baseline.py. All three SDKs run and are gated: each leg that
+# is not explicitly skipped must produce a full.json, and a regression
+# beyond threshold in any of them fails the run.
 #
 # Exit status is propagated from compare_baseline.py:
 #   0 — no regression
@@ -70,6 +70,19 @@ if [ "$run_java" = "1" ]; then
     fi
     "$here/build_and_run_java_full.sh" --n 10000 --peaks 16
 fi
+
+# Fail loudly if a SDK that ran produced no full.json (e.g. the harness
+# silently errored out). Without this, the orchestrator would happily
+# "compare" against an empty/missing file and the CI gate would go green
+# while measuring nothing.
+for pair in "python:$PYTHON_OUT" "objc:$OBJC_OUT" "java:$JAVA_OUT"; do
+    lang="${pair%%:*}"; dir="${pair#*:}"
+    eval "ran=\$run_$lang"
+    if [ "$ran" = "1" ] && [ ! -s "$dir/full.json" ]; then
+        echo "[perf-ci] ERROR: $lang harness produced no $dir/full.json" >&2
+        exit 1
+    fi
+done
 
 new_args=()
 [ "$run_python" = "1" ] && new_args+=(--new "$PYTHON_OUT/full.json:python")
