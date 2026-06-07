@@ -80,6 +80,19 @@
     // semantics in TTIOAcquisitionRun).
     NSMutableDictionary<NSString *, NSData *> *_decryptedChannels;
 
+    // Perf (Fix #1): lazy per-channel full-column cache for read-only
+    // disk-backed runs. spectrumAtIndex: previously issued one HDF5
+    // hyperslab read per channel per spectrum (~200k round-trips for a
+    // 100k-AU 2-channel run). On first access of a channel we read the
+    // WHOLE float64 column once via the storage protocol's readAll: and
+    // retain it here, then slice element-wise — byte-identical to the
+    // prior per-slice read (readAll and readSliceAtOffset:count: return
+    // the same packed-LE bytes; M43 cross-backend identity covers this).
+    // Java loads all channels at open; this loads only accessed channels,
+    // lazily. Invalidated by -releaseHDF5Handles / -reattachSignalHandles
+    // so it can never serve stale bytes after the dataset handles change.
+    NSMutableDictionary<NSString *, NSData *> *_cachedFullChannels;
+
     // Persistence context attached post-load for protocol encryption
     NSString *_persistenceFilePath;
     NSString *_persistenceRunName;
@@ -989,15 +1002,43 @@
             d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
                                length:(NSUInteger)len * sizeof(double)];
         } else {
-            // route the hot spectrum read through the
-            // storage protocol instead of TTIOHDF5Dataset directly.
-            // Works uniformly across HDF5/Memory/SQLite backends;
-            // M43's cross-backend byte-identity tests guarantee
-            // equivalence.
-            id<TTIOStorageDataset> ds = _storageDatasets[chName];
-            d = [ds readSliceAtOffset:(NSUInteger)off
-                                 count:(NSUInteger)len
-                                 error:error];
+            // Fix #1: lazy whole-column cache. On a miss, read the entire
+            // channel column ONCE via the storage protocol's readAll: and
+            // retain it; on a hit (and after the first miss) slice it
+            // element-wise with the SAME base+off*sizeof(double) /
+            // len*sizeof(double) logic the cached branches above use. The
+            // sliced bytes are byte-identical to the prior per-spectrum
+            // readSliceAtOffset:count: read (readAll and the hyperslab
+            // read both return packed little-endian float64), eliminating
+            // ~one HDF5 hyperslab round-trip per channel per spectrum.
+            // Works uniformly across HDF5/Memory/SQLite backends; M43's
+            // cross-backend byte-identity tests guarantee equivalence.
+            // @synchronized(self) guards lazy population so concurrent
+            // first reads can't race on the mutable cache.
+            NSData *full = _cachedFullChannels[chName];
+            if (!full) {
+                @synchronized (self) {
+                    full = _cachedFullChannels[chName];
+                    if (!full) {
+                        id<TTIOStorageDataset> ds = _storageDatasets[chName];
+                        full = [ds readAll:error];
+                        if (full) {
+                            if (!_cachedFullChannels) {
+                                _cachedFullChannels =
+                                    [NSMutableDictionary dictionary];
+                            }
+                            _cachedFullChannels[chName] = full;
+                        }
+                    }
+                }
+            }
+            if (full) {
+                const uint8_t *base = (const uint8_t *)full.bytes;
+                d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
+                                   length:(NSUInteger)len * sizeof(double)];
+            } else {
+                d = nil;  // readAll: failed; *error already set
+            }
         }
         if (!d) return nil;
         TTIOSignalArray *sa = [[TTIOSignalArray alloc] initWithBuffer:d
@@ -1163,6 +1204,9 @@
 {
     _storageDatasets     = nil;
     _storageSignalGroup  = nil;
+    // Fix #1: drop the whole-column cache when the backing handles go
+    // away so it can never serve bytes from a closed/replaced dataset.
+    @synchronized (self) { _cachedFullChannels = nil; }
 }
 
 #pragma mark - TTIOProvenanceable
@@ -1273,6 +1317,10 @@
     }
     _storageSignalGroup = channels;
     _storageDatasets    = datasets;
+    // Fix #1: the datasets were just rebuilt from a reopened file; any
+    // previously cached columns belonged to the old handles. Invalidate
+    // so the next read repopulates from the fresh datasets.
+    @synchronized (self) { _cachedFullChannels = nil; }
     return YES;
 }
 
