@@ -43,9 +43,14 @@ static NSError *makeErr(NSInteger code, NSString *fmt, ...)
     if ((self = [super init])) {
         _offset = offset;
         _length = length;
-        _iv = [iv copy];
-        _tag = [tag copy];
-        _ciphertext = [ciphertext copy];
+        // Retain (not copy): the properties are declared `strong` and the
+        // per-AU encrypt loop hands us freshly allocated, never-mutated
+        // NSData (fresh random IV, fresh GCM tag, fresh ciphertext buffer
+        // per AU — no reused mutable buffer). A defensive copy would be
+        // ~600K redundant small-NSData copies per encryption run.
+        _iv = iv;
+        _tag = tag;
+        _ciphertext = ciphertext;
     }
     return self;
 }
@@ -56,9 +61,11 @@ static NSError *makeErr(NSInteger code, NSString *fmt, ...)
 - (instancetype)initWithIV:(NSData *)iv tag:(NSData *)tag ciphertext:(NSData *)ciphertext
 {
     if ((self = [super init])) {
-        _iv = [iv copy];
-        _tag = [tag copy];
-        _ciphertext = [ciphertext copy];
+        // Retain (not copy): properties are `strong`; the header-segment
+        // encrypt loop supplies fresh, never-mutated NSData per row.
+        _iv = iv;
+        _tag = tag;
+        _ciphertext = ciphertext;
     }
     return self;
 }
@@ -351,8 +358,10 @@ static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
                 if (!ct) { failed = YES; }
             }
             if (!failed) {
-                // -initWithOffset:... copies iv/tag/ciphertext, so the segment
-                // owns its own NSData and is safe once this pool drains.
+                // -initWithOffset:... retains (strong) iv/tag/ciphertext.
+                // Each is freshly allocated this iteration and never mutated,
+                // so the segment safely owns them once this pool drains; the
+                // strong refs keep them alive past the autoreleasepool.
                 TTIOChannelSegment *seg =
                     [[TTIOChannelSegment alloc] initWithOffset:offsets[i]
                                                           length:lengths[i]

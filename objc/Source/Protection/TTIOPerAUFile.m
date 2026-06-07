@@ -18,6 +18,7 @@
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"
 #import "Dataset/TTIOCompoundIO.h"
+#import "Dataset/TTIOCompoundIO+Internal.h"
 #import "Genomics/TTIOGenomicIndex.h"  // TTIOOffsetsFromLengths (v1.10 #10)
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
@@ -151,23 +152,43 @@ static BOOL writeChannelSegments(id<TTIOStorageGroup> parent,
     if ([parent hasChildNamed:name]) {
         if (![parent deleteChildNamed:name error:error]) return NO;
     }
-    id<TTIOStorageDataset> ds =
-        [parent createCompoundDatasetNamed:name
-                                      fields:channelSegmentsFields()
-                                       count:segments.count
-                                       error:error];
-    if (!ds) return NO;
-    NSMutableArray *rows = [NSMutableArray arrayWithCapacity:segments.count];
-    for (TTIOChannelSegment *seg in segments) {
-        [rows addObject:@{
-            @"offset": @(seg.offset),
-            @"length": @(seg.length),
-            @"iv": seg.iv,
-            @"tag": seg.tag,
-            @"ciphertext": seg.ciphertext,
-        }];
+
+    // Column-oriented write: build the 5 columns in one pass over the
+    // segments and hand them to TTIOCompoundIO writeColumnar, avoiding the
+    // per-row NSDictionary + NSNumber boxing of the old writeGeneric path.
+    //   - offset/length -> packed C arrays (int64 / uint32), zero boxing.
+    //   - iv/tag/ciphertext -> NSArray<NSData*> referencing seg.* directly
+    //     (no copy; writeColumnar borrows the bytes zero-copy and keeps the
+    //     NSData alive through the single bulk H5Dwrite).
+    NSUInteger n = segments.count;
+    NSMutableData *offsetCol = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableData *lengthCol = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    int64_t  *offsetPtr = (int64_t  *)offsetCol.mutableBytes;
+    uint32_t *lengthPtr = (uint32_t *)lengthCol.mutableBytes;
+    NSMutableArray<NSData *> *ivCol  = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray<NSData *> *tagCol = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray<NSData *> *ctCol  = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        TTIOChannelSegment *seg = segments[i];
+        offsetPtr[i] = (int64_t)seg.offset;
+        lengthPtr[i] = seg.length;
+        [ivCol  addObject:seg.iv];
+        [tagCol addObject:seg.tag];
+        [ctCol  addObject:seg.ciphertext];
     }
-    return [ds writeAll:rows error:error];
+
+    return [TTIOCompoundIO writeColumnar:@{
+                @"offset":     offsetCol,
+                @"length":     lengthCol,
+                @"iv":         ivCol,
+                @"tag":        tagCol,
+                @"ciphertext": ctCol,
+            }
+                              intoGroup:parent
+                           datasetNamed:name
+                                 fields:channelSegmentsFields()
+                                  count:n
+                                  error:error];
 }
 
 // Compound-dataset reads go through TTIOCompoundIO's

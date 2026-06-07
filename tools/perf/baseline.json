@@ -238,102 +238,102 @@
   },
   "objc": {
     "codecs": {
-      "name_tokenized_decode": 0.00542984,
-      "rans_o0_decode": 0.00435436,
-      "quality_binned_encode": 0.00089026,
-      "rans_o1_decode": 0.0123372,
-      "base_pack_decode": 0.000445523,
-      "quality_binned_decode": 0.000864921,
-      "name_tokenized_encode": 0.02151,
-      "rans_o1_encode": 0.0085447,
-      "base_pack_encode": 0.00205832,
-      "rans_o0_encode": 0.00509367
+      "name_tokenized_decode": 0.00546349,
+      "rans_o0_decode": 0.00434952,
+      "quality_binned_encode": 0.000897745,
+      "rans_o1_decode": 0.0123084,
+      "base_pack_decode": 0.000441924,
+      "quality_binned_decode": 0.000858139,
+      "name_tokenized_encode": 0.0209854,
+      "rans_o1_encode": 0.00857447,
+      "base_pack_encode": 0.00205067,
+      "rans_o0_encode": 0.00509573
     },
     "codecs.genomic": {
-      "ref_diff_encode": 0.0950907,
-      "delta_rans_encode": 0.021567,
-      "fqzcomp_nx16_z_decode": 0.336468,
-      "delta_rans_decode": 0.0574931,
-      "ref_diff_decode": 0.0729602,
-      "mate_info_v2_encode": 0.00339066,
-      "fqzcomp_nx16_z_encode": 0.375623,
-      "mate_info_v2_decode": 0.00274078
+      "ref_diff_encode": 0.0951698,
+      "delta_rans_encode": 0.0215893,
+      "fqzcomp_nx16_z_decode": 0.337393,
+      "delta_rans_decode": 0.0566343,
+      "ref_diff_decode": 0.0730175,
+      "mate_info_v2_encode": 0.00336283,
+      "fqzcomp_nx16_z_encode": 0.371794,
+      "mate_info_v2_decode": 0.0027421
     },
     "encryption": {
-      "encrypt": 0.687745,
+      "encrypt": 0.575821,
       "bytes_mb": 2.74369,
-      "decrypt": 0.659931
+      "decrypt": 0.659017
     },
     "encryption.genomic": {
-      "encrypt": 0.0297834,
+      "encrypt": 0.0296706,
       "bytes_mb": 67.1089,
-      "decrypt": 0.0295324
+      "decrypt": 0.0296608
     },
     "genomic": {
       "write_mb": 11.867,
-      "read": 0.156642,
-      "write": 0.832637,
-      "random_access_p99": 0.000506802,
-      "random_access_p50": 0.000394773
+      "read": 0.156925,
+      "write": 0.827716,
+      "random_access_p99": 0.000472558,
+      "random_access_p50": 0.000390168
     },
     "import": {
-      "nmrml": 0.0011417,
-      "mzml_1min": 0.00421902,
-      "bam": 0.112056,
-      "mzml_tiny": 0.000564157
+      "nmrml": 0.00113942,
+      "mzml_1min": 0.00420384,
+      "bam": 0.111832,
+      "mzml_tiny": 0.000573941
     },
     "jcamp": {
-      "uvvis_write": 0.0593728,
-      "raman_write": 0.0600961,
-      "uvvis_read": 0.186535,
-      "compressed_read": 0.0706231,
-      "ir_write": 0.0576497,
-      "ir_read": 0.177599,
-      "raman_read": 0.1743
+      "uvvis_write": 0.0599476,
+      "raman_write": 0.0600461,
+      "uvvis_read": 0.190031,
+      "compressed_read": 0.0705643,
+      "ir_write": 0.0571312,
+      "ir_read": 0.177557,
+      "raman_read": 0.173704
     },
     "ms.hdf5": {
-      "read": 0.0382745,
-      "write": 0.46815
+      "read": 0.0372997,
+      "write": 0.469581
     },
     "ms.memory": {
-      "read": 0.000269544,
-      "write": 0.00824944
+      "read": 0.000266399,
+      "write": 0.00847942
     },
     "ms.sqlite": {
-      "read": 0.00230048,
-      "write": 0.0794724
+      "read": 0.0022849,
+      "write": 0.0797065
     },
     "ms.zarr": {
-      "read": 0.0369882,
-      "write": 0.202977
+      "read": 0.0367079,
+      "write": 0.208213
     },
     "signatures": {
-      "verify": 0.0132234,
-      "sign": 0.0133666
+      "verify": 0.0132773,
+      "sign": 0.0133018
     },
     "signatures.pqc": {
-      "verify": 4.8041e-05,
-      "sign": 6.1249e-05
+      "verify": 4.8195e-05,
+      "sign": 6.1235e-05
     },
     "spectra.build": {
-      "2dcos_build": 0.00089437,
-      "ir_build": 0.00121548,
-      "uvvis_build": 0.000858264,
-      "raman_build": 0.00088797
+      "2dcos_build": 0.000893877,
+      "ir_build": 0.00121052,
+      "uvvis_build": 0.000843159,
+      "raman_build": 0.000880801
     },
     "streaming": {
-      "read": 0.244792,
-      "write": 0.791503
+      "read": 0.245483,
+      "write": 0.791433
     },
     "transport.compressed": {
-      "encode": 1.43909,
-      "decode": 0.871348,
+      "encode": 1.4482,
+      "decode": 0.872045,
       "mots_mb": 23.4827,
       "src_mb": 2.74369
     },
     "transport.plain": {
-      "encode": 0.625444,
-      "decode": 0.775223,
+      "encode": 0.638223,
+      "decode": 0.782687,
       "mots_mb": 35.7003,
       "src_mb": 2.74369
     }
