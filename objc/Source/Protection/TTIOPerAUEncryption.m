@@ -87,6 +87,122 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
 }
 
 
+// ---------------------------------------------------------------- ctx-reuse helpers
+//
+// These perform the SAME AES-256-GCM operation as the public single-shot
+// methods, but operate on a caller-owned EVP_CIPHER_CTX so it can be reused
+// across a per-AU loop. The caller is responsible for EVP_CIPHER_CTX_new/free.
+// Re-running EVP_{Enc,Dec}ryptInit_ex(ctx, cipher, NULL, key, iv) fully resets
+// the GCM state for a new message, so output is byte-identical to a freshly
+// allocated context (each AU still uses its own fresh IV — IV derivation is
+// unchanged). The cipher pointer (EVP_aes_256_gcm()) and the explicit
+// SET_IVLEN=12 are repeated each call to mirror the single-shot init order.
+
+static NSData *ttioGCMEncryptWithCtx(EVP_CIPHER_CTX *ctx,
+                                     NSData *plaintext, NSData *key, NSData *iv,
+                                     NSData *aad, NSData **outTag, NSError **error)
+{
+    if (key.length != 32) {
+        if (error) *error = makeErr(kErrCrypto,
+            @"AES-256-GCM key must be 32 bytes, got %lu", (unsigned long)key.length);
+        return nil;
+    }
+    if (iv.length != 12) {
+        if (error) *error = makeErr(kErrCrypto,
+            @"IV must be 12 bytes, got %lu", (unsigned long)iv.length);
+        return nil;
+    }
+
+    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1 ||
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1 ||
+        EVP_EncryptInit_ex(ctx, NULL, NULL, key.bytes, iv.bytes) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptInit_ex failed");
+        return nil;
+    }
+
+    int outLen = 0;
+    if (aad.length > 0) {
+        if (EVP_EncryptUpdate(ctx, NULL, &outLen, aad.bytes, (int)aad.length) != 1) {
+            if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptUpdate(aad) failed");
+            return nil;
+        }
+    }
+
+    NSMutableData *out = [NSMutableData dataWithLength:plaintext.length + 16];
+    int totalLen = 0;
+    if (EVP_EncryptUpdate(ctx, out.mutableBytes, &outLen,
+                            plaintext.bytes, (int)plaintext.length) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptUpdate failed");
+        return nil;
+    }
+    totalLen = outLen;
+    if (EVP_EncryptFinal_ex(ctx, (uint8_t *)out.mutableBytes + totalLen, &outLen) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptFinal_ex failed");
+        return nil;
+    }
+    totalLen += outLen;
+    out.length = (NSUInteger)totalLen;
+
+    uint8_t tag[16];
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_CTRL_GCM_GET_TAG failed");
+        return nil;
+    }
+
+    if (outTag) *outTag = [NSData dataWithBytes:tag length:16];
+    return out;
+}
+
+static NSData *ttioGCMDecryptWithCtx(EVP_CIPHER_CTX *ctx,
+                                     NSData *ciphertext, NSData *key, NSData *iv,
+                                     NSData *tag, NSData *aad, NSError **error)
+{
+    if (key.length != 32 || iv.length != 12 || tag.length != 16) {
+        if (error) *error = makeErr(kErrCrypto,
+            @"bad key/iv/tag lengths: key=%lu iv=%lu tag=%lu",
+            (unsigned long)key.length, (unsigned long)iv.length,
+            (unsigned long)tag.length);
+        return nil;
+    }
+
+    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1 ||
+        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1 ||
+        EVP_DecryptInit_ex(ctx, NULL, NULL, key.bytes, iv.bytes) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_DecryptInit_ex failed");
+        return nil;
+    }
+
+    int outLen = 0;
+    if (aad.length > 0) {
+        if (EVP_DecryptUpdate(ctx, NULL, &outLen, aad.bytes, (int)aad.length) != 1) {
+            if (error) *error = makeErr(kErrCrypto, @"EVP_DecryptUpdate(aad) failed");
+            return nil;
+        }
+    }
+
+    NSMutableData *out = [NSMutableData dataWithLength:ciphertext.length];
+    int totalLen = 0;
+    if (EVP_DecryptUpdate(ctx, out.mutableBytes, &outLen,
+                            ciphertext.bytes, (int)ciphertext.length) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_DecryptUpdate failed");
+        return nil;
+    }
+    totalLen = outLen;
+
+    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void *)tag.bytes) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_CTRL_GCM_SET_TAG failed");
+        return nil;
+    }
+    if (EVP_DecryptFinal_ex(ctx, (uint8_t *)out.mutableBytes + totalLen, &outLen) != 1) {
+        if (error) *error = makeErr(kErrCrypto, @"AES-GCM authentication failed");
+        return nil;
+    }
+    totalLen += outLen;
+    out.length = (NSUInteger)totalLen;
+    return out;
+}
+
+
 // ---------------------------------------------------------------- impl
 
 @implementation TTIOPerAUEncryption
@@ -142,63 +258,10 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
                             outTag:(NSData **)outTag
                              error:(NSError **)error
 {
-    if (key.length != 32) {
-        if (error) *error = makeErr(kErrCrypto,
-            @"AES-256-GCM key must be 32 bytes, got %lu", (unsigned long)key.length);
-        return nil;
-    }
-    if (iv.length != 12) {
-        if (error) *error = makeErr(kErrCrypto,
-            @"IV must be 12 bytes, got %lu", (unsigned long)iv.length);
-        return nil;
-    }
-
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) { if (error) *error = makeErr(kErrCrypto, @"EVP_CIPHER_CTX_new failed"); return nil; }
-
-    if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1 ||
-        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1 ||
-        EVP_EncryptInit_ex(ctx, NULL, NULL, key.bytes, iv.bytes) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptInit_ex failed");
-        return nil;
-    }
-
-    int outLen = 0;
-    if (aad.length > 0) {
-        if (EVP_EncryptUpdate(ctx, NULL, &outLen, aad.bytes, (int)aad.length) != 1) {
-            EVP_CIPHER_CTX_free(ctx);
-            if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptUpdate(aad) failed");
-            return nil;
-        }
-    }
-
-    NSMutableData *out = [NSMutableData dataWithLength:plaintext.length + 16];
-    int totalLen = 0;
-    if (EVP_EncryptUpdate(ctx, out.mutableBytes, &outLen,
-                            plaintext.bytes, (int)plaintext.length) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptUpdate failed");
-        return nil;
-    }
-    totalLen = outLen;
-    if (EVP_EncryptFinal_ex(ctx, (uint8_t *)out.mutableBytes + totalLen, &outLen) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_EncryptFinal_ex failed");
-        return nil;
-    }
-    totalLen += outLen;
-    out.length = (NSUInteger)totalLen;
-
-    uint8_t tag[16];
-    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_CTRL_GCM_GET_TAG failed");
-        return nil;
-    }
+    NSData *out = ttioGCMEncryptWithCtx(ctx, plaintext, key, iv, aad, outTag, error);
     EVP_CIPHER_CTX_free(ctx);
-
-    if (outTag) *outTag = [NSData dataWithBytes:tag length:16];
     return out;
 }
 
@@ -209,56 +272,9 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
                                 aad:(NSData *)aad
                               error:(NSError **)error
 {
-    if (key.length != 32 || iv.length != 12 || tag.length != 16) {
-        if (error) *error = makeErr(kErrCrypto,
-            @"bad key/iv/tag lengths: key=%lu iv=%lu tag=%lu",
-            (unsigned long)key.length, (unsigned long)iv.length,
-            (unsigned long)tag.length);
-        return nil;
-    }
-
     EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
     if (!ctx) { if (error) *error = makeErr(kErrCrypto, @"EVP_CIPHER_CTX_new failed"); return nil; }
-
-    if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), NULL, NULL, NULL) != 1 ||
-        EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN, 12, NULL) != 1 ||
-        EVP_DecryptInit_ex(ctx, NULL, NULL, key.bytes, iv.bytes) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_DecryptInit_ex failed");
-        return nil;
-    }
-
-    int outLen = 0;
-    if (aad.length > 0) {
-        if (EVP_DecryptUpdate(ctx, NULL, &outLen, aad.bytes, (int)aad.length) != 1) {
-            EVP_CIPHER_CTX_free(ctx);
-            if (error) *error = makeErr(kErrCrypto, @"EVP_DecryptUpdate(aad) failed");
-            return nil;
-        }
-    }
-
-    NSMutableData *out = [NSMutableData dataWithLength:ciphertext.length];
-    int totalLen = 0;
-    if (EVP_DecryptUpdate(ctx, out.mutableBytes, &outLen,
-                            ciphertext.bytes, (int)ciphertext.length) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_DecryptUpdate failed");
-        return nil;
-    }
-    totalLen = outLen;
-
-    if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG, 16, (void *)tag.bytes) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"EVP_CTRL_GCM_SET_TAG failed");
-        return nil;
-    }
-    if (EVP_DecryptFinal_ex(ctx, (uint8_t *)out.mutableBytes + totalLen, &outLen) != 1) {
-        EVP_CIPHER_CTX_free(ctx);
-        if (error) *error = makeErr(kErrCrypto, @"AES-GCM authentication failed");
-        return nil;
-    }
-    totalLen += outLen;
-    out.length = (NSUInteger)totalLen;
+    NSData *out = ttioGCMDecryptWithCtx(ctx, ciphertext, key, iv, tag, aad, error);
     EVP_CIPHER_CTX_free(ctx);
     return out;
 }
@@ -303,33 +319,54 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
             @"bytesPerElement must be > 0");
         return nil;
     }
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:nSpectra];
+    // Strong accumulator declared outside the per-AU autoreleasepool so the
+    // appended segments survive each iteration's pool drain (ARC retains them).
+    NSMutableArray<TTIOChannelSegment *> *out =
+        [NSMutableArray arrayWithCapacity:nSpectra];
     const uint8_t *all = (const uint8_t *)plaintext.bytes;
-    for (NSUInteger i = 0; i < nSpectra; i++) {
-        NSUInteger byteOffset = (NSUInteger)offsets[i] * bpe;
-        NSUInteger byteLength = (NSUInteger)lengths[i] * bpe;
-        NSData *chunk = [NSData dataWithBytes:all + byteOffset length:byteLength];
-        NSData *aad = [self aadForChannel:channelName
-                                  datasetId:datasetId
-                                 auSequence:(uint32_t)i];
-        NSData *iv = [self randomIVWithError:error];
-        if (!iv) return nil;
-        NSData *tag = nil;
-        NSData *ct = [self encryptWithPlaintext:chunk
-                                             key:key
-                                              iv:iv
-                                             aad:aad
-                                          outTag:&tag
-                                           error:error];
-        if (!ct) return nil;
-        TTIOChannelSegment *seg =
-            [[TTIOChannelSegment alloc] initWithOffset:offsets[i]
-                                                  length:lengths[i]
-                                                      iv:iv
-                                                     tag:tag
-                                              ciphertext:ct];
-        [out addObject:seg];
+
+    // One cipher context reused across the whole loop (re-keyed per AU inside
+    // ttioGCMEncryptWithCtx) instead of new/free per AU. Output is identical.
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_CIPHER_CTX_new failed");
+        return nil;
     }
+
+    BOOL failed = NO;
+    for (NSUInteger i = 0; i < nSpectra; i++) {
+        @autoreleasepool {
+            NSUInteger byteOffset = (NSUInteger)offsets[i] * bpe;
+            NSUInteger byteLength = (NSUInteger)lengths[i] * bpe;
+            NSData *chunk = [NSData dataWithBytes:all + byteOffset length:byteLength];
+            NSData *aad = [self aadForChannel:channelName
+                                      datasetId:datasetId
+                                     auSequence:(uint32_t)i];
+            NSData *iv = [self randomIVWithError:error];
+            if (!iv) { failed = YES; }
+            NSData *tag = nil;
+            NSData *ct = nil;
+            if (!failed) {
+                ct = ttioGCMEncryptWithCtx(ctx, chunk, key, iv, aad, &tag, error);
+                if (!ct) { failed = YES; }
+            }
+            if (!failed) {
+                // -initWithOffset:... copies iv/tag/ciphertext, so the segment
+                // owns its own NSData and is safe once this pool drains.
+                TTIOChannelSegment *seg =
+                    [[TTIOChannelSegment alloc] initWithOffset:offsets[i]
+                                                          length:lengths[i]
+                                                              iv:iv
+                                                             tag:tag
+                                                      ciphertext:ct];
+                [out addObject:seg];
+            }
+        }
+        if (failed) break;
+    }
+
+    EVP_CIPHER_CTX_free(ctx);
+    if (failed) return nil;
     return out;
 }
 
@@ -360,28 +397,44 @@ static void appendU32LE(NSMutableData *d, uint32_t v)
         return nil;
     }
     NSMutableData *out = [NSMutableData data];
-    for (NSUInteger i = 0; i < segments.count; i++) {
-        TTIOChannelSegment *seg = segments[i];
-        NSData *aad = [self aadForChannel:channelName
-                                  datasetId:datasetId
-                                 auSequence:(uint32_t)i];
-        NSData *plain = [self decryptWithCiphertext:seg.ciphertext
-                                                  key:key
-                                                   iv:seg.iv
-                                                  tag:seg.tag
-                                                  aad:aad
-                                                error:error];
-        if (!plain) return nil;
-        if (plain.length != (NSUInteger)seg.length * bpe) {
-            if (error) *error = makeErr(kErrCrypto,
-                @"channel %@ segment %lu: decrypted %lu bytes, expected %lu",
-                channelName, (unsigned long)i,
-                (unsigned long)plain.length,
-                (unsigned long)((NSUInteger)seg.length * bpe));
-            return nil;
-        }
-        [out appendData:plain];
+
+    // One cipher context reused across the loop (re-keyed per AU inside
+    // ttioGCMDecryptWithCtx) instead of new/free per segment.
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) {
+        if (error) *error = makeErr(kErrCrypto, @"EVP_CIPHER_CTX_new failed");
+        return nil;
     }
+
+    BOOL failed = NO;
+    for (NSUInteger i = 0; i < segments.count; i++) {
+        @autoreleasepool {
+            TTIOChannelSegment *seg = segments[i];
+            NSData *aad = [self aadForChannel:channelName
+                                      datasetId:datasetId
+                                     auSequence:(uint32_t)i];
+            NSData *plain = ttioGCMDecryptWithCtx(ctx, seg.ciphertext, key,
+                                                  seg.iv, seg.tag, aad, error);
+            if (!plain) {
+                failed = YES;
+            } else if (plain.length != (NSUInteger)seg.length * bpe) {
+                if (error) *error = makeErr(kErrCrypto,
+                    @"channel %@ segment %lu: decrypted %lu bytes, expected %lu",
+                    channelName, (unsigned long)i,
+                    (unsigned long)plain.length,
+                    (unsigned long)((NSUInteger)seg.length * bpe));
+                failed = YES;
+            } else {
+                // -appendData: copies the bytes into 'out' (declared outside
+                // the pool), so the plaintext survives this pool drain.
+                [out appendData:plain];
+            }
+        }
+        if (failed) break;
+    }
+
+    EVP_CIPHER_CTX_free(ctx);
+    if (failed) return nil;
     return out;
 }
 

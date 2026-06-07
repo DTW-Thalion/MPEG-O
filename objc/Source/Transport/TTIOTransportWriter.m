@@ -1637,9 +1637,27 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
             [run valueForKey:@"channelNames"] ?: @[@"mz", @"intensity"];
         NSUInteger count = [run count];
         for (NSUInteger i = 0; i < count; i++) {
-            TTIOSpectrum *sp = [run objectAtIndex:i];
-            TTIOAccessUnit *au = accessUnitFromSpectrum(sp, run, channelNames, _useCompression);
-            if (![self writeAccessUnit:au datasetId:did auSequence:(uint32_t)i error:error]) return NO;
+            // Fix #3b: drain the per-AU transient objects (spectrum,
+            // access unit, channel payloads, sliced NSData) each
+            // iteration instead of letting ~1M autoreleased temporaries
+            // accumulate until the whole walk finishes. The output is
+            // committed to the strong _sink inside writeAccessUnit: before
+            // the pool drains, so nothing needed survives only as an
+            // autoreleased object across the boundary. On failure we
+            // retain the error past the drain and break out.
+            __block BOOL ok = YES;
+            __block NSError *auError = nil;
+            @autoreleasepool {
+                TTIOSpectrum *sp = [run objectAtIndex:i];
+                TTIOAccessUnit *au = accessUnitFromSpectrum(sp, run, channelNames, _useCompression);
+                NSError *localErr = nil;
+                ok = [self writeAccessUnit:au datasetId:did auSequence:(uint32_t)i error:&localErr];
+                if (!ok) auError = localErr;  // retained out of the pool
+            }
+            if (!ok) {
+                if (error) *error = auError;
+                return NO;
+            }
         }
         if (![self writeEndOfDatasetWithDatasetId:did
                                   finalAUSequence:(uint32_t)count
