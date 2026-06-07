@@ -25,6 +25,7 @@
 #import <time.h>
 #import <math.h>
 #import <unistd.h>
+#include <hdf5.h>
 
 #import "Core/TTIOSignalArray.h"
 #import "Dataset/TTIOSpectralDataset.h"
@@ -55,6 +56,42 @@ static double nowSeconds(void)
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (double)ts.tv_sec + (double)ts.tv_nsec / 1e9;
+}
+
+/* H5Ovisit callback: sum H5Dget_storage_size over every dataset object.
+ * op_data is a hsize_t* accumulator. */
+static herr_t sumStorageCb(hid_t obj, const char *name,
+                            const H5O_info2_t *info, void *op_data)
+{
+    if (info->type == H5O_TYPE_DATASET) {
+        hid_t did = H5Dopen2(obj, name, H5P_DEFAULT);
+        if (did >= 0) {
+            *(hsize_t *)op_data += H5Dget_storage_size(did);
+            H5Dclose(did);
+        }
+    }
+    return 0;  /* H5_ITER_CONT */
+}
+
+/* Sum of on-disk (compressed) storage over every dataset in a .tio.
+ *
+ * Reports the real allocated byte cost of the data, not the HDF5 FILE
+ * size — Java's HDF5 layer adds an ~8 MB metadata-aggregation block to
+ * every file, so file-size massively overstates and is not comparable
+ * to the other SDKs as a "source size". Walking with H5Ovisit and
+ * summing H5Dget_storage_size (compressed allocated bytes per dataset)
+ * gives an honest, methodologically-identical size across Python/Java/
+ * ObjC. See issue #251. Returns BYTES. */
+static double compressedStorageMb(NSString *path)
+{
+    hid_t fid = H5Fopen([path fileSystemRepresentation],
+                        H5F_ACC_RDONLY, H5P_DEFAULT);
+    if (fid < 0) return 0.0;
+    hsize_t total = 0;
+    H5Ovisit(fid, H5_INDEX_NAME, H5_ITER_NATIVE, sumStorageCb, &total,
+             H5O_INFO_BASIC);
+    H5Fclose(fid);
+    return (double)total / 1e6;
 }
 
 /* Number of timed repetitions per op (default 7). One warmup is run and
@@ -455,12 +492,11 @@ static void bench_transport(NSString *tmp, NSUInteger n, NSUInteger peaks,
             }
         }));
 
-        NSDictionary *srcAttrs  = [[NSFileManager defaultManager]
-            attributesOfItemAtPath:src error:NULL];
         NSDictionary *motsAttrs = [[NSFileManager defaultManager]
             attributesOfItemAtPath:mots error:NULL];
-        putSeconds(out, @"src_mb",
-                    ((NSNumber *)srcAttrs[NSFileSize]).doubleValue / 1e6);
+        /* src_mb: sum of compressed dataset storage, not container file size
+         * (cross-SDK honest size; file size includes meta overhead). #251 */
+        putSeconds(out, @"src_mb", compressedStorageMb(src));
         putSeconds(out, @"mots_mb",
                     ((NSNumber *)motsAttrs[NSFileSize]).doubleValue / 1e6);
     }
@@ -550,10 +586,9 @@ static void bench_encryption(NSString *tmp, NSUInteger n, NSUInteger peaks,
             if (!dec) { NSLog(@"decrypt failed: %@", e); exit(1); }
         }));
 
-        NSDictionary *attrs = [[NSFileManager defaultManager]
-            attributesOfItemAtPath:src error:NULL];
-        putSeconds(out, @"bytes_mb",
-                    ((NSNumber *)attrs[NSFileSize]).doubleValue / 1e6);
+        /* bytes_mb: sum of compressed dataset storage, not container file
+         * size (cross-SDK honest size; file size includes meta overhead). #251 */
+        putSeconds(out, @"bytes_mb", compressedStorageMb(src));
     }
 }
 
