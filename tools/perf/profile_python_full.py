@@ -754,12 +754,13 @@ def bench_genomic_write_read(tmp: Path, _n: int) -> dict[str, float]:
 
 
 def bench_encryption_genomic(_tmp: Path, _n: int) -> dict[str, float]:
-    """AES-256-GCM encrypt/decrypt on a 10 MiB payload (V10 B5).
+    """AES-256-GCM encrypt/decrypt on a 64 MiB payload (V10 B5).
 
     Confirms no size-dependent perf cliff vs. the existing ~0.33 MiB
-    spectral encryption benchmark.
+    spectral encryption benchmark. 64 MiB (P1d) keeps the op well above
+    the 5ms jitter floor so the min-of-N timing is stable.
     """
-    payload_size = 10 * 1024 * 1024  # 10 MiB
+    payload_size = 64 * 1024 * 1024  # 64 MiB
     rng = np.random.default_rng(42)
     payload = rng.integers(0, 256, size=payload_size, dtype=np.uint8).tobytes()
     key = bytes(range(32))

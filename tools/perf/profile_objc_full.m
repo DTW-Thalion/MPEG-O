@@ -968,14 +968,16 @@ static void bench_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
     }
 }
 
-/* B5: Encryption -- AES-256-GCM on 10 MiB payload */
+/* B5: Encryption -- AES-256-GCM on 64 MiB payload */
 
 static void bench_encryption_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
                                       NSMutableDictionary *out)
 {
     (void)tmp; (void)n; (void)peaks;
     @autoreleasepool {
-        const NSUInteger payloadBytes = 10 * 1024 * 1024;
+        /* 64 MiB (P1d): keeps the op well above the 5ms jitter floor so the
+         * min-of-N timing is stable (10 MiB was a sub-5ms op on AES-NI). */
+        const NSUInteger payloadBytes = 64 * 1024 * 1024;
 
         NSMutableData *payload = [NSMutableData dataWithLength:payloadBytes];
         uint8_t *pp = payload.mutableBytes;

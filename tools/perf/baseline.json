@@ -8,8 +8,6 @@
     "regression_threshold_pct": 15.0,
     "min_abs_ms": 5.0,
     "metric_overrides": {
-      "encryption.genomic.encrypt": 1000.0,
-      "encryption.genomic.decrypt": 1000.0,
       "ms.sqlite.write": 30.0,
       "codecs.rans_o1_decode": 30.0
     },
@@ -20,7 +18,7 @@
       "Re-captured 2026-06-07 (P1a): min-of-7 timing (the minimum of 7 reps + 1 warmup, per op) in all three harnesses, at n=100000 (10x the prior 10000). ref_diff/name_tokenized measure the v2 codecs (not comparable to pre-2026-06 v1 numbers).",
       "regression_threshold_pct tightened 50 -> 15 (P1a): min-of-N + 10x workload cut back-to-back drift on the compute/transport/codec paths to <=8.5%. Two drift runs measured 2026-06-07; full rationale in docs/benchmarks/2026-06-07-perf-min-of-n.md.",
       "min_abs_ms=5.0: sub-5ms metrics swing +100-266% on pure jitter; the floor reports but never fails a metric when BOTH baseline and new are below it (a sub-floor->above-floor jump still fails).",
-      "metric_overrides: per-metric thresholds for the few inherently-noisy metrics so the tight global gate still applies to everything else. ms.sqlite.write (~15%, fsync) and codecs.rans_o1_decode (~17%) get 30%. encryption.genomic.encrypt/decrypt swing +/-25-85% run-to-run (3.7ms to encrypt 10MB is physically impossible -> the bench measures something degenerate); set to 1000 (report-only) pending a P1d bench-validity fix."
+      "metric_overrides: per-metric thresholds for the few inherently-noisy metrics so the tight global gate still applies to everything else. ms.sqlite.write (~15%, fsync) and codecs.rans_o1_decode (~17%) get 30%. (P1d) encryption.genomic.encrypt/decrypt overrides removed: the 10 MiB payload was a sub-5ms AES-NI op (~5 GB/s, correct, not 'impossible') whose +/-25-85% swing was pure jitter under the floor; scaling to 64 MiB lifts it above the 5ms floor so it is now normally-gated at the 15% global."
     ]
   },
   "python": {

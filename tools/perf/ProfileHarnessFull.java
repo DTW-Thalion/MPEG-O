@@ -783,16 +783,24 @@ public final class ProfileHarnessFull {
         return r;
     }
 
-    // -- B5: AES-256-GCM encrypt/decrypt on 10 MiB payload
+    // -- B5: AES-256-GCM encrypt/decrypt on 64 MiB payload
 
     private static Result benchEncryptionGenomic() {
         Result r = new Result();
-        final int tenMiB = 10 * 1024 * 1024;
-        final byte[] plaintext = new byte[tenMiB];
+        // 64 MiB (P1d): keeps the op well above the 5ms jitter floor so the
+        // min-of-N timing is stable (10 MiB was a sub-20ms op that swung
+        // +/-25-85% run-to-run).
+        final int sixtyFourMiB = 64 * 1024 * 1024;
+        final byte[] plaintext = new byte[sixtyFourMiB];
         new java.util.Random(42).nextBytes(plaintext);
         final byte[] key = new byte[32];
         for (int i = 0; i < 32; i++) key[i] = (byte) i;
         // pure AES-GCM encrypt/decrypt (no shared state) -> rep-safe.
+        // NOTE: EncryptionManager.encrypt/decrypt call Cipher.getInstance
+        // internally (product code), so the provider-lookup cost is inside
+        // the timed window. We cannot hoist it without editing product code,
+        // which is out of scope for the perf harness; at 64 MiB the
+        // getInstance overhead is a negligible fraction of the doFinal cost.
         final EncryptionManager.EncryptResult[] erBox =
                 new EncryptionManager.EncryptResult[1];
         r.timingMs("encrypt", timedMinMs(REPS, () ->
@@ -802,8 +810,8 @@ public final class ProfileHarnessFull {
         r.timingMs("decrypt", timedMinMs(REPS, () ->
             decBox[0] = EncryptionManager.decrypt(
                 er.ciphertext(), er.iv(), er.tag(), key)));
-        if (decBox[0].length != tenMiB) throw new IllegalStateException("decrypt length mismatch");
-        r.size("bytes_mb", tenMiB);
+        if (decBox[0].length != sixtyFourMiB) throw new IllegalStateException("decrypt length mismatch");
+        r.size("bytes_mb", sixtyFourMiB);
         return r;
     }
 
