@@ -34,16 +34,18 @@ GNU_LIB="$(gnustep-config --base-libs 2>/dev/null || echo '-lgnustep-base')"
 OUT_BIN="$BUILD_DIR/profile_objc_full"
 
 # shellcheck disable=SC2086
+# Link against the SAME HDF5 that libTTIO uses (/usr/local/lib
+# libhdf5.so.310) — NOT the system -lhdf5_serial. Loading two HDF5
+# runtimes in one process segfaults (H5Literate2 in bench_encryption).
 clang -fobjc-arc \
     -O2 \
     -I"$OBJC_DIR/Source" \
     $GNU_CPP \
     -L"$LIB_OBJ_DIR" \
-    -L/usr/lib/x86_64-linux-gnu/hdf5/serial \
-    -I/usr/include/hdf5/serial \
+    -I/usr/local/include \
     "$TOOLS_DIR/profile_objc_full.m" \
     -L/usr/local/lib \
-    -lTTIO -lhdf5_serial -lhdf5_serial_hl -lz -lcrypto -lsqlite3 -lobjc \
+    -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lobjc \
     $GNU_LIB -lm \
     -o "$OUT_BIN"
 
