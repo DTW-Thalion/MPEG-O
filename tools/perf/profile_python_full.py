@@ -66,12 +66,12 @@ from ttio.transport import file_to_transport, transport_to_file
 
 # P4 (perf workplan): isolated codec microbenchmarks.
 from ttio.codecs import base_pack as _bp
-from ttio.codecs import name_tokenizer as _nt
+from ttio.codecs import name_tokenizer_v2 as _nt
 from ttio.codecs import quality as _qb
 from ttio.codecs import rans as _rans
 
 # V10: genomic codec benchmarks.
-from ttio.codecs.ref_diff import encode as _ref_diff_encode, decode as _ref_diff_decode
+from ttio.codecs.ref_diff_v2 import encode as _ref_diff_encode, decode as _ref_diff_decode
 from ttio.codecs.fqzcomp_nx16_z import encode as _fqzcomp_z_encode
 from ttio.codecs.fqzcomp_nx16_z import decode_with_metadata as _fqzcomp_z_decode
 from ttio.codecs.delta_rans import encode as _delta_rans_encode, decode as _delta_rans_decode
@@ -463,11 +463,17 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     cigars_rd = [f"{read_len}M"] * n_reads_rd
     positions_rd = sorted(rng.integers(1, ref_len - read_len, size=n_reads_rd).tolist())
 
+    seq_flat = np.frombuffer(b"".join(sequences_rd), dtype=np.uint8)
+    offsets_rd = np.zeros(n_reads_rd + 1, dtype=np.uint64)
+    offsets_rd[1:] = np.cumsum([len(sq) for sq in sequences_rd], dtype=np.uint64)
+    positions_arr = np.asarray(positions_rd, dtype=np.int64)
+    total_bases_rd = int(offsets_rd[n_reads_rd])
     t_rd_enc, rd_encoded = _timed(
-        _ref_diff_encode, sequences_rd, cigars_rd, positions_rd,
-        ref_seq, ref_md5, "perf-ref")
+        _ref_diff_encode, seq_flat, offsets_rd, positions_arr,
+        cigars_rd, ref_seq, ref_md5, "synthetic://perf-ref")
     t_rd_dec, _ = _timed(
-        _ref_diff_decode, rd_encoded, cigars_rd, positions_rd, ref_seq)
+        _ref_diff_decode, rd_encoded, positions_arr, cigars_rd, ref_seq,
+        n_reads_rd, total_bases_rd)
 
     # ── Quality test data: 100K × 100bp quality strings, Q20-Q40 LCG ──
     n_qual = 100_000 * 100
