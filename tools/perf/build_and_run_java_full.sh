@@ -2,8 +2,9 @@
 # Multi-function Java perf harness build+run script.
 set -eu
 
-JAVA_DIR="$HOME/TTI-O/java"
-TOOLS_DIR="$HOME/TTI-O/tools/perf"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+JAVA_DIR="$ROOT/java"
+TOOLS_DIR="$ROOT/tools/perf"
 BUILD_DIR="$TOOLS_DIR/_build"
 OUT_DIR="$TOOLS_DIR/_out_java_full"
 

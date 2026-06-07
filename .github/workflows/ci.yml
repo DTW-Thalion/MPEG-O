@@ -518,7 +518,7 @@ jobs:
           retention-days: 14
 
   perf-regression:
-    name: Performance regression check (Python + ObjC, push-to-main only)
+    name: Performance regression check (all SDKs, push-to-main only)
     runs-on: ubuntu-latest
     # V2 (verification workplan): only fires on push to main, not every
     # PR. Perf runs are slow (~3-5 min total) and noisy on shared GHA
@@ -592,12 +592,11 @@ jobs:
               -Dmdep.outputFile=target/runtime-classpath.txt
 
       - name: Run perf harness + compare against baseline
+        shell: bash
         run: |
-          chmod +x tools/perf/run_perf_ci.sh \
-                   tools/perf/build_and_run_python_full.sh \
-                   tools/perf/build_and_run_objc_full.sh \
-                   tools/perf/build_and_run_java_full.sh
-          tools/perf/run_perf_ci.sh | tee perf-report.md
+          chmod +x tools/perf/*.sh
+          set -o pipefail
+          tools/perf/run_perf_ci.sh 2>&1 | tee perf-report.md
 
       - name: Upload perf report
         if: always()

@@ -6,7 +6,7 @@
 # the extended harness covering every major v0.11.1 function.
 set -e
 
-ROOT="$HOME/TTI-O"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OBJC_DIR="$ROOT/objc"
 TOOLS_DIR="$ROOT/tools/perf"
 BUILD_DIR="$TOOLS_DIR/_build"
