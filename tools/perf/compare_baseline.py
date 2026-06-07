@@ -82,17 +82,37 @@ def compare(
     baseline: dict[str, float | None],
     new: dict[str, float | None],
     threshold_pct: float,
+    min_abs_ms: float = 0.0,
+    overrides: dict[str, float] | None = None,
 ) -> tuple[list[tuple[str, float | None, float | None, float | None, str]], bool]:
     """Return ``(rows, has_regression)``.
 
     Each row is ``(metric, baseline_secs, new_secs, delta_pct, verdict)``.
     ``verdict`` is one of ``"OK"``, ``"WIN"``, ``"REGRESS"``, ``"NEW"``,
-    ``"DROPPED"``. A regression sets ``has_regression = True``.
+    ``"DROPPED"``, ``"small"``. A regression sets ``has_regression = True``.
 
     Metrics with ``None`` values in either side are reported but never
     fail (e.g. ObjC's read-only providers expose ``null`` for the write
     half of memory/sqlite/zarr).
+
+    ``min_abs_ms`` is an absolute floor (milliseconds): when BOTH the
+    baseline and new timings are below it, the metric is reported with
+    verdict ``"small"`` and can never fail the gate. Sub-millisecond
+    metrics swing wildly in *percentage* terms on run-to-run jitter
+    (e.g. 1.7ms → 3.4ms is +100% but physically meaningless), so the
+    percentage gate is unreliable there. The "both sides below" rule
+    means a genuine jump that crosses the floor (e.g. 1ms → 100ms) is
+    still evaluated and can still fail.
+
+    ``overrides`` maps a flattened metric key (e.g. ``"ms.zarr.read"``) to
+    a per-metric threshold percentage that replaces ``threshold_pct`` for
+    that metric only. Use it for the handful of inherently-noisy
+    storage-read metrics whose run-to-run jitter stays high (~30-40%) on a
+    shared dev box no matter the timing strategy, so the tight global
+    threshold can still gate the compute-bound metrics that matter.
     """
+    floor_s = min_abs_ms / 1000.0
+    overrides = overrides or {}
     rows: list[tuple[str, float | None, float | None, float | None, str]] = []
     has_regression = False
 
@@ -116,10 +136,15 @@ def compare(
             continue
 
         delta_pct = (n - b) / b * 100.0
-        if delta_pct >= threshold_pct:
+        eff_threshold = overrides.get(k, threshold_pct)
+        if floor_s > 0 and b < floor_s and n < floor_s:
+            # Both timings below the absolute floor: percentage drift is
+            # noise here, so report but never fail.
+            verdict = "small"
+        elif delta_pct >= eff_threshold:
             verdict = "REGRESS"
             has_regression = True
-        elif delta_pct <= -threshold_pct:
+        elif delta_pct <= -eff_threshold:
             verdict = "WIN"
         else:
             verdict = "OK"
@@ -146,6 +171,7 @@ def render_markdown(
             "REGRESS": "🔴 REGRESS",
             "WIN": "🟢 WIN",
             "OK": "OK",
+            "small": "small (below floor)",
             "NEW": "NEW",
             "DROPPED": "DROPPED",
             "n/a": "n/a",
@@ -177,6 +203,14 @@ def main(argv: list[str] | None = None) -> int:
              "baseline.json _meta.regression_threshold_pct, fallback 10).",
     )
     parser.add_argument(
+        "--min-ms", type=float, default=None,
+        help="Absolute floor in milliseconds (default: read from "
+             "baseline.json _meta.min_abs_ms, fallback 0). When both the "
+             "baseline and new timing of a metric are below this floor, the "
+             "metric is reported but never fails the gate — sub-ms metrics "
+             "swing wildly in percentage terms on run-to-run jitter.",
+    )
+    parser.add_argument(
         "--update-baseline", action="store_true",
         help="Overwrite baseline.json with the new numbers. Use only "
              "when intentionally accepting a perf change.",
@@ -193,6 +227,10 @@ def main(argv: list[str] | None = None) -> int:
         threshold = baseline_doc.get("_meta", {}).get(
             "regression_threshold_pct", 10.0
         )
+    min_abs_ms = args.min_ms
+    if min_abs_ms is None:
+        min_abs_ms = baseline_doc.get("_meta", {}).get("min_abs_ms", 0.0)
+    overrides = baseline_doc.get("_meta", {}).get("metric_overrides", {})
 
     overall_regression = False
     sections_seen: set[str] = set()
@@ -214,12 +252,19 @@ def main(argv: list[str] | None = None) -> int:
             return 2
 
         new_metrics = _load_metrics(path)
-        rows, has_regression = compare(baseline_metrics, new_metrics, threshold)
+        rows, has_regression = compare(
+            baseline_metrics, new_metrics, threshold, min_abs_ms, overrides
+        )
         overall_regression = overall_regression or has_regression
         sections_seen.add(language)
         sections[language] = {"rows": rows, "path": path}
 
-        title = f"{language} (vs baseline.json[{language}], threshold ±{threshold}%)"
+        floor_note = f", floor {min_abs_ms}ms" if min_abs_ms else ""
+        ov_note = f", {len(overrides)} per-metric overrides" if overrides else ""
+        title = (
+            f"{language} (vs baseline.json[{language}], "
+            f"threshold ±{threshold}%{floor_note}{ov_note})"
+        )
         print(render_markdown(title, rows))
 
     if args.update_baseline:

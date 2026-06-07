@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# run_perf_ci.sh — V2 perf-regression CI orchestrator.
+# run_perf_ci.sh — manual cross-SDK perf-regression orchestrator.
 #
 # Runs the Python, ObjC, and Java multi-function perf harnesses, then
 # diffs the output against tools/perf/baseline.json via
@@ -7,17 +7,33 @@
 # is not explicitly skipped must produce a full.json, and a regression
 # beyond threshold in any of them fails the run.
 #
+# NOT run in CI. The baseline is calibrated to the maintainer's local
+# box; GitHub runners are noisier and would produce non-comparable
+# numbers. Run this manually/occasionally (e.g. around a major release)
+# on the box that captured the baseline:
+#
+#   bash tools/perf/run_perf_ci.sh                      # gate vs baseline
+#   bash tools/perf/run_perf_ci.sh --update-baseline    # accept new numbers
+#   PERF_N=10000 bash tools/perf/run_perf_ci.sh         # quick smoke run
+#
 # Exit status is propagated from compare_baseline.py:
 #   0 — no regression
 #   1 — at least one metric regressed beyond threshold
 #   2 — usage / file / parse error
-#
-# Per docs/verification-workplan.md §V2.
 
 set -euo pipefail
 
 here="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$here/../.." && pwd)"
+
+# Workload size. Larger N makes each op run long enough that fixed
+# scheduling/cache jitter is a small fraction of the timing, which
+# (together with min-of-N timing) lets the gate use a tight threshold.
+# This suite is run manually/occasionally (not in CI), so the ~15-20 min
+# at PERF_N=100000 is an acceptable trade for stable numbers. Override
+# with e.g. PERF_N=10000 for a quick smoke run.
+PERF_N="${PERF_N:-100000}"
+PERF_PEAKS="${PERF_PEAKS:-16}"
 
 PYTHON_OUT="$here/_out_python_full"
 OBJC_OUT="$here/_out_objc_full"
@@ -51,12 +67,12 @@ done
 
 if [ "$run_python" = "1" ]; then
     echo "[perf-ci] running Python harness..."
-    "$here/build_and_run_python_full.sh" --n 10000 --peaks 16
+    "$here/build_and_run_python_full.sh" --n "$PERF_N" --peaks "$PERF_PEAKS"
 fi
 
 if [ "$run_objc" = "1" ]; then
     echo "[perf-ci] running ObjC harness..."
-    "$here/build_and_run_objc_full.sh" --n 10000 --peaks 16
+    "$here/build_and_run_objc_full.sh" --n "$PERF_N" --peaks "$PERF_PEAKS"
 fi
 
 if [ "$run_java" = "1" ]; then
@@ -68,7 +84,7 @@ if [ "$run_java" = "1" ]; then
             mvn -q dependency:build-classpath \
                 -Dmdep.outputFile=target/runtime-classpath.txt)
     fi
-    "$here/build_and_run_java_full.sh" --n 10000 --peaks 16
+    "$here/build_and_run_java_full.sh" --n "$PERF_N" --peaks "$PERF_PEAKS"
 fi
 
 # Fail loudly if a SDK that ran produced no full.json (e.g. the harness
