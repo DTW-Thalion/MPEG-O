@@ -16,6 +16,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOCompoundIO.h"
+#import "TTIOCompoundIO+Internal.h"
 #import "TTIOIdentification.h"
 #import "TTIOQuantification.h"
 #import "TTIOProvenanceRecord.h"
@@ -29,6 +30,15 @@
 #import <hdf5.h>
 #import <stdlib.h>
 #import <string.h>
+
+// Informal protocol: provider group wrappers (e.g. TTIOHDF5GroupAdapter)
+// expose -unwrap to reach the underlying TTIOHDF5Group. Declared here so
+// writeColumnar can fast-path an adapter without importing the provider
+// header (and without a hard class dependency).
+@class TTIOHDF5Group;
+@protocol TTIOHDF5Unwrappable <NSObject>
+- (TTIOHDF5Group *)unwrap;
+@end
 
 #pragma mark - Record structs
 
@@ -562,6 +572,47 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     return 0;
 }
 
+// Build the HDF5 compound H5T type for `fields`, returning it (caller
+// closes) and writing each field's byte offset into fieldOff[i] and the
+// total record size into *outRecSize. Shared by writeGeneric and
+// writeColumnar so both produce the IDENTICAL on-disk compound type and
+// field offsets. Returns nil (and sets *error) on an empty schema.
+static TTIOHDF5CompoundType *
+ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
+                     size_t *fieldOff, size_t *outRecSize, NSError **error)
+{
+    size_t recSize = 0;
+    NSUInteger nFields = fields.count;
+    for (NSUInteger i = 0; i < nFields; i++) {
+        fieldOff[i] = recSize;
+        recSize += fieldByteSize(fields[i].kind);
+    }
+    if (recSize == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"empty compound schema");
+        return nil;
+    }
+    TTIOHDF5CompoundType *t = [[TTIOHDF5CompoundType alloc] initWithSize:recSize];
+    for (NSUInteger i = 0; i < nFields; i++) {
+        TTIOCompoundField *f = fields[i];
+        size_t off = fieldOff[i];
+        switch (f.kind) {
+            case TTIOCompoundFieldKindUInt32:
+                [t addField:f.name type:H5T_NATIVE_UINT32 offset:off]; break;
+            case TTIOCompoundFieldKindInt64:
+                [t addField:f.name type:H5T_NATIVE_INT64 offset:off]; break;
+            case TTIOCompoundFieldKindFloat64:
+                [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
+            case TTIOCompoundFieldKindVLString:
+                [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
+            case TTIOCompoundFieldKindVLBytes:
+                [t addVariableLengthBytesFieldNamed:f.name atOffset:off]; break;
+        }
+    }
+    *outRecSize = recSize;
+    return t;
+}
+
 + (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
             intoGroup:(id<TTIOStorageGroup>)parent
          datasetNamed:(NSString *)name
@@ -583,35 +634,12 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     // directly. Preserves byte-exact compatibility with v0.2 readers.
     TTIOHDF5Group *hdf5Parent = (TTIOHDF5Group *)parent;
     NSUInteger n = rows.count;
+    NSUInteger nFields = fields.count;
+    size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
     size_t recSize = 0;
-    NSMutableArray<NSNumber *> *offsets = [NSMutableArray array];
-    for (TTIOCompoundField *f in fields) {
-        [offsets addObject:@(recSize)];
-        recSize += fieldByteSize(f.kind);
-    }
-    if (recSize == 0) {
-        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
-                @"empty compound schema");
-        return NO;
-    }
-
-    TTIOHDF5CompoundType *t = [[TTIOHDF5CompoundType alloc] initWithSize:recSize];
-    for (NSUInteger i = 0; i < fields.count; i++) {
-        TTIOCompoundField *f = fields[i];
-        size_t off = (size_t)[offsets[i] unsignedIntegerValue];
-        switch (f.kind) {
-            case TTIOCompoundFieldKindUInt32:
-                [t addField:f.name type:H5T_NATIVE_UINT32 offset:off]; break;
-            case TTIOCompoundFieldKindInt64:
-                [t addField:f.name type:H5T_NATIVE_INT64 offset:off]; break;
-            case TTIOCompoundFieldKindFloat64:
-                [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
-            case TTIOCompoundFieldKindVLString:
-                [t addVariableLengthStringFieldNamed:f.name atOffset:off]; break;
-            case TTIOCompoundFieldKindVLBytes:
-                [t addVariableLengthBytesFieldNamed:f.name atOffset:off]; break;
-        }
-    }
+    TTIOHDF5CompoundType *t =
+        ttioMakeCompoundType(fields, fieldOff, &recSize, error);
+    if (!t) { free(fieldOff); return NO; }
 
     uint8_t *buf = calloc(n > 0 ? n : 1, recSize);
     // Keeps VL temporaries alive through writeCompoundDataset (H5Dwrite):
@@ -622,20 +650,16 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     NSMutableArray *retained = [NSMutableArray array];
 
     // Hoist per-field metadata out of the inner row loop: these are
-    // invariant per field, so precompute once instead of unboxing an
-    // NSNumber and re-reading the field object on every row.
-    NSUInteger nFields = fields.count;
-    size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
+    // invariant per field, so precompute once instead of re-reading the
+    // field object on every row.
     TTIOCompoundFieldKind *fieldKind =
         malloc((nFields ? nFields : 1) * sizeof(TTIOCompoundFieldKind));
     __unsafe_unretained NSString **fieldName =
         (__unsafe_unretained NSString **)
         malloc((nFields ? nFields : 1) * sizeof(NSString *));
     for (NSUInteger i = 0; i < nFields; i++) {
-        TTIOCompoundField *f = fields[i];
-        fieldOff[i]  = (size_t)[offsets[i] unsignedIntegerValue];
-        fieldKind[i] = f.kind;
-        fieldName[i] = f.name;   // borrowed; `fields` is alive for the loop
+        fieldKind[i] = fields[i].kind;
+        fieldName[i] = fields[i].name;   // borrowed; `fields` alive for loop
     }
 
     for (NSUInteger r = 0; r < n; r++) {
@@ -695,6 +719,191 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     // Safe to release borrowed-pointer backers now: H5Dwrite has copied
     // every VL payload out into HDF5-owned global-heap storage.
     [retained removeAllObjects];
+    [t close];
+    return ok;
+}
+
++ (BOOL)writeColumnar:(NSDictionary<NSString *, id> *)columns
+            intoGroup:(id<TTIOStorageGroup>)parent
+         datasetNamed:(NSString *)name
+               fields:(NSArray<TTIOCompoundField *> *)fields
+                count:(NSUInteger)count
+                error:(NSError **)error
+{
+    // Resolve the underlying HDF5 group for the fast path. The per-AU
+    // writer hands us a `TTIOHDF5GroupAdapter` (the provider wrapper from
+    // -openGroupNamed:), not a raw TTIOHDF5Group; unwrap it so we still
+    // take the direct H5Dwrite path rather than the row-conversion
+    // fallback. (writeGeneric only reaches the real group indirectly via
+    // the adapter's createCompoundDatasetNamed:/writeAll:.)
+    TTIOHDF5Group *hdf5Parent = nil;
+    if ([parent isKindOfClass:[TTIOHDF5Group class]]) {
+        hdf5Parent = (TTIOHDF5Group *)parent;
+    } else if ([parent respondsToSelector:@selector(unwrap)]) {
+        id u = [(id)parent unwrap];
+        if ([u isKindOfClass:[TTIOHDF5Group class]]) hdf5Parent = u;
+    }
+
+    // Non-HDF5 providers: convert columns -> row dictionaries and route
+    // through the protocol's compound dataset API (Memory/SQLite/Zarr).
+    // Rare path (not the per-AU hot path); keeps every backend working.
+    if (hdf5Parent == nil) {
+        NSMutableArray<NSDictionary *> *rows =
+            [NSMutableArray arrayWithCapacity:count];
+        NSUInteger nf = fields.count;
+        for (NSUInteger r = 0; r < count; r++) {
+            NSMutableDictionary *row =
+                [NSMutableDictionary dictionaryWithCapacity:nf];
+            for (NSUInteger i = 0; i < nf; i++) {
+                TTIOCompoundField *f = fields[i];
+                id colObj = columns[f.name];
+                id v = nil;
+                switch (f.kind) {
+                    case TTIOCompoundFieldKindUInt32:
+                        v = [colObj isKindOfClass:[NSData class]]
+                            ? @(((const uint32_t *)[colObj bytes])[r])
+                            : ((NSArray *)colObj)[r];
+                        break;
+                    case TTIOCompoundFieldKindInt64:
+                        v = [colObj isKindOfClass:[NSData class]]
+                            ? @(((const int64_t *)[colObj bytes])[r])
+                            : ((NSArray *)colObj)[r];
+                        break;
+                    case TTIOCompoundFieldKindFloat64:
+                        v = [colObj isKindOfClass:[NSData class]]
+                            ? @(((const double *)[colObj bytes])[r])
+                            : ((NSArray *)colObj)[r];
+                        break;
+                    case TTIOCompoundFieldKindVLString:
+                    case TTIOCompoundFieldKindVLBytes:
+                        v = ((NSArray *)colObj)[r];
+                        break;
+                }
+                row[f.name] = v;
+            }
+            [rows addObject:row];
+        }
+        return [self writeGeneric:rows
+                        intoGroup:parent
+                     datasetNamed:name
+                           fields:fields
+                            error:error];
+    }
+
+    // HDF5 fast path: assemble the SAME row-major compound buffer as
+    // writeGeneric (same ttioMakeCompoundType, same field offsets, same
+    // primitive memcpy, same zero-copy hvl_t.p = NSData.bytes kept alive
+    // through the single bulk H5Dwrite), but source each column directly:
+    //   - primitive columns are packed C NSData -> read in place, no boxing.
+    //   - VL columns are NSArray<NSData*>/NSArray<NSString*> -> borrowed.
+    // This is the per-AU encryption hot path: no per-row NSDictionary and
+    // no per-cell NSNumber. The inner byte assembly mirrors writeGeneric's
+    // exactly, so output is byte-identical for the same logical data.
+    NSUInteger n = count;
+    NSUInteger nFields = fields.count;
+    size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
+    size_t recSize = 0;
+    TTIOHDF5CompoundType *t =
+        ttioMakeCompoundType(fields, fieldOff, &recSize, error);
+    if (!t) { free(fieldOff); return NO; }
+
+    // Resolve each field's column once, hoisting every per-row msgSend out
+    // of the inner loop:
+    //   - primitive columns: packed C NSData -> raw base pointer (read in
+    //     place), or NSArray<NSNumber*> -> bulk-extracted element buffer.
+    //   - VL columns: NSArray -> bulk-extracted into a C array of object
+    //     pointers via -getObjects:range: (one call per column), so the
+    //     inner loop indexes a plain C array, no objectAtIndexedSubscript:.
+    // The `columns` dict (and the NSArrays / NSData it holds) stays alive
+    // for the whole call, keeping every VL NSData/NSString — and the bytes
+    // we borrow zero-copy — valid through the single bulk H5Dwrite. So no
+    // separate `retained` array is needed.
+    TTIOCompoundFieldKind *fieldKind =
+        malloc((nFields ? nFields : 1) * sizeof(TTIOCompoundFieldKind));
+    const void **primPtr =       // packed-primitive base, or NULL
+        malloc((nFields ? nFields : 1) * sizeof(const void *));
+    __unsafe_unretained id **elems =   // bulk-extracted element pointers
+        (__unsafe_unretained id **)
+        malloc((nFields ? nFields : 1) * sizeof(id *));
+    for (NSUInteger i = 0; i < nFields; i++) {
+        TTIOCompoundField *f = fields[i];
+        fieldKind[i] = f.kind;
+        primPtr[i] = NULL;
+        elems[i]   = NULL;
+        id colObj = columns[f.name];   // borrowed; `columns` alive for call
+        BOOL isPrim = (f.kind == TTIOCompoundFieldKindUInt32 ||
+                       f.kind == TTIOCompoundFieldKindInt64  ||
+                       f.kind == TTIOCompoundFieldKindFloat64);
+        if (isPrim && [colObj isKindOfClass:[NSData class]]) {
+            primPtr[i] = [(NSData *)colObj bytes];   // packed C values
+        } else {
+            // NSArray column (NSNumber for prim-as-array, NSData/NSString
+            // for VL). Bulk-copy element pointers into a C array once.
+            NSArray *arr = (NSArray *)colObj;
+            __unsafe_unretained id *e =
+                (__unsafe_unretained id *)
+                malloc((n ? n : 1) * sizeof(id));
+            if (n) [arr getObjects:e range:NSMakeRange(0, n)];
+            elems[i] = e;
+        }
+    }
+
+    uint8_t *buf = calloc(n > 0 ? n : 1, recSize);
+
+    for (NSUInteger r = 0; r < n; r++) {
+        uint8_t *base = buf + r * recSize;
+        for (NSUInteger i = 0; i < nFields; i++) {
+            size_t off = fieldOff[i];
+            switch (fieldKind[i]) {
+                case TTIOCompoundFieldKindUInt32: {
+                    uint32_t x = primPtr[i]
+                        ? ((const uint32_t *)primPtr[i])[r]
+                        : (uint32_t)[elems[i][r] unsignedIntValue];
+                    memcpy(base + off, &x, 4);
+                    break;
+                }
+                case TTIOCompoundFieldKindInt64: {
+                    int64_t x = primPtr[i]
+                        ? ((const int64_t *)primPtr[i])[r]
+                        : [elems[i][r] longLongValue];
+                    memcpy(base + off, &x, 8);
+                    break;
+                }
+                case TTIOCompoundFieldKindFloat64: {
+                    double x = primPtr[i]
+                        ? ((const double *)primPtr[i])[r]
+                        : [elems[i][r] doubleValue];
+                    memcpy(base + off, &x, 8);
+                    break;
+                }
+                case TTIOCompoundFieldKindVLString: {
+                    __unsafe_unretained id e = elems[i][r];
+                    NSString *s = [e isKindOfClass:[NSString class]] ? e : @"";
+                    const char *cstr = [s UTF8String];
+                    memcpy(base + off, &cstr, sizeof(char *));
+                    break;
+                }
+                case TTIOCompoundFieldKindVLBytes: {
+                    __unsafe_unretained id e = elems[i][r];
+                    NSData *d = [e isKindOfClass:[NSData class]] ? e : nil;
+                    hvl_t hv;
+                    hv.len = d ? d.length : 0;
+                    hv.p = (d && d.length) ? (void *)d.bytes : NULL;
+                    memcpy(base + off, &hv, sizeof(hvl_t));
+                    break;
+                }
+            }
+        }
+    }
+
+    BOOL ok = writeCompoundDataset(hdf5Parent.groupId, [name UTF8String],
+                                    t.typeId, n, buf, error);
+    free(buf);
+    free(fieldOff);
+    free(fieldKind);
+    free(primPtr);
+    for (NSUInteger i = 0; i < nFields; i++) free(elems[i]);
+    free(elems);
     [t close];
     return ok;
 }
