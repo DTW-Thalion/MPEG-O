@@ -678,6 +678,40 @@ public final class ProfileHarnessFull {
         r.timingMs("delta_rans_decode", timedMinMs(REPS, () ->
             global.thalion.ttio.codecs.DeltaRans.decode(drEnc)));
 
+        // ── MATE_INFO_V2: 100K records, parallel mate-pair channels ──
+        // Same native lib (TtioRansNative) as the genomic codecs above;
+        // guard on isAvailable() and skip (0.0) if it is absent.
+        final int nMate = 100_000;
+        final int[]   mateChromIds  = new int[nMate];
+        final long[]  matePositions = new long[nMate];
+        final int[]   tplLengths    = new int[nMate];
+        final short[] ownChromIds   = new short[nMate];
+        final long[]  ownPositions  = new long[nMate];
+        java.util.Random mateRng = new java.util.Random(42);
+        long mp = 1000;
+        for (int i = 0; i < nMate; i++) {
+            mateChromIds[i]  = i % 25;
+            ownChromIds[i]   = (short) (i % 25);
+            mp += 100 + mateRng.nextInt(401);
+            ownPositions[i]  = mp;
+            matePositions[i] = mp + 100 + mateRng.nextInt(400);
+            tplLengths[i]    = 200 + mateRng.nextInt(300);
+        }
+        if (global.thalion.ttio.codecs.MateInfoV2.isAvailable()) {
+            final byte[][] miBox = new byte[1][];
+            r.timingMs("mate_info_v2_encode", timedMinMs(REPS, () ->
+                miBox[0] = global.thalion.ttio.codecs.MateInfoV2.encode(
+                    mateChromIds, matePositions, tplLengths,
+                    ownChromIds, ownPositions)));
+            final byte[] miEnc = miBox[0];
+            r.timingMs("mate_info_v2_decode", timedMinMs(REPS, () ->
+                global.thalion.ttio.codecs.MateInfoV2.decode(
+                    miEnc, ownChromIds, ownPositions, nMate)));
+        } else {
+            r.timingMs("mate_info_v2_encode", 0.0);
+            r.timingMs("mate_info_v2_decode", 0.0);
+        }
+
         return r;
     }
 
