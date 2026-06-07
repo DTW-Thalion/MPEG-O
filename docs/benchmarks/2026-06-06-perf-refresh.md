@@ -62,6 +62,17 @@ JAVA_HOME=~/jdk25 TTIO_RANS_LIB_PATH=$HOME/TTI-O/native/_build/libttio_rans.so \
 Offline/synthetic, ~5–10 min, all three SDKs. The CI `perf-regression` job (now enforcing
 again after the P0 fix) compares future push-to-main runs against this baseline at ±10%.
 
+## Gate noise — threshold widened to 50% (P1 will tighten)
+The harness runs a **single timed iteration with no warmup**. A back-to-back re-run on the
+same machine (minutes apart, identical code) flagged ~20 metrics at **+20% to +46%** — pure
+run-to-run timing variance, not regressions. The comparator itself is correct (it exits
+non-zero on a real regression — verified), but a tight ±10% enforcing gate would
+false-positive on nearly every push. So `regression_threshold_pct` is set to **50%** for now:
+the enforcing gate catches only **gross (~1.5×+) regressions** (e.g. a codec silently falling
+back to pure-Python) without false-positive spam. **Top P1 item:** run **median-of-N
+iterations** (with warmup) in all three harnesses to cut variance and restore a tight (~10%)
+gate.
+
 ## Caveat (re-baseline calibration)
 This baseline is dev-box local. The first post-merge CI perf run may flag environment-variance
 "regressions" (CI runner vs dev box); if so, re-baseline from that run's uploaded `full.json`
