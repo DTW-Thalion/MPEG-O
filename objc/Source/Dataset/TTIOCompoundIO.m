@@ -614,19 +614,37 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     }
 
     uint8_t *buf = calloc(n > 0 ? n : 1, recSize);
+    // Keeps VL temporaries alive through writeCompoundDataset (H5Dwrite):
+    //   - VLString: the NSString backing the borrowed [s UTF8String] pointer.
+    //   - VLBytes:  the NSData backing the borrowed (zero-copy) hv.p pointer.
+    // Cleared only AFTER writeCompoundDataset returns, so every borrowed
+    // pointer outlives the single bulk H5Dwrite.
     NSMutableArray *retained = [NSMutableArray array];
-    // Each VL_BYTES row writes an hvl_t that points at heap-allocated
-    // bytes. Record those pointers so we can free() them after
-    // H5Dwrite has copied the data out.
-    NSMutableArray *vlBytesAllocs = [NSMutableArray array];
+
+    // Hoist per-field metadata out of the inner row loop: these are
+    // invariant per field, so precompute once instead of unboxing an
+    // NSNumber and re-reading the field object on every row.
+    NSUInteger nFields = fields.count;
+    size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
+    TTIOCompoundFieldKind *fieldKind =
+        malloc((nFields ? nFields : 1) * sizeof(TTIOCompoundFieldKind));
+    __unsafe_unretained NSString **fieldName =
+        (__unsafe_unretained NSString **)
+        malloc((nFields ? nFields : 1) * sizeof(NSString *));
+    for (NSUInteger i = 0; i < nFields; i++) {
+        TTIOCompoundField *f = fields[i];
+        fieldOff[i]  = (size_t)[offsets[i] unsignedIntegerValue];
+        fieldKind[i] = f.kind;
+        fieldName[i] = f.name;   // borrowed; `fields` is alive for the loop
+    }
+
     for (NSUInteger r = 0; r < n; r++) {
         NSDictionary *row = rows[r];
         uint8_t *base = buf + r * recSize;
-        for (NSUInteger i = 0; i < fields.count; i++) {
-            TTIOCompoundField *f = fields[i];
-            size_t off = (size_t)[offsets[i] unsignedIntegerValue];
-            id v = row[f.name];
-            switch (f.kind) {
+        for (NSUInteger i = 0; i < nFields; i++) {
+            size_t off = fieldOff[i];
+            id v = row[fieldName[i]];
+            switch (fieldKind[i]) {
                 case TTIOCompoundFieldKindUInt32: {
                     uint32_t x = (uint32_t)[v unsignedIntValue];
                     memcpy(base + off, &x, 4);
@@ -650,17 +668,17 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
                     break;
                 }
                 case TTIOCompoundFieldKindVLBytes: {
+                    // Zero-copy: point hv.p directly at the NSData's bytes and
+                    // keep the NSData alive until after writeCompoundDataset.
+                    // HDF5's H5Dwrite only READS hv.len bytes from hv.p (it
+                    // copies them into its own global-heap VL storage; it does
+                    // not modify, free, or retain hv.p), so borrowing d.bytes
+                    // produces byte-identical output without a malloc+memcpy.
                     NSData *d = [v isKindOfClass:[NSData class]] ? v : [NSData data];
                     hvl_t hv;
                     hv.len = d.length;
-                    if (d.length > 0) {
-                        void *p = malloc(d.length);
-                        memcpy(p, d.bytes, d.length);
-                        hv.p = p;
-                        [vlBytesAllocs addObject:[NSValue valueWithPointer:p]];
-                    } else {
-                        hv.p = NULL;
-                    }
+                    hv.p = d.length ? (void *)d.bytes : NULL;
+                    if (d.length) [retained addObject:d];
                     memcpy(base + off, &hv, sizeof(hvl_t));
                     break;
                 }
@@ -671,11 +689,11 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     BOOL ok = writeCompoundDataset(hdf5Parent.groupId, [name UTF8String],
                                     t.typeId, n, buf, error);
     free(buf);
-    for (NSValue *v in vlBytesAllocs) {
-        void *p = NULL;
-        [v getValue:&p];
-        if (p) free(p);
-    }
+    free(fieldOff);
+    free(fieldKind);
+    free(fieldName);
+    // Safe to release borrowed-pointer backers now: H5Dwrite has copied
+    // every VL payload out into HDF5-owned global-heap storage.
     [retained removeAllObjects];
     [t close];
     return ok;
