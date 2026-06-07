@@ -10,7 +10,7 @@
 # (e.g. `--n 10000 --peaks 16 --only ms.hdf5,encryption`).
 set -euo pipefail
 
-ROOT="$HOME/TTI-O"
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TOOLS_DIR="$ROOT/tools/perf"
 OUT_DIR="$TOOLS_DIR/_out_python_full"
 

@@ -989,8 +989,8 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"
-#import "Codecs/TTIONameTokenizer.h"
-#import "Codecs/TTIORefDiff.h"
+#import "Codecs/TTIONameTokenizerV2.h"
+#import "Codecs/TTIORefDiffV2.h"
 #import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Codecs/TTIODeltaRans.h"
 #include <openssl/md5.h>
@@ -1054,10 +1054,10 @@ static void bench_codecs(NSString *tmp, NSUInteger n, NSUInteger peaks,
                               (unsigned long)i, rand() % 1000, rand() % 100]];
         }
         t0 = nowSeconds();
-        NSData *ntEnc = TTIONameTokenizerEncode(names);
+        NSData *ntEnc = [TTIONameTokenizerV2 encodeNames:names];
         putSeconds(out, @"name_tokenized_encode", nowSeconds() - t0);
         t0 = nowSeconds();
-        (void)TTIONameTokenizerDecode(ntEnc, NULL);
+        (void)[TTIONameTokenizerV2 decodeData:ntEnc error:NULL];
         putSeconds(out, @"name_tokenized_decode", nowSeconds() - t0);
     }
 }
@@ -1123,24 +1123,48 @@ static void bench_codecs_genomic(NSString *tmp, NSUInteger n, NSUInteger peaks,
                                (unsigned long)rdReadLen]];
         }
 
+        // Flatten the per-read sequences into a single uint8 buffer plus an
+        // (n+1)-entry uint64 LE offsets array for the refdiff-v2 API.
+        NSMutableData *seqFlat = [NSMutableData data];
+        NSMutableData *offsets =
+            [NSMutableData dataWithLength:(rdNumReads + 1) * sizeof(uint64_t)];
+        uint64_t *offPtr = (uint64_t *)offsets.mutableBytes;
+        uint64_t cumOff = 0;
+        offPtr[0] = 0;
+        for (NSUInteger i = 0; i < rdNumReads; i++) {
+            NSData *s = sequences[i];
+            [seqFlat appendData:s];
+            cumOff += (uint64_t)s.length;
+            offPtr[i + 1] = cumOff;
+        }
+        const NSUInteger rdTotalBases = (NSUInteger)cumOff;
+
         double t0 = nowSeconds();
-        NSData *rdEnc = [TTIORefDiff encodeWithSequences:sequences
-                                                  cigars:cigars
-                                               positions:positions
-                                      referenceChromSeq:refSeqData
-                                            referenceMD5:refMd5
-                                            referenceURI:@"perf://ref/chr1"
-                                                   error:&err];
+        NSData *rdEnc = [TTIORefDiffV2 encodeSequences:seqFlat
+                                              offsets:offsets
+                                            positions:positions
+                                         cigarStrings:cigars
+                                            reference:refSeqData
+                                         referenceMd5:refMd5
+                                         referenceUri:@"perf://ref/chr1"
+                                       readsPerSlice:10000
+                                                error:&err];
         putSeconds(out, @"ref_diff_encode", nowSeconds() - t0);
         if (!rdEnc) { NSLog(@"ref_diff encode failed: %@", err); }
 
         if (rdEnc) {
+            NSData *outSeq = nil;
+            NSData *outOff = nil;
             t0 = nowSeconds();
-            (void)[TTIORefDiff decodeData:rdEnc
-                                   cigars:cigars
-                                positions:positions
-                       referenceChromSeq:refSeqData
-                                    error:&err];
+            (void)[TTIORefDiffV2 decodeData:rdEnc
+                                  positions:positions
+                               cigarStrings:cigars
+                                  reference:refSeqData
+                                     nReads:rdNumReads
+                                 totalBases:rdTotalBases
+                               outSequences:&outSeq
+                                 outOffsets:&outOff
+                                      error:&err];
             putSeconds(out, @"ref_diff_decode", nowSeconds() - t0);
             if (err) NSLog(@"ref_diff decode error: %@", err);
         } else {
