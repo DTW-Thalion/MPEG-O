@@ -44,6 +44,28 @@
     return self;
 }
 
+- (instancetype)initWithOwnedBuffer:(NSData *)buffer
+                             length:(NSUInteger)length
+                           encoding:(TTIOEncodingSpec *)encoding
+                               axis:(TTIOAxisDescriptor *)axis
+{
+    NSParameterAssert(buffer != nil);
+    NSParameterAssert(encoding != nil);
+    NSParameterAssert(buffer.length == length * [encoding elementSize]);
+
+    self = [super init];
+    if (self) {
+        // No-copy: the caller guarantees a freshly-owned, unaliased,
+        // immutable NSData. Store it directly via the ivar.
+        _buffer   = buffer;
+        _length   = length;
+        _encoding = encoding;
+        _axis     = axis;
+        _cvParams = [NSMutableArray array];
+    }
+    return self;
+}
+
 #pragma mark - HDF5
 
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
