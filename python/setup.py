@@ -38,6 +38,10 @@ _CYTHON_TARGETS = [
         "ttio.codecs._rans._rans",
         "src/ttio/codecs/_rans/_rans.pyx",
     ),
+    (
+        "ttio.codecs._delta_rans._delta_rans",
+        "src/ttio/codecs/_delta_rans/_delta_rans.pyx",
+    ),
     # Note: REF_DIFF_V2 and NAME_TOKENIZED_V2 use the native C library
     # via ctypes; no Python-side Cython accelerator is meaningful. See
     # the module docstring above.
