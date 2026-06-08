@@ -72,6 +72,34 @@
                       encoding:(TTIOEncodingSpec *)encoding
                           axis:(TTIOAxisDescriptor *)axis;
 
+/**
+ * No-copy initialiser for callers that hand over a freshly-owned,
+ * unaliased, immutable <code>NSData</code>. Identical to
+ * <code>-initWithBuffer:length:encoding:axis:</code> except the buffer
+ * is retained as-is rather than defensively copied.
+ *
+ * The caller MUST guarantee that <code>buffer</code> is immutable and
+ * is not aliased or mutated elsewhere after this call; otherwise the
+ * SignalArray's <code>buffer</code> contract (immutable value) is
+ * violated. Intended for internal hot-path slice construction (e.g.
+ * <code>-spectrumAtIndex:</code>) where the slice is produced by
+ * <code>+[NSData dataWithBytes:length:]</code> and is therefore a
+ * private, immutable copy.
+ *
+ * @param buffer   Freshly-owned, unaliased, immutable bytes; must
+ *                 contain exactly
+ *                 <code>length * encoding.elementSize</code> bytes.
+ * @param length   Number of signal elements (not bytes).
+ * @param encoding Wire-format encoding.
+ * @param axis     Optional axis descriptor; pass <code>nil</code>
+ *                 if unknown.
+ * @return An initialised SignalArray, or <code>nil</code> on failure.
+ */
+- (instancetype)initWithOwnedBuffer:(NSData *)buffer
+                             length:(NSUInteger)length
+                           encoding:(TTIOEncodingSpec *)encoding
+                               axis:(TTIOAxisDescriptor *)axis;
+
 #pragma mark - Storage round-trip (provider-agnostic)
 
 /**

@@ -1058,10 +1058,14 @@ static void _buildStdChannelEncoding(void)
             }
         }
         if (!d) return nil;
-        TTIOSignalArray *sa = [[TTIOSignalArray alloc] initWithBuffer:d
-                                                                length:len
-                                                              encoding:enc
-                                                                  axis:nil];
+        // `d` is always a fresh, unaliased, immutable NSData built by
+        // +dataWithBytes:length: (in both the decrypted/numpress and the
+        // cached-full-column branches above), so it never aliases the
+        // cache and is safe to hand off without a defensive copy.
+        TTIOSignalArray *sa = [[TTIOSignalArray alloc] initWithOwnedBuffer:d
+                                                                    length:len
+                                                                  encoding:enc
+                                                                      axis:nil];
         channels[chName] = sa;
     }
 
