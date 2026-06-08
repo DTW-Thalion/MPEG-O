@@ -118,9 +118,10 @@ void testEncryption(void)
     NSError *err = nil;
     {
         TTIOAcquisitionRun *run = buildSmallRun();
-        TTIOHDF5File *f = [TTIOHDF5File createAtPath:path error:&err];
+        TTIOHDF5File *f = [[TTIOHDF5File createAtPath:path error:&err] retain];
         PASS([run writeToGroup:[f rootGroup] name:@"run_0001" error:&err], "run writes");
         [f close];
+        [f release];
     }
 
     PASS(![TTIOEncryptionManager isIntensityChannelEncryptedInRun:@"run_0001"
@@ -130,7 +131,7 @@ void testEncryption(void)
     // Capture original plaintext intensity for byte-exact verification later.
     NSData *originalIntensity = nil;
     {
-        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5File *f = [[TTIOHDF5File openReadOnlyAtPath:path error:&err] retain];
         TTIOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
         TTIOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
         TTIOHDF5Dataset *ds = [ch openDatasetNamed:@"intensity_values" error:&err];
@@ -138,6 +139,7 @@ void testEncryption(void)
         PASS(originalIntensity.length == 5 * 8 * sizeof(double),
              "captured original intensity (40 doubles)");
         [f close];
+        [f release];
     }
 
     // Encrypt the intensity channel.
@@ -153,7 +155,7 @@ void testEncryption(void)
 
     // Verify mz_values are still readable without the key.
     {
-        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5File *f = [[TTIOHDF5File openReadOnlyAtPath:path error:&err] retain];
         TTIOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
         TTIOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
         TTIOHDF5Dataset *mzDS = [ch openDatasetNamed:@"mz_values" error:&err];
@@ -165,6 +167,7 @@ void testEncryption(void)
         // The spectrum_index group is untouched by encryption.
         PASS([runG hasChildNamed:@"spectrum_index"], "spectrum_index untouched by encryption");
         [f close];
+        [f release];
     }
 
     // Decrypt with correct key → byte-exact match.
@@ -192,7 +195,7 @@ void testEncryption(void)
 
     // ---- access policy round-trip independent of key management ----
     {
-        TTIOHDF5File *f = [TTIOHDF5File openAtPath:path error:&err];
+        TTIOHDF5File *f = [[TTIOHDF5File openAtPath:path error:&err] retain];
         TTIOAccessPolicy *policy =
             [[TTIOAccessPolicy alloc] initWithPolicy:@{
                 @"version":  @1,
@@ -202,15 +205,17 @@ void testEncryption(void)
             }];
         PASS([policy writeToFile:f error:&err], "write access policy JSON to /protection/");
         [f close];
+        [f release];
     }
     {
-        TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:path error:&err];
+        TTIOHDF5File *f = [[TTIOHDF5File openReadOnlyAtPath:path error:&err] retain];
         TTIOAccessPolicy *back = [TTIOAccessPolicy readFromFile:f error:&err];
         PASS(back != nil, "access policy reads back without a key");
         PASS([back.policy[@"subjects"] containsObject:@"alice@lab"], "policy subjects preserved");
         PASS([back.policy[@"key_id"] isEqualToString:@"kms://demo/2026"],
              "policy key_id preserved");
         [f close];
+        [f release];
     }
 
     unlink([path fileSystemRepresentation]);
