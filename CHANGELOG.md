@@ -11,6 +11,8 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-06-08
+
 Performance campaign (post-1.7.0): repaired the cross-SDK performance suite and landed
 behavior-identical perf wins across all three SDKs. **No `.tio` on-disk, transport wire, or
 breaking public-API change** — every change verified byte-identical with cross-language
@@ -41,6 +43,12 @@ conformance preserved.
   timing, an absolute floor + two-tier per-metric thresholds, real-format import / PQC /
   `mate_info_v2` benches, honest cross-SDK size metrics, and a cross-SDK parity checker. (#248,
   #249, #250, #252, #253, #254, #255, #259)
+- **Cross-SDK coverage campaign R1–R6.** In-process CLI coverage (Java/Python) + happy-path
+  ObjC NSTask runs; dead fqzcomp V1/V2/V3 removed across all 3 SDKs (live V4 path tested);
+  coverage gates ratcheted (Java line + Python total to 0.86, ObjC gate enforced in CI,
+  per-unit floors). Docs refreshed. (#239, #240–#247, #264, #265)
+
+PRs: #239–#265.
 
 ## [1.7.0] - 2026-06-05
 
