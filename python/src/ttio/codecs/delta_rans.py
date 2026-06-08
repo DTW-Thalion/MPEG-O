@@ -25,6 +25,17 @@ import numpy as np
 
 from . import rans
 
+# Optional Cython accelerator for the inherently-serial LEB128 varint
+# emit/parse loops. Byte-exact with the pure-Python fallbacks below (see
+# setup.py for the extension declaration). When absent, the pure-Python
+# loops are used and produce identical bytes, just slower.
+try:
+    from ._delta_rans import _delta_rans as _c  # type: ignore[import-not-found]
+    _HAVE_C_EXTENSION = True
+except ImportError:  # pragma: no cover — Cython optional
+    _c = None
+    _HAVE_C_EXTENSION = False
+
 _MAGIC = b"DRA0"
 _VERSION = 1
 _HEADER_LEN = 8
@@ -96,19 +107,24 @@ def encode(data: bytes, element_size: int) -> bytes:
         return header + rans.encode(b"", order=0)
 
     bits = _BITS[element_size]
-    zz_list = _encode_zigzag(data, element_size, bits)
+    zz = _encode_zigzag(data, element_size, bits)
 
-    # Variable-length varint emit stays serial (kept byte-identical).
-    varint_buf = bytearray()
-    for z in zz_list:
-        varint_buf.extend(_varint_encode(z))
+    if _HAVE_C_EXTENSION:
+        # C LEB128 emit — byte-identical to the serial loop below.
+        varint_bytes = _c.varint_encode_all(zz)
+    else:
+        # Variable-length varint emit stays serial (kept byte-identical).
+        varint_buf = bytearray()
+        for z in zz:
+            varint_buf.extend(_varint_encode(int(z)))
+        varint_bytes = bytes(varint_buf)
 
-    body = rans.encode(bytes(varint_buf), order=0)
+    body = rans.encode(varint_bytes, order=0)
     return header + body
 
 
-def _encode_zigzag(data: bytes, element_size: int, bits: int) -> list[int]:
-    """Return the per-element zigzag-encoded deltas (unsigned ints).
+def _encode_zigzag(data: bytes, element_size: int, bits: int) -> np.ndarray:
+    """Return the per-element zigzag-encoded deltas as a uint64 array.
 
     Sizes 1 and 4 are vectorized with numpy; size 8 (int64) stays on the
     scalar loop. For bits < 64 numpy's fixed-width two's-complement wrap of
@@ -124,11 +140,11 @@ def _encode_zigzag(data: bytes, element_size: int, bits: int) -> list[int]:
         n = len(data) // 8
         values = struct.unpack(f"<{n}q", data)
         prev = 0
-        out: list[int] = []
-        for v in values:
+        out = np.empty(n, dtype=np.uint64)
+        for idx, v in enumerate(values):
             delta = v - prev
             zz = ((delta << 1) ^ (delta >> 63)) & mask
-            out.append(zz)
+            out[idx] = zz
             prev = v
         return out
 
@@ -144,7 +160,31 @@ def _encode_zigzag(data: bytes, element_size: int, bits: int) -> list[int]:
     with np.errstate(over="ignore"):
         deltas = np.diff(vals, prepend=sdtype.type(0))
         zz_signed = (deltas << 1) ^ (deltas >> (bits - 1))
-    return zz_signed.view(udtype).tolist()
+    # Return as uint64 so the varint emit (C or Python) sees a uniform,
+    # contiguous unsigned array. The widening from u1/u4 to u8 is value-
+    # preserving (zigzag values are non-negative), so the emitted LEB128
+    # bytes are unchanged.
+    return zz_signed.view(udtype).astype(np.uint64)
+
+
+def _decode_int64_scalar(zigzag_values) -> bytes:
+    """Scalar int64 zigzag-decode + prefix sum (overflow fallback).
+
+    Mirrors the original reference exactly: it sums in Python's unbounded
+    integers and raises ``struct.error`` if a reconstructed value falls
+    outside the int64 range. Only used when the vectorized path detects a
+    signed-addition overflow, so byte-for-byte behavior (including the error)
+    is preserved for malformed streams.
+    """
+    values: list[int] = []
+    prev = 0
+    for zz in zigzag_values:
+        zz = int(zz)
+        delta = (zz >> 1) ^ -(zz & 1)
+        v = prev + delta
+        values.append(v)
+        prev = v
+    return struct.pack(f"<{len(values)}q", *values)
 
 
 def decode(encoded: bytes) -> bytes:
@@ -170,25 +210,48 @@ def decode(encoded: bytes) -> bytes:
     if len(varint_bytes) == 0:
         return b""
 
-    # Variable-length varint parse stays serial (kept byte-identical).
-    zigzag_values = _varint_decode_all(varint_bytes)
-
-    if element_size == 8:
-        # Scalar int64 path, kept to mirror the scalar encode exactly. The
-        # original code has no bits==64 wrap, so it sums in Python's unbounded
-        # integers and raises struct.error if a reconstructed value overflows
-        # int64; preserving the scalar loop preserves that behavior byte-for-byte.
-        values: list[int] = []
-        prev = 0
-        for zz in zigzag_values:
-            delta = (zz >> 1) ^ -(zz & 1)
-            v = prev + delta
-            values.append(v)
-            prev = v
-        return struct.pack(f"<{len(values)}q", *values)
+    # Variable-length varint parse — C accelerator when available (returns a
+    # uint64 numpy array), else the byte-identical serial Python loop (returns
+    # a list). Both yield the same zigzag values.
+    if _HAVE_C_EXTENSION:
+        zz_arr = _c.varint_decode_all(varint_bytes)
+    else:
+        zz_arr = np.array(_varint_decode_all(varint_bytes), dtype=np.uint64)
 
     sdtype = np.dtype(_NUMPY_DTYPE[element_size])
     udtype = np.dtype(_NUMPY_UDTYPE[element_size])
+
+    if element_size == 8:
+        # Vectorized int64 zigzag-decode + prefix sum. zz arrives as uint64;
+        # the signed delta is `(zz >> 1) ^ -(zz & 1)` in 64-bit two's
+        # complement. cumsum in uint64 wraps mod 2**64, and viewing the result
+        # as int64 reinterprets the bits — identical to the scalar
+        # `v = prev + delta` for every sequence whose running sum stays in
+        # int64 range. The little-endian signed dtype makes tobytes()
+        # byte-identical to struct.pack('<...q').
+        #
+        # The scalar reference sums in Python's *unbounded* integers and raises
+        # struct.error when a reconstructed value falls outside int64. To
+        # preserve that behavior byte-for-byte we detect signed-addition
+        # overflow vectorially (prev and delta same sign, result opposite sign)
+        # and, if any step overflowed, defer to the scalar loop so the same
+        # struct.error is raised.
+        ones = np.uint64(1)
+        delta = (zz_arr >> ones).view(sdtype) ^ -(zz_arr & ones).view(sdtype)
+        with np.errstate(over="ignore"):
+            vals_u = np.cumsum(delta.view(udtype), dtype=udtype)
+        vals = vals_u.view(sdtype)
+        # Signed overflow at step i: prev=vals[i-1], d=delta[i], r=vals[i];
+        # overflow iff sign(prev)==sign(d) != sign(r). prev for i=0 is 0, so
+        # the first step never overflows.
+        prev = np.empty_like(vals)
+        prev[0] = 0
+        prev[1:] = vals[:-1]
+        same_sign = (prev >= 0) == (delta >= 0)
+        result_diff = (vals >= 0) != (prev >= 0)
+        if np.any(same_sign & result_diff):
+            return _decode_int64_scalar(zz_arr)
+        return vals.tobytes()
 
     # Vectorized zigzag-decode + prefix sum (sizes 1 and 4). zz arrives
     # unsigned; the signed delta is `(zz >> 1) ^ -(zz & 1)` computed in the
@@ -197,7 +260,7 @@ def decode(encoded: bytes) -> bytes:
     # normalization (`v &= mask; if v >= half: v -= 1<<bits`). The
     # little-endian signed dtype makes tobytes() byte-identical to
     # struct.pack('<...').
-    zz = np.array(zigzag_values, dtype=udtype)
+    zz = zz_arr.astype(udtype)
     with np.errstate(over="ignore"):
         delta = (zz >> 1).view(sdtype) ^ -(zz & udtype.type(1)).view(sdtype)
         vals = np.cumsum(delta, dtype=sdtype)
