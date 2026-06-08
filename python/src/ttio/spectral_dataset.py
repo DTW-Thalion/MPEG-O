@@ -244,6 +244,12 @@ class SpectralDataset:
         title = io.read_string_attr(study, "title", default="") or ""
         isa = io.read_string_attr(study, "isa_investigation_id", default="") or ""
 
+        # Remote (fsspec) datasets keep the per-spectrum hyperslab read so
+        # a single random access only fetches its own slice over the
+        # network; local datasets bulk-read each channel column once. The
+        # materialized spectra are byte-identical either way.
+        bulk_read = _remote_fileobj is None
+
         ms_runs: dict[str, AcquisitionRun] = {}
         if study.has_child("ms_runs"):
             ms_group = study.open_group("ms_runs")
@@ -252,7 +258,8 @@ class SpectralDataset:
             )
             for name in names:
                 if ms_group.has_child(name):
-                    run = AcquisitionRun.open(ms_group.open_group(name), name)
+                    run = AcquisitionRun.open(
+                        ms_group.open_group(name), name, bulk_read=bulk_read)
                     run._set_persistence_context(str(path), name)
                     ms_runs[name] = run
 
@@ -264,7 +271,8 @@ class SpectralDataset:
             )
             for name in names:
                 if nmr_group.has_child(name):
-                    run = AcquisitionRun.open(nmr_group.open_group(name), name)
+                    run = AcquisitionRun.open(
+                        nmr_group.open_group(name), name, bulk_read=bulk_read)
                     run._set_persistence_context(str(path), name)
                     nmr_runs[name] = run
 

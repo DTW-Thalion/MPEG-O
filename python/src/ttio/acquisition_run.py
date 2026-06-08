@@ -369,6 +369,13 @@ class AcquisitionRun:
     # are readable through the normal API after decrypt while the
     # on-disk file stays encrypted. Mirrors ObjC rehydration.
     _decrypted_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
+    # Lazy full-column cache for the plain (non-decrypted, non-numpress)
+    # read path. On first access of a channel, :meth:`_materialize_spectrum`
+    # bulk-reads the WHOLE channel column once and stores it here, then
+    # slices in memory for every spectrum — mirroring the ObjC/Java fast
+    # path and the existing _decrypted/_numpress caches. The underlying
+    # run is read-only after open, so no invalidation is needed.
+    _full_channel_cache: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
     # Streamable cursor and Provenanceable cache.
     _cursor: int = field(default=0, repr=False)
     _provenance_cache: list[ProvenanceRecord] | None = field(default=None, repr=False)
@@ -378,6 +385,13 @@ class AcquisitionRun:
     # encrypt_with_key / decrypt_with_key can delegate to the encryption module.
     _persistence_file_path: str | None = field(default=None, repr=False)
     _persistence_run_name: str | None = field(default=None, repr=False)
+    # When True (local files), :meth:`_materialize_spectrum` bulk-reads
+    # each channel column once and slices in memory (the fast path). When
+    # False (remote fsspec-backed runs), it keeps the per-spectrum
+    # hyperslab read so a single random access does not pull the whole
+    # column over the network — preserving lazy HTTP range-request
+    # behavior. Set by SpectralDataset._from_provider.
+    _bulk_read: bool = field(default=True, repr=False)
 
     @property
     def kind(self) -> SpectrumKind:
@@ -394,7 +408,13 @@ class AcquisitionRun:
         return SpectrumKind.from_persisted(self.spectrum_class)
 
     @classmethod
-    def open(cls, group: StorageGroup | "h5py.Group", name: str) -> "AcquisitionRun":
+    def open(
+        cls,
+        group: StorageGroup | "h5py.Group",
+        name: str,
+        *,
+        bulk_read: bool = True,
+    ) -> "AcquisitionRun":
         """Open a run from a storage-provider group .
 
         Accepts either a :class:`StorageGroup` (protocol path) or an
@@ -402,6 +422,12 @@ class AcquisitionRun:
         :class:`~ttio.providers.hdf5._Group`). made every
         cold-path read route through the StorageGroup protocol so
         Memory / SQLite / Zarr backends work without touching h5py.
+
+        ``bulk_read`` (default ``True``) controls the per-spectrum read
+        strategy: local files bulk-read each channel column once and
+        slice in memory; pass ``False`` for remote fsspec-backed runs so
+        a single random access only fetches its own slice. The materialized
+        spectra are byte-identical either way.
         """
         sgroup = _wrap_hdf5_group(group)
 
@@ -491,6 +517,7 @@ class AcquisitionRun:
             uvvis_path_length_cm=uvvis_path_length_cm,
             chromatograms=_read_chromatograms(sgroup),
             _numpress_channels=numpress_channels,
+            _bulk_read=bulk_read,
         )
 
     # ----------------------------------------------------- spectrum access
@@ -717,15 +744,39 @@ class AcquisitionRun:
             elif (decoded := self._numpress_channels.get(c)) is not None:
                 arr = decoded[offset:offset + length]
             else:
-                try:
-                    ds = self._signal_dataset(c)
-                except KeyError:
-                    continue
-                # read through the storage protocol, not
-                # h5py slicing. Works uniformly across Hdf5/Memory/
-                # Sqlite providers — the cross-backend byte-identity
-                # tests in M43 guarantee equivalence.
-                arr = np.asarray(ds.read(offset=offset, count=length))
+                full = self._full_channel_cache.get(c)
+                if full is not None:
+                    # Cache HIT: slice the already-loaded full column.
+                    arr = full[offset:offset + length]
+                elif self._bulk_read:
+                    # Local fast path: bulk-read the WHOLE channel column
+                    # once through the storage protocol (offset=0,
+                    # count=-1 -> full read), cache it, then slice in
+                    # memory for every spectrum. This mirrors the ObjC/Java
+                    # fast path and the _decrypted/_numpress caches above.
+                    # The per-spectrum slice ``full[offset:offset+length]``
+                    # is byte-identical to the old per-call
+                    # ``ds.read(offset=offset, count=length)`` (same dtype,
+                    # same element range). Works uniformly across
+                    # Hdf5/Memory/Sqlite providers — the cross-backend
+                    # byte-identity tests in M43 guarantee equivalence.
+                    try:
+                        ds = self._signal_dataset(c)
+                    except KeyError:
+                        continue
+                    full = np.asarray(ds.read())
+                    self._full_channel_cache[c] = full
+                    arr = full[offset:offset + length]
+                else:
+                    # Remote (fsspec) path: keep the per-spectrum hyperslab
+                    # read so a single random access only pulls its own
+                    # slice over the network, not the whole column. The
+                    # result is identical to the bulk-then-slice path.
+                    try:
+                        ds = self._signal_dataset(c)
+                    except KeyError:
+                        continue
+                    arr = np.asarray(ds.read(offset=offset, count=length))
             axis = _CHANNEL_AXIS.get(c, AxisDescriptor(name=c, unit=""))
             signal_arrays[c] = SignalArray.from_numpy(arr, axis=axis)
 
