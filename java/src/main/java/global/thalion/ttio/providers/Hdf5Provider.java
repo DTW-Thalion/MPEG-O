@@ -54,11 +54,19 @@ public final class Hdf5Provider implements StorageProvider {
 
     @Override
     public StorageProvider open(String pathOrUrl, Mode mode) {
+        return open(pathOrUrl, mode, false);
+    }
+
+    @Override
+    public StorageProvider open(String pathOrUrl, Mode mode, boolean largeBlocks) {
         String path = pathOrUrl.startsWith("file://")
                 ? pathOrUrl.substring("file://".length())
                 : pathOrUrl;
         this.file = switch (mode) {
-            case CREATE -> Hdf5File.create(path);
+            // Issue #251: only CREATE consults the largeBlocks hint
+            // (genomic writes → 8 MB meta block; spectral → HDF5
+            // defaults). READ/READ_WRITE/APPEND are unchanged.
+            case CREATE -> Hdf5File.create(path, largeBlocks);
             case READ -> Hdf5File.openReadOnly(path);
             case READ_WRITE, APPEND -> Hdf5File.open(path);
         };

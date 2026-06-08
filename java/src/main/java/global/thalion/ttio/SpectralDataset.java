@@ -663,8 +663,12 @@ public class SpectralDataset implements
             List<Sample> samples,
             FeatureFlags featureFlags,
             Runnable bumpSection) {
+        // Issue #251: genomic writes request the large amortising meta
+        // block; pure-spectral writes take HDF5 defaults. Non-HDF5
+        // providers (memory/sqlite/zarr) ignore the hint.
+        boolean hasGenomic = genomicRuns != null && !genomicRuns.isEmpty();
         StorageProvider provider = global.thalion.ttio.providers
-                .ProviderRegistry.open(url, StorageProvider.Mode.CREATE);
+                .ProviderRegistry.open(url, StorageProvider.Mode.CREATE, hasGenomic);
         // Batch all create-time writes into a single provider transaction so
         // SQLite doesn't fsync per group/dataset/attribute. No-op for
         // providers without explicit transactions (default StorageProvider
@@ -1225,8 +1229,10 @@ public class SpectralDataset implements
                     provenanceRecords, subjectsList, samplesList, featureFlags,
                     bumpSection);
         }
+        // Issue #251: only genomic writes need the 8 MB amortising meta
+        // block; pure-spectral files take the HDF5 default (small) blocks.
         Hdf5Provider provider = (Hdf5Provider) new Hdf5Provider()
-                .open(pathOrUrl, StorageProvider.Mode.CREATE);
+                .open(pathOrUrl, StorageProvider.Mode.CREATE, hasGenomic);
         Hdf5File file = (Hdf5File) provider.nativeHandle();
         try (Hdf5Group root = file.rootGroup()) {
             featureFlags.writeTo(root);

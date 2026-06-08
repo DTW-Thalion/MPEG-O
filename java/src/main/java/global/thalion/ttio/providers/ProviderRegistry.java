@@ -63,13 +63,31 @@ public final class ProviderRegistry {
     /** Open the appropriate provider for the given URL or path. */
     public static StorageProvider open(String pathOrUrl,
                                         StorageProvider.Mode mode) {
-        return open(pathOrUrl, mode, null);
+        return open(pathOrUrl, mode, (String) null);
+    }
+
+    /** Open the appropriate provider for the given URL or path, passing the
+     *  {@code largeBlocks} backend-allocation hint (issue #251). Non-HDF5
+     *  providers ignore it via the {@link StorageProvider} default. */
+    public static StorageProvider open(String pathOrUrl,
+                                        StorageProvider.Mode mode,
+                                        boolean largeBlocks) {
+        return open(pathOrUrl, mode, null, largeBlocks);
     }
 
     /** Open with an explicit provider name override (bypasses URL detection). */
     public static StorageProvider open(String pathOrUrl,
                                         StorageProvider.Mode mode,
                                         String providerName) {
+        return open(pathOrUrl, mode, providerName, false);
+    }
+
+    /** Open with an explicit provider name override + a {@code largeBlocks}
+     *  backend-allocation hint (issue #251). */
+    public static StorageProvider open(String pathOrUrl,
+                                        StorageProvider.Mode mode,
+                                        String providerName,
+                                        boolean largeBlocks) {
         Map<String, Class<? extends StorageProvider>> registry = discover();
 
         Class<? extends StorageProvider> cls;
@@ -113,6 +131,6 @@ public final class ProviderRegistry {
             throw new IllegalStateException(
                     "provider " + cls + " lacks a no-arg constructor", e);
         }
-        return provider.open(pathOrUrl, mode);
+        return provider.open(pathOrUrl, mode, largeBlocks);
     }
 }

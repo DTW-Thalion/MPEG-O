@@ -47,6 +47,26 @@ public interface StorageProvider extends AutoCloseable {
      *  <p>Re-opening an already-open provider is an error.</p> */
     StorageProvider open(String pathOrUrl, Mode mode);
 
+    /** Open the backing store with a backend-allocation hint.
+     *
+     *  <p>{@code largeBlocks} is advisory: when {@code true} the provider
+     *  may pre-size its file free-space blocks for a metadata-heavy write
+     *  (e.g. an HDF5 genome reference with tens of thousands of contigs).
+     *  It affects only where bytes land in the file, never the logical
+     *  content, so providers that don't allocate file blocks
+     *  (Memory/SQLite/Zarr) ignore it. The default implementation
+     *  delegates to {@link #open(String, Mode)} — only {@link Hdf5Provider}
+     *  honours the hint. Added for issue #251 (small spectral {@code .tio}
+     *  files no longer carry ~8 MB of dead meta-block space).</p>
+     *
+     *  @param pathOrUrl   backing-store path or URL
+     *  @param mode        open mode
+     *  @param largeBlocks {@code true} to request large amortising blocks
+     *  @return this provider, opened */
+    default StorageProvider open(String pathOrUrl, Mode mode, boolean largeBlocks) {
+        return open(pathOrUrl, mode);
+    }
+
     /** Root group ("/"). Must be called after {@link #open}. */
     StorageGroup rootGroup();
 
