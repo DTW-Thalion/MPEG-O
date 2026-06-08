@@ -1120,10 +1120,12 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
             if (!writer) { NSLog(@"StreamWriter init failed: %@", e); exit(1); }
 
             for (NSUInteger i = 0; i < specCount; i++) {
-                TTIOMassSpectrum *sp = [srcRun objectAtIndex:i];
-                if (![writer appendSpectrum:sp error:&e]) {
-                    NSLog(@"StreamWriter append %lu failed: %@", (unsigned long)i, e);
-                    exit(1);
+                @autoreleasepool {
+                    TTIOMassSpectrum *sp = [srcRun objectAtIndex:i];
+                    if (![writer appendSpectrum:sp error:&e]) {
+                        NSLog(@"StreamWriter append %lu failed: %@", (unsigned long)i, e);
+                        exit(1);
+                    }
                 }
             }
             if (![writer flushAndCloseWithError:&e]) {
@@ -1143,9 +1145,11 @@ static void bench_streaming(NSString *tmp, NSUInteger n, NSUInteger peaks,
 
             NSUInteger readBack = 0;
             while (![reader atEnd]) {
-                TTIOMassSpectrum *sp = [reader nextSpectrumWithError:&e];
-                if (!sp) { NSLog(@"StreamReader next failed: %@", e); exit(1); }
-                readBack += sp.signalArrays[@"mz"].length;
+                @autoreleasepool {
+                    TTIOMassSpectrum *sp = [reader nextSpectrumWithError:&e];
+                    if (!sp) { NSLog(@"StreamReader next failed: %@", e); exit(1); }
+                    readBack += sp.signalArrays[@"mz"].length;
+                }
             }
             (void)readBack;
             [reader close];
