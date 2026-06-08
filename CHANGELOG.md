@@ -11,6 +11,37 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+Performance campaign (post-1.7.0): repaired the cross-SDK performance suite and landed
+behavior-identical perf wins across all three SDKs. **No `.tio` on-disk, transport wire, or
+breaking public-API change** — every change verified byte-identical with cross-language
+conformance preserved.
+
+### Performance
+- **Objective-C transport & per-AU encryption.** `.mots` transport encode ~976→629ms (a
+  whole-channel read cache in `spectrumAtIndex:` eliminates ~200k per-AU HDF5 hyperslab reads);
+  per-AU `encryption.encrypt` ~825→576ms via zero-copy variable-length writes in the shared
+  compound-write path (`writeGeneric` — benefits **all** compound writers), `EVP_CIPHER_CTX`
+  reuse, and per-AU autorelease pools. (#256, #257, #258, #260)
+- **Python `delta_rans` codec.** decode ~12× faster (271→22ms, now at Java/ObjC parity), encode
+  ~2× — a new optional Cython varint/int64 accelerator with a pure-Python fallback;
+  byte-identical `DRA0` output. (#262)
+- **Python bulk reads.** `streaming.read` ~2.2×, `genomic.read` ~3.7×, genomic random-access p99
+  ~100× faster — channel columns are now read once and sliced in memory instead of per-spectrum
+  HDF5 hyperslab reads. Remote (fsspec/HTTP) datasets retain lazy range requests. (#263)
+
+### Fixed
+- **Java `.tio` storage bloat.** Small spectral `.tio` files no longer carry ~8MB of unused HDF5
+  metadata-block space (~8MB → ~36KB on disk). The large meta-block is now used only for
+  genome-reference writes that need it. FAPL-only change — files stay valid HDF5 with
+  byte-identical content. (#251, #261)
+
+### Internal
+- **Cross-SDK performance suite repaired + hardened** (`tools/perf/`). It had been silently
+  green while executing nothing; it is now a trustworthy **manual** regression gate — min-of-N
+  timing, an absolute floor + two-tier per-metric thresholds, real-format import / PQC /
+  `mate_info_v2` benches, honest cross-SDK size metrics, and a cross-SDK parity checker. (#248,
+  #249, #250, #252, #253, #254, #255, #259)
+
 ## [1.7.0] - 2026-06-05
 
 Object-oriented design sweep: completes the entire 2026-06-02 OO design-assessment
