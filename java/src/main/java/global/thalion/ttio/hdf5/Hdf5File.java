@@ -52,13 +52,56 @@ public class Hdf5File implements AutoCloseable {
     private static final long META_BLOCK_SIZE        = 8L * 1024L * 1024L;
     private static final long SMALL_DATA_BLOCK_SIZE  = 2L * 1024L * 1024L;
 
-    /** Create a new HDF5 file, truncating any existing file at path. */
+    // Issue #251 test seam: records the {@code largeBlocks} hint of the
+    // most recent {@link #create(String, boolean)} call so a unit test can
+    // assert that genomic writes still request the 8 MB amortising blocks
+    // and pure-spectral writes don't. Test-observability only — reading or
+    // writing this field changes no file content or allocation behaviour.
+    private static volatile boolean lastCreateLargeBlocks;
+
+    /** Test-observability accessor for the {@link #lastCreateLargeBlocks}
+     *  seam (issue #251). Returns the {@code largeBlocks} hint of the most
+     *  recent {@link #create(String, boolean)} call. Has no effect on file
+     *  content or allocation behaviour. */
+    public static boolean lastCreateLargeBlocks() {
+        return lastCreateLargeBlocks;
+    }
+
+    /** Test-observability setter: resets the {@link #lastCreateLargeBlocks}
+     *  seam so a test can assert the next create's hint deterministically.
+     *  No effect on file content or allocation behaviour. */
+    public static void resetLastCreateLargeBlocks(boolean value) {
+        lastCreateLargeBlocks = value;
+    }
+
+    /** Create a new HDF5 file, truncating any existing file at path.
+     *  Uses the HDF5 default (small) meta/small-data block sizes. */
     public static Hdf5File create(String path) {
+        return create(path, false);
+    }
+
+    /** Create a new HDF5 file, truncating any existing file at path.
+     *
+     *  <p>When {@code largeBlocks} is {@code true} the FAPL is configured
+     *  with an 8 MB meta block + 2 MB small-data block — the amortising
+     *  layout needed by genome-reference writes (~25k contigs → ~100k
+     *  metadata ops). When {@code false} the HDF5 defaults (~2 KB) are
+     *  used, matching the Python/ObjC SDKs and avoiding ~8 MB of dead
+     *  free-space in small spectral files (issue #251).</p>
+     *
+     *  <p>This setting affects only the file's free-space allocation
+     *  strategy (where bytes land), never the logical objects or dataset
+     *  bytes; the file is valid HDF5 either way and reads identically.</p>
+     */
+    public static Hdf5File create(String path, boolean largeBlocks) {
+        lastCreateLargeBlocks = largeBlocks;
         try {
             long fapl = H5.H5Pcreate(HDF5Constants.H5P_FILE_ACCESS);
             try {
-                H5.H5Pset_meta_block_size(fapl, META_BLOCK_SIZE);
-                H5.H5Pset_small_data_block_size(fapl, SMALL_DATA_BLOCK_SIZE);
+                if (largeBlocks) {
+                    H5.H5Pset_meta_block_size(fapl, META_BLOCK_SIZE);
+                    H5.H5Pset_small_data_block_size(fapl, SMALL_DATA_BLOCK_SIZE);
+                }
                 long fid = H5.H5Fcreate(path,
                         HDF5Constants.H5F_ACC_TRUNC,
                         HDF5Constants.H5P_DEFAULT,
