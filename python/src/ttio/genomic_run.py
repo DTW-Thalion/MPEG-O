@@ -175,6 +175,16 @@ class GenomicRun:
         default=None, repr=False, compare=False,
     )
 
+    # When True (local files), :meth:`_byte_channel_slice` bulk-reads an
+    # uncompressed byte channel once and slices in memory. When False
+    # (remote fsspec-backed runs), it keeps the per-record hyperslab read
+    # so a single random access does not pull the whole column over the
+    # network. Codec-compressed channels are always whole-channel decoded
+    # (the codec output is not sliceable) regardless of this flag. Set by
+    # SpectralDataset._from_provider. The returned bytes are identical
+    # either way.
+    _bulk_read: bool = field(default=True, repr=False, compare=False)
+
     # ------------------------------------------------------------------
     # Sequence protocol
     # ------------------------------------------------------------------
@@ -291,7 +301,8 @@ class GenomicRun:
     # ------------------------------------------------------------------
 
     @classmethod
-    def open(cls, group, name: str, *, references_group=None) -> "GenomicRun":
+    def open(cls, group, name: str, *, references_group=None,
+             bulk_read: bool = True) -> "GenomicRun":
         """Open an existing genomic_runs/<name>/ group.
 
         Mirrors :meth:`ttio.acquisition_run.AcquisitionRun.open`: the
@@ -334,6 +345,7 @@ class GenomicRun:
             group=sgroup,
             channel_names=channel_names,
             _references_group=references_group,
+            _bulk_read=bulk_read,
         )
 
     # ------------------------------------------------------------------
@@ -440,9 +452,27 @@ class GenomicRun:
             return decoded[offset:offset + count]
 
         ds = self._signal_dataset(name)
+        # The @compression attr is probed only on a cache MISS — once the
+        # channel is cached below, the top-of-function ``cached`` check
+        # returns the slice without re-reading the attr, so this is a
+        # one-time-per-channel determination (was previously re-read on
+        # every slice for the uncompressed path).
         codec_id = io.read_int_attr(ds, "compression", default=0) or 0
         if codec_id == 0:
-            return bytes(ds.read(offset=offset, count=count))
+            if not self._bulk_read:
+                # Remote (fsspec) path: keep the per-record hyperslab read
+                # so a single random access only pulls its own slice over
+                # the network, not the whole column. Byte-identical to the
+                # bulk-then-slice path.
+                return bytes(ds.read(offset=offset, count=count))
+            # Uncompressed: bulk-read the WHOLE byte channel once, cache,
+            # and slice in memory thereafter — mirroring the compressed
+            # branch below and the ObjC/Java fast path. The cached slice
+            # ``[offset:offset+count]`` is byte-identical to the old
+            # per-call ``ds.read(offset=offset, count=count)``.
+            all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))
+            self._decoded_byte_channels[name] = all_bytes
+            return all_bytes[offset:offset + count]
 
         # Compressed: read all bytes, decode, cache for subsequent slices.
         all_bytes = bytes(ds.read(offset=0, count=int(ds.length)))

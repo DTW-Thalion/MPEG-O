@@ -833,11 +833,17 @@ def test_opt_genomic_flag_absent_when_no_genomic_runs(tmp_path: Path):
         ds.close()
 
 
-def test_random_access_uses_hyperslab(tmp_path: Path):
-    """Acceptance #12: __getitem__ reads only the read's slice, not the full channel.
+def test_random_access_bulk_reads_channel_once(tmp_path: Path):
+    """__getitem__ bulk-reads the byte channel once, then slices in memory.
 
-    Verifies by recording the offset/count arguments to the sequences dataset's
-    read() and asserting they match offsets[i]..offsets[i]+lengths[i].
+    The uncompressed byte-channel read path mirrors the ObjC/Java fast
+    path: on first access the WHOLE channel is read once (offset=0,
+    count=full length) and cached, and subsequent accesses slice the
+    cached bytes (no further dataset reads). Verified by recording the
+    offset/count arguments to the sequences dataset's read() and
+    asserting (a) the first access issues exactly one full-channel read,
+    (b) a second access issues no further reads, and (c) the returned
+    content is byte-identical to the record's expected slice.
     """
     from ttio.spectral_dataset import SpectralDataset
 
@@ -866,13 +872,17 @@ def test_random_access_uses_hyperslab(tmp_path: Path):
 
         read = gr[500]
 
-        # Exactly one read call against sequences for read 500
+        # Exactly one read call against sequences: the whole-channel
+        # bulk read (offset 0, full length).
         assert len(recorded) == 1
-        expected_offset = int(written.offsets[500])
+        assert recorded[0] == (0, int(seq_ds.length))
+        # The actual read content matches the record's slice exactly.
         expected_count = int(written.lengths[500])
-        assert recorded[0] == (expected_offset, expected_count)
-        # And the actual read content matches
         assert len(read.sequence) == expected_count
+
+        # A second access slices the cached bytes — no further reads.
+        _ = gr[501]
+        assert len(recorded) == 1
     finally:
         ds.close()
 

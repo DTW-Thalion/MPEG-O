@@ -294,6 +294,7 @@ class SpectralDataset:
                     genomic_runs_map[name] = GenomicRun.open(
                         g_group.open_group(name), name,
                         references_group=refs_group,
+                        bulk_read=bulk_read,
                     )
 
         references_map = _gw._load_references_provider(study)
