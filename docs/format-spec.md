@@ -1104,13 +1104,15 @@ The 4-substream container wire format:
 
 | Substream | Content | Encoding |
 |-----------|---------|----------|
-| MF | Per-record mate-flag (0=SAME_CHROM_NEARBY, 1=SAME_CHROM_FAR, 2=NO_MATE, 3=DIFF_CHROM) | raw-pack or rANS-O0 (auto-pick) |
-| NS | Chrom_id for DIFF_CHROM records (0 elsewhere) | varint + rANS-O0 auto-pick |
-| NP | Mate_pos: zigzag-varint delta for SAME_CHROM_NEARBY, absolute for DIFF_CHROM; 0 for others | varint + rANS-O0 auto-pick |
+| MF | Per-record mate-flag (0=SAME_CHROM, 1=CROSS_CHROM, 2=NO_MATE, 3=RESERVED — never emitted) | raw-pack or rANS-O0 (auto-pick) |
+| NS | Chrom_id for CROSS_CHROM records (0 elsewhere) | varint + rANS-O0 auto-pick |
+| NP | Mate_pos: zigzag-varint delta vs read position for SAME_CHROM, absolute for CROSS_CHROM; 0 for others | varint + rANS-O0 auto-pick |
 | TS | Template_length (zigzag-varint); 0 for NO_MATE | varint + rANS-O0 auto-pick |
 
 Container header (34 bytes): 4-byte magic `b"MIv2"` + 1-byte version
-`\x01` + 1-byte flags `\x00` + 4 × uint64 LE substream byte lengths.
+`\x01` + 1-byte flags `\x00` + `n_records` (uint64 LE) + `num_cross`
+(uint32 LE) + 4 × uint32 LE substream byte lengths (MF, NS, NP, TS).
+See [docs/codecs/mate_info_v2.md](codecs/mate_info_v2.md) for the full codec.
 
 ### 10.9b.2 Reader-side dependency
 
