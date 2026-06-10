@@ -1,4 +1,4 @@
-# Migration Guide: mzML, nmrML, SAM/BAM/CRAM to TTI-O (current: v1.2)
+# Migration Guide: mzML, nmrML, SAM/BAM/CRAM to TTI-O (current: v1.7.1)
 
 ## Audience and prerequisites
 
@@ -10,7 +10,7 @@ only the Python implementation; the ObjC and Java surfaces mirror it
 **You need:**
 
 - Python 3.11 or later
-- A TTI-O v1.2 checkout (PyPI publishing is deferred until the M40
+- A TTI-O v1.7.1 checkout (PyPI publishing is deferred until the M40
   account-setup work clears; install from source today)
 - For Thermo `.raw` input: ThermoRawFileParser on your `PATH` (see section 6)
 - For SAM / BAM / CRAM input: `samtools` (≥ 1.19) on your `PATH`
@@ -608,12 +608,12 @@ not both (mutually exclusive per the format spec). See
 All three languages ship a JCAMP-DX 5.01 AFFN reader and writer:
 
 ```python
-from ttio.importers.jcampdx import read as read_jcampdx
+from ttio.importers.jcamp_dx import read_spectrum as read_jcampdx
 result = read_jcampdx("sample.jdx")
 result.to_ttio("sample.tio")
 
-from ttio.exporters.jcampdx import write as write_jcampdx
-write_jcampdx(spectrum, "out.jdx")
+from ttio.exporters.jcamp_dx import write_raman_spectrum, write_ir_spectrum
+write_raman_spectrum(spectrum, "out.jdx")  # or write_ir_spectrum for IR
 ```
 
 Dispatch on `##DATA TYPE=` between Raman and IR is automatic on

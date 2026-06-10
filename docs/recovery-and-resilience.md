@@ -15,7 +15,7 @@ specification.
 
 | Failure mode | Behaviour | Catchable? | Notes |
 |---|---|---|---|
-| Zero-byte file | Open raises | Yes | Python: `OSError`; Java: `HDF5LibraryException`; ObjC: `NSError`. |
+| Zero-byte file | Open raises | Yes | Python: `OSError`; Java: `Hdf5Errors.Hdf5Exception` (a `RuntimeException` wrapping the underlying `HDF5LibraryException`); ObjC: `NSError`. |
 | 1-byte file | Open raises | Yes | Same as zero-byte. |
 | Truncated at superblock (first 4 KB) | Open raises | Yes | All three languages raise; no segfault. |
 | Truncated mid-file (last quarter chopped) | Open succeeds, dataset read raises | Yes | h5py defers chunk loading; the failure surfaces on the first `ds[...]` access. |
@@ -63,7 +63,8 @@ specification.
 3. **Verify on first read** in long-lived pipelines:
 
    ```python
-   if dataset.verify_signature() != "OK":
+   from ttio import signatures
+   if not signatures.verify_dataset(dataset, key):  # algorithm="ml-dsa-87" for PQC
        raise IntegrityError(...)
    ```
 

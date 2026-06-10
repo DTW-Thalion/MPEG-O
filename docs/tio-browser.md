@@ -62,7 +62,7 @@ pre-selected.
 - **File → Open…** (`Shortcut+O`) picks a `.tio` from a file dialog.
 - **File → Open Recent ▸** lists the 8 most recently opened paths.
 - **Drag-and-drop** any `.tio` onto the window.
-- **CLI**: `java -jar tio-browser-1.4.1-<your-os>.jar --open path/to/dataset.tio`.
+- **CLI**: `java -jar tio-browser-1.7.1-<your-os>.jar --open path/to/dataset.tio`.
 
 ### Importing a foreign format
 
@@ -71,7 +71,7 @@ pre-selected.
   format file onto the window to pre-select the format.
 
 Supported formats: mzML, ImzML, nmrML, JCAMP-DX (Raman/IR/UV-Vis),
-BAM/SAM/CRAM (samtools required), FASTA, FASTQ, mzTab, Thermo
+BAM/SAM/CRAM (pure-Java htsjdk, no external binary), FASTA, FASTQ, mzTab, Thermo
 `.raw` (ThermoRawFileParser required), Waters MassLynx `.RAW`
 (masslynxraw required), Bruker timsTOF `.d` (Python + opentimspy
 required). Format rows whose required external binary is missing
@@ -173,8 +173,9 @@ elapsed 1m 12s"`. When stalled: `"stalled — last activity 12s ago"`.
 ## Diagnostics
 
 **Help → Diagnostics…** opens a modal dialog probing every external
-binary the library can use: HDF5 JNI (in-process), `samtools`,
-`ThermoRawFileParser`, `masslynxraw`, and the Bruker Python helper.
+binary the library can use: HDF5 JNI (in-process), htsjdk SAM/BAM/CRAM
+(in-process), `ThermoRawFileParser`, `masslynxraw`, and the Bruker
+Python helper.
 Each probe shows status (OK / NOT_FOUND / ERROR), resolved path,
 and a version string when available.
 

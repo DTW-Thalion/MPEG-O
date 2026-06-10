@@ -96,7 +96,7 @@ absent.
 |-----|------|
 | `objc-build-test` | GNUstep + libobjc2 + libTTIO + test runner (307 tests as of v0.11.0) |
 | `python-test` | `tests/` default filter, Python 3.11 + 3.12 matrix (1443 tests as of v0.11.0) |
-| `java-test` | Maven `verify`, JDK 17 (695 tests as of v0.11.0) |
+| `java-test` | Maven `verify`, JDK 25 (695 tests as of v0.11.0) |
 | `cross-compat` | Python smoke tests that subprocess into `TtioVerify` + `TtioSign` binaries (44 combinations as of v0.11.0) |
 | `python-validation` | `tests/validation + tests/integration + tests/security` with `[integration]` extras installed |
 

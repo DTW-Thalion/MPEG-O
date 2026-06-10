@@ -8,7 +8,7 @@ Objective-C build.
 Regenerate at any time from a green tree via:
 
 ```bash
-./build.sh                        # ensure libTTIO + Tools are built
+objc/build.sh                     # ensure libTTIO + Tools are built
 LD_LIBRARY_PATH="$PWD/objc/Source/obj:$LD_LIBRARY_PATH" \
   objc/Tools/obj/MakeFixtures objc/Tests/Fixtures/ttio
 ```

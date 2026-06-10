@@ -163,6 +163,7 @@ The CMake build supports three options:
 |---|---|---|
 | `TTIO_RANS_BUILD_JNI` | `OFF` | Build `libttio_rans_jni.so` for Java JNI consumption. |
 | `TTIO_RANS_ENABLE_TSAN` | `OFF` | Build a parallel `libttio_rans_tsan` + `test_thread_safety_tsan` target with `-fsanitize=thread`. |
+| `BUILD_TESTING` | `ON` | Build the native test executables. Release-matrix / JNI-only builds set `OFF` (some tests use POSIX `setenv`/`unsetenv` unavailable on MinGW UCRT). |
 
 Per-file SIMD flags are applied via
 `set_source_files_properties(... PROPERTIES COMPILE_FLAGS "-msse4.1")` /
@@ -171,7 +172,11 @@ based on the CPU's reported feature flags.
 
 ### 1.4 Test surface
 
-`ctest` registers four suites (run in build dir):
+`ctest` registers the following core rANS / M94.Z suites (run in build
+dir). The full `ctest` run also includes the v2-codec suites
+(`adaptive_*`, `rc_cram_byte_equal`, `fqzcomp_qual_*`, `rans_o0_byte_exact`,
+`mate_info_v2_*`, `ref_diff_v2_*`, `name_tok_v2_*`) — 23 registered tests
+in total (22 without the optional TSAN target):
 
 | Test | Sub-tests | Coverage |
 |---|---:|---|
@@ -181,7 +186,7 @@ based on the CPU's reported feature flags.
 | `streaming` | 8 | Streaming-context decoder parity vs. regular decoder. |
 | `m94z_decode` | 1 | M94.Z inline-context decoder parity vs. streaming-callback path on a 1000-symbol / 10-read input. |
 
-30 sub-tests total, 0 warnings under `-Wall -Wextra -Wpedantic`.
+All native targets compile under `-Wall -Wextra -Wpedantic`.
 
 ---
 
