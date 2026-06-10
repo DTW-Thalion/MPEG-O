@@ -136,6 +136,7 @@ extern void testPixelSpectraRaisesWhenMzAxisAbsent(void);
 extern void testJcampVibrationalRoundTrip(void);
 extern void testFD1MultiRecipient(void);
 extern void testMultiRecipientXLang(void);
+extern void testDekWrappedXLang(void);
 extern void testC0StandaloneKeyWrap(void);
 extern void testC2aServerKekId(void);
 extern void testTransportPacketTypeV011(void);
@@ -445,6 +446,10 @@ int main(int argc, const char *argv[])
         START_SET("FD-1 Phase A-4: multi-recipient cross-language conformance")
             testMultiRecipientXLang();
         END_SET("FD-1 Phase A-4: multi-recipient cross-language conformance")
+
+        START_SET("dek_wrapped envelope-encryption cross-language conformance")
+            testDekWrappedXLang();
+        END_SET("dek_wrapped envelope-encryption cross-language conformance")
 
         START_SET("FD-1 Phase C-0: standalone key-wrap primitive")
             testC0StandaloneKeyWrap();

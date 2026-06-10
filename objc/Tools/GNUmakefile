@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
 
 TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
 TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -77,6 +77,10 @@ TtioTransportDecode_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioPerAU_OBJC_FILES = TtioPerAU.m
 TtioPerAU_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
 TtioPerAU_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioDekEnvelope_OBJC_FILES = TtioDekEnvelope.m
+TtioDekEnvelope_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets
+TtioDekEnvelope_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 TtioJcampDxDump_OBJC_FILES = TtioJcampDxDump.m
 TtioJcampDxDump_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
