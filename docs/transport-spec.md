@@ -82,7 +82,7 @@ little-endian.
 
 | Offset | Field            | Type       | Value / Meaning                                    |
 |-------:|------------------|------------|----------------------------------------------------|
-|      0 | `magic`          | `bytes[2]` | ASCII `"MO"` (0x4D 0x4F)                           |
+|      0 | `magic`          | `bytes[2]` | ASCII `"TI"` (0x54 0x49)                           |
 |      2 | `version`        | `uint8`    | `0x01` in this spec                                |
 |      3 | `packet_type`    | `uint8`    | See §3.2                                           |
 |      4 | `flags`          | `uint16`   | Bit flags — see §3.1.1                             |
@@ -91,7 +91,7 @@ little-endian.
 |     12 | `payload_length` | `uint32`   | Bytes of payload following the header              |
 |     16 | `timestamp_ns`   | `uint64`   | Nanosecond Unix timestamp at packet emission       |
 
-`HEADER_SIZE = 24`. Readers MUST validate `magic == "MO"` and reject
+`HEADER_SIZE = 24`. Readers MUST validate `magic == "TI"` and reject
 the stream otherwise.
 
 ### 3.1.1 Flag bits

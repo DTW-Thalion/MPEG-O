@@ -39,10 +39,10 @@ This repository hosts three reference-implementation streams plus a desktop GUI 
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.7.0. | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.7.1. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
 | **Java (`global.thalion.ttio`)** | **Full parity with ObjC and Python, JDK 22, Maven.** Library + tio-browser combined `mvn test` is green across the suite. | `java/` |
-| **`tio-browser` (JavaFX desktop GUI)** | **v1.5.0 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
+| **`tio-browser` (JavaFX desktop GUI)** | **v1.7.1 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |
 
 A **cross-language conformance harness** drives the per-AU encryption CLI and
 the JCAMP-DX bridge through small subprocess drivers in all three languages
@@ -157,7 +157,7 @@ All importers and exporters are registered through a unified `Reader` / `Writer`
 
 ### Cross-language conformance
 
-* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`ttio`, Python 3.11+), Java (`global.thalion.ttio`, JDK 17 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
+* **Three-language parity** — Objective-C (GNUstep) normative reference, Python (`ttio`, Python 3.11+), Java (`global.thalion.ttio`, JDK 22 + Maven). Every cross-language round-trip test passes byte-for-byte, driven by shared format fixtures.
 * **Compound byte-parity harness** — three dumper CLIs (Python `python -m ttio.tools.dump_identifications`, Java `DumpIdentifications`, ObjC `TtioDumpIdentifications`) emit identifications / quantifications / study-level provenance / `ms_per_run_provenance` (per-run provenance flattened by sorted run-name + per-run sequence index, Phase 2) as byte-identical canonical JSON; pairwise-diffed in CI.
 * **Per-AU encryption CLIs** — `per_au_cli` (Python), `PerAUCli` (Java), `TtioPerAU` (ObjC) all expose `{encrypt, decrypt, send, recv, transcode}` subcommands. `decrypt` emits a canonical "MPAD" dump for byte-compare; `transcode --rekey` rotates DEKs.
 * **PQC conformance matrix** — 32-cell verification across languages × providers (primitive ML-DSA / ML-KEM sign-verify-encaps-decaps, `v3:` signatures on HDF5 / Zarr / SQLite, v2+v3 coexistence).

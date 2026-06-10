@@ -1,10 +1,20 @@
 # TTI-O M94.Z — FQZCOMP_NX16_Z Codec (CRAM-Mimic)
 
-> **Status:** shipping in v1.2.0 (M94.Z). Reference implementation in
-> Python (Cython-accelerated), normative implementation in
-> Objective-C, parity implementation in Java. All three produce
-> byte-identical encoded streams for the seven canonical conformance
-> vectors. Applies to genomic-`qualities` channels; codec id `12`.
+> **Status:** shipped. Applies to genomic-`qualities` channels; codec
+> id `12`, magic `M94Z`. All three reference implementations (Python,
+> Objective-C, Java) produce byte-identical encoded streams.
+>
+> **v1.0 reset — current state.** Only the **V4** wire format (version
+> byte `4`, CRAM 3.1 `fqzcomp_qual` port) is live. The native
+> `libttio_rans` library is **required** for top-level encode/decode in
+> all three languages — there is no pure-Python or Cython fallback. The
+> earlier V1 (pure-language static rANS), V2 (native-body) and V3
+> (adaptive Range Coder) formats were removed: their encoders/decoders
+> are gone and `decode_with_metadata` rejects V1/V2/V3 blobs with a
+> migration error. The V1/V2/V3 wire-format and algorithm sections below
+> are retained as historical record; they no longer describe a path the
+> current code can produce or read. See `python/src/ttio/codecs/`
+> `fqzcomp_nx16_z.py` for the live V4-only surface.
 
 This document specifies the FQZCOMP_NX16_Z codec used by TTI-O for
 lossless quality-score compression in v1.0. It is a clean-room
@@ -21,6 +31,13 @@ lean is ~4% of the full-pipeline wall-clock.
 ---
 
 ## 1. Algorithm
+
+> **Historical (V1-era).** The build-then-emit / bit-pack-context /
+> static-per-block-rANS description in this section is the V1/V2/V3
+> pure-language algorithm. The live V4 path delegates to
+> `libttio_rans`'s CRAM 3.1 `fqzcomp_qual` core (auto-tuning encoder,
+> self-describing inner body — see §2 "V4"); the section below is kept
+> for context on the M94.Z lineage and byte-pairing rationale (§8).
 
 For each quality byte `q[i]` in the input, the encoder runs a two-pass
 build-then-emit cycle per block:
@@ -523,12 +540,14 @@ When the codec is selected via
 on a `WrittenGenomicRun`, the M86 pipeline derives `read_lengths`
 from `run.lengths` and `revcomp_flags` from `run.flags[i] & 16`.
 
-The public symbols `MAGIC`, `VERSION`, `L`, `B_BITS`, `B`, `T`,
-`T_BITS`, `NUM_STREAMS`, `X_MAX_PREFACTOR`, `m94z_context`,
-`position_bucket_pbits`, `normalise_to_total`, `cumulative`, and
-`ContextParams` / `CodecHeader` are exported for tests and
-diagnostics; the encode/decode functions above are the load-bearing
-surface.
+The module's `__all__` exports exactly `encode`,
+`decode_with_metadata`, `get_backend_name`, `MAGIC`, and
+`VERSION_V4_FQZCOMP`. (The V1-era diagnostic symbols `L`, `B_BITS`,
+`B`, `T`, `T_BITS`, `NUM_STREAMS`, `X_MAX_PREFACTOR`, `m94z_context`,
+`normalise_to_total`, `cumulative`, `ContextParams`, `CodecHeader`,
+etc. were removed with the V1/V2/V3 pure-language paths in the v1.0
+reset; the live codec is a thin wrapper over `libttio_rans`'s V4
+core.)
 
 ### Objective-C
 

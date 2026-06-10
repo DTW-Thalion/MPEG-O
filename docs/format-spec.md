@@ -252,7 +252,7 @@ Name-driven channel storage.
 | `@<channel>_ciphertext_bytes` | int64          | Exact ciphertext size            |
 | `@<channel>_original_count`| int64             | Original element count           |
 | `@<channel>_algorithm`     | string            | e.g. `"AES-256-GCM"`             |
-| `@mpgo_signature`          | string (base64)   | HMAC-SHA256 if signed            |
+| `@ttio_signature`          | string (base64)   | HMAC-SHA256 if signed            |
 
 For an MS run the channels are `{mz, intensity}` producing
 `mz_values` and `intensity_values`. For an NMR run they are
@@ -510,7 +510,7 @@ raman_image_cube/ (or ir_image_cube/)
 ├── @scan_pattern              (VL string)
 ├── @excitation_wavelength_nm  (float64)   ← raman_image_cube only
 ├── @laser_power_mw            (float64)   ← raman_image_cube only
-├── @ir_mode                   (VL string) ← ir_image_cube only  ("ABSORBANCE" / "TRANSMITTANCE")
+├── @ir_mode                   (int64 enum) ← ir_image_cube only  (0 = TRANSMITTANCE, 1 = ABSORBANCE)
 ├── @resolution_cm_inv         (float64)   ← ir_image_cube only
 ├── intensity                  (float64[H][W][SP])
 └── wavenumbers                (float64[SP])
@@ -535,7 +535,7 @@ persistence path, keyed by the following named signal arrays:
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "TTIOUVVisSpectrum"
+├── @ttio_class = "TTIOUVVisSpectrum"
 ├── @path_length_cm   (float64, optional)
 ├── @solvent          (VL string, optional)
 └── arrays/
@@ -556,7 +556,7 @@ correlation matrices of equal size.
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "TTIOTwoDimensionalCorrelationSpectrum"
+├── @ttio_class = "TTIOTwoDimensionalCorrelationSpectrum"
 ├── arrays/
 │   ├── variable_axis  (float64[N])
 │   ├── synchronous    (float64[N][N], row-major; in-phase, symmetric)
@@ -582,7 +582,7 @@ An `TTIONMR2DSpectrum` group (written via the generic
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "TTIONMR2DSpectrum"
+├── @ttio_class = "TTIONMR2DSpectrum"
 ├── @matrix_width, @matrix_height
 ├── @nucleus_f1, @nucleus_f2
 ├── arrays/
@@ -717,7 +717,7 @@ The legacy decryption code remains for migration; see the
 
 `TTIOSignatureManager.signDataset:inFile:withKey:error:` computes an
 HMAC-SHA256 over a canonical byte stream derived from the target
-dataset and stores a **prefixed** base64 MAC in `@mpgo_signature`.
+dataset and stores a **prefixed** base64 MAC in `@ttio_signature`.
 Provenance chain signing stores its MAC in `@provenance_signature`
 on the run group, computed over the UTF-8 bytes of
 `@provenance_json` (legacy v0.2 path, kept for v0.2 compatibility).
@@ -1634,7 +1634,7 @@ must be materialised to re-slice per-spectrum).
 ```
 HDF5 "minimal_ms.tio" {
 GROUP "/" {
-   ATTRIBUTE "ttio_format_version" { DATATYPE H5T_STRING ... DATA { "1.1" } }
+   ATTRIBUTE "ttio_format_version" { DATATYPE H5T_STRING ... DATA { "1.0" } }
    ATTRIBUTE "ttio_features" { DATA { "[\"base_v1\",\"compound_identifications\",...]" } }
    GROUP "study" {
       ATTRIBUTE "title" { ... }

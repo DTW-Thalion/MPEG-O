@@ -120,7 +120,7 @@ No additional setup required:
 
 ### ML-DSA-87 dataset signatures — `v3:` prefix
 
-Stored as a variable-length string attribute `@mpgo_signature` on
+Stored as a variable-length string attribute `@ttio_signature` on
 the signed dataset:
 
 ```
