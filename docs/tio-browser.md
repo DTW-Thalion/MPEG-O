@@ -63,6 +63,10 @@ pre-selected.
 - **File → Open Recent ▸** lists the 8 most recently opened paths.
 - **Drag-and-drop** any `.tio` onto the window.
 - **CLI**: `java -jar tio-browser-1.7.1-<your-os>.jar --open path/to/dataset.tio`.
+  *Note: the `--open` flag is currently parsed and logged but not yet
+  wired to actually open the file — dataset loading from the CLI is
+  deferred to a later stage (tracked in `App.java` as Stage 2.8). For
+  now, open files via File → Open, Open Recent, or drag-and-drop.*
 
 ### Importing a foreign format
 

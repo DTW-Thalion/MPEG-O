@@ -6,7 +6,7 @@ v1.0.0 ships three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md`
-  is rooted here. **3072 assertions / 0 failures.**
+  is rooted here. **4501 assertions / 0 failures.**
 - **Python (`ttio` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top
   of `h5py` + `numpy` that mirrors the Objective-C class

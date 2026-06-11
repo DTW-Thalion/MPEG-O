@@ -39,7 +39,7 @@ This repository hosts three reference-implementation streams plus a desktop GUI 
 
 | Stream | Status | Directory |
 |---|---|---|
-| **Objective-C (GNUstep)** | **Normative reference — 3123 PASS / 0 failures.** Current release: v1.7.1. | `objc/` |
+| **Objective-C (GNUstep)** | **Normative reference — 4501 PASS / 0 failures.** Current release: v1.7.1. | `objc/` |
 | **Python (`ttio`)**       | **Full parity with ObjC and Java, Python 3.11+.** | `python/` |
 | **Java (`global.thalion.ttio`)** | **Full parity with ObjC and Python, JDK 22, Maven.** Library + tio-browser combined `mvn test` is green across the suite. | `java/` |
 | **`tio-browser` (JavaFX desktop GUI)** | **v1.7.1 — TTI-O Workbench Client (W1–W6) shipped:** Connection Manager + Container Browser + Transfer Manager + Cohort Query Builder + Pipeline Launcher / Job Monitor + Interactive Session Launcher + Encoding + Export panels. Per-platform shaded JARs bundle HDF5 1.14.6 + LZ4 filter plugin + `libttio_rans_jni` for Linux x86_64, macOS Apple Silicon, and Windows x86_64; end users run `java -jar tio-browser-<ver>-<os>.jar` with no toolchain setup beyond a JDK 22+. See [`tio-browser/README.md`](tio-browser/README.md). | `tio-browser/` |

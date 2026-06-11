@@ -208,12 +208,9 @@ synthesize `offsets` from `cumsum(lengths)` at load time using a
 uint64 accumulator (overflow-safe on >4 GB genomic runs even when
 `lengths` is uint32).
 
-The opt-out flag `WrittenRun.opt_keep_offsets_columns` (Python),
-`WrittenRun#optKeepOffsetsColumns` (Java),
-`TTIOWrittenRun.optKeepOffsetsColumns` (ObjC) — same flag for
-both genomic and MS — restores the redundant column for byte-
-equivalent backward compat with pre-v1.10 readers. Pre-v1.10
-readers cannot open v1.10-default files.
+The omission is unconditional in v1.10+ writers — there is no
+opt-out to restore the redundant column. Pre-v1.10 readers cannot
+open v1.10-default files.
 
 All parallel datasets are chunked (chunk = 1024) and `zlib -6`
 compressed. `@count` (int64) on the `spectrum_index/` group mirrors

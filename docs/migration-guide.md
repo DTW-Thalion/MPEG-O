@@ -778,15 +778,16 @@ bifurcating by modality.
 
 - Existing MS / NMR / Raman / IR / UV-Vis / 2D-COS APIs:
   unchanged. v1.1.x callers that only touch spectroscopy data
-  upgrade transparently — `write_minimal(runs=...)` with an
-  all-MS dict is the same call as `write_minimal(ms_runs=...)`
-  (the latter remains supported as an alias).
+  upgrade transparently — pass the runs through the `runs=`
+  parameter of `write_minimal` (the modality-agnostic dict;
+  genomic runs go through `genomic_runs=`).
 - Per-AU encryption, transport, JCAMP-DX, mzTab, ISA-Tab,
   storage providers, signature verification: all unchanged.
-- Format-version attribute: bumps from `1.3` to `1.4` only when
-  genomic content is present; pure-spectroscopy files written by
-  v1.2 still carry `@ttio_format_version = "1.3"` and round-trip
-  on a v1.1.x reader (modulo the rebrand, see below).
+- Format-version attribute: every v1.0+ writer stamps a flat
+  `@ttio_format_version = "1.0"` on disk regardless of whether
+  the file carries genomic content (see
+  `python/src/ttio/__init__.py` `FORMAT_VERSION`). The on-disk
+  format version is frozen at `"1.0"`.
 
 ### 12.5 The rebrand: identifiers that changed
 
