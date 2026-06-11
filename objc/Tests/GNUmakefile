@@ -68,6 +68,7 @@ TTIOTests_OBJC_FILES = \
 	TestJcampVibrationalRoundTrip.m \
 	TestFD1MultiRecipient.m \
 	TestMultiRecipientXLang.m \
+	TestDekWrappedXLang.m \
 	TestC0StandaloneKeyWrap.m \
 	TestC2aServerKekId.m \
 	TestM76JcampConformance.m \

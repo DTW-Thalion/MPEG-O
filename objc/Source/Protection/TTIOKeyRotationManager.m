@@ -470,11 +470,15 @@ static NSString *iso8601Now(void)
 }
 
 // Write (or overwrite) the wrapped blob at /protection/key_info/dek_wrapped.
-// blob length now varies (v1.1 = 60 bytes, v1.2 AES-GCM =
-// 71 bytes, v1.2 ML-KEM = 1579 bytes). Pad to int32 boundary and
-// store the real byte length in @dek_wrapped_bytes so readers can
-// recover it precisely; pre-v0.7 readers default to 60 bytes and
-// tolerate the extra padding harmlessly.
+// blob length varies (v1.1 = 60 bytes, v1.2 AES-GCM = 71 bytes,
+// v1.2 ML-KEM = 1639 bytes). The spec (docs/format-spec.md) stores
+// dek_wrapped as uint8[N] at EXACT length (no padding); the byte
+// length is also recorded in @dek_wrapped_bytes (int64) so readers
+// can recover it without inspecting the dataset shape. Writing uint8
+// at exact length is the cross-language-interoperable representation:
+// Python and Java read dek_wrapped as raw uint8 bytes and cannot
+// decode the legacy ObjC int32-padded layout. Legacy ObjC files
+// (int32, padded) remain readable via -readWrappedBlobWithLength:.
 - (BOOL)writeWrappedBlob:(NSData *)blob
                   group:(TTIOHDF5Group *)keyInfo
                   error:(NSError **)error
@@ -482,35 +486,60 @@ static NSString *iso8601Now(void)
     if ([keyInfo hasChildNamed:@"dek_wrapped"]) {
         if (![keyInfo deleteChildNamed:@"dek_wrapped" error:error]) return NO;
     }
-    NSUInteger padded = ((blob.length + 3) / 4) * 4;
-    NSMutableData *padBuf = [NSMutableData dataWithLength:padded];
-    memcpy(padBuf.mutableBytes, blob.bytes, blob.length);
     TTIOHDF5Dataset *ds =
         [keyInfo createDatasetNamed:@"dek_wrapped"
-                           precision:TTIOPrecisionInt32
-                              length:padded / sizeof(int32_t)
+                           precision:TTIOPrecisionUInt8
+                              length:blob.length
                            chunkSize:0
                     compressionLevel:0
                                error:error];
     if (!ds) return NO;
-    if (![ds writeData:padBuf error:error]) return NO;
+    if (![ds writeData:blob error:error]) return NO;
     return [keyInfo setIntegerAttribute:@"dek_wrapped_bytes"
                                    value:(int64_t)blob.length
                                    error:error];
 }
 
-// Read the wrapped blob with v0.7+ length awareness. Pre-v0.7 files
-// lack @dek_wrapped_bytes and are always exactly 60 bytes.
+// Read the wrapped blob, recovering its exact byte length across all
+// supported on-disk representations.
+//
+//  * uint8 dataset (spec-compliant — Python/Java/new ObjC): the raw
+//    bytes ARE the blob. readDataWithError: returns exactly N bytes,
+//    so use them verbatim. @dek_wrapped_bytes (when present) is the
+//    authoritative length but equals the dataset length here.
+//  * int32 dataset (legacy ObjC): the blob was zero-padded to a
+//    4-byte boundary, so slice back to the true length. That length
+//    comes from @dek_wrapped_bytes when present; absent (a true v1.1
+//    file) the dataset byte length is the exact length (60 for v1.1)
+//    — we do NOT default to a hard-coded 60, which would truncate any
+//    uint8 blob lacking the attribute.
 - (NSData *)readWrappedBlobWithLength:(TTIOHDF5Group *)keyInfo
                                  error:(NSError **)error
 {
-    NSData *raw = [self readWrappedBlob:keyInfo error:error];
+    TTIOHDF5Dataset *ds = [keyInfo openDatasetNamed:@"dek_wrapped" error:error];
+    if (!ds) return nil;
+    NSData *raw = [ds readDataWithError:error];
     if (!raw) return nil;
+
     BOOL exists = NO;
     int64_t declared = [keyInfo integerAttributeNamed:@"dek_wrapped_bytes"
                                                   exists:&exists
                                                    error:NULL];
-    if (!exists) declared = TTIO_KR_V11_LEN;
+
+    if (ds.precision == TTIOPrecisionUInt8) {
+        // Spec layout: dataset byte length IS the blob length. Trust
+        // @dek_wrapped_bytes when it agrees; otherwise (or when it is a
+        // sentinel / past-end value) fall back to the dataset length.
+        if (exists && declared > 0 && (NSUInteger)declared <= raw.length) {
+            return [raw subdataWithRange:NSMakeRange(0, (NSUInteger)declared)];
+        }
+        return raw;
+    }
+
+    // Legacy int32 (padded) layout. Absent the attribute, the dataset
+    // byte length is the true length (no padding was ever needed for a
+    // genuine 60-byte v1.1 blob, whose 15 int32 elements = 60 bytes).
+    if (!exists) declared = (int64_t)raw.length;
     if (declared <= 0 || (NSUInteger)declared > raw.length) {
         return raw;  // sentinel / corruption: hand back the raw bytes.
     }

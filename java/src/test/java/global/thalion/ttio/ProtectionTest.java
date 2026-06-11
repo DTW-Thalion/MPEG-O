@@ -240,6 +240,138 @@ class ProtectionTest {
         }
     }
 
+    /**
+     * Cross-language data-integrity guard: the {@code dek_wrapped} child
+     * dataset must be written as a spec-compliant {@code uint8[N]} blob
+     * with the EXACT wrapped length (no int32 packing, no 4-byte padding),
+     * and {@code @dek_wrapped_bytes} must equal that length. Python and
+     * ObjC read this layout; an int32-padded dataset corrupts them.
+     */
+    @Test
+    void dekWrappedIsUint8ExactLength() {
+        String path = tempDir.resolve("dek_uint8.tio").toString();
+        byte[] kek = new byte[32];
+        Arrays.fill(kek, (byte) 0x33);
+
+        KeyRotationManager mgr = new KeyRotationManager();
+        mgr.enableEnvelopeEncryption(kek, "kek-x");
+
+        try (Hdf5File f = Hdf5File.create(path);
+             Hdf5Group root = f.rootGroup()) {
+            mgr.writeTo(root);
+        }
+
+        try (Hdf5File f = Hdf5File.openReadOnly(path);
+             Hdf5Group root = f.rootGroup();
+             Hdf5Group prot = root.openGroup("protection");
+             Hdf5Group ki = prot.openGroup("key_info");
+             Hdf5Dataset ds = ki.openDataset("dek_wrapped")) {
+            assertEquals(Precision.UINT8, ds.getPrecision(),
+                    "dek_wrapped must be uint8 for cross-language reads");
+            // Default wrap is the 71-byte v1.2 AES-GCM blob — no padding,
+            // so the dataset byte length is exactly 71.
+            assertEquals(71L, ds.getLength(),
+                    "dek_wrapped must hold the exact blob length, unpadded");
+            assertEquals(71L, ki.readIntegerAttribute("dek_wrapped_bytes", -1L),
+                    "@dek_wrapped_bytes must equal the blob length");
+        }
+    }
+
+    /**
+     * Integrity across the blob sizes in play (60 v1.1 AES, 71 v1.2
+     * AES-GCM, 1639 PQC ML-KEM): a uint8 dek_wrapped dataset of any size
+     * must round-trip byte-identically through the read-side length logic,
+     * including when @dek_wrapped_bytes is absent (length recovered from
+     * the dataset shape).
+     */
+    @Test
+    void uint8DekWrappedRoundTripsAllSizes() {
+        for (int size : new int[]{60, 71, 1639}) {
+            for (boolean withAttr : new boolean[]{true, false}) {
+                String path = tempDir.resolve(
+                        "uint8_" + size + "_" + withAttr + ".tio").toString();
+                byte[] blob = new byte[size];
+                for (int i = 0; i < size; i++) blob[i] = (byte) ((i * 31 + 7) & 0xFF);
+
+                try (Hdf5File f = Hdf5File.create(path);
+                     Hdf5Group root = f.rootGroup();
+                     Hdf5Group prot = root.createGroup("protection");
+                     Hdf5Group ki = prot.createGroup("key_info")) {
+                    if (withAttr) ki.setIntegerAttribute("dek_wrapped_bytes", size);
+                    try (Hdf5Dataset ds = ki.createDataset("dek_wrapped",
+                            Precision.UINT8, size, 0, 0)) {
+                        ds.writeData(blob);
+                    }
+                }
+
+                try (Hdf5File f = Hdf5File.openReadOnly(path);
+                     Hdf5Group root = f.rootGroup();
+                     Hdf5Group prot = root.openGroup("protection");
+                     Hdf5Group ki = prot.openGroup("key_info");
+                     Hdf5Dataset ds = ki.openDataset("dek_wrapped")) {
+                    assertEquals(Precision.UINT8, ds.getPrecision());
+                    assertEquals(size, ds.getLength());
+                    byte[] got = (byte[]) ds.readData();
+                    assertArrayEquals(blob, got,
+                            "uint8 blob size=" + size + " withAttr=" + withAttr
+                                    + " must read back verbatim");
+                }
+            }
+        }
+    }
+
+    /**
+     * Backward-compat read: a legacy Java file whose dek_wrapped is the
+     * old INT32-packed, 4-byte-padded layout must still decode to the
+     * original DEK via {@code KeyRotationManager.readFrom}.
+     */
+    @Test
+    void legacyInt32PaddedDekWrappedStillDecodes() {
+        String path = tempDir.resolve("legacy_int32.tio").toString();
+        byte[] kek = new byte[32];
+        Arrays.fill(kek, (byte) 0x44);
+
+        // Produce a real DEK and its 71-byte v1.2 AES-GCM wrapped blob.
+        byte[] dek = new byte[32];
+        new java.security.SecureRandom().nextBytes(dek);
+        byte[] wrapped = EncryptionManager.wrapKey(dek, kek);
+        assertEquals(71, wrapped.length);
+
+        // Synthesize the legacy on-disk layout: int32 little-endian
+        // packing, zero-padded to the next 4-byte boundary (72 here → 18
+        // int32), with @dek_wrapped_bytes carrying the true length.
+        int padded = ((wrapped.length + 3) / 4) * 4;
+        byte[] padBuf = new byte[padded];
+        System.arraycopy(wrapped, 0, padBuf, 0, wrapped.length);
+        int[] wrappedInts = new int[padded / 4];
+        java.nio.ByteBuffer bb = java.nio.ByteBuffer.wrap(padBuf)
+                .order(java.nio.ByteOrder.LITTLE_ENDIAN);
+        for (int i = 0; i < wrappedInts.length; i++) wrappedInts[i] = bb.getInt();
+
+        try (Hdf5File f = Hdf5File.create(path);
+             Hdf5Group root = f.rootGroup()) {
+            FeatureFlags.defaultCurrent()
+                    .with(FeatureFlags.OPT_KEY_ROTATION).writeTo(root);
+            try (Hdf5Group prot = root.createGroup("protection");
+                 Hdf5Group ki = prot.createGroup("key_info")) {
+                ki.setStringAttribute("kek_id", "legacy-kek");
+                ki.setStringAttribute("kek_algorithm", "aes-256-gcm");
+                ki.setIntegerAttribute("dek_wrapped_bytes", wrapped.length);
+                try (Hdf5Dataset ds = ki.createDataset("dek_wrapped",
+                        Precision.INT32, wrappedInts.length, 0, 0)) {
+                    ds.writeData(wrappedInts);
+                }
+            }
+        }
+
+        try (Hdf5File f = Hdf5File.openReadOnly(path);
+             Hdf5Group root = f.rootGroup()) {
+            KeyRotationManager readMgr = KeyRotationManager.readFrom(root, kek);
+            assertArrayEquals(dek, readMgr.getDek(),
+                    "legacy INT32-padded dek_wrapped must still decode");
+        }
+    }
+
     // ── Anonymization ───────────────────────────────────────────────
 
     @Test

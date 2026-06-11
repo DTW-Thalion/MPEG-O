@@ -199,3 +199,39 @@ def test_v12_reject_unknown_algorithm(tmp_path: Path) -> None:
         assert "0x0001" in str(e)
     else:
         raise AssertionError("expected UnsupportedWrappedBlobError")
+
+
+@pytest.mark.parametrize("n", [71, 1639])
+def test_read_legacy_int32_padded_dek_wrapped(tmp_path: Path, n: int) -> None:
+    """Pre-fix Java/ObjC stored ``dek_wrapped`` as INT32, zero-padded to a
+    4-byte boundary, with ``@dek_wrapped_bytes`` giving the true length.
+
+    Python's reader must byte-REINTERPRET (not value-cast) the int32 array
+    and slice off the padding, recovering the exact original blob. Python's
+    own writes stay uint8/exact (verified in test_cross_language_parity).
+    """
+    from ttio.key_rotation import _read_wrapped_dataset
+    import numpy as np
+
+    # Deterministic payload spanning the full byte range so a naive
+    # int32->uint8 value-cast would visibly mangle it.
+    original = bytes((i * 31 + 7) & 0xFF for i in range(n))
+
+    path = tmp_path / f"legacy_int32_{n}.tio"
+    with h5py.File(path, "w") as f:
+        prot = f.create_group("protection")
+        ki = prot.create_group("key_info")
+        # Mimic the legacy writer: pad to a 4-byte boundary, store as int32.
+        pad = (-len(original)) % 4
+        blob = original + b"\x00" * pad
+        arr = np.frombuffer(blob, dtype="<i4").copy()
+        ds = ki.create_dataset("dek_wrapped", data=arr)
+        assert ds.dtype == np.dtype("<i4")
+        ki.attrs["dek_wrapped_bytes"] = np.int64(len(original))
+
+    with h5py.File(path, "r") as f:
+        ki = f["/protection/key_info"]
+        recovered = _read_wrapped_dataset(ki)
+
+    assert recovered == original
+    assert len(recovered) == n
