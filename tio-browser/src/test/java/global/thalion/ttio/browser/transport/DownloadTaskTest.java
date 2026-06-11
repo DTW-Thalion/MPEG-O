@@ -45,11 +45,37 @@ class DownloadTaskTest {
     }
 
     private void runAndWait(DownloadTask task) throws InterruptedException {
-        var exec = Executors.newSingleThreadExecutor();
-        exec.submit(task);
-        exec.shutdown();
-        assertTrue(exec.awaitTermination(60, TimeUnit.SECONDS),
-            "DownloadTask did not finish within 60s");
+        // Run the task on a DAEMON worker so a hung/slow DownloadTask can
+        // never keep this forked surefire JVM alive (the previous
+        // newSingleThreadExecutor() worker was non-daemon, which is how a
+        // failed run could hang CI for 6h). On timeout we additionally
+        // shutdownNow() to interrupt the task and then still assert.
+        var exec = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "DownloadTaskTest-worker");
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            exec.submit(task);
+            exec.shutdown();
+            // 90s, not 60s: the underlying TransportClient.fetchPackets has
+            // two SEQUENTIAL 30s internal timeouts (connectBlocking + the
+            // EndOfStream collect), so a slow-but-eventually-failing run can
+            // legitimately occupy ~60s inside call(). A 60s executor bound
+            // raced with that and produced an opaque "did not finish" flake.
+            // With 90s the client's own timeout surfaces the real cause via
+            // task.get() instead; if it still overruns we interrupt so the
+            // JVM can never hang (the actual CI-killer was the leaked
+            // non-daemon thread, fixed in TransportClient + below).
+            if (!exec.awaitTermination(90, TimeUnit.SECONDS)) {
+                exec.shutdownNow();           // interrupt the stuck task
+                exec.awaitTermination(10, TimeUnit.SECONDS);
+                fail("DownloadTask did not finish within 90s");
+            }
+        } finally {
+            // Belt-and-suspenders: ensure the worker is never left running.
+            exec.shutdownNow();
+        }
     }
 
     @Test

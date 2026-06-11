@@ -71,13 +71,22 @@ public final class TransportClient {
                                                              LongConsumer onBytesReceived)
             throws Exception {
         CollectingClient client = new CollectingClient(uri, filters, onBytesReceived);
-        if (!client.connectBlocking(timeoutMs, TimeUnit.MILLISECONDS)) {
-            throw new IllegalStateException("TransportClient: connect timed out");
+        // Always release the underlying Java-WebSocket connection threads,
+        // even when connect / collect times out or is interrupted. Those
+        // threads are non-daemon; leaking one keeps the JVM (e.g. a forked
+        // surefire worker) alive indefinitely. (#flaky-download-hang)
+        try {
+            if (!client.connectBlocking(timeoutMs, TimeUnit.MILLISECONDS)) {
+                throw new IllegalStateException("TransportClient: connect timed out");
+            }
+            return client.done.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } finally {
+            try {
+                client.closeBlocking();
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
-        List<TransportReader.PacketRecord> packets =
-                client.done.get(timeoutMs, TimeUnit.MILLISECONDS);
-        client.closeBlocking();
-        return packets;
     }
 
     /**

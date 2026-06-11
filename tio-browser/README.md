@@ -41,8 +41,11 @@ Run with a JDK 22+:
 
 ```bash
 java -jar tio-browser-<ver>-<your-os>.jar
-java -jar tio-browser-<ver>-<your-os>.jar --open path/to/dataset.tio
 ```
+
+> Note: a `--open path/to/dataset.tio` flag is parsed but not yet wired to
+> auto-open the file (planned). For now, open datasets via **File → Open** /
+> **Open Recent** or drag-and-drop.
 
 Each per-platform JAR bundles HDF5 1.14.6, the LZ4 filter plugin, and `libttio_rans_jni` for that platform — **no other prerequisites beyond a JDK 22+**.
 

@@ -110,11 +110,15 @@ NSObject
 │     - spectrumIndex    : TTIOSpectrumIndex
 │
 ├── TTIOSpectralDataset <TTIOIndexable, TTIOEncryptable, TTIOProvenanceable>
-│     - runs             : NSArray<TTIOAcquisitionRun*>
+│     - msRuns           : NSDictionary<NSString*, TTIOAcquisitionRun*>
+│     - nmrRuns          : NSDictionary<NSString*, NSArray<TTIONMRSpectrum*>*>
+│     - genomicRuns      : NSDictionary<NSString*, TTIOGenomicRun*>
 │     - identifications  : NSArray<TTIOIdentification*>
 │     - quantifications  : NSArray<TTIOQuantification*>
-│     - studyMetadata    : NSDictionary
-│     - hdf5File         : TTIOHDF5File  (nullable — memory-only datasets)
+│     - title            : NSString
+│     - isaInvestigationId : NSString
+│     - provider         : id<TTIOStorageProvider>  (storage abstraction; M44/Task 31)
+│     - filePath         : NSString  (nullable — memory-only datasets)
 │
 ├── TTIOIdentification <TTIOCVAnnotatable>
 │     - spectrumRef     : NSUInteger
@@ -187,6 +191,12 @@ TTIOSpectrum
       - asynchronousMatrix : TTIOSignalArray  (keyed "asynchronous", rank-2 float64[N×N])
       - (feature-flagged   : opt_native_2d_cos)
 
+TTIOSpectrum  (continued)
+└── TTIOChromatogram <TTIOCVAnnotatable>
+      - timeArray        : TTIOSignalArray
+      - intensityArray   : TTIOSignalArray
+      - chromatogramType : TTIOChromatogramType  (TIC / XIC / SRM)
+
 TTIOSignalArray
 └── TTIOFreeInductionDecay
       - realComponent    : NSData
@@ -196,20 +206,17 @@ TTIOSignalArray
       - receiverGain     : double
 
 NSObject
-├── TTIOChromatogram <TTIOCVAnnotatable>
-│     - timeArray        : TTIOSignalArray
-│     - intensityArray   : TTIOSignalArray
-│     - chromatogramType : TTIOChromatogramType  (TIC / XIC / SRM)
-│
 └── TTIOTransitionList
       - transitions : NSArray<TTIOTransition*>
 
-TTIOSpectralDataset
+TTIOImage : NSObject
+  (shared base: width, height, spectralPoints, tileSize : NSUInteger;
+   pixelSizeX, pixelSizeY : double; cube : NSData (float64[H][W][SP]);
+   scanPattern : NSString; title, isaInvestigationId : NSString;
+   identifications, quantifications, provenanceRecords : NSArray)
+│
 ├── TTIOMSImage
-│     - spatialDimensions : CGSize (or {width,height} struct)
-│     - pixelSize         : CGSize
-│     - scanPattern       : NSString
-│     - gridSpectra       : NSArray<NSArray<TTIOMassSpectrum*>*>
+│     - mzAxis            : NSData (float64[SP], nullable)
 │
 ├── TTIORamanImage                                       ← v0.11 (M73)
 │     - width, height, spectralPoints, tileSize   : NSUInteger

@@ -1,4 +1,4 @@
-# Migration Guide: mzML, nmrML, SAM/BAM/CRAM to TTI-O (current: v1.2)
+# Migration Guide: mzML, nmrML, SAM/BAM/CRAM to TTI-O (current: v1.7.1)
 
 ## Audience and prerequisites
 
@@ -10,7 +10,7 @@ only the Python implementation; the ObjC and Java surfaces mirror it
 **You need:**
 
 - Python 3.11 or later
-- A TTI-O v1.2 checkout (PyPI publishing is deferred until the M40
+- A TTI-O v1.7.1 checkout (PyPI publishing is deferred until the M40
   account-setup work clears; install from source today)
 - For Thermo `.raw` input: ThermoRawFileParser on your `PATH` (see section 6)
 - For SAM / BAM / CRAM input: `samtools` (≥ 1.19) on your `PATH`
@@ -608,12 +608,12 @@ not both (mutually exclusive per the format spec). See
 All three languages ship a JCAMP-DX 5.01 AFFN reader and writer:
 
 ```python
-from ttio.importers.jcampdx import read as read_jcampdx
+from ttio.importers.jcamp_dx import read_spectrum as read_jcampdx
 result = read_jcampdx("sample.jdx")
 result.to_ttio("sample.tio")
 
-from ttio.exporters.jcampdx import write as write_jcampdx
-write_jcampdx(spectrum, "out.jdx")
+from ttio.exporters.jcamp_dx import write_raman_spectrum, write_ir_spectrum
+write_raman_spectrum(spectrum, "out.jdx")  # or write_ir_spectrum for IR
 ```
 
 Dispatch on `##DATA TYPE=` between Raman and IR is automatic on
@@ -778,15 +778,16 @@ bifurcating by modality.
 
 - Existing MS / NMR / Raman / IR / UV-Vis / 2D-COS APIs:
   unchanged. v1.1.x callers that only touch spectroscopy data
-  upgrade transparently — `write_minimal(runs=...)` with an
-  all-MS dict is the same call as `write_minimal(ms_runs=...)`
-  (the latter remains supported as an alias).
+  upgrade transparently — pass the runs through the `runs=`
+  parameter of `write_minimal` (the modality-agnostic dict;
+  genomic runs go through `genomic_runs=`).
 - Per-AU encryption, transport, JCAMP-DX, mzTab, ISA-Tab,
   storage providers, signature verification: all unchanged.
-- Format-version attribute: bumps from `1.3` to `1.4` only when
-  genomic content is present; pure-spectroscopy files written by
-  v1.2 still carry `@ttio_format_version = "1.3"` and round-trip
-  on a v1.1.x reader (modulo the rebrand, see below).
+- Format-version attribute: every v1.0+ writer stamps a flat
+  `@ttio_format_version = "1.0"` on disk regardless of whether
+  the file carries genomic content (see
+  `python/src/ttio/__init__.py` `FORMAT_VERSION`). The on-disk
+  format version is frozen at `"1.0"`.
 
 ### 12.5 The rebrand: identifiers that changed
 
