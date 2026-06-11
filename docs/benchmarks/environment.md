@@ -76,7 +76,7 @@ git -C "$HOME/src/genie"  rev-parse HEAD
 ```
 
 The repo ships a ready-to-run build script with the same
-sequence at [`/home/toddw/genie_build.sh`](../../tools/benchmarks/genie_build.sh)
+sequence at `/home/toddw/genie_build.sh`
 (WSL absolute path; see `tools/benchmarks/genie_build.sh` if
 checked into the tree).
 

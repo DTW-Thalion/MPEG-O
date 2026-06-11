@@ -24,14 +24,20 @@ same concerns through individual test files.
 
 ## Marker-based gating
 
-`python/tests/conftest.py` registers these markers. The default
-pytest invocation applies the filter
-`-m "not stress and not requires_network and not aspirational"`.
+The default pytest invocation is configured by `addopts` in
+`python/pyproject.toml`, which applies the filter
+`-m 'not slow and not perf and not integration'` (the `slow`, `perf`,
+and `integration` markers are registered there). Separately,
+`python/tests/conftest.py` registers the `stress`, `requires_network`,
+`aspirational`, and the various `requires_*` markers; the
+`not stress and not requires_network` form is the filter used by the
+`python-validation` CI job (`.github/workflows/ci.yml`), not the
+local `addopts` default.
 
 | Marker | Gates on | Auto-skip when |
 |--------|----------|---------------|
-| `stress` | Long-running fixtures + benchmarks | default filter |
-| `requires_network` | Fixture downloads, XSD fetches | default filter |
+| `stress` | Long-running fixtures + benchmarks | excluded by the `-m` filter on the PR / validation CI jobs (not by the local `addopts` default) |
+| `requires_network` | Fixture downloads, XSD fetches | excluded by the `-m` filter on the validation CI job (not by the local `addopts` default) |
 | `requires_s3` | S3 / MinIO endpoint | `TTIO_S3_FIXTURE_URL` unset |
 | `requires_pyteomics` | Third-party cross-reader | `pyteomics` not importable |
 | `requires_pymzml` | Third-party cross-reader | `pymzml` not importable |
@@ -96,7 +102,7 @@ absent.
 |-----|------|
 | `objc-build-test` | GNUstep + libobjc2 + libTTIO + test runner (307 tests as of v0.11.0) |
 | `python-test` | `tests/` default filter, Python 3.11 + 3.12 matrix (1443 tests as of v0.11.0) |
-| `java-test` | Maven `verify`, JDK 17 (695 tests as of v0.11.0) |
+| `java-test` | Maven `verify`, JDK 25 (695 tests as of v0.11.0) |
 | `cross-compat` | Python smoke tests that subprocess into `TtioVerify` + `TtioSign` binaries (44 combinations as of v0.11.0) |
 | `python-validation` | `tests/validation + tests/integration + tests/security` with `[integration]` extras installed |
 

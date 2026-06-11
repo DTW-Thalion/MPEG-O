@@ -34,7 +34,7 @@ Python in-memory store).
 | Directory | Purpose |
 |-----------|---------|
 | `python/` | Python reference implementation (`ttio` package), the canonical write path. |
-| `java/`   | Java reference implementation (Maven, JDK 17). |
+| `java/`   | Java reference implementation (Maven, JDK 22). |
 | `objc/`   | Objective-C reference implementation (GNUstep). |
 | `native/` | C library `libttio_rans` — the v2 codec kernels (rANS, ref_diff_v2, mate_info_v2, name_tokenized_v2, fqzcomp_nx16_z). All three language bindings link against it. |
 | `docs/`   | Specs, ADRs, codec design docs, test strategy, vendor-format mappings. |

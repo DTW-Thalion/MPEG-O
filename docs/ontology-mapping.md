@@ -56,8 +56,8 @@ This document lists the primary ontologies that TTI-O readers and writers should
 
 | Accession | Name |
 |---|---|
-| `NMR:1000049` | nucleus |
-| `NMR:1000050` | spectrometer frequency |
+| `NMR:1000002` | nucleus |
+| `NMR:1000001` | spectrometer frequency |
 | `NMR:1000001` | 1D NMR experiment |
 | `NMR:1000332` | COSY |
 | `NMR:1000333` | HSQC |
@@ -79,15 +79,20 @@ This document lists the primary ontologies that TTI-O readers and writers should
 Identifications reference chemical entities by accession:
 
 ```objc
-TTIOIdentification *id1 = [TTIOIdentification new];
-[id1 setChemicalEntity:@"CHEBI:17234"];   // D-glucose
-[id1 setConfidenceScore:0.97];
-[id1 addCVParam:[TTIOCVParam paramWithOntologyRef:@"MS"
-                                         accession:@"MS:1002356"
-                                              name:@"PSM-level FDR"
-                                             value:@(0.01)
-                                              unit:nil]];
+TTIOIdentification *id1 =
+    [[TTIOIdentification alloc] initWithRunName:@"run1"
+                                 spectrumIndex:0
+                                chemicalEntity:@"CHEBI:17234"   // D-glucose
+                               confidenceScore:0.97
+                                 evidenceChain:@[@"MS:1002356 PSM-level FDR"]];
 ```
+
+`TTIOIdentification` is an immutable value object: the chemical entity,
+confidence score, and evidence chain are fixed at construction via the
+designated initialiser. Supporting CV references travel in the
+`evidenceChain` (an ordered list of free-form accession strings), not as
+attached `TTIOCVParam`s — `TTIOIdentification` does not conform to
+`TTIOCVAnnotatable`.
 
 ---
 

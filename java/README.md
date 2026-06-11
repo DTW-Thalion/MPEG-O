@@ -41,13 +41,13 @@ The Java implementation mirrors the three-layer ObjC/Python pattern:
 
 | Layer | Java Package | Description |
 |-------|-------------|-------------|
-| HDF5 wrappers | `global.thalion.ttio.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundIO`, `NativeStringPool`, `NativeBytesPool` |
+| HDF5 wrappers | `global.thalion.ttio.hdf5` | `Hdf5File`, `Hdf5Group`, `Hdf5Dataset`, `Hdf5CompoundIO`, `NativeStringPool`, `VlBytesFFM` |
 | Storage providers | `global.thalion.ttio.providers` | `Hdf5Provider`, `MemoryProvider`, `SqliteProvider`, `ZarrProvider` (`StorageProvider` / `StorageGroup` / `StorageDataset` protocols) |
 | Protocols | `global.thalion.ttio.protocols` | `Run`, `Indexable`, `Streamable`, `Provenanceable`, `Encryptable`, `CVAnnotatable` |
 | Core + enums | `global.thalion.ttio` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec`, `ProvenanceRecord`, `Enums.SpectrumKind` (v1.7.0) |
 | Genomics | `global.thalion.ttio.genomics` | `AlignedRead`, `GenomicIndex`, `GenomicRun`, `WrittenGenomicRun` |
-| Codecs | `global.thalion.ttio.codecs` | `Rans`, `BasePack`, `QualityBinned`, `NameTokenizer` |
-| Transport | `global.thalion.ttio.transport` | `TransportWriter`, `TransportReader`, `AUFilter`, `WebSocketServer`, `WebSocketClient` |
+| Codecs | `global.thalion.ttio.codecs` | `Rans`, `BasePack`, `Quality`, `NameTokenizerV2` |
+| Transport | `global.thalion.ttio.transport` | `TransportWriter`, `TransportReader`, `AUFilter`, `TransportServer`, `TransportClient` |
 | Importers | `global.thalion.ttio.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `BamReader`, `CramReader` |
 | Exporters | `global.thalion.ttio.exporters` | `MzMLWriter`, `NmrMLWriter`, `ISAExporter`, `BamWriter`, `CramWriter` |
 | Protection | `global.thalion.ttio.protection` | `EncryptionManager`, `SignatureManager`, `KeyRotationManager`, `Anonymizer`, `PostQuantumCrypto` |
