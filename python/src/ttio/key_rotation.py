@@ -453,7 +453,23 @@ def _write_wrapped_dataset(ki, wrapped: bytes) -> None:
 def _read_wrapped_dataset(ki) -> bytes:
     native = _native_h5_from(ki)
     if native is not None:
-        return bytes(np.asarray(native["dek_wrapped"][()], dtype="<u1").tobytes())
+        dset = native["dek_wrapped"]
+        if dset.dtype.itemsize == 1:
+            # Spec-compliant uint8 layout (Python writes, new Java/ObjC
+            # writes): the bytes are stored verbatim, exact length.
+            raw = np.asarray(dset[()], dtype="<u1").tobytes()
+            if "dek_wrapped_bytes" in native.attrs:
+                n = int(np.asarray(native.attrs["dek_wrapped_bytes"]))
+                return raw[:n]
+            return raw
+        # Legacy pre-fix Java/ObjC layout: int32, zero-padded to a 4-byte
+        # boundary. Byte-REINTERPRET (view the underlying bytes, never
+        # value-cast) and slice off the padding to the true length.
+        raw = np.asarray(dset[()], dtype="<i4").tobytes()
+        if "dek_wrapped_bytes" in native.attrs:
+            n = int(np.asarray(native.attrs["dek_wrapped_bytes"]))
+            return raw[:n]
+        return raw
     arr = np.asarray(ki.open_dataset("dek_wrapped").read())
     raw = arr.tobytes()
     if ki.has_attribute("dek_wrapped_byte_length"):
