@@ -22,7 +22,7 @@ the `positions` channel and RANS_ORDER0 to other integer channels.
 ## 1. Algorithm
 
 The encode pipeline transforms raw little-endian integer bytes into a
-compact rANS order-0 encoded byte stream via four stages:
+compact rANS order-0 encoded byte stream via five stages:
 
 1. **Parse.** Interpret the input as a flat array of little-endian
    integers of `element_size` bytes (1, 4, or 8 bytes per element).

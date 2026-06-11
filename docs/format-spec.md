@@ -208,12 +208,9 @@ synthesize `offsets` from `cumsum(lengths)` at load time using a
 uint64 accumulator (overflow-safe on >4 GB genomic runs even when
 `lengths` is uint32).
 
-The opt-out flag `WrittenRun.opt_keep_offsets_columns` (Python),
-`WrittenRun#optKeepOffsetsColumns` (Java),
-`TTIOWrittenRun.optKeepOffsetsColumns` (ObjC) — same flag for
-both genomic and MS — restores the redundant column for byte-
-equivalent backward compat with pre-v1.10 readers. Pre-v1.10
-readers cannot open v1.10-default files.
+The omission is unconditional in v1.10+ writers — there is no
+opt-out to restore the redundant column. Pre-v1.10 readers cannot
+open v1.10-default files.
 
 All parallel datasets are chunked (chunk = 1024) and `zlib -6`
 compressed. `@count` (int64) on the `spectrum_index/` group mirrors
@@ -252,7 +249,7 @@ Name-driven channel storage.
 | `@<channel>_ciphertext_bytes` | int64          | Exact ciphertext size            |
 | `@<channel>_original_count`| int64             | Original element count           |
 | `@<channel>_algorithm`     | string            | e.g. `"AES-256-GCM"`             |
-| `@mpgo_signature`          | string (base64)   | HMAC-SHA256 if signed            |
+| `@ttio_signature`          | string (base64)   | HMAC-SHA256 if signed            |
 
 For an MS run the channels are `{mz, intensity}` producing
 `mz_values` and `intensity_values`. For an NMR run they are
@@ -510,7 +507,7 @@ raman_image_cube/ (or ir_image_cube/)
 ├── @scan_pattern              (VL string)
 ├── @excitation_wavelength_nm  (float64)   ← raman_image_cube only
 ├── @laser_power_mw            (float64)   ← raman_image_cube only
-├── @ir_mode                   (VL string) ← ir_image_cube only  ("ABSORBANCE" / "TRANSMITTANCE")
+├── @ir_mode                   (int64 enum) ← ir_image_cube only  (0 = TRANSMITTANCE, 1 = ABSORBANCE)
 ├── @resolution_cm_inv         (float64)   ← ir_image_cube only
 ├── intensity                  (float64[H][W][SP])
 └── wavenumbers                (float64[SP])
@@ -535,7 +532,7 @@ persistence path, keyed by the following named signal arrays:
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "TTIOUVVisSpectrum"
+├── @ttio_class = "TTIOUVVisSpectrum"
 ├── @path_length_cm   (float64, optional)
 ├── @solvent          (VL string, optional)
 └── arrays/
@@ -556,7 +553,7 @@ correlation matrices of equal size.
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "TTIOTwoDimensionalCorrelationSpectrum"
+├── @ttio_class = "TTIOTwoDimensionalCorrelationSpectrum"
 ├── arrays/
 │   ├── variable_axis  (float64[N])
 │   ├── synchronous    (float64[N][N], row-major; in-phase, symmetric)
@@ -582,7 +579,7 @@ An `TTIONMR2DSpectrum` group (written via the generic
 
 ```
 spec_NNNNNN/
-├── @mpgo_class = "TTIONMR2DSpectrum"
+├── @ttio_class = "TTIONMR2DSpectrum"
 ├── @matrix_width, @matrix_height
 ├── @nucleus_f1, @nucleus_f2
 ├── arrays/
@@ -717,7 +714,7 @@ The legacy decryption code remains for migration; see the
 
 `TTIOSignatureManager.signDataset:inFile:withKey:error:` computes an
 HMAC-SHA256 over a canonical byte stream derived from the target
-dataset and stores a **prefixed** base64 MAC in `@mpgo_signature`.
+dataset and stores a **prefixed** base64 MAC in `@ttio_signature`.
 Provenance chain signing stores its MAC in `@provenance_signature`
 on the run group, computed over the UTF-8 bytes of
 `@provenance_json` (legacy v0.2 path, kept for v0.2 compatibility).
@@ -1104,13 +1101,15 @@ The 4-substream container wire format:
 
 | Substream | Content | Encoding |
 |-----------|---------|----------|
-| MF | Per-record mate-flag (0=SAME_CHROM_NEARBY, 1=SAME_CHROM_FAR, 2=NO_MATE, 3=DIFF_CHROM) | raw-pack or rANS-O0 (auto-pick) |
-| NS | Chrom_id for DIFF_CHROM records (0 elsewhere) | varint + rANS-O0 auto-pick |
-| NP | Mate_pos: zigzag-varint delta for SAME_CHROM_NEARBY, absolute for DIFF_CHROM; 0 for others | varint + rANS-O0 auto-pick |
+| MF | Per-record mate-flag (0=SAME_CHROM, 1=CROSS_CHROM, 2=NO_MATE, 3=RESERVED — never emitted) | raw-pack or rANS-O0 (auto-pick) |
+| NS | Chrom_id for CROSS_CHROM records (0 elsewhere) | varint + rANS-O0 auto-pick |
+| NP | Mate_pos: zigzag-varint delta vs read position for SAME_CHROM, absolute for CROSS_CHROM; 0 for others | varint + rANS-O0 auto-pick |
 | TS | Template_length (zigzag-varint); 0 for NO_MATE | varint + rANS-O0 auto-pick |
 
 Container header (34 bytes): 4-byte magic `b"MIv2"` + 1-byte version
-`\x01` + 1-byte flags `\x00` + 4 × uint64 LE substream byte lengths.
+`\x01` + 1-byte flags `\x00` + `n_records` (uint64 LE) + `num_cross`
+(uint32 LE) + 4 × uint32 LE substream byte lengths (MF, NS, NP, TS).
+See [docs/codecs/mate_info_v2.md](codecs/mate_info_v2.md) for the full codec.
 
 ### 10.9b.2 Reader-side dependency
 
@@ -1634,7 +1633,7 @@ must be materialised to re-slice per-spectrum).
 ```
 HDF5 "minimal_ms.tio" {
 GROUP "/" {
-   ATTRIBUTE "ttio_format_version" { DATATYPE H5T_STRING ... DATA { "1.1" } }
+   ATTRIBUTE "ttio_format_version" { DATATYPE H5T_STRING ... DATA { "1.0" } }
    ATTRIBUTE "ttio_features" { DATA { "[\"base_v1\",\"compound_identifications\",...]" } }
    GROUP "study" {
       ATTRIBUTE "title" { ... }

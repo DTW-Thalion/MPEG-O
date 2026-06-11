@@ -6,7 +6,7 @@ v1.0.0 ships three interoperable reference implementations:
 
 - **Objective-C / GNUstep** (`objc/`, LGPL-3.0) — the normative
   implementation. Every format guarantee in `docs/format-spec.md`
-  is rooted here. **3072 assertions / 0 failures.**
+  is rooted here. **4501 assertions / 0 failures.**
 - **Python (`ttio` package)** (`python/`, LGPL-3.0 core +
   Apache-2.0 importers/exporters) — a full reader/writer on top
   of `h5py` + `numpy` that mirrors the Objective-C class
@@ -286,7 +286,7 @@ existing MS-only client code path is affected.
 ## Storage Provider Abstraction
 
 The data model and API are the standard; the storage backend is a
-**pluggable implementation detail**. Two providers ship:
+**pluggable implementation detail**. Four providers ship:
 
 ```
                  ┌─────────────────────────┐
@@ -297,13 +297,13 @@ The data model and API are the standard; the storage backend is a
         ┌─────────────────────────────────────────────┐
         │ <StorageProvider> / <StorageGroup> /         │
         │         <StorageDataset>                     │
-        └────────────┬────────────────────┬────────────┘
-                     │                    │
-                     ▼                    ▼
-            ┌─────────────────┐  ┌─────────────────┐
-            │  Hdf5Provider   │  │ MemoryProvider  │
-            │   (h5py/libhdf5)│  │ (dict-tree)     │
-            └─────────────────┘  └─────────────────┘
+        └──┬──────────────┬──────────────┬──────────┬──┘
+           │              │              │          │
+           ▼              ▼              ▼          ▼
+   ┌──────────────┐ ┌────────────┐ ┌──────────┐ ┌────────┐
+   │ Hdf5Provider │ │  Memory    │ │  Sqlite  │ │  Zarr  │
+   │(h5py/libhdf5)│ │ (dict-tree)│ │ Provider │ │Provider│
+   └──────────────┘ └────────────┘ └──────────┘ └────────┘
 ```
 
 Providers register via platform-native discovery:
@@ -328,8 +328,8 @@ Each language exposes the same **capability floor**:
 
 `MemoryProvider` exists so the abstraction is provable: if round-trip
 tests pass identically over `Hdf5Provider` and `MemoryProvider`, the
-protocol contract is correct. Future providers (Zarr, SQLite, …) are
-drop-in additions.
+protocol contract is correct. The `SqliteProvider` and `ZarrProvider`
+backends shipped as drop-in additions on top of the same protocol.
 
 ### Transport
 
@@ -676,8 +676,8 @@ snake_case module names.
 
 Java uses `AutoCloseable` + try-with-resources instead of ObjC `-dealloc`. Thread
 safety via `ReentrantReadWriteLock` on `Hdf5File` (same model as ObjC's
-`pthread_rwlock_t`). Value types use Java records (JDK 17). Crypto via
-`javax.crypto` (no external dependency). Maven build with system HDF5 1.10
+`pthread_rwlock_t`). Value types use Java records (JDK 22). Crypto via
+`javax.crypto` (no external dependency). Maven build with system HDF5 1.14.6
 bindings (`libhdf5-java`).
 
 ---
