@@ -69,6 +69,12 @@ public final class TransportServer {
     public void start() throws InterruptedException {
         server = new InnerServer(new InetSocketAddress(host, port), this);
         server.setReuseAddr(true);
+        // Run the selector + decoder worker threads as daemons so a slow or
+        // wedged stop() (e.g. a worker blocked in conn.send because the peer
+        // vanished) can never keep a forked JVM alive after the owning test
+        // finishes. stop() in finally still attempts a clean join first.
+        // (#flaky-download-hang)
+        server.setDaemon(true);
         server.start();
         startedLatch.await(5, TimeUnit.SECONDS);
         port = server.getPort();
