@@ -1,10 +1,13 @@
 [build-system]
-# Cython>=3.0 build dep for the FQZCOMP_NX16_Z C extension at
-# ttio.codecs._fqzcomp_nx16. The extension is optional; the pure-Python
-# reference implementation in ttio/codecs/fqzcomp_nx16_z.py produces
-# byte-identical output, just slower.
-requires = ["setuptools>=68", "wheel", "Cython>=3.0"]
-build-backend = "setuptools.build_meta"
+# scikit-build-core drives the CMake build (python/CMakeLists.txt), which
+# compiles the native libttio_rans shared library and the optional Cython
+# accelerators. The in-tree backend (_build_backend.py) first vendors the
+# sibling ../native C sources into ./_native so sdists are self-contained.
+# Cython is a build dep for the optional accelerators; their pure-Python
+# references produce byte-identical output, just slower.
+requires = ["scikit-build-core>=0.9", "cython>=3.0"]
+build-backend = "_build_backend"
+backend-path = ["."]
 
 [project]
 name = "ttio"
@@ -115,14 +118,30 @@ ttio-pqc = "ttio.tools.ttio_pqc_cli:main"
 # that surface a clear "available in <milestone>" message.
 ttio = "ttio.tools.workbench_cli:main"
 
-[tool.setuptools]
-package-dir = { "" = "src" }
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.setuptools.package-data]
-ttio = ["py.typed"]
+[tool.scikit-build]
+minimum-version = "0.9"
+build-dir = "build/{wheel_tag}"
+wheel.packages = ["src/ttio"]
+# Vendor the native C sources (copied into _native/ by _build_backend.py) into
+# the sdist so it can rebuild libttio_rans at install time. py.typed ships the
+# typing marker.
+sdist.include = ["_native/**", "src/ttio/py.typed"]
+# The package is a subdirectory of the git repo, so scikit-build-core cannot
+# use git to scope the sdist and would otherwise sweep in everything under
+# python/ (a stray .venv, built docs, coverage html, caches). Exclude all of it
+# explicitly; the wheel itself is unaffected (it is built from the CMake install
+# + wheel.packages, not this list).
+sdist.exclude = [
+    ".venv", "venv",
+    "build", "build_smoke", "dist", "dist_test", "wheelhouse",
+    "htmlcov", "docs", "default.profraw", "*.profraw",
+    "_native/_build", "_native/_build_tsan",
+    "**/__pycache__", "**/*.pyc", "**/*.pyo",
+    ".pytest_cache", "**/.pytest_cache",
+    "**/*.so", "**/*.dylib", "**/*.dll", "**/*.o", "**/*.a",
+    "*.egg-info", "**/*.egg-info",
+]
+cmake.version = ">=3.16"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
