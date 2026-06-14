@@ -157,16 +157,18 @@ test-command = "python -c \"from ttio.codecs import fqzcomp_nx16_z as f; assert 
 # The native build's find_package(ZLIB REQUIRED) needs zlib headers in the
 # manylinux container. cmake/ninja are fetched by scikit-build-core.
 before-all = "yum install -y zlib-devel"
-archs = ["x86_64", "aarch64"]
+# Build the runner's native arch only; the CI matrix uses a separate native
+# runner per arch (x86_64 + aarch64) so no QEMU emulation is needed.
+archs = ["auto"]
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.macos]
-archs = ["x86_64", "arm64"]
+archs = ["auto"]
 # zlib ships with the macOS SDK; delocate vendors libttio_rans into the wheel.
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.windows]
-archs = ["AMD64"]
+archs = ["auto"]
 # zlib for the native build comes from the runner's preinstalled vcpkg. The
 # static-md triplet links zlib INTO libttio_rans.dll, so the DLL has no external
 # zlib dependency to vendor. cibuildwheel's default repair (delvewheel) handles
