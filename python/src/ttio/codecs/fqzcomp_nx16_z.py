@@ -58,69 +58,15 @@ except ImportError:  # pragma: no cover
 #   * get_backend_name() introspection
 
 import array  # noqa: E402
-import ctypes  # noqa: E402  (kept here so lib loader stays close to flag)
-import ctypes.util  # noqa: E402
-import os  # noqa: E402
+import ctypes  # noqa: E402  (used below for argtype/restype wiring)
 
-_native_lib = None
+from ttio.codecs._native_loader import load_ttio_rans  # noqa: E402
 
-
-def _load_native_lib():
-    """Locate and dlopen libttio_rans (.so/.dylib/.dll).
-
-    Search order:
-      1. $TTIO_RANS_LIB_PATH (full path or directory containing the lib)
-      2. Bare names — letting the dynamic loader use LD_LIBRARY_PATH /
-         DYLD_LIBRARY_PATH / PATH (Windows) / RPATH.
-      3. ctypes.util.find_library("ttio_rans") as a last resort.
-
-    Returns the CDLL handle on success, ``None`` on failure (caller
-    treats absence as "no native acceleration available").
-    """
-    global _native_lib
-    if _native_lib is not None:
-        return _native_lib
-
-    candidates: list[str] = []
-
-    env_path = os.environ.get("TTIO_RANS_LIB_PATH")
-    if env_path:
-        if os.path.isdir(env_path):
-            for name in (
-                "libttio_rans.so",
-                "libttio_rans.dylib",
-                "ttio_rans.dll",
-                "libttio_rans.dll",
-            ):
-                candidates.append(os.path.join(env_path, name))
-        else:
-            candidates.append(env_path)
-
-    candidates.extend([
-        "libttio_rans.so",
-        "libttio_rans.dylib",
-        "ttio_rans.dll",
-        "libttio_rans.dll",
-    ])
-
-    for name in candidates:
-        try:
-            _native_lib = ctypes.CDLL(name)
-            return _native_lib
-        except OSError:
-            continue
-
-    path = ctypes.util.find_library("ttio_rans")
-    if path:
-        try:
-            _native_lib = ctypes.CDLL(path)
-            return _native_lib
-        except OSError:
-            pass
-    return None
-
-
-_HAVE_NATIVE_LIB = _load_native_lib() is not None
+# Single source of truth for native-library discovery. The other v2 codecs
+# (ref_diff_v2, mate_info_v2, name_tokenizer_v2) re-import _native_lib /
+# _HAVE_NATIVE_LIB from this module, so the loader lives here only.
+_native_lib = load_ttio_rans()
+_HAVE_NATIVE_LIB = _native_lib is not None
 
 if _HAVE_NATIVE_LIB:
     _lib = _native_lib
