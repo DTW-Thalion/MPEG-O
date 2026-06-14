@@ -167,10 +167,14 @@ repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest
 
 [tool.cibuildwheel.windows]
 archs = ["AMD64"]
-# delvewheel vendors the DLL; zlib for the native build is provisioned in
-# the publish workflow (see .github/workflows/publish-ttio.yml).
-before-build = "pip install delvewheel"
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
+# zlib for the native build comes from the runner's preinstalled vcpkg. The
+# static-md triplet links zlib INTO libttio_rans.dll, so the DLL has no external
+# zlib dependency to vendor. cibuildwheel's default repair (delvewheel) handles
+# the rest. CI-validated only — not exercised on the Linux dev box.
+before-all = "vcpkg install zlib:x64-windows-static-md"
+
+[tool.cibuildwheel.windows.environment]
+CMAKE_ARGS = "-DCMAKE_TOOLCHAIN_FILE=$VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static-md"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
