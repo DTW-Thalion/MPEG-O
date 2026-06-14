@@ -19,6 +19,9 @@ message(STATUS "ttio: building libttio_rans from ${_NATIVE_DIR}")
 # finds it with no environment configuration.
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 set(TTIO_RANS_BUILD_JNI OFF CACHE BOOL "" FORCE)
+# Suppress the native project's own lib/ + include/ install rules; we install
+# the library into ttio/.libs ourselves below.
+set(TTIO_RANS_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory("${_NATIVE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/native_build")
 
 install(TARGETS ttio_rans
