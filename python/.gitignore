@@ -7,6 +7,8 @@ src/ttio/.libs/
 # Build/output dirs.
 build/
 build_smoke/
+dist/
 dist_test/
+dist_wheel/
 wheelhouse/
 *.egg-info/
