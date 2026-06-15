@@ -1,0 +1,14 @@
+# Vendored native sources copied in by _build_backend.py at build time.
+_native/
+
+# Native library bundled into the package by the CMake install (binary wheels).
+src/ttio/.libs/
+
+# Build/output dirs.
+build/
+build_smoke/
+dist/
+dist_test/
+dist_wheel/
+wheelhouse/
+*.egg-info/
