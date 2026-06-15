@@ -88,9 +88,15 @@ if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
     endif()
 endif()
 
-# Install
-install(TARGETS ttio_rans LIBRARY DESTINATION lib)
-install(FILES include/ttio_rans.h DESTINATION include)
+# Install. Defaults ON for standalone / ObjC / Java consumers. The Python wheel
+# build sets TTIO_RANS_INSTALL=OFF (it installs the library into ttio/.libs via
+# python/CMakeLists.txt) so these rules don't drop a stray lib/ + include/ into
+# the wheel root.
+option(TTIO_RANS_INSTALL "Install libttio_rans and its public header" ON)
+if(TTIO_RANS_INSTALL)
+    install(TARGETS ttio_rans LIBRARY DESTINATION lib)
+    install(FILES include/ttio_rans.h DESTINATION include)
+endif()
 
 # Optional JNI wrapper.  Enable with `-DTTIO_RANS_BUILD_JNI=ON`.
 # Java loads the library by base name "ttio_rans_jni" via System.loadLibrary,

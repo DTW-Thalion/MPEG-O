@@ -1,0 +1,85 @@
+name: publish-ttio
+
+# Build the ttio sdist + binary wheels and publish to TestPyPI on a
+# `ttio-vX.Y.Z` tag. Wheels are built FROM THE SDIST (not the python/ project
+# dir) because cibuildwheel only mounts the package dir into its build
+# container, and the native libttio_rans sources live in the sibling ../native
+# — the sdist vendors them, so it is self-contained.
+
+on:
+  push:
+    tags: ["ttio-v*"]
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash   # cross-platform globbing of the sdist, incl. Windows
+
+jobs:
+  sdist:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build sdist
+        run: pipx run build --sdist python --outdir dist
+      - name: Check metadata
+        run: pipx run twine check dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  wheels:
+    needs: [sdist]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest      # linux x86_64
+          - os: ubuntu-24.04-arm   # linux aarch64 (native ARM runner, no QEMU)
+          - os: macos-13           # macOS x86_64
+          - os: macos-14           # macOS arm64
+          - os: windows-latest     # windows AMD64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Download sdist
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist
+      - name: Build wheels from the sdist
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install "cibuildwheel==4.1.0"
+          python -m cibuildwheel "$(ls dist/*.tar.gz)" --output-dir wheelhouse
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+
+  publish-testpypi:
+    needs: [sdist, wheels]
+    runs-on: ubuntu-latest
+    # Configure a TestPyPI trusted publisher for project `ttio`, workflow
+    # `publish-ttio.yml`, environment `testpypi`. Until then this job fails at
+    # the upload step (expected) while the build jobs still go green.
+    environment: testpypi
+    permissions:
+      id-token: write   # OIDC for trusted publishing
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          packages-dir: dist
