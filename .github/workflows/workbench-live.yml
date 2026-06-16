@@ -219,7 +219,9 @@ jobs:
         # [pqc] pulls in liboqs-python for the PQC per-AU live test
         # (test_per_au_encrypted_pqc_upload_round_trip); without it the
         # test errors with PQCUnavailableError instead of running.
-        run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python[pqc]"
+        # pytest-cov is required by the R7 workbench-client coverage gate
+        # (TTIOWB_COVERAGE=1 passes --cov to the live pytest run).
+        run: python3 -m pip install --break-system-packages pytest pytest-cov -e "${{ github.workspace }}/TTI-O/python[pqc]"
 
       # JDK 25 for the Java live test (mvn -Dtest=WorkbenchLiveTest).
       # The runner's default JAVA_HOME is < 22; the java/ pom targets
