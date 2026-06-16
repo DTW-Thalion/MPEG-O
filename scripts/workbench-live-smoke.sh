@@ -105,9 +105,28 @@ export TTIO_RANS_LIB_PATH="${TTIO_RANS_LIB_PATH:-$TTIO_REPO_PATH/native/_build/l
 set +e
 
 # --- Python client live test ---
+# R7: when TTIOWB_COVERAGE=1, measure + gate the workbench client modules
+# (which pyproject's omit drops from the always-on ci.yml gate). Coverage
+# is scoped to src/ttio/workbench via coverage-live.cfg; the xml report is
+# written to a persistent dir so the workflow can upload it.
+PY_COV_ARGS=()
+if [ "${TTIOWB_COVERAGE:-0}" = "1" ]; then
+    COV_DIR="${TTIOWB_COV_OUT:-$TTIO_REPO_PATH/.coverage-live}"
+    mkdir -p "$COV_DIR"
+    # Bare --cov (no source path) so coverage's `include` allowlist in
+    # coverage-live.cfg applies (source and include are mutually exclusive;
+    # a --cov=<dir> would set source and ignore the allowlist). The allowlist
+    # scopes to exactly the omitted-from-ci.yml client modules the live test
+    # drives. session_proxy.py + tools/workbench_cli.py are NOT live-driven
+    # yet, so they stay omitted+ungated (see coverage-live.cfg).
+    PY_COV_ARGS=(--cov --cov-config=coverage-live.cfg
+                 --cov-report=term-missing
+                 "--cov-report=xml:$COV_DIR/workbench-cov.xml")
+fi
 echo "==> [python] pytest test_workbench_live.py"
 ( cd "$TTIO_REPO_PATH/python" \
-  && python3 -m pytest tests/integration/test_workbench_live.py -v --no-header "$@" )
+  && python3 -m pytest tests/integration/test_workbench_live.py -v --no-header \
+        "${PY_COV_ARGS[@]}" "$@" )
 PY_RC=$?
 
 # --- Java client live test (parity; opt-in via TTIOWB_JAVA_TEST=1
