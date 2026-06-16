@@ -134,13 +134,28 @@ PY_RC=$?
 #     sets it, local runs default to Python-only) ---
 JAVA_RC=0
 if [ "${TTIOWB_JAVA_TEST:-0}" = "1" ]; then
-    echo "==> [java] mvn -Dtest=WorkbenchLiveTest"
+    # R7: with TTIOWB_COVERAGE=1, run the `live-coverage` profile (re-instruments
+    # the workbench client classes the default jacoco config excludes, and runs
+    # a workbench-scoped jacoco check at the `test` phase). Otherwise skip jacoco.
+    JAVA_COV_ARGS=(-Djacoco.skip=true)
+    JAVA_GOAL=test
+    if [ "${TTIOWB_COVERAGE:-0}" = "1" ]; then
+        # The profile's workbench report+check bind to prepare-package (after
+        # surefire writes jacoco.exec); run through that phase.
+        JAVA_COV_ARGS=(-Plive-coverage)
+        JAVA_GOAL=prepare-package
+    fi
+    echo "==> [java] mvn -Dtest=WorkbenchLiveTest ${JAVA_COV_ARGS[*]} $JAVA_GOAL"
     ( cd "$TTIO_REPO_PATH/java" \
-      && mvn -q -Djacoco.skip=true \
+      && mvn -q "${JAVA_COV_ARGS[@]}" \
              -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar \
              -Dsurefire.failIfNoSpecifiedTests=false \
-             -Dtest=WorkbenchLiveTest test )
+             -Dtest=WorkbenchLiveTest "$JAVA_GOAL" )
     JAVA_RC=$?
+    if [ "${TTIOWB_COVERAGE:-0}" = "1" ] \
+       && [ -d "$TTIO_REPO_PATH/java/target/jacoco-workbench" ]; then
+        cp -r "$TTIO_REPO_PATH/java/target/jacoco-workbench" "$COV_DIR/" 2>/dev/null || true
+    fi
 fi
 
 echo "==> server.log tail:"; tail -8 "$WORK/server.log" 2>/dev/null || true
