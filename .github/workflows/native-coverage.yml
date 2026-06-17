@@ -1,0 +1,106 @@
+name: Native + Cython coverage
+
+# R8 (final coverage-campaign item). Dedicated workflow — the instrumented
+# native build + Cython linetrace rebuild are slower than the production
+# build and are kept off the every-PR ci.yml critical path. The C half is
+# REPORT-ONLY (SIMD dispatch makes per-file counts CPU-dependent); the
+# Cython half ENFORCES a linetrace floor (deterministic). Path-filtered so
+# only codec/native changes trigger it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'native/**'
+      - 'python/src/ttio/codecs/**'
+      - 'python/CMakeLists.txt'
+      - 'python/pyproject.toml'
+      - 'python/coverage-cython.cfg'
+      - 'python/scripts/run_cython_coverage.py'
+      - 'scripts/native-coverage.sh'
+      - '.github/workflows/native-coverage.yml'
+  pull_request:
+    paths:
+      - 'native/**'
+      - 'python/src/ttio/codecs/**'
+      - 'python/CMakeLists.txt'
+      - 'python/pyproject.toml'
+      - 'python/coverage-cython.cfg'
+      - 'python/scripts/run_cython_coverage.py'
+      - 'scripts/native-coverage.sh'
+      - '.github/workflows/native-coverage.yml'
+  workflow_dispatch:
+
+jobs:
+  c-coverage:
+    name: Native C — ctest + gcov (report-only)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            zlib1g-dev cmake ninja-build gcovr
+      - name: Build (instrumented) + ctest + gcovr
+        run: bash scripts/native-coverage.sh
+      - name: Publish coverage total to job summary
+        if: always()
+        run: |
+          {
+            echo "## Native C coverage (report-only)"
+            echo '```'
+            gcovr --root native --filter native/src/ \
+              --gcov-ignore-parse-errors=negative_hits.warn_once_per_file \
+              --print-summary native/_covbuild | tail -5 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: native-c-coverage
+          path: |
+            native/_covbuild/coverage.xml
+            native/_covbuild/coverage-html/
+          if-no-files-found: warn
+          retention-days: 14
+
+  cython-coverage:
+    name: Cython — linetrace coverage (enforced floor 73)
+    runs-on: ubuntu-latest
+    env:
+      TTIO_RANS_LIB_PATH: ${{ github.workspace }}/native/_build/libttio_rans.so
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            zlib1g-dev cmake ninja-build samtools
+      - uses: ./.github/actions/setup-hdf5
+      - uses: ./.github/actions/build-native
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Cache liboqs
+        id: cache-liboqs
+        uses: actions/cache@v5
+        with:
+          path: /usr/local/lib/liboqs.so
+          key: liboqs-0.14.0-${{ runner.os }}
+      - name: Install liboqs (PQC native library)
+        if: steps.cache-liboqs.outputs.cache-hit != 'true'
+        run: bash scripts/install-liboqs.sh 0.14.0
+      - name: Update ldconfig for liboqs (always)
+        run: sudo ldconfig /usr/local/lib
+      - name: Install ttio (editable) with Cython linetrace
+        working-directory: python
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -e ".[test]" \
+            --config-settings=cmake.define.TTIO_CYTHON_LINETRACE=ON
+      - name: Cython linetrace coverage gate (floor 73)
+        working-directory: python
+        # Floor mirrors the baseline note in coverage-cython.cfg; bump both together.
+        run: python scripts/run_cython_coverage.py --fail-under 73
