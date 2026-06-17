@@ -1316,7 +1316,7 @@ int ttio_name_tok_v2_decode(const uint8_t *encoded, size_t encoded_size,
     *out_names = NULL;
     *out_n_reads = 0;
 
-    if (encoded_size < NTV2_HEADER_FIXED) return TTIO_RANS_ERR_NTV2_BAD_MAGIC;
+    if (encoded_size < NTV2_HEADER_FIXED) return TTIO_RANS_ERR_CORRUPT;
     if (memcmp(encoded, NTV2_MAGIC, NTV2_MAGIC_LEN) != 0) {
         return TTIO_RANS_ERR_NTV2_BAD_MAGIC;
     }
