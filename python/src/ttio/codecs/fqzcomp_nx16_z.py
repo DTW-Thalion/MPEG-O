@@ -35,14 +35,6 @@ VERSION_V3_ADAPTIVE = 3  # M94.Z V3: adaptive Range Coder
 VERSION_V4_FQZCOMP = 4  # M94.Z V4: CRAM 3.1 fqzcomp_qual port (the only live version)
 
 
-try:  # pragma: no cover — extension may be absent
-    from ttio.codecs._fqzcomp_nx16_z import _fqzcomp_nx16_z as _ext
-    _HAVE_C_EXTENSION = True
-except ImportError:  # pragma: no cover
-    _HAVE_C_EXTENSION = False
-    _ext = None  # type: ignore[assignment]
-
-
 # ── libttio_rans native library loader ──────────────────────────────────
 #
 # The native libttio_rans library (loaded via ctypes) implements the
@@ -345,20 +337,16 @@ def get_backend_name() -> str:
 
     One of:
         ``"native-<kernel>"``  e.g. ``"native-avx2"``  (libttio_rans available)
-        ``"cython"``           (Cython extension available)
         ``"pure-python"``      (fallback)
 
     Selection precedence is determined at module-import time; this
     introspector reports the *highest tier loaded*. Top-level V4
     encode/decode require the native library (``"native-<kernel>"``);
-    the Cython/pure-Python tiers, if present, are reported here for
-    diagnostics only.
+    the pure-Python tier, if present, is reported here for diagnostics only.
     """
     if _HAVE_NATIVE_LIB:
         kernel = _native_kernel_name() or "unknown"
         return f"native-{kernel}"
-    if _HAVE_C_EXTENSION:
-        return "cython"
     return "pure-python"
 
 
