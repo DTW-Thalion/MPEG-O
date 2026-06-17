@@ -100,6 +100,12 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           pip install -e ".[test]" \
             --config-settings=cmake.define.TTIO_CYTHON_LINETRACE=ON
+          # The coverage-cython.cfg plugin `Cython.Coverage` needs the Cython
+          # package importable at RUNTIME. Cython is otherwise only a build
+          # dependency (build-system.requires), so with build isolation it is
+          # absent from the job's runtime env — install it explicitly.
+          # (coverage itself is pulled in transitively by .[test]/pytest-cov.)
+          pip install "cython>=3.0"
       - name: Cython linetrace coverage gate (floor 73)
         working-directory: python
         # Floor mirrors the baseline note in coverage-cython.cfg; bump both together.
