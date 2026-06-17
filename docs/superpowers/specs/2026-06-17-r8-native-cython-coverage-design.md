@@ -176,3 +176,31 @@ Build/test in WSL `~/TTI-O`; push via Windows git, `gh` on the Windows side.
 Subagent-driven implementation (implementer + spec-review + code-quality).
 Watch CI, squash-merge, sync, update memory. Measure exit codes via PowerShell
 `$LASTEXITCODE`, not `; echo $?` nested in `wsl bash -lc`.
+
+## Post-implementation notes (divergence from design)
+
+Three things changed during implementation versus this design — all
+documented in the shipped code and recorded here for coherence:
+
+1. **Cython measures 2 extensions, not 3.** `_fqzcomp_nx16_z`'s Cython
+   extension is dead: its wrapper (`fqzcomp_nx16_z.py`) requires the native
+   `libttio_rans` and never falls back to the Cython `_ext` (V1/V2/V3 were
+   removed in the v1.0 reset; V4 is native-only — `_ext` has zero call
+   sites). It is excluded from the Cython floor `source`; the native
+   fqzcomp C is covered by the C half instead. Flagged as a separate
+   dead-code-removal follow-up (R3-style), out of R8 scope.
+2. **A dedicated runner replaces a bare `coverage run -m pytest`.**
+   `python/scripts/run_cython_coverage.py` encapsulates the coverage.py 7.x
+   + `Cython.Coverage` + numpy 2.x workarounds that a plain `coverage run`
+   cannot do: `COVERAGE_CORE=ctrace` (the default sys.monitoring core has no
+   Cython plugin), numpy + extension pre-import before the C tracer starts,
+   staging the linetrace-generated `.c` next to each `.pyx`, `-p no:cov`,
+   and deselecting a throughput perf test that linetrace slows below its
+   assert floor.
+3. **A latent native bug was fixed.** Running the native ctests in CI for
+   the first time surfaced `test_name_tok_v2_stress`: truncated-header
+   input returned `BAD_MAGIC` instead of `ERR_CORRUPT`. Fixed in its own
+   commit; no cross-language contract regression.
+
+Measured baselines: native C **77.3% line** (report-only); Cython
+**76.3% line** over `_rans` + `_delta_rans`, enforced floor **73**.

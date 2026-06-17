@@ -546,3 +546,28 @@ After merge (user-approved per campaign discipline), sync WSL `main` to `origin/
 **Placeholder scan:** `<FLOOR>`, `<measured>`, `<DATE>`, `<RECORD ...>`, `<CTEST_EXCLUDE>` are deliberate calibration values resolved by an explicit measurement procedure (Task 2 Step 3, Task 4 Steps 2–3) — not vague "fill in later" gaps. Every code/file artifact is given in full.
 
 **Type/name consistency:** Option names `TTIO_COVERAGE` / `TTIO_CYTHON_LINETRACE`, build dir `native/_covbuild`, config `python/coverage-cython.cfg`, env `CYTHON_TRACE=1` + macro `CYTHON_TRACE_NOGIL=1`, and the curated test list are identical across Tasks 1–5. ✓
+
+---
+
+## Post-implementation notes (as shipped)
+
+The plan above (Tasks 4–5) anticipated measuring three `.pyx` via a bare
+`coverage run --rcfile=... -m pytest`. The shipped implementation diverged
+for good reasons — recorded here so the plan matches reality:
+
+- **2 extensions measured, not 3.** `_fqzcomp_nx16_z`'s Cython extension is
+  dead (the wrapper requires the native `libttio_rans` and never calls the
+  Cython `_ext` — zero call sites). It is excluded from the Cython floor;
+  the native fqzcomp C is covered by the C half. Separate dead-code
+  follow-up, out of R8 scope.
+- **Dedicated runner `python/scripts/run_cython_coverage.py`** replaces the
+  bare `coverage run` to handle coverage.py 7.x + Cython.Coverage + numpy
+  2.x: `COVERAGE_CORE=ctrace`, numpy/extension pre-import, generated-`.c`
+  staging, `-p no:cov`, and a throughput-test deselect (linetrace slows it
+  below its assert floor — a profiler artifact).
+- **Latent native bug fixed** (own commit): `name_tok_v2` truncated-header
+  decode returned `BAD_MAGIC` instead of `ERR_CORRUPT`; surfaced by running
+  the native ctests in CI for the first time.
+
+Measured: native C **77.3% line** (report-only); Cython **76.3% line**
+(`_rans` + `_delta_rans`), enforced floor **73**.
