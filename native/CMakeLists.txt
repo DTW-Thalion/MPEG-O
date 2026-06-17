@@ -18,6 +18,24 @@ option(BUILD_TESTING "Build native test executables" ON)
 find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 
+# Optional gcov/llvm-cov instrumentation (R8 coverage visibility).
+# Default OFF so production / wheel / ObjC / Java builds are unaffected.
+# Placed before any target so it instruments the library AND every test
+# executable defined below in one shot. MSVC has no --coverage; gcov is a
+# GCC/Clang feature, so this is a no-op there. Use a fresh build dir
+# (native/_covbuild) — never the shared native/_build.
+option(TTIO_COVERAGE "Instrument with --coverage for gcov/llvm-cov reporting" OFF)
+if(TTIO_COVERAGE AND NOT MSVC)
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+    message(STATUS "ttio_rans: gcov coverage instrumentation ENABLED")
+elseif(TTIO_COVERAGE AND MSVC)
+    message(WARNING "TTIO_COVERAGE=ON has no effect on MSVC (no --coverage support); ignoring")
+endif()
+if(TTIO_COVERAGE AND TTIO_RANS_ENABLE_TSAN)
+    message(WARNING "TTIO_COVERAGE and TTIO_RANS_ENABLE_TSAN are both ON; gcov + ThreadSanitizer instrumentation together produce unreliable coverage and race data")
+endif()
+
 add_library(ttio_rans SHARED
     src/rans_core.c
     src/rans_encode_scalar.c
@@ -353,7 +371,11 @@ if(TTIO_RANS_ENABLE_TSAN)
     add_test(NAME thread_safety_tsan COMMAND test_thread_safety_tsan)
 endif()
 
-# Benchmark (not registered as a ctest; run manually)
-add_executable(bench_throughput bench/bench_throughput.c)
-target_link_libraries(bench_throughput PRIVATE ttio_rans)
-target_compile_options(bench_throughput PRIVATE -O3)
+# Benchmark (not registered as a ctest; run manually). Skipped under
+# coverage: it is never exercised by ctest, and its -O3 would clash with
+# the directory-level --coverage -O0 instrumentation.
+if(NOT TTIO_COVERAGE)
+    add_executable(bench_throughput bench/bench_throughput.c)
+    target_link_libraries(bench_throughput PRIVATE ttio_rans)
+    target_compile_options(bench_throughput PRIVATE -O3)
+endif()

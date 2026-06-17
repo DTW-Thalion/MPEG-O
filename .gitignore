@@ -93,6 +93,7 @@ tools/benchmarks/_cache/
 # build outputs are regenerated via `cmake .. && make`.
 native/_build/
 native/_build_tsan/
+native/_covbuild/
 tools/perf/htscodecs/
 
 # Perf-harness scratch outputs: benchmark JSONs, .tio files, ad-hoc
