@@ -240,18 +240,17 @@
                             <!-- W1: workbench client surfaces whose
                                  only meaningful coverage comes from
                                  a live `tti-workbench-server`
-                                 round-trip (the WS driver + the
-                                 REST login client). Live-daemon
-                                 integration tests are tracked as a
-                                 W1 follow-up in
-                                 docs/workbench-client/W1-progress.md;
-                                 until they land, these classes are
-                                 only exercised by the structural
-                                 unit tests in
-                                 python/tests/workbench/. Exclude
-                                 them from coverage so the BUNDLE
-                                 line-coverage rule reflects the
-                                 actually-tested surface. -->
+                                 round-trip (the WS driver + the REST
+                                 login client). Excluded from THIS
+                                 always-on gate (the daemon only runs
+                                 in workbench-live.yml) so the BUNDLE
+                                 rule reflects the actually-tested
+                                 surface. As of R7 (2026-06-16) these
+                                 classes ARE coverage-GATED in
+                                 workbench-live.yml via the
+                                 `live-coverage` profile at the bottom
+                                 of this pom. See docs/superpowers/
+                                 plans/2026-06-16-r7-live-coverage-gate.md. -->
                             <excludes>
                                 <exclude>**/workbench/transport/WorkbenchTransportClient*</exclude>
                                 <exclude>**/workbench/auth/Login*</exclude>
@@ -449,4 +448,98 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <!-- R7: live-daemon workbench-client coverage gate. Activated by
+             scripts/workbench-live-smoke.sh (TTIOWB_COVERAGE=1) under
+             .github/workflows/workbench-live.yml, where a real
+             tti-workbench-server daemon runs. The default jacoco config
+             EXCLUDES the workbench client classes from instrumentation (their
+             only meaningful coverage is a live round-trip); this profile
+             re-instruments them and runs a workbench-scoped check. The default
+             `mvn verify` (no profile) and ci.yml's gates are unaffected — the
+             base report/check stay at the `verify` phase, which the runner's
+             `mvn ... prepare-package` does not reach.
+             See docs/superpowers/plans/2026-06-16-r7-live-coverage-gate.md. -->
+        <profile>
+            <id>live-coverage</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.jacoco</groupId>
+                        <artifactId>jacoco-maven-plugin</artifactId>
+                        <executions>
+                            <!-- Override the base agent config: instrument the
+                                 workbench classes too (drop the workbench
+                                 excludes; keep only the Indexable interface). -->
+                            <execution>
+                                <id>jacoco-prepare-agent</id>
+                                <configuration combine.self="override">
+                                    <excludes>
+                                        <exclude>**/protocols/Indexable*</exclude>
+                                    </excludes>
+                                </configuration>
+                            </execution>
+                            <!-- Workbench-scoped report (uploaded as an artifact)
+                                 at prepare-package, after surefire writes
+                                 jacoco.exec. -->
+                            <execution>
+                                <id>jacoco-live-workbench-report</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>report</goal></goals>
+                                <configuration>
+                                    <includes>
+                                        <include>**/workbench/**</include>
+                                    </includes>
+                                    <outputDirectory>${project.build.directory}/jacoco-workbench</outputDirectory>
+                                </configuration>
+                            </execution>
+                            <!-- The gate: scoped to the client classes the
+                                 default config excludes + the live test drives.
+                                 Floor set empirically (0.00 = measurement). -->
+            <execution>
+                                <id>jacoco-live-workbench-check</id>
+                                <phase>prepare-package</phase>
+                                <goals><goal>check</goal></goals>
+                                <configuration>
+                                    <haltOnFailure>true</haltOnFailure>
+                                    <!-- The live-driven excluded client classes. PasswordTotpAuth
+                                         (the live test uses bootstrap-admin auth) and
+                                         SessionProxyAttach (no WS session attach in the live test,
+                                         mirroring Python's session_proxy) are NOT live-driven, so
+                                         they stay excluded+ungated — a future W-item. -->
+                                    <includes>
+                                        <include>**/workbench/transport/WorkbenchTransportClient*</include>
+                                        <include>**/workbench/auth/Login*</include>
+                                        <include>**/workbench/auth/BootstrapAdminAuth*</include>
+                                        <include>**/workbench/WorkbenchHttp*</include>
+                                        <include>**/workbench/pipeline/PipelinesClient*</include>
+                                        <include>**/workbench/jobs/JobsClient*</include>
+                                        <include>**/workbench/sessions/SessionsClient*</include>
+                                        <include>**/workbench/containers/ContainersClient*</include>
+                                    </includes>
+                                    <rules>
+                                        <rule>
+                                            <element>BUNDLE</element>
+                                            <limits>
+                                                <limit>
+                                                    <counter>LINE</counter>
+                                                    <value>COVEREDRATIO</value>
+                                                    <!-- Live run measures ~57.5% over these classes
+                                                         (2026-06-16); 0.54 leaves a ~3pt buffer on a
+                                                         brand-new gate. Never decrease without a
+                                                         recorded reason; ratchet as the live test grows. -->
+                                                    <minimum>0.54</minimum>
+                                                </limit>
+                                            </limits>
+                                        </rule>
+                                    </rules>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

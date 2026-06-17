@@ -219,7 +219,9 @@ jobs:
         # [pqc] pulls in liboqs-python for the PQC per-AU live test
         # (test_per_au_encrypted_pqc_upload_round_trip); without it the
         # test errors with PQCUnavailableError instead of running.
-        run: python3 -m pip install --break-system-packages pytest -e "${{ github.workspace }}/TTI-O/python[pqc]"
+        # pytest-cov is required by the R7 workbench-client coverage gate
+        # (TTIOWB_COVERAGE=1 passes --cov to the live pytest run).
+        run: python3 -m pip install --break-system-packages pytest pytest-cov -e "${{ github.workspace }}/TTI-O/python[pqc]"
 
       # JDK 25 for the Java live test (mvn -Dtest=WorkbenchLiveTest).
       # The runner's default JAVA_HOME is < 22; the java/ pom targets
@@ -239,4 +241,17 @@ jobs:
           # with the Python smoke). Needs Maven + the JDK 25 set up
           # above; the runner skips it locally unless this is 1.
           TTIOWB_JAVA_TEST: '1'
+          # R7: collect + GATE coverage of the workbench client modules that
+          # ci.yml's always-on gate excludes (their only meaningful coverage
+          # is this live round-trip). Python floor in python/coverage-live.cfg;
+          # Java floor in the java/pom.xml `live-coverage` profile.
+          TTIOWB_COVERAGE: '1'
         run: bash "${{ github.workspace }}/TTI-O/scripts/workbench-live-smoke.sh"
+
+      - name: Upload workbench-client coverage (R7)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbench-live-coverage
+          path: ${{ github.workspace }}/TTI-O/.coverage-live/
+          if-no-files-found: warn

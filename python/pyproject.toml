@@ -200,12 +200,12 @@ omit = [
     # W1 / W2: workbench client surfaces whose only meaningful
     # coverage comes from a live `tti-workbench-server` round-trip
     # (the WS upload/download drivers + the CLI handlers that wrap
-    # them). Mirrors the Java JaCoCo exclude pattern. Live-daemon
-    # integration tests are tracked as a W1/W2 follow-up in
-    # docs/workbench-client/{W1,W2}-progress.md; until they land,
-    # these modules are only exercised by structural unit tests in
-    # tests/workbench/, which cover the handshake JSON shape but
-    # not the WS lifecycle.
+    # them). Mirrors the Java JaCoCo exclude pattern. They stay
+    # omitted from THIS always-on gate because the daemon only runs
+    # in .github/workflows/workbench-live.yml. As of R7 (2026-06-16)
+    # those modules ARE coverage-GATED there: the live test runs with
+    # TTIOWB_COVERAGE=1 and python/coverage-live.cfg floors them. See
+    # docs/superpowers/plans/2026-06-16-r7-live-coverage-gate.md.
     "*/workbench/transport/upload.py",
     "*/workbench/transport/download.py",
     "*/tools/workbench_cli.py",
