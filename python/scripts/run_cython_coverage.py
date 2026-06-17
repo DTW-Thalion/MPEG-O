@@ -23,10 +23,9 @@ Prerequisite — build the package with linetrace first:
 Usage:  python scripts/run_cython_coverage.py [--fail-under N]
 Exit 0 if coverage >= floor (and tests pass); nonzero otherwise.
 
-_fqzcomp_nx16_z is intentionally NOT measured here: its Cython extension is
-superseded by the required native libttio_rans (the wrapper never calls the
-Cython ext), so it is never runtime-exercised. The native fqzcomp C is covered
-by the native C half (scripts/native-coverage.sh).
+Only the two runtime-exercised codec extensions (_rans, _delta_rans) have
+Cython accelerators. The fqzcomp codec is native-only (libttio_rans); its
+native C is covered by the native C half (scripts/native-coverage.sh).
 """
 from __future__ import annotations
 
