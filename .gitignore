@@ -65,6 +65,8 @@ python/coverage.xml
 python/htmlcov/
 python/.coverage
 objc/coverage/
+# R7: live-daemon workbench-client coverage output (workbench-live-smoke.sh).
+.coverage-live/
 
 # V5 (verification workplan) test-runtime artefacts.
 # - jqwik writes .jqwik-database next to the test run for shrinking.
