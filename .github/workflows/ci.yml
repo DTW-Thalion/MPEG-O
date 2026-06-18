@@ -434,11 +434,11 @@ jobs:
 
       - uses: ./.github/actions/setup-hdf5
 
-      - name: Set up JDK 25
+      - name: Set up JDK 22
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '25'
+          java-version: '22'
 
       - uses: ./.github/actions/build-native
         with:
@@ -471,9 +471,13 @@ jobs:
     # CI-verified compile of the JavaFX surface. This job adds a
     # PR-level compile + test gate that mirrors the release
     # workflow's linux-x64 leg minus the shading / packaging
-    # steps. JDK 25 matches the java-test job; linux-x64 profile
-    # activation pulls in the right JavaFX classifier deps.
-    name: tio-browser — build & test (Maven + JDK 25)
+    # steps. Runs on JDK 22 (NOT 25 like java-test): JavaFX is 21.0.5,
+    # and JavaFX 21 on JDK 25 stalls the headless render pulse
+    # (QuantumToolkit.pulse → PaintCollector.waitForRenderingToComplete),
+    # wedging the FX thread so TestFX's setup never completes. JDK 22 is
+    # the floor (maven.compiler.source=22) and closest to JavaFX 21's
+    # supported runtime. linux-x64 profile pulls the JavaFX classifier deps.
+    name: tio-browser — build & test (Maven + JDK 22)
     runs-on: ubuntu-latest
     # Hard backstop: this TestFX suite has been hanging in CI (AppSmokeTest
     # launches the full App; the forked JVM never terminates). Without this,

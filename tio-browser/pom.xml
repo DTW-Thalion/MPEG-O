@@ -95,7 +95,6 @@
                         -Dtestfx.robot=glass
                         -Dtestfx.headless=true
                         -Dprism.order=sw
-                        -Dprism.text=t2k
                         -Dheadless.geometry=1600x900-32
                         -Dglass.platform=Monocle
                         -Dmonocle.platform=Headless
