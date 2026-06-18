@@ -15,14 +15,17 @@ public class App extends Application {
         try {
             Hdf5NativeLoader.ensureLoaded();
         } catch (Hdf5NativeLoadException e) {
-            // Detect headless test mode via TestFX's marker system property
-            // (set in surefire argLine) or Monocle's glass.platform marker.
-            // Either signals "we're in a unit test, don't pop alerts or exit".
-            boolean headless = "true".equalsIgnoreCase(System.getProperty("testfx.headless", ""))
+            // Detect automated-test mode so we don't pop a modal alert or
+            // System.exit during CI. tio.browser.testMode is set in the
+            // surefire argLine and is independent of the rendering backend
+            // (TestFX-headless/Monocle vs. a real display under xvfb); the
+            // legacy testfx.headless / glass.platform markers are still honored.
+            boolean testMode = "true".equalsIgnoreCase(System.getProperty("tio.browser.testMode", ""))
+                || "true".equalsIgnoreCase(System.getProperty("testfx.headless", ""))
                 || "Monocle".equalsIgnoreCase(System.getProperty("glass.platform", ""));
-            if (headless) {
+            if (testMode) {
                 java.util.logging.Logger.getLogger(App.class.getName())
-                    .warning("Hdf5NativeLoader failed (headless test mode): " + e.getMessage());
+                    .warning("Hdf5NativeLoader failed (test mode): " + e.getMessage());
             } else {
                 new javafx.scene.control.Alert(
                     javafx.scene.control.Alert.AlertType.ERROR,

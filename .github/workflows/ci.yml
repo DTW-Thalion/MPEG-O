@@ -434,11 +434,11 @@ jobs:
 
       - uses: ./.github/actions/setup-hdf5
 
-      - name: Set up JDK 22
+      - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '22'
+          java-version: '25'
 
       - uses: ./.github/actions/build-native
         with:
@@ -471,13 +471,13 @@ jobs:
     # CI-verified compile of the JavaFX surface. This job adds a
     # PR-level compile + test gate that mirrors the release
     # workflow's linux-x64 leg minus the shading / packaging
-    # steps. Runs on JDK 22 (NOT 25 like java-test): JavaFX is 21.0.5,
-    # and JavaFX 21 on JDK 25 stalls the headless render pulse
-    # (QuantumToolkit.pulse → PaintCollector.waitForRenderingToComplete),
-    # wedging the FX thread so TestFX's setup never completes. JDK 22 is
-    # the floor (maven.compiler.source=22) and closest to JavaFX 21's
-    # supported runtime. linux-x64 profile pulls the JavaFX classifier deps.
-    name: tio-browser — build & test (Maven + JDK 22)
+    # steps. JDK 25 matches the java-test job; linux-x64 profile
+    # activation pulls in the right JavaFX classifier deps. The TestFX
+    # suite renders against a real display via xvfb (see the test step):
+    # the Monocle headless software pipeline deadlocks the JavaFX render
+    # pulse (QuantumToolkit.pulse → PaintCollector.waitForRenderingToComplete),
+    # wedging the FX thread so TestFX's setup never completes.
+    name: tio-browser — build & test (Maven + JDK 25)
     runs-on: ubuntu-latest
     # Hard backstop: this TestFX suite has been hanging in CI (AppSmokeTest
     # launches the full App; the forked JVM never terminates). Without this,
@@ -510,19 +510,27 @@ jobs:
         working-directory: java
         run: mvn -B install -DskipTests -Djacoco.skip=true -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
 
-      # TestFX runs headless via the openjfx-monocle dep already
-      # in tio-browser/pom.xml. -P linux-x64 activates the platform
-      # classifier profile (JavaFX 21 needs per-OS classifier deps).
+      - name: Install xvfb (virtual display for TestFX)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends xvfb
+
+      # TestFX renders against a virtual X display (xvfb) using the real
+      # JavaFX pipeline. -P linux-x64 activates the platform classifier
+      # profile (JavaFX 21 needs per-OS classifier deps). The Monocle
+      # headless software pipeline deadlocks the render pulse in CI
+      # (PaintCollector.waitForRenderingToComplete), so we give JavaFX a
+      # real display instead — matching the working local desktop/WSLg config.
       #
-      # DIAGNOSTIC: the suite runs in the background; if it is still alive
-      # after DUMP_AFTER seconds (well past a healthy run) it is almost
-      # certainly hung, so we jstack every JVM to surface the stuck thread
-      # BEFORE the job-level timeout-minutes kills the runner. The dump is
-      # non-destructive — a slow-but-healthy run still finishes and passes.
+      # SAFETY NET: the suite runs in the background; if it is still alive
+      # after DUMP_AFTER seconds (well past a healthy run) it is likely hung,
+      # so we jstack every JVM to surface the stuck thread BEFORE the
+      # job-level timeout-minutes kills the runner. Non-destructive — a
+      # slow-but-healthy run still finishes and passes.
       - name: Build and test tio-browser
         working-directory: tio-browser
         run: |
-          mvn -B -P linux-x64 test -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar &
+          xvfb-run -a mvn -B -P linux-x64 test -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar &
           MVN_PID=$!
           DUMP_AFTER=600
           (

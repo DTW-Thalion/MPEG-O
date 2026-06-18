@@ -89,16 +89,20 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
+                    <!--
+                      TestFX renders against a REAL display, not the Monocle
+                      headless software pipeline. The SW pipeline deadlocks the
+                      JavaFX render pulse in CI (QuantumToolkit.pulse ->
+                      PaintCollector.waitForRenderingToComplete), wedging the FX
+                      thread so FxToolkit.setupApplication never returns. CI
+                      supplies the display via xvfb (see ci.yml); locally it is
+                      the desktop / WSLg display. tio.browser.testMode tells the
+                      app it is under test (skip the HDF5 error alert + exit).
+                    -->
                     <argLine>
                         --enable-native-access=ALL-UNNAMED
                         -Djava.library.path=/usr/local/lib:${project.basedir}/../native/_build
-                        -Dtestfx.robot=glass
-                        -Dtestfx.headless=true
-                        -Dprism.order=sw
-                        -Dheadless.geometry=1600x900-32
-                        -Dglass.platform=Monocle
-                        -Dmonocle.platform=Headless
-                        -Djava.awt.headless=true
+                        -Dtio.browser.testMode=true
                     </argLine>
                 </configuration>
             </plugin>
