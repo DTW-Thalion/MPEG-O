@@ -475,6 +475,11 @@ jobs:
     # activation pulls in the right JavaFX classifier deps.
     name: tio-browser — build & test (Maven + JDK 25)
     runs-on: ubuntu-latest
+    # Hard backstop: this TestFX suite has been hanging in CI (AppSmokeTest
+    # launches the full App; the forked JVM never terminates). Without this,
+    # a hang pins the runner for the 6h default. The test step below also
+    # captures a thread dump on hang to identify the stuck thread.
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -504,9 +509,38 @@ jobs:
       # TestFX runs headless via the openjfx-monocle dep already
       # in tio-browser/pom.xml. -P linux-x64 activates the platform
       # classifier profile (JavaFX 21 needs per-OS classifier deps).
+      #
+      # DIAGNOSTIC: the suite runs in the background; if it is still alive
+      # after DUMP_AFTER seconds (well past a healthy run) it is almost
+      # certainly hung, so we jstack every JVM to surface the stuck thread
+      # BEFORE the job-level timeout-minutes kills the runner. The dump is
+      # non-destructive — a slow-but-healthy run still finishes and passes.
       - name: Build and test tio-browser
         working-directory: tio-browser
-        run: mvn -B -P linux-x64 test -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
+        run: |
+          mvn -B -P linux-x64 test -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar &
+          MVN_PID=$!
+          DUMP_AFTER=600
+          (
+            sleep "$DUMP_AFTER"
+            if kill -0 "$MVN_PID" 2>/dev/null; then
+              echo "::group::tio-browser still running after ${DUMP_AFTER}s — thread dump (likely hung)"
+              ps -ef | grep -E '[j]ava|[s]urefire|[m]vn' || true
+              JSTACK="${JAVA_HOME:+$JAVA_HOME/bin/}jstack"
+              JCMD="${JAVA_HOME:+$JAVA_HOME/bin/}jcmd"
+              "$JCMD" -l 2>/dev/null || true
+              for pid in $(pgrep java || true); do
+                echo "---- thread dump pid=$pid ($(ps -o args= -p "$pid" 2>/dev/null | cut -c1-80)) ----"
+                "$JSTACK" -l "$pid" 2>&1 || "$JCMD" "$pid" Thread.print 2>&1 || true
+              done
+              echo "::endgroup::"
+            fi
+          ) &
+          WATCH_PID=$!
+          RC=0
+          wait "$MVN_PID" || RC=$?
+          kill "$WATCH_PID" 2>/dev/null || true
+          exit "$RC"
 
       - name: Upload surefire reports on failure
         if: failure()
