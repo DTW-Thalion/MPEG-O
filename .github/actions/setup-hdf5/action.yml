@@ -27,14 +27,37 @@ runs:
           /usr/local/include/H5*
           /usr/local/lib/libhdf5*
           /usr/local/lib/libjarhdf5*
+          /usr/local/lib/jarhdf5-*.jar
           /usr/local/lib/jarhdf5.jar
           /usr/local/share/hdf5_examples
-        key: hdf5-${{ inputs.version }}-hl-${{ runner.os }}-narrow
+        key: hdf5-${{ inputs.version }}-hl-${{ runner.os }}-narrow-v2
 
     - name: Install HDF5 ${{ inputs.version }} from source
       if: steps.cache-hdf5.outputs.cache-hit != 'true'
       shell: bash
       run: bash scripts/install-hdf5.sh ${{ inputs.version }}
+
+    # install-hdf5.sh creates /usr/local/lib/jarhdf5.jar as a symlink to the
+    # versioned jar, with sudo. actions/cache restores unprivileged and cannot
+    # recreate a symlink there, so on a cache hit the restore logs
+    # "Cannot create symlink ... Permission denied" and the jar is simply
+    # absent. Every job that hit the cache therefore had no jarhdf5.jar, which
+    # is what made the Java half of the cross-language conformance matrix skip
+    # while the Java build job, which missed the cache and built from source,
+    # had it. Recreate the link rather than depending on the restore.
+    - name: Ensure the jarhdf5.jar symlink
+      shell: bash
+      run: |
+        if [ ! -e /usr/local/lib/jarhdf5.jar ]; then
+          versioned=$(ls /usr/local/lib/jarhdf5-*.jar 2>/dev/null | head -1)
+          if [ -n "$versioned" ]; then
+            sudo ln -sf "$versioned" /usr/local/lib/jarhdf5.jar
+            echo "recreated jarhdf5.jar -> $versioned"
+          else
+            echo "no versioned jarhdf5 jar under /usr/local/lib"
+          fi
+        fi
+        ls -l /usr/local/lib/jarhdf5* 2>/dev/null || true
 
     - name: Update ldconfig for HDF5
       shell: bash
