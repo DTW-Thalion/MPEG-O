@@ -278,11 +278,9 @@ _ENCODE_EXTRA_FLAGS: dict[str, list[str]] = {
 # codec dispatch is inside ``SpectralDataset.write_minimal``; mirrors
 # the gating used by ``tests/test_accessor_matrix_conformance.py``.
 def _genomic_runs_available_for_python() -> bool:
-    try:
-        from ttio.codecs.fqzcomp_nx16_z import _load_native_lib
-    except Exception:
-        return False
-    return _load_native_lib() is not None
+    from ttio.codecs._native_loader import load_ttio_rans
+
+    return load_ttio_rans() is not None
 
 
 def _genomic_runs_available_for_java() -> bool:

@@ -28,7 +28,6 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import io
-import os
 import sys
 from pathlib import Path
 
@@ -50,13 +49,9 @@ from _v0_11_fixtures import build_everything  # noqa: E402
 # the lib, the fixture build itself fails — skip rather than report
 # a noisy stack trace.
 def _native_genomic_codec_available() -> bool:
-    try:
-        from ttio.codecs.fqzcomp_nx16_z import _load_native_lib
-    except Exception:
-        return False
-    if os.environ.get("TTIO_RANS_LIB_PATH"):
-        return _load_native_lib() is not None
-    return _load_native_lib() is not None
+    from ttio.codecs._native_loader import load_ttio_rans
+
+    return load_ttio_rans() is not None
 
 
 pytestmark = pytest.mark.skipif(
