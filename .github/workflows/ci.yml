@@ -666,6 +666,14 @@ jobs:
           TTIO_RANS_LIB_PATH: ${{ github.workspace }}/native/_build/libttio_rans.so
           LD_LIBRARY_PATH: ${{ github.workspace }}/native/_build
         run: |
+          # The Java conformance helpers are gated on java/target/classpath.txt
+          # as well as target/classes and target/test-classes. `mvn verify`
+          # above produces the classes but not the classpath file, so without
+          # this every Java cell reports "conformance helpers not built" and
+          # skips.
+          mvn -B -q -f ../java/pom.xml -DincludeScope=runtime \
+            dependency:build-classpath \
+            -Dmdep.outputFile="$GITHUB_WORKSPACE/java/target/classpath.txt"
           pytest -v --tb=short tests/conformance/ | tee /tmp/conformance.log
           skipped=$(grep -oE '[0-9]+ skipped' /tmp/conformance.log | tail -1 | cut -d' ' -f1)
           skipped=${skipped:-0}
