@@ -11,6 +11,44 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+Post-1.7.1 work: a cross-language storage-corruption fix, a CI-hang fix, PyPI packaging
+and the R7/R8 coverage work. **`dek_wrapped` changes on disk for Java and ObjC** — both
+now match the spec layout Python has always written, and every reader still accepts the
+old one.
+
+### Fixed
+- **Cross-language `dek_wrapped` storage corruption.** `/protection/key_info/dek_wrapped`
+  was written as spec uint8 exact-length by Python but as int32 zero-padded to 4 bytes by
+  Java and ObjC. Java threw `ClassCastException` on a Python-written file, ObjC truncated
+  71- and 1639-byte blobs to a hard-coded 60 (silent decryption failure), and Python
+  value-cast the int32 files. Java and ObjC now write spec uint8; all three readers
+  precision-dispatch, so pre-fix files still read. A new `conformance/key_rotation/` suite
+  covers the AES-GCM 3×3 language matrix and the PQC ML-KEM Python↔ObjC pair. (#269)
+- **`TransportClient` WebSocket thread leak.** `fetchPackets` closed the client only on the
+  success path, so a timed-out download leaked non-daemon Java-WebSocket threads and wedged
+  the forked surefire JVM until GitHub killed the tio-browser job at its 6h limit. The close
+  now runs in a `finally`, `TransportServer` selector threads are daemons, and tio-browser's
+  surefire runs headless JavaFX. Leaked non-daemon threads 2 → 0. (#270)
+
+### Added
+- **`ttio` builds as a PyPI package.** A scikit-build-core backend, an sdist that vendors
+  the `native/` sources, and cibuildwheel manylinux/macOS/Windows wheels that bundle
+  `libttio_rans` into `ttio/.libs` so the native codecs resolve with no environment
+  variable. Publishes to TestPyPI on a `ttio-v*` tag. (#271)
+
+### Internal
+- **Documentation ground-truth audit.** All 219 tracked `.md` files checked against the
+  code: `@mpgo_*`→`@ttio_*` rebrand leftovers, the transport header magic, the version/JDK/
+  HDF5 numbers and the mate-info MF taxonomy corrected, and the missing `ref_diff_v2`,
+  `mate_info_v2` and genomic-runs docs written. (#268)
+- **Coverage R7 and R8**: a live-daemon workbench-client coverage gate, plus native C and
+  Cython codec coverage visibility. (#272, #273)
+- **Dead `_fqzcomp_nx16_z` Cython extension removed** — the wrapper is V4-native-only and
+  had zero call sites. (#274)
+- **Perf baseline re-captured** at 2026-06-09 numbers; every metric was inside the ±15%
+  gate before the refresh. (#267)
+- **tio-browser CI hang diagnostics**: a job timeout and a thread dump on hang. (#275)
+
 ## [1.7.1] - 2026-06-08
 
 Performance campaign (post-1.7.0): repaired the cross-SDK performance suite and landed
