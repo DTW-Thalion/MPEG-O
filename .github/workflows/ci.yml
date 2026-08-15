@@ -642,3 +642,37 @@ jobs:
       - name: Java full test suite
         working-directory: java
         run: mvn verify -B
+
+      # The 9x8 cross-language conformance matrix lives in
+      # python/tests/conformance/ and needs all three SDKs at once: the ObjC
+      # TtioTransportEncode/Decode built above, java/target/classes from the
+      # Maven run immediately before this, and libttio_rans plus its JNI shim
+      # for the NAME_TOKENIZED_V2 codec. This job is the only one that has all
+      # of them, so it runs here rather than with the parity tests above,
+      # which execute before the JDK is installed.
+      #
+      # Until this step existed the matrix ran nowhere with a real toolchain:
+      # the Python job collects it and skips every cross-language cell for a
+      # missing CLI, and this job never named the directory. Every cell that
+      # skips here is one the conformance contract is not actually checking,
+      # so the count is asserted rather than left to a reader.
+      - name: Cross-language conformance matrix
+        working-directory: python
+        # `shell: bash` is deliberate: the default is `bash -e` with no
+        # pipefail, so a pytest failure through the tee below would be masked
+        # by tee's exit status.
+        shell: bash
+        env:
+          TTIO_RANS_LIB_PATH: ${{ github.workspace }}/native/_build/libttio_rans.so
+          LD_LIBRARY_PATH: ${{ github.workspace }}/native/_build
+        run: |
+          pytest -v --tb=short tests/conformance/ | tee /tmp/conformance.log
+          skipped=$(grep -oE '[0-9]+ skipped' /tmp/conformance.log | tail -1 | cut -d' ' -f1)
+          skipped=${skipped:-0}
+          echo "conformance cells skipped: $skipped"
+          # 3 known: test_multi_recipient_xlang has no committed vector yet.
+          if [ "$skipped" -gt 3 ]; then
+            echo "::error::$skipped conformance cells skipped, expected at most 3"
+            grep '^SKIPPED' /tmp/conformance.log || true
+            exit 1
+          fi
