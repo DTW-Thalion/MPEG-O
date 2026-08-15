@@ -673,7 +673,26 @@ jobs:
           # skips.
           mvn -B -q -f ../java/pom.xml -DincludeScope=runtime \
             dependency:build-classpath \
-            -Dmdep.outputFile="$GITHUB_WORKSPACE/java/target/classpath.txt"
+            -Dmdep.outputFile="$GITHUB_WORKSPACE/java/target/classpath.txt" \
+            -Dhdf5.jar.path=/usr/local/lib/jarhdf5.jar
+          # Every one of these gates the Java half of the matrix, and a miss
+          # only ever surfaced as "helpers not built", which does not say
+          # which. Print them so a skip is attributable.
+          python3 - <<'PY'
+          import shutil
+          from pathlib import Path
+          target = Path("../java/target").resolve()
+          checks = [
+              target / "classes",
+              target / "test-classes",
+              target / "classpath.txt",
+              Path("/usr/local/lib/jarhdf5.jar"),
+              target / "test-classes/global/thalion/ttio/conformance/RefXLangReader.class",
+          ]
+          for p in checks:
+              print(f"  {'present' if p.exists() else 'MISSING'}  {p}")
+          print(f"  java on PATH: {shutil.which('java')}")
+          PY
           pytest -v --tb=short tests/conformance/ | tee /tmp/conformance.log
           skipped=$(grep -oE '[0-9]+ skipped' /tmp/conformance.log | tail -1 | cut -d' ' -f1)
           skipped=${skipped:-0}
