@@ -25,7 +25,6 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import io
-import os
 import sys
 from pathlib import Path
 
@@ -55,16 +54,12 @@ from _v0_11_accessor_spec import ACCESSOR_SPECS  # noqa: E402
 # ``test_transport_codec.TestGenomicRoundTrip`` (which fails for the
 # same reason in environments without the lib).
 def _genomic_runs_available() -> bool:
-    try:
-        from ttio.codecs.fqzcomp_nx16_z import _load_native_lib
-    except Exception:
-        return False
-    if os.environ.get("TTIO_RANS_LIB_PATH"):
-        return _load_native_lib() is not None
-    # No env var: probe the default-discovery path. The loader walks
-    # bare names + find_library("ttio_rans"); a non-None handle here
-    # means a system-installed libttio_rans is reachable.
-    return _load_native_lib() is not None
+    # The loader honours ``$TTIO_RANS_LIB_PATH`` first, then walks the
+    # bundled ``.libs`` dirs, the bare names and ``find_library``. A
+    # non-None handle means the shim is reachable however it was built.
+    from ttio.codecs._native_loader import load_ttio_rans
+
+    return load_ttio_rans() is not None
 
 
 @pytest.mark.parametrize("spec", ACCESSOR_SPECS, ids=lambda s: s.name)
