@@ -35,10 +35,12 @@ static int decompress_rlt(const uint8_t *in, size_t in_len,
     return 0;
 }
 
-int ttio_m94z_v4_pack(
+/* Shared packer: V4 and V5 differ only in the version and flags
+ * bytes; the layout is identical. */
+static int m94z_pack_any(
+    uint8_t version, uint8_t flags_byte,
     uint64_t num_qualities, uint64_t num_reads,
     const uint32_t *read_lengths,
-    uint8_t pad_count,
     const uint8_t *cram_body, size_t cram_body_len,
     uint8_t *out, size_t *out_len)
 {
@@ -68,9 +70,9 @@ int ttio_m94z_v4_pack(
 
     /* Outer header. */
     memcpy(out, TTIO_M94Z_V4_MAGIC, 4);
-    out[4] = TTIO_M94Z_V4_VERSION;
-    /* flags: bit 0 = has_cram_body (must be 1); bits 4-5 = pad_count */
-    out[5] = (uint8_t)(0x01u | ((pad_count & 0x3u) << 4));
+    out[4] = version;
+    /* flags: body-kind bit (0 = cram, 1 = seqctx); bits 4-5 = pad_count */
+    out[5] = flags_byte;
     memcpy(out + 6,  &num_qualities, 8);
     memcpy(out + 14, &num_reads,     8);
     uint32_t rlt32 = (uint32_t)rlt_len;
@@ -86,7 +88,8 @@ int ttio_m94z_v4_pack(
     return 0;
 }
 
-int ttio_m94z_v4_unpack(
+static int m94z_unpack_any(
+    uint8_t version, uint8_t flags_set, uint8_t flags_clear,
     const uint8_t *in, size_t in_len,
     uint64_t *out_nq, uint64_t *out_nr,
     uint32_t *out_rl,
@@ -95,9 +98,10 @@ int ttio_m94z_v4_unpack(
 {
     if (in == NULL || in_len < 30) return -1;
     if (memcmp(in, TTIO_M94Z_V4_MAGIC, 4) != 0) return -2;
-    if (in[4] != TTIO_M94Z_V4_VERSION) return -3;
+    if (in[4] != version) return -3;
     uint8_t flags = in[5];
-    if (!(flags & 0x01u)) return -4; /* has_cram_body must be set */
+    if ((flags & flags_set) != flags_set) return -4;
+    if ((flags & flags_clear) != 0) return -4;
     if (out_pad) *out_pad = (uint8_t)((flags >> 4) & 0x3u);
     uint64_t nq, nr;
     memcpy(&nq, in + 6,  8);
@@ -120,6 +124,56 @@ int ttio_m94z_v4_unpack(
     if (out_body)     *out_body     = in + 30 + rlt_len;
     if (out_body_len) *out_body_len = (size_t)cram_len;
     return 0;
+}
+
+int ttio_m94z_v4_pack(
+    uint64_t num_qualities, uint64_t num_reads,
+    const uint32_t *read_lengths,
+    uint8_t pad_count,
+    const uint8_t *cram_body, size_t cram_body_len,
+    uint8_t *out, size_t *out_len)
+{
+    return m94z_pack_any(TTIO_M94Z_V4_VERSION,
+                         (uint8_t)(0x01u | ((pad_count & 0x3u) << 4)),
+                         num_qualities, num_reads, read_lengths,
+                         cram_body, cram_body_len, out, out_len);
+}
+
+int ttio_m94z_v5_pack(
+    uint64_t num_qualities, uint64_t num_reads,
+    const uint32_t *read_lengths,
+    uint8_t pad_count,
+    const uint8_t *body, size_t body_len,
+    uint8_t *out, size_t *out_len)
+{
+    return m94z_pack_any(TTIO_M94Z_V5_WIRE_VERSION,
+                         (uint8_t)(0x02u | ((pad_count & 0x3u) << 4)),
+                         num_qualities, num_reads, read_lengths,
+                         body, body_len, out, out_len);
+}
+
+int ttio_m94z_v4_unpack(
+    const uint8_t *in, size_t in_len,
+    uint64_t *out_nq, uint64_t *out_nr,
+    uint32_t *out_rl,
+    uint8_t  *out_pad,
+    const uint8_t **out_body, size_t *out_body_len)
+{
+    return m94z_unpack_any(TTIO_M94Z_V4_VERSION, 0x01u, 0x00u,
+                           in, in_len, out_nq, out_nr, out_rl, out_pad,
+                           out_body, out_body_len);
+}
+
+int ttio_m94z_v5_unpack(
+    const uint8_t *in, size_t in_len,
+    uint64_t *out_nq, uint64_t *out_nr,
+    uint32_t *out_rl,
+    uint8_t  *out_pad,
+    const uint8_t **out_body, size_t *out_body_len)
+{
+    return m94z_unpack_any(TTIO_M94Z_V5_WIRE_VERSION, 0x02u, 0x01u,
+                           in, in_len, out_nq, out_nr, out_rl, out_pad,
+                           out_body, out_body_len);
 }
 
 /* ---------------------------------------------------------------- */
