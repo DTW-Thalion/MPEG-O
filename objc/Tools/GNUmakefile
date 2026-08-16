@@ -1,6 +1,6 @@
 include $(GNUSTEP_MAKEFILES)/common.make
 
-TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
+TOOL_NAME = MakeFixtures TtioVerify TtioWriteGenomicFixture TtioSign TtioToMzML TtioDumpIdentifications TtioPQCTool TtioSimulator TtioTransportServer TtioTransportEncode TtioTransportDecode TtioPerAU TtioDekEnvelope TtioJcampDxDump TtioBamDump TtioM94zV4Cli TtioMateInfoV2Cli TtioRefDiffV2Cli TtioNameTokV2Cli TtioFastaRoundTrip TtioFastqRoundTrip TtioBenchmark TtioNmrMLProbe TtioFastqBench TtioMzMLProbe TtioTransportEncodeBench TtioRefXLangWriter TtioRefXLangReader TtioQualXLangReader TtioMsImageXLangReader TtioRamanImageXLangReader TtioEncode TtioExport
 
 TtioTransportEncodeBench_OBJC_FILES = TtioTransportEncodeBench.m
 TtioTransportEncodeBench_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
@@ -114,6 +114,10 @@ TtioRefXLangWriter_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 TtioRefXLangReader_OBJC_FILES = TtioRefXLangReader.m
 TtioRefXLangReader_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
 TtioRefXLangReader_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
+
+TtioQualXLangReader_OBJC_FILES = TtioQualXLangReader.m
+TtioQualXLangReader_TOOL_LIBS += -lTTIO -lhdf5 -lhdf5_hl -lz -lcrypto
+TtioQualXLangReader_LIB_DIRS  += -L../Source/$(GNUSTEP_OBJ_DIR)
 
 # msimage-mz-axis Phase 3 — cross-language MSImage.mzAxis conformance.
 TtioMsImageXLangReader_OBJC_FILES = TtioMsImageXLangReader.m

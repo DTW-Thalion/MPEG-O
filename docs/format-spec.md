@@ -825,7 +825,7 @@ HDF5 filter pipeline (codec ids 1–3) or a dedicated per-channel
 | 9  | _RESERVED_9            | Reserved on the wire. Was the v1 REF_DIFF codec; superseded by id 14. |
 | 10 | _RESERVED_10           | Reserved on the wire. Was the FQZCOMP_NX16 v1 codec; superseded by id 12. |
 | 11 | DELTA_RANS_ORDER0      | Running delta + zigzag-varint + rANS-O0 wrapper for sorted-ascending integer arrays. Auto-default for the `positions` channel. See `docs/codecs/delta_rans.md`. |
-| 12 | FQZCOMP_NX16_Z         | CRAM-mimic lossless quality codec. Magic `M94Z`, V4 wire format. Static-per-block frequency tables (zlib-deflated in the header so the decoder skips the build pass), 16-bit renormalisation (`B = 16`, `b = 2^16`), `T = 4096` fixed (12-bit shift); `T \| b·L = 2^31` exactly, byte-pairing mathematically guaranteed. Bit-pack context model: 12 bits `prev_q` + 2 bits position bucket + 1 bit revcomp, masked to `2^14` slots. 4-way interleaved rANS states. **Default for the `qualities` channel.** Clean-room implementation of CRAM 3.1 `rANS-Nx16` discipline; no htslib / tools-Java source consulted. See `docs/codecs/fqzcomp_nx16_z.md`. |
+| 12 | FQZCOMP_NX16_Z         | CRAM-mimic lossless quality codec. Magic `M94Z`, V4 wire format. Static-per-block frequency tables (zlib-deflated in the header so the decoder skips the build pass), 16-bit renormalisation (`B = 16`, `b = 2^16`), `T = 4096` fixed (12-bit shift); `T \| b·L = 2^31` exactly, byte-pairing mathematically guaranteed. Bit-pack context model: 12 bits `prev_q` + 2 bits position bucket + 1 bit revcomp, masked to `2^14` slots. 4-way interleaved rANS states. **Default for the `qualities` channel.** Since qualities V5, the encoder also tries the S5/S6 sequence-context strategies when the run carries a base-parallel `sequences` channel and keeps the smallest stream by exact size; a winning sequence strategy is emitted as a `M94Z` version-5 stream whose body is the explicit 8-byte parameter block plus a range-coded stream, and whose decoder requires the decoded sequences as side input. Files where V4 wins stay byte-identical version-4 streams. Writers opt out per run with `opt_disable_qualities_v5` / `optDisableQualitiesV5`. Spec: `docs/superpowers/specs/2026-08-16-qualities-v5-design.md`. Clean-room implementation of CRAM 3.1 `rANS-Nx16` discipline; no htslib / tools-Java source consulted. See `docs/codecs/fqzcomp_nx16_z.md`. |
 | 13 | MATE_INLINE_V2         | Inlined per-record mate_info (chrom + pos + tlen) as a single channel. Replaces the M82 compound + per-field subgroup decomposition. **Default for the `mate_info` channel.** See `docs/codecs/mate_info_v2.md`. |
 | 14 | REF_DIFF_V2            | **Context-aware** reference-based sequence-diff codec. Encoder/decoder consume sibling channels (`positions`, `cigars`) and an external reference resolver alongside the channel bytes. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`. **Default for the `sequences` channel** when a reference is available; falls back to BASE_PACK silently when not. See `docs/codecs/ref_diff_v2.md`. |
 | 15 | NAME_TOKENIZED_V2      | 8-substream multi-token columnar codec for read names. Substreams: FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT, each auto-picked between rANS-O0 and raw passthrough. Per-block reset every 4096 reads; magic `NTK2`. **Default for the `read_names` channel.** See `docs/codecs/name_tokenizer_v2.md`. |
@@ -849,7 +849,10 @@ migration error.
 - Id `11` (DELTA_RANS_ORDER0) applies to sortable integer channels
   (`positions` is the canonical case).
 - Id `12` (FQZCOMP_NX16_Z) applies to the `qualities` channel and
-  is the v1.0 default.
+  is the v1.0 default. Its M94.Z stream is version 4, or version 5
+  (sequence-context body) when the writer had base-parallel
+  sequences and the sequence strategy won by exact size; version-5
+  streams decode against the run's decoded sequences channel.
 - Id `13` (MATE_INLINE_V2) applies to the `mate_info` channel and
   is the v1.0 default.
 - Id `14` (REF_DIFF_V2) applies to the `sequences` channel of

@@ -1,6 +1,9 @@
 # Qualities V5 bake-off — sequence-motif context (R6 spec-proof)
 
 - Date: 2026-08-16
+- Status: implemented; V5 ships with strategies S5 (q6/p7/s5) and
+  S6 (q8/p4/s6) picked from these numbers, exact-size selection
+  against V4 at encode time.
 - Follow-up to R6 of the compression audit; informs the V5 spec.
 - Prototype: `tools/perf/m94z_v4_prototype/fqzcomp_seqctx_ref.c`
   (V4-shaped adaptive model + htscodecs range coder, seq-context

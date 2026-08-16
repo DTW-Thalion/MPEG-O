@@ -50,6 +50,23 @@ the old layout per run.
   reported every dataset attribute as absent.
 
 ### Added
+- **Qualities V5: sequence-motif context for FQZCOMP_NX16_Z (codec id 12).** The
+  encoder auto-tunes across the V4 presets plus 2 sequence-context strategies
+  (S5 q6/p7/s5, S6 q8/p4/s6, 18 context bits) and keeps the smallest stream by
+  exact size, so files where sequence context loses stay byte-identical V4 and
+  readable by existing releases. Measured on the bake-off corpora: chr22 NA12878
+  -22.7% B/q (0.3600 to 0.2782), PacBio HiFi -4.4%; WES capture and HG002 2x250
+  keep V4. A version-5 stream decodes against the run's decoded sequences
+  channel (readers order sequences before qualities; a V5 stream without
+  sequences fails with a distinct error, and readers older than this release
+  reject the version byte cleanly). The writer tries sequence strategies only
+  for runs with a base-parallel sequences channel, skips them below 1 MiB of
+  qualities, and `opt_disable_qualities_v5` / `optDisableQualitiesV5` removes
+  them per run. One native implementation serves all three languages; a shared
+  golden fixture pins the decode side and a cross-language file-level edge
+  covers Python-written V5 files opened by Java and ObjC. Spec:
+  `docs/superpowers/specs/2026-08-16-qualities-v5-design.md`; bake-off:
+  `docs/benchmarks/2026-08-16-qualities-v5-bakeoff.md`.
 - **FLOAT_DELTA_ZSTD (codec id 17): lossless float64 channel codec.** Per block:
   none/delta on the uint64 bit view (picked by exact size comparison), byte-plane
   transpose, one zstd frame. Opt-in via `signal_compression="float_delta_zstd"`
