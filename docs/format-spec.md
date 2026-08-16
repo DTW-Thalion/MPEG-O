@@ -816,7 +816,7 @@ HDF5 filter pipeline (codec ids 1–3) or a dedicated per-channel
 | 0  | NONE                   | Passthrough.                                                                                                                                                                  |
 | 1  | ZLIB                   | `H5P_DEFLATE` filter at level 6 (default for non-genomic channels). Lossless. Readable by any HDF5 library without extra plugins.                                              |
 | 2  | LZ4                    | HDF5 filter id **32004**. Requires the LZ4 filter plugin (`libh5lz4.so`) to be loadable at runtime via `HDF5_PLUGIN_PATH`. Lossless. ~35× faster write / ~2× faster read than zlib, at ~20% larger files on random data. |
-| 3  | NUMPRESS_DELTA         | Per-channel transform implemented inside TTIO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. |
+| 3  | NUMPRESS_DELTA         | Per-channel transform implemented inside TTIO, **not** an HDF5 filter. The dataset stores an `int64` array of first differences of a fixed-point quantised signal. The signal_channels group carries `@<channel>_numpress_fixed_point` (int64) giving the scaling factor. Readers detect the codec via that attribute. Lossy, sub-ppm relative error for typical mass-spectrometry m/z. Clean-room implementation from Teleman et al., *MCP* 13(6), 2014. **Not a size optimisation** — on the PXD000001 Orbitrap corpus, MS1 profile m/z stored as numpress deltas + zlib is 119.4 MB where a modern lossless numerical codec stores the identical channel bit-exact in 61.9 MB (2026-08 compression audit). Keep it for mzML / msNumpress interchange parity; do not choose it to shrink files. |
 | 4  | RANS_ORDER0            | Range Asymmetric Numeral Systems entropy coder, order-0 (per-byte) frequency model. Clean-room from Duda 2014, no htslib source consulted. Wire format + deterministic frequency-table normalisation specified in `docs/codecs/rans.md`. |
 | 5  | RANS_ORDER1            | Order-1 (preceding-byte context) rANS variant. Same wire format as order-0; per-context frequency tables (256 of them) with run-length-encoded sparse rows. See `docs/codecs/rans.md`. |
 | 6  | BASE_PACK              | 2-bit ACGT packed-base codec for genomic sequences. Lossless on the full byte alphabet via a sparse position+byte sidecar mask: bases that are uppercase `{A,C,G,T}` pack into 2-bit slots (4 bases per output byte, big-endian within byte); everything else (`N`, IUPAC ambiguity codes, lowercase soft-masking, gaps) is recorded in the mask alongside its input position so the decoder restores it byte-for-byte. See `docs/codecs/base_pack.md`. |
@@ -1180,6 +1180,14 @@ raw payload (endian-neutral).
 Decoding is the exact inverse: cumsum the int64 array, cast to
 double, divide by the scale. The TTIO ObjC and Python encoders agree
 byte-for-byte on any input (see `test_numpress_scale_matches_objc_formula`).
+
+The codec's role is mzML / msNumpress interchange parity, not file
+size: the 2026-08 compression audit measured numpress + zlib at
+119.4 MB on PXD000001 MS1 profile m/z against 61.9 MB for the same
+channel stored losslessly by a modern numerical codec. Accepting
+sub-ppm loss to end up with a file nearly twice the lossless size is
+the wrong trade everywhere except when byte-level msNumpress
+compatibility is itself the requirement.
 
 ## 10.10 `sequences` channel reference storage
 

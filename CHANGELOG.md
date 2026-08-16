@@ -58,6 +58,11 @@ old one.
   variable. Publishes to TestPyPI on a `ttio-v*` tag. (#271)
 
 ### Internal
+- **NUMPRESS_DELTA demoted from the size-saving tier in the format spec.** The 2026-08
+  compression audit measured it at 119.4 MB (lossy) on PXD000001 MS1 profile m/z where
+  a modern lossless numerical codec stores the identical channel in 61.9 MB. The spec
+  now states its role plainly: mzML / msNumpress interchange parity only. Docs change;
+  no code or format behaviour touched.
 - **Documentation ground-truth audit.** All 219 tracked `.md` files checked against the
   code: `@mpgo_*`→`@ttio_*` rebrand leftovers, the transport header magic, the version/JDK/
   HDF5 numbers and the mate-info MF taxonomy corrected, and the missing `ref_diff_v2`,
