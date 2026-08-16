@@ -128,6 +128,7 @@ libTTIO_HEADER_FILES = \
 	Analysis/TTIOTwoDCos.h \
 	Codecs/TTIORans.h \
 	Codecs/TTIOBasePack.h \
+	Codecs/TTIOFloatDeltaZstd.h \
 	Codecs/TTIOQuality.h \
 	Codecs/TTIOFqzcompNx16Z.h \
 	Codecs/TTIOMateInfoV2.h \
@@ -272,6 +273,7 @@ libTTIO_OBJC_FILES = \
 	Analysis/TTIOTwoDCos.m \
 	Codecs/TTIORans.m \
 	Codecs/TTIOBasePack.m \
+	Codecs/TTIOFloatDeltaZstd.m \
 	Codecs/TTIOQuality.m \
 	Codecs/TTIOFqzcompNx16Z.m \
 	Codecs/TTIOMateInfoV2.m \

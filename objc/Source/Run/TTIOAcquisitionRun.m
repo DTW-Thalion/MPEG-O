@@ -26,6 +26,7 @@
 #import "Spectra/TTIORamanSpectrum.h"
 #import "Spectra/TTIOUVVisSpectrum.h"
 #import "Spectra/TTIOChromatogram.h"
+#import "Codecs/TTIOFloatDeltaZstd.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEnums.h"
 #import "ValueClasses/TTIOEncodingSpec.h"
@@ -508,6 +509,28 @@ static void _buildStdChannelEncoding(void)
                 [NSString stringWithFormat:@"%@_numpress_fixed_point", chName];
             if (![channels setAttributeValue:@(scale)
                                      forName:spAttr error:error]) return NO;
+        } else if (_signalCompression == TTIOCompressionFloatDeltaZstd) {
+            /* Codec id 17: the dataset bytes ARE the FDZ1 stream;
+               @compression on the dataset is the dispatch signal and
+               no HDF5 filter is applied. */
+            NSData *stream = [TTIOFloatDeltaZstd encodeFloat64:all];
+            if (!stream) {
+                if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
+                    @"FLOAT_DELTA_ZSTD encode failed for '%@'", dsName);
+                return NO;
+            }
+            id<TTIOStorageDataset> ds =
+                [channels createDatasetNamed:dsName
+                                   precision:TTIOPrecisionUInt8
+                                      length:stream.length
+                                   chunkSize:65536
+                                 compression:TTIOCompressionNone
+                            compressionLevel:0
+                                       error:error];
+            if (!ds) return NO;
+            if (![ds writeAll:stream error:error]) return NO;
+            if (![ds setAttributeValue:@(TTIOCompressionFloatDeltaZstd)
+                               forName:@"compression" error:error]) return NO;
         } else {
             id<TTIOStorageDataset> ds =
                 [channels createDatasetNamed:dsName
@@ -871,6 +894,28 @@ static void _buildStdChannelEncoding(void)
 
         id<TTIOStorageDataset> ds = [channels openDatasetNamed:dsName error:error];
         if (!ds) return nil;
+
+        /* FLOAT_DELTA_ZSTD (codec id 17): the dataset is a flat uint8
+           FDZ1 stream with @compression = 17. Decode once into the
+           same eager buffer the numpress path uses. */
+        NSNumber *codecNum = [ds attributeValueForName:@"compression" error:NULL];
+        NSUInteger codecId = codecNum ? [codecNum unsignedIntegerValue] : 0;
+        if (codecId == TTIOCompressionFloatDeltaZstd) {
+            NSData *stream = [ds readAll:error];
+            if (!stream) return nil;
+            NSData *decoded = [TTIOFloatDeltaZstd decodeStream:stream error:error];
+            if (!decoded) return nil;
+            numpressChannels[chName] = decoded;
+            runCompression = TTIOCompressionFloatDeltaZstd;
+            continue;
+        }
+        if (codecId != 0) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
+                @"signal channel '%@': @compression=%lu is not a spectral "
+                @"channel codec (FLOAT_DELTA_ZSTD=17 is the only one wired)",
+                chName, (unsigned long)codecId);
+            return nil;
+        }
         channelDatasets[chName] = ds;
     }
 

@@ -186,6 +186,26 @@ public class AcquisitionRun implements
         this.solvent = solvent != null ? solvent : "";
     }
 
+    /** Signal-channel storage codec for writes: {@code ZLIB}
+     *  (default, chunked HDF5 filter) or {@code FLOAT_DELTA_ZSTD}
+     *  (codec id 17, flat FDZ1 stream with {@code @compression} on
+     *  the dataset). Mutable so callers can opt in before a write —
+     *  mirrors Python {@code WrittenRun.signal_compression} and the
+     *  ObjC {@code signalCompression} property. */
+    private Enums.Compression signalCompression = Enums.Compression.ZLIB;
+
+    /** Opt a run's channels into a storage codec before writing. */
+    public void setSignalCompression(Enums.Compression c) {
+        if (c != Enums.Compression.ZLIB
+                && c != Enums.Compression.FLOAT_DELTA_ZSTD) {
+            throw new IllegalArgumentException(
+                "signalCompression supports ZLIB or FLOAT_DELTA_ZSTD, got " + c);
+        }
+        this.signalCompression = c;
+    }
+
+    public Enums.Compression signalCompression() { return signalCompression; }
+
     /** @return The run's identifier, unique within its parent {@link SpectralDataset}. */
     public String name() { return name; }
 
@@ -743,6 +763,22 @@ public class AcquisitionRun implements
 
                 String dsName = entry.getKey() + "_values";
                 double[] data = entry.getValue();
+                if (signalCompression == Compression.FLOAT_DELTA_ZSTD) {
+                    // Codec id 17: the dataset bytes ARE the FDZ1
+                    // stream; @compression on the dataset is the
+                    // dispatch signal, no HDF5 filter.
+                    byte[] stream =
+                        global.thalion.ttio.codecs.FloatDeltaZstd.encode(data);
+                    try (StorageDataset ds = sc.createDataset(dsName,
+                            Precision.UINT8, stream.length, CHUNK_SIZE,
+                            Compression.NONE, 0)) {
+                        ds.writeAll(stream);
+                        ds.setAttribute("compression",
+                                Compression.FLOAT_DELTA_ZSTD.ordinal());
+                    }
+                    first = false;
+                    continue;
+                }
                 StorageDataset ds;
                 try {
                     ds = sc.createDataset(dsName, Precision.FLOAT64,
@@ -775,10 +811,30 @@ public class AcquisitionRun implements
                 String dsName = ch.strip() + "_values";
                 if (sc.hasChild(dsName)) {
                     try (StorageDataset ds = sc.openDataset(dsName)) {
-                        // route through the storage protocol, not
-                        // Hdf5Dataset directly. Providers decide how to
-                        // materialise the underlying array.
-                        channels.put(ch.strip(), (double[]) ds.readAll());
+                        // FLOAT_DELTA_ZSTD (codec id 17): the dataset
+                        // is a flat uint8 FDZ1 stream — decode whole,
+                        // matching Python's decode-once-cache and the
+                        // eager double[] model here.
+                        int codecId = 0;
+                        if (ds.hasAttribute("compression")) {
+                            Object v = ds.getAttribute("compression");
+                            if (v instanceof Number num) codecId = num.intValue();
+                        }
+                        if (codecId == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()) {
+                            byte[] stream = (byte[]) ds.readAll();
+                            channels.put(ch.strip(),
+                                global.thalion.ttio.codecs.FloatDeltaZstd.decode(stream));
+                        } else if (codecId != 0) {
+                            throw new IllegalStateException(
+                                "signal channel '" + ch.strip() + "': @compression="
+                                + codecId + " is not a spectral channel codec "
+                                + "(FLOAT_DELTA_ZSTD=17 is the only one wired)");
+                        } else {
+                            // route through the storage protocol, not
+                            // Hdf5Dataset directly. Providers decide how
+                            // to materialise the underlying array.
+                            channels.put(ch.strip(), (double[]) ds.readAll());
+                        }
                     }
                 }
             }

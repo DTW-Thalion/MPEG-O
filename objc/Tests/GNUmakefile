@@ -82,6 +82,7 @@ TTIOTests_OBJC_FILES = \
 	TestCodecRegistry.m \
 	TestM84BasePack.m \
 	TestPackedReference.m \
+	TestFloatDeltaZstd.m \
 	TestM85Quality.m \
 	TestM86GenomicCodecWiring.m \
 	TestM94ZFqzcompPerf.m \

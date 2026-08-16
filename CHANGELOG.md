@@ -31,6 +31,17 @@ old one.
   surefire runs headless JavaFX. Leaked non-daemon threads 2 → 0. (#270)
 
 ### Added
+- **FLOAT_DELTA_ZSTD (codec id 17): lossless float64 channel codec.** Per block:
+  none/delta on the uint64 bit view (picked by exact size comparison), byte-plane
+  transpose, one zstd frame. Opt-in via `signal_compression="float_delta_zstd"`
+  (Python) / `setSignalCompression` (Java) / `signalCompression` (ObjC); the channel
+  dataset becomes a flat uint8 FDZ1 stream with `@compression = 17`, decoded once at
+  open. Measured on PXD000001: the four MS channels drop 193.9 → 130.8 MB at the
+  level-9 default vs the shipping shuffle+gzip pipeline, bit-exact, ~100 MB/s encode.
+  Decoders in all three languages; a shared golden fixture pins the decode side
+  (encoders may differ byte-wise per the spec's Option B). Default unchanged —
+  the flip is Phase 2 after soak. Spec:
+  `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`.
 - **HDF5 byte-shuffle ahead of the channel compressor.** All three writers now set the
   core HDF5 shuffle filter before deflate/LZ4 on chunked numeric datasets with multi-byte
   elements (signal channels, index arrays, image cubes, 2-D NMR matrices). Measured on
