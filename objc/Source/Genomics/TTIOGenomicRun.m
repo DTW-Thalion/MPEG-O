@@ -318,6 +318,20 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     ctx.totalBases   = @(totalBases);
     ctx.readCount    = @(n);
 
+    /* fqzcomp V5: the qualities decoder needs the decoded sequences
+     * channel. Route through -byteChannelSliceNamed: so refdiff_v2
+     * and plain layouts both work; the block fires only for
+     * version-5 streams. __weak breaks the cycle through the cached
+     * context. */
+    __weak typeof(self) weakSelfV5 = self;
+    NSUInteger seqTotal = totalBases;
+    ctx.sequencesProvider = ^NSData * _Nullable {
+        return [weakSelfV5 byteChannelSliceNamed:@"sequences"
+                                        offset:0
+                                         count:seqTotal
+                                         error:NULL];
+    };
+
     // positions int64-LE (mirrors -_decodeRefDiffV2Sequences:).
     NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
     int64_t *posPtr = (int64_t *)positions.mutableBytes;

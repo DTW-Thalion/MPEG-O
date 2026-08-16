@@ -202,6 +202,12 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
     if (version == kZ_VERSION_V4_FQZCOMP) {
         return [self decodeV4Data:data revcompFlags:revcompFlags error:error];
     }
+    if (version == 5) {
+        z_set_error(error, 210,
+            @"M94Z V5 stream requires sequences: use "
+            @"decodeData:revcompFlags:sequencesProvider:error:");
+        return nil;
+    }
     if (version == 1 || version == kZ_VERSION_V2_NATIVE || version == 3) {
         z_set_error(error, 203,
             @"FQZCOMP_NX16_Z V%u is no longer supported in v1.0; "
@@ -214,6 +220,110 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
 }
 
 
++ (nullable NSDictionary *)decodeData:(NSData *)data
+                          revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
+                     sequencesProvider:(NSData * _Nullable (^_Nullable)(void))sequencesProvider
+                                 error:(NSError * _Nullable *)error
+{
+    if (data != nil && data.length >= 5
+        && ((const uint8_t *)data.bytes)[4] == 5) {
+        if (sequencesProvider == nil) {
+            z_set_error(error, 210,
+                @"M94Z V5 stream requires sequences: pass a "
+                @"sequencesProvider returning the run's decoded "
+                @"sequences bytes");
+            return nil;
+        }
+        NSData *seq = sequencesProvider();
+        if (seq == nil) {
+            z_set_error(error, 211,
+                @"M94Z V5: sequencesProvider returned nil");
+            return nil;
+        }
+        return [self decodeQualData:data revcompFlags:revcompFlags
+                          sequences:seq error:error];
+    }
+    return [self decodeData:data revcompFlags:revcompFlags error:error];
+}
+
++ (nullable NSDictionary *)decodeQualData:(NSData *)data
+                             revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
+                                sequences:(NSData *)sequences
+                                    error:(NSError * _Nullable *)error
+{
+#if !TTIO_HAS_NATIVE_RANS
+    z_set_error(error, 310,
+        @"M94.Z decode requires libttio_rans, which is not linked");
+    return nil;
+#else
+    if (data == nil || data.length < (NSUInteger)kZ_V4_HEADER_MIN_LEN) {
+        z_set_error(error, 312, @"M94.Z V5: header truncated");
+        return nil;
+    }
+    const uint8_t *p = (const uint8_t *)data.bytes;
+    if (memcmp(p, kZ_MAGIC, 4) != 0 || p[4] != 5) {
+        z_set_error(error, 313, @"not an M94.Z V5 stream");
+        return nil;
+    }
+    uint64_t numQualities = le_read_u64(p + 6);
+    uint64_t numReads     = le_read_u64(p + 14);
+    if (numQualities > (1ULL << 40) || numReads > (1ULL << 32)) {
+        z_set_error(error, 315, @"M94.Z V5: implausible header counts");
+        return nil;
+    }
+    if ((uint64_t)sequences.length != numQualities) {
+        z_set_error(error, 320,
+            @"M94Z V5: sequences length (%lu) != num_qualities (%llu)",
+            (unsigned long)sequences.length,
+            (unsigned long long)numQualities);
+        return nil;
+    }
+    NSArray<NSNumber *> *effectiveFlags = revcompFlags;
+    if (effectiveFlags == nil) {
+        NSMutableArray *zeros = [NSMutableArray arrayWithCapacity:(NSUInteger)numReads];
+        for (uint64_t i = 0; i < numReads; i++) [zeros addObject:@0];
+        effectiveFlags = zeros;
+    } else if ((uint64_t)effectiveFlags.count != numReads) {
+        z_set_error(error, 317,
+            @"revcompFlags.count %lu != numReads %llu",
+            (unsigned long)effectiveFlags.count,
+            (unsigned long long)numReads);
+        return nil;
+    }
+    uint32_t *lens  = (uint32_t *)malloc((size_t)numReads * sizeof(uint32_t));
+    uint8_t  *flags = (uint8_t  *)malloc((size_t)numReads ?: 1);
+    if (!lens || !flags) {
+        free(lens); free(flags);
+        z_set_error(error, 318, @"M94.Z V5: alloc failed");
+        return nil;
+    }
+    for (uint64_t i = 0; i < numReads; i++) {
+        flags[i] = ([effectiveFlags[(NSUInteger)i] unsignedIntegerValue] & 1u)
+                     ? (uint8_t)kZ_V4_SAM_REVERSE : (uint8_t)0;
+    }
+    NSMutableData *outQ = [NSMutableData dataWithLength:(NSUInteger)numQualities];
+    int rc = ttio_m94z_qual_decode(
+        p, (size_t)data.length,
+        lens, (size_t)numReads,
+        flags,
+        (const uint8_t *)sequences.bytes,
+        (uint8_t *)outQ.mutableBytes, (size_t)numQualities);
+    free(flags);
+    if (rc != 0) {
+        free(lens);
+        z_set_error(error, 319, @"ttio_m94z_qual_decode failed (rc=%d)", rc);
+        return nil;
+    }
+    NSMutableArray<NSNumber *> *readLengths =
+        [NSMutableArray arrayWithCapacity:(NSUInteger)numReads];
+    for (uint64_t i = 0; i < numReads; i++) {
+        [readLengths addObject:@(lens[i])];
+    }
+    free(lens);
+    return @{ @"qualities": outQ, @"readLengths": readLengths };
+#endif
+}
+
 // ── V4 native dispatch (Stage 3, Task 7) ─────────────────────────────
 //
 // V4 wraps htscodecs's fqzcomp_qual (CRAM 3.1) with an M94.Z outer
@@ -223,12 +333,13 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
 // Python (ttio.codecs.fqzcomp_nx16_z) and Java
 // (global.thalion.ttio.codecs.FqzcompNx16Z).
 
-+ (nullable NSData *)encodeV4WithQualities:(NSData *)qualities
-                                readLengths:(NSArray<NSNumber *> *)readLengths
-                               revcompFlags:(NSArray<NSNumber *> *)revcompFlags
-                               strategyHint:(NSInteger)strategyHint
-                                   padCount:(uint8_t)padCount
-                                      error:(NSError * _Nullable *)error
++ (nullable NSData *)encodeQualWithQualities:(NSData *)qualities
+                                 readLengths:(NSArray<NSNumber *> *)readLengths
+                                revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                   sequences:(nullable NSData *)sequences
+                                strategyHint:(NSInteger)strategyHint
+                                    padCount:(uint8_t)padCount
+                                       error:(NSError * _Nullable *)error
 {
 #if !TTIO_HAS_NATIVE_RANS
     z_set_error(error, 300,
@@ -237,6 +348,14 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
 #else
     if (qualities == nil) {
         z_set_error(error, 301, @"qualities must not be nil");
+        return nil;
+    }
+    if (sequences != nil && sequences.length != qualities.length) {
+        z_set_error(error, 307,
+            @"sequences length (%lu) != qualities length (%lu); the V5 "
+            @"sequence context needs one base per quality",
+            (unsigned long)sequences.length,
+            (unsigned long)qualities.length);
         return nil;
     }
     if (readLengths.count != revcompFlags.count) {
@@ -307,10 +426,11 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
         return nil;
     }
     size_t out_len = out_cap;
-    int rc = ttio_m94z_v4_encode(
+    int rc = ttio_m94z_qual_encode(
         (const uint8_t *)qualities.bytes, (size_t)n_qual,
         lens, (size_t)n_reads,
         flags,
+        (const uint8_t *)sequences.bytes,
         (int)strategyHint,
         (uint8_t)(padCount & 0x3),
         out, &out_len);
@@ -318,11 +438,43 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
     if (rc != 0) {
         free(out);
         z_set_error(error, 306,
-            @"ttio_m94z_v4_encode failed (rc=%d)", rc);
+            @"ttio_m94z_qual_encode failed (rc=%d)", rc);
         return nil;
     }
     return [NSData dataWithBytesNoCopy:out length:out_len freeWhenDone:YES];
 #endif
+}
+
++ (nullable NSData *)encodeV4WithQualities:(NSData *)qualities
+                                readLengths:(NSArray<NSNumber *> *)readLengths
+                               revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                               strategyHint:(NSInteger)strategyHint
+                                   padCount:(uint8_t)padCount
+                                      error:(NSError * _Nullable *)error
+{
+    return [self encodeQualWithQualities:qualities
+                             readLengths:readLengths
+                            revcompFlags:revcompFlags
+                               sequences:nil
+                            strategyHint:strategyHint
+                                padCount:padCount
+                                   error:error];
+}
+
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                sequences:(nullable NSData *)sequences
+                                    error:(NSError * _Nullable *)error
+{
+    uint8_t padCount = (uint8_t)((-(NSInteger)qualities.length) & 0x3);
+    return [self encodeQualWithQualities:qualities
+                             readLengths:readLengths
+                            revcompFlags:revcompFlags
+                               sequences:sequences
+                            strategyHint:-1
+                                padCount:padCount
+                                   error:error];
 }
 
 + (nullable NSDictionary *)decodeV4Data:(NSData *)data

@@ -91,6 +91,7 @@ extern void testImageBase(void);
 extern void testM84BasePack(void);
 extern void testPackedReference(void);
 extern void testFloatDeltaZstd(void);
+extern void testQualitiesV5(void);
 extern void testM85Quality(void);
 extern void testM86GenomicCodecWiring(void);
 extern void testM94ZFqzcompPerf(void);
@@ -503,6 +504,7 @@ int main(int argc, const char *argv[])
 
         START_SET("FLOAT_DELTA_ZSTD codec")
             testFloatDeltaZstd();
+            testQualitiesV5();
         END_SET("FLOAT_DELTA_ZSTD codec")
 
         START_SET("M85: QUALITY_BINNED codec")
