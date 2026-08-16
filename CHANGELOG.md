@@ -31,6 +31,13 @@ old one.
   surefire runs headless JavaFX. Leaked non-daemon threads 2 → 0. (#270)
 
 ### Added
+- **HDF5 byte-shuffle ahead of the channel compressor.** All three writers now set the
+  core HDF5 shuffle filter before deflate/LZ4 on chunked numeric datasets with multi-byte
+  elements (signal channels, index arrays, image cubes, 2-D NMR matrices). Measured on
+  the PXD000001 Orbitrap corpus: profile m/z 174.0 → 137.1 MB (−21%), all four signal
+  channels together −16%, at lower encode cost. The filter is self-describing, so every existing
+  reader — including pre-change releases and plain h5py/h5dump — reads the new files
+  unchanged, and old files stay valid.
 - **`ttio` builds as a PyPI package.** A scikit-build-core backend, an sdist that vendors
   the `native/` sources, and cibuildwheel manylinux/macOS/Windows wheels that bundle
   `libttio_rans` into `ttio/.libs` so the native codecs resolve with no environment

@@ -153,6 +153,14 @@
     if (chunkSize > 0 && length > 0) {
         hsize_t chunk[1] = { (hsize_t)MIN(chunkSize, length) };
         H5Pset_chunk(plist, 1, chunk);
+        /* Byte-shuffle ahead of the compressor for multi-byte elements.
+           Core HDF5 filter, self-describing, so every reader decodes it
+           transparently; single-byte elements gain nothing and skip it. */
+        BOOL compressing = (compression == TTIOCompressionZlib && compressionLevel > 0)
+            || compression == TTIOCompressionLZ4;
+        if (compressing && precision != TTIOPrecisionUInt8) {
+            H5Pset_shuffle(plist);
+        }
         if (compression == TTIOCompressionZlib && compressionLevel > 0) {
             H5Pset_deflate(plist, (unsigned)compressionLevel);
         } else if (compression == TTIOCompressionLZ4) {

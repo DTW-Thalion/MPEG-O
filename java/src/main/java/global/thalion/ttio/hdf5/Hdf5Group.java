@@ -192,6 +192,16 @@ public class Hdf5Group implements AutoCloseable {
             if (chunkSize > 0 && length > 0) {
                 long[] chunk = { Math.min(chunkSize, length) };
                 H5.H5Pset_chunk(plist, 1, chunk);
+                // Byte-shuffle ahead of the compressor for multi-byte
+                // elements. Core HDF5 filter, self-describing, so every
+                // reader decodes it transparently; single-byte elements
+                // gain nothing and skip it.
+                boolean compressing =
+                        (compression == Compression.ZLIB && compressionLevel > 0)
+                        || compression == Compression.LZ4;
+                if (compressing && precision != Precision.UINT8) {
+                    H5.H5Pset_shuffle(plist);
+                }
                 if (compression == Compression.ZLIB && compressionLevel > 0) {
                     H5.H5Pset_deflate(plist, compressionLevel);
                 } else if (compression == Compression.LZ4) {

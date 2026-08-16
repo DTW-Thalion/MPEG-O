@@ -290,6 +290,7 @@ static BOOL writeImageCubeGroupAtStudy(hid_t studyGid,
     hid_t space = H5Screate_simple(3, dims, NULL);
     hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
     H5Pset_chunk(plist, 3, chunk);
+    H5Pset_shuffle(plist);   /* byte-shuffle before deflate; matches the cube writers */
     H5Pset_deflate(plist, 6);
     hid_t did = H5Dcreate2(g, "intensity",
                            H5T_NATIVE_DOUBLE, space,
@@ -328,6 +329,7 @@ static BOOL writeImageCubeGroupAtStudy(hid_t studyGid,
         if (isMs) {
             axisPlist = H5Pcreate(H5P_DATASET_CREATE);
             H5Pset_chunk(axisPlist, 1, aDims);
+            H5Pset_shuffle(axisPlist);
             H5Pset_deflate(axisPlist, 6);
             aPlist = axisPlist;
         }
