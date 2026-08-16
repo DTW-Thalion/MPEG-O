@@ -102,6 +102,15 @@
  *  explicitly before calling <code>-writeToGroup:</code>. */
 @property (nonatomic) TTIOCompression signalCompression;
 
+/** Phase 2 of the FLOAT_DELTA_ZSTD spec: MS float64 channels default
+ *  to codec id 17 when <code>signalCompression</code> is left at
+ *  <code>TTIOCompressionZlib</code>. Set to <code>YES</code> to keep
+ *  the chunked-zlib layout — same opt-out pattern as
+ *  <code>TTIOWrittenGenomicRun.optDisableInlineMateInfoV2</code>.
+ *  Python: <code>WrittenRun.opt_disable_float_delta</code>; Java:
+ *  <code>AcquisitionRun.setOptDisableFloatDelta</code>. */
+@property (nonatomic) BOOL optDisableFloatDelta;
+
 /** Chromatogram traces associated with this run (TIC / XIC / SRM).
  *  Empty by default. */
 @property (readonly, copy) NSArray<TTIOChromatogram *> *chromatograms;

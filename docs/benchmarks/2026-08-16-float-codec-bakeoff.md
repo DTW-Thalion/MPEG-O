@@ -1,6 +1,9 @@
 # Float-codec bake-off — R1 spec-proof measurements
 
 - Date: 2026-08-16
+- Status: codec 17 shipped (Phase 1) and is the default for MS
+  float64 channels (Phase 2; `opt_disable_float_delta` opts out).
+  The numbers below are the measurements that drove both decisions.
 - Spec: `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`
   (§3 carries the results table and its reading; not duplicated here)
 - Scripts: `tools/perf/float_codec_bakeoff/`

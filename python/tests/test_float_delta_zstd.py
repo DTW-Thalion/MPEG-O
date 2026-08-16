@@ -177,3 +177,99 @@ class TestTioDispatch:
             assert len(rt.all_runs["r"]) == 4
         finally:
             rt.close()
+
+
+def _flip_run(spectrum_class: str = "TTIOMassSpectrum", **overrides):
+    """A minimal 4-spectrum WrittenRun for the Phase 2 default tests."""
+    from ttio.spectral_dataset import WrittenRun
+    from ttio.enums import AcquisitionMode, Polarity
+
+    total = 4 * 64
+    rng = np.random.default_rng(11)
+    fields = dict(
+        spectrum_class=spectrum_class,
+        acquisition_mode=int(AcquisitionMode.MS1_DDA),
+        channel_data={"mz": np.sort(rng.uniform(100, 900, total)),
+                      "intensity": rng.lognormal(5, 1, total)},
+        offsets=np.arange(0, total, 64, dtype="<u8"),
+        lengths=np.full(4, 64, dtype="<u4"),
+        retention_times=np.arange(4, dtype="<f8"),
+        ms_levels=np.ones(4, dtype="<i4"),
+        polarities=np.full(4, int(Polarity.POSITIVE), dtype="<i4"),
+        precursor_mzs=np.zeros(4, dtype="<f8"),
+        precursor_charges=np.zeros(4, dtype="<i4"),
+        base_peak_intensities=np.ones(4, dtype="<f8"),
+    )
+    fields.update(overrides)
+    return WrittenRun(**fields)
+
+
+def _write_one(tmp_path: Path, run) -> Path:
+    from ttio.spectral_dataset import SpectralDataset
+    p = tmp_path / "flip.tio"
+    SpectralDataset.write_minimal(
+        p, title="flip", isa_investigation_id="F001", runs={"r": run})
+    return p
+
+
+class TestDefaultFlip:
+    """Phase 2 (spec §5): MS float64 channels default to codec id 17.
+
+    ``signal_compression="gzip"`` (the default) on a TTIOMassSpectrum
+    run now selects FLOAT_DELTA_ZSTD. ``opt_disable_float_delta=True``
+    preserves the chunked-zlib layout; non-MS runs and explicit codec
+    strings are unchanged."""
+
+    def test_ms_default_writes_codec_17(self, tmp_path: Path) -> None:
+        import h5py
+        run = _flip_run()
+        p = _write_one(tmp_path, run)
+        with h5py.File(p, "r") as f:
+            for ch in ("mz", "intensity"):
+                ds = f[f"/study/ms_runs/r/signal_channels/{ch}_values"]
+                assert ds.dtype == np.uint8, ch
+                assert int(ds.attrs["compression"]) == 17, ch
+
+    def test_ms_default_round_trips(self, tmp_path: Path) -> None:
+        from ttio.spectral_dataset import SpectralDataset
+        run = _flip_run()
+        mz = run.channel_data["mz"].copy()
+        p = _write_one(tmp_path, run)
+        with SpectralDataset.open(p) as back:
+            sp = back.all_runs["r"][1]
+            got = np.asarray(sp.signal_array("mz").data)
+            assert np.array_equal(got, mz[64:128])
+
+    def test_opt_disable_preserves_zlib(self, tmp_path: Path) -> None:
+        import h5py
+        run = _flip_run(opt_disable_float_delta=True)
+        p = _write_one(tmp_path, run)
+        with h5py.File(p, "r") as f:
+            ds = f["/study/ms_runs/r/signal_channels/mz_values"]
+            assert ds.dtype == np.float64
+            assert ds.compression == "gzip"
+            assert "compression" not in ds.attrs
+
+    def test_nmr_default_unchanged(self, tmp_path: Path) -> None:
+        import h5py
+        run = _flip_run(
+            spectrum_class="TTIONMRSpectrum",
+            channel_data={
+                "chemical_shift": np.linspace(0, 12, 256),
+                "intensity": np.random.default_rng(2).normal(0, 1, 256)},
+            offsets=np.arange(0, 256, 64, dtype="<u8"),
+        )
+        p = _write_one(tmp_path, run)
+        with h5py.File(p, "r") as f:
+            ds = f["/study/ms_runs/r/signal_channels/chemical_shift_values"]
+            assert ds.dtype == np.float64
+            assert ds.compression == "gzip"
+
+    def test_explicit_none_still_honoured(self, tmp_path: Path) -> None:
+        import h5py
+        run = _flip_run(signal_compression="none")
+        p = _write_one(tmp_path, run)
+        with h5py.File(p, "r") as f:
+            ds = f["/study/ms_runs/r/signal_channels/mz_values"]
+            assert ds.dtype == np.float64
+            assert ds.compression is None

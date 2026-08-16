@@ -57,6 +57,12 @@ def _make_run(n_spec: int, n_pts: int) -> WrittenRun:
         precursor_mzs=np.zeros(n_spec, dtype=np.float64),
         precursor_charges=np.zeros(n_spec, dtype=np.int32),
         base_peak_intensities=np.full(n_spec, 1000.0, dtype=np.float64),
+        # The lazy random-access criterion needs the chunked HDF5
+        # layout: the codec-17 MS default is a whole-stream codec and
+        # decodes the full channel at open, which on a remote file
+        # means downloading it. Writers targeting remote range reads
+        # opt out.
+        opt_disable_float_delta=True,
     )
 
 

@@ -206,6 +206,20 @@ public class AcquisitionRun implements
 
     public Enums.Compression signalCompression() { return signalCompression; }
 
+    /** Phase 2 of the FLOAT_DELTA_ZSTD spec: MS float64 channels
+     *  default to codec id 17 when {@code signalCompression} is left
+     *  at ZLIB. Setting this flag preserves the chunked-zlib layout —
+     *  same opt-out pattern as
+     *  {@code WrittenGenomicRun.optDisableInlineMateInfoV2}. Python:
+     *  {@code WrittenRun.opt_disable_float_delta}. */
+    private boolean optDisableFloatDelta = false;
+
+    public void setOptDisableFloatDelta(boolean b) {
+        this.optDisableFloatDelta = b;
+    }
+
+    public boolean optDisableFloatDelta() { return optDisableFloatDelta; }
+
     /** @return The run's identifier, unique within its parent {@link SpectralDataset}. */
     public String name() { return name; }
 
@@ -757,13 +771,20 @@ public class AcquisitionRun implements
             // reuse the decision for the rest so the loop is
             // consistent rather than half-compressed/half-not.
             Compression codec = Compression.ZLIB;
+            // Phase 2: ZLIB left at its default resolves to codec 17
+            // on MS runs unless the caller opted out.
+            boolean useFloatDelta =
+                signalCompression == Compression.FLOAT_DELTA_ZSTD
+                    || (signalCompression == Compression.ZLIB
+                        && !optDisableFloatDelta
+                        && "TTIOMassSpectrum".equals(spectrumClassName()));
             for (var entry : channels.entrySet()) {
                 if (!first) channelNames.append(",");
                 channelNames.append(entry.getKey());
 
                 String dsName = entry.getKey() + "_values";
                 double[] data = entry.getValue();
-                if (signalCompression == Compression.FLOAT_DELTA_ZSTD) {
+                if (useFloatDelta) {
                     // Codec id 17: the dataset bytes ARE the FDZ1
                     // stream; @compression on the dataset is the
                     // dispatch signal, no HDF5 filter.

@@ -11,10 +11,13 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-Post-1.7.1 work: a cross-language storage-corruption fix, a CI-hang fix, PyPI packaging
-and the R7/R8 coverage work. **`dek_wrapped` changes on disk for Java and ObjC** — both
+Post-1.7.1 work: a cross-language storage-corruption fix, a CI-hang fix, PyPI packaging,
+the R7/R8 coverage work, and the compression audit (shuffle, packed references, wire
+zstd, FLOAT_DELTA_ZSTD). **`dek_wrapped` changes on disk for Java and ObjC** — both
 now match the spec layout Python has always written, and every reader still accepts the
-old one.
+old one. **MS files written with default settings now use codec 17** and are not
+readable by releases up to and including v1.7.1; `opt_disable_float_delta` restores
+the old layout per run.
 
 ### Fixed
 - **Cross-language `dek_wrapped` storage corruption.** `/protection/key_info/dek_wrapped`
@@ -30,6 +33,22 @@ old one.
   now runs in a `finally`, `TransportServer` selector threads are daemons, and tio-browser's
   surefire runs headless JavaFX. Leaked non-daemon threads 2 → 0. (#270)
 
+### Changed
+- **MS float64 channels default to FLOAT_DELTA_ZSTD (codec id 17).** Phase 2 of the
+  float-delta spec: leaving `signal_compression` at its default on a `TTIOMassSpectrum`
+  run now writes each channel as a flat uint8 FDZ1 stream instead of the chunked
+  shuffle+zlib layout (−33% on the PXD000001 MS channels). Opt out per run with
+  `WrittenRun.opt_disable_float_delta` (Python) / `setOptDisableFloatDelta` (Java) /
+  `optDisableFloatDelta` (ObjC); NMR, vibrational and genomic channels are unchanged.
+  Consequences of the whole-stream layout: readers older than this release cannot open
+  default-written MS files; remote range-read consumers download the full channel at
+  open, so writers targeting that use the opt-out; channel and per-AU encryption decode
+  to float64 before encrypting, so an encrypt/decrypt cycle rewrites the channel in the
+  plain float64 layout, as it already did for numpress. The Java PQC signer gained the
+  uint8 branch its canonical reader was missing, and the ObjC HDF5 provider's dataset
+  adapter now routes attribute reads to the real implementation instead of a stub that
+  reported every dataset attribute as absent.
+
 ### Added
 - **FLOAT_DELTA_ZSTD (codec id 17): lossless float64 channel codec.** Per block:
   none/delta on the uint64 bit view (picked by exact size comparison), byte-plane
@@ -39,8 +58,8 @@ old one.
   open. Measured on PXD000001: the four MS channels drop 193.9 → 130.8 MB at the
   level-9 default vs the shipping shuffle+gzip pipeline, bit-exact, ~100 MB/s encode.
   Decoders in all three languages; a shared golden fixture pins the decode side
-  (encoders may differ byte-wise per the spec's Option B). Default unchanged —
-  the flip is Phase 2 after soak. Spec:
+  (encoders may differ byte-wise per the spec's Option B). Shipped opt-in; the
+  default flipped for MS runs in the same release (see Changed). Spec:
   `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`.
 - **HDF5 byte-shuffle ahead of the channel compressor.** All three writers now set the
   core HDF5 shuffle filter before deflate/LZ4 on chunked numeric datasets with multi-byte

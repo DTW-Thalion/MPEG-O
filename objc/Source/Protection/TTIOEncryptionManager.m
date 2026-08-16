@@ -17,6 +17,7 @@
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Types.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Codecs/TTIOFloatDeltaZstd.h"
 #import <openssl/evp.h>
 #import <openssl/rand.h>
 #import <openssl/err.h>
@@ -174,6 +175,23 @@
     NSUInteger originalCount = intensityDS.length;
     NSData *plaintext = [intensityDS readDataWithError:error];
     if (!plaintext) return NO;
+
+    // FLOAT_DELTA_ZSTD (codec id 17, the MS default since Phase 2):
+    // the dataset is a flat uint8 FDZ1 stream. The channel-encryption
+    // contract is float64 plaintext — decode first; decrypt writes
+    // plain float64 back, the same layout downgrade as the per-AU
+    // path. Matches Python _plain_f8_from_values.
+    if ([intensityDS hasAttributeNamed:@"compression"]) {
+        id cval = [intensityDS attributeValueForName:@"compression" error:NULL];
+        if ([cval respondsToSelector:@selector(intValue)]
+            && [cval intValue] == TTIOCompressionFloatDeltaZstd) {
+            NSData *decoded = [TTIOFloatDeltaZstd decodeStream:plaintext
+                                                         error:error];
+            if (!decoded) return NO;
+            plaintext = decoded;
+            originalCount = decoded.length / sizeof(double);
+        }
+    }
 
     NSData *iv = nil, *tag = nil;
     NSData *ciphertext = [self encryptData:plaintext

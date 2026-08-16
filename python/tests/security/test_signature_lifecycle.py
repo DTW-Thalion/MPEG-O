@@ -94,12 +94,30 @@ class TestSignatureLifecycle:
             sign_dataset(ds_handle, _KEY)
         with SpectralDataset.open(url, writable=True) as ds:
             ds_handle = ds.ms_runs["run_0001"].group.open_group("signal_channels").open_dataset("intensity_values")
-            tampered = np.linspace(1.0, 100.0, 4).astype(np.float64)
-            tampered[0] = 999999.0
+            # Layout-agnostic mutation: the channel is a uint8 FDZ1
+            # stream under the codec-17 default and float64 with
+            # opt_disable_float_delta; flip one element either way.
+            tampered = np.asarray(ds_handle.read()).copy()
+            if tampered.dtype == np.uint8:
+                tampered[-1] ^= 0xFF
+            else:
+                tampered[0] = 999999.0
             ds_handle.write(tampered)
-        with SpectralDataset.open(url) as ds:
-            ds_handle = ds.ms_runs["run_0001"].group.open_group("signal_channels").open_dataset("intensity_values")
+        # Verify through the provider directly: a tampered FDZ1 stream
+        # no longer decodes, so the eager codec-17 decode inside
+        # SpectralDataset.open raises before verify_dataset could run.
+        # Signature verification is exactly the check that must still
+        # be reachable on a corrupted file.
+        from ttio.providers.registry import open_provider
+        sp = open_provider(url, provider=provider, mode="r")
+        try:
+            ds_handle = (sp.root_group().open_group("study")
+                         .open_group("ms_runs").open_group("run_0001")
+                         .open_group("signal_channels")
+                         .open_dataset("intensity_values"))
             assert verify_dataset(ds_handle, _KEY) is False
+        finally:
+            sp.close()
 
     def test_v2_hmac_backward_compat(self, provider: str, tmp_path: Path) -> None:
         """Signatures persisted with the v2 prefix verify on read."""

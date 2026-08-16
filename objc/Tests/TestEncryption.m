@@ -16,7 +16,24 @@
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
+#import "Codecs/TTIOFloatDeltaZstd.h"
 #import <unistd.h>
+
+// The MS default layout is a codec-17 FDZ1 stream since Phase 2;
+// materialize a channel dataset as float64 regardless of layout.
+static NSData *readChannelAsFloat64(TTIOHDF5Dataset *ds, NSError **err)
+{
+    NSData *raw = [ds readDataWithError:err];
+    if (!raw) return nil;
+    if ([ds hasAttributeNamed:@"compression"]) {
+        id cval = [ds attributeValueForName:@"compression" error:NULL];
+        if ([cval respondsToSelector:@selector(intValue)]
+            && [cval intValue] == TTIOCompressionFloatDeltaZstd) {
+            return [TTIOFloatDeltaZstd decodeStream:raw error:err];
+        }
+    }
+    return raw;
+}
 
 static NSString *encPath(NSString *suffix)
 {
@@ -135,7 +152,7 @@ void testEncryption(void)
         TTIOHDF5Group *runG = [[f rootGroup] openGroupNamed:@"run_0001" error:&err];
         TTIOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
         TTIOHDF5Dataset *ds = [ch openDatasetNamed:@"intensity_values" error:&err];
-        originalIntensity = [ds readDataWithError:&err];
+        originalIntensity = readChannelAsFloat64(ds, &err);
         PASS(originalIntensity.length == 5 * 8 * sizeof(double),
              "captured original intensity (40 doubles)");
         [f close];
@@ -160,7 +177,7 @@ void testEncryption(void)
         TTIOHDF5Group *ch = [runG openGroupNamed:@"signal_channels" error:&err];
         TTIOHDF5Dataset *mzDS = [ch openDatasetNamed:@"mz_values" error:&err];
         PASS(mzDS != nil, "mz_values still openable post-encryption");
-        NSData *mz = [mzDS readDataWithError:&err];
+        NSData *mz = readChannelAsFloat64(mzDS, &err);
         PASS(mz.length == 5 * 8 * sizeof(double),
              "mz_values still readable as plaintext");
 

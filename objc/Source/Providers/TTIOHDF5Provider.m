@@ -108,31 +108,28 @@
                                                    precision:_ds.precision];
 }
 
-- (BOOL)hasAttributeNamed:(NSString *)name { (void)name; return NO; }
+// Routed through TTIOHDF5Dataset's scalar attribute support; the
+// per-AU encryption path reads a codec-17 channel's @compression
+// through this adapter.
+- (BOOL)hasAttributeNamed:(NSString *)name
+{
+    return [_ds hasAttributeNamed:name];
+}
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
 {
-    (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
-            @"dataset-level attributes not exposed via TTIOHDF5Dataset");
-    return nil;
+    return [_ds attributeValueForName:name error:error];
 }
 - (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
 {
-    (void)value; (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
-            @"dataset-level attributes not exposed via TTIOHDF5Dataset");
-    return NO;
+    return [_ds setAttributeValue:value forName:name error:error];
 }
 
 - (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
 {
-    (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
-            @"dataset-level attributes not exposed via TTIOHDF5Dataset");
-    return NO;
+    return [_ds deleteAttributeNamed:name error:error];
 }
 
-- (NSArray<NSString *> *)attributeNames { return @[]; }
+- (NSArray<NSString *> *)attributeNames { return [_ds attributeNames]; }
 
 @end
 
