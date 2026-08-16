@@ -2,8 +2,9 @@
 
 > **Status (2026-08-16).** Spec-proof phase output of the 2026-08
 > compression audit's R1. Measured bake-off on real Orbitrap data
-> (PXD000001) plus synthetic NMR / Raman corpora; design decided,
-> implementation NOT started — this document is the gate.
+> (PXD000001) plus synthetic NMR / Raman corpora. **§4 decided
+> 2026-08-16: Option B** (decode-compatible per-language encoders,
+> golden decode fixture) — Phase 1 implementation may proceed.
 
 > **Out of scope:**
 > - A Pco/ALP-class binning codec (revisit as codec id 18 only if the
@@ -187,6 +188,10 @@ the same zstd build:
 
 Option B ships in days; Option A in weeks. The recommendation is B,
 recorded here for an explicit yes/no.
+
+**Decision (2026-08-16): Option B.** The remaining §7 defaults stand
+as drafted: 1 Mi block size, the `FLOAT_DELTA_ZSTD` name, and an
+MS-channels-only Phase 2 flip.
 
 ## 5. Rollout
 
