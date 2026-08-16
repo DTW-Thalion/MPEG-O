@@ -168,8 +168,20 @@ static BOOL roundTrip(NSUInteger nRuns, NSUInteger nSpectra,
     return eq;
 }
 
+static BOOL roundTripWithCodec(NSUInteger nRuns, NSUInteger nSpectra,
+                               NSUInteger pointsPerSpectrum,
+                               TTIOCompression codec);
+
 static BOOL roundTripWithCompression(NSUInteger nRuns, NSUInteger nSpectra,
                                        NSUInteger pointsPerSpectrum)
+{
+    return roundTripWithCodec(nRuns, nSpectra, pointsPerSpectrum,
+                              TTIOCompressionZlib);
+}
+
+static BOOL roundTripWithCodec(NSUInteger nRuns, NSUInteger nSpectra,
+                               NSUInteger pointsPerSpectrum,
+                               TTIOCompression codec)
 {
     NSString *src = tmp(@"src-zlib.tio");
     NSString *mots = tmp(@"stream-zlib.tis");
@@ -182,6 +194,7 @@ static BOOL roundTripWithCompression(NSUInteger nRuns, NSUInteger nSpectra,
     TTIOSpectralDataset *source = [TTIOSpectralDataset readFromFilePath:src error:&err];
     TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
     tw.useCompression = YES;
+    tw.compressionCodec = codec;
     if (![tw writeDataset:source error:&err]) { [tw close]; return NO; }
     [tw close];
 
@@ -204,4 +217,8 @@ void testTransportConformance(void)
          "round-trip with ZLIB wire compression: bit-equal");
     PASS(roundTripWithCompression(1, 20, 128),
          "round-trip with ZLIB wire compression + larger spectra: bit-equal");
+    PASS(roundTripWithCodec(1, 5, 4, TTIOCompressionZstd),
+         "round-trip with ZSTD wire compression (id 16): bit-equal");
+    PASS(roundTripWithCodec(1, 20, 128, TTIOCompressionZstd),
+         "round-trip with ZSTD wire compression + larger spectra: bit-equal");
 }

@@ -36,6 +36,8 @@ dependencies = [
     # uses arrow-vector 16; pyarrow's wire format is logically
     # compatible across all 16.x releases.
     "pyarrow>=16.0",
+    # zstd wire codec for transport AU channels (compression id 16).
+    "zstandard>=0.22",
 ]
 
 [project.optional-dependencies]

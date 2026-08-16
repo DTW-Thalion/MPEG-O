@@ -83,17 +83,21 @@ def file_to_transport(
     use_checksum: bool = False,
     use_compression: bool = False,
     use_bulk_mode: bool = False,
+    compression_codec: str = "zlib",
 ) -> None:
     """Convert a ``.tio`` file to a transport stream.
 
     ``use_bulk_mode=True`` enables Phase 2c-T verbatim v2-blob
     carriage for genomic runs. See ``docs/transport-spec.md`` §6.4.
+    ``compression_codec`` selects the AU channel codec when
+    ``use_compression`` is on: ``"zlib"`` (default) or ``"zstd"``.
     """
     with SpectralDataset.open(ttio_path) as ds, \
             TransportWriter(output,
                               use_checksum=use_checksum,
                               use_compression=use_compression,
-                              use_bulk_mode=use_bulk_mode) as tw:
+                              use_bulk_mode=use_bulk_mode,
+                              compression_codec=compression_codec) as tw:
         tw.write_dataset(ds)
 
 

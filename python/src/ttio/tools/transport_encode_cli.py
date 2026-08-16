@@ -86,6 +86,11 @@ def main(argv: list[str] | None = None) -> int:
              "(=, '') byte-for-byte. No effect on MS-only inputs.",
     )
     parser.add_argument(
+        "--compress", choices=["zlib", "zstd"], default=None,
+        help="compress spectral AU channels with the chosen wire codec "
+             "(zlib = compression id 1, zstd = id 16).",
+    )
+    parser.add_argument(
         "--image-processed", action="store_true",
         help="emit the input's MSImage via write_image_processed "
              "(sparse wire mode) in place of write_image (continuous). "
@@ -101,6 +106,8 @@ def main(argv: list[str] | None = None) -> int:
             args.input, args.output,
             use_checksum=args.checksum,
             use_bulk_mode=args.bulk,
+            use_compression=args.compress is not None,
+            compression_codec=args.compress or "zlib",
         )
     return 0
 

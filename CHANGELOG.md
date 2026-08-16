@@ -45,7 +45,13 @@ old one.
   IUPAC-dense) keep the raw `data` layout, chosen deterministically from content in all
   three languages, and readers fall back to `data` transparently, so old files read
   unchanged. Pre-change readers fail with a missing-`data` error on packed chromosomes
-  instead of misreading bytes. Cross-language byte-exact via a shared golden stream.
+  instead of misreading bytes. Cross-language byte-exact via a shared golden stream. (#281)
+- **zstd on the transport wire (compression id 16).** Spectral AU channels can now be
+  zstd-compressed (opt-in per writer; zlib stays the default) and all three readers
+  inflate id 16; the ImagePixel packet's long-specced `1=zstd / 2=zlib` ids are now
+  actually decoded instead of rejected. Measured on PXD000001 MS2 payloads: −9% bytes
+  at 3.2× the encode speed of zlib-6 (zstd-3). Deps: `zstandard` (Python),
+  `io.airlift:aircompressor` (Java, pure JVM), system `libzstd` (ObjC).
 - **`ttio` builds as a PyPI package.** A scikit-build-core backend, an sdist that vendors
   the `native/` sources, and cibuildwheel manylinux/macOS/Windows wheels that bundle
   `libttio_rans` into `ttio/.libs` so the native codecs resolve with no environment

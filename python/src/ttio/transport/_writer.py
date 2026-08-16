@@ -63,6 +63,7 @@ class TransportWriter:
         use_checksum: bool = False,
         use_compression: bool = False,
         use_bulk_mode: bool = False,
+        compression_codec: str = "zlib",
     ):
         """Construct a writer targeting ``output``.
 
@@ -78,9 +79,16 @@ class TransportWriter:
             set on the header. Default ``False``.
         use_compression : bool, optional
             When ``True``, signal channels in spectral access units
-            are zlib-compressed before emission. The reader detects
-            the per-channel compression byte and decompresses
-            transparently. Default ``False``.
+            are compressed before emission with ``compression_codec``.
+            The reader detects the per-channel compression byte and
+            decompresses transparently. Default ``False``.
+        compression_codec : str, optional
+            ``"zlib"`` (default, wire id 1) or ``"zstd"`` (wire id 16,
+            level 3 — same ratio class as zlib at a fraction of the
+            encode cost). Only consulted when ``use_compression`` is
+            ``True``. Readers older than the zstd addition reject
+            id 16 with an unsupported-compression error, so flip a
+            deployment to zstd only after its readers are current.
         use_bulk_mode : bool, optional
             When ``True``, the writer probes each genomic run for
             v2 codec blobs on disk and emits ``BlobV2*`` packets
@@ -97,6 +105,12 @@ class TransportWriter:
             self._stream = output  # type: ignore[assignment]
         self._use_checksum = use_checksum
         self._use_compression = use_compression
+        if compression_codec not in ("zlib", "zstd"):
+            raise ValueError(
+                f"unsupported compression_codec {compression_codec!r}; "
+                "expected 'zlib' or 'zstd'"
+            )
+        self._compression_codec = compression_codec
         # Phase 2c-T: when True, the writer probes each genomic run for
         # v2 blobs on disk and emits BlobV2* packets carrying them
         # verbatim. The receiver writes the blobs back without going
@@ -1426,7 +1440,11 @@ class TransportWriter:
         is_ms_class = run.spectrum_class == "TTIOMassSpectrum"
         is_pixel_class = wire_class == 4
         use_compression = self._use_compression
-        compression_enum = int(Compression.ZLIB if use_compression else Compression.NONE) & 0xFF
+        use_zstd = use_compression and self._compression_codec == "zstd"
+        if use_zstd:
+            compression_enum = int(Compression.ZSTD) & 0xFF
+        else:
+            compression_enum = int(Compression.ZLIB if use_compression else Compression.NONE) & 0xFF
         precision_enum = int(Precision.FLOAT64) & 0xFF
         unknown_polarity_wire = _POLARITY_TO_WIRE[Polarity.UNKNOWN]
 
@@ -1473,7 +1491,12 @@ class TransportWriter:
         pixel_pack = _AU_PIXEL_STRUCT.pack
         crc32c_ = crc32c
         checksum_pack = _CHECKSUM_STRUCT.pack
-        zlib_compress = zlib.compress
+        if use_zstd:
+            import zstandard
+            _zc = zstandard.ZstdCompressor(level=3)
+            compress = _zc.compress
+        else:
+            compress = zlib.compress
         use_checksum = self._use_checksum
         flags = int(PacketFlag.HAS_CHECKSUM) if use_checksum else 0
         ac_type = int(PacketType.ACCESS_UNIT) & 0xFF
@@ -1494,7 +1517,7 @@ class TransportWriter:
                     continue
                 ci, full_arr = slot
                 raw = full_arr[start:stop].tobytes()
-                payload_bytes = zlib_compress(raw) if use_compression else raw
+                payload_bytes = compress(raw) if use_compression else raw
                 channel_chunks.append(channel_name_prefixes[ci])
                 channel_chunks.append(channel_suffix_pack(
                     precision_enum,
@@ -1653,6 +1676,7 @@ def _spectrum_to_access_unit(
     run: AcquisitionRun,
     *,
     use_compression: bool = False,
+    compression_codec: str = "zlib",
 ) -> AccessUnit:
     wire_class = _SPECTRUM_CLASS_TO_WIRE.get(run.spectrum_class, 0)
     ms_level = 0
@@ -1670,7 +1694,11 @@ def _spectrum_to_access_unit(
         sa = spectrum.signal_array(cname)
         arr = np.asarray(sa.data).astype("<f8", copy=False)
         raw = arr.tobytes()
-        if use_compression:
+        if use_compression and compression_codec == "zstd":
+            import zstandard
+            payload = zstandard.ZstdCompressor(level=3).compress(raw)
+            compression = int(Compression.ZSTD)
+        elif use_compression:
             payload = zlib.compress(raw)
             compression = int(Compression.ZLIB)
         else:
