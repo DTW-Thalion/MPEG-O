@@ -11,13 +11,21 @@ public API is stable from onward.
 
 ## [Unreleased]
 
-Post-1.7.1 work: a cross-language storage-corruption fix, a CI-hang fix, PyPI packaging,
-the R7/R8 coverage work, and the compression audit (shuffle, packed references, wire
-zstd, FLOAT_DELTA_ZSTD). **`dek_wrapped` changes on disk for Java and ObjC** — both
-now match the spec layout Python has always written, and every reader still accepts the
-old one. **MS files written with default settings now use codec 17** and are not
-readable by releases up to and including v1.7.1; `opt_disable_float_delta` restores
-the old layout per run.
+## [1.8.0] - 2026-08-16
+
+The compression release. Spectral float64 channels gain byte-shuffle and the
+FLOAT_DELTA_ZSTD codec (id 17, the MS default), the qualities channel gains the V5
+sequence-context flavor, embedded references pack to 2 bits per base, and the AU
+transport wire gains zstd (id 16) — measured together on the audit corpora these
+take the spectral side -53% lossless and chr22 qualities -22.7%. Also: a
+cross-language `dek_wrapped` storage-corruption fix, a CI-hang fix, PyPI packaging
+(workflow present, not yet published), the R7/R8 coverage work, and the conformance
+matrix actually running in CI. **Reader compatibility:** `dek_wrapped` changes on
+disk for Java and ObjC (both now write the spec layout Python always wrote; every
+reader still accepts the old one), and **files written with default settings —
+codec-17 MS channels and V5 qualities where it wins — are not readable by releases
+up to and including v1.7.1**; `opt_disable_float_delta` and
+`opt_disable_qualities_v5` restore the old layouts per run.
 
 ### Fixed
 - **Cross-language `dek_wrapped` storage corruption.** `/protection/key_info/dek_wrapped`
@@ -121,6 +129,8 @@ the old layout per run.
 - **Perf baseline re-captured** at 2026-06-09 numbers; every metric was inside the ±15%
   gate before the refresh. (#267)
 - **tio-browser CI hang diagnostics**: a job timeout and a thread dump on hang. (#275)
+
+PRs: #267–#287.
 
 ## [1.7.1] - 2026-06-08
 
