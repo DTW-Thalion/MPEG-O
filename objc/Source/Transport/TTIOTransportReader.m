@@ -39,6 +39,7 @@
 #import <objc/runtime.h>
 #import <string.h>
 #import <zlib.h>
+#import <zstd.h>
 
 // ---------------------------------------------------------------- LE helpers
 
@@ -106,6 +107,35 @@ static NSData *zlibInflateExact(NSData *deflated,
         return nil;
     }
     return out;
+}
+
+// zlib inflate without a known plaintext size (IMAGE_PIXEL payloads:
+// processed-mode entry counts are only knowable after inflation).
+// Grows the destination geometrically up to a 128 MB cap.
+static NSData *zlibInflateGrow(const uint8_t *src, NSUInteger srcLen,
+                               NSError **error)
+{
+    NSUInteger cap = MAX((NSUInteger)4096, srcLen * 4);
+    for (;;) {
+        NSMutableData *out = [NSMutableData dataWithLength:cap];
+        uLongf destLen = (uLongf)cap;
+        int rc = uncompress((Bytef *)out.mutableBytes, &destLen,
+                              (const Bytef *)src, (uLong)srcLen);
+        if (rc == Z_OK) {
+            [out setLength:destLen];
+            return out;
+        }
+        if (rc == Z_BUF_ERROR && cap < ((NSUInteger)1 << 27)) {
+            cap *= 2;
+            continue;
+        }
+        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                 code:TTIOTransportErrorUnexpectedPayload
+                                             userInfo:@{NSLocalizedDescriptionKey:
+                                 [NSString stringWithFormat:
+                                     @"IMAGE_PIXEL zlib inflate failed: rc=%d", rc]}];
+        return nil;
+    }
 }
 
 static NSString *readLEString(const uint8_t *bytes, NSUInteger length,
@@ -830,6 +860,21 @@ typedef struct {
                     }
                     [out setLength:destLen];
                     decoded = out;
+                } else if (ch.compression == TTIOCompressionZstd) {
+                    // Exact-size output: the channel header carries
+                    // the plaintext element count.
+                    NSMutableData *out = [NSMutableData dataWithLength:(NSUInteger)ch.nElements * 8];
+                    size_t n = ZSTD_decompress(out.mutableBytes, out.length,
+                                               ch.data.bytes, ch.data.length);
+                    if (ZSTD_isError(n) || n != out.length) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:@"zstd inflate failed or short: %s",
+                                                 ZSTD_isError(n) ? ZSTD_getErrorName(n) : "size mismatch"]}];
+                        return NO;
+                    }
+                    decoded = out;
                 } else if (ch.compression != TTIOCompressionNone) {
                     if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                              code:TTIOTransportErrorUnexpectedPayload
@@ -1262,15 +1307,51 @@ typedef struct {
             if (off + 4 > len) continue;
             uint32_t payloadLen = readU32(&bytes[off]); off += 4;
             if (off + payloadLen > len) continue;
-            if (compression != 0) {
+            /* §4.17 pixel enum: 0=none, 1=zstd, 2=zlib. Writers emit
+               0 today; the inflate paths make the enum real. The
+               decoded buffer replaces (pix, pixLen) for the rest of
+               this branch. */
+            const uint8_t *pix = &bytes[off];
+            NSUInteger pixLen = payloadLen;
+            NSData *pixInflated = nil;
+            if (compression == 1) {
+                unsigned long long plain =
+                    ZSTD_getFrameContentSize(pix, pixLen);
+                if (plain == ZSTD_CONTENTSIZE_ERROR
+                    || plain == ZSTD_CONTENTSIZE_UNKNOWN
+                    || plain > (1ull << 27)) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         @"IMAGE_PIXEL zstd frame without a sane content size"}];
+                    return NO;
+                }
+                NSMutableData *out = [NSMutableData dataWithLength:(NSUInteger)plain];
+                size_t n = ZSTD_decompress(out.mutableBytes, out.length, pix, pixLen);
+                if (ZSTD_isError(n) || n != out.length) {
+                    if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                             code:TTIOTransportErrorUnexpectedPayload
+                                                         userInfo:@{NSLocalizedDescriptionKey:
+                                         @"IMAGE_PIXEL zstd inflate failed"}];
+                    return NO;
+                }
+                pixInflated = out;
+            } else if (compression == 2) {
+                pixInflated = zlibInflateGrow(pix, pixLen, error);
+                if (!pixInflated) return NO;
+            } else if (compression != 0) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                          code:TTIOTransportErrorUnexpectedPayload
                                                      userInfo:@{NSLocalizedDescriptionKey:
                                      [NSString stringWithFormat:
-                                         @"IMAGE_PIXEL compression=%u not yet "
-                                         @"supported (NONE only at Task 3.6)",
+                                         @"IMAGE_PIXEL compression=%u not "
+                                         @"supported (0=none, 1=zstd, 2=zlib)",
                                          (unsigned)compression]}];
                 return NO;
+            }
+            if (pixInflated) {
+                pix = pixInflated.bytes;
+                pixLen = pixInflated.length;
             }
             if (px >= imgWidth || py >= imgHeight) {
                 if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
@@ -1312,7 +1393,7 @@ typedef struct {
                 // bytes == bins * sizeof(precision).
                 if (precision == 1) {
                     // FLOAT64
-                    NSUInteger n = payloadLen / 8;
+                    NSUInteger n = pixLen / 8;
                     if (n != imgBins) {
                         if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                                  code:TTIOTransportErrorUnexpectedPayload
@@ -1324,11 +1405,11 @@ typedef struct {
                         return NO;
                     }
                     for (NSUInteger k = 0; k < n; k++) {
-                        cubeWrite[base + k] = readF64(&bytes[off + 8 * k]);
+                        cubeWrite[base + k] = readF64(&pix[8 * k]);
                     }
                 } else {
                     // FLOAT32 — widen into the float64 cube.
-                    NSUInteger n = payloadLen / 4;
+                    NSUInteger n = pixLen / 4;
                     if (n != imgBins) {
                         if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                                  code:TTIOTransportErrorUnexpectedPayload
@@ -1340,7 +1421,7 @@ typedef struct {
                         return NO;
                     }
                     for (NSUInteger k = 0; k < n; k++) {
-                        uint32_t bits = readU32(&bytes[off + 4 * k]);
+                        uint32_t bits = readU32(&pix[4 * k]);
                         float f;
                         memcpy(&f, &bits, 4);
                         cubeWrite[base + k] = (double)f;
@@ -1352,16 +1433,16 @@ typedef struct {
                 //   nonzero_count × { u32 channel + fXX intensity }.
                 // Cube was zero-initialised at IMAGE_HEADER time, so
                 // unmentioned channels stay 0.0.
-                if (payloadLen < 4) {
+                if (pixLen < 4) {
                     if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                              code:TTIOTransportErrorUnexpectedPayload
                                                          userInfo:@{NSLocalizedDescriptionKey:
                                          @"IMAGE_PIXEL (processed): payload < 4 bytes"}];
                     return NO;
                 }
-                uint32_t nonzero = readU32(&bytes[off]);
+                uint32_t nonzero = readU32(pix);
                 NSUInteger entrySize = (precision == 1) ? (4 + 8) : (4 + 4);
-                if ((NSUInteger)payloadLen != 4 + (NSUInteger)nonzero * entrySize) {
+                if (pixLen != 4 + (NSUInteger)nonzero * entrySize) {
                     if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
                                                              code:TTIOTransportErrorUnexpectedPayload
                                                          userInfo:@{NSLocalizedDescriptionKey:
@@ -1374,9 +1455,9 @@ typedef struct {
                                              (unsigned long)entrySize]}];
                     return NO;
                 }
-                NSUInteger entryOff = off + 4;
+                NSUInteger entryOff = 4;
                 for (uint32_t e = 0; e < nonzero; e++) {
-                    uint32_t ch = readU32(&bytes[entryOff]);
+                    uint32_t ch = readU32(&pix[entryOff]);
                     entryOff += 4;
                     if (ch >= imgBins) {
                         if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
@@ -1392,10 +1473,10 @@ typedef struct {
                     }
                     double v;
                     if (precision == 1) {
-                        v = readF64(&bytes[entryOff]);
+                        v = readF64(&pix[entryOff]);
                         entryOff += 8;
                     } else {
-                        uint32_t bits = readU32(&bytes[entryOff]);
+                        uint32_t bits = readU32(&pix[entryOff]);
                         float f;
                         memcpy(&f, &bits, 4);
                         v = (double)f;

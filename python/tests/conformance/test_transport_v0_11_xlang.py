@@ -394,3 +394,29 @@ def test_xlang_tis_bytes_equal_across_decoders(
             "decoder edges failed on the same encoded .tis (encoder "
             f"= {enc_lang}):\n  " + "\n  ".join(failures)
         )
+
+
+@pytest.mark.parametrize("dec_lang", list(DECODERS.keys()))
+def test_xlang_zstd_stream_decodes_everywhere(
+    tmp_path: Path, dec_lang: str,
+) -> None:
+    """A Python-encoded stream with zstd AU channels (wire compression
+    id 16) decodes to equivalent content in every language. Locks the
+    cross-implementation frame interop seam: Python compresses with
+    the zstandard wheel, Java inflates with aircompressor, ObjC with
+    system libzstd — all RFC 8878."""
+    from ttio.spectral_dataset import SpectralDataset
+
+    ms_spec = next(s for s in ACCESSOR_SPECS if s.name == "MS_RUNS")
+    src = ms_spec.build_fixture(tmp_path / "src.tio")
+    tis = tmp_path / "src_zstd.tis"
+    _py_encode(src, tis, extra_flags=["--compress", "zstd"])
+
+    # The stream really carries compression id 16.
+    from ttio.enums import Compression
+    assert bytes([int(Compression.ZSTD)]) in tis.read_bytes()
+
+    rt = tmp_path / f"rt_zstd_to_{dec_lang}.tio"
+    DECODERS[dec_lang](tis, rt)
+    with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
+        ms_spec.assert_content_equals(a, b)

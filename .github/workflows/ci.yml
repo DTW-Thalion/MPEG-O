@@ -44,6 +44,12 @@ jobs:
           libs-base-ref: ${{ env.LIBS_BASE_REF }}
           install-prefix: ${{ env.INSTALL_PREFIX }}
 
+      # libTTIO links -lzstd for the transport wire codec (id 16).
+      - name: Install libzstd headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libzstd-dev
+
       - uses: ./.github/actions/setup-hdf5
 
       - uses: ./.github/actions/setup-libarrow
@@ -590,8 +596,8 @@ jobs:
           libs-base-ref: ${{ env.LIBS_BASE_REF }}
           install-prefix: ${{ env.INSTALL_PREFIX }}
 
-      - name: Install cross-compat extras (samtools for V4EdgeCasesTest)
-        run: sudo apt-get install -y --no-install-recommends samtools
+      - name: Install cross-compat extras (samtools for V4EdgeCasesTest; libzstd for the wire codec)
+        run: sudo apt-get install -y --no-install-recommends samtools libzstd-dev
 
       - uses: ./.github/actions/setup-hdf5
 

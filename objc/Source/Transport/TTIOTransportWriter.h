@@ -7,6 +7,7 @@
 #import <Foundation/Foundation.h>
 #import "TTIOTransportPacket.h"
 #import "TTIOAccessUnit.h"
+#import "ValueClasses/TTIOEnums.h"
 
 @class TTIOSpectralDataset;
 @class TTIOAcquisitionRun;
@@ -122,10 +123,18 @@ NS_ASSUME_NONNULL_BEGIN
  *  (sets TTIOTransportPacketFlagHasChecksum). Default NO. */
 @property (nonatomic) BOOL useChecksum;
 
-/** Compress each channel's float64 bytes with zlib on the wire,
- *  setting ``TTIOCompressionZlib`` on the ChannelData. The reader
+/** Compress each channel's float64 bytes on the wire, setting the
+ *  matching compression id on the ChannelData. The reader
  *  decompresses automatically regardless of this flag. Default NO. */
 @property (nonatomic) BOOL useCompression;
+
+/** Codec used when ``useCompression`` is YES: zlib (wire id 1,
+ *  default) or zstd level 3 (wire id 16) when set to
+ *  ``TTIOCompressionZstd``. Only ``TTIOCompressionZlib`` and
+ *  ``TTIOCompressionZstd`` are valid. Readers older than the zstd
+ *  addition reject id 16, so flip a deployment to zstd only after
+ *  its readers are current. */
+@property (nonatomic) TTIOCompression compressionCodec;
 
 /** Phase 2c-T: when YES, probe each genomic run for v2 codec blobs
  *  and emit BlobV2* packets carrying them verbatim. Allows the

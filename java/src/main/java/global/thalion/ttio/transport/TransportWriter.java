@@ -53,6 +53,9 @@ public final class TransportWriter implements AutoCloseable {
     private final boolean ownsStream;
     private boolean useChecksum = false;
     private boolean useCompression = false;
+    /** AU channel codec when {@link #useCompression} is on:
+     *  "zlib" (wire id 1, default) or "zstd" (wire id 16, level 3). */
+    private String compressionCodec = "zlib";
     /** Phase 2c-T: when true, probe each genomic run for v2 codec
      *  blobs and emit BlobV2* packets carrying them verbatim. */
     private boolean useBulkMode = false;
@@ -72,6 +75,18 @@ public final class TransportWriter implements AutoCloseable {
     public void setUseBulkMode(boolean v) { this.useBulkMode = v; }
     public boolean useCompression() { return useCompression; }
     public boolean useBulkMode() { return useBulkMode; }
+
+    /** Select the AU channel codec used when compression is on:
+     *  "zlib" (default) or "zstd". */
+    public void setCompressionCodec(String codec) {
+        if (!"zlib".equals(codec) && !"zstd".equals(codec)) {
+            throw new IllegalArgumentException(
+                "unsupported compressionCodec '" + codec
+                + "'; expected \"zlib\" or \"zstd\"");
+        }
+        this.compressionCodec = codec;
+    }
+    public String compressionCodec() { return compressionCodec; }
 
     @Override
     public void close() throws IOException {
@@ -1098,7 +1113,8 @@ public final class TransportWriter implements AutoCloseable {
             int n = run.spectrumCount();
             List<String> channelNames = new ArrayList<>(run.channels().keySet());
             for (int i = 0; i < n; i++) {
-                AccessUnit au = spectrumToAccessUnit(run, i, channelNames, useCompression);
+                AccessUnit au = spectrumToAccessUnit(run, i, channelNames,
+                        useCompression, compressionCodec);
                 writeAccessUnit(id, i, au);
             }
             writeEndOfDataset(id, n);
@@ -1366,12 +1382,19 @@ public final class TransportWriter implements AutoCloseable {
 
     static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
                                               List<String> channelNames) {
-        return spectrumToAccessUnit(run, i, channelNames, false);
+        return spectrumToAccessUnit(run, i, channelNames, false, "zlib");
     }
 
     static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
                                               List<String> channelNames,
                                               boolean useCompression) {
+        return spectrumToAccessUnit(run, i, channelNames, useCompression, "zlib");
+    }
+
+    static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
+                                              List<String> channelNames,
+                                              boolean useCompression,
+                                              String compressionCodec) {
         Spectrum sp = run.objectAtIndex(i);
         int wireClass = wireFromSpectrumClassName(run.spectrumClassName());
         int msLevel = 0;
@@ -1399,7 +1422,10 @@ public final class TransportWriter implements AutoCloseable {
             for (int k = 0; k < len; k++) buf.putDouble(all[off + k]);
             byte[] payload = raw;
             int compressionCode = Enums.Compression.NONE.ordinal();
-            if (useCompression) {
+            if (useCompression && "zstd".equals(compressionCodec)) {
+                payload = zstdCompress(raw);
+                compressionCode = Enums.Compression.ZSTD.ordinal();
+            } else if (useCompression) {
                 payload = zlibDeflate(raw);
                 compressionCode = Enums.Compression.ZLIB.ordinal();
             }
@@ -1421,6 +1447,14 @@ public final class TransportWriter implements AutoCloseable {
                 bpi,
                 channels,
                 0, 0, 0);
+    }
+
+    private static byte[] zstdCompress(byte[] input) {
+        io.airlift.compress.zstd.ZstdCompressor c =
+                new io.airlift.compress.zstd.ZstdCompressor();
+        byte[] buf = new byte[c.maxCompressedLength(input.length)];
+        int n = c.compress(input, 0, input.length, buf, 0, buf.length);
+        return java.util.Arrays.copyOf(buf, n);
     }
 
     private static byte[] zlibDeflate(byte[] input) {

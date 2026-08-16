@@ -223,6 +223,43 @@ class TestCompression:
         finally:
             rt.close()
 
+    def test_zstd_wire_compression_roundtrip(self, tmp_path):
+        """compression_codec="zstd" emits wire id 16 and the reader
+        restores the values bit-exactly."""
+        import numpy as np
+        src = _make_minimal_dataset(tmp_path / "src.tio")
+
+        plain = tmp_path / "plain.tis"
+        compressed = tmp_path / "zstd.tis"
+        file_to_transport(src, plain)
+        file_to_transport(src, compressed, use_compression=True,
+                          compression_codec="zstd")
+        assert compressed.stat().st_size <= plain.stat().st_size + 64
+        # The wire byte 16 actually appears in the stream.
+        from ttio.enums import Compression
+        assert bytes([int(Compression.ZSTD)]) in compressed.read_bytes()
+
+        rt = transport_to_file(compressed, tmp_path / "rt.tio")
+        original = SpectralDataset.open(src)
+        try:
+            for name in original.all_runs:
+                ra, rb = original.all_runs[name], rt.all_runs[name]
+                for i in range(len(ra)):
+                    for c in ra.channel_names:
+                        assert np.array_equal(
+                            np.asarray(ra[i].signal_array(c).data),
+                            np.asarray(rb[i].signal_array(c).data),
+                        )
+        finally:
+            original.close()
+            rt.close()
+
+    def test_unknown_compression_codec_rejected(self, tmp_path):
+        import pytest
+        from ttio.transport import TransportWriter
+        with pytest.raises(ValueError, match="compression_codec"):
+            TransportWriter(tmp_path / "x.tis", compression_codec="brotli")
+
 
 class TestChecksum:
 

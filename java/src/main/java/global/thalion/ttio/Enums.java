@@ -146,7 +146,16 @@ public final class Enums {
          * {@code Compression.NAME_TOKENIZED_V2} and ObjC
          * {@code TTIOCompressionNameTokenizedV2}.
          */
-        NAME_TOKENIZED_V2
+        NAME_TOKENIZED_V2,
+        /**
+         * Zstandard (RFC 8878), codec id 16. Wire-only today: an
+         * opt-in codec for spectral access-unit channels on the
+         * transport stream; no on-disk {@code @compression} dispatch
+         * is wired for it yet. Cross-language ordinal {@code = 16}
+         * matches Python {@code Compression.ZSTD} and ObjC
+         * {@code TTIOCompressionZstd}.
+         */
+        ZSTD
     }
 
     /** Ion polarity for mass spectrometry. */

@@ -643,10 +643,16 @@ class TransportReader:
                 compression = pl[off]; off += 1
                 (payload_len,) = struct.unpack_from("<I", pl, off); off += 4
                 raw = bytes(pl[off:off + payload_len])
-                if compression != 0:
+                # §4.17 pixel enum: 0=none, 1=zstd, 2=zlib. Writers
+                # emit 0 today; the inflate paths make the enum real.
+                if compression == 1:
+                    raw = _zstd_decompress(raw, 1 << 27)
+                elif compression == 2:
+                    raw = zlib.decompress(raw)
+                elif compression != 0:
                     raise ValueError(
-                        f"IMAGE_PIXEL compression={compression} not yet "
-                        "supported (NONE only at Task 2.6)"
+                        f"IMAGE_PIXEL compression={compression} not "
+                        "supported (0=none, 1=zstd, 2=zlib)"
                     )
                 if precision not in (0, 1):
                     raise ValueError(
@@ -1205,10 +1211,12 @@ def _ingest_access_unit_bytes(rd: dict, payload: bytes) -> None:
             raw = data
         elif compression == _COMPRESSION_ZLIB_WIRE:
             raw = zlib.decompress(data)
+        elif compression == _COMPRESSION_ZSTD_WIRE:
+            raw = _zstd_decompress(data, n_elements * 8)
         else:
             raise NotImplementedError(
                 f"compression {compression} not yet supported "
-                "(current codec: NONE, ZLIB)"
+                "(current codec: NONE, ZLIB, ZSTD)"
             )
         arr = np.frombuffer(raw, dtype="<f8").copy()
         seen[name] = True
@@ -1239,6 +1247,17 @@ def _ingest_access_unit_bytes(rd: dict, payload: bytes) -> None:
 _FLOAT64_WIRE = int(Precision.FLOAT64)
 _COMPRESSION_NONE_WIRE = int(Compression.NONE)
 _COMPRESSION_ZLIB_WIRE = int(Compression.ZLIB)
+_COMPRESSION_ZSTD_WIRE = int(Compression.ZSTD)
+
+
+def _zstd_decompress(data: bytes, max_output_size: int) -> bytes:
+    """One-shot zstd decompress. ``max_output_size`` backstops frames
+    without an embedded content size (the channel header supplies the
+    exact plaintext size)."""
+    import zstandard
+
+    return zstandard.ZstdDecompressor().decompress(
+        data, max_output_size=max_output_size)
 
 
 def _ingest_access_unit(rd: dict, au: AccessUnit) -> None:
@@ -1252,10 +1271,12 @@ def _ingest_access_unit(rd: dict, au: AccessUnit) -> None:
             raw = ch.data
         elif ch.compression == int(Compression.ZLIB):
             raw = zlib.decompress(ch.data)
+        elif ch.compression == int(Compression.ZSTD):
+            raw = _zstd_decompress(ch.data, ch.n_elements * 8)
         else:
             raise NotImplementedError(
                 f"compression {ch.compression} not yet supported "
-                "(current codec: NONE, ZLIB)"
+                "(current codec: NONE, ZLIB, ZSTD)"
             )
         arr_by_name[ch.name] = np.frombuffer(raw, dtype="<f8").copy()
 

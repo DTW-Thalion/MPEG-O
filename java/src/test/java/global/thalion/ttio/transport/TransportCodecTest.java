@@ -237,6 +237,45 @@ class TransportCodecTest {
     }
 
     @Test
+    void zstdWireCompressionRoundTrips(@TempDir Path dir) throws Exception {
+        try (SpectralDataset src0 = makeFixture(dir)) { /* close */ }
+        SpectralDataset src = SpectralDataset.open(dir.resolve("src.tio").toString());
+
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (TransportWriter tw = new TransportWriter(compressed)) {
+            tw.setUseCompression(true);
+            tw.setCompressionCodec("zstd");
+            tw.writeDataset(src);
+        }
+        src.close();
+
+        // The wire byte 16 (Compression.ZSTD) appears in the stream.
+        byte[] streamBytes = compressed.toByteArray();
+        boolean sawZstd = false;
+        for (byte b : streamBytes) {
+            if ((b & 0xFF) == Enums.Compression.ZSTD.ordinal()) { sawZstd = true; break; }
+        }
+        assertTrue(sawZstd, "expected compression id 16 in the stream");
+
+        Path out = dir.resolve("rt_zstd.tio");
+        try (TransportReader tr = new TransportReader(streamBytes);
+             SpectralDataset rt = tr.materializeTo(out.toString())) {
+            AcquisitionRun run = rt.msRuns().get("run_0001");
+            assertNotNull(run);
+            assertEquals(3, run.spectrumCount());
+            MassSpectrum s1 = (MassSpectrum) run.objectAtIndex(1);
+            assertEquals(500.25, s1.precursorMz(), 1e-9);
+        }
+    }
+
+    @Test
+    void unknownCompressionCodecIsRejected() {
+        TransportWriter tw = new TransportWriter(new ByteArrayOutputStream());
+        assertThrows(IllegalArgumentException.class,
+                () -> tw.setCompressionCodec("brotli"));
+    }
+
+    @Test
     void checksumCorruptionIsDetected(@TempDir Path dir) throws Exception {
         try (SpectralDataset src = makeFixture(dir)) { /* close */ }
         SpectralDataset src = SpectralDataset.open(dir.resolve("src.tio").toString());

@@ -959,12 +959,27 @@ public final class TransportReader implements AutoCloseable {
         int payloadLen = (int) payloadLenLong;
         byte[] raw = new byte[payloadLen];
         bb.get(raw);
-        if (compression != 0) {
-            // Writer always emits compression=NONE today; defer
-            // ZLIB/zstd inflation until a fixture requires it.
+        // §4.17 pixel enum: 0=none, 1=zstd, 2=zlib. Writers emit 0
+        // today; the inflate paths make the enum real.
+        if (compression == 1) {
+            io.airlift.compress.zstd.ZstdDecompressor zd =
+                    new io.airlift.compress.zstd.ZstdDecompressor();
+            long plain = io.airlift.compress.zstd.ZstdDecompressor
+                    .getDecompressedSize(raw, 0, raw.length);
+            if (plain < 0 || plain > (1 << 27)) {
+                throw new IllegalStateException(
+                    "IMAGE_PIXEL zstd frame without a sane content size: "
+                    + plain);
+            }
+            byte[] out = new byte[(int) plain];
+            zd.decompress(raw, 0, raw.length, out, 0, out.length);
+            raw = out;
+        } else if (compression == 2) {
+            raw = zlibInflate(raw);
+        } else if (compression != 0) {
             throw new IllegalStateException(
                 "IMAGE_PIXEL compression=" + compression
-                + " not yet supported (NONE only at Task 1.7)");
+                + " not supported (0=none, 1=zstd, 2=zlib)");
         }
         if (precision != 0 && precision != 1) {
             throw new IllegalStateException(
@@ -1592,9 +1607,14 @@ public final class TransportReader implements AutoCloseable {
                     raw = ch.data;
                 } else if (ch.compression == Enums.Compression.ZLIB.ordinal()) {
                     raw = zlibInflate(ch.data);
+                } else if (ch.compression == Enums.Compression.ZSTD.ordinal()) {
+                    // The channel header carries the exact plaintext
+                    // element count, so decompress into an exact buffer.
+                    raw = zstdDecompress(ch.data, ch.nElements * 8);
                 } else {
                     throw new IllegalStateException(
-                            "reader supports NONE/ZLIB compression only, got " + ch.compression);
+                            "reader supports NONE/ZLIB/ZSTD compression only, got "
+                            + ch.compression);
                 }
                 int n = raw.length / 8;
                 double[] arr = new double[n];
@@ -1662,6 +1682,19 @@ public final class TransportReader implements AutoCloseable {
             }
             return out;
         }
+    }
+
+    private static byte[] zstdDecompress(byte[] input, int plainLength) {
+        io.airlift.compress.zstd.ZstdDecompressor d =
+                new io.airlift.compress.zstd.ZstdDecompressor();
+        byte[] out = new byte[plainLength];
+        int n = d.decompress(input, 0, input.length, out, 0, out.length);
+        if (n != plainLength) {
+            throw new IllegalStateException(
+                    "zstd payload inflated to " + n + " bytes; expected "
+                    + plainLength);
+        }
+        return out;
     }
 
     private static byte[] zlibInflate(byte[] input) {

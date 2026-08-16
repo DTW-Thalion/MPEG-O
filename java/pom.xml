@@ -120,6 +120,16 @@
             <version>1.5.7</version>
         </dependency>
 
+        <!-- zstd wire codec (transport compression id 16). Pure-JVM
+             zstd implementation (also used by Trino/Parquet); Python
+             uses the zstandard wheel and ObjC links system libzstd —
+             all three produce/consume standard RFC 8878 frames. -->
+        <dependency>
+            <groupId>io.airlift</groupId>
+            <artifactId>aircompressor</artifactId>
+            <version>0.27</version>
+        </dependency>
+
         <!-- v1.5.0: htsjdk replaces the samtools subprocess in
              importers/BamReader + exporters/BamWriter / CramWriter.
              Pure-Java SAM/BAM/CRAM read+write so tio-browser works

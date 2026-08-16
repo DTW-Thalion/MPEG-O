@@ -295,7 +295,7 @@ libTTIO_OBJC_FILES = \
 libTTIO_OBJCC_FILES = \
 	Transport/TTIOArrowIpcBridge.mm
 
-libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lcrypto -lsqlite3 -lwebsockets -larrow -lstdc++
+libTTIO_LIBRARIES_DEPEND_UPON += -lhdf5 -lhdf5_hl -lz -lzstd -lcrypto -lsqlite3 -lwebsockets -larrow -lstdc++
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/library.make

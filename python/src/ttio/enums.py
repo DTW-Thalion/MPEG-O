@@ -106,6 +106,11 @@ class Compression(IntEnum):
     # @compression = 15. Default read_names codec from v1.8 onward
     # (no opt-out — v1.0 reset removed the user-facing flag).
     NAME_TOKENIZED_V2 = 15
+    # Zstandard (RFC 8878). Wire-only today: an opt-in codec for
+    # spectral access-unit channels on the transport stream
+    # (TransportWriter compression_codec="zstd"); no on-disk
+    # @compression dispatch is wired for it yet.
+    ZSTD = 16
 
 
 class ByteOrder(IntEnum):
