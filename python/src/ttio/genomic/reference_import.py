@@ -183,6 +183,8 @@ class ReferenceImport:
             except ValueError:
                 md5_bytes = b""
 
+        from . import packed_reference
+
         chrom_names: list[str] = []
         sequences: list[bytes] = []
         chroms_grp = ref_group.open_group("chromosomes")
@@ -190,15 +192,11 @@ class ReferenceImport:
             for name in chroms_grp.child_names():
                 chrom_grp = chroms_grp.open_group(name)
                 try:
-                    ds = chrom_grp.open_dataset("data")
-                    try:
-                        arr = ds.read()
-                        # Primitive UINT8 datasets always come back as
-                        # ndarray per the StorageDataset contract.
-                        chrom_names.append(name)
-                        sequences.append(bytes(arr))
-                    finally:
-                        ds.close()
+                    # Dispatches on layout: data_packed (2-bit + run
+                    # mask) when present, legacy raw data otherwise.
+                    chrom_names.append(name)
+                    sequences.append(
+                        packed_reference.read_chromosome_bytes(chrom_grp))
                 finally:
                     chrom_grp.close()
         finally:
@@ -235,8 +233,14 @@ class ReferenceImport:
               alphabetic order:
 
             attr ``length`` : int64 sequence length in bytes.
-            ``data`` : UINT8 dataset of the chromosome's sequence
-                bytes (case-preserving, no newlines), ZLIB-compressed.
+            ``data_packed`` : UINT8 dataset holding the 2-bit + run-mask
+                packed stream (``packed_reference`` layout), ZLIB-
+                compressed — written when packing beats the raw bytes.
+            ``data`` : UINT8 dataset of the chromosome's raw sequence
+                bytes (case-preserving, no newlines), ZLIB-compressed —
+                the fallback when packing does not win (soft-masked or
+                IUPAC-dense sequences), and the only layout pre-change
+                readers understand.
 
         ``@total_bases`` (a v1.1.0-era attribute written here only,
         never by the canonical embed-helper / Java writer) is no
@@ -268,12 +272,9 @@ class ReferenceImport:
             If ``dataset``'s storage backend doesn't expose a provider
             (an open dataset always does).
         """
-        import numpy as np
-
         from .. import _hdf5_io as io
-        from ..enums import Compression as _Compression
-        from ..enums import Precision as _Precision
         from ..io.progress import _fire
+        from . import packed_reference
 
         provider = getattr(dataset, "provider", None)
         if provider is None:
@@ -322,14 +323,5 @@ class ReferenceImport:
             seq = self.chromosome(name)
             c = chroms_grp.create_group(name)
             io.write_int_attr(c, "length", len(seq))
-            arr = np.frombuffer(seq, dtype=np.uint8)
-            ds = c.create_dataset(
-                "data",
-                _Precision.UINT8,
-                length=int(arr.shape[0]),
-                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-                compression=_Compression.ZLIB,
-                compression_level=6,
-            )
-            ds.write(arr)
+            packed_reference.write_chromosome_dataset(c, seq)
             _fire(progress, i + 1, total)

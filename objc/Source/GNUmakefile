@@ -44,6 +44,7 @@ libTTIO_HEADER_FILES = \
 	Genomics/TTIOGenomicIndex.h \
 	Genomics/TTIOWrittenGenomicRun.h \
 	Genomics/TTIOGenomicRun.h \
+	Genomics/TTIOPackedReference.h \
 	Genomics/TTIOReferenceImport.h \
 	Dataset/TTIOFeature.h \
 	Dataset/TTIOIdentification.h \
@@ -183,6 +184,7 @@ libTTIO_OBJC_FILES = \
 	Genomics/TTIOGenomicIndex.m \
 	Genomics/TTIOWrittenGenomicRun.m \
 	Genomics/TTIOGenomicRun.m \
+	Genomics/TTIOPackedReference.m \
 	Genomics/TTIOReferenceImport.m \
 	Dataset/TTIOFeature.m \
 	Dataset/TTIOIdentification.m \

@@ -140,19 +140,13 @@ public final class ReferenceResolver {
                         + "' — covered_chromosomes are " + covered);
                 }
                 try (Hdf5Group chrom = chroms.openGroup(chromosome)) {
-                    // Wrap as StorageDataset for typed read.
+                    // Wrap as StorageGroup for the layout dispatch:
+                    // data_packed (2-bit + run mask) when present,
+                    // legacy raw data otherwise.
                     var adapter = global.thalion.ttio.providers
                         .Hdf5Provider.adapterForGroup(chrom);
-                    try (StorageDataset ds = adapter.openDataset("data")) {
-                        long total = ds.shape()[0];
-                        Object raw = ds.readSlice(0L, total);
-                        if (raw instanceof byte[] arr) {
-                            return arr;
-                        }
-                        throw new RefMissingException(
-                            "embedded reference '" + uri + "/" + chromosome
-                            + "/data' is not a uint8 dataset");
-                    }
+                    return global.thalion.ttio.genomics.PackedReference
+                        .readChromosomeBytes(adapter);
                 }
             }
         }

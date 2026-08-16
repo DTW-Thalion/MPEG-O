@@ -1203,9 +1203,29 @@ embeds the covered chromosome sequences at:
   chromosomes/
     <chrom_name>/
       @length      : int64 — chromosome length in bases
-      data         : 1-D uint8 dataset of uppercase ACGTN bytes
-                     (zlib-compressed)
+      data_packed  : 1-D uint8 dataset holding the packed stream
+                     (zlib-compressed) — written when packing wins
+      data         : 1-D uint8 dataset of raw sequence bytes
+                     (zlib-compressed) — the fallback layout, and the
+                     only one pre-change readers understand
 ```
+
+Exactly one of `data_packed` / `data` is present per chromosome.
+The packed stream (big-endian, version byte `0x01`) is a 2-bit ACGT
+body plus a run mask: `version(u8) || original_length(u32) ||
+run_count(u32) || run_count × (position(u32) || length(u32)) ||
+run_bytes || packed_body`. Runs are maximal stretches of non-ACGT
+bytes (N blocks, IUPAC codes, soft-masked lowercase), recorded with
+their original bytes so decode is byte-exact; the body packs the
+remaining ACGT bytes 4-per-byte, first base in the two
+highest-order bits. Writers pack only when the sequence is ≥ 50%
+uppercase ACGT AND the packed stream is smaller than the raw bytes
+— the decision is deterministic on content, so all three reference
+implementations choose the same layout. On chr22 the packed layout
+lands at 8.24 MB against 9.71 MB for raw + zlib. Readers probe
+`data_packed` first and fall back to `data`; pre-change readers
+fail with a missing-`data` error on packed chromosomes rather than
+misreading bytes.
 
 **Auto-deduplication:** when multiple runs in the same `.tio` file
 share a `reference_uri`, the writer embeds the reference at this

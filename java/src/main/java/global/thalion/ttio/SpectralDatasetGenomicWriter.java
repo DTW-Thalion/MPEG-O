@@ -786,19 +786,11 @@ final class SpectralDatasetGenomicWriter {
                             byte[] seq = chromSeqs.get(chromName);
                             try (var c = chromsGrp.createGroup(chromName)) {
                                 c.setAttribute("length", (long) seq.length);
-                                global.thalion.ttio.providers.StorageDataset ds;
-                                try {
-                                    ds = c.createDataset("data",
-                                        Enums.Precision.UINT8, seq.length,
-                                        65536, Enums.Compression.ZLIB, 6);
-                                } catch (UnsupportedOperationException e) {
-                                    ds = c.createDataset("data",
-                                        Enums.Precision.UINT8, seq.length,
-                                        0, Enums.Compression.NONE, 0);
-                                }
-                                try (var closeMe = ds) {
-                                    closeMe.writeAll(seq);
-                                }
+                                // data_packed when packing wins, raw
+                                // data otherwise (same dispatch as
+                                // ReferenceImport.writeToDataset).
+                                global.thalion.ttio.genomics.PackedReference
+                                    .writeChromosomeDataset(c, seq);
                             }
                         }
                     }

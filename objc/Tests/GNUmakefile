@@ -81,6 +81,7 @@ TTIOTests_OBJC_FILES = \
 	TestM83Rans.m \
 	TestCodecRegistry.m \
 	TestM84BasePack.m \
+	TestPackedReference.m \
 	TestM85Quality.m \
 	TestM86GenomicCodecWiring.m \
 	TestM94ZFqzcompPerf.m \

@@ -17,6 +17,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOReferenceImport.h"
+#import "TTIOPackedReference.h"
 #import "Dataset/TTIOSpectralDataset.h"
 #import "ValueClasses/TTIOEnums.h"
 #import <openssl/evp.h>
@@ -159,13 +160,13 @@ static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
             id<TTIOStorageGroup> chromGrp =
                 [chromsGrp openGroupNamed:cname error:NULL];
             if (chromGrp == nil) continue;
-            id<TTIOStorageDataset> ds =
-                [chromGrp openDatasetNamed:@"data" error:NULL];
-            if (ds == nil) continue;
-            id raw = [ds readAll:NULL];
-            if (![raw isKindOfClass:[NSData class]]) continue;
+            /* Dispatches on layout: data_packed (2-bit + run mask)
+               when present, legacy raw data otherwise. */
+            NSData *raw = [TTIOPackedReference readChromosomeBytes:chromGrp
+                                                             error:NULL];
+            if (raw == nil) continue;
             [chromNames addObject:cname];
-            [seqs addObject:(NSData *)raw];
+            [seqs addObject:raw];
         }
     }
 
@@ -306,16 +307,10 @@ static NSData *_TTIO_ParseMd5HexLocal(NSString *hex)
         if (![cg setAttributeValue:@((int64_t)seq.length)
                            forName:@"length"
                              error:error]) return NO;
-        id<TTIOStorageDataset> ds =
-            [cg createDatasetNamed:@"data"
-                          precision:TTIOPrecisionUInt8
-                             length:seq.length
-                          chunkSize:65536
-                        compression:TTIOCompressionZlib
-                   compressionLevel:6
-                              error:error];
-        if (ds == nil) return NO;
-        if (![ds writeAll:seq error:error]) return NO;
+        /* data_packed when packing wins, raw data otherwise. */
+        if (![TTIOPackedReference writeChromosomeDataset:cg
+                                                sequence:seq
+                                                   error:error]) return NO;
         progress(++done, total);  // (i+1, N) per contig
     }
     return YES;

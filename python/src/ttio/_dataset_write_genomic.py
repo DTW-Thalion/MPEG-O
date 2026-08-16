@@ -12,6 +12,7 @@ import h5py
 import numpy as np
 
 from . import _hdf5_io as io
+from .genomic import packed_reference
 from .genomic.reference_import import ReferenceImport
 from .written_genomic_run import WrittenGenomicRun
 from ._dataset_write_metadata import _write_provenance
@@ -111,7 +112,7 @@ def _embed_references_for_runs(
     ``StorageGroup``.
     """
     from .codecs._registry import CODEC_REGISTRY
-    from .enums import Compression as _Compression, Precision as _Precision
+    from .enums import Compression as _Compression
     from .providers.hdf5 import _Group as _H5Group
 
     from .codecs import ref_diff_v2 as _rdv2_meta
@@ -184,16 +185,7 @@ def _embed_references_for_runs(
             seq = chrom_seqs[chrom_name]
             c = chroms_grp.create_group(chrom_name)
             io.write_int_attr(c, "length", len(seq))
-            arr = np.frombuffer(seq, dtype=np.uint8)
-            ds = c.create_dataset(
-                "data",
-                _Precision.UINT8,
-                length=int(arr.shape[0]),
-                chunk_size=io.DEFAULT_SIGNAL_CHUNK,
-                compression=_Compression.ZLIB,
-                compression_level=6,
-            )
-            ds.write(arr)
+            packed_reference.write_chromosome_dataset(c, seq)
 
 
 def _is_valid_compression(value: object) -> bool:

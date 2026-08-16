@@ -100,8 +100,9 @@ class ReferenceResolver:
                     f"reference {uri!r} — covered_chromosomes are "
                     f"{sorted(chroms.child_names())}"
                 )
-            data_ds = chroms.open_group(chromosome).open_dataset("data")
-            return bytes(np.asarray(data_ds.read()).tobytes())
+            from . import packed_reference
+            return packed_reference.read_chromosome_bytes(
+                chroms.open_group(chromosome))
 
         # 2. Try external FASTA.
         if self._external is not None and self._external.exists():
