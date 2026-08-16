@@ -37,7 +37,15 @@ old one.
   the PXD000001 Orbitrap corpus: profile m/z 174.0 → 137.1 MB (−21%), all four signal
   channels together −16%, at lower encode cost. The filter is self-describing, so every existing
   reader — including pre-change releases and plain h5py/h5dump — reads the new files
-  unchanged, and old files stay valid.
+  unchanged, and old files stay valid. (#280)
+- **Packed embedded references.** Reference chromosomes under
+  `/study/references/…/chromosomes/…/` now store a 2-bit ACGT body plus a run mask
+  (`data_packed`) instead of raw bytes when packing wins — chr22 drops 9.71 → 8.24 MB
+  (−15%) with encode 13× faster. Sequences that would not benefit (soft-masked,
+  IUPAC-dense) keep the raw `data` layout, chosen deterministically from content in all
+  three languages, and readers fall back to `data` transparently, so old files read
+  unchanged. Pre-change readers fail with a missing-`data` error on packed chromosomes
+  instead of misreading bytes. Cross-language byte-exact via a shared golden stream.
 - **`ttio` builds as a PyPI package.** A scikit-build-core backend, an sdist that vendors
   the `native/` sources, and cibuildwheel manylinux/macOS/Windows wheels that bundle
   `libttio_rans` into `ttio/.libs` so the native codecs resolve with no environment

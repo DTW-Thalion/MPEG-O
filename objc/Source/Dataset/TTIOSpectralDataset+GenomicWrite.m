@@ -28,6 +28,7 @@
 #import "Spectra/TTIONMRSpectrum.h"
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
+#import "Genomics/TTIOPackedReference.h"
 #import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Types.h"
@@ -1380,16 +1381,21 @@ static BOOL _TTIO_M93_EmbedReferences(TTIOHDF5Group *study,
             NSData *seq = seqs[cname];
             if (![cg setIntegerAttribute:@"length"
                                     value:(int64_t)seq.length error:error]) return NO;
+            /* data_packed when packing wins, raw data otherwise (same
+               dispatch as TTIOReferenceImport writeToDataset). */
+            NSString *dsName = nil;
+            NSData *payload =
+                [TTIOPackedReference payloadForSequence:seq datasetName:&dsName];
             TTIOHDF5Dataset *ds =
-                [cg createDatasetNamed:@"data"
+                [cg createDatasetNamed:dsName
                               precision:TTIOPrecisionUInt8
-                                 length:seq.length
+                                 length:payload.length
                               chunkSize:65536
                             compression:TTIOCompressionZlib
                        compressionLevel:6
                                   error:error];
             if (!ds) return NO;
-            if (![ds writeData:seq error:error]) return NO;
+            if (![ds writeData:payload error:error]) return NO;
         }
     }
     return YES;

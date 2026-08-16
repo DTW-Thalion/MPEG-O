@@ -5,6 +5,7 @@
  */
 
 #import "Codecs/TTIOReferenceResolver.h"
+#import "Genomics/TTIOPackedReference.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Dataset.h"
 
@@ -120,7 +121,11 @@ static NSData *hexToData(NSString *hex)
     }
     TTIOHDF5Group *chromG = [chromsG openGroupNamed:chromosome error:&e];
     if (!chromG) return nil;
-    TTIOHDF5Dataset *ds = [chromG openDatasetNamed:@"data" error:&e];
+    /* Layout dispatch: data_packed (2-bit + run mask) when present,
+       legacy raw data otherwise. */
+    BOOL packed = [chromG hasChildNamed:@"data_packed"];
+    TTIOHDF5Dataset *ds =
+        [chromG openDatasetNamed:(packed ? @"data_packed" : @"data") error:&e];
     if (!ds) return nil;
     NSData *bytes = [ds readDataWithError:&e];
     if (!bytes) {
@@ -128,6 +133,16 @@ static NSData *hexToData(NSString *hex)
             @"chromosome %@ data dataset read failed: %@", chromosome,
             e.localizedDescription);
         return nil;
+    }
+    if (packed) {
+        NSData *decoded = [TTIOPackedReference decode:bytes error:&e];
+        if (!decoded) {
+            rr_set_error(error, 4,
+                @"chromosome %@ data_packed decode failed: %@", chromosome,
+                e.localizedDescription);
+            return nil;
+        }
+        return decoded;
     }
     return bytes;
 }

@@ -151,10 +151,10 @@ def test_fasta_reference_to_tio_to_fasta_byte_exact(tmp_path: Path) -> None:
             md5_hex = md5_hex.decode("ascii")
         chroms = grp.open_group("chromosomes")
         names = sorted(chroms.child_names())
+        # Layout dispatch: data_packed when present, raw data otherwise.
+        from ttio.genomic import packed_reference
         seqs = [
-            bytes(np.asarray(
-                chroms.open_group(n).open_dataset("data").read()
-            ).tobytes())
+            packed_reference.read_chromosome_bytes(chroms.open_group(n))
             for n in names
         ]
         ref_back = ReferenceImport(
