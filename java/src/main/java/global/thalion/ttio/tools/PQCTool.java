@@ -338,6 +338,16 @@ public final class PQCTool {
                 for (float v : data) bb.putFloat(v);
                 return bb.array();
             }
+            if (tclass == HDF5Constants.H5T_INTEGER && size == 1) {
+                // uint8 codec streams (FLOAT_DELTA_ZSTD channels, the
+                // MS default since Phase 2): canonical bytes are the
+                // raw stream bytes.
+                byte[] data = new byte[(int) total];
+                H5.H5Dread(did, HDF5Constants.H5T_NATIVE_UINT8,
+                        HDF5Constants.H5S_ALL, HDF5Constants.H5S_ALL,
+                        HDF5Constants.H5P_DEFAULT, data);
+                return data;
+            }
             throw new UnsupportedOperationException(
                     "PQCTool canonical read: unsupported HDF5 class="
                     + tclass + " size=" + size);

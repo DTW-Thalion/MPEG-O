@@ -49,6 +49,7 @@
 #import "Codecs/TTIOQuality.h"                 // M86 Phase D
 #import "Codecs/TTIOFqzcompNx16Z.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
+#import "Codecs/TTIOFloatDeltaZstd.h"           // codec id 17, Phase 2 MS default
 #import "Codecs/TTIOMateInfoV2.h"               // inline mate-pair codec
 #import "Codecs/TTIORefDiffV2.h"               // bit-packed ref-diff v2
 #import "Codecs/TTIONameTokenizerV2.h"          // v1.8 #11 ch3: adaptive name-tokenizer v2
@@ -2830,10 +2831,45 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         if (![channels setStringAttribute:@"channel_names"
                                     value:namesJoined error:error]) return NO;
 
+        // Phase 2: "gzip" left at its default resolves to codec 17
+        // on MS runs unless the caller opted out. Matches Python's
+        // write_minimal and the object-mode -writeToGroup: path.
+        BOOL useFloatDelta =
+            [run.signalCompression isEqualToString:@"gzip"]
+            && !run.optDisableFloatDelta
+            && [run.spectrumClassName isEqualToString:@"TTIOMassSpectrum"];
+
         for (NSString *chName in channelNames) {
             NSData *buf = run.channelData[chName];
             NSUInteger total = buf.length / sizeof(double);
             NSString *dsName = [chName stringByAppendingString:@"_values"];
+            if (useFloatDelta) {
+                NSData *stream = [TTIOFloatDeltaZstd encodeFloat64:buf];
+                if (!stream) {
+                    if (error) *error = [NSError
+                        errorWithDomain:@"TTIOSpectralDatasetErrorDomain"
+                                   code:1102
+                               userInfo:@{NSLocalizedDescriptionKey:
+                            [NSString stringWithFormat:
+                                @"FLOAT_DELTA_ZSTD encode failed for '%@'",
+                                dsName]}];
+                    return NO;
+                }
+                TTIOHDF5Dataset *ds =
+                    [channels createDatasetNamed:dsName
+                                       precision:TTIOPrecisionUInt8
+                                          length:stream.length
+                                       chunkSize:65536
+                                     compression:TTIOCompressionNone
+                                compressionLevel:0
+                                           error:error];
+                if (!ds) return NO;
+                if (![ds writeData:stream error:error]) return NO;
+                if (![ds setAttributeValue:@(TTIOCompressionFloatDeltaZstd)
+                                   forName:@"compression"
+                                     error:error]) return NO;
+                continue;
+            }
             TTIOHDF5Dataset *ds =
                 [channels createDatasetNamed:dsName
                                    precision:TTIOPrecisionFloat64

@@ -403,9 +403,26 @@ def encrypt_per_au(
                 values_name = f"{cname}_values"
                 if not sig.has_child(values_name):
                     continue
-                plaintext = np.asarray(
-                    sig.open_dataset(values_name).read()
-                ).astype("<f8", copy=False)
+                ds = sig.open_dataset(values_name)
+                # FLOAT_DELTA_ZSTD (codec id 17, the MS default since
+                # Phase 2): decode to float64 before slicing — the
+                # per-AU segment contract is per-spectrum float64, and
+                # decrypt writes plain float64 back (M90.12 v1 layout).
+                codec_id = io.read_int_attr(ds, "compression",
+                                            default=0) or 0
+                if codec_id == 17:
+                    from .codecs import float_delta_zstd as _fdz
+                    stream = bytes(np.asarray(ds.read(), dtype=np.uint8))
+                    plaintext = _fdz.decode(stream)
+                elif codec_id != 0:
+                    raise ValueError(
+                        f"signal channel {cname!r}: @compression="
+                        f"{codec_id} is not a spectral channel codec "
+                        "(FLOAT_DELTA_ZSTD=17 is the only one wired)"
+                    )
+                else:
+                    plaintext = np.asarray(ds.read()).astype(
+                        "<f8", copy=False)
                 segments = encrypt_channel_to_segments(
                     plaintext, offsets, lengths,
                     dataset_id=dataset_id_counter,

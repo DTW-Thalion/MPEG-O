@@ -830,7 +830,7 @@ HDF5 filter pipeline (codec ids 1–3) or a dedicated per-channel
 | 14 | REF_DIFF_V2            | **Context-aware** reference-based sequence-diff codec. Encoder/decoder consume sibling channels (`positions`, `cigars`) and an external reference resolver alongside the channel bytes. Slice-based wire format with embedded reference at `/study/references/<reference_uri>/`. **Default for the `sequences` channel** when a reference is available; falls back to BASE_PACK silently when not. See `docs/codecs/ref_diff_v2.md`. |
 | 15 | NAME_TOKENIZED_V2      | 8-substream multi-token columnar codec for read names. Substreams: FLAG / POOL_IDX / MATCH_K / COL_TYPES / NUM_DELTA / DICT_CODE / DICT_LIT / VERB_LIT, each auto-picked between rANS-O0 and raw passthrough. Per-block reset every 4096 reads; magic `NTK2`. **Default for the `read_names` channel.** See `docs/codecs/name_tokenizer_v2.md`. |
 | 16 | ZSTD                   | Zstandard (RFC 8878). Wire-only: an opt-in codec for spectral access-unit channels on the transport stream (`transport-spec.md` §4.3). No on-disk `@compression` dispatch. |
-| 17 | FLOAT_DELTA_ZSTD       | Lossless float64 channel codec: per block of 2^20 values, none/delta on the uint64 bit view (chosen by exact size comparison), byte-plane transpose, one zstd frame. Magic `FDZ1`. Values round-trip bit-exactly (NaN payloads, signed zeros, Inf). Opt-in for spectral float64 channels via `signal_compression="float_delta_zstd"`; the dataset becomes a flat uint8 stream with `@compression = 17` and no HDF5 filter. Encoders MAY differ byte-wise across languages (zstd builds differ); decoders MUST accept any conforming stream — a shared golden fixture pins the decode side. Spec at `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`. |
+| 17 | FLOAT_DELTA_ZSTD       | Lossless float64 channel codec: per block of 2^20 values, none/delta on the uint64 bit view (chosen by exact size comparison), byte-plane transpose, one zstd frame. Magic `FDZ1`. Values round-trip bit-exactly (NaN payloads, signed zeros, Inf). The default for float64 channels of `TTIOMassSpectrum` runs (writers opt out via `opt_disable_float_delta` / `optDisableFloatDelta`); other spectral classes opt in via `signal_compression="float_delta_zstd"`. The dataset becomes a flat uint8 stream with `@compression = 17` and no HDF5 filter. Encoders MAY differ byte-wise across languages (zstd builds differ); decoders MUST accept any conforming stream — a shared golden fixture pins the decode side. Spec at `docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`. |
 
 Ids `0`–`3` ride the HDF5 filter pipeline; ids `4`+ are signalled via
 the per-channel `@compression` attribute (see §10.5). Reserved ids
@@ -858,9 +858,11 @@ migration error.
 - Id `15` (NAME_TOKENIZED_V2) applies to the `read_names` channel
   and is the v1.0 default.
 - Id `17` (FLOAT_DELTA_ZSTD) applies to spectral float64 signal
-  channels (`mz`, `intensity`, `chemical_shift`, FID channels).
-  Opt-in; the shipping default for those channels remains the HDF5
-  shuffle + zlib filter pipeline.
+  channels (`mz`, `intensity`, `chemical_shift`, FID channels) and
+  is the default for `TTIOMassSpectrum` runs (Phase 2 of the codec
+  spec; `opt_disable_float_delta` preserves the previous layout).
+  Non-MS spectral channels keep the HDF5 shuffle + zlib filter
+  pipeline as their default and opt in explicitly.
 
 See §10.5 for the `@compression` attribute scheme, §10.6 for the
 `read_names` channel format, §10.7 for the integer-channel

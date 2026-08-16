@@ -93,6 +93,14 @@ NS_ASSUME_NONNULL_BEGIN
  *  to <code>@"gzip"</code>. */
 @property (nonatomic, copy) NSString *signalCompression;
 
+/** Phase 2 of the FLOAT_DELTA_ZSTD spec: MS float64 channels default
+ *  to codec id 17 when <code>signalCompression</code> is left at
+ *  <code>@"gzip"</code>. Set to <code>YES</code> to keep the
+ *  chunked-zlib layout. Python:
+ *  <code>WrittenRun.opt_disable_float_delta</code>; Java:
+ *  <code>AcquisitionRun.setOptDisableFloatDelta</code>. */
+@property (nonatomic) BOOL optDisableFloatDelta;
+
 /** Per-run provenance records. Persisted under the run's group as
  *  <code>provenance/steps</code> (compound dataset) plus a legacy
  *  <code>@provenance_json</code> attribute mirror for backward

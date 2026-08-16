@@ -194,6 +194,24 @@ def read_encrypted_channel(
 # ---------------------------------------------- run-level helpers ---
 
 
+def _plain_f8_from_values(raw, codec_id: int) -> np.ndarray:
+    """Materialize a ``<channel>_values`` dataset as float64.
+
+    FLOAT_DELTA_ZSTD (codec id 17, the MS default since Phase 2 of
+    the float-delta spec) stores a flat uint8 FDZ1 stream; the channel
+    encryption contract is float64 plaintext, so decode before
+    encrypting. Decrypt writes plain float64 back, the same layout
+    downgrade as the per-AU path."""
+    if codec_id == 17:
+        from .codecs import float_delta_zstd as _fdz
+        return _fdz.decode(bytes(np.asarray(raw, dtype=np.uint8)))
+    if codec_id != 0:
+        raise ValueError(
+            f"@compression={codec_id} is not a spectral channel codec "
+            "(FLOAT_DELTA_ZSTD=17 is the only one wired)")
+    return np.asarray(raw).astype("<f8", copy=False)
+
+
 def _encrypt_intensity_in_signal_group(
     sig, key: bytes
 ) -> None:
@@ -220,7 +238,10 @@ def _encrypt_intensity_in_signal_group(
             return
         if not sig.has_child("intensity_values"):
             raise KeyError("intensity_values not found in signal_channels group")
-        plain_arr = np.asarray(sig.open_dataset("intensity_values").read()).astype("<f8", copy=False)
+        from . import _hdf5_io as _io
+        ds = sig.open_dataset("intensity_values")
+        codec_id = _io.read_int_attr(ds, "compression", default=0) or 0
+        plain_arr = _plain_f8_from_values(ds.read(), codec_id)
         original_count = int(plain_arr.shape[0])
         plaintext = plain_arr.tobytes()
         blob = encrypt_bytes(plaintext, key)
@@ -246,7 +267,9 @@ def _encrypt_intensity_in_signal_group(
         return
     if "intensity_values" not in native:
         raise KeyError("intensity_values not found in signal_channels group")
-    plain_arr = native["intensity_values"][()].astype("<f8", copy=False)
+    _plain_ds = native["intensity_values"]
+    plain_arr = _plain_f8_from_values(
+        _plain_ds[()], int(_plain_ds.attrs.get("compression", 0)))
     original_count = int(plain_arr.shape[0])
     plaintext = plain_arr.tobytes()
     blob = encrypt_bytes(plaintext, key)

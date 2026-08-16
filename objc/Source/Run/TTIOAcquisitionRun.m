@@ -449,6 +449,15 @@ static void _buildStdChannelEncoding(void)
         total += [s.signalArrays[_channelNames.firstObject] length];
     }
 
+    // Phase 2: Zlib left at its default resolves to codec 17 on MS
+    // runs unless the caller opted out.
+    TTIOCompression effectiveCompression = _signalCompression;
+    if (_signalCompression == TTIOCompressionZlib
+        && !_optDisableFloatDelta
+        && [_spectrumClassName isEqualToString:@"TTIOMassSpectrum"]) {
+        effectiveCompression = TTIOCompressionFloatDeltaZstd;
+    }
+
     for (NSString *chName in _channelNames) {
         // Concat per-spectrum channel buffers into one flat NSData.
         // NSMutableData would zero-fill the backing store on
@@ -509,7 +518,7 @@ static void _buildStdChannelEncoding(void)
                 [NSString stringWithFormat:@"%@_numpress_fixed_point", chName];
             if (![channels setAttributeValue:@(scale)
                                      forName:spAttr error:error]) return NO;
-        } else if (_signalCompression == TTIOCompressionFloatDeltaZstd) {
+        } else if (effectiveCompression == TTIOCompressionFloatDeltaZstd) {
             /* Codec id 17: the dataset bytes ARE the FDZ1 stream;
                @compression on the dataset is the dispatch signal and
                no HDF5 filter is applied. */

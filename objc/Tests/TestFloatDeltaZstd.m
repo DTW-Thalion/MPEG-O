@@ -10,6 +10,7 @@
 #import "Testing.h"
 #import "Codecs/TTIOFloatDeltaZstd.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Dataset/TTIOWrittenRun.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
 #import "Spectra/TTIOMassSpectrum.h"
@@ -81,6 +82,97 @@ static NSString *fdzFixturePath(void)
         here = [here stringByDeletingLastPathComponent];
     }
     return nil;
+}
+
+// Spectra for the Phase 2 default-flip checks: nSpec spectra of
+// nPts points on the same deterministic grid the end-to-end block
+// uses.
+static NSArray *flipSpectra(NSUInteger nSpec, NSUInteger nPts)
+{
+    NSMutableArray *spectra = [NSMutableArray array];
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    for (NSUInteger k = 0; k < nSpec; k++) {
+        NSMutableData *mzB = [NSMutableData dataWithLength:nPts * sizeof(double)];
+        NSMutableData *inB = [NSMutableData dataWithLength:nPts * sizeof(double)];
+        double *mzv = mzB.mutableBytes, *inv = inB.mutableBytes;
+        for (NSUInteger i = 0; i < nPts; i++) {
+            mzv[i] = 100.0 + (double)(k * nPts + i) * 0.25;
+            inv[i] = (double)(k * 100 + i) + 0.5;
+        }
+        TTIOSignalArray *mzA = [[TTIOSignalArray alloc]
+            initWithBuffer:mzB length:nPts encoding:enc axis:nil];
+        TTIOSignalArray *inA = [[TTIOSignalArray alloc]
+            initWithBuffer:inB length:nPts encoding:enc axis:nil];
+        [spectra addObject:[[TTIOMassSpectrum alloc]
+            initWithMzArray:mzA
+             intensityArray:inA
+                    msLevel:1
+                   polarity:TTIOPolarityPositive
+                 scanWindow:nil
+              indexPosition:k
+            scanTimeSeconds:(double)k
+                precursorMz:0
+            precursorCharge:0
+                      error:NULL]];
+    }
+    return spectra;
+}
+
+static TTIOAcquisitionRun *flipRun(void)
+{
+    TTIOInstrumentConfig *cfg =
+        [[TTIOInstrumentConfig alloc] initWithManufacturer:@""
+                                                     model:@""
+                                              serialNumber:@""
+                                                sourceType:@""
+                                              analyzerType:@""
+                                              detectorType:@""];
+    return [[TTIOAcquisitionRun alloc] initWithSpectra:flipSpectra(4, 8)
+                                       acquisitionMode:TTIOAcquisitionModeMS1DDA
+                                      instrumentConfig:cfg];
+}
+
+static TTIOWrittenRun *flipWrittenRun(void)
+{
+    NSUInteger n = 3, peaks = 4, total = n * peaks;
+    NSMutableData *mzBuf = [NSMutableData dataWithLength:total * sizeof(double)];
+    NSMutableData *inBuf = [NSMutableData dataWithLength:total * sizeof(double)];
+    double *mz = mzBuf.mutableBytes, *inn = inBuf.mutableBytes;
+    for (NSUInteger i = 0; i < total; i++) {
+        mz[i] = 100.0 + 0.25 * (double)i;
+        inn[i] = 1000.0 * (double)(i + 1);
+    }
+    NSMutableData *offsets = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableData *lengths = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    NSMutableData *rts = [NSMutableData dataWithLength:n * sizeof(double)];
+    NSMutableData *mls = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    NSMutableData *pols = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    NSMutableData *pmzs = [NSMutableData dataWithLength:n * sizeof(double)];
+    NSMutableData *pcs = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    NSMutableData *bps = [NSMutableData dataWithLength:n * sizeof(double)];
+    for (NSUInteger i = 0; i < n; i++) {
+        ((int64_t *)offsets.mutableBytes)[i] = (int64_t)(i * peaks);
+        ((uint32_t *)lengths.mutableBytes)[i] = (uint32_t)peaks;
+        ((double *)rts.mutableBytes)[i] = (double)i;
+        ((int32_t *)mls.mutableBytes)[i] = 1;
+        ((int32_t *)pols.mutableBytes)[i] = 1;
+        ((double *)bps.mutableBytes)[i] = 1000.0;
+    }
+    return [[TTIOWrittenRun alloc]
+        initWithSpectrumClassName:@"TTIOMassSpectrum"
+                  acquisitionMode:(int64_t)TTIOAcquisitionModeMS1DDA
+                      channelData:@{@"mz": mzBuf, @"intensity": inBuf}
+                          offsets:offsets
+                          lengths:lengths
+                   retentionTimes:rts
+                         msLevels:mls
+                       polarities:pols
+                     precursorMzs:pmzs
+                 precursorCharges:pcs
+              basePeakIntensities:bps];
 }
 
 void testFloatDeltaZstd(void)
@@ -207,6 +299,116 @@ void testFloatDeltaZstd(void)
                      "codec-17 slices are bit-exact");
             }
         }
+        unlink([tioPath fileSystemRepresentation]);
+    }
+
+    // ── Phase 2: MS channels default to codec 17 ───────────────────
+    {
+        // Object-mode writer, signalCompression left at its default.
+        TTIOAcquisitionRun *run = flipRun();
+        TTIOSpectralDataset *ds = [[TTIOSpectralDataset alloc]
+            initWithTitle:@"flip" isaInvestigationId:@""
+                   msRuns:@{@"run_0001": run} nmrRuns:@{}
+          identifications:@[] quantifications:@[]
+        provenanceRecords:@[] transitions:nil];
+        NSString *tioPath = [NSString stringWithFormat:
+            @"/tmp/ttio_test_fdz_flip_%d.tio", (int)getpid()];
+        unlink([tioPath fileSystemRepresentation]);
+        NSError *werr = nil;
+        PASS([ds writeToFilePath:tioPath error:&werr],
+             "MS default (object mode) writes");
+        NSError *rerr = nil;
+        TTIOSpectralDataset *round =
+            [TTIOSpectralDataset readFromFilePath:tioPath error:&rerr];
+        PASS(round != nil, "MS default (object mode) reopens");
+        if (round) {
+            TTIOAcquisitionRun *rr = round.msRuns[@"run_0001"];
+            PASS(rr.signalCompression == TTIOCompressionFloatDeltaZstd,
+                 "MS default (object mode) resolves to codec 17");
+            NSError *serr = nil;
+            TTIOMassSpectrum *s1 = (TTIOMassSpectrum *)
+                [rr spectrumAtIndex:1 error:&serr];
+            PASS(s1 != nil
+                 && ((const double *)s1.mzArray.buffer.bytes)[0]
+                    == 100.0 + 8.0 * 0.25,
+                 "MS default (object mode) slices are bit-exact");
+        }
+        unlink([tioPath fileSystemRepresentation]);
+
+        // Opt-out preserves the chunked-zlib layout.
+        TTIOAcquisitionRun *run2 = flipRun();
+        run2.optDisableFloatDelta = YES;
+        TTIOSpectralDataset *ds2 = [[TTIOSpectralDataset alloc]
+            initWithTitle:@"flip" isaInvestigationId:@""
+                   msRuns:@{@"run_0001": run2} nmrRuns:@{}
+          identifications:@[] quantifications:@[]
+        provenanceRecords:@[] transitions:nil];
+        unlink([tioPath fileSystemRepresentation]);
+        werr = nil;
+        PASS([ds2 writeToFilePath:tioPath error:&werr],
+             "opt-out (object mode) writes");
+        rerr = nil;
+        TTIOSpectralDataset *round2 =
+            [TTIOSpectralDataset readFromFilePath:tioPath error:&rerr];
+        PASS(round2 != nil
+             && ((TTIOAcquisitionRun *)round2.msRuns[@"run_0001"])
+                    .signalCompression == TTIOCompressionZlib,
+             "opt-out (object mode) keeps zlib");
+        unlink([tioPath fileSystemRepresentation]);
+    }
+    {
+        // writeMinimal (flat-buffer) writer, default TTIOWrittenRun.
+        NSString *tioPath = [NSString stringWithFormat:
+            @"/tmp/ttio_test_fdz_flip_min_%d.tio", (int)getpid()];
+        unlink([tioPath fileSystemRepresentation]);
+        NSError *werr = nil;
+        PASS([TTIOSpectralDataset writeMinimalToPath:tioPath
+                                               title:@"flip"
+                                  isaInvestigationId:@""
+                                              msRuns:@{@"r": flipWrittenRun()}
+                                     identifications:@[]
+                                     quantifications:@[]
+                                   provenanceRecords:@[]
+                                               error:&werr],
+             "MS default (writeMinimal) writes");
+        NSError *rerr = nil;
+        TTIOSpectralDataset *round =
+            [TTIOSpectralDataset readFromFilePath:tioPath error:&rerr];
+        PASS(round != nil, "MS default (writeMinimal) reopens");
+        if (round) {
+            TTIOAcquisitionRun *rr = round.msRuns[@"r"];
+            PASS(rr.signalCompression == TTIOCompressionFloatDeltaZstd,
+                 "MS default (writeMinimal) resolves to codec 17");
+            NSError *serr = nil;
+            TTIOMassSpectrum *s1 = (TTIOMassSpectrum *)
+                [rr spectrumAtIndex:1 error:&serr];
+            PASS(s1 != nil
+                 && ((const double *)s1.mzArray.buffer.bytes)[0]
+                    == 100.0 + 0.25 * 4.0,
+                 "MS default (writeMinimal) values survive");
+        }
+        unlink([tioPath fileSystemRepresentation]);
+
+        // Opt-out on the flat-buffer writer.
+        TTIOWrittenRun *wr2 = flipWrittenRun();
+        wr2.optDisableFloatDelta = YES;
+        werr = nil;
+        PASS([TTIOSpectralDataset writeMinimalToPath:tioPath
+                                               title:@"flip"
+                                  isaInvestigationId:@""
+                                              msRuns:@{@"r": wr2}
+                                     identifications:@[]
+                                     quantifications:@[]
+                                   provenanceRecords:@[]
+                                               error:&werr],
+             "opt-out (writeMinimal) writes");
+        rerr = nil;
+        TTIOSpectralDataset *round2 =
+            [TTIOSpectralDataset readFromFilePath:tioPath error:&rerr];
+        PASS(round2 != nil
+             && ((TTIOAcquisitionRun *)round2.msRuns[@"r"])
+                    .signalCompression == TTIOCompressionZlib,
+             "opt-out (writeMinimal) keeps zlib");
         unlink([tioPath fileSystemRepresentation]);
     }
 

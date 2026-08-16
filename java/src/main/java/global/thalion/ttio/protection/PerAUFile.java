@@ -593,9 +593,24 @@ public final class PerAUFile {
             for (String cname : channelNames) {
                 String valuesName = cname + "_values";
                 if (!sig.hasChild(valuesName)) continue;
+                // FLOAT_DELTA_ZSTD (codec id 17, the MS default since
+                // Phase 2): decode to float64 before slicing — the
+                // per-AU segment contract is per-spectrum float64,
+                // and decrypt writes plain float64 back.
                 double[] values;
                 try (StorageDataset ds = sig.openDataset(valuesName)) {
-                    values = (double[]) ds.readAll();
+                    long codecId = 0L;
+                    if (ds.hasAttribute("compression")) {
+                        Object v = ds.getAttribute("compression");
+                        if (v instanceof Number num) codecId = num.longValue();
+                    }
+                    if (codecId == global.thalion.ttio.Enums.Compression
+                            .FLOAT_DELTA_ZSTD.ordinal()) {
+                        values = global.thalion.ttio.codecs.FloatDeltaZstd
+                                .decode((byte[]) ds.readAll());
+                    } else {
+                        values = (double[]) ds.readAll();
+                    }
                 }
                 byte[] bytes = doublesToLeBytes(values);
                 List<ChannelSegment> segs = PerAUEncryption.encryptChannelToSegments(

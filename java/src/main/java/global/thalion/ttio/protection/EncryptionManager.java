@@ -488,10 +488,23 @@ public final class EncryptionManager {
             // Idempotent: already encrypted
             if (sig.hasChild("intensity_values_encrypted")) return;
 
-            // Read plaintext intensity_values
+            // Read plaintext intensity_values. FLOAT_DELTA_ZSTD
+            // (codec id 17, the MS default since Phase 2) stores a
+            // flat uint8 FDZ1 stream; the channel-encryption contract
+            // is float64 plaintext, so decode first — decrypt writes
+            // plain float64 back, the same layout downgrade as the
+            // per-AU path.
             double[] data;
             try (global.thalion.ttio.hdf5.Hdf5Dataset ds = sig.openDataset("intensity_values")) {
-                data = (double[]) ds.readData();
+                long codecId = ds.hasAttribute("compression")
+                        ? ds.readIntegerAttribute("compression", 0L) : 0L;
+                if (codecId == global.thalion.ttio.Enums.Compression
+                        .FLOAT_DELTA_ZSTD.ordinal()) {
+                    data = global.thalion.ttio.codecs.FloatDeltaZstd
+                            .decode((byte[]) ds.readData());
+                } else {
+                    data = (double[]) ds.readData();
+                }
             }
 
             // Encrypt

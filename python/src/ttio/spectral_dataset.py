@@ -27,7 +27,7 @@ from .io.progress import ProgressSinkLike, _fire
 from .acquisition_run import AcquisitionRun
 from .genomic.reference_import import ReferenceImport  # tio-browser Phase 0
 from .genomic_run import GenomicRun  # M82
-from .enums import EncryptionLevel
+from .enums import EncryptionLevel, SpectrumKind
 from .feature_flags import FeatureFlags
 from .ir_image import IRImage
 from .ms_image import MSImage
@@ -1179,7 +1179,14 @@ class WrittenRun:
     # "float_delta_zstd" stores each channel as a lossless FDZ1 codec
     # stream (codec id 17, @compression on the dataset; see
     # docs/superpowers/specs/2026-08-16-float-delta-codec-design.md).
+    # Phase 2 of that spec: "gzip" on a TTIOMassSpectrum run resolves
+    # to float_delta_zstd unless opt_disable_float_delta is set;
+    # non-MS runs keep the chunked-zlib layout.
     signal_compression: str = "gzip"
+    # Opt-out for the MS float_delta_zstd default, same pattern as
+    # WrittenGenomicRun.opt_disable_inline_mate_info_v2. Java/ObjC:
+    # optDisableFloatDelta.
+    opt_disable_float_delta: bool = False
     # optional chromatogram traces for this run. Empty list
     # results in no /chromatograms/ group, preserving byte parity with
     # v0.3 files written by callers that don't supply chromatograms.
@@ -1277,6 +1284,10 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
     sig = g.create_group("signal_channels")
     io.write_fixed_string_attr(sig, "channel_names", ",".join(run.channel_data.keys()))
     codec = run.signal_compression
+    if (codec == "gzip"
+            and not run.opt_disable_float_delta
+            and run.spectrum_class == SpectrumKind.MASS.value):
+        codec = "float_delta_zstd"
     for cname, buffer in run.channel_data.items():
         if codec == "numpress_delta":
             from ._numpress import encode as _np_encode

@@ -81,6 +81,20 @@
                        count:(NSUInteger)count
                        error:(NSError **)error;
 
+/**
+ * Scalar attribute support (numeric + string), added for the
+ * FLOAT_DELTA_ZSTD codec dispatch whose <code>@compression</code>
+ * attribute lives on the dataset. Same contract as the
+ * <code>TTIOStorageDataset</code> protocol methods of the same
+ * names; integers read via native long long, writes of 0-255 emit
+ * uint8 to match the Python writer.
+ */
+- (BOOL)hasAttributeNamed:(NSString *)name;
+- (id)attributeValueForName:(NSString *)name error:(NSError **)error;
+- (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error;
+- (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error;
+- (NSArray<NSString *> *)attributeNames;
+
 @end
 
 #endif

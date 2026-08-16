@@ -23,6 +23,7 @@
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Codecs/TTIOFloatDeltaZstd.h"  // codec id 17, Phase 2 MS default
 
 #include <string.h>
 
@@ -673,6 +674,23 @@ static NSData *decryptChannelWithDispatch(
                 if (!vDs) return NO;
                 NSData *plaintext = [vDs readAll:error];
                 if (!plaintext) return NO;
+
+                // FLOAT_DELTA_ZSTD (codec id 17, the MS default since
+                // Phase 2): decode to float64 before slicing — the
+                // per-AU segment contract is per-spectrum float64,
+                // and decrypt writes plain float64 back.
+                if ([vDs hasAttributeNamed:@"compression"]) {
+                    id cval = [vDs attributeValueForName:@"compression"
+                                                   error:NULL];
+                    if ([cval respondsToSelector:@selector(intValue)]
+                        && [cval intValue] == TTIOCompressionFloatDeltaZstd) {
+                        NSData *decoded =
+                            [TTIOFloatDeltaZstd decodeStream:plaintext
+                                                       error:error];
+                        if (!decoded) return NO;
+                        plaintext = decoded;
+                    }
+                }
 
                 NSArray<TTIOChannelSegment *> *segs =
                     [TTIOPerAUEncryption encryptChannelToSegments:plaintext
