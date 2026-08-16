@@ -550,6 +550,7 @@ public class GenomicRun
             .ownChromIds(ownChromIds).ownPositions(positions).nRecords(n)
             .cigarsProvider(() -> allCigars().toArray(new String[0]))
             .referenceResolver(resolver)
+            .sequencesProvider(() -> byteChannelFull("sequences"))
             .build();
         return codecCtxCache;
     }

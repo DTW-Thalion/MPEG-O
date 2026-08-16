@@ -100,7 +100,8 @@ public final class CodecRegistry {
         public boolean needsEmbeddedReference() { return false; }
         public DecodedChannel decode(ChannelPayload p, CodecContext ctx) {
             FqzcompNx16Z.DecodeResult dr =
-                FqzcompNx16Z.decode(payloadBytes(p), ctx.revcompFlags());
+                FqzcompNx16Z.decode(payloadBytes(p), ctx.revcompFlags(),
+                                    ctx.sequencesProvider());
             return new DecodedChannel.Bytes(dr.qualities());
         }
         public EncodedChannel encode(DecodedChannel v, CodecContext ctx) {
@@ -109,7 +110,8 @@ public final class CodecRegistry {
                     "FQZCOMP_NX16_Z encode requires CodecContext.readLengths + revcompFlags");
             }
             return new EncodedChannel.DatasetBytes(
-                FqzcompNx16Z.encode(bytes(v), ctx.readLengths(), ctx.revcompFlags()));
+                FqzcompNx16Z.encode(bytes(v), ctx.readLengths(),
+                                    ctx.revcompFlags(), ctx.sequences()));
         }
     }
 

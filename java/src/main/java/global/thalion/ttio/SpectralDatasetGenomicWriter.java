@@ -967,9 +967,20 @@ final class SpectralDatasetGenomicWriter {
             revcompFlags[i] =
                 ((run.flags()[i] & SAM_REVERSE_FLAG) != 0) ? 1 : 0;
         }
+        // Qualities V5 gate (spec 2.4): offer the base bytes to the
+        // encoder only when the run carries a base-parallel sequences
+        // channel and the caller did not opt out; V4 still wins by
+        // exact size wherever sequence context does not pay.
+        byte[] v5Sequences = null;
+        if (!run.optDisableQualitiesV5()
+                && run.sequences() != null
+                && run.sequences().length == run.qualities().length) {
+            v5Sequences = run.sequences();
+        }
         var ctx = global.thalion.ttio.codecs.registry.CodecContext.builder()
             .readLengths(readLengths)
             .revcompFlags(revcompFlags)
+            .sequences(v5Sequences)
             .build();
         byte[] encoded = ((global.thalion.ttio.codecs.registry.EncodedChannel.DatasetBytes)
             global.thalion.ttio.codecs.registry.CodecRegistry.CODEC_REGISTRY

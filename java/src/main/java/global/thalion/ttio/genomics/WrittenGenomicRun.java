@@ -118,8 +118,50 @@ public record WrittenGenomicRun(
     Map<String, byte[]> referenceChromSeqs,
     Path externalReferencePath,
     /** Phase 2c-T verbatim v2 codec blobs; null disables. */
-    BulkV2Blobs bulkV2Blobs
+    BulkV2Blobs bulkV2Blobs,
+    /** Removes the V5 sequence-context strategies from the qualities
+     *  auto-tune set (spec 2.4). Python:
+     *  {@code opt_disable_qualities_v5}; ObjC:
+     *  {@code optDisableQualitiesV5}. */
+    boolean optDisableQualitiesV5
 ) {
+    /** Previous canonical signature (25 components); qualities V5
+     *  stays enabled. */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression,
+        Map<String, Compression> signalCodecOverrides,
+        List<ProvenanceRecord> provenanceRecords,
+        boolean embedReference,
+        Map<String, byte[]> referenceChromSeqs,
+        Path externalReferencePath,
+        BulkV2Blobs bulkV2Blobs
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, signalCodecOverrides, provenanceRecords,
+             embedReference, referenceChromSeqs, externalReferencePath,
+             bulkV2Blobs, false);
+    }
+
     public WrittenGenomicRun {
         Objects.requireNonNull(acquisitionMode);
         Objects.requireNonNull(referenceUri);
@@ -173,7 +215,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, Map.of(), List.of(),
-             false, null, null, null);
+             false, null, null, null, false);
     }
 
     /**
@@ -208,7 +250,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, List.of(),
-             false, null, null, null);
+             false, null, null, null, false);
     }
 
     /**
@@ -244,7 +286,7 @@ public record WrittenGenomicRun(
              offsets, lengths, cigars, readNames, mateChromosomes,
              matePositions, templateLengths, chromosomes,
              signalCompression, signalCodecOverrides, provenanceRecords,
-             false, null, null, null);
+             false, null, null, null, false);
     }
 
     /**
