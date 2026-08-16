@@ -111,6 +111,11 @@ class Compression(IntEnum):
     # (TransportWriter compression_codec="zstd"); no on-disk
     # @compression dispatch is wired for it yet.
     ZSTD = 16
+    # Lossless float64 channel codec: per-block none/delta on the
+    # u64 bit view + byte-plane transpose + zstd. Spec at
+    # docs/superpowers/specs/2026-08-16-float-delta-codec-design.md;
+    # opt-in via WrittenRun.signal_compression="float_delta_zstd".
+    FLOAT_DELTA_ZSTD = 17
 
 
 class ByteOrder(IntEnum):

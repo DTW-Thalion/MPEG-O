@@ -237,20 +237,125 @@
     return exists > 0;
 }
 
+/* Scalar attribute support (numeric + string). Added for the
+   FLOAT_DELTA_ZSTD codec dispatch, whose @compression attribute lives
+   on the channel DATASET per format-spec 10.5 — until codec id 17 no
+   consumer needed dataset-level attributes through this legacy
+   wrapper (the provider adapter always supported them). */
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
 {
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
-        @"attributeValueForName: not yet supported on TTIOHDF5Dataset; "
-        @"datasets currently only carry shape/chunks intrinsic metadata");
-    return nil;
+    id out = nil;
+    [_file lockForReading];
+    htri_t exists = H5Aexists(_did, [name UTF8String]);
+    if (exists <= 0) {
+        [_file unlockForReading];
+        return nil;   /* absent (or probe failed): nil, no error */
+    }
+    hid_t aid = H5Aopen(_did, [name UTF8String], H5P_DEFAULT);
+    if (aid < 0) {
+        [_file unlockForReading];
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"H5Aopen failed for dataset attribute '%@'", name);
+        return nil;
+    }
+    hid_t tid = H5Aget_type(aid);
+    H5T_class_t cls = H5Tget_class(tid);
+    if (cls == H5T_INTEGER) {
+        long long v = 0;
+        if (H5Aread(aid, H5T_NATIVE_LLONG, &v) >= 0) out = @(v);
+    } else if (cls == H5T_FLOAT) {
+        double v = 0;
+        if (H5Aread(aid, H5T_NATIVE_DOUBLE, &v) >= 0) out = @(v);
+    } else if (cls == H5T_STRING) {
+        if (H5Tis_variable_str(tid) > 0) {
+            char *s = NULL;
+            hid_t mem = H5Tcopy(H5T_C_S1);
+            H5Tset_size(mem, H5T_VARIABLE);
+            if (H5Aread(aid, mem, &s) >= 0 && s) {
+                out = [NSString stringWithUTF8String:s];
+                H5free_memory(s);
+            }
+            H5Tclose(mem);
+        } else {
+            size_t sz = H5Tget_size(tid);
+            char *buf = calloc(1, sz + 1);
+            if (buf && H5Aread(aid, tid, buf) >= 0) {
+                out = [NSString stringWithUTF8String:buf];
+            }
+            free(buf);
+        }
+    }
+    H5Tclose(tid);
+    H5Aclose(aid);
+    [_file unlockForReading];
+    if (!out && error) {
+        *error = TTIOMakeError(TTIOErrorAttributeRead,
+            @"unsupported type class for dataset attribute '%@'", name);
+    }
+    return out;
 }
 
 - (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
 {
-    (void)value; (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
-        @"setAttributeValue: not yet supported on TTIOHDF5Dataset");
-    return NO;
+    BOOL ok = NO;
+    [_file lockForWriting];
+    if (H5Aexists(_did, [name UTF8String]) > 0) {
+        H5Adelete(_did, [name UTF8String]);
+    }
+    hid_t space = H5Screate(H5S_SCALAR);
+    if ([value isKindOfClass:[NSNumber class]]) {
+        const char *objType = [(NSNumber *)value objCType];
+        if (strcmp(objType, @encode(double)) == 0
+            || strcmp(objType, @encode(float)) == 0) {
+            hid_t aid = H5Acreate2(_did, [name UTF8String], H5T_NATIVE_DOUBLE,
+                                   space, H5P_DEFAULT, H5P_DEFAULT);
+            if (aid >= 0) {
+                double v = [(NSNumber *)value doubleValue];
+                ok = H5Awrite(aid, H5T_NATIVE_DOUBLE, &v) >= 0;
+                H5Aclose(aid);
+            }
+        } else {
+            long long ll = [(NSNumber *)value longLongValue];
+            if (ll >= 0 && ll <= 255) {
+                /* Codec ids and other u8 dispatch bytes: match the
+                   Python writer's H5T_NATIVE_UINT8 (10.5). */
+                hid_t aid = H5Acreate2(_did, [name UTF8String],
+                                       H5T_NATIVE_UCHAR, space,
+                                       H5P_DEFAULT, H5P_DEFAULT);
+                if (aid >= 0) {
+                    unsigned char v = (unsigned char)ll;
+                    ok = H5Awrite(aid, H5T_NATIVE_UCHAR, &v) >= 0;
+                    H5Aclose(aid);
+                }
+            } else {
+                hid_t aid = H5Acreate2(_did, [name UTF8String],
+                                       H5T_NATIVE_LLONG, space,
+                                       H5P_DEFAULT, H5P_DEFAULT);
+                if (aid >= 0) {
+                    ok = H5Awrite(aid, H5T_NATIVE_LLONG, &ll) >= 0;
+                    H5Aclose(aid);
+                }
+            }
+        }
+    } else if ([value isKindOfClass:[NSString class]]) {
+        hid_t mem = H5Tcopy(H5T_C_S1);
+        H5Tset_size(mem, H5T_VARIABLE);
+        hid_t aid = H5Acreate2(_did, [name UTF8String], mem, space,
+                               H5P_DEFAULT, H5P_DEFAULT);
+        if (aid >= 0) {
+            const char *cs = [(NSString *)value UTF8String];
+            ok = H5Awrite(aid, mem, &cs) >= 0;
+            H5Aclose(aid);
+        }
+        H5Tclose(mem);
+    }
+    H5Sclose(space);
+    [_file unlockForWriting];
+    if (!ok && error) {
+        *error = TTIOMakeError(TTIOErrorAttributeWrite,
+            @"failed to write dataset attribute '%@'", name);
+    }
+    return ok;
 }
 
 - (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error

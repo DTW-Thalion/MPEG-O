@@ -495,6 +495,28 @@ class AcquisitionRun:
                 raw = sig_group.open_dataset(ds_name).read()
                 scale = int(sig_group.get_attribute(scale_attr))
                 numpress_channels[chName] = _np_decode(raw, scale)
+                continue
+            # FLOAT_DELTA_ZSTD (codec id 17): the channel dataset is a
+            # flat uint8 FDZ1 stream with @compression = 17 on the
+            # dataset. Decode-once-cache into the same eager buffer the
+            # numpress path uses; every downstream consumer (spectrum
+            # materialisation, transport writer) already prefers it.
+            ds_name = f"{chName}_values"
+            if not sig_group.has_child(ds_name):
+                continue
+            ds = sig_group.open_dataset(ds_name)
+            from . import _hdf5_io as _io
+            codec_id = _io.read_int_attr(ds, "compression", default=0) or 0
+            if codec_id == 17:
+                from .codecs import float_delta_zstd as _fdz
+                stream = bytes(np.asarray(ds.read(), dtype=np.uint8))
+                numpress_channels[chName] = _fdz.decode(stream)
+            elif codec_id != 0:
+                raise ValueError(
+                    f"signal channel {chName!r}: @compression={codec_id} "
+                    "is not a spectral channel codec (FLOAT_DELTA_ZSTD=17 "
+                    "is the only one wired)"
+                )
 
         return cls(
             name=name,

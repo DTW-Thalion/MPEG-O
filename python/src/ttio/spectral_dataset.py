@@ -1176,6 +1176,9 @@ class WrittenRun:
     # the TTIO-level ``"numpress_delta"`` codec, which transforms the
     # float64 buffer into an int64 first-difference array and stores
     # the fixed-point scaling factor on the signal_channels group.
+    # "float_delta_zstd" stores each channel as a lossless FDZ1 codec
+    # stream (codec id 17, @compression on the dataset; see
+    # docs/superpowers/specs/2026-08-16-float-delta-codec-design.md).
     signal_compression: str = "gzip"
     # optional chromatogram traces for this run. Empty list
     # results in no /chromatograms/ group, preserving byte parity with
@@ -1285,6 +1288,17 @@ def _write_run(parent: h5py.Group, name: str, run: WrittenRun) -> None:
             # Per-channel fixed-point attribute, matching the ObjC
             # writer's ``@<chName>_numpress_fixed_point``.
             io.write_int_attr(sig, f"{cname}_numpress_fixed_point", int(scale))
+        elif codec == "float_delta_zstd":
+            # Codec id 17: the dataset bytes ARE the FDZ1 stream;
+            # @compression on the dataset is the dispatch signal and
+            # no HDF5 filter is applied (§10.5 discipline).
+            from .codecs import float_delta_zstd as _fdz
+            from .enums import Compression as _Compression
+            stream = _fdz.encode(
+                np.ascontiguousarray(buffer, dtype=np.float64))
+            io.write_codec_stream_channel(
+                sig, f"{cname}_values", stream,
+                compression_id=int(_Compression.FLOAT_DELTA_ZSTD))
         else:
             io.write_signal_channel(
                 sig, f"{cname}_values",

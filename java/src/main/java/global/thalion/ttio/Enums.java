@@ -155,7 +155,17 @@ public final class Enums {
          * matches Python {@code Compression.ZSTD} and ObjC
          * {@code TTIOCompressionZstd}.
          */
-        ZSTD
+        ZSTD,
+        /**
+         * Lossless float64 channel codec (codec id 17): per-block
+         * none/delta on the uint64 bit view + byte-plane transpose +
+         * zstd. Spec at
+         * {@code docs/superpowers/specs/2026-08-16-float-delta-codec-design.md}.
+         * Cross-language ordinal {@code = 17} matches Python
+         * {@code Compression.FLOAT_DELTA_ZSTD} and ObjC
+         * {@code TTIOCompressionFloatDeltaZstd}.
+         */
+        FLOAT_DELTA_ZSTD
     }
 
     /** Ion polarity for mass spectrometry. */

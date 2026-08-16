@@ -682,6 +682,36 @@ def _write_byte_channel_with_codec(
     write_int_attr(ds, "compression", int(codec_override), dtype="<u1")
 
 
+def write_codec_stream_channel(
+    group: _IOTarget, name: str, stream: bytes, *, compression_id: int
+) -> None:
+    """Write a self-contained codec stream as a flat UINT8 dataset with
+    the ``@compression`` dispatch attribute and no HDF5 filter — the
+    §10.5 shape shared by codec ids 4+. Used by FLOAT_DELTA_ZSTD (17)
+    for spectral float64 channels. Handles both raw h5py groups (the
+    legacy fast path) and StorageGroup providers."""
+    from .enums import Compression, Precision
+
+    arr = np.frombuffer(stream, dtype=np.uint8)
+    native = _unwrap_to_h5py(group)
+    if native is not None:
+        if len(arr):
+            chunks = (min(DEFAULT_SIGNAL_CHUNK, len(arr)),)
+            ds = native.create_dataset(name, data=arr, chunks=chunks)
+        else:
+            ds = native.create_dataset(name, data=arr)
+        ds.attrs.create("compression", np.uint8(compression_id))
+        return
+    ds = group.create_dataset(
+        name, Precision.UINT8, length=int(arr.shape[0]),
+        chunk_size=DEFAULT_SIGNAL_CHUNK,
+        compression=Compression.NONE,  # bytes already coded
+    )
+    if len(arr):
+        ds.write(arr)
+    write_int_attr(ds, "compression", int(compression_id), dtype="<u1")
+
+
 def _write_uint32_channel(
     group: _IOTarget, name: str, data: np.ndarray, compression: str
 ) -> None:

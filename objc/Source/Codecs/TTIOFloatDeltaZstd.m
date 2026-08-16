@@ -1,0 +1,220 @@
+/*
+ * TTIOFloatDeltaZstd.m
+ * TTI-O Objective-C Implementation
+ *
+ * Class:         TTIOFloatDeltaZstd
+ * Inherits From: NSObject
+ * Declared In:   Codecs/TTIOFloatDeltaZstd.h
+ *
+ * FLOAT_DELTA_ZSTD (codec id 17). Wire format FDZ1 per the spec:
+ * 22-byte header + per block { transform(u8), body_length(u32 LE),
+ * one zstd frame of the 8 transposed byte planes }.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+#import "TTIOFloatDeltaZstd.h"
+#import "HDF5/TTIOHDF5Errors.h"
+#import <zstd.h>
+#import <string.h>
+
+static const uint8_t kVersion = 0x01;
+static const NSUInteger kHeaderLen = 22;
+static const NSUInteger kBlockSize = 1u << 20;
+static const uint8_t kTransformNone = 0x00;
+static const uint8_t kTransformDelta = 0x01;
+static const int kZstdLevel = 9;
+
+static void putU32LE(NSMutableData *d, uint32_t v)
+{
+    uint8_t b[4] = { (uint8_t)v, (uint8_t)(v >> 8),
+                     (uint8_t)(v >> 16), (uint8_t)(v >> 24) };
+    [d appendBytes:b length:4];
+}
+
+static void putU64LE(NSMutableData *d, uint64_t v)
+{
+    uint8_t b[8];
+    for (int i = 0; i < 8; i++) b[i] = (uint8_t)(v >> (8 * i));
+    [d appendBytes:b length:8];
+}
+
+static uint32_t getU32LE(const uint8_t *p)
+{
+    return (uint32_t)p[0] | ((uint32_t)p[1] << 8)
+         | ((uint32_t)p[2] << 16) | ((uint32_t)p[3] << 24);
+}
+
+static uint64_t getU64LE(const uint8_t *p)
+{
+    uint64_t v = 0;
+    for (int i = 7; i >= 0; i--) v = (v << 8) | p[i];
+    return v;
+}
+
+static void transpose(const uint64_t *u, NSUInteger len, uint8_t *out)
+{
+    for (int plane = 0; plane < 8; plane++) {
+        uint8_t *dst = out + (NSUInteger)plane * len;
+        int shift = plane * 8;
+        for (NSUInteger i = 0; i < len; i++) {
+            dst[i] = (uint8_t)(u[i] >> shift);
+        }
+    }
+}
+
+static void untranspose(const uint8_t *planes, NSUInteger len, uint64_t *out)
+{
+    memset(out, 0, len * sizeof(uint64_t));
+    for (int plane = 0; plane < 8; plane++) {
+        const uint8_t *src = planes + (NSUInteger)plane * len;
+        int shift = plane * 8;
+        for (NSUInteger i = 0; i < len; i++) {
+            out[i] |= ((uint64_t)src[i]) << shift;
+        }
+    }
+}
+
+/* zstd-compress buf; returns nil on failure. */
+static NSData *zstdFrame(const uint8_t *buf, NSUInteger len)
+{
+    size_t bound = ZSTD_compressBound(len);
+    NSMutableData *out = [NSMutableData dataWithLength:bound];
+    size_t n = ZSTD_compress(out.mutableBytes, bound, buf, len, kZstdLevel);
+    if (ZSTD_isError(n)) return nil;
+    [out setLength:n];
+    return out;
+}
+
+@implementation TTIOFloatDeltaZstd
+
++ (NSData *)encodeFloat64:(NSData *)values
+{
+    if (values.length % 8 != 0) return nil;
+    NSUInteger n = values.length / 8;
+    NSUInteger nBlocks = (n + kBlockSize - 1) / kBlockSize;
+    const uint64_t *uAll = (const uint64_t *)values.bytes;
+
+    NSMutableData *out = [NSMutableData data];
+    [out appendBytes:"FDZ1" length:4];
+    uint8_t vf[2] = { kVersion, 0 };
+    [out appendBytes:vf length:2];
+    putU64LE(out, n);
+    putU32LE(out, (uint32_t)kBlockSize);
+    putU32LE(out, (uint32_t)nBlocks);
+
+    NSUInteger scratchLen = MIN(kBlockSize, n > 0 ? n : 1);
+    uint64_t *delta = malloc(scratchLen * sizeof(uint64_t));
+    uint8_t *planes = malloc(scratchLen * 8);
+    if (!delta || !planes) {
+        free(delta); free(planes);
+        return nil;
+    }
+    for (NSUInteger bi = 0; bi < nBlocks; bi++) {
+        NSUInteger off = bi * kBlockSize;
+        NSUInteger len = MIN(kBlockSize, n - off);
+        transpose(uAll + off, len, planes);
+        NSData *bodyNone = zstdFrame(planes, len * 8);
+        delta[0] = uAll[off];
+        for (NSUInteger i = 1; i < len; i++) {
+            delta[i] = uAll[off + i] - uAll[off + i - 1];
+        }
+        transpose(delta, len, planes);
+        NSData *bodyDelta = zstdFrame(planes, len * 8);
+        if (!bodyNone || !bodyDelta) {
+            free(delta); free(planes);
+            return nil;
+        }
+        uint8_t transform;
+        NSData *body;
+        if (bodyDelta.length < bodyNone.length) {
+            transform = kTransformDelta; body = bodyDelta;
+        } else {
+            transform = kTransformNone; body = bodyNone;
+        }
+        [out appendBytes:&transform length:1];
+        putU32LE(out, (uint32_t)body.length);
+        [out appendData:body];
+    }
+    free(delta);
+    free(planes);
+    return out;
+}
+
++ (NSData *)decodeStream:(NSData *)stream error:(NSError **)error
+{
+    const uint8_t *p = stream.bytes;
+    if (stream.length < kHeaderLen || memcmp(p, "FDZ1", 4) != 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"not an FDZ1 stream");
+        return nil;
+    }
+    if (p[4] != kVersion) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"unknown FDZ1 version 0x%02x", p[4]);
+        return nil;
+    }
+    uint64_t n64 = getU64LE(p + 6);
+    uint32_t blockSize = getU32LE(p + 14);
+    uint32_t nBlocks = getU32LE(p + 18);
+    if (blockSize == 0 || n64 > (uint64_t)NSUIntegerMax
+        || nBlocks != (n64 + blockSize - 1) / blockSize) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"malformed FDZ1 header");
+        return nil;
+    }
+    NSUInteger n = (NSUInteger)n64;
+    NSMutableData *outData = [NSMutableData dataWithLength:n * sizeof(uint64_t)];
+    uint64_t *out = outData.mutableBytes;
+    NSUInteger scratchLen = MIN((NSUInteger)blockSize, n > 0 ? n : 1);
+    uint8_t *planes = malloc(scratchLen * 8);
+    if (!planes) return nil;
+
+    NSUInteger off = kHeaderLen;
+    for (uint32_t bi = 0; bi < nBlocks; bi++) {
+        if (off + 5 > stream.length) {
+            free(planes);
+            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"FDZ1 stream truncated at block header");
+            return nil;
+        }
+        uint8_t transform = p[off];
+        uint32_t bodyLen = getU32LE(p + off + 1);
+        off += 5;
+        if (off + bodyLen > stream.length) {
+            free(planes);
+            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"FDZ1 stream truncated in block body");
+            return nil;
+        }
+        NSUInteger blkOff = (NSUInteger)bi * blockSize;
+        NSUInteger len = MIN((NSUInteger)blockSize, n - blkOff);
+        size_t inflated = ZSTD_decompress(planes, len * 8, p + off, bodyLen);
+        if (ZSTD_isError(inflated) || inflated != len * 8) {
+            free(planes);
+            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"FDZ1 block inflated to the wrong size");
+            return nil;
+        }
+        off += bodyLen;
+        untranspose(planes, len, out + blkOff);
+        if (transform == kTransformDelta) {
+            for (NSUInteger i = 1; i < len; i++) {
+                out[blkOff + i] += out[blkOff + i - 1];
+            }
+        } else if (transform != kTransformNone) {
+            free(planes);
+            if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"unknown FDZ1 transform 0x%02x", transform);
+            return nil;
+        }
+    }
+    free(planes);
+    if (off != stream.length) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"trailing bytes after the last FDZ1 block");
+        return nil;
+    }
+    return outData;
+}
+
+@end

@@ -71,7 +71,8 @@ typedef NS_ENUM(NSUInteger, TTIOCompression) {
     TTIOCompressionMateInlineV2 = 13,     // CRAM-style inline mate-pair codec.
     TTIOCompressionRefDiffV2 = 14,        // Bit-packed reference-diff v2 (substream layout).
     TTIOCompressionNameTokenizedV2 = 15,  // CRAM-style adaptive name-tokenizer v2.
-    TTIOCompressionZstd = 16              // Zstandard (RFC 8878); wire-only today.
+    TTIOCompressionZstd = 16,             // Zstandard (RFC 8878); wire-only today.
+    TTIOCompressionFloatDeltaZstd = 17    // Lossless float64 channels: none/delta + transpose + zstd.
 };
 
 /**

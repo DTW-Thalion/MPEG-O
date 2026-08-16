@@ -396,6 +396,56 @@ def test_xlang_tis_bytes_equal_across_decoders(
         )
 
 
+@pytest.mark.parametrize("enc_lang", list(ENCODERS.keys()))
+def test_xlang_float_delta_zstd_source_reads_everywhere(
+    tmp_path: Path, enc_lang: str,
+) -> None:
+    """A Python-written .tio whose MS channels use FLOAT_DELTA_ZSTD
+    (codec id 17) must OPEN correctly in every language: each
+    language's transport-encode CLI reads the source (exercising its
+    codec-17 decode-once path), and the Python decoder lifts the
+    stream back to equivalent content."""
+    import numpy as np
+
+    from ttio.enums import AcquisitionMode, Polarity
+    from ttio.spectral_dataset import SpectralDataset, WrittenRun
+
+    total = 6 * 32
+    rng = np.random.default_rng(17)
+    run = WrittenRun(
+        spectrum_class="TTIOMassSpectrum",
+        acquisition_mode=int(AcquisitionMode.MS1_DDA),
+        channel_data={"mz": np.sort(rng.uniform(100, 1500, total)),
+                      "intensity": rng.lognormal(6, 1.5, total)},
+        offsets=np.arange(0, total, 32, dtype="<u8"),
+        lengths=np.full(6, 32, dtype="<u4"),
+        retention_times=np.arange(6, dtype="<f8"),
+        ms_levels=np.ones(6, dtype="<i4"),
+        polarities=np.full(6, int(Polarity.POSITIVE), dtype="<i4"),
+        precursor_mzs=np.zeros(6, dtype="<f8"),
+        precursor_charges=np.zeros(6, dtype="<i4"),
+        base_peak_intensities=np.ones(6, dtype="<f8"),
+        signal_compression="float_delta_zstd",
+    )
+    src = tmp_path / "fdz_src.tio"
+    SpectralDataset.write_minimal(
+        src, title="fdz", isa_investigation_id="FDZ-XL", runs={"r": run})
+
+    tis = tmp_path / f"fdz_{enc_lang}.tis"
+    ENCODERS[enc_lang](src, tis)
+    rt = tmp_path / f"fdz_rt_{enc_lang}.tio"
+    _py_decode(tis, rt)
+
+    with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
+        ra, rb = a.all_runs["r"], b.all_runs["r"]
+        for i in range(len(ra)):
+            for c in ("mz", "intensity"):
+                assert np.array_equal(
+                    np.asarray(ra[i].signal_array(c).data),
+                    np.asarray(rb[i].signal_array(c).data),
+                ), f"{enc_lang} spectrum {i} channel {c}"
+
+
 @pytest.mark.parametrize("dec_lang", list(DECODERS.keys()))
 def test_xlang_zstd_stream_decodes_everywhere(
     tmp_path: Path, dec_lang: str,
