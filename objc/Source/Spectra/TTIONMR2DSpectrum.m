@@ -102,6 +102,7 @@
     };
     if (chunk[0] > 0 && chunk[1] > 0) {
         H5Pset_chunk(plist, 2, chunk);
+        H5Pset_shuffle(plist);   /* byte-shuffle before deflate; core HDF5, self-describing */
         H5Pset_deflate(plist, 6);
     }
 

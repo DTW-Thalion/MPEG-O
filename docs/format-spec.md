@@ -213,7 +213,11 @@ opt-out to restore the redundant column. Pre-v1.10 readers cannot
 open v1.10-default files.
 
 All parallel datasets are chunked (chunk = 1024) and `zlib -6`
-compressed. `@count` (int64) on the `spectrum_index/` group mirrors
+compressed, with the HDF5 byte-shuffle filter ahead of the
+compressor on multi-byte element types (current writers; the
+filter is part of core HDF5 and self-describing, so any reader
+decodes it transparently and files written without it remain
+valid). `@count` (int64) on the `spectrum_index/` group mirrors
 `spectrum_count` for quick access.
 
 The **optional compound `headers` dataset** packs all of the above
@@ -255,7 +259,7 @@ For an MS run the channels are `{mz, intensity}` producing
 `mz_values` and `intensity_values`. For an NMR run they are
 `{chemical_shift, intensity}` producing `chemical_shift_values` and
 `intensity_values`. Channel data is chunked (chunk = 16384) with
-`zlib -6`.
+`zlib -6` behind the HDF5 byte-shuffle filter (see §4).
 
 Each channel's concatenated dataset is indexed by `offsets[i]` and
 `lengths[i]` from `spectrum_index/`: spectrum `i`'s contents for
@@ -477,7 +481,8 @@ image_cube/
 ```
 
 The `intensity` dataset is rank-3, chunked with shape
-`(tile_size, tile_size, spectral_points)`, and `zlib -6` compressed.
+`(tile_size, tile_size, spectral_points)`, and `zlib -6` compressed
+behind the byte-shuffle filter (see §4).
 This chunking ensures that reading a `(tileSize × tileSize)` tile
 hits exactly one chunk.
 

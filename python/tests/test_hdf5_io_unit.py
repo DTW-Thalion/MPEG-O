@@ -115,6 +115,27 @@ class TestWriteSignalChannelCodecs:
             assert ds.compression is None
             assert ds.chunks is not None
 
+    def test_gzip_gets_byte_shuffle(self, tmp_path: Path) -> None:
+        p = tmp_path / "s.h5"
+        data = np.arange(1000, dtype=np.float64)
+        with h5py.File(p, "w") as f:
+            g = f.create_group("g")
+            ds = io.write_signal_channel(g, "v", data)
+            assert ds.compression == "gzip"
+            assert ds.shuffle is True
+        with h5py.File(p, "r") as f:
+            assert np.array_equal(f["g/v"][()], data)
+
+    def test_uint8_skips_shuffle(self, tmp_path: Path) -> None:
+        # Single-byte elements have nothing to shuffle.
+        p = tmp_path / "u8.h5"
+        data = np.arange(256, dtype=np.uint8)
+        with h5py.File(p, "w") as f:
+            g = f.create_group("g")
+            ds = io.write_signal_channel(g, "v", data)
+            assert ds.compression == "gzip"
+            assert ds.shuffle is False
+
     def test_unknown_codec_raises(self, tmp_path: Path) -> None:
         p = tmp_path / "u.h5"
         data = np.arange(10, dtype=np.float64)

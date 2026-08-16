@@ -228,18 +228,22 @@ def write_signal_channel(
         if length:
             ds.write(np.ascontiguousarray(data))
         return ds
-    # HDF5 legacy fast path — byte-parity preserved.
+    # HDF5 legacy fast path — decoded-byte parity preserved.
     if length == 0:
         return native.create_dataset(name, data=data)
     chunks = (min(chunk_size, length),)
+    # Byte-shuffle ahead of the compressor for multi-byte elements; the
+    # filter is core HDF5 and self-describing, so readers are unaffected.
+    shuf = data.dtype.itemsize > 1
     if compression == "gzip":
         return native.create_dataset(
-            name, data=data, chunks=chunks,
+            name, data=data, chunks=chunks, shuffle=shuf,
             compression="gzip", compression_opts=compression_level,
         )
     if compression == "lz4":
         return native.create_dataset(
-            name, data=data, chunks=chunks, **_lz4_filter_kwargs(),
+            name, data=data, chunks=chunks, shuffle=shuf,
+            **_lz4_filter_kwargs(),
         )
     if compression == "none":
         return native.create_dataset(name, data=data, chunks=chunks)

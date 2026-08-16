@@ -148,6 +148,7 @@ static BOOL writeImageCubeUnderGroup(hid_t parentGid,
     hid_t space = H5Screate_simple(3, dims, NULL);
     hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
     H5Pset_chunk(plist, 3, chunk);
+    H5Pset_shuffle(plist);   /* byte-shuffle before deflate; core HDF5, self-describing */
     H5Pset_deflate(plist, 6);
 
     hid_t did = H5Dcreate2(imageGroup, "intensity",
@@ -206,6 +207,7 @@ static BOOL writeImageCubeUnderGroup(hid_t parentGid,
         hid_t axisSpace = H5Screate_simple(1, axisDims, NULL);
         hid_t axisPlist = H5Pcreate(H5P_DATASET_CREATE);
         H5Pset_chunk(axisPlist, 1, axisDims);
+        H5Pset_shuffle(axisPlist);
         H5Pset_deflate(axisPlist, 6);
         hid_t axisDid = H5Dcreate2(imageGroup, "mz_axis",
                                     H5T_NATIVE_DOUBLE, axisSpace,
