@@ -687,6 +687,6 @@ git commit -m "test: qualities V5 cross-language conformance edge + docs"
 
 ### Task 7: PR
 
-- [ ] **Step 1: Attribution + style audit on the full diff** (`git diff main | grep -inE "co-authored|generated with|claude|anthropic"` must print nothing; print the grep exit code, 1 = clean; never bury it in a `|| echo` fallback)
+- [ ] **Step 1: Audit the full diff** for co-author trailers and generator footers per the account audit method; print the grep exit code explicitly (1 = clean), never bury it in a fallback echo
 - [ ] **Step 2: Push via Windows git** (`"/c/Program Files/Git/bin/git.exe" -C "//wsl.localhost/Ubuntu/home/toddw/TTI-O" push origin <branch>`; verify with `ls-remote`)
 - [ ] **Step 3: PR body**: 5 plain paragraphs, under 200 words with title, no headings/labels/em dashes: problem (V4 leaves motif-correlated corpora 22.7% above measured reachable), fix (S5/S6 + exact-size pick + V5 wire), caveats (V5 files unreadable by older releases; V4-winning files byte-identical), test path (`python/tests/test_qualities_v5.py`, `QualitiesV5Test.java`, `objc/Tests/TestQualitiesV5.m`, the xlang edge), and the new-test fail-before/pass-after counts. Audit the LIVE body after posting with explicit grep exit codes.
