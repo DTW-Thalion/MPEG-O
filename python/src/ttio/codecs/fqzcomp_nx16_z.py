@@ -32,7 +32,10 @@ MAGIC = b"M94Z"
 VERSION = 1
 VERSION_V2_NATIVE = 2  # M94.Z V2: body produced by libttio_rans
 VERSION_V3_ADAPTIVE = 3  # M94.Z V3: adaptive Range Coder
-VERSION_V4_FQZCOMP = 4  # M94.Z V4: CRAM 3.1 fqzcomp_qual port (the only live version)
+VERSION_V4_FQZCOMP = 4  # M94.Z V4: CRAM 3.1 fqzcomp_qual port
+VERSION_V5_SEQCTX = 5   # M94.Z V5: sequence-context body; emitted only
+                        # when it beats V4 by exact size (spec at
+                        # docs/superpowers/specs/2026-08-16-qualities-v5-design.md)
 
 
 # ── libttio_rans native library loader ──────────────────────────────────
@@ -313,6 +316,44 @@ if _HAVE_NATIVE_LIB:
         ctypes.c_size_t,                     # n_qualities
     ]
     _lib.ttio_m94z_v4_decode.restype = ctypes.c_int
+
+    # ── Qualities V5 umbrella (V4 presets + S5/S6 by exact size) ────────
+    # int ttio_m94z_qual_encode(
+    #     const uint8_t  *qual_in, size_t n_qualities,
+    #     const uint32_t *read_lengths, size_t n_reads,
+    #     const uint8_t  *flags, const uint8_t *seq_in,
+    #     int strategy_hint, uint8_t pad_count,
+    #     uint8_t *out, size_t *out_len);
+    _lib.ttio_m94z_qual_encode.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),     # qual_in
+        ctypes.c_size_t,                     # n_qualities
+        ctypes.POINTER(ctypes.c_uint32),    # read_lengths
+        ctypes.c_size_t,                     # n_reads
+        ctypes.POINTER(ctypes.c_uint8),     # flags
+        ctypes.POINTER(ctypes.c_uint8),     # seq_in (NULL = V4 only)
+        ctypes.c_int,                        # strategy_hint
+        ctypes.c_uint8,                      # pad_count
+        ctypes.POINTER(ctypes.c_uint8),     # out
+        ctypes.POINTER(ctypes.c_size_t),    # out_len
+    ]
+    _lib.ttio_m94z_qual_encode.restype = ctypes.c_int
+
+    # int ttio_m94z_qual_decode(
+    #     const uint8_t *in, size_t in_len,
+    #     uint32_t *read_lengths, size_t n_reads,
+    #     const uint8_t *flags, const uint8_t *seq_in,
+    #     uint8_t *out_qual, size_t n_qualities);
+    _lib.ttio_m94z_qual_decode.argtypes = [
+        ctypes.POINTER(ctypes.c_uint8),     # in
+        ctypes.c_size_t,                     # in_len
+        ctypes.POINTER(ctypes.c_uint32),    # read_lengths (out)
+        ctypes.c_size_t,                     # n_reads
+        ctypes.POINTER(ctypes.c_uint8),     # flags
+        ctypes.POINTER(ctypes.c_uint8),     # seq_in (required for V5)
+        ctypes.POINTER(ctypes.c_uint8),     # out_qual
+        ctypes.c_size_t,                     # n_qualities
+    ]
+    _lib.ttio_m94z_qual_decode.restype = ctypes.c_int
 else:
     _lib = None
     _TTIORansContextResolver = None
@@ -361,6 +402,7 @@ def _encode_v4_native(
     revcomp_flags: list[int],
     pad_count: int,
     strategy_hint: int = -1,
+    sequences: bytes | None = None,
 ) -> bytes:
     """V4 (CRAM 3.1 fqzcomp_qual) encode via libttio_rans.
 
@@ -410,31 +452,40 @@ def _encode_v4_native(
         rl_buf = None
         flags_buf = None
 
+    # Marshal sequences (V5 candidates; None = V4-only behaviour).
+    if sequences is not None and len(sequences):
+        seq_buf = (ctypes.c_uint8 * len(sequences)).from_buffer_copy(
+            bytes(sequences))
+    else:
+        seq_buf = None
+
     # Output capacity: V4 outer header overhead (~30 bytes) + RLT (deflated,
     # bounded by 4*n_reads) + cram body (worst case ~ qualities + slack).
     out_cap = 64 + 4 * n_reads + n_qualities * 2 + 1024
     out_buf = (ctypes.c_uint8 * out_cap)()
     out_len = ctypes.c_size_t(out_cap)
 
-    rc = _lib.ttio_m94z_v4_encode(
+    rc = _lib.ttio_m94z_qual_encode(
         qual_buf,
         ctypes.c_size_t(n_qualities),
         rl_buf,
         ctypes.c_size_t(n_reads),
         flags_buf,
+        seq_buf,
         ctypes.c_int(strategy_hint),
         ctypes.c_uint8(pad_count & 0x3),
         out_buf,
         ctypes.byref(out_len),
     )
     if rc != 0:
-        raise RuntimeError(f"ttio_m94z_v4_encode failed: rc={rc}")
+        raise RuntimeError(f"ttio_m94z_qual_encode failed: rc={rc}")
     return bytes(out_buf[:out_len.value])
 
 
 def _decode_v4_via_native(
     encoded: bytes,
     revcomp_flags: list[int] | None,
+    sequences: bytes | None = None,
 ) -> tuple[bytes, list[int], list[int]]:
     """Decode a V4 (CRAM 3.1 fqzcomp_qual) M94.Z blob.
 
@@ -466,9 +517,10 @@ def _decode_v4_via_native(
         raise ValueError(
             f"M94Z V4 bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
         )
-    if encoded[4] != VERSION_V4_FQZCOMP:
+    if encoded[4] not in (VERSION_V4_FQZCOMP, VERSION_V5_SEQCTX):
         raise ValueError(
-            f"M94Z V4: expected version {VERSION_V4_FQZCOMP}, got {encoded[4]}"
+            f"M94Z: expected version {VERSION_V4_FQZCOMP} or "
+            f"{VERSION_V5_SEQCTX}, got {encoded[4]}"
         )
     flags_byte = encoded[5]
     # pad_count occupies bits 4-5 of flags (matches V3 convention; see
@@ -501,8 +553,27 @@ def _decode_v4_via_native(
     if num_qualities == 0 and num_reads == 0:
         return b"", [], list(revcomp_flags)
 
+    if encoded[4] == VERSION_V5_SEQCTX:
+        if sequences is None:
+            raise ValueError(
+                "M94Z V5 stream requires sequences: pass a "
+                "sequences_provider to decode_with_metadata (the "
+                "sequence-context model decodes against the run's "
+                "decoded sequences channel)"
+            )
+        if len(sequences) != num_qualities:
+            raise ValueError(
+                f"M94Z V5: sequences length ({len(sequences)}) != "
+                f"num_qualities ({num_qualities})"
+            )
+
     in_buf = (ctypes.c_uint8 * len(encoded)).from_buffer_copy(bytes(encoded))
     out_buf = (ctypes.c_uint8 * num_qualities)()
+    if sequences is not None and num_qualities:
+        seq_buf = (ctypes.c_uint8 * num_qualities).from_buffer_copy(
+            bytes(sequences))
+    else:
+        seq_buf = None
 
     if num_reads:
         _rl = array.array('I', [0] * num_reads)
@@ -516,17 +587,18 @@ def _decode_v4_via_native(
         rl_buf = None
         flags_buf = None
 
-    rc = _lib.ttio_m94z_v4_decode(
+    rc = _lib.ttio_m94z_qual_decode(
         in_buf,
         ctypes.c_size_t(len(encoded)),
         rl_buf,
         ctypes.c_size_t(num_reads),
         flags_buf,
+        seq_buf,
         out_buf,
         ctypes.c_size_t(num_qualities),
     )
     if rc != 0:
-        raise RuntimeError(f"ttio_m94z_v4_decode failed: rc={rc}")
+        raise RuntimeError(f"ttio_m94z_qual_decode failed: rc={rc}")
 
     read_lengths = list(_rl) if num_reads else []
     return bytes(out_buf), read_lengths, list(revcomp_flags)
@@ -538,6 +610,7 @@ def encode(
     revcomp_flags: list[int],
     *,
     v4_strategy_hint: int = -1,
+    sequences: bytes | None = None,
     # Legacy keyword arguments accepted but ignored, for backward
     # compatibility with old call sites (Phase 2c: V1/V2/V3 encoders
     # deleted; only V4 remains, so these no longer affect the output).
@@ -563,15 +636,22 @@ def encode(
         read_lengths: per-read length list (sum must equal
             len(qualities)).
         revcomp_flags: parallel list of 0/1.
-        v4_strategy_hint: -1 = auto-tune (default), 0..4 = preset for
-            the V4 fqzcomp_qual encoder.
+        v4_strategy_hint: -1 = auto-tune (default), 0..4 = V4 preset,
+            5..6 = forced V5 sequence strategy (requires
+            ``sequences``).
+        sequences: base bytes parallel to ``qualities`` position for
+            position. When supplied (and the channel is at least
+            ``TTIO_M94Z_V5_MIN_QUALITIES`` bytes, or the hint forces
+            it), the encoder also tries the S5/S6 sequence-context
+            strategies and keeps the smallest stream; the output is
+            then version 5 only when a sequence strategy won. ``None``
+            keeps the V4-only behaviour byte for byte.
         context_params, prefer_native, prefer_v3, prefer_v4: accepted
-            for backward-compatible call sites only — the encoder
-            always emits V4 in v1.0.
+            for backward-compatible call sites only.
 
     Returns:
         On-wire byte stream tagged with version byte 4
-        (``VERSION_V4_FQZCOMP``).
+        (``VERSION_V4_FQZCOMP``) or 5 (``VERSION_V5_SEQCTX``).
     """
     if not isinstance(qualities, (bytes, bytearray, memoryview)):
         raise TypeError("qualities must be bytes-like")
@@ -587,6 +667,14 @@ def encode(
             f"sum(read_lengths) ({total}) != len(qualities) "
             f"({len(qualities)})"
         )
+    if sequences is not None:
+        sequences = bytes(sequences)
+        if len(sequences) != len(qualities):
+            raise ValueError(
+                f"sequences length ({len(sequences)}) != qualities "
+                f"length ({len(qualities)}); the V5 sequence context "
+                "needs one base per quality"
+            )
 
     if not _HAVE_NATIVE_LIB:
         raise RuntimeError(
@@ -616,6 +704,7 @@ def encode(
     return _encode_v4_native(
         qualities, list(read_lengths), list(revcomp_flags),
         pad_count, strategy_hint=v4_strategy_hint,
+        sequences=sequences,
     )
 
 
@@ -623,6 +712,7 @@ def encode(
 def decode_with_metadata(
     encoded: bytes,
     revcomp_flags: list[int] | None = None,
+    sequences_provider=None,
 ) -> tuple[bytes, list[int], list[int]]:
     """Decode an M94.Z V4 blob.
 
@@ -641,13 +731,23 @@ def decode_with_metadata(
         raise ValueError(
             f"M94Z bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
         )
-    if encoded[4] == VERSION_V4_FQZCOMP:
+    if encoded[4] in (VERSION_V4_FQZCOMP, VERSION_V5_SEQCTX):
         if not _HAVE_NATIVE_LIB:
             raise RuntimeError(
-                "M94Z V4 decode requires libttio_rans (set "
+                "M94Z V4/V5 decode requires libttio_rans (set "
                 "TTIO_RANS_LIB_PATH or install the native library)"
             )
-        return _decode_v4_via_native(encoded, revcomp_flags)
+        sequences = None
+        if encoded[4] == VERSION_V5_SEQCTX:
+            if sequences_provider is None:
+                raise ValueError(
+                    "M94Z V5 stream requires sequences: pass a "
+                    "sequences_provider callable returning the run's "
+                    "decoded sequences bytes"
+                )
+            sequences = bytes(sequences_provider())
+        return _decode_v4_via_native(encoded, revcomp_flags,
+                                     sequences=sequences)
 
     if encoded[4] in (VERSION, VERSION_V2_NATIVE, VERSION_V3_ADAPTIVE):
         raise ValueError(
@@ -668,4 +768,5 @@ __all__ = [
     "get_backend_name",
     "MAGIC",
     "VERSION_V4_FQZCOMP",
+    "VERSION_V5_SEQCTX",
 ]

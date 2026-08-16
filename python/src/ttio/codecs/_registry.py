@@ -99,7 +99,8 @@ class _FqzcompNx16ZCodec:
         if ctx.revcomp_flags is not None:
             flags = [int(x) for x in ctx.revcomp_flags]
         qualities, _read_lengths, _rc = fqzcomp_nx16_z.decode_with_metadata(
-            payload.as_bytes(), flags
+            payload.as_bytes(), flags,
+            sequences_provider=ctx.sequences_provider,
         )
         return DecodedChannel.of_bytes(qualities)
 
@@ -112,6 +113,7 @@ class _FqzcompNx16ZCodec:
             value.as_bytes(),
             [int(x) for x in ctx.read_lengths],
             [int(x) for x in ctx.revcomp_flags],
+            sequences=ctx.sequences,
         )
         return EncodedChannel.of_dataset(blob)
 

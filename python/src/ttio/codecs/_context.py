@@ -21,6 +21,12 @@ class CodecContext:
     """Run-derived context for codecs. All fields optional; plain codecs ignore it."""
     read_lengths: "np.ndarray | None" = None        # fqzcomp; == index.lengths
     revcomp_flags: "np.ndarray | None" = None        # fqzcomp; (flags & 16) != 0
+    # fqzcomp V5 (sequence context). Decode: lazy provider returning the
+    # run's decoded sequences bytes, called only for version-5 streams.
+    # Encode: the flat base bytes, populated by the writer when the run
+    # carries a base-parallel sequences channel and V5 is not opted out.
+    sequences_provider: "Callable[[], bytes] | None" = None
+    sequences: "bytes | None" = None
     element_size: "int | None" = None                # delta_rans encode
     read_count: "int | None" = None                  # == index.count
     positions: "np.ndarray | None" = None            # ref_diff
