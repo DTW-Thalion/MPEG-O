@@ -82,6 +82,31 @@ int ttio_m94z_v4_unpack(
     const uint8_t   **out_cram_body,
     size_t           *out_cram_body_len);
 
+/* V5 outer wire: identical header layout with version=5, flags bit 0
+ * (has_cram_body) clear and bit 1 (has_seqctx_body) set. The body is
+ * the fqzcomp_seqctx.c body (param block + RC stream). */
+#define TTIO_M94Z_V5_WIRE_VERSION 5
+
+int ttio_m94z_v5_pack(
+    uint64_t          num_qualities,
+    uint64_t          num_reads,
+    const uint32_t   *read_lengths,
+    uint8_t           pad_count,
+    const uint8_t    *body,
+    size_t            body_len,
+    uint8_t          *out,
+    size_t           *out_len);
+
+int ttio_m94z_v5_unpack(
+    const uint8_t    *in,
+    size_t            in_len,
+    uint64_t         *out_num_qualities,
+    uint64_t         *out_num_reads,
+    uint32_t         *out_read_lengths,
+    uint8_t          *out_pad_count,
+    const uint8_t   **out_body,
+    size_t           *out_body_len);
+
 #ifdef __cplusplus
 }
 #endif

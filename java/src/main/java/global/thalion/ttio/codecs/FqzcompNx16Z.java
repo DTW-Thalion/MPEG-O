@@ -35,6 +35,11 @@ public final class FqzcompNx16Z {
      *  The only version emitted and decoded in v1.0+. */
     public static final int VERSION_V4_FQZCOMP = 4;
 
+    /** M94.Z V5: sequence-context body, emitted only when it beats V4
+     *  by exact size (spec
+     *  docs/superpowers/specs/2026-08-16-qualities-v5-design.md). */
+    public static final int VERSION_V5_SEQCTX = 5;
+
     // ── Default context parameters ──────────────────────────────────
 
     public static final int DEFAULT_QBITS = 12;
@@ -170,20 +175,22 @@ public final class FqzcompNx16Z {
      * Encode via the M94.Z V4 (CRAM 3.1 fqzcomp) path through JNI.
      * Throws {@link IllegalStateException} if libttio_rans_jni is not loaded.
      */
-    private static byte[] encodeV4Internal(byte[] qualities, int[] readLengths,
-                                            int[] revcompFlags, int strategyHint,
-                                            int padCount) {
+    private static byte[] encodeQualInternal(byte[] qualities, int[] readLengths,
+                                              int[] revcompFlags,
+                                              byte[] sequences,
+                                              int strategyHint,
+                                              int padCount) {
         if (!TtioRansNative.isAvailable()) {
             throw new IllegalStateException(
-                "encodeV4Internal called but libttio_rans_jni not loaded");
+                "encodeQualInternal called but libttio_rans_jni not loaded");
         }
         // Convert revcompFlags 0/1 to SAM-flag byte (bit 4 = SAM_REVERSE).
         int[] samFlags = new int[revcompFlags.length];
         for (int i = 0; i < revcompFlags.length; i++) {
             samFlags[i] = (revcompFlags[i] & 1) != 0 ? 16 : 0;
         }
-        return TtioRansNative.encodeV4(qualities, readLengths, samFlags,
-                                        strategyHint, padCount);
+        return TtioRansNative.encodeQual(qualities, readLengths, samFlags,
+                                          sequences, strategyHint, padCount);
     }
 
     /**
@@ -236,12 +243,69 @@ public final class FqzcompNx16Z {
         return new DecodeResult(qual, lens);
     }
 
+    /** V5 decode: same outer-header parse as V4 (identical layout),
+     *  dispatched through the native umbrella with the sequences
+     *  side input. */
+    private static DecodeResult decodeQualInternal(byte[] encoded,
+                                                   int[] revcompFlags,
+                                                   byte[] sequences) {
+        if (!TtioRansNative.isAvailable()) {
+            throw new IllegalStateException(
+                "decodeQualInternal called but libttio_rans_jni not loaded");
+        }
+        if (encoded.length < 26 || encoded[0] != 'M' || encoded[1] != '9'
+            || encoded[2] != '4' || encoded[3] != 'Z'
+            || (encoded[4] & 0xFF) != VERSION_V5_SEQCTX) {
+            throw new IllegalArgumentException("not an M94.Z V5 stream");
+        }
+        long numQual = 0L, numReads = 0L;
+        for (int i = 0; i < 8; i++) numQual  |= ((long)(encoded[6 + i] & 0xFF)) << (8 * i);
+        for (int i = 0; i < 8; i++) numReads |= ((long)(encoded[14 + i] & 0xFF)) << (8 * i);
+        if (numQual > Integer.MAX_VALUE || numReads > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("V5 stream too large for Java int sizes");
+        }
+        int nQual  = (int) numQual;
+        int nReads = (int) numReads;
+        if (sequences == null || sequences.length != nQual) {
+            throw new IllegalArgumentException(
+                "M94Z V5: sequences length ("
+                + (sequences == null ? "null" : sequences.length)
+                + ") != num_qualities (" + nQual + ")");
+        }
+        if (revcompFlags == null) revcompFlags = new int[nReads];
+        if (revcompFlags.length != nReads) {
+            throw new IllegalArgumentException(
+                "revcompFlags length " + revcompFlags.length + " != numReads " + nReads);
+        }
+        int[] samFlags = new int[nReads];
+        for (int i = 0; i < nReads; i++) {
+            samFlags[i] = (revcompFlags[i] & 1) != 0 ? 16 : 0;
+        }
+        Object[] result = TtioRansNative.decodeQual(encoded, nReads, nQual,
+                                                    samFlags, sequences);
+        return new DecodeResult((byte[]) result[0], (int[]) result[1]);
+    }
+
     // ── Top-level encoder ───────────────────────────────────────────
 
     public static byte[] encode(byte[] qualities, int[] readLengths,
                                 int[] revcompFlags) {
         return encode(qualities, readLengths, revcompFlags,
                       ContextParams.defaults(), null);
+    }
+
+    /**
+     * Encode with the V5 sequence-context strategies eligible.
+     * {@code sequences} must be base bytes parallel to
+     * {@code qualities}; the encoder keeps the smaller of the best V4
+     * and sequence-context streams, so the output is version 5 only
+     * when sequence context won. {@code null} keeps V4-only behaviour
+     * byte for byte.
+     */
+    public static byte[] encode(byte[] qualities, int[] readLengths,
+                                int[] revcompFlags, byte[] sequences) {
+        return encodeWithSequences(qualities, readLengths, revcompFlags,
+                                   sequences, null);
     }
 
     public static byte[] encode(byte[] qualities, int[] readLengths,
@@ -317,11 +381,62 @@ public final class FqzcompNx16Z {
         }
         int strategy = (opts != null && opts.v4StrategyHint != null)
             ? opts.v4StrategyHint : -1;
-        return encodeV4Internal(qualities, readLengths, revcompFlags,
-                                 strategy, padCount);
+        return encodeQualInternal(qualities, readLengths, revcompFlags,
+                                   null, strategy, padCount);
+    }
+
+    /** Shared body for the sequences-aware overloads. */
+    private static byte[] encodeWithSequences(byte[] qualities,
+                                              int[] readLengths,
+                                              int[] revcompFlags,
+                                              byte[] sequences,
+                                              EncodeOptions opts) {
+        if (sequences != null && sequences.length != qualities.length) {
+            throw new IllegalArgumentException(
+                "sequences length (" + sequences.length
+                + ") != qualities length (" + qualities.length
+                + "); the V5 sequence context needs one base per quality");
+        }
+        if (sequences == null || qualities.length == 0) {
+            return encode(qualities, readLengths, revcompFlags,
+                          ContextParams.defaults(), opts);
+        }
+        if (readLengths.length != revcompFlags.length) {
+            throw new IllegalArgumentException(
+                "readLengths (" + readLengths.length + ") != revcompFlags ("
+                + revcompFlags.length + ")");
+        }
+        int n = qualities.length;
+        int padCount = (-n) & 3;
+        int strategy = (opts != null && opts.v4StrategyHint != null)
+            ? opts.v4StrategyHint : -1;
+        return encodeQualInternal(qualities, readLengths, revcompFlags,
+                                   sequences, strategy, padCount);
     }
 
     // ── Top-level decoder ───────────────────────────────────────────
+
+    /**
+     * Decode with the run's decoded sequences available for V5 streams.
+     * The supplier is invoked only when the stream's version byte is 5;
+     * a V5 stream decoded through the 2-arg overload (no supplier)
+     * throws {@link IllegalStateException} naming the requirement.
+     */
+    public static DecodeResult decode(byte[] encoded, int[] revcompFlags,
+                                      java.util.function.Supplier<byte[]> sequencesProvider) {
+        if (encoded != null && encoded.length >= 5
+                && (encoded[4] & 0xFF) == VERSION_V5_SEQCTX) {
+            if (sequencesProvider == null) {
+                throw new IllegalStateException(
+                    "M94Z V5 stream requires sequences: pass a "
+                    + "sequencesProvider returning the run's decoded "
+                    + "sequences bytes");
+            }
+            return decodeQualInternal(encoded, revcompFlags,
+                                      sequencesProvider.get());
+        }
+        return decode(encoded, revcompFlags);
+    }
 
     public static DecodeResult decode(byte[] encoded, int[] revcompFlags) {
         if (encoded == null) {
@@ -340,6 +455,11 @@ public final class FqzcompNx16Z {
         int versionByte = encoded[4] & 0xFF;
         if (versionByte == VERSION_V4_FQZCOMP) {
             return decodeV4Internal(encoded, revcompFlags);
+        }
+        if (versionByte == VERSION_V5_SEQCTX) {
+            throw new IllegalStateException(
+                "M94Z V5 stream requires sequences: use "
+                + "decode(encoded, revcompFlags, sequencesProvider)");
         }
         // V1 (pure-Java rANS-Nx16) and V2
         // (libttio_rans body) decoder dispatch removed. Files written

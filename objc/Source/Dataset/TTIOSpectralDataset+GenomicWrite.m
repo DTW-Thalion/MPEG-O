@@ -1678,6 +1678,14 @@ static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16Z(TTIOHDF5Group *sc,
     TTIOCodecContext *fqzCtx = [TTIOCodecContext emptyContext];
     fqzCtx.readLengths = readLengths;
     fqzCtx.revcompFlags = revcompFlags;
+    /* Qualities V5 gate (spec 2.4): offer the base bytes to the
+     * encoder only when the run carries a base-parallel sequences
+     * channel and the caller did not opt out; V4 still wins by exact
+     * size wherever sequence context does not pay. */
+    if (!run.optDisableQualitiesV5
+        && run.sequencesData.length == run.qualitiesData.length) {
+        fqzCtx.sequences = run.sequencesData;
+    }
     id<TTIOCodec> fqzCodec =
         [TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z];
     TTIOEncodedChannel *fqzEnc =

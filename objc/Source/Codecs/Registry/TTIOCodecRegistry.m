@@ -118,7 +118,9 @@ static pthread_once_t gOnce = PTHREAD_ONCE_INIT;
 - (BOOL)needsEmbeddedReference { return NO; }
 - (TTIODecodedChannel *)decode:(TTIOChannelPayload *)p context:(TTIOCodecContext *)ctx error:(NSError **)e {
     NSDictionary *r = [TTIOFqzcompNx16Z decodeData:((TTIOBytesPayload *)p).bytes
-                                       revcompFlags:ctx.revcompFlags error:e];
+                                       revcompFlags:ctx.revcompFlags
+                                  sequencesProvider:ctx.sequencesProvider
+                                              error:e];
     if (!r) return nil;
     return [[TTIODecodedBytes alloc] initWithData:r[@"qualities"]];
 }
@@ -130,6 +132,7 @@ static pthread_once_t gOnce = PTHREAD_ONCE_INIT;
     NSData *out = [TTIOFqzcompNx16Z encodeWithQualities:((TTIODecodedBytes *)v).data
                                             readLengths:ctx.readLengths
                                            revcompFlags:ctx.revcompFlags
+                                              sequences:ctx.sequences
                                                   error:e];
     return out ? [[TTIOEncodedDatasetBytes alloc] initWithBytes:out] : nil;
 }

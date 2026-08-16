@@ -346,11 +346,21 @@ def _write_qualities_fqzcomp_nx16_z(sc, run: WrittenGenomicRun) -> None:
     # registry. Its encode adapter requires read_lengths + revcomp_flags
     # in the CodecContext — sourced exactly as the prior direct call did
     # (index lengths + the SAM reverse flag bit). Bytes are identical.
+    # Qualities V5 gate (spec 2.4): offer the sequence bytes to the
+    # encoder only when the run carries a base-parallel sequences
+    # channel and the caller did not opt out; the encoder still emits
+    # V4 whenever a V4 strategy wins by exact size.
+    v5_sequences = None
+    if not getattr(run, "opt_disable_qualities_v5", False):
+        seq_arr = np.asarray(run.sequences, dtype=np.uint8)
+        if seq_arr.shape[0] == len(qualities):
+            v5_sequences = bytes(seq_arr.tobytes())
     encoded = CODEC_REGISTRY[_Compression.FQZCOMP_NX16_Z].encode(
         DecodedChannel.of_bytes(qualities),
         CodecContext(
             read_lengths=np.asarray(read_lengths),
             revcomp_flags=np.asarray(revcomp_flags),
+            sequences=v5_sequences,
         ),
     ).dataset_bytes
 

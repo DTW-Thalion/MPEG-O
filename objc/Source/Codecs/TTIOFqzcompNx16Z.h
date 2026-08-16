@@ -225,6 +225,56 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
  * the only supported wire format and it is implemented entirely in the
  * native library.
  */
+/**
+ * Encode with the V5 sequence-context strategies eligible.
+ *
+ * sequences must be base bytes parallel to qualities position for
+ * position. The encoder tries the S5/S6 sequence strategies next to
+ * the V4 presets and keeps the smallest stream, so the output is
+ * version 5 only when sequence context won; nil keeps the V4-only
+ * behaviour byte for byte. Mirrors Python encode(sequences=...) and
+ * Java FqzcompNx16Z.encode(..., byte[] sequences).
+ */
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                sequences:(nullable NSData *)sequences
+                                    error:(NSError * _Nullable *)error;
+
+/**
+ * Designated encode core: V4 presets plus S5/S6 when sequences is
+ * non-nil, exact-size pick, forced sequence strategy via
+ * strategyHint 5 or 6.
+ */
++ (nullable NSData *)encodeQualWithQualities:(NSData *)qualities
+                                 readLengths:(NSArray<NSNumber *> *)readLengths
+                                revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                   sequences:(nullable NSData *)sequences
+                                strategyHint:(NSInteger)strategyHint
+                                    padCount:(uint8_t)padCount
+                                       error:(NSError * _Nullable *)error;
+
+/**
+ * Decode with the run's decoded sequences available for V5 streams.
+ * The block is invoked only when the stream's version byte is 5; a V5
+ * stream decoded through the sequence-less variants fails with an
+ * error naming this selector.
+ */
++ (nullable NSDictionary *)decodeData:(NSData *)data
+                          revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
+                     sequencesProvider:(NSData * _Nullable (^_Nullable)(void))sequencesProvider
+                                 error:(NSError * _Nullable *)error;
+
+/**
+ * Decode a V5 M94.Z stream (version byte 5) against the given
+ * sequence bytes. Direct calls are useful for round-trip tests;
+ * the provider variant above dispatches here.
+ */
++ (nullable NSDictionary *)decodeQualData:(NSData *)data
+                             revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
+                                sequences:(NSData *)sequences
+                                    error:(NSError * _Nullable *)error;
+
 + (NSString *)backendName;
 
 @end

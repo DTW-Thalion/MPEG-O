@@ -280,6 +280,46 @@ int ttio_m94z_v4_decode(
     uint8_t        *out_qual,
     size_t          n_qualities);
 
+/* Qualities V5: sequence-context strategies (spec at
+ * docs/superpowers/specs/2026-08-16-qualities-v5-design.md). The
+ * umbrella auto-tunes across the V4 presets plus S5/S6 and keeps the
+ * smallest stream by exact size; ties go to V4. S5/S6 are tried only
+ * when seq_in is non-NULL and n_qualities is at least the floor
+ * below; forced hints 5/6 bypass the floor but require seq_in.
+ *
+ * Encode:
+ *   seq_in         — n_qualities base bytes parallel to qual_in, or
+ *                    NULL for V4-only behaviour
+ *   strategy_hint  — -1 auto, 0..4 V4 preset, 5..6 forced sequence
+ *                    strategy
+ * Decode dispatches on the version byte: a version-5 stream requires
+ * seq_in (the decoded sequences channel) and fails with a distinct
+ * error without it; version-4 streams ignore seq_in. */
+#define TTIO_M94Z_V5_VERSION 5
+#define TTIO_M94Z_V5_MIN_QUALITIES (1u << 20)
+
+int ttio_m94z_qual_encode(
+    const uint8_t  *qual_in,
+    size_t          n_qualities,
+    const uint32_t *read_lengths,
+    size_t          n_reads,
+    const uint8_t  *flags,
+    const uint8_t  *seq_in,
+    int             strategy_hint,
+    uint8_t         pad_count,
+    uint8_t        *out,
+    size_t         *out_len);
+
+int ttio_m94z_qual_decode(
+    const uint8_t  *in,
+    size_t          in_len,
+    uint32_t       *read_lengths,
+    size_t          n_reads,
+    const uint8_t  *flags,
+    const uint8_t  *seq_in,
+    uint8_t        *out_qual,
+    size_t          n_qualities);
+
 /* ──────────────────────────────────────────────────────────────────────
  * Plain rANS-O0 — byte-exact port of python/src/ttio/codecs/rans.py
  * (order=0 path) and Java/ObjC equivalents. Used by mate_info v2

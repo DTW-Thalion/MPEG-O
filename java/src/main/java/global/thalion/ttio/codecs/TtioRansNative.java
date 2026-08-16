@@ -196,6 +196,44 @@ public final class TtioRansNative {
                                                     int numQualities, int[] flags);
 
     /**
+     * Encode flat qualities through the M94.Z umbrella (V4 presets plus
+     * the S5/S6 sequence-context strategies when {@code sequences} is
+     * non-null; smallest stream wins by exact size).
+     */
+    public static byte[] encodeQual(byte[] qualities, int[] readLengths,
+                                    int[] flags, byte[] sequences,
+                                    int strategyHint, int padCount) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return encodeQualNative(qualities, readLengths, flags, sequences,
+                                strategyHint, padCount);
+    }
+
+    /**
+     * Decode an M94.Z V4 or V5 stream. {@code sequences} is required for
+     * V5 streams (the decoded sequences channel) and ignored for V4.
+     */
+    public static Object[] decodeQual(byte[] encoded, int numReads,
+                                      int numQualities, int[] flags,
+                                      byte[] sequences) {
+        if (!LOADED) throw new IllegalStateException("libttio_rans_jni not loaded");
+        return decodeQualNative(encoded, numReads, numQualities, flags,
+                                sequences);
+    }
+
+    private static native byte[] encodeQualNative(byte[] qualities,
+                                                    int[] readLengths,
+                                                    int[] flags,
+                                                    byte[] sequences,
+                                                    int strategyHint,
+                                                    int padCount);
+
+    private static native Object[] decodeQualNative(byte[] encoded,
+                                                      int numReads,
+                                                      int numQualities,
+                                                      int[] flags,
+                                                      byte[] sequences);
+
+    /**
      * Encode a mate triple via libttio_rans (mate_info v2).
      *
      * @param mateChromIds    int[N] — -1 if RNEXT='*', else id >= 0

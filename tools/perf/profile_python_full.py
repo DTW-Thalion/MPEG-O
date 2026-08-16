@@ -606,6 +606,29 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
     t_fqz_z_dec, _ = _timed(
         _fqzcomp_z_decode, fqz_z_encoded, revcomp_flags_z)
 
+    # -- Qualities V5: motif-correlated corpus so the sequence
+    # strategies win and the timed path is the V5 encode + decode.
+    seq_buf = bytearray(n_qual)
+    v5_qual_buf = bytearray(n_qual)
+    bases = b"ACGT"
+    s = 0x5E
+    for i in range(n_qual):
+        s = (s * 6364136223846793005 + 1442695040888963407) & mask64
+        bi = (s >> 32) % 4
+        seq_buf[i] = bases[bi]
+        v5_qual_buf[i] = 40 + 10 * bi + ((s >> 16) % 4)
+    v5_qualities = bytes(v5_qual_buf)
+    v5_sequences = bytes(seq_buf)
+    t_qv5_enc, qv5_encoded = _timed(
+        lambda q, rl, rc: _fqzcomp_z_encode(q, rl, rc,
+                                            sequences=v5_sequences),
+        v5_qualities, read_lengths, revcomp_flags_z)
+    assert qv5_encoded[4] == 5, "V5 bench corpus must select a sequence strategy"
+    t_qv5_dec, _ = _timed(
+        lambda blob, rc: _fqzcomp_z_decode(
+            blob, rc, sequences_provider=lambda: v5_sequences),
+        qv5_encoded, revcomp_flags_z)
+
     # ── DELTA_RANS: 1.25M sorted int64 positions, LCG deltas 100-500 ──
     n_pos = 1_250_000
     pos_vals = np.empty(n_pos, dtype=np.int64)
@@ -647,6 +670,7 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
           f"enc={t_rd_enc:.2f}s  dec={t_rd_dec:.2f}s")
     print(f"  [genomic codec] fqzcomp_z  {n_qual/1e6:.1f} MiB  "
           f"enc={t_fqz_z_enc:.2f}s  dec={t_fqz_z_dec:.2f}s")
+    print(f"  qualities_v5:    enc={t_qv5_enc:.2f}s  dec={t_qv5_dec:.2f}s")
     print(f"  [genomic codec] delta_rans {len(dr_input)/1e6:.1f} MiB  "
           f"enc={t_dr_enc:.2f}s  dec={t_dr_dec:.2f}s")
     print(f"  [genomic codec] mate_info_v2 {n_mate} records  "
@@ -657,6 +681,8 @@ def bench_codecs_genomic(_tmp: Path, _n: int) -> dict[str, float]:
         "ref_diff_decode": t_rd_dec,
         "fqzcomp_nx16_z_encode": t_fqz_z_enc,
         "fqzcomp_nx16_z_decode": t_fqz_z_dec,
+        "qualities_v5_encode": t_qv5_enc,
+        "qualities_v5_decode": t_qv5_dec,
         "delta_rans_encode": t_dr_enc,
         "delta_rans_decode": t_dr_dec,
         "mate_info_v2_encode": t_mate_enc,

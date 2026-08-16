@@ -414,6 +414,12 @@ class GenomicRun:
             n_records=int(idx.count),
             own_chrom_ids=own_chrom_ids,
             reference_resolver=resolver,
+            # fqzcomp V5: the qualities decoder needs the decoded
+            # sequences channel; route through the decode-once byte
+            # cache so ref_diff_v2 and plain layouts both work and the
+            # provider fires only for version-5 streams.
+            sequences_provider=lambda: self._byte_channel_slice(
+                "sequences", 0, int(sum(idx.lengths))),
         )
         self._codec_ctx_cache = ctx
         return ctx

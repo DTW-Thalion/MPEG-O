@@ -92,6 +92,12 @@ NS_ASSUME_NONNULL_BEGIN
  *  channels. Defaults to <code>TTIOCompressionZlib</code>. */
 @property (readonly) TTIOCompression signalCompression;
 
+/** Removes the V5 sequence-context strategies from the qualities
+ *  auto-tune set (spec 2.4). Python:
+ *  <code>opt_disable_qualities_v5</code>; Java:
+ *  <code>optDisableQualitiesV5</code>. Defaults to NO. */
+@property (nonatomic) BOOL optDisableQualitiesV5;
+
 /**
  * Per-channel codec opt-in. Maps channel name
  * (<code>NSString *</code>) to a boxed

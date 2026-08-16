@@ -87,6 +87,11 @@ class WrittenGenomicRun:
     provenance_records: list[ProvenanceRecord] = field(default_factory=list)
     signal_compression: str = "gzip"  # "gzip" → ZLIB; "none" → NONE
 
+    # Removes the V5 sequence-context strategies from the qualities
+    # auto-tune set (float-delta and mate_info opt-out pattern; spec
+    # 2.4). Java/ObjC: optDisableQualitiesV5.
+    opt_disable_qualities_v5: bool = False
+
     # per-channel codec opt-in. Maps channel name to a TTI-O
     # internal codec id. Only "sequences" and "qualities" are
     # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are

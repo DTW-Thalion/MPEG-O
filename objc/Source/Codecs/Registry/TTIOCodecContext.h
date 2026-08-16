@@ -23,6 +23,13 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nullable, strong) NSString *referenceUri;
 @property (nullable, strong) NSNumber *readsPerSlice;
 
+// fqzcomp V5 (sequence context). Decode: lazy block returning the
+// run's decoded sequences bytes, invoked only for version-5 streams.
+// Encode: the flat base bytes, set by the writer when the run carries
+// a base-parallel sequences channel and V5 is not opted out.
+@property (nullable, copy)   NSData * _Nullable (^sequencesProvider)(void);
+@property (nullable, strong) NSData *sequences;
+
 + (instancetype)emptyContext;
 @end
 
