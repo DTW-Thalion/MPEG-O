@@ -226,7 +226,20 @@ def test_real_tdf_round_trip(tmp_path: Path) -> None:
         assert "mz_values" in names
         assert "intensity_values" in names
         assert "inv_ion_mobility_values" in names
-        assert (
-            channels.open_dataset("mz_values").shape
-            == channels.open_dataset("inv_ion_mobility_values").shape
-        )
+
+        # Under the codec-17 MS default the datasets are FDZ1 streams
+        # whose byte lengths differ per channel; compare decoded
+        # element counts, not raw dataset shapes.
+        def _element_count(name: str) -> int:
+            import numpy as np
+            from ttio import _hdf5_io as io
+            ds = channels.open_dataset(name)
+            codec = io.read_int_attr(ds, "compression", default=0) or 0
+            if codec == 17:
+                from ttio.codecs import float_delta_zstd as fdz
+                return fdz.decode(
+                    bytes(np.asarray(ds.read(), dtype=np.uint8))).shape[0]
+            return ds.shape[0]
+
+        assert (_element_count("mz_values")
+                == _element_count("inv_ion_mobility_values"))
