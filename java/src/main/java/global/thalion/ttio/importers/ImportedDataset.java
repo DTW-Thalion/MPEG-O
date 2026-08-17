@@ -14,7 +14,9 @@ import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.io.ProgressSink;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Normalized in-memory draft every importer produces; {@link #write} is
  *  the single dataset-write call site. Cross-language equivalent: Python
@@ -32,6 +34,12 @@ public final class ImportedDataset {
     public MSImage image;
     public RamanImage ramanImage;
     public IRImage irImage;
+    /** Genomic runs delivered as batch streams; written after the
+     *  in-memory content through {@link GenomicStreamSource#writeInto}. */
+    public final Map<String, GenomicStreamSource> genomicStreams = new LinkedHashMap<>();
+    /** Spectral runs delivered as batch streams; written after the
+     *  in-memory content through {@link SpectralStreamSource#writeInto}. */
+    public final Map<String, SpectralStreamSource> spectralStreams = new LinkedHashMap<>();
 
     /** Optional write-through delegate. When non-null, {@link #write}
      *  routes the write through it instead of {@link SpectralDataset#create}.
@@ -69,7 +77,7 @@ public final class ImportedDataset {
         if (writeDelegate != null) {
             return writeDelegate.write(output, progress);
         }
-        return SpectralDataset.create(
+        Path written = SpectralDataset.create(
             output.toString(),
             title.isEmpty() ? "imported" : title,
             isaInvestigationId,
@@ -78,5 +86,15 @@ public final class ImportedDataset {
             subjects, samples,
             image, ramanImage, irImage,
             progress != null ? progress : ProgressSink.discard());
+        if (!genomicStreams.isEmpty() || !spectralStreams.isEmpty()) {
+            try (global.thalion.ttio.providers.StorageProvider p =
+                     global.thalion.ttio.providers.ProviderRegistry.open(
+                         written.toString(), global.thalion.ttio.providers.StorageProvider.Mode.READ_WRITE, "hdf5")) {
+                global.thalion.ttio.providers.StorageGroup study = p.rootGroup().openGroup("study");
+                for (GenomicStreamSource src : genomicStreams.values()) src.writeInto(study, progress);
+                for (SpectralStreamSource src : spectralStreams.values()) src.writeInto(study, progress);
+            }
+        }
+        return written;
     }
 }

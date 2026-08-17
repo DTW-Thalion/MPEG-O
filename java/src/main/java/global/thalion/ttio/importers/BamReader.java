@@ -187,22 +187,7 @@ public class BamReader {
         String rgSample = "";
         String rgPlatform = "";
         List<ProvenanceRecord> provenance = new ArrayList<>();
-
-        // Per-read accumulators (boxed because final size is unknown).
-        List<String> readNames = new ArrayList<>();
-        List<String> chromosomes = new ArrayList<>();
-        List<Long> positionsL = new ArrayList<>();
-        List<Integer> mappingQualitiesL = new ArrayList<>();
-        List<Integer> flagsL = new ArrayList<>();
-        List<String> cigars = new ArrayList<>();
-        List<String> mateChromosomes = new ArrayList<>();
-        List<Long> matePositionsL = new ArrayList<>();
-        List<Integer> templateLengthsL = new ArrayList<>();
-        List<Long> offsetsL = new ArrayList<>();
-        List<Integer> lengthsL = new ArrayList<>();
-        List<byte[]> seqChunks = new ArrayList<>();
-        List<byte[]> qualChunks = new ArrayList<>();
-        long runningOffset = 0L;
+        BatchAccumulator acc = new BatchAccumulator();
 
         SamReaderFactory factory = makeReaderFactory();
         SamReader reader;
@@ -270,85 +255,9 @@ public class BamReader {
                             "Malformed record in " + path + ": " + e.getMessage(), e);
                     }
 
-                    String qname = rec.getReadName() != null ? rec.getReadName() : "*";
-                    int flag = rec.getFlags();
-                    String rname = rec.getReferenceName() != null
-                        ? rec.getReferenceName() : "*";
-                    // SAM spec: 1-based pos; 0 means unmapped/no position.
-                    // htsjdk: getAlignmentStart() returns 1-based or 0 if NO_ALIGNMENT_START.
-                    long pos = rec.getAlignmentStart();
-                    int mapq = rec.getMappingQuality();
-                    String cigar = rec.getCigarString() != null
-                        ? rec.getCigarString() : "*";
-                    // RNEXT: htsjdk auto-expands "=" to the actual ref name —
-                    // same semantic as the prior samtools-text parser's manual
-                    // expansion (Gotcha §156).
-                    String rnext = rec.getMateReferenceName() != null
-                        ? rec.getMateReferenceName() : "*";
-                    long pnext = rec.getMateAlignmentStart();
-                    int tlen = rec.getInferredInsertSize();
-
-                    readNames.add(qname);
-                    flagsL.add(flag);
-                    chromosomes.add(rname);
-                    positionsL.add(pos);
-                    mappingQualitiesL.add(mapq);
-                    cigars.add(cigar);
-                    mateChromosomes.add(rnext);
-                    matePositionsL.add(pnext);
-                    templateLengthsL.add(tlen);
-
-                    // SEQ: getReadString() returns "*" for missing or an ASCII
-                    // sequence string. Match the prior parser's "*" → empty bytes.
-                    String seqStr = rec.getReadString();
-                    byte[] seqBytes;
-                    if (seqStr == null || "*".equals(seqStr)) {
-                        seqBytes = new byte[0];
-                    } else {
-                        seqBytes = seqStr.getBytes(StandardCharsets.US_ASCII);
-                    }
-
-                    // QUAL: getBaseQualities() returns raw Phred bytes (0-93)
-                    // or SAMRecord.NULL_QUALS (a static empty array) for "*".
-                    // Prior parser stored Phred+33 ASCII bytes (verbatim from
-                    // SAM text). Convert raw -> ASCII by adding 33 to match.
-                    byte[] qualRaw = rec.getBaseQualities();
-                    byte[] qualBytes;
-                    if (qualRaw == null || qualRaw == SAMRecord.NULL_QUALS
-                            || qualRaw.length == 0) {
-                        if (seqBytes.length == 0) {
-                            qualBytes = new byte[0];
-                        } else {
-                            qualBytes = new byte[seqBytes.length];
-                            Arrays.fill(qualBytes, (byte) 0xFF);
-                        }
-                    } else {
-                        qualBytes = new byte[qualRaw.length];
-                        for (int i = 0; i < qualRaw.length; i++) {
-                            qualBytes[i] = (byte) ((qualRaw[i] & 0xFF) + 33);
-                        }
-                    }
-
-                    if (qualBytes.length != seqBytes.length) {
-                        if (seqBytes.length == 0) {
-                            qualBytes = new byte[0];
-                        } else if (qualBytes.length != 0) {
-                            throw new IOException(
-                                "SEQ/QUAL length mismatch in record " + qname
-                                + ": SEQ=" + seqBytes.length
-                                + " QUAL=" + qualBytes.length);
-                        }
-                    }
-
-                    int length = seqBytes.length;
-                    offsetsL.add(runningOffset);
-                    lengthsL.add(length);
-                    seqChunks.add(seqBytes);
-                    qualChunks.add(qualBytes);
-                    runningOffset += length;
-
-                    if (readNames.size() % PROGRESS_INTERVAL_READS == 0) {
-                        progress.onProgress(readNames.size(), -1L);
+                    addRecord(acc, rec);
+                    if (acc.size() % PROGRESS_INTERVAL_READS == 0) {
+                        progress.onProgress(acc.size(), -1L);
                     }
                 }
             } finally {
@@ -364,40 +273,7 @@ public class BamReader {
         // reference_uri: first @SQ wins.
         String referenceUri = sqNames.isEmpty() ? "" : sqNames.get(0);
 
-        int n = readNames.size();
-        long[] positions = new long[n];
-        byte[] mappingQualities = new byte[n];
-        int[] flags = new int[n];
-        long[] offsets = new long[n];
-        int[] lengths = new int[n];
-        long[] matePositions = new long[n];
-        int[] templateLengths = new int[n];
-        int totalSeqBytes = 0;
-        int totalQualBytes = 0;
-        for (int i = 0; i < n; i++) {
-            positions[i]        = positionsL.get(i);
-            mappingQualities[i] = (byte) (mappingQualitiesL.get(i) & 0xFF);
-            flags[i]            = flagsL.get(i);
-            offsets[i]          = offsetsL.get(i);
-            lengths[i]          = lengthsL.get(i);
-            matePositions[i]    = matePositionsL.get(i);
-            templateLengths[i]  = templateLengthsL.get(i);
-            totalSeqBytes      += seqChunks.get(i).length;
-            totalQualBytes     += qualChunks.get(i).length;
-        }
-
-        byte[] sequences = new byte[totalSeqBytes];
-        byte[] qualities = new byte[totalQualBytes];
-        int seqOff = 0, qualOff = 0;
-        for (int i = 0; i < n; i++) {
-            byte[] s = seqChunks.get(i);
-            byte[] q = qualChunks.get(i);
-            System.arraycopy(s, 0, sequences, seqOff, s.length);
-            seqOff += s.length;
-            System.arraycopy(q, 0, qualities, qualOff, q.length);
-            qualOff += q.length;
-        }
-
+        int n = acc.size();
         this.lastProvenance = List.copyOf(provenance);
 
         // Final progress fire — total is now known. Listeners can flip
@@ -406,26 +282,187 @@ public class BamReader {
         // 100% before the write phase begins.
         progress.onProgress((long) n, (long) n);
 
-        return new WrittenGenomicRun(
-            AcquisitionMode.GENOMIC_WGS,
-            referenceUri,
-            rgPlatform,
-            effectiveSample,
-            positions,
-            mappingQualities,
-            flags,
-            sequences,
-            qualities,
-            offsets,
-            lengths,
-            cigars,
-            readNames,
-            mateChromosomes,
-            matePositions,
-            templateLengths,
-            chromosomes,
-            Compression.ZLIB
-        );
+        return acc.toRun(AcquisitionMode.GENOMIC_WGS, referenceUri, rgPlatform,
+            effectiveSample, List.of());
+    }
+
+    /** Batches of {@code batchReads} reads as {@link WrittenGenomicRun}s
+     *  carrying the run-level metadata ({@code @SQ}, {@code @RG},
+     *  {@code @PG} provenance) so the first batch configures a
+     *  {@link global.thalion.ttio.genomics.GenomicStreamWriter}. The
+     *  iterator holds one batch; it implements {@link AutoCloseable}
+     *  and closes the SAM reader at EOF or when closed early. */
+    public Iterator<WrittenGenomicRun> iterBatches(String name, String region,
+                                                   String sampleName, int batchReads)
+            throws IOException {
+        if (batchReads < 1) throw new IllegalArgumentException("batchReads must be >= 1");
+        if (!Files.exists(path)) {
+            throw new IOException("BAM/SAM file not found: " + path);
+        }
+        if (Files.size(path) == 0) {
+            throw new IOException("BAM/SAM file is empty (0 bytes): " + path);
+        }
+        long fileMtime;
+        try {
+            fileMtime = Files.getLastModifiedTime(path).toInstant().getEpochSecond();
+        } catch (IOException e) {
+            fileMtime = System.currentTimeMillis() / 1000L;
+        }
+        SamReader reader;
+        try {
+            reader = makeReaderFactory().open(SamInputResource.of(path.toFile()));
+        } catch (RuntimeException e) {
+            throw new IOException(
+                "Failed to open BAM/SAM/CRAM: " + path + ": " + e.getMessage(), e);
+        }
+        SAMFileHeader header = reader.getFileHeader();
+        List<String> sqNames = new ArrayList<>();
+        for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
+            sqNames.add(seq.getSequenceName());
+        }
+        String rgSample = "", rgPlatform = "";
+        for (SAMReadGroupRecord rg : header.getReadGroups()) {
+            if (rgSample.isEmpty() && rg.getSample() != null) rgSample = rg.getSample();
+            if (rgPlatform.isEmpty() && rg.getPlatform() != null) rgPlatform = rg.getPlatform();
+        }
+        List<ProvenanceRecord> provenance = new ArrayList<>();
+        for (SAMProgramRecord pg : header.getProgramRecords()) {
+            String program = pg.getProgramName() != null ? pg.getProgramName() : "";
+            Map<String, String> params = new LinkedHashMap<>();
+            if (pg.getCommandLine() != null) params.put("CL", pg.getCommandLine());
+            if (pg.getId() != null) params.put("ID", pg.getId());
+            if (pg.getProgramVersion() != null) params.put("VN", pg.getProgramVersion());
+            if (pg.getPreviousProgramGroupId() != null) params.put("PP", pg.getPreviousProgramGroupId());
+            provenance.add(new ProvenanceRecord(fileMtime, program, params, List.of(), List.of()));
+        }
+        this.lastProvenance = List.copyOf(provenance);
+        final String referenceUri = sqNames.isEmpty() ? "" : sqNames.get(0);
+        final String sample = sampleName != null ? sampleName : rgSample;
+        final String platform = rgPlatform;
+        final List<ProvenanceRecord> prov = List.copyOf(provenance);
+        final Iterator<SAMRecord> it;
+        try {
+            it = iteratorFor(reader, region);
+        } catch (RuntimeException e) {
+            reader.close();
+            throw new IOException(
+                "Failed to iterate records in " + path + ": " + e.getMessage(), e);
+        }
+        return new BatchIterator(reader, it, batchReads, referenceUri, platform, sample, prov);
+    }
+
+    /** {@link #iterBatches} as a {@link GenomicStreamSource}. */
+    public GenomicStreamSource stream(String name, String region, String sampleName,
+                                      Path referenceFasta, boolean embedReference, int batchReads) {
+        return new GenomicStreamSource(name, () -> {
+            try {
+                return iterBatches(name, region, sampleName, batchReads);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        }, referenceFasta, embedReference, null, null, false);
+    }
+
+    /** Default batch of 100 000 reads. */
+    public GenomicStreamSource stream(String name, String region, String sampleName,
+                                      Path referenceFasta, boolean embedReference) {
+        return stream(name, region, sampleName, referenceFasta, embedReference, DEFAULT_BATCH_READS);
+    }
+
+    /** Reads per streamed batch. */
+    public static final int DEFAULT_BATCH_READS = 100_000;
+
+    private final class BatchIterator implements Iterator<WrittenGenomicRun>, AutoCloseable {
+        private final SamReader reader;
+        private final Iterator<SAMRecord> records;
+        private final int batchReads;
+        private final String referenceUri, platform, sample;
+        private final List<ProvenanceRecord> prov;
+        private final BatchAccumulator acc = new BatchAccumulator();
+        private WrittenGenomicRun next;
+        private boolean done;
+
+        BatchIterator(SamReader reader, Iterator<SAMRecord> records, int batchReads,
+                      String referenceUri, String platform, String sample,
+                      List<ProvenanceRecord> prov) {
+            this.reader = reader; this.records = records; this.batchReads = batchReads;
+            this.referenceUri = referenceUri; this.platform = platform; this.sample = sample;
+            this.prov = prov;
+        }
+
+        @Override public boolean hasNext() {
+            if (next != null) return true;
+            if (done) return false;
+            try {
+                while (acc.size() < batchReads && records.hasNext()) {
+                    addRecord(acc, records.next());
+                }
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            } catch (RuntimeException e) {
+                close();
+                throw new java.io.UncheckedIOException(new IOException(
+                    "Malformed record in " + path + ": " + e.getMessage(), e));
+            }
+            if (acc.size() == 0) { close(); return false; }
+            next = acc.toRun(AcquisitionMode.GENOMIC_WGS, referenceUri, platform, sample, prov);
+            acc.clear();
+            if (!records.hasNext()) close();
+            return true;
+        }
+
+        @Override public WrittenGenomicRun next() {
+            if (!hasNext()) throw new java.util.NoSuchElementException();
+            WrittenGenomicRun r = next;
+            next = null;
+            return r;
+        }
+
+        @Override public void close() {
+            if (done) return;
+            done = true;
+            if (records instanceof htsjdk.samtools.util.CloseableIterator<?> c) c.close();
+            try { reader.close(); } catch (IOException ignored) { }
+        }
+    }
+
+    /** One htsjdk record into the accumulator (SEQ {@code *} → empty
+     *  bytes; QUAL {@code *} with a sequence → 0xFF fill; Phred+33). */
+    private static void addRecord(BatchAccumulator acc, SAMRecord rec) throws IOException {
+        String qname = rec.getReadName() != null ? rec.getReadName() : "*";
+        int flag = rec.getFlags();
+        String rname = rec.getReferenceName() != null ? rec.getReferenceName() : "*";
+        long pos = rec.getAlignmentStart();
+        int mapq = rec.getMappingQuality();
+        String cigar = rec.getCigarString() != null ? rec.getCigarString() : "*";
+        String rnext = rec.getMateReferenceName() != null ? rec.getMateReferenceName() : "*";
+        long pnext = rec.getMateAlignmentStart();
+        int tlen = rec.getInferredInsertSize();
+        String seqStr = rec.getReadString();
+        byte[] seqBytes = (seqStr == null || "*".equals(seqStr))
+            ? new byte[0] : seqStr.getBytes(StandardCharsets.US_ASCII);
+        byte[] qualRaw = rec.getBaseQualities();
+        byte[] qualBytes;
+        if (qualRaw == null || qualRaw == SAMRecord.NULL_QUALS || qualRaw.length == 0) {
+            if (seqBytes.length == 0) {
+                qualBytes = new byte[0];
+            } else {
+                qualBytes = new byte[seqBytes.length];
+                Arrays.fill(qualBytes, (byte) 0xFF);
+            }
+        } else {
+            qualBytes = new byte[qualRaw.length];
+            for (int i = 0; i < qualRaw.length; i++) qualBytes[i] = (byte) ((qualRaw[i] & 0xFF) + 33);
+        }
+        if (qualBytes.length != seqBytes.length) {
+            if (seqBytes.length == 0) {
+                qualBytes = new byte[0];
+            } else if (qualBytes.length != 0) {
+                throw new IOException("SEQ/QUAL length mismatch in record " + qname
+                    + ": SEQ=" + seqBytes.length + " QUAL=" + qualBytes.length);
+            }
+        }
+        acc.add(qname, flag, rname, pos, mapq, cigar, rnext, pnext, tlen, seqBytes, qualBytes);
     }
 
     // ------------------------------------------------------------------

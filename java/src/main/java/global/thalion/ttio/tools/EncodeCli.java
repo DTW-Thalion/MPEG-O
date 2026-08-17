@@ -138,7 +138,10 @@ public final class EncodeCli {
         System.err.println(
             "usage: EncodeCli --input <path> [--input <path> ...] "
             + "--format <fmt> --output <out.tio> [--extra k=v ...]\n"
-            + "       EncodeCli --list-formats");
+            + "       EncodeCli --list-formats\n"
+            + "  streaming extras (bam/sam/cram, mzml): block_reads=N block_bytes=N "
+            + "legacy_whole_channel=1 reference=<fasta> embed_reference=1 "
+            + "batch_reads=N batch_spectra=N");
         return 2;
     }
 }
