@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 
 from _digests import genomic_run_sam11_md5, sam11_md5
 from ttio.spectral_dataset import SpectralDataset
-from tests.validation.test_cross_language_smoke import _resolve_java_verify
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / "validation"))
+from test_cross_language_smoke import _resolve_java_verify  # noqa: E402
 BAM = HERE.parent / "fixtures/genomic/m87_test.bam"
 
 
