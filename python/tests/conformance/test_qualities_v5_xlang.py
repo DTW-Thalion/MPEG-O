@@ -126,10 +126,6 @@ def _write_v5_file(out: Path) -> bytes:
         mate_positions=np.full(N_READS, -1, dtype=np.int64),
         template_lengths=np.zeros(N_READS, dtype=np.int32),
         chromosomes=["chr1"] * N_READS,
-        # blocks_v1 read support in Java and ObjC lands with their
-        # streaming specs; until then the cross-language genomic
-        # fixtures use the v1.8 whole-channel layout.
-        opt_legacy_whole_channel=True,
         signal_codec_overrides={"qualities": Compression.FQZCOMP_NX16_Z},
     )
     SpectralDataset.write_minimal(
