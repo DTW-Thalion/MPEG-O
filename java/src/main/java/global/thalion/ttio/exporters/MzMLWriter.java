@@ -6,7 +6,9 @@ import global.thalion.ttio.Enums.*;
 import global.thalion.ttio.importers.CVTermMapper;
 import global.thalion.ttio.io.ProgressSink;
 
+import java.io.BufferedOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -68,7 +70,41 @@ public final class MzMLWriter {
     public static void write(AcquisitionRun run, String path,
                               boolean zlibCompress, ProgressSink progress) {
         if (progress == null) progress = ProgressSink.discard();
-        StringBuilder sb = new StringBuilder();
+        try (Out sb = new Out(Path.of(path))) {
+            writeTo(run, sb, zlibCompress, progress);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Failed to write mzML: " + path, e);
+        }
+    }
+
+    /** Counting UTF-8 output: the byte position of every {@code <spectrum}
+     *  and {@code <chromatogram} tag is known as it is written, so the
+     *  indexedmzML index needs no second pass and no in-memory copy. */
+    private static final class Out implements AutoCloseable {
+        private final OutputStream out;
+        private long count;
+
+        Out(Path path) throws IOException {
+            this.out = new BufferedOutputStream(Files.newOutputStream(path), 1 << 16);
+        }
+
+        Out append(String s) throws IOException {
+            byte[] b = s.getBytes(StandardCharsets.UTF_8);
+            out.write(b);
+            count += b.length;
+            return this;
+        }
+        Out append(char c) throws IOException { return append(String.valueOf(c)); }
+        Out append(int v) throws IOException { return append(String.valueOf(v)); }
+        Out append(long v) throws IOException { return append(String.valueOf(v)); }
+        Out append(double v) throws IOException { return append(String.valueOf(v)); }
+        Out append(Object o) throws IOException { return append(String.valueOf(o)); }
+        long length() { return count; }
+        @Override public void close() throws IOException { out.close(); }
+    }
+
+    private static void writeTo(AcquisitionRun run, Out sb, boolean zlibCompress,
+                                ProgressSink progress) throws IOException {
         sb.append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
         sb.append("<indexedmzML xmlns=\"http://psi.hupo.org/ms/mzml\"" +
                   " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\">\n");
@@ -160,7 +196,7 @@ public final class MzMLWriter {
             spectrumIds.add(scanId);
 
             // Record byte offset before this <spectrum tag
-            spectrumOffsets.add(byteLength(sb));
+            spectrumOffsets.add(sb.length());
 
             sb.append("      <spectrum index=\"").append(i)
               .append("\" id=\"").append(scanId)
@@ -289,7 +325,7 @@ public final class MzMLWriter {
                 Chromatogram c = chroms.get(i);
                 String chromId = "chrom=" + (i + 1);
                 chromIds.add(chromId);
-                chromOffsets.add(byteLength(sb));
+                chromOffsets.add(sb.length());
 
                 sb.append("      <chromatogram index=\"").append(i)
                   .append("\" id=\"").append(chromId)
@@ -345,7 +381,7 @@ public final class MzMLWriter {
         sb.append("</mzML>\n");
 
         // indexList
-        long indexListOffset = byteLength(sb);
+        long indexListOffset = sb.length();
         int indexCount = 1 + (chromOffsets.isEmpty() ? 0 : 1);
         sb.append("<indexList count=\"").append(indexCount).append("\">\n");
 
@@ -371,12 +407,6 @@ public final class MzMLWriter {
         sb.append("<indexListOffset>").append(indexListOffset).append("</indexListOffset>\n");
         sb.append("<fileChecksum>0</fileChecksum>\n");
         sb.append("</indexedmzML>\n");
-
-        try {
-            Files.writeString(Path.of(path), sb.toString(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new UncheckedIOException("Failed to write mzML: " + path, e);
-        }
         progress.onProgress((long) specCount, (long) specCount);
     }
 
@@ -412,11 +442,6 @@ public final class MzMLWriter {
         } finally {
             deflater.end();
         }
-    }
-
-    /** Return the UTF-8 byte length of the StringBuilder contents so far. */
-    private static long byteLength(StringBuilder sb) {
-        return sb.toString().getBytes(StandardCharsets.UTF_8).length;
     }
 
     private static String escapeXml(String s) {

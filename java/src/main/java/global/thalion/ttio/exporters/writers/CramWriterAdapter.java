@@ -40,10 +40,9 @@ public final class CramWriterAdapter implements Writer {
         }
         Path reference = (ref instanceof Path p) ? p : Path.of(ref.toString());
         GenomicRun run = RunSelection.genomicRun(ds, layer);
-        WrittenGenomicRun written = RunSelection.toWritten(run);
         // GUI: new CramWriter(targetPath, reference)
         //          .write(w, provenance, /*sort=*/true, sink).
         new CramWriter(output, reference)
-            .write(written, ds.provenanceRecords(), true, null);
+            .write(run, ds.provenanceRecords(), true, null);
     }
 }
