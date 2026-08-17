@@ -138,6 +138,34 @@
                                            fields:(NSArray<TTIOCompoundField *> *)fields
                                             error:(NSError **)error;
 
+/** Create an empty compound dataset with an unlimited first dimension,
+ *  chunked in ``chunkRows`` records; rows are added with
+ *  ``+appendRows:toGroup:name:fields:error:``. Primitive kinds only. */
++ (BOOL)createExtendableCompoundInGroup:(TTIOHDF5Group *)parent
+                                   name:(NSString *)name
+                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                              chunkRows:(NSUInteger)chunkRows
+                                  error:(NSError **)error;
+
+/** Append rows (dictionaries keyed by field name) to a dataset created
+ *  by ``+createExtendableCompoundInGroup:``. */
++ (BOOL)appendRows:(NSArray<NSDictionary *> *)rows
+           toGroup:(TTIOHDF5Group *)parent
+              name:(NSString *)name
+            fields:(NSArray<TTIOCompoundField *> *)fields
+             error:(NSError **)error;
+
+/** Field schema of an existing compound dataset inferred from its
+ *  member types, or ``nil`` when the dataset is not a compound or a
+ *  member kind is not one of the five (six with UInt64) supported. */
++ (NSArray<TTIOCompoundField *> *)schemaOfCompoundInGroup:(TTIOHDF5Group *)parent name:(NSString *)name;
+
+/** ``YES`` when the dataset exists with an unlimited first dimension. */
++ (BOOL)isExtendableCompoundInGroup:(TTIOHDF5Group *)parent name:(NSString *)name;
+
+/** Record count of an existing compound dataset (0 when absent). */
++ (NSUInteger)rowCountInGroup:(TTIOHDF5Group *)parent name:(NSString *)name;
+
 @end
 
 #endif /* TTIO_COMPOUND_IO_H */

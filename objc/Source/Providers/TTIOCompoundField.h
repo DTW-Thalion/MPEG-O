@@ -25,6 +25,8 @@ typedef NS_ENUM(NSInteger, TTIOCompoundFieldKind) {
     TTIOCompoundFieldKindFloat64  = 2,
     TTIOCompoundFieldKindVLString = 3,
     TTIOCompoundFieldKindVLBytes  = 4,
+    /** Unsigned 64-bit integer; carried as an NSNumber (unsignedLongLong). */
+    TTIOCompoundFieldKindUInt64   = 5,
 };
 
 /**

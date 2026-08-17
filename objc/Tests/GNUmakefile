@@ -112,6 +112,7 @@ TTIOTests_OBJC_FILES = \
 	TestC3ProvidersErrorPaths.m \
 	TestC5ProtectionGap.m \
 	TestC3bProvidersWritePaths.m \
+	TestProviderExtendable.m \
 	TestC2bHDF5CompoundType.m \
 	TestC3cCanonicalBytes.m \
 	TestPhase12RunProtocol.m \

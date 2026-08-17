@@ -74,6 +74,15 @@
                                                         fields:(NSArray<TTIOCompoundField *> *)fields
                                                          count:(NSUInteger)count;
 
+/** Compound adapter over an existing or freshly created dataset;
+ *  ``extendable`` marks one created by
+ *  ``TTIOCompoundIO createExtendableCompoundInGroup:``. */
++ (id<TTIOStorageDataset>)adapterForCompoundDatasetWithParent:(TTIOHDF5Group *)parent
+                                                          name:(NSString *)name
+                                                        fields:(NSArray<TTIOCompoundField *> *)fields
+                                                         count:(NSUInteger)count
+                                                    extendable:(BOOL)extendable;
+
 @end
 
 #endif

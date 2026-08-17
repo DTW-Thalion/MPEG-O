@@ -29,6 +29,7 @@
     NSUInteger     _length;
     id             _retainer;
     TTIOHDF5File  *_file;   // cached owning file for wrapper rwlock (M23)
+    BOOL           _extendable;
 }
 
 - (instancetype)initWithDatasetId:(hid_t)did
@@ -36,12 +37,23 @@
                            length:(NSUInteger)length
                          retainer:(id)retainer
 {
+    return [self initWithDatasetId:did precision:precision length:length
+                          retainer:retainer extendable:NO];
+}
+
+- (instancetype)initWithDatasetId:(hid_t)did
+                        precision:(TTIOPrecision)precision
+                           length:(NSUInteger)length
+                         retainer:(id)retainer
+                       extendable:(BOOL)extendable
+{
     self = [super init];
     if (self) {
         _did = did;
         _precision = precision;
         _length = length;
         _retainer = retainer;
+        _extendable = extendable;
         if ([retainer respondsToSelector:@selector(owningFile)]) {
             _file = [(id)retainer owningFile];
         }
@@ -52,6 +64,68 @@
 - (hid_t)datasetId         { return _did; }
 - (TTIOPrecision)precision { return _precision; }
 - (NSUInteger)length       { return _length; }
+- (BOOL)isExtendable       { return _extendable; }
+
+- (BOOL)_writeRange:(NSData *)data atOffset:(NSUInteger)offset count:(NSUInteger)n error:(NSError **)error
+{
+    hid_t fspace = H5Dget_space(_did);
+    hsize_t off[1] = { (hsize_t)offset };
+    hsize_t cnt[1] = { (hsize_t)n };
+    H5Sselect_hyperslab(fspace, H5S_SELECT_SET, off, NULL, cnt, NULL);
+    hid_t mspace = H5Screate_simple(1, cnt, NULL);
+    hid_t htype = TTIOHDF5TypeForPrecision(_precision);
+    herr_t s = H5Dwrite(_did, htype, mspace, fspace, H5P_DEFAULT, data.bytes);
+    if (!TTIOHDF5TypeIsBuiltin(_precision)) H5Tclose(htype);
+    H5Sclose(mspace); H5Sclose(fspace);
+    if (s < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"H5Dwrite (hyperslab) failed");
+        return NO;
+    }
+    return YES;
+}
+
+- (BOOL)appendData:(NSData *)data error:(NSError **)error
+{
+    if (!_extendable) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"dataset is not extendable");
+        return NO;
+    }
+    NSUInteger elem = TTIOPrecisionElementSize(_precision);
+    NSUInteger n = elem ? data.length / elem : 0;
+    if (n == 0) return YES;
+    [_file lockForWriting];
+    hsize_t newDims[1] = { (hsize_t)(_length + n) };
+    herr_t rc = H5Dset_extent(_did, newDims);
+    BOOL ok = NO;
+    if (rc < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"H5Dset_extent failed");
+    } else {
+        ok = [self _writeRange:data atOffset:_length count:n error:error];
+        if (ok) _length += n;
+    }
+    [_file unlockForWriting];
+    return ok;
+}
+
+- (BOOL)writeSlice:(NSData *)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    NSUInteger elem = TTIOPrecisionElementSize(_precision);
+    NSUInteger n = elem ? data.length / elem : 0;
+    if (n == 0) return YES;
+    if (offset + n > _length) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange,
+            @"writeSlice [%lu, %lu) exceeds dataset length %lu",
+            (unsigned long)offset, (unsigned long)(offset + n), (unsigned long)_length);
+        return NO;
+    }
+    [_file lockForWriting];
+    BOOL ok = [self _writeRange:data atOffset:offset count:n error:error];
+    [_file unlockForWriting];
+    return ok;
+}
 
 - (BOOL)writeData:(NSData *)data error:(NSError **)error
 {

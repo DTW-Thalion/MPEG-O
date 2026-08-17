@@ -192,6 +192,25 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 /** Return the list of attribute names defined on the dataset, in backend iteration order. */
 - (NSArray<NSString *> *)attributeNames;
 
+/** ``YES`` when the dataset was created extendable and accepts
+ *  ``-appendData:error:``. */
+- (BOOL)isExtendable;
+
+/**
+ * Grow the dataset along its first axis.
+ *
+ * @param data  Packed little-endian elements (``NSData``) for a
+ *              primitive dataset, or ``NSArray<NSDictionary *>`` rows
+ *              for a compound one.
+ * @param error Populated with ``TTIOErrorDatasetWrite`` when the
+ *              dataset is not extendable.
+ */
+- (BOOL)appendData:(id)data error:(NSError **)error;
+
+/** Overwrite elements in place starting at ``offset``; the dataset
+ *  does not grow. */
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error;
+
 @optional
 /** Release the dataset's backend resources eagerly. Optional; not all providers maintain per-dataset state. */
 - (void)close;
@@ -348,6 +367,32 @@ typedef NS_ENUM(NSInteger, TTIOStorageOpenMode) {
 - (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
                                                 fields:(NSArray<TTIOCompoundField *> *)fields
                                                  count:(NSUInteger)count
+                                                 error:(NSError **)error;
+
+/**
+ * Create a primitive 1-D dataset, optionally extendable along its
+ * single axis (``chunkSize`` must then be > 0). Extendable datasets
+ * accept ``-appendData:error:``.
+ */
+- (id<TTIOStorageDataset>)createDatasetNamed:(NSString *)name
+                                    precision:(TTIOPrecision)precision
+                                       length:(NSUInteger)length
+                                    chunkSize:(NSUInteger)chunkSize
+                                  compression:(TTIOCompression)compression
+                             compressionLevel:(int)compressionLevel
+                                   extendable:(BOOL)extendable
+                                        error:(NSError **)error;
+
+/**
+ * Create a compound dataset, optionally extendable in rows of
+ * ``chunkRows`` (must then be > 0). HDF5 extendable compounds take
+ * primitive field kinds only.
+ */
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
+                                                fields:(NSArray<TTIOCompoundField *> *)fields
+                                                 count:(NSUInteger)count
+                                            extendable:(BOOL)extendable
+                                             chunkRows:(NSUInteger)chunkRows
                                                  error:(NSError **)error;
 
 // Attributes

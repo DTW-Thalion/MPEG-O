@@ -565,6 +565,7 @@ static size_t fieldByteSize(TTIOCompoundFieldKind kind)
     switch (kind) {
         case TTIOCompoundFieldKindUInt32:   return 4;
         case TTIOCompoundFieldKindInt64:    return 8;
+        case TTIOCompoundFieldKindUInt64:   return 8;
         case TTIOCompoundFieldKindFloat64:  return 8;
         case TTIOCompoundFieldKindVLString: return sizeof(char *);
         case TTIOCompoundFieldKindVLBytes:  return sizeof(hvl_t);
@@ -601,6 +602,8 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
                 [t addField:f.name type:H5T_NATIVE_UINT32 offset:off]; break;
             case TTIOCompoundFieldKindInt64:
                 [t addField:f.name type:H5T_NATIVE_INT64 offset:off]; break;
+            case TTIOCompoundFieldKindUInt64:
+                [t addField:f.name type:H5T_NATIVE_UINT64 offset:off]; break;
             case TTIOCompoundFieldKindFloat64:
                 [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
             case TTIOCompoundFieldKindVLString:
@@ -611,6 +614,45 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
     }
     *outRecSize = recSize;
     return t;
+}
+
+// Pack primitive rows (dictionary per record) into a record buffer of
+// `recSize` bytes each; used by the extendable append path.
+static void ttioPackPrimitiveRows(NSArray<NSDictionary *> *rows,
+                                  NSArray<TTIOCompoundField *> *fields,
+                                  const size_t *fieldOff, size_t recSize,
+                                  uint8_t *buf)
+{
+    NSUInteger nFields = fields.count;
+    for (NSUInteger r = 0; r < rows.count; r++) {
+        NSDictionary *row = rows[r];
+        uint8_t *base = buf + r * recSize;
+        for (NSUInteger i = 0; i < nFields; i++) {
+            TTIOCompoundField *f = fields[i];
+            id v = row[f.name];
+            size_t off = fieldOff[i];
+            switch (f.kind) {
+                case TTIOCompoundFieldKindUInt32: {
+                    uint32_t x = (uint32_t)[v unsignedIntValue]; memcpy(base + off, &x, 4); break; }
+                case TTIOCompoundFieldKindInt64: {
+                    int64_t x = [v longLongValue]; memcpy(base + off, &x, 8); break; }
+                case TTIOCompoundFieldKindUInt64: {
+                    uint64_t x = [v unsignedLongLongValue]; memcpy(base + off, &x, 8); break; }
+                case TTIOCompoundFieldKindFloat64: {
+                    double x = [v doubleValue]; memcpy(base + off, &x, 8); break; }
+                default: break;
+            }
+        }
+    }
+}
+
+static BOOL ttioSchemaIsPrimitive(NSArray<TTIOCompoundField *> *fields)
+{
+    for (TTIOCompoundField *f in fields) {
+        if (f.kind == TTIOCompoundFieldKindVLString ||
+            f.kind == TTIOCompoundFieldKindVLBytes) return NO;
+    }
+    return YES;
 }
 
 + (BOOL)writeGeneric:(NSArray<NSDictionary *> *)rows
@@ -676,6 +718,11 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
                 }
                 case TTIOCompoundFieldKindInt64: {
                     int64_t x = [v longLongValue];
+                    memcpy(base + off, &x, 8);
+                    break;
+                }
+                case TTIOCompoundFieldKindUInt64: {
+                    uint64_t x = [v unsignedLongLongValue];
                     memcpy(base + off, &x, 8);
                     break;
                 }
@@ -769,6 +816,11 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
                             ? @(((const int64_t *)[colObj bytes])[r])
                             : ((NSArray *)colObj)[r];
                         break;
+                    case TTIOCompoundFieldKindUInt64:
+                        v = [colObj isKindOfClass:[NSData class]]
+                            ? @(((const uint64_t *)[colObj bytes])[r])
+                            : ((NSArray *)colObj)[r];
+                        break;
                     case TTIOCompoundFieldKindFloat64:
                         v = [colObj isKindOfClass:[NSData class]]
                             ? @(((const double *)[colObj bytes])[r])
@@ -833,6 +885,7 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
         id colObj = columns[f.name];   // borrowed; `columns` alive for call
         BOOL isPrim = (f.kind == TTIOCompoundFieldKindUInt32 ||
                        f.kind == TTIOCompoundFieldKindInt64  ||
+                       f.kind == TTIOCompoundFieldKindUInt64 ||
                        f.kind == TTIOCompoundFieldKindFloat64);
         if (isPrim && [colObj isKindOfClass:[NSData class]]) {
             primPtr[i] = [(NSData *)colObj bytes];   // packed C values
@@ -866,6 +919,13 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
                     int64_t x = primPtr[i]
                         ? ((const int64_t *)primPtr[i])[r]
                         : [elems[i][r] longLongValue];
+                    memcpy(base + off, &x, 8);
+                    break;
+                }
+                case TTIOCompoundFieldKindUInt64: {
+                    uint64_t x = primPtr[i]
+                        ? ((const uint64_t *)primPtr[i])[r]
+                        : [elems[i][r] unsignedLongLongValue];
                     memcpy(base + off, &x, 8);
                     break;
                 }
@@ -941,6 +1001,8 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
                 [t addField:f.name type:H5T_NATIVE_UINT32 offset:off]; break;
             case TTIOCompoundFieldKindInt64:
                 [t addField:f.name type:H5T_NATIVE_INT64 offset:off]; break;
+            case TTIOCompoundFieldKindUInt64:
+                [t addField:f.name type:H5T_NATIVE_UINT64 offset:off]; break;
             case TTIOCompoundFieldKindFloat64:
                 [t addField:f.name type:H5T_NATIVE_DOUBLE offset:off]; break;
             case TTIOCompoundFieldKindVLString:
@@ -976,6 +1038,10 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
                     int64_t x; memcpy(&x, base + off, 8);
                     row[f.name] = @(x); break;
                 }
+                case TTIOCompoundFieldKindUInt64: {
+                    uint64_t x; memcpy(&x, base + off, 8);
+                    row[f.name] = @(x); break;
+                }
                 case TTIOCompoundFieldKindFloat64: {
                     double x; memcpy(&x, base + off, 8);
                     row[f.name] = @(x); break;
@@ -1006,6 +1072,165 @@ ttioMakeCompoundType(NSArray<TTIOCompoundField *> *fields,
     H5Sclose(space_id);
     [t close];
     return out;
+}
+
+#pragma mark - Extendable compound datasets
+
++ (BOOL)createExtendableCompoundInGroup:(TTIOHDF5Group *)parent
+                                   name:(NSString *)name
+                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                              chunkRows:(NSUInteger)chunkRows
+                                  error:(NSError **)error
+{
+    if (!ttioSchemaIsPrimitive(fields)) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable compound '%@': variable-length fields are not supported", name);
+        return NO;
+    }
+    if (chunkRows == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument, @"chunkRows must be > 0");
+        return NO;
+    }
+    NSUInteger nFields = fields.count;
+    size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
+    size_t recSize = 0;
+    TTIOHDF5CompoundType *t = ttioMakeCompoundType(fields, fieldOff, &recSize, error);
+    free(fieldOff);
+    if (!t) return NO;
+    hsize_t dims[1] = { 0 };
+    hsize_t maxdims[1] = { H5S_UNLIMITED };
+    hid_t space = H5Screate_simple(1, dims, maxdims);
+    hid_t plist = H5Pcreate(H5P_DATASET_CREATE);
+    hsize_t chunk[1] = { (hsize_t)chunkRows };
+    H5Pset_chunk(plist, 1, chunk);
+    hid_t dset = H5Dcreate2(parent.groupId, [name UTF8String], t.typeId, space,
+                            H5P_DEFAULT, plist, H5P_DEFAULT);
+    BOOL ok = dset >= 0;
+    if (dset >= 0) H5Dclose(dset);
+    H5Pclose(plist);
+    H5Sclose(space);
+    [t close];
+    if (!ok && error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+        @"H5Dcreate2 failed for extendable compound '%@'", name);
+    return ok;
+}
+
++ (BOOL)appendRows:(NSArray<NSDictionary *> *)rows
+           toGroup:(TTIOHDF5Group *)parent
+              name:(NSString *)name
+            fields:(NSArray<TTIOCompoundField *> *)fields
+             error:(NSError **)error
+{
+    if (!ttioSchemaIsPrimitive(fields)) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable compound '%@': variable-length fields are not supported", name);
+        return NO;
+    }
+    if (rows.count == 0) return YES;
+    NSUInteger nFields = fields.count;
+    size_t *fieldOff = malloc((nFields ? nFields : 1) * sizeof(size_t));
+    size_t recSize = 0;
+    TTIOHDF5CompoundType *t = ttioMakeCompoundType(fields, fieldOff, &recSize, error);
+    if (!t) { free(fieldOff); return NO; }
+    uint8_t *buf = calloc(rows.count, recSize);
+    ttioPackPrimitiveRows(rows, fields, fieldOff, recSize, buf);
+    free(fieldOff);
+    BOOL ok = NO;
+    hid_t dset = H5Dopen2(parent.groupId, [name UTF8String], H5P_DEFAULT);
+    if (dset < 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"H5Dopen2 failed for compound '%@'", name);
+    } else {
+        hid_t fs0 = H5Dget_space(dset);
+        hsize_t cur[1] = { 0 };
+        H5Sget_simple_extent_dims(fs0, cur, NULL);
+        H5Sclose(fs0);
+        hsize_t n = (hsize_t)rows.count;
+        hsize_t newDims[1] = { cur[0] + n };
+        if (H5Dset_extent(dset, newDims) >= 0) {
+            hid_t fspace = H5Dget_space(dset);
+            hsize_t off[1] = { cur[0] };
+            hsize_t cnt[1] = { n };
+            H5Sselect_hyperslab(fspace, H5S_SELECT_SET, off, NULL, cnt, NULL);
+            hid_t mspace = H5Screate_simple(1, cnt, NULL);
+            ok = H5Dwrite(dset, t.typeId, mspace, fspace, H5P_DEFAULT, buf) >= 0;
+            H5Sclose(mspace);
+            H5Sclose(fspace);
+            if (!ok && error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+                @"H5Dwrite (append) failed for compound '%@'", name);
+        } else if (error) {
+            *error = TTIOMakeError(TTIOErrorDatasetWrite,
+                @"H5Dset_extent failed for compound '%@'", name);
+        }
+        H5Dclose(dset);
+    }
+    free(buf);
+    [t close];
+    return ok;
+}
+
++ (NSArray<TTIOCompoundField *> *)schemaOfCompoundInGroup:(TTIOHDF5Group *)parent name:(NSString *)name
+{
+    if (![parent hasChildNamed:name]) return nil;
+    hid_t dset = H5Dopen2(parent.groupId, [name UTF8String], H5P_DEFAULT);
+    if (dset < 0) return nil;
+    hid_t ftype = H5Dget_type(dset);
+    NSMutableArray<TTIOCompoundField *> *fields = nil;
+    if (H5Tget_class(ftype) == H5T_COMPOUND) {
+        int n = H5Tget_nmembers(ftype);
+        fields = [NSMutableArray arrayWithCapacity:(NSUInteger)MAX(n, 0)];
+        for (int i = 0; i < n && fields != nil; i++) {
+            char *mname = H5Tget_member_name(ftype, (unsigned)i);
+            hid_t mt = H5Tget_member_type(ftype, (unsigned)i);
+            H5T_class_t cls = H5Tget_class(mt);
+            size_t size = H5Tget_size(mt);
+            NSString *nm = [NSString stringWithUTF8String:mname ?: ""];
+            H5free_memory(mname);
+            TTIOCompoundFieldKind kind;
+            BOOL known = YES;
+            if (cls == H5T_VLEN) kind = TTIOCompoundFieldKindVLBytes;
+            else if (cls == H5T_STRING && H5Tis_variable_str(mt) > 0) kind = TTIOCompoundFieldKindVLString;
+            else if (cls == H5T_INTEGER && size == 4) kind = TTIOCompoundFieldKindUInt32;
+            else if (cls == H5T_INTEGER && size == 8) {
+                kind = (H5Tget_sign(mt) == H5T_SGN_NONE) ? TTIOCompoundFieldKindUInt64
+                                                          : TTIOCompoundFieldKindInt64;
+            }
+            else if (cls == H5T_FLOAT && size == 8) kind = TTIOCompoundFieldKindFloat64;
+            else { known = NO; kind = TTIOCompoundFieldKindVLString; }
+            H5Tclose(mt);
+            if (!known) { fields = nil; break; }
+            [fields addObject:[TTIOCompoundField fieldWithName:nm kind:kind]];
+        }
+    }
+    H5Tclose(ftype);
+    H5Dclose(dset);
+    return fields;
+}
+
++ (BOOL)isExtendableCompoundInGroup:(TTIOHDF5Group *)parent name:(NSString *)name
+{
+    if (![parent hasChildNamed:name]) return NO;
+    hid_t dset = H5Dopen2(parent.groupId, [name UTF8String], H5P_DEFAULT);
+    if (dset < 0) return NO;
+    hid_t space = H5Dget_space(dset);
+    hsize_t dims[1] = { 0 }, maxdims[1] = { 0 };
+    H5Sget_simple_extent_dims(space, dims, maxdims);
+    H5Sclose(space);
+    H5Dclose(dset);
+    return maxdims[0] == H5S_UNLIMITED;
+}
+
++ (NSUInteger)rowCountInGroup:(TTIOHDF5Group *)parent name:(NSString *)name
+{
+    if (![parent hasChildNamed:name]) return 0;
+    hid_t dset = H5Dopen2(parent.groupId, [name UTF8String], H5P_DEFAULT);
+    if (dset < 0) return 0;
+    hid_t space = H5Dget_space(dset);
+    hsize_t dims[1] = { 0 };
+    H5Sget_simple_extent_dims(space, dims, NULL);
+    H5Sclose(space);
+    H5Dclose(dset);
+    return (NSUInteger)dims[0];
 }
 
 @end

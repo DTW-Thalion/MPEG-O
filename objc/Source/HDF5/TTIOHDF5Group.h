@@ -138,6 +138,19 @@
  */
 - (TTIOHDF5Dataset *)openDatasetNamed:(NSString *)name error:(NSError **)error;
 
+/**
+ * Create a 1-D dataset; ``extendable`` gives it an unlimited first
+ * dimension (``chunkSize`` > 0 required) so ``-appendData:`` can grow it.
+ */
+- (TTIOHDF5Dataset *)createDatasetNamed:(NSString *)name
+                              precision:(TTIOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                            compression:(TTIOCompression)compression
+                       compressionLevel:(int)compressionLevel
+                             extendable:(BOOL)extendable
+                                  error:(NSError **)error;
+
 #pragma mark - Attributes
 
 /**

@@ -49,6 +49,25 @@
 /** Element count. */
 @property (readonly) NSUInteger length;
 
+/** ``YES`` when the dataset has an unlimited first dimension. */
+@property (readonly) BOOL isExtendable;
+
+/**
+ * Internal initialiser carrying the extendable flag.
+ */
+- (instancetype)initWithDatasetId:(hid_t)did
+                        precision:(TTIOPrecision)precision
+                           length:(NSUInteger)length
+                         retainer:(id)retainer
+                       extendable:(BOOL)extendable;
+
+/** Extend the dataset by the elements of ``data`` (packed, native
+ *  layout for the precision) and write them after the current end. */
+- (BOOL)appendData:(NSData *)data error:(NSError **)error;
+
+/** Overwrite ``data``'s elements in place starting at ``offset``. */
+- (BOOL)writeSlice:(NSData *)data atOffset:(NSUInteger)offset error:(NSError **)error;
+
 /**
  * Writes all elements.
  *
