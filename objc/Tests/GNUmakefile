@@ -114,6 +114,7 @@ TTIOTests_OBJC_FILES = \
 	TestC3bProvidersWritePaths.m \
 	TestProviderExtendable.m \
 	TestGenomicBlocks.m \
+	TestGenomicStreamWriter.m \
 	TestC2bHDF5CompoundType.m \
 	TestC3cCanonicalBytes.m \
 	TestPhase12RunProtocol.m \

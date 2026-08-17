@@ -49,6 +49,7 @@
 #import "Codecs/TTIOQuality.h"                 // M86 Phase D
 #import "Codecs/TTIOFqzcompNx16Z.h"
 #import "Genomics/TTIOGenomicWriteContext.h"
+#import "Genomics/TTIOGenomicStreamWriter.h"
 #import "Dataset/TTIOSpectralDataset+GenomicWrite.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
 #import "Codecs/TTIOFloatDeltaZstd.h"           // codec id 17, Phase 2 MS default
@@ -1834,6 +1835,13 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     return TTIOCompressionNone;
 }
 
+@interface TTIOSpectralDataset (GenomicWriteStream)
++ (BOOL)_ttio_streamGenomicRun:(TTIOWrittenGenomicRun *)run
+                          name:(NSString *)name
+                         study:(id<TTIOStorageGroup>)study
+                         error:(NSError **)error;
+@end
+
 @implementation TTIOSpectralDataset (GenomicWrite)
 
 + (NSData *)referenceMD5ForRun:(TTIOWrittenGenomicRun *)run
@@ -2355,10 +2363,15 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             if (![gG setAttributeValue:[gNames componentsJoinedByString:@","]
                                forName:@"_run_names" error:error]) return NO;
             for (NSString *gName in gNames) {
-                if (![self writeGenomicRunStorage:genomicRuns[gName]
-                                           toGroup:gG
-                                              name:gName
-                                             error:error]) return NO;
+                TTIOWrittenGenomicRun *gRun = genomicRuns[gName];
+                if (gRun.optLegacyWholeChannel) {
+                    if (![self writeGenomicRunStorage:gRun
+                                               toGroup:gG
+                                                  name:gName
+                                                 error:error]) return NO;
+                } else {
+                    if (![self _ttio_streamGenomicRun:gRun name:gName study:study error:error]) return NO;
+                }
             }
         }
     }
@@ -2366,6 +2379,22 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
         [prov close];
     }
     return YES;
+}
+
+/* Route one run through TTIOGenomicStreamWriter (blocks_v1) into the
+ * /study group. `study` must already hold genomic_runs with the
+ * run's name in @_run_names; the writer leaves both alone. */
++ (BOOL)_ttio_streamGenomicRun:(TTIOWrittenGenomicRun *)run
+                          name:(NSString *)name
+                         study:(id<TTIOStorageGroup>)study
+                         error:(NSError **)error
+{
+    TTIOGenomicStreamWriterOptions *o = [TTIOGenomicStreamWriterOptions optionsFromRun:run];
+    TTIOGenomicStreamWriter *w = [[TTIOGenomicStreamWriter alloc] initWithStudyGroup:study
+                                                                             runName:name
+                                                                             options:o];
+    if (![w appendBatch:run error:error]) return NO;
+    return [w close:error];
 }
 
 // write one /study/genomic_runs/<name>/ subtree. Mirrors the
@@ -3063,10 +3092,17 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                       error:error]) return NO;
         for (NSString *gName in gNames) {
             TTIOWrittenGenomicRun *gRun = genomicRuns[gName];
-            if (![self writeGenomicRun:gRun
-                                toGroup:gRunsGroup
-                                   name:gName
-                                  error:error]) return NO;
+            if (gRun.optLegacyWholeChannel) {
+                if (![self writeGenomicRun:gRun
+                                    toGroup:gRunsGroup
+                                       name:gName
+                                      error:error]) return NO;
+            } else {
+                id<TTIOStorageGroup> studyAdapter =
+                    (id<TTIOStorageGroup>)_TTIO_MakeHDF5GroupAdapter(study);
+                if (!studyAdapter) return NO;
+                if (![self _ttio_streamGenomicRun:gRun name:gName study:studyAdapter error:error]) return NO;
+            }
         }
     }
 
