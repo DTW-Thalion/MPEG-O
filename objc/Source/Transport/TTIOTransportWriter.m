@@ -36,6 +36,7 @@
 #import "Image/TTIOIRImage.h"
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
+#import "Codecs/TTIOFloatDeltaZstd.h"  // codec 17 spectral AU channels
 #import "Dataset/TTIOIdentification.h"
 #import "Dataset/TTIOQuantification.h"
 #import "Dataset/TTIOSubject.h"
@@ -162,7 +163,7 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
         _fileHandleSink = [[TTIOFileHandleSink alloc] init];
         _fileHandleSink.handle = [NSFileHandle fileHandleForWritingAtPath:path];
         _sink = _fileHandleSink;
-        _compressionCodec = TTIOCompressionZlib;
+        _compressionCodec = TTIOCompressionFloatDeltaZstd;
     }
     return self;
 }
@@ -176,7 +177,7 @@ static uint8_t wireFromPolarity(TTIOPolarity p)
 {
     if ((self = [super init])) {
         _sink = sink;
-        _compressionCodec = TTIOCompressionZlib;
+        _compressionCodec = TTIOCompressionFloatDeltaZstd;
     }
     return self;
 }
@@ -1223,7 +1224,7 @@ static TTIOAccessUnit *accessUnitFromSpectrum(TTIOSpectrum *spectrum,
                                                 TTIOAcquisitionRun *run,
                                                 NSArray<NSString *> *channelNames,
                                                 BOOL useCompression,
-                                                BOOL useZstd)
+                                                TTIOCompression codec)
 {
     uint8_t wireClass = wireFromSpectrumClassName(run.spectrumClassName);
     uint8_t msLevel = 0;
@@ -1254,7 +1255,13 @@ static TTIOAccessUnit *accessUnitFromSpectrum(TTIOSpectrum *spectrum,
         uint32_t nElements = (uint32_t)(leFloat64.length / 8);
         NSData *payload = leFloat64;
         uint8_t compressionCode = TTIOCompressionNone;
-        if (useCompression && useZstd) {
+        if (useCompression && codec == TTIOCompressionFloatDeltaZstd) {
+            NSData *compressed = [TTIOFloatDeltaZstd encodeFloat64:leFloat64];
+            if (compressed) {
+                payload = compressed;
+                compressionCode = TTIOCompressionFloatDeltaZstd;
+            }
+        } else if (useCompression && codec == TTIOCompressionZstd) {
             NSData *compressed = zstdCompressData(leFloat64);
             if (compressed) {
                 payload = compressed;
@@ -1673,7 +1680,7 @@ static NSData *applyWireCodecGenomic(NSData *plaintext, uint8_t codec)
                 TTIOSpectrum *sp = [run objectAtIndex:i];
                 TTIOAccessUnit *au = accessUnitFromSpectrum(
                     sp, run, channelNames, _useCompression,
-                    _compressionCodec == TTIOCompressionZstd);
+                    _compressionCodec);
                 NSError *localErr = nil;
                 ok = [self writeAccessUnit:au datasetId:did auSequence:(uint32_t)i error:&localErr];
                 if (!ok) auError = localErr;  // retained out of the pool

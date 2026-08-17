@@ -1602,24 +1602,36 @@ public final class TransportReader implements AutoCloseable {
                     throw new IllegalStateException(
                             "reader supports FLOAT64 precision only");
                 }
-                byte[] raw;
-                if (ch.compression == Enums.Compression.NONE.ordinal()) {
-                    raw = ch.data;
-                } else if (ch.compression == Enums.Compression.ZLIB.ordinal()) {
-                    raw = zlibInflate(ch.data);
-                } else if (ch.compression == Enums.Compression.ZSTD.ordinal()) {
-                    // The channel header carries the exact plaintext
-                    // element count, so decompress into an exact buffer.
-                    raw = zstdDecompress(ch.data, ch.nElements * 8);
+                double[] arr;
+                if (ch.compression == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()) {
+                    arr = global.thalion.ttio.codecs.FloatDeltaZstd.decode(ch.data);
+                    if (arr.length != ch.nElements) {
+                        throw new IllegalStateException(
+                                "FLOAT_DELTA_ZSTD channel decoded " + arr.length
+                                + " values but the channel header declares n_elements="
+                                + ch.nElements);
+                    }
                 } else {
-                    throw new IllegalStateException(
-                            "reader supports NONE/ZLIB/ZSTD compression only, got "
-                            + ch.compression);
+                    byte[] raw;
+                    if (ch.compression == Enums.Compression.NONE.ordinal()) {
+                        raw = ch.data;
+                    } else if (ch.compression == Enums.Compression.ZLIB.ordinal()) {
+                        raw = zlibInflate(ch.data);
+                    } else if (ch.compression == Enums.Compression.ZSTD.ordinal()) {
+                        // The channel header carries the exact plaintext
+                        // element count, so decompress into an exact buffer.
+                        raw = zstdDecompress(ch.data, ch.nElements * 8);
+                    } else {
+                        throw new IllegalStateException(
+                                "reader supports NONE/ZLIB/ZSTD/FLOAT_DELTA_ZSTD "
+                                + "compression only, got " + ch.compression);
+                    }
+                    int n = raw.length / 8;
+                    arr = new double[n];
+                    ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+                    for (int k = 0; k < n; k++) arr[k] = buf.getDouble();
                 }
-                int n = raw.length / 8;
-                double[] arr = new double[n];
-                ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
-                for (int k = 0; k < n; k++) arr[k] = buf.getDouble();
+                int n = arr.length;
                 perAu.put(ch.name, arr);
                 if (length != 0 && length != n) {
                     throw new IllegalStateException(

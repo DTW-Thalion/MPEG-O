@@ -35,6 +35,7 @@
 #import <hdf5.h>
 #import "Codecs/TTIORans.h"        // rANS wire codec dispatch
 #import "Codecs/TTIOBasePack.h"    // BASE_PACK wire codec dispatch
+#import "Codecs/TTIOFloatDeltaZstd.h"  // codec 17 spectral AU channels
 #import "ValueClasses/TTIOEnums.h"
 #import <objc/runtime.h>
 #import <string.h>
@@ -872,6 +873,27 @@ typedef struct {
                                                              userInfo:@{NSLocalizedDescriptionKey:
                                              [NSString stringWithFormat:@"zstd inflate failed or short: %s",
                                                  ZSTD_isError(n) ? ZSTD_getErrorName(n) : "size mismatch"]}];
+                        return NO;
+                    }
+                    decoded = out;
+                } else if (ch.compression == TTIOCompressionFloatDeltaZstd) {
+                    NSError *fdzErr = nil;
+                    NSData *out = [TTIOFloatDeltaZstd decodeStream:ch.data error:&fdzErr];
+                    if (!out) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:@"FLOAT_DELTA_ZSTD decode failed: %@",
+                                                 fdzErr.localizedDescription ?: @"unknown"]}];
+                        return NO;
+                    }
+                    if (out.length != (NSUInteger)ch.nElements * 8) {
+                        if (error) *error = [NSError errorWithDomain:TTIOTransportErrorDomain
+                                                                 code:TTIOTransportErrorUnexpectedPayload
+                                                             userInfo:@{NSLocalizedDescriptionKey:
+                                             [NSString stringWithFormat:@"FLOAT_DELTA_ZSTD channel decoded "
+                                                 @"%lu values but the channel header declares n_elements=%u",
+                                                 (unsigned long)(out.length / 8), (unsigned)ch.nElements]}];
                         return NO;
                     }
                     decoded = out;

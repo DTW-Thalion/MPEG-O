@@ -53,9 +53,13 @@ public final class TransportWriter implements AutoCloseable {
     private final boolean ownsStream;
     private boolean useChecksum = false;
     private boolean useCompression = false;
+    /** Default AU channel codec when compression is on: codec 17,
+     *  one FDZ1 stream per channel (wire id 17). */
+    public static final String DEFAULT_COMPRESSION_CODEC = "float_delta_zstd";
     /** AU channel codec when {@link #useCompression} is on:
-     *  "zlib" (wire id 1, default) or "zstd" (wire id 16, level 3). */
-    private String compressionCodec = "zlib";
+     *  "float_delta_zstd" (wire id 17, default), "zstd" (wire id 16,
+     *  level 3) or "zlib" (wire id 1). */
+    private String compressionCodec = DEFAULT_COMPRESSION_CODEC;
     /** Phase 2c-T: when true, probe each genomic run for v2 codec
      *  blobs and emit BlobV2* packets carrying them verbatim. */
     private boolean useBulkMode = false;
@@ -77,12 +81,16 @@ public final class TransportWriter implements AutoCloseable {
     public boolean useBulkMode() { return useBulkMode; }
 
     /** Select the AU channel codec used when compression is on:
-     *  "zlib" (default) or "zstd". */
+     *  "float_delta_zstd" (default), "zstd" or "zlib". Readers older
+     *  than a codec's addition reject its id (id 16: pre-1.8.0; id 17:
+     *  1.8.0 and older), so name "zlib" explicitly until a
+     *  deployment's readers are current. */
     public void setCompressionCodec(String codec) {
-        if (!"zlib".equals(codec) && !"zstd".equals(codec)) {
+        if (!"float_delta_zstd".equals(codec) && !"zstd".equals(codec)
+                && !"zlib".equals(codec)) {
             throw new IllegalArgumentException(
                 "unsupported compressionCodec '" + codec
-                + "'; expected \"zlib\" or \"zstd\"");
+                + "'; expected \"float_delta_zstd\", \"zstd\" or \"zlib\"");
         }
         this.compressionCodec = codec;
     }
@@ -1382,13 +1390,15 @@ public final class TransportWriter implements AutoCloseable {
 
     static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
                                               List<String> channelNames) {
-        return spectrumToAccessUnit(run, i, channelNames, false, "zlib");
+        return spectrumToAccessUnit(run, i, channelNames, false,
+                DEFAULT_COMPRESSION_CODEC);
     }
 
     static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
                                               List<String> channelNames,
                                               boolean useCompression) {
-        return spectrumToAccessUnit(run, i, channelNames, useCompression, "zlib");
+        return spectrumToAccessUnit(run, i, channelNames, useCompression,
+                DEFAULT_COMPRESSION_CODEC);
     }
 
     static AccessUnit spectrumToAccessUnit(AcquisitionRun run, int i,
@@ -1417,17 +1427,25 @@ public final class TransportWriter implements AutoCloseable {
             if (all == null) continue;
             int off = (int) idx.offsetAt(i);
             int len = idx.lengthAt(i);
-            byte[] raw = new byte[len * 8];
-            ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
-            for (int k = 0; k < len; k++) buf.putDouble(all[off + k]);
-            byte[] payload = raw;
-            int compressionCode = Enums.Compression.NONE.ordinal();
-            if (useCompression && "zstd".equals(compressionCodec)) {
-                payload = zstdCompress(raw);
-                compressionCode = Enums.Compression.ZSTD.ordinal();
-            } else if (useCompression) {
-                payload = zlibDeflate(raw);
-                compressionCode = Enums.Compression.ZLIB.ordinal();
+            byte[] payload;
+            int compressionCode;
+            if (useCompression && "float_delta_zstd".equals(compressionCodec)) {
+                payload = global.thalion.ttio.codecs.FloatDeltaZstd.encode(
+                        java.util.Arrays.copyOfRange(all, off, off + len));
+                compressionCode = Enums.Compression.FLOAT_DELTA_ZSTD.ordinal();
+            } else {
+                byte[] raw = new byte[len * 8];
+                ByteBuffer buf = ByteBuffer.wrap(raw).order(ByteOrder.LITTLE_ENDIAN);
+                for (int k = 0; k < len; k++) buf.putDouble(all[off + k]);
+                payload = raw;
+                compressionCode = Enums.Compression.NONE.ordinal();
+                if (useCompression && "zstd".equals(compressionCodec)) {
+                    payload = zstdCompress(raw);
+                    compressionCode = Enums.Compression.ZSTD.ordinal();
+                } else if (useCompression) {
+                    payload = zlibDeflate(raw);
+                    compressionCode = Enums.Compression.ZLIB.ordinal();
+                }
             }
             channels.add(new ChannelData(cname,
                     Enums.Precision.FLOAT64.ordinal(),

@@ -470,3 +470,42 @@ def test_xlang_zstd_stream_decodes_everywhere(
     DECODERS[dec_lang](tis, rt)
     with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
         ms_spec.assert_content_equals(a, b)
+
+
+@pytest.mark.parametrize(
+    "enc_lang,dec_lang",
+    [(e, d) for e in ENCODERS for d in DECODERS],
+)
+def test_xlang_float_delta_zstd_wire_round_trips_everywhere(
+    tmp_path: Path, enc_lang: str, dec_lang: str,
+) -> None:
+    """Every language's transport encoder can emit AU channels as
+    FLOAT_DELTA_ZSTD (wire compression id 17, one FDZ1 stream per
+    channel) and every language's decoder restores the same content.
+    Per the codec-17 spec, encoders may differ byte-wise (each
+    language's zstd build); the DECODE side is the contract, so the
+    full encoder x decoder matrix runs."""
+    from ttio.enums import Compression
+    from ttio.spectral_dataset import SpectralDataset
+    from ttio.transport import AccessUnit, PacketType, TransportReader
+
+    ms_spec = next(s for s in ACCESSOR_SPECS if s.name == "MS_RUNS")
+    src = ms_spec.build_fixture(tmp_path / "src.tio")
+    tis = tmp_path / f"src_fdz_{enc_lang}.tis"
+    ENCODERS[enc_lang](src, tis, extra_flags=["--compress", "float_delta_zstd"])
+
+    # Every AU channel really carries compression id 17 with an FDZ1 body.
+    n_channels = 0
+    with TransportReader(tis) as tr:
+        for hdr, payload in tr.iter_packets():
+            if hdr.packet_type == PacketType.ACCESS_UNIT:
+                for ch in AccessUnit.from_bytes(payload).channels:
+                    n_channels += 1
+                    assert ch.compression == int(Compression.FLOAT_DELTA_ZSTD), enc_lang
+                    assert ch.data[:4] == b"FDZ1", enc_lang
+    assert n_channels > 0
+
+    rt = tmp_path / f"rt_fdz_{enc_lang}_to_{dec_lang}.tio"
+    DECODERS[dec_lang](tis, rt)
+    with SpectralDataset.open(src) as a, SpectralDataset.open(rt) as b:
+        ms_spec.assert_content_equals(a, b)

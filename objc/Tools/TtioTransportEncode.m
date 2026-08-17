@@ -23,14 +23,31 @@ int main(int argc, const char **argv)
         //   --image-processed  Stage 5 / Task 5.6 (Deferral 1):
         //                      emit MSImage via writeImageProcessed
         //                      (sparse wire mode).
+        //   --compress <codec> spectral AU channel compression:
+        //                      float_delta_zstd (wire id 17), zstd (16)
+        //                      or zlib (1).
         const char *input = NULL;
         const char *output = NULL;
         BOOL bulk = NO;
         BOOL imageProcessed = NO;
+        BOOL compress = NO;
+        TTIOCompression codec = TTIOCompressionFloatDeltaZstd;
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--bulk") == 0) { bulk = YES; continue; }
             if (strcmp(argv[i], "--image-processed") == 0) {
                 imageProcessed = YES;
+                continue;
+            }
+            if (strcmp(argv[i], "--compress") == 0 && i + 1 < argc) {
+                const char *name = argv[++i];
+                compress = YES;
+                if (strcmp(name, "float_delta_zstd") == 0) codec = TTIOCompressionFloatDeltaZstd;
+                else if (strcmp(name, "zstd") == 0) codec = TTIOCompressionZstd;
+                else if (strcmp(name, "zlib") == 0) codec = TTIOCompressionZlib;
+                else {
+                    fprintf(stderr, "unknown --compress codec: %s\n", name);
+                    return 2;
+                }
                 continue;
             }
             if (input == NULL) { input = argv[i]; }
@@ -38,8 +55,9 @@ int main(int argc, const char **argv)
         }
         if (input == NULL || output == NULL) {
             fprintf(stderr,
-                "usage: TtioTransportEncode [--bulk] "
-                "[--image-processed] <input.tio> <output.tis>\n");
+                "usage: TtioTransportEncode [--bulk] [--image-processed] "
+                "[--compress float_delta_zstd|zstd|zlib] "
+                "<input.tio> <output.tis>\n");
             return 2;
         }
         NSString *inputS = [NSString stringWithUTF8String:input];
@@ -70,6 +88,10 @@ int main(int argc, const char **argv)
             if (ok) ok = [tw writeEndOfStreamWithError:&err];
         } else {
             tw.useBulkMode = bulk;
+            if (compress) {
+                tw.useCompression = YES;
+                tw.compressionCodec = codec;
+            }
             ok = [tw writeDataset:ds error:&err];
         }
         [tw close];

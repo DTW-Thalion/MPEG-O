@@ -128,12 +128,13 @@ NS_ASSUME_NONNULL_BEGIN
  *  decompresses automatically regardless of this flag. Default NO. */
 @property (nonatomic) BOOL useCompression;
 
-/** Codec used when ``useCompression`` is YES: zlib (wire id 1,
- *  default) or zstd level 3 (wire id 16) when set to
- *  ``TTIOCompressionZstd``. Only ``TTIOCompressionZlib`` and
- *  ``TTIOCompressionZstd`` are valid. Readers older than the zstd
- *  addition reject id 16, so flip a deployment to zstd only after
- *  its readers are current. */
+/** Codec used when ``useCompression`` is YES:
+ *  ``TTIOCompressionFloatDeltaZstd`` (wire id 17, default; one FDZ1
+ *  stream per channel), ``TTIOCompressionZstd`` (wire id 16, level 3)
+ *  or ``TTIOCompressionZlib`` (wire id 1). Any other value writes
+ *  zlib. Readers older than a codec's addition reject its id (id 16:
+ *  pre-1.8.0; id 17: 1.8.0 and older), so set zlib explicitly until
+ *  a deployment's readers are current. */
 @property (nonatomic) TTIOCompression compressionCodec;
 
 /** Phase 2c-T: when YES, probe each genomic run for v2 codec blobs

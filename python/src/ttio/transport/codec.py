@@ -7,8 +7,9 @@ file via :meth:`SpectralDataset.write_minimal`.
 
 Scope:
 
-- Signal data is emitted as ``float64``. On-wire compression via
-  ``Compression.ZLIB`` is opt-in (``TransportWriter(use_compression=True)``)
+- Signal data is emitted as ``float64``. On-wire compression is
+  opt-in (``TransportWriter(use_compression=True)``; codec 17
+  ``float_delta_zstd`` by default, ``zstd`` or ``zlib`` on request)
   and handled automatically by :class:`TransportReader` regardless.
 - ProtectionMetadata / Annotation / Provenance / Chromatogram
   packet slots are defined on the wire but writer emission and
@@ -83,14 +84,15 @@ def file_to_transport(
     use_checksum: bool = False,
     use_compression: bool = False,
     use_bulk_mode: bool = False,
-    compression_codec: str = "zlib",
+    compression_codec: str = "float_delta_zstd",
 ) -> None:
     """Convert a ``.tio`` file to a transport stream.
 
     ``use_bulk_mode=True`` enables Phase 2c-T verbatim v2-blob
     carriage for genomic runs. See ``docs/transport-spec.md`` §6.4.
     ``compression_codec`` selects the AU channel codec when
-    ``use_compression`` is on: ``"zlib"`` (default) or ``"zstd"``.
+    ``use_compression`` is on: ``"float_delta_zstd"`` (default, wire
+    id 17), ``"zstd"`` (id 16) or ``"zlib"`` (id 1).
     """
     with SpectralDataset.open(ttio_path) as ds, \
             TransportWriter(output,

@@ -250,6 +250,7 @@ class TransportWriterUnitTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         try (TransportWriter tw = new TransportWriter(out)) {
             tw.setUseCompression(true);
+            tw.setCompressionCodec("zlib");
             assertTrue(tw.useCompression());
             tw.writeDataset(src);
         }
@@ -467,10 +468,21 @@ class TransportWriterUnitTest {
                 channels, List.of(), List.of(), "", 0.0);
 
         AccessUnit au = TransportWriter.spectrumToAccessUnit(
-                run, 0, new ArrayList<>(channels.keySet()), true);
+                run, 0, new ArrayList<>(channels.keySet()), true, "zlib");
         // ZLIB compression = ordinal of Compression.ZLIB.
         for (ChannelData ch : au.channels) {
             assertEquals(Enums.Compression.ZLIB.ordinal(), ch.compression);
+        }
+        // Compression on with no codec named: FLOAT_DELTA_ZSTD (id 17),
+        // one FDZ1 stream per channel.
+        AccessUnit dflt = TransportWriter.spectrumToAccessUnit(
+                run, 0, new ArrayList<>(channels.keySet()), true);
+        for (ChannelData ch : dflt.channels) {
+            assertEquals(Enums.Compression.FLOAT_DELTA_ZSTD.ordinal(), ch.compression);
+            assertEquals('F', ch.data[0]);
+            assertEquals('D', ch.data[1]);
+            assertEquals('Z', ch.data[2]);
+            assertEquals('1', ch.data[3]);
         }
     }
 
