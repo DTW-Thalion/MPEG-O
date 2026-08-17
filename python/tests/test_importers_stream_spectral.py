@@ -50,6 +50,7 @@ def test_mzml_stream_matches_whole_file_import(tmp_path, src):
 
 
 def test_mzml_stream_memory_ceiling(tmp_path):
+    psims = pytest.importorskip("psims", reason="psims writes the synthetic 200 k-spectrum mzML")
     from psims.mzml import MzMLWriter
     big = tmp_path / "big.mzML"
     n, pts = 200_000, 100
