@@ -848,7 +848,7 @@ Default `batchReads` = 100_000; `batchSpectra` = 4096.
 **Files:**
 - Modify: `java/README.md` (streaming section: `GenomicStreamWriter`, `SpectralStreamWriter`, `iterReads`/`iterSpectra`, encode extras), `ARCHITECTURE.md` (Java entry in the streaming/blocks section if one exists; else a short paragraph next to the Python one), `CHANGELOG.md` (Unreleased: Java writes `blocks_v1` by default, reads both layouts, streaming importers/exporters, provider extendable datasets and UINT64), `docs/format-spec.md` §10.12.6 already names the Java class — verify the name matches (`GenomicStreamWriter`), `docs/superpowers/specs/2026-08-17-streaming-blocks-v1-java-design.md` status note (implemented; note the two deviations: SQLite append is read-modify-write and Zarr append rewrites, both as Python does; extendable compound datasets are primitive-kind only).
 - [ ] **Step 1:** Write the sections in the repo's register (plain statements; no marketing).
-- [ ] **Step 2:** Run the attribution/style gate on the diff (`git diff main --stat`, `git log --format=%B main..HEAD | rg -i "claude|anthropic|generated with|co-authored"` → nothing).
+- [ ] **Step 2:** Run the attribution/style gate on the diff and on every commit body (`git diff main --stat`, `git log --format=%B main..HEAD`) with the account-wide token list → nothing.
 - [ ] **Step 3: Commit** `docs: Java streaming import/export and blocks_v1`
 
 ---
