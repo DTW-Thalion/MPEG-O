@@ -102,6 +102,68 @@ def encode(values: np.ndarray) -> bytes:
     return bytes(out)
 
 
+def decode_block_bytes(transform: int, body: bytes, blk_n: int) -> np.ndarray:
+    """Decode one block body to blk_n float64 values."""
+    import zstandard
+
+    planes = zstandard.ZstdDecompressor().decompress(body, max_output_size=blk_n * 8)
+    if len(planes) != blk_n * 8:
+        raise ValueError("FDZ1 block inflated to the wrong size")
+    u = _untranspose(planes, blk_n)
+    if transform == TRANSFORM_DELTA:
+        u = np.cumsum(u, dtype=np.uint64)
+    elif transform != TRANSFORM_NONE:
+        raise ValueError(f"unknown FDZ1 transform {transform:#04x}")
+    return np.ascontiguousarray(u).view(np.float64)
+
+
+class BlockTable:
+    """Where each block of an FDZ1 stream lives, read from a dataset
+    without loading the bodies (spec 3, per-block decode)."""
+
+    __slots__ = ("n_values", "block_size", "n_blocks", "offsets", "transforms", "lengths")
+
+    def __init__(self, n_values, block_size, n_blocks, offsets, transforms, lengths):
+        self.n_values, self.block_size, self.n_blocks = n_values, block_size, n_blocks
+        self.offsets, self.transforms, self.lengths = offsets, transforms, lengths
+
+    def block_values(self, k: int) -> int:
+        return min(self.block_size, self.n_values - k * self.block_size)
+
+
+def read_block_table(read_bytes) -> BlockTable:
+    """Build the block table by reading only the stream header and the
+    5-byte block headers. read_bytes(offset, count) -> bytes."""
+    hdr = bytes(read_bytes(0, HEADER_LEN))
+    if len(hdr) < HEADER_LEN or hdr[:4] != MAGIC:
+        raise ValueError("not an FDZ1 stream")
+    version, _flags, n, block_size, n_blocks = struct.unpack_from("<BBQII", hdr, 4)
+    if version != VERSION:
+        raise ValueError(f"unknown FDZ1 version {version:#04x}")
+    if block_size == 0 or n_blocks != (n + block_size - 1) // block_size:
+        raise ValueError("malformed FDZ1 header")
+    offsets, transforms, lengths = [], [], []
+    off = HEADER_LEN
+    for _ in range(n_blocks):
+        bh = bytes(read_bytes(off, 5))
+        if len(bh) < 5:
+            raise ValueError("FDZ1 stream truncated at block header")
+        transform, body_len = struct.unpack_from("<BI", bh, 0)
+        offsets.append(off + 5)
+        transforms.append(transform)
+        lengths.append(body_len)
+        off += 5 + body_len
+    return BlockTable(int(n), int(block_size), int(n_blocks), offsets, transforms, lengths)
+
+
+def decode_block(read_bytes, table: BlockTable, k: int) -> np.ndarray:
+    """Decode block k of a stream addressed by read_bytes."""
+    body = bytes(read_bytes(table.offsets[k], table.lengths[k]))
+    if len(body) != table.lengths[k]:
+        raise ValueError("FDZ1 stream truncated in block body")
+    return decode_block_bytes(table.transforms[k], body, table.block_values(k))
+
+
 def decode(stream: bytes) -> np.ndarray:
     """Decode an FDZ1 stream back to the exact float64 array."""
     import zstandard
