@@ -699,6 +699,12 @@ jobs:
               print(f"  {'present' if p.exists() else 'MISSING'}  {p}")
           print(f"  java on PATH: {shutil.which('java')}")
           PY
+          # The ObjC transport encoder has crashed intermittently in this job
+          # (SIGSEGV in TtioTransportEncode, twice so far, never locally).
+          # Let the tools dump core into the working directory so the step
+          # below can print a backtrace instead of "died with SIGSEGV".
+          sudo sysctl -w kernel.core_pattern='core.%e.%p' > /dev/null
+          ulimit -c unlimited
           pytest -v --tb=short tests/conformance/ | tee /tmp/conformance.log
           skipped=$(grep -oE '[0-9]+ skipped' /tmp/conformance.log | tail -1 | cut -d' ' -f1)
           skipped=${skipped:-0}
@@ -709,3 +715,22 @@ jobs:
             grep '^SKIPPED' /tmp/conformance.log || true
             exit 1
           fi
+
+      - name: Backtraces of any core dumped by the conformance matrix
+        if: failure()
+        shell: bash
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/native/_build:${{ github.workspace }}/objc/Source/obj
+        run: |
+          cores=$(find "$GITHUB_WORKSPACE/python" /tmp -maxdepth 2 -name 'core.*' -type f 2>/dev/null || true)
+          if [ -z "$cores" ]; then
+            echo "no core files"
+            exit 0
+          fi
+          sudo apt-get install -y -q gdb > /dev/null
+          for c in $cores; do
+            echo "=== $c"
+            exe=$(file "$c" | grep -oE "execfn: '[^']*'" | cut -d"'" -f2)
+            echo "executable: ${exe:-unknown}"
+            gdb -batch -ex 'set pagination off' -ex 'thread apply all bt' ${exe:+"$exe"} "$c" 2>&1 | tail -80
+          done
