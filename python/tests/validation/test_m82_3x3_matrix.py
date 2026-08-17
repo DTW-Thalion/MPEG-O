@@ -112,10 +112,6 @@ def _write_python_fixture(tmp_path: Path) -> Path:
         mate_positions=np.full(n_reads, -1, dtype=np.int64),
         template_lengths=np.zeros(n_reads, dtype=np.int32),
         chromosomes=chroms,
-        # blocks_v1 read support in Java and ObjC lands with their
-        # streaming specs; until then the cross-language genomic
-        # fixtures use the v1.8 whole-channel layout.
-        opt_legacy_whole_channel=True,
     )
     out = tmp_path / "py_xlang.tio"
     SpectralDataset.write_minimal(

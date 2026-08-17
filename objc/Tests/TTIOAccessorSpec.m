@@ -21,6 +21,7 @@
 #import "Dataset/TTIOSubject.h"
 #import "Genomics/TTIOReferenceImport.h"
 #import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOAlignedRead.h"
 #import "Image/TTIOIRImage.h"
 #import "Image/TTIOMSImage.h"
 #import "Image/TTIORamanImage.h"
@@ -206,6 +207,38 @@ static NSString *spec_genomicRunsEqual(TTIOSpectralDataset *a,
             return [NSString stringWithFormat:
                 @"acquisitionMode mismatch for run %@: %d vs %d",
                 name, (int)ra.acquisitionMode, (int)rb.acquisitionMode];
+        }
+    }
+    return nil;
+}
+
+/* GENOMIC_RUNS_BLOCKS: the run-level checks, then every read,
+ * whichever layout either side was written in. */
+static NSString *spec_genomicRunsReadsEqual(TTIOSpectralDataset *a,
+                                              TTIOSpectralDataset *b)
+{
+    NSString *why = spec_genomicRunsEqual(a, b);
+    if (why) return why;
+    NSDictionary<NSString *, TTIOGenomicRun *> *ga = a.genomicRuns;
+    NSDictionary<NSString *, TTIOGenomicRun *> *gb = b.genomicRuns;
+    for (NSString *name in ga) {
+        TTIOGenomicRun *ra = ga[name];
+        TTIOGenomicRun *rb = gb[name];
+        NSUInteger n = [ra readCount];
+        for (NSUInteger i = 0; i < n; i++) {
+            NSError *ea = nil, *eb = nil;
+            TTIOAlignedRead *xa = [ra readAtIndex:i error:&ea];
+            TTIOAlignedRead *xb = [rb readAtIndex:i error:&eb];
+            if (xa == nil || xb == nil) {
+                return [NSString stringWithFormat:
+                    @"read %lu of run %@ unreadable: %@ / %@",
+                    (unsigned long)i, name, ea, eb];
+            }
+            if (![xa isEqual:xb]) {
+                return [NSString stringWithFormat:
+                    @"read %lu of run %@ differs: %@ vs %@",
+                    (unsigned long)i, name, xa, xb];
+            }
         }
     }
     return nil;
@@ -627,6 +660,16 @@ static void _ttioAccessorSpecsInit(void)
                  assertEqual:^NSString *(TTIOSpectralDataset *a,
                                           TTIOSpectralDataset *b) {
                      return spec_genomicRunsEqual(a, b);
+                 }],
+            [[TTIOAccessorSpec alloc]
+                initWithName:@"GENOMIC_RUNS_BLOCKS"
+                       build:^BOOL(NSString *path, NSError **error) {
+                           return [TTIOV011FixtureBuilder
+                               buildGenomicRunsBlocksAtPath:path error:error];
+                       }
+                 assertEqual:^NSString *(TTIOSpectralDataset *a,
+                                          TTIOSpectralDataset *b) {
+                     return spec_genomicRunsReadsEqual(a, b);
                  }],
             [[TTIOAccessorSpec alloc]
                 initWithName:@"IMAGE"

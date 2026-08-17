@@ -49,6 +49,7 @@ from ttio.transport.codec import (
 from _v0_11_fixtures import (
     build_dataset_provenance_only,
     build_encryption_algorithm_only,
+    build_genomic_runs_blocks,
     build_genomic_runs_only,
     build_identifications_only,
     build_image_ms_continuous,
@@ -663,6 +664,22 @@ def _samples_equals(a: SpectralDataset, b: SpectralDataset) -> None:
             )
 
 
+def _genomic_runs_reads_equal(a: SpectralDataset, b: SpectralDataset) -> None:
+    """Mirror Java's ``GENOMIC_RUNS_BLOCKS.assertContentEquals``:
+    everything ``_genomic_runs_equals`` checks, then every read
+    field-by-field, whichever layout either side was written in."""
+    _genomic_runs_equals(a, b)
+    ga = dict(a.genomic_runs)
+    gb = dict(b.genomic_runs)
+    for name in ga.keys():
+        for i, (ra, rb) in enumerate(zip(ga[name].iter_reads(),
+                                         gb[name].iter_reads())):
+            if ra != rb:
+                raise AssertionError(
+                    f"read {i} of run {name!r} differs: {ra!r} vs {rb!r}"
+                )
+
+
 # ── master list — order matches Java's enum declaration ──────────────
 
 
@@ -670,6 +687,11 @@ ACCESSOR_SPECS: list[AccessorSpec] = [
     AccessorSpec("REFERENCES", build_reference_only, _ref_equals),
     AccessorSpec("MS_RUNS", build_ms_runs_only, _ms_runs_equals),
     AccessorSpec("GENOMIC_RUNS", build_genomic_runs_only, _genomic_runs_equals),
+    AccessorSpec(
+        "GENOMIC_RUNS_BLOCKS",
+        build_genomic_runs_blocks,
+        _genomic_runs_reads_equal,
+    ),
     AccessorSpec("IMAGE", build_image_ms_continuous, _image_equals),
     AccessorSpec(
         "IDENTIFICATIONS",

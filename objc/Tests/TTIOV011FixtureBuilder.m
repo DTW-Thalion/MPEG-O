@@ -474,9 +474,26 @@ static BOOL fb_layerSubjectsAndSamples(NSString *path,
                               error:(NSError **)error
 {
     unlink([path fileSystemRepresentation]);
-    TTIOWrittenGenomicRun *wgr = fb_synthGenomicRun();
+    TTIOWrittenGenomicRun *wgr =
+        [fb_synthGenomicRun() copyWithOptLegacyWholeChannel:YES];
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"genomic_runs_only"
+                                 isaInvestigationId:@""
+                                             msRuns:@{}
+                                        genomicRuns:@{@"genomic_0001": wgr}
+                                    identifications:nil
+                                    quantifications:nil
+                                  provenanceRecords:nil
+                                              error:error];
+}
+
++ (BOOL)buildGenomicRunsBlocksAtPath:(NSString *)path
+                                error:(NSError **)error
+{
+    unlink([path fileSystemRepresentation]);
+    TTIOWrittenGenomicRun *wgr = fb_synthGenomicRun();
+    return [TTIOSpectralDataset writeMinimalToPath:path
+                                              title:@"genomic_runs_blocks"
                                  isaInvestigationId:@""
                                              msRuns:@{}
                                         genomicRuns:@{@"genomic_0001": wgr}

@@ -320,7 +320,7 @@ def test_xlang_round_trip_preserves_accessor(
     the ``.tio`` (HDF5 storage is not deterministic across SDKs) or
     byte-equality on the ``.tis`` (Arrow IPC framing diverges).
     Logical content equivalence is the conformance contract."""
-    if spec.name == "GENOMIC_RUNS":
+    if spec.name in ("GENOMIC_RUNS", "GENOMIC_RUNS_BLOCKS"):
         if not _genomic_runs_available_for_python():
             pytest.skip(
                 "GENOMIC_RUNS fixture requires libttio_rans native "

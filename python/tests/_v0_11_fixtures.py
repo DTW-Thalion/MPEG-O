@@ -427,13 +427,17 @@ def build_ms_runs_only(target: Path) -> Path:
 # ── genomic run (4 short aligned reads) ──────────────────────────────
 
 
-def _synth_genomic_run() -> WrittenGenomicRun:
+def _synth_genomic_run(*, legacy_layout: bool = True) -> WrittenGenomicRun:
     """Mirror Java's ``FixtureBuilder.synthGenomicRun`` — 4 short
     aligned reads (``read_000`` … ``read_003``) on
     ``chr1``/``chr1``/``chr2``/``*`` with deterministic
     ``ACGTACGTACGT`` sequence and uniform quality 30. Mirrors the
     fixture shape used by ``test_transport_codec.TestGenomicRoundTrip``
-    so the existing reader/writer paths are exercised."""
+    so the existing reader/writer paths are exercised.
+
+    ``legacy_layout=True`` (GENOMIC_RUNS) writes the v1.8 whole-channel
+    layout; ``False`` (GENOMIC_RUNS_BLOCKS) takes the writer default,
+    ``blocks_v1``, where the three chromosomes give three blocks."""
     n = 4
     template = b"ACGTACGTACGT"
     read_len = len(template)
@@ -459,10 +463,7 @@ def _synth_genomic_run() -> WrittenGenomicRun:
         mate_positions=np.full(n, -1, dtype=np.int64),
         template_lengths=np.zeros(n, dtype=np.int32),
         chromosomes=["chr1", "chr1", "chr2", "*"],
-        # blocks_v1 read support in Java and ObjC lands with their
-        # streaming specs; until then the cross-language genomic
-        # fixtures use the v1.8 whole-channel layout.
-        opt_legacy_whole_channel=True,
+        opt_legacy_whole_channel=legacy_layout,
     )
 
 
@@ -474,6 +475,21 @@ def build_genomic_runs_only(target: Path) -> Path:
         isa_investigation_id="",
         runs={},
         genomic_runs={"genomic_0001": _synth_genomic_run()},
+    )
+    return target
+
+
+def build_genomic_runs_blocks(target: Path) -> Path:
+    """Mirror Java's ``FixtureBuilder.buildGenomicRunsBlocks``: the
+    same run in the ``blocks_v1`` layout (three blocks)."""
+    SpectralDataset.write_minimal(
+        target,
+        title="genomic_runs_blocks",
+        isa_investigation_id="",
+        runs={},
+        genomic_runs={
+            "genomic_0001": _synth_genomic_run(legacy_layout=False),
+        },
     )
     return target
 

@@ -44,6 +44,11 @@ NS_ASSUME_NONNULL_BEGIN
 + (BOOL)buildGenomicRunsOnlyAtPath:(NSString *)path
                               error:(NSError * _Nullable * _Nullable)error;
 
+/** The GENOMIC_RUNS run in the blocks_v1 layout (the writer default):
+ *  three chromosomes, three blocks. */
++ (BOOL)buildGenomicRunsBlocksAtPath:(NSString *)path
+                                error:(NSError * _Nullable * _Nullable)error;
+
 /** Image only (continuous mode): 4x4x5 cube with deterministic
  *  intensities = (k+1) * (x + y*width). mz_axis = [100, 110, 120,
  *  130, 140]. */
