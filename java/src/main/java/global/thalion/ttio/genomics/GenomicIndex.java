@@ -29,8 +29,8 @@ import java.util.Objects;
  */
 public final class GenomicIndex {
 
-    private static final int CHUNK_SIZE = 65536;
-    private static final int COMPRESSION_LEVEL = 6;
+    static final int CHUNK_SIZE = 65536;
+    static final int COMPRESSION_LEVEL = 6;
 
     private final long[]   offsets;          // uint64 — byte offset into sequence channel
     private final int[]    lengths;          // uint32 — read length in bases

@@ -460,30 +460,37 @@ public final class SpectralDatasetGenomicWriter {
             // (memory/sqlite/zarr) and legacy Java readers still see
             // the chain.
             if (!run.provenanceRecords().isEmpty()) {
-                try (var prov = rg.createGroup("provenance")) {
-                    Hdf5Group h5 = global.thalion.ttio.providers.Hdf5Provider
-                        .tryUnwrapHdf5Group(prov);
-                    if (h5 != null) {
-                        List<ProvenanceRecord> recs = run.provenanceRecords();
-                        Hdf5CompoundIO.writeCompoundDataset(h5, "steps",
-                            Hdf5CompoundIO.provenanceSchema(),
-                            recs.size(),
-                            (row, pool) -> {
-                                ProvenanceRecord r = recs.get(row);
-                                return new Object[]{
-                                    r.timestampUnix(),
-                                    pool.addString(r.software()),
-                                    pool.addString(r.parametersJson()),
-                                    pool.addString(r.inputRefsJson()),
-                                    pool.addString(r.outputRefsJson())
-                                };
-                            });
-                    }
-                }
-                rg.setAttribute("provenance_json",
-                    SpectralDataset.buildProvenanceJsonArray(run.provenanceRecords()));
+                writeRunProvenance(rg, run.provenanceRecords());
             }
         }
+    }
+
+    /** Per-run provenance: the compound {@code provenance/steps} on HDF5
+     *  and the {@code provenance_json} attribute on every provider. */
+    public static void writeRunProvenance(
+            global.thalion.ttio.providers.StorageGroup rg,
+            List<ProvenanceRecord> recs) {
+        try (var prov = rg.createGroup("provenance")) {
+            Hdf5Group h5 = global.thalion.ttio.providers.Hdf5Provider
+                .tryUnwrapHdf5Group(prov);
+            if (h5 != null) {
+                Hdf5CompoundIO.writeCompoundDataset(h5, "steps",
+                    Hdf5CompoundIO.provenanceSchema(),
+                    recs.size(),
+                    (row, pool) -> {
+                        ProvenanceRecord r = recs.get(row);
+                        return new Object[]{
+                            r.timestampUnix(),
+                            pool.addString(r.software()),
+                            pool.addString(r.parametersJson()),
+                            pool.addString(r.inputRefsJson()),
+                            pool.addString(r.outputRefsJson())
+                        };
+                    });
+            }
+        }
+        rg.setAttribute("provenance_json",
+            SpectralDataset.buildProvenanceJsonArray(recs));
     }
 
     /** Task 13 (mate_info v2): write the CRAM-style inline_v2 blob.

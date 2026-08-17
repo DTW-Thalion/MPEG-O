@@ -730,7 +730,7 @@ public class SpectralDataset implements
                             String gname = genomicRunNames.get(i);
                             if (i > 0) names.append(",");
                             names.append(gname);
-                            SpectralDatasetGenomicWriter.writeGenomicRunSubtree(gG, gname, gr);
+                            writeGenomicRunDefault(study, gG, gname, gr);
                             try (var rgGroup = gG.openGroup(gname)) {
                                 genomicMap.put(gname, GenomicRun.readFrom(rgGroup, gname));
                             }
@@ -1289,7 +1289,7 @@ public class SpectralDataset implements
                             String gname = gNamesList.get(i);
                             if (i > 0) names.append(",");
                             names.append(gname);
-                            SpectralDatasetGenomicWriter.writeGenomicRunSubtree(
+                            writeGenomicRunDefault(Hdf5Provider.adapterForGroup(study),
                                 Hdf5Provider.adapterForGroup(gRunsGroup), gname, gr);
                             // Open a read-side handle to populate genomicMap.
                             try (var gAdapter = Hdf5Provider.adapterForGroup(gRunsGroup);
@@ -1367,6 +1367,23 @@ public class SpectralDataset implements
     /** Phase 1: build the JSON array attribute carrying per-run
      *  provenance for a genomic run. Same shape as
      *  {@link global.thalion.ttio.AcquisitionRun#writeProvenance}. */
+    /** Write one genomic run: {@code blocks_v1} through the stream writer
+     *  unless the run asks for the v1.8 whole-channel layout. */
+    static void writeGenomicRunDefault(
+            global.thalion.ttio.providers.StorageGroup study,
+            global.thalion.ttio.providers.StorageGroup runsGroup,
+            String name, WrittenGenomicRun run) {
+        if (run.optLegacyWholeChannel()) {
+            SpectralDatasetGenomicWriter.writeGenomicRunSubtree(runsGroup, name, run);
+            return;
+        }
+        try (global.thalion.ttio.genomics.GenomicStreamWriter w =
+                 new global.thalion.ttio.genomics.GenomicStreamWriter(study, name,
+                     global.thalion.ttio.genomics.GenomicStreamWriter.Options.fromRun(run))) {
+            w.appendBatch(run);
+        }
+    }
+
     static String buildProvenanceJsonArray(
             List<ProvenanceRecord> records) {
         StringBuilder json = new StringBuilder("[");
