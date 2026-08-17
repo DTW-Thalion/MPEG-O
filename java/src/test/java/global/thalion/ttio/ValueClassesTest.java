@@ -504,8 +504,8 @@ class ValueClassesTest {
         assertTrue(global.thalion.ttio.providers.StorageGroup.class.isInterface());
         assertTrue(global.thalion.ttio.providers.StorageDataset.class.isInterface());
 
-        // CompoundField.Kind: 4 v0.x primitives + VL_BYTES added in v1.0.
-        assertEquals(5, global.thalion.ttio.providers.CompoundField.Kind.values().length);
+        // CompoundField.Kind: 4 v0.x primitives + VL_BYTES (v1.0) + UINT64 (v1.9).
+        assertEquals(6, global.thalion.ttio.providers.CompoundField.Kind.values().length);
     }
 
     @Test

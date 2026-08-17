@@ -999,8 +999,13 @@ public final class TransportWriter implements AutoCloseable {
         // Phase 2c-T: declare bulk-mode in StreamHeader features when
         // the writer is bulk-enabled AND there is at least one
         // genomic run with v2 blobs to carry.
-        if (useBulkMode && !genomicRuns.isEmpty()
-            && !features.contains(PacketType.BULK_MODE_V2_BLOBS_FEATURE)) {
+        boolean bulkActive = false;
+        if (useBulkMode) {
+            for (GenomicRun g : genomicRuns.values()) {
+                if (bulkCarriable(g)) { bulkActive = true; break; }
+            }
+        }
+        if (bulkActive && !features.contains(PacketType.BULK_MODE_V2_BLOBS_FEATURE)) {
             features.add(PacketType.BULK_MODE_V2_BLOBS_FEATURE);
         }
 
@@ -1132,7 +1137,7 @@ public final class TransportWriter implements AutoCloseable {
         // Then genomic AUs. Phase 2c-T: in bulk mode, emit
         // verbatim v2 codec blobs first, then per-AU AccessUnits.
         for (Map.Entry<String, GenomicRun> e : genomicRuns.entrySet()) {
-            if (useBulkMode) {
+            if (useBulkMode && bulkCarriable(e.getValue())) {
                 emitGenomicRunV2Blobs(id, e.getValue());
             }
             emitGenomicRunAccessUnits(id, e.getValue());
@@ -1140,6 +1145,12 @@ public final class TransportWriter implements AutoCloseable {
             id++;
         }
         writeEndOfStream();
+    }
+
+    /** Whole-channel runs and one-block {@code blocks_v1} runs carry
+     *  their v2 blobs verbatim; a multi-block run goes per AU. */
+    static boolean bulkCarriable(GenomicRun run) {
+        return !"blocks_v1".equals(run.layout()) || run.blockCount() == 1;
     }
 
     /** Phase 2c-T: probe a {@link GenomicRun} for verbatim v2

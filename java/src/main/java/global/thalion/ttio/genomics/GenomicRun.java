@@ -45,8 +45,21 @@ public class GenomicRun
     private final String referenceUri;
     private final String platform;
     private final String sampleName;
-    private final GenomicIndex index;
+    private GenomicIndex index;
     private final StorageGroup runGroup;
+    // blocks_v1 (format-spec 10.12): the block table, the last
+    // materialised block view and the run-level name tables. Null /
+    // "whole" for the v1.8 whole-channel layout.
+    private final String layout;
+    private final BlockTable blockTable;
+    private int cachedBlock = -1;
+    private GenomicRun cachedView;
+    private BlockView.Handle cachedHandle;
+    private List<String> chromNamesTable;
+    private List<String> mateChromNamesTable;
+    private global.thalion.ttio.codecs.ReferenceResolver injectedResolver;
+    private global.thalion.ttio.codecs.ReferenceResolver viewResolver;
+    private boolean viewResolverBuilt;
     // Phase 1 (post-M91): per-run provenance, cached at open time so
     // provenanceChain() is a pure accessor. Eager because the on-disk
     // form is a small JSON attribute on the run group; lazy decode
@@ -141,7 +154,8 @@ public class GenomicRun
                        String modality, String referenceUri,
                        String platform, String sampleName,
                        GenomicIndex index, StorageGroup runGroup,
-                       List<ProvenanceRecord> provenanceRecords) {
+                       List<ProvenanceRecord> provenanceRecords,
+                       String layout, BlockTable blockTable) {
         this.name = name;
         this.acquisitionMode = acquisitionMode;
         this.modality = modality;
@@ -152,6 +166,8 @@ public class GenomicRun
         this.runGroup = runGroup;
         this.provenanceRecords = provenanceRecords != null
             ? List.copyOf(provenanceRecords) : List.of();
+        this.layout = layout;
+        this.blockTable = blockTable;
     }
 
     public String name()                       { return name; }
@@ -160,15 +176,64 @@ public class GenomicRun
     public String referenceUri()               { return referenceUri; }
     public String platform()                   { return platform; }
     public String sampleName()                 { return sampleName; }
-    public GenomicIndex index()                { return index; }
-    public int readCount()                     { return index.count(); }
+
+    /** The per-read index. Under {@code blocks_v1} it is loaded from
+     *  {@code genomic_index/} on first call. */
+    public GenomicIndex index() {
+        if (index == null) {
+            try (StorageGroup ig = runGroup.openGroup("genomic_index")) {
+                index = GenomicIndex.readFrom(ig);
+            }
+        }
+        return index;
+    }
+
+    public int readCount() {
+        return blockTable != null ? (int) blockTable.readCount() : index().count();
+    }
+
+    /** {@code "blocks_v1"} or {@code "whole"} (the v1.8 whole-channel
+     *  layout). */
+    public String layout() { return layout; }
+
+    /** Number of blocks; 1 for a whole-channel run. */
+    public int blockCount() { return blockTable != null ? blockTable.count() : 1; }
+
+    /** Run-level chromosome name table ({@code genomic_index/chromosome_names}),
+     *  read without loading the per-read arrays. */
+    public List<String> chromosomeNames() {
+        if (chromNamesTable == null) {
+            try (StorageGroup ig = runGroup.openGroup("genomic_index")) {
+                chromNamesTable = BlockView.readNames(ig, "chromosome_names");
+            }
+        }
+        return chromNamesTable;
+    }
 
     /** Open an existing genomic_runs/&lt;name&gt;/ group. The caller
      *  resolves the run group and passes it as {@code runGroup}. */
     public static GenomicRun readFrom(StorageGroup runGroup, String name) {
-        GenomicIndex idx;
-        try (StorageGroup ig = runGroup.openGroup("genomic_index")) {
-            idx = GenomicIndex.readFrom(ig);
+        return readFrom(runGroup, name, null);
+    }
+
+    /** {@code resolver}, when given, is used for REF_DIFF decodes instead
+     *  of one built from the run group's HDF5 file (block views live in
+     *  a memory provider and share their parent's). */
+    static GenomicRun readFrom(StorageGroup runGroup, String name,
+                               global.thalion.ttio.codecs.ReferenceResolver resolver) {
+        String layout = stringAttr(runGroup, "layout", "whole");
+        GenomicIndex idx = null;
+        BlockTable table = null;
+        if ("blocks_v1".equals(layout)) {
+            table = BlockTable.read(runGroup);
+        } else if ("whole".equals(layout)) {
+            try (StorageGroup ig = runGroup.openGroup("genomic_index")) {
+                idx = GenomicIndex.readFrom(ig);
+            }
+        } else {
+            throw new IllegalStateException(
+                "genomic run '" + name + "': unsupported layout '" + layout
+                + "' (this reader knows the whole-channel layout and blocks_v1)");
         }
         Object modeObj = runGroup.getAttribute("acquisition_mode");
         AcquisitionMode mode = AcquisitionMode.values()[
@@ -178,9 +243,76 @@ public class GenomicRun
         String platform   = stringAttr(runGroup, "platform",       "");
         String sampleName = stringAttr(runGroup, "sample_name",    "");
         List<ProvenanceRecord> prov = readPerRunProvenance(runGroup);
-        return new GenomicRun(name, mode, modality, refUri, platform,
-                              sampleName, idx, runGroup, prov);
+        GenomicRun run = new GenomicRun(name, mode, modality, refUri, platform,
+                                        sampleName, idx, runGroup, prov, layout, table);
+        run.injectedResolver = resolver;
+        return run;
     }
+
+    // ── blocks_v1 dispatch ─────────────────────────────────────────
+
+    /** The {@link GenomicRun} over block {@code b}, materialised on
+     *  demand; the last one is cached. */
+    private GenomicRun blockView(int b) {
+        if (cachedView != null && cachedBlock == b) return cachedView;
+        if (mateChromNamesTable == null) {
+            try (StorageGroup sc = runGroup.openGroup("signal_channels")) {
+                mateChromNamesTable = sc.hasChild("mate_info")
+                    ? BlockView.readNames(sc.openGroup("mate_info"), "chrom_names")
+                    : List.of();
+            }
+        }
+        BlockView.Handle h = BlockView.materialise(runGroup, blockTable, b,
+                chromosomeNames(), mateChromNamesTable);
+        GenomicRun sub = GenomicRun.readFrom(h.group(), name, resolverForViews());
+        dropCachedView();
+        cachedBlock = b;
+        cachedView = sub;
+        cachedHandle = h;
+        return sub;
+    }
+
+    private void dropCachedView() {
+        if (cachedView != null) cachedView.close();
+        if (cachedHandle != null) cachedHandle.discard();
+        cachedView = null;
+        cachedHandle = null;
+        cachedBlock = -1;
+    }
+
+    private global.thalion.ttio.codecs.ReferenceResolver resolverForViews() {
+        if (injectedResolver != null) return injectedResolver;
+        if (!viewResolverBuilt) {
+            viewResolverBuilt = true;
+            try {
+                global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
+                    .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
+                viewResolver = h5g == null ? null
+                    : new global.thalion.ttio.codecs.ReferenceResolver(h5g.owningFile());
+            } catch (RuntimeException e) {
+                viewResolver = null;
+            }
+        }
+        return viewResolver;
+    }
+
+    /** Reads {@code [start, stop)} in order, holding at most one decoded
+     *  block at a time under {@code blocks_v1}. */
+    public java.util.Iterator<AlignedRead> iterReads(int start, int stop) {
+        int n = readCount();
+        int lo = Math.max(start, 0), hi = Math.min(stop, n);
+        return new java.util.Iterator<>() {
+            int i = lo;
+            @Override public boolean hasNext() { return i < hi; }
+            @Override public AlignedRead next() {
+                if (i >= hi) throw new NoSuchElementException();
+                return objectAtIndex(i++);
+            }
+        };
+    }
+
+    /** Every read in order; see {@link #iterReads(int, int)}. */
+    public java.util.Iterator<AlignedRead> iterReads() { return iterReads(0, readCount()); }
 
     /** Phase 2 (post-M91): read per-run provenance. Prefers the
      *  canonical compound dataset {@code provenance/steps} (matches
@@ -234,6 +366,14 @@ public class GenomicRun
      *  {@link global.thalion.ttio.transport.TransportWriter} to mirror
      *  the file's per-channel codec choice on the wire. */
     public int signalChannelCompressionCode(String channelName) {
+        if (blockTable != null) {
+            if (blockTable.count() == 0 || blockTable.codec == null
+                    || !blockTable.codec.containsKey(channelName)) return 0;
+            int c = blockTable.codec.get(channelName)[0];
+            return (c == global.thalion.ttio.Enums.Compression.RANS_ORDER0.ordinal()
+                 || c == global.thalion.ttio.Enums.Compression.RANS_ORDER1.ordinal()
+                 || c == global.thalion.ttio.Enums.Compression.BASE_PACK.ordinal()) ? c : 0;
+        }
         ensureSignalChannels();
         if (!signalChannels.hasChild(channelName)) return 0;
         try (StorageDataset ds = signalChannels.openDataset(channelName)) {
@@ -250,12 +390,16 @@ public class GenomicRun
      *  domain-natural alias. */
     @Override
     public AlignedRead objectAtIndex(int i) {
-        if (i < 0 || i >= index.count()) {
+        if (i < 0 || i >= readCount()) {
             throw new IndexOutOfBoundsException(
-                "read index " + i + " out of range [0, " + index.count() + ")");
+                "read index " + i + " out of range [0, " + readCount() + ")");
         }
-        long offset = index.offsetAt(i);
-        int  length = index.lengthAt(i);
+        if (blockTable != null) {
+            int b = blockTable.blockFor(i);
+            return blockView(b).objectAtIndex(i - (int) blockTable.readStart[b]);
+        }
+        long offset = index().offsetAt(i);
+        int  length = index().lengthAt(i);
 
         ensureSignalChannels();
         // routed through byteChannelSlice so that channels written
@@ -281,13 +425,13 @@ public class GenomicRun
 
         return new AlignedRead(
             readName,
-            index.chromosomeAt(i),
-            index.positionAt(i),
-            index.mappingQualityAt(i),
+            index().chromosomeAt(i),
+            index().positionAt(i),
+            index().mappingQualityAt(i),
             cigar,
             sequence,
             qualities,
-            index.flagsAt(i),
+            index().flagsAt(i),
             mateChrom,
             matePos,
             tlen);
@@ -300,7 +444,7 @@ public class GenomicRun
      *  {@code [start, end)}. */
     public List<AlignedRead> readsInRegion(String chromosome,
                                             long start, long end) {
-        List<Integer> indices = index.indicesForRegion(chromosome, start, end);
+        List<Integer> indices = index().indicesForRegion(chromosome, start, end);
         List<AlignedRead> out = new ArrayList<>(indices.size());
         for (int i : indices) out.add(objectAtIndex(i));
         return out;
@@ -354,6 +498,7 @@ public class GenomicRun
 
     @Override
     public void close() {
+        dropCachedView();
         if (sequencesDs != null) { sequencesDs.close(); sequencesDs = null; }
         if (qualitiesDs != null) { qualitiesDs.close(); qualitiesDs = null; }
         if (signalChannels != null) { signalChannels.close(); signalChannels = null; }
@@ -496,19 +641,19 @@ public class GenomicRun
      *  </ul> */
     private global.thalion.ttio.codecs.registry.CodecContext codecContext() {
         if (codecCtxCache != null) return codecCtxCache;
-        int n = index.count();
+        int n = index().count();
         int[] readLengths = new int[n];
         int[] revcomp = new int[n];
         long[] positions = new long[n];
         long totalBases = 0L;
         for (int i = 0; i < n; i++) {
-            readLengths[i] = index.lengthAt(i);
-            revcomp[i] = ((index.flagsAt(i) & 16) != 0) ? 1 : 0;
-            positions[i] = index.positionAt(i);
-            totalBases += index.lengthAt(i);
+            readLengths[i] = index().lengthAt(i);
+            revcomp[i] = ((index().flagsAt(i) & 16) != 0) ? 1 : 0;
+            positions[i] = index().positionAt(i);
+            totalBases += index().lengthAt(i);
         }
         String[] chromosomes = new String[n];
-        for (int i = 0; i < n; i++) chromosomes[i] = index.chromosomeAt(i);
+        for (int i = 0; i < n; i++) chromosomes[i] = index().chromosomeAt(i);
 
         // own_chrom_ids: rebuild encounter-order id-per-read from the
         // mate_info/chrom_names sidecar, byte-identical to _decodeMateV2.
@@ -523,26 +668,14 @@ public class GenomicRun
             }
             ownChromIds = new short[n];
             for (int i = 0; i < n; i++) {
-                String chr = index.chromosomeAt(i);
+                String chr = index().chromosomeAt(i);
                 Integer id = nameToId.get(chr);
                 ownChromIds[i] = (id == null) ? (short) 0xFFFF
                                : id.shortValue();
             }
         }
 
-        global.thalion.ttio.codecs.ReferenceResolver resolver;
-        try {
-            global.thalion.ttio.hdf5.Hdf5Group h5g = global.thalion.ttio.providers
-                .Hdf5Provider.tryUnwrapHdf5Group(runGroup);
-            if (h5g == null) {
-                resolver = null;
-            } else {
-                resolver = new global.thalion.ttio.codecs.ReferenceResolver(
-                    h5g.owningFile());
-            }
-        } catch (RuntimeException e) {
-            resolver = null;  // non-HDF5 backend: ref_diff decode raises clearly
-        }
+        global.thalion.ttio.codecs.ReferenceResolver resolver = resolverForViews();
 
         codecCtxCache = global.thalion.ttio.codecs.registry.CodecContext.builder()
             .readLengths(readLengths).revcompFlags(revcomp).readCount(n)
@@ -573,8 +706,8 @@ public class GenomicRun
      *  {@link #decodedCigars}. */
     private java.util.List<String> allCigars() {
         if (decodedCigars != null) return decodedCigars;
-        java.util.List<String> out = new java.util.ArrayList<>(index.count());
-        for (int i = 0; i < index.count(); i++) {
+        java.util.List<String> out = new java.util.ArrayList<>(index().count());
+        for (int i = 0; i < index().count(); i++) {
             out.add(cigarAt(i));
         }
         // cigarAt() populates decodedCigars when the codec path is hit;
@@ -598,7 +731,11 @@ public class GenomicRun
      *  <p>If {@code readCount == 0} the writer emits an empty group
      *  (no child datasets); this method short-circuits there. */
     public String readNameAt(int i) {
-        if (index.count() == 0) {
+        if (blockTable != null) {
+            int b = blockTable.blockFor(i);
+            return blockView(b).readNameAt(i - (int) blockTable.readStart[b]);
+        }
+        if (index().count() == 0) {
             // Defensive: read at index 0 on an empty run is an
             // out-of-range error caught upstream; return-empty-string
             // here keeps the codepath safe.
@@ -667,6 +804,10 @@ public class GenomicRun
      *  </ul>
      */
     public String cigarAt(int i) {
+        if (blockTable != null) {
+            int b = blockTable.blockFor(i);
+            return blockView(b).cigarAt(i - (int) blockTable.readStart[b]);
+        }
         List<String> cached = decodedCigars;
         if (cached != null) {
             return cached.get(i);
@@ -859,6 +1000,10 @@ public class GenomicRun
      *  the M86 Phase F per-field subgroup and the M82 compound layout
      *  raise {@code IllegalStateException}. */
     public String mateChromAt(int i) {
+        if (blockTable != null) {
+            int b = blockTable.blockFor(i);
+            return blockView(b).mateChromAt(i - (int) blockTable.readStart[b]);
+        }
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             int mateChromId = decodedMateV2.mateChromIds[i];
@@ -874,6 +1019,10 @@ public class GenomicRun
     /** return the mate position at index
      *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
     public long matePosAt(int i) {
+        if (blockTable != null) {
+            int b = blockTable.blockFor(i);
+            return blockView(b).matePosAt(i - (int) blockTable.readStart[b]);
+        }
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             return decodedMateV2.matePositions[i];
@@ -884,6 +1033,10 @@ public class GenomicRun
     /** return the template length at index
      *  {@code i}. Inline_v2 only — see {@link #mateChromAt}. */
     public int mateTlenAt(int i) {
+        if (blockTable != null) {
+            int b = blockTable.blockFor(i);
+            return blockView(b).mateTlenAt(i - (int) blockTable.readStart[b]);
+        }
         if (isMateInfoInlineV2()) {
             _decodeMateV2();
             return decodedMateV2.templateLengths[i];
@@ -950,6 +1103,9 @@ public class GenomicRun
      *  mate_chromosomes at write time). */
     @SuppressWarnings("unchecked")
     public byte[] readMateInfoInlineV2BlobBytes() {
+        if (blockTable != null) {
+            return blockTable.count() == 1 ? blockView(0).readMateInfoInlineV2BlobBytes() : null;
+        }
         ensureSignalChannels();
         if (!signalChannels.hasChild("mate_info")) return null;
         try (StorageGroup mateGrp = signalChannels.openGroup("mate_info")) {
@@ -965,6 +1121,13 @@ public class GenomicRun
      *  table. Returns an empty list when the table is missing. */
     @SuppressWarnings("unchecked")
     public List<String> readMateInfoChromNamesTable() {
+        if (blockTable != null) {
+            try (StorageGroup sc = runGroup.openGroup("signal_channels")) {
+                return sc.hasChild("mate_info")
+                    ? BlockView.readNames(sc.openGroup("mate_info"), "chrom_names")
+                    : new ArrayList<>();
+            }
+        }
         ensureSignalChannels();
         List<String> out = new ArrayList<>();
         if (!signalChannels.hasChild("mate_info")) return out;
@@ -989,6 +1152,9 @@ public class GenomicRun
      *  {@code @compression == NAME_TOKENIZED_V2 (15)}. Returns null
      *  when read_names is absent or carries a different codec. */
     public byte[] readNameTokV2BlobBytes() {
+        if (blockTable != null) {
+            return blockTable.count() == 1 ? blockView(0).readNameTokV2BlobBytes() : null;
+        }
         ensureSignalChannels();
         if (!signalChannels.hasChild("read_names")) return null;
         try (StorageDataset ds = signalChannels.openDataset("read_names")) {
@@ -1004,6 +1170,9 @@ public class GenomicRun
      *  {@code sequences/refdiff_v2} blob when sequences is the v1.8
      *  group layout. Returns null otherwise. */
     public byte[] readRefDiffV2BlobBytes() {
+        if (blockTable != null) {
+            return blockTable.count() == 1 ? blockView(0).readRefDiffV2BlobBytes() : null;
+        }
         ensureSignalChannels();
         if (!signalChannels.hasChild("sequences")) return null;
         // sequences may be a flat dataset or a group containing refdiff_v2.
@@ -1038,13 +1207,21 @@ public class GenomicRun
      *  matters for uncompressed channels, which the codec path
      *  does not cache automatically. */
     public byte[] sequencesFull() {
+        if (blockTable != null) return concatBlocks(GenomicRun::sequencesFull);
         ensureSignalChannels();
         return byteChannelFull("sequences");
+    }
+
+    private byte[] concatBlocks(java.util.function.Function<GenomicRun, byte[]> f) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        for (int b = 0; b < blockTable.count(); b++) out.writeBytes(f.apply(blockView(b)));
+        return out.toByteArray();
     }
 
     /** Return the full ``signal_channels/qualities`` byte array.
      *  Same warm-cache semantics as {@link #sequencesFull}. */
     public byte[] qualitiesFull() {
+        if (blockTable != null) return concatBlocks(GenomicRun::qualitiesFull);
         ensureSignalChannels();
         return byteChannelFull("qualities");
     }
@@ -1075,7 +1252,12 @@ public class GenomicRun
      *  NAME_TOKENIZED_V2 decode + cache. Mirrors the Python
      *  ``GenomicRun._read_name_at`` cache priming idiom. */
     public List<String> readNamesAll() {
-        int n = index.count();
+        if (blockTable != null) {
+            List<String> all = new ArrayList<>(readCount());
+            for (int b = 0; b < blockTable.count(); b++) all.addAll(blockView(b).readNamesAll());
+            return all;
+        }
+        int n = index().count();
         if (n == 0) return java.util.Collections.emptyList();
         // Touch index 0 to trigger the one-shot decode for v2 layouts.
         readNameAt(0);
@@ -1087,8 +1269,8 @@ public class GenomicRun
     }
 
     private long totalBaseCount() {
-        int n = index.count();
+        int n = index().count();
         if (n == 0) return 0L;
-        return index.offsetAt(n - 1) + index.lengthAt(n - 1);
+        return index().offsetAt(n - 1) + index().lengthAt(n - 1);
     }
 }

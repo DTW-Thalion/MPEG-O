@@ -130,7 +130,7 @@ final class RefDiffV2DispatchTest {
             cigars, readNames, mateChromosomes, matePositions,
             templateLengths, chromosomes,
             Compression.ZLIB, Map.of(), List.of(),
-            true, chromSeqs, null);
+            true, chromSeqs, null).withOptLegacyWholeChannel(true);
     }
 
     private static Path writeRun(Path tmp, WrittenGenomicRun run,

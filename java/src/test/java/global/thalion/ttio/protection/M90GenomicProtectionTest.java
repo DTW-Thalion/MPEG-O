@@ -86,7 +86,7 @@ class M90GenomicProtectionTest {
             sequencesConcat, qualitiesConcat,
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chromosomes,
-            Enums.Compression.ZLIB);
+            Enums.Compression.ZLIB).withOptLegacyWholeChannel(true);
     }
 
     /** Build an "ACGTACGT" sequences + all-30 qualities fixture. */
@@ -396,7 +396,7 @@ class M90GenomicProtectionTest {
             sequences, qualities,
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chroms,
-            Enums.Compression.ZLIB);
+            Enums.Compression.ZLIB).withOptLegacyWholeChannel(true);
         String path = tempDir.resolve(name).toString();
         SpectralDataset.create(path, "M90.3 anon", "ISA-M90-3",
             List.of(), List.of(run),

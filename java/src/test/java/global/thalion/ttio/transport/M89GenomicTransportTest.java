@@ -301,7 +301,7 @@ class M89GenomicTransportTest {
             "GRCh38.p14", "ILLUMINA", "NA12878",
             positions, mqs, flags, sequences, qualities,
             offsets, lengths, cigars, readNames, mateChroms,
-            matePos, tlens, chromsList, Compression.ZLIB);
+            matePos, tlens, chromsList, Compression.ZLIB).withOptLegacyWholeChannel(true);
     }
 
     private static SpectralDataset writeMinimalGenomicDataset(Path file) {
@@ -494,7 +494,7 @@ class M89GenomicTransportTest {
             "GRCh38.p14", "ILLUMINA", "NA12878",
             gPositions, gMqs, gFlags, sequences, qualities,
             gOffsets, gLengths, gCigars, gReadNames, gMateChroms,
-            gMatePos, gTlens, gChroms, Compression.ZLIB);
+            gMatePos, gTlens, gChroms, Compression.ZLIB).withOptLegacyWholeChannel(true);
 
         SpectralDataset.create(file.toString(),
             "M89.4 multiplexed fixture", "ISA-M89-MUX",
