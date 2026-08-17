@@ -55,9 +55,13 @@ def _iter_mzml(path: Path):
 
 
 def mzml_arrays_md5(path: Path) -> str:
+    """Digest of every spectrum's m/z and intensity arrays as float64
+    in file order. Spectrum ids are not part of the digest: the check
+    is the arrays (spec section 6), and the TTI-O exporter renumbers
+    ids as scan=1..n."""
     h = hashlib.md5()
-    for sid, mz, it in _iter_mzml(path):
-        h.update(sid.encode()); h.update(mz.tobytes()); h.update(it.tobytes())
+    for _sid, mz, it in _iter_mzml(path):
+        h.update(len(mz).to_bytes(8, "little")); h.update(mz.tobytes()); h.update(it.tobytes())
     return h.hexdigest()
 
 
