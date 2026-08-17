@@ -31,7 +31,9 @@ from . import _blocks
 LAYOUT = "blocks_v1"
 DEFAULT_BLOCK_READS = 1_000_000
 DEFAULT_BLOCK_BYTES = 256 << 20
-CHANNEL_CHUNK = 4 << 20
+# Unfiltered chunked datasets store whole chunks, so the chunk is kept
+# moderate: a 10-read run costs 5 x 256 KiB, a 100 GB channel ~400 k chunks.
+CHANNEL_CHUNK = 256 << 10
 
 #: Block index schema, in the fixed column order of format-spec 10.12.
 INDEX_FIELDS: list[CompoundField] = (

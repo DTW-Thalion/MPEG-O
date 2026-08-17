@@ -233,6 +233,19 @@ ds.close()
 
 ---
 
+## 2a. Large inputs stream
+
+`ttio encode` streams every supported input: a BAM, FASTQ or mzML of
+any size is converted with bounded memory (one block of reads or one
+batch of spectra at a time). Genomic runs land in the `blocks_v1`
+layout (format-spec 10.12); pass `--block-reads` / `--block-bytes` to
+change the block size (default 1 000 000 reads or 256 MiB of
+sequence) and `--legacy-whole-channel` when a reader older than this
+release must open the file. `--reference <fasta>` (indexed) enables
+REF_DIFF_V2 for BAM/SAM and is required for CRAM. `ttio export` streams
+too. Thermo RAW and Waters .raw convert to mzML in a temporary
+directory that is removed when the import finishes.
+
 ## 3. Where the fixtures live
 
 The canonical reference fixtures used by the cross-compatibility test suite are

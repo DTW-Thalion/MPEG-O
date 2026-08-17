@@ -1491,31 +1491,62 @@ order is part of the contract:
 | `n_reads` | uint32 | reads in the block |
 | `base_start` | uint64 | offset of the block's first base in the concatenated base space |
 | `n_bases` | uint64 | bases in the block |
-| `sequences_off`, `sequences_len` | uint64 | byte range of the block's blob inside the `sequences` dataset |
+| `sequences_off`, `sequences_len` | uint64 | byte range of the block's blob inside `sequences/data` |
 | `qualities_off`, `qualities_len` | uint64 | same for `qualities` |
 | `read_names_off`, `read_names_len` | uint64 | same for `read_names` |
 | `cigars_off`, `cigars_len` | uint64 | same for `cigars` |
 | `mate_info_off`, `mate_info_len` | uint64 | same for `mate_info/inline_v2` |
+| `sequences_codec`, `qualities_codec`, `read_names_codec`, `cigars_codec`, `mate_info_codec` | uint32 | the codec id (section 10.4) of that block's blob, one column per channel in the same order |
 
-A channel a run does not carry has `_len = 0` in every row.
+A channel a run does not carry has `_len = 0` in every row. The codec
+columns exist because a block's codec can differ from its
+neighbours': a mapped block codes sequences with REF_DIFF_V2 while
+the unmapped block of the same run falls back to BASE_PACK. The
+`@compression` attribute on a channel dataset carries the first
+block's codec and is informative only.
 
 ### 10.12.3 Channel datasets
 
-Each blob channel is one extendable, unfiltered 1-D `uint8` dataset
-holding the blocks' blobs back to back, with the same `@compression`
-value and dataset name/location as the whole-channel layout:
-`sequences/refdiff_v2` (or flat `sequences` for the non-reference
-codecs), `qualities`, `read_names`, `cigars`, `mate_info/inline_v2`.
-`cigars` defaults to RANS_ORDER0 (id 4, section 10.8) under this
-layout because the v1.8 compound VL-string default has no blob form.
+Each blob channel is one extendable 1-D `uint8` dataset holding the
+blocks' blobs back to back: `sequences/data` (always a group under
+this layout, whatever the codec), `qualities`, `read_names`,
+`cigars`, `mate_info/inline_v2`. Codec output is unfiltered; a channel
+whose codec is 0 keeps the zlib filter. Chunk size is 256 KiB.
+
+A block never spans two chromosomes: the writer flushes the pending
+block when the chromosome changes (REF_DIFF_V2 codes one chromosome
+per blob; unmapped `*` reads form their own blocks). A
+coordinate-sorted whole-genome BAM therefore streams through
+REF_DIFF_V2 as long same-chromosome stretches.
+
+Every blob channel is codec-coded under this layout. Defaults when the
+caller sets no override: `cigars` RANS_ORDER0 (id 4, section 10.8;
+the v1.8 compound VL-string default has no blob form), `qualities`
+FQZCOMP_NX16_Z (id 12; v1.8 only used it when another v1.5 codec was
+active on the run and otherwise left zlib-filtered raw bytes), and
+`sequences` REF_DIFF_V2 (id 14) with a reference or RANS_ORDER1
+(id 5) without one. A block that contains a zero-length read (SEQ
+`*`, e.g. a secondary alignment) codes qualities with RANS_ORDER0
+because the FQZCOMP_NX16_Z kernel does not decode a stream in which a
+zero-length read precedes another read; the codec column records it.
+
 `mate_info/chrom_names`, `genomic_index/chromosome_names` and the
 reference tables stay run-level; chromosome ids are assigned once per
 run in first-seen order across blocks and both name tables are
-written at close from that map.
+written at close from that map. Readers derive a read's own
+chromosome id for the mate decoder from the `mate_info/chrom_names`
+row index (encounter order restarts per block, so it must not be
+rebuilt from the block's own names).
 
 Codec consequences the codecs already tolerate: FQZCOMP_NX16_Z
 auto-tunes per block, REF_DIFF_V2 carries its slice index per block,
-NAME_TOKENIZED_V2 restarts its tokenizer per block.
+NAME_TOKENIZED_V2 restarts its tokenizer per block. Measured on the
+NA12878 chr22 low-coverage BAM (151 MB) with the hs37 chr22 reference:
+blocks_v1 73.5 MB, whole-channel layout 113.4 MB (the whole-channel
+writer falls back to BASE_PACK on the whole channel when any read is
+unmapped); NA12878 WES chr22 (72.8 MB): 64.1 MB vs 87.5 MB. Peak RSS
+of the streaming import at the default 1 M-read blocks: 1.8 GB and
+1.6 GB.
 
 ### 10.12.4 `genomic_index/`
 
@@ -1534,8 +1565,10 @@ the last indexed block and use the index row count, not
 ### 10.12.6 Signatures
 
 `sign_genomic_run` / `verify_genomic_run` cover the same datasets as
-for the whole-channel layout plus `blocks/index` (canonical compound
-bytes), placed after `genomic_index/*` and before `signal_channels/*`.
+for the whole-channel layout (the datasets inside a channel group,
+`sequences/data`, included) plus `blocks/index` (canonical compound
+bytes). Per-AU and region encryption of genomic channels operate on
+the whole-channel layout only.
 
 Cross-language: Java `GenomicStreamWriter` / ObjC
 `TTIOGenomicStreamWriter` and their readers implement this section;

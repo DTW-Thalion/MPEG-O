@@ -12,6 +12,31 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Changed
+- **Streaming import and export; genomic runs stored as `blocks_v1`.** Every
+  Python importer (BAM/SAM/CRAM, FASTQ, mzML, Thermo RAW, Waters .raw, Bruker .d)
+  and exporter (SAM/BAM, FASTQ, mzML) now streams: a run of any size is written
+  and read with bounded memory (one block or batch plus, for REF_DIFF_V2, the
+  reference chromosomes touched). Genomic runs are written as independently coded
+  blocks (format-spec 10.12: `@layout="blocks_v1"`, a `blocks/index` compound with
+  per-block byte ranges and codec ids, per-channel extendable datasets, blocks
+  cut at chromosome boundaries so a coordinate-sorted whole-genome BAM streams
+  through REF_DIFF_V2); every blob channel is codec-coded (cigars RANS_ORDER0,
+  qualities FQZCOMP_NX16_Z, reference-less sequences RANS_ORDER1). New API:
+  `ttio.genomic.GenomicStreamWriter`, `ttio.spectral_stream_writer.
+  SpectralStreamWriter`, `GenomicRun.iter_reads`, `AcquisitionRun.iter_spectra` /
+  `channel_range`, `BamReader.iter_batches`, `FastqReader.iter_batches`,
+  `MzMLStream`, `LazyReference`; storage providers gain extendable datasets
+  (`create_dataset(..., extendable=True)`, `append`, `write_slice`) and the
+  `UINT64` compound field kind. `ttio encode` gains `--block-reads`,
+  `--block-bytes`, `--legacy-whole-channel`, `--reference`, `--embed-reference`.
+  Measured on the NA12878 chr22 low-coverage BAM: 73.5 MB as blocks_v1 vs
+  113.4 MB whole-channel, peak RSS 1.8 GB vs 3.3 GB. **Reader compatibility:**
+  genomic files written with default settings are not readable by releases up to
+  and including v1.8.0; `opt_legacy_whole_channel=True` (CLI
+  `--legacy-whole-channel`) writes the v1.8 layout. Java and ObjC read support
+  for `blocks_v1` follows in the next two PRs; until then the cross-language
+  fixtures use the whole-channel layout. Per-AU and region encryption of genomic
+  channels operate on the whole-channel layout only.
 - **FLOAT_DELTA_ZSTD (compression id 17) on the transport wire, and the default
   wire codec.** Spectral AU channels can carry one FDZ1 stream per channel, and it
   is now what `use_compression=True` / `setUseCompression(true)` / `useCompression =

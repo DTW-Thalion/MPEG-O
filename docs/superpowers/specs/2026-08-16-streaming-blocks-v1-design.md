@@ -1,6 +1,16 @@
 # Streaming import/export and the genomic block layout (`blocks_v1`)
 
-> **Status (2026-08-16).** Design approved as sub-project 1 of 4
+> **Status (2026-08-17).** Implemented in Python (branch
+> `streaming-blocks-v1`); the normative layout is `docs/format-spec.md`
+> section 10.12, which supersedes section 2 below where they differ.
+> Decisions made during implementation, all in 10.12: blocks never
+> span chromosomes; per-channel `<ch>_codec` index columns;
+> `sequences/data` for every codec; every blob channel is codec-coded
+> (cigars RANS_ORDER0, qualities FQZCOMP_NX16_Z, reference-less
+> sequences RANS_ORDER1; RANS_ORDER0 qualities for a block holding a
+> zero-length read); own chromosome ids from `mate_info/chrom_names`;
+> whole-channel-only features: per-AU/region encryption, verbatim bulk
+> transport for multi-block runs. Sub-project 1 of 4
 > (format + Python reference implementation). Java (2), ObjC (3) and
 > the cross-language conformance + benchmark work (4) each get their
 > own spec that reads this one as the format contract. Plan:
@@ -313,6 +323,12 @@ are untouched.
 - Full Python suite + xlang matrix; the golden fixture committed.
 
 ## 11. Open questions
+
+- Per-block bulk (verbatim blob) carriage on the transport wire; today
+  a multi-block run is sent per-AU.
+- The FQZCOMP_NX16_Z zero-length-read decode failure is a kernel bug
+  shared by all three languages; once fixed the RANS_ORDER0 fallback
+  can go.
 
 - Whether `cigars` should stay rANS per block or move into a
   mate_info-style inline stream is not decided here; per block with

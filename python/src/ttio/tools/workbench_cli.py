@@ -319,17 +319,35 @@ def cmd_encode(args) -> int:
     # CLI-delegated formats.
     from ttio.importers import registry
     fmt = registry.normalize(args.format)
+    stream_flags: list[str] = []
+    stream_opts: dict = {}
+    if getattr(args, "block_reads", None) is not None:
+        stream_flags += ["--block-reads", str(args.block_reads)]
+        stream_opts["block_reads"] = args.block_reads
+    if getattr(args, "block_bytes", None) is not None:
+        stream_flags += ["--block-bytes", str(args.block_bytes)]
+        stream_opts["block_bytes"] = args.block_bytes
+    if getattr(args, "legacy_whole_channel", False):
+        stream_flags += ["--legacy-whole-channel"]
+        stream_opts["legacy_whole_channel"] = True
+    if getattr(args, "reference", None):
+        stream_opts["reference"] = args.reference
+    if getattr(args, "embed_reference", False):
+        stream_opts["embed_reference"] = True
     if fmt == "fastq":
         from ttio.tools import fastq_import_cli as backend
-        return _delegate_to(backend, ["--input"] + args.input +
-                              ["--output", args.output] + (args.extra or []))
+        if len(args.input) != 1:
+            print(f"{PROG}: --format fastq takes exactly one --input file", file=sys.stderr)
+            return 2
+        return _delegate_to(backend, ["--fastq", args.input[0], "--out", args.output]
+                            + stream_flags + (args.extra or []))
     if fmt == "fasta":
         from ttio.tools import fasta_import_cli as backend
         return _delegate_to(backend, ["--input"] + args.input +
                               ["--output", args.output] + (args.extra or []))
     if registry.is_registry_format(fmt):
         try:
-            registry.encode(fmt, args.input, args.output)
+            registry.encode(fmt, args.input, args.output, **stream_opts)
         except registry.UnknownFormatError:
             return _encode_unsupported(args.format)
         except Exception as e:  # importer/runtime-tool failure
@@ -905,6 +923,22 @@ def build_parser() -> argparse.ArgumentParser:
                           "(aliases: thermo, waters, bruker, timstof).")
     pe.add_argument("--output", required=True,
                      help="Target .tio path.")
+    pe.add_argument("--block-reads", type=int, default=None,
+                     help="genomic runs: reads per blocks_v1 block "
+                          "(default 1000000).")
+    pe.add_argument("--block-bytes", type=int, default=None,
+                     help="genomic runs: sequence bytes per blocks_v1 "
+                          "block (default 268435456).")
+    pe.add_argument("--legacy-whole-channel", action="store_true",
+                     help="genomic runs: write the v1.8 whole-channel "
+                          "layout (readers up to v1.8.0; memory grows "
+                          "with the run).")
+    pe.add_argument("--reference", default=None,
+                     help="bam/sam/cram: reference FASTA (indexed) for "
+                          "REF_DIFF_V2 sequences; required for cram.")
+    pe.add_argument("--embed-reference", action="store_true",
+                     help="bam/sam/cram: embed the reference in the "
+                          "container.")
     pe.add_argument("--extra", nargs=argparse.REMAINDER,
                      help="Extra args forwarded to the format-specific CLI.")
     pe.set_defaults(func=cmd_encode)
