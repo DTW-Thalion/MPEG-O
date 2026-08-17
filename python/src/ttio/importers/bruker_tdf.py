@@ -465,3 +465,47 @@ def _empty_run(spectrum_class: str, acquisition_mode: int) -> WrittenRun:
     )
 
 
+class BrukerTDFStream:
+    """Stream a timsTOF ``.d`` as consecutive :class:`WrittenRun`
+    batches of ``batch_frames`` frames (MS1 by default; ``ms2=True``
+    adds a second run of MS2 frames). Requires ``opentimspy``."""
+
+    def __init__(self, d_dir: str | Path, *, batch_frames: int = 256, ms2: bool = False):
+        self._d = Path(d_dir)
+        self._batch = max(1, int(batch_frames))
+        self._ms2 = bool(ms2)
+
+    def _open(self):
+        try:
+            from opentimspy import OpenTIMS
+        except ImportError as exc:  # pragma: no cover
+            raise BrukerTDFUnavailableError(
+                "Binary frame decompression requires the optional "
+                "opentimspy + opentims-bruker-bridge dependencies "
+                "(pip install 'ttio[bruker]')") from exc
+        return OpenTIMS(self._d)
+
+    def iter_batches(self, *, ms_level: int = 1):
+        ot = self._open()
+        try:
+            if ms_level == 1:
+                frames = np.asarray(ot.ms1_frames, dtype=np.int64)
+                mode = int(AcquisitionMode.MS1_DDA)
+            else:
+                frames = np.asarray(ot.ms2_frames if ot.ms2_frames is not None else [], dtype=np.int64)
+                mode = int(AcquisitionMode.MS2_DDA)
+            for i in range(0, len(frames), self._batch):
+                yield _build_run(ot, frames[i:i + self._batch],
+                                 spectrum_class="TTIOMassSpectrum", acquisition_mode=mode)
+        finally:
+            ot.close()
+
+    def stream_sources(self) -> dict:
+        """``{run name: SpectralStreamSource}`` for tims_ms1 (and tims_ms2)."""
+        from .import_result import SpectralStreamSource
+        out = {"tims_ms1": SpectralStreamSource(
+            name="tims_ms1", iter_batches=lambda: self.iter_batches(ms_level=1))}
+        if self._ms2:
+            out["tims_ms2"] = SpectralStreamSource(
+                name="tims_ms2", iter_batches=lambda: self.iter_batches(ms_level=2))
+        return out

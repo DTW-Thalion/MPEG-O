@@ -76,7 +76,13 @@ class SpectralStreamWriter:
         self._fdz_blocks: dict[str, int] = {}
         self._m74: bool | None = None
         self._centroided: bool | None = None
+        self._chromatograms: list = []
         self._closed = False
+
+    def set_chromatograms(self, chromatograms) -> None:
+        """Chromatogram traces written at close (mzML carries them
+        after the spectra)."""
+        self._chromatograms = list(chromatograms or [])
 
     # ------------------------------------------------------------------
     @property
@@ -146,6 +152,9 @@ class SpectralStreamWriter:
             from ._dataset_write_metadata import _write_provenance
             prov = self._g.create_group("provenance")
             _write_provenance(prov, self._provenance, dataset_name="steps")
+        if self._chromatograms:
+            from .acquisition_run import write_chromatograms_to_run_group
+            write_chromatograms_to_run_group(self._g, self._chromatograms)
 
     def __enter__(self) -> "SpectralStreamWriter":
         return self
@@ -155,10 +164,13 @@ class SpectralStreamWriter:
 
     # ------------------------------------------------------------------
     def _runs_group(self):
-        if self._study.has_child("ms_runs"):
-            g = self._study.open_group("ms_runs")
+        # write_minimal keeps NMR runs under nmr_runs and everything
+        # else (MS, IR, Raman, UV-Vis) under ms_runs.
+        gname = "nmr_runs" if self._spectrum_class == SpectrumKind.NMR.value else "ms_runs"
+        if self._study.has_child(gname):
+            g = self._study.open_group(gname)
         else:
-            g = self._study.create_group("ms_runs")
+            g = self._study.create_group(gname)
             io.write_fixed_string_attr(g, "_run_names", "")
         names = [n for n in (io.read_string_attr(g, "_run_names", default="") or "").split(",") if n]
         if self._name not in names:
@@ -228,6 +240,32 @@ class SpectralStreamWriter:
                 "ms_levels": b.ms_levels, "polarities": b.polarities,
                 "precursor_mzs": b.precursor_mzs, "precursor_charges": b.precursor_charges,
                 "base_peak_intensities": b.base_peak_intensities}
+        # Optional M74 / centroided columns are all-or-nothing on disk;
+        # a batch that first carries them makes the writer create the
+        # datasets and backfill zero sentinels for the spectra already
+        # written, and a batch that lacks them appends zero sentinels.
+        m74_batch = all(c is not None for c in (b.activation_methods, b.isolation_target_mzs,
+                                                b.isolation_lower_offsets, b.isolation_upper_offsets))
+        if m74_batch and not self._m74:
+            self._m74 = True
+            idx = self._g.open_group("spectrum_index")
+            for name, prec, dt in _M74_COLUMNS:
+                ds = idx.create_dataset(name, prec, 0, chunk_size=io.DEFAULT_INDEX_CHUNK,
+                                        compression=Compression.ZLIB, compression_level=6,
+                                        extendable=True)
+                if self._count:
+                    ds.append(np.zeros(self._count, dtype=dt))
+                self._idx[name] = ds
+        if b.centroideds is not None and not self._centroided:
+            self._centroided = True
+            idx = self._g.open_group("spectrum_index")
+            ds = idx.create_dataset("centroideds", Precision.INT32, 0,
+                                    chunk_size=io.DEFAULT_INDEX_CHUNK,
+                                    compression=Compression.ZLIB, compression_level=6,
+                                    extendable=True)
+            if self._count:
+                ds.append(np.zeros(self._count, dtype="<i4"))
+            self._idx["centroideds"] = ds
         if self._m74:
             cols.update(activation_methods=b.activation_methods,
                         isolation_target_mzs=b.isolation_target_mzs,
@@ -237,9 +275,9 @@ class SpectralStreamWriter:
             cols["centroideds"] = b.centroideds
         for name, prec, dt in _INDEX_COLUMNS + _M74_COLUMNS + (("centroideds", Precision.INT32, "<i4"),):
             if name in self._idx:
-                arr = cols[name]
+                arr = cols.get(name)
                 if arr is None:
-                    raise ValueError(f"batch lacks index column {name!r} present in earlier batches")
+                    arr = np.zeros(n, dtype=dt)
                 self._idx[name].append(np.asarray(arr).astype(dt, copy=False))
         for c in self._channels:
             data = np.ascontiguousarray(b.channel_data[c], dtype=np.float64)

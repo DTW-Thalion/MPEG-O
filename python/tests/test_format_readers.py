@@ -40,7 +40,9 @@ def test_mzml_reader_returns_draft(tmp_path):
     assert isinstance(r, Reader)
     ds = r.read([_write_mzml(tmp_path)], {})
     assert isinstance(ds, ImportedDataset)
-    assert ds.runs
+    # mzML is delivered as a stream source (written through
+    # SpectralStreamWriter), not a whole in-memory run.
+    assert ds.spectral_streams and "run_0001" in ds.spectral_streams
 
 
 def test_mzml_reader_round_trips(tmp_path):

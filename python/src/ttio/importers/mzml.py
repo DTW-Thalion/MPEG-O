@@ -16,7 +16,7 @@ API status: Stable.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 from xml.etree.ElementTree import iterparse
 
 import numpy as np
@@ -25,6 +25,7 @@ from ..enums import ActivationMethod, Polarity, Precision
 from ..io.progress import ProgressSinkLike, _fire
 from . import cv_term_mapper as cv
 from ._base64_zlib import decode as decode_base64
+from ..spectral_dataset import WrittenRun
 from .import_result import ImportResult, ImportedChromatogram, ImportedSpectrum
 
 
@@ -90,6 +91,77 @@ def read(
         chromatograms=state.chromatograms,
         source_file=str(path),
     )
+
+
+class MzMLStream:
+    """Stream an mzML file as consecutive :class:`WrittenRun` batches.
+
+    Wraps the same iterparse state machine as :func:`read`, but hands
+    the parsed spectra out every ``batch_spectra`` and clears them, so
+    a run of any size imports with bounded memory. Chromatograms, which
+    mzML puts after the spectrum list, are available on
+    :attr:`chromatograms` once :meth:`iter_batches` is exhausted;
+    :attr:`title` is the run id. ``progress`` fires every
+    :data:`PROGRESS_INTERVAL_SPECTRA` spectra.
+    """
+
+    def __init__(self, path: str | Path, *, batch_spectra: int = 4096,
+                 progress: ProgressSinkLike | None = None) -> None:
+        self._path = Path(path)
+        self._batch = max(1, int(batch_spectra))
+        self._progress = progress
+        self._state: _State | None = None
+        self.n_spectra = 0
+
+    @property
+    def title(self) -> str:
+        return (self._state.run_id if self._state is not None else "") or "mzml_import"
+
+    @property
+    def chromatograms(self) -> list:
+        """Chromatogram value objects (valid after iteration)."""
+        if self._state is None or not self._state.chromatograms:
+            return []
+        from .import_result import ImportResult
+        runs = ImportResult(title="", isa_investigation_id="", ms_spectra=[],
+                            chromatograms=self._state.chromatograms,
+                            source_file=str(self._path)).build_runs()
+        run = runs.get("run_0001")
+        return list(run.chromatograms) if run is not None else []
+
+    def iter_batches(self) -> Iterator[WrittenRun]:
+        from .import_result import _pack_run
+        state = _State(source_file=str(self._path))
+        self._state = state
+        last_emitted = 0
+        for event, elem in iterparse(str(self._path), events=("start", "end")):
+            tag = _local(elem.tag)
+            if event == "start":
+                _handle_start(state, tag, elem)
+                continue
+            _handle_end(state, tag, elem)
+            elem.clear()
+            if len(state.spectra) >= self._batch:
+                self.n_spectra += len(state.spectra)
+                if self.n_spectra >= last_emitted + PROGRESS_INTERVAL_SPECTRA:
+                    _fire(self._progress, self.n_spectra, -1)
+                    last_emitted = self.n_spectra
+                yield _pack_run(state.spectra, spectrum_class="TTIOMassSpectrum",
+                                acquisition_mode=0, channel_x="mz")
+                state.spectra = []
+        if state.spectra:
+            self.n_spectra += len(state.spectra)
+            yield _pack_run(state.spectra, spectrum_class="TTIOMassSpectrum",
+                            acquisition_mode=0, channel_x="mz")
+            state.spectra = []
+        _fire(self._progress, self.n_spectra, self.n_spectra)
+
+    def stream_source(self, *, name: str = "run_0001"):
+        """A :class:`~ttio.importers.import_result.SpectralStreamSource`."""
+        from .import_result import SpectralStreamSource
+        return SpectralStreamSource(name=name, iter_batches=self.iter_batches,
+                                    batch_spectra=self._batch,
+                                    chromatograms_after=lambda: self.chromatograms)
 
 
 # --------------------------------------------------------- parser state ---

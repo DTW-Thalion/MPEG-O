@@ -137,3 +137,21 @@ def _with_mono_if_needed(path: str) -> list[str]:
                 f"{path} requires mono, which is not on PATH.")
         return [mono, path]
     return [path]
+
+
+def stream_source(raw_dir: str | Path, *, converter: str | None = None,
+                  name: str = "run_0001", batch_spectra: int = 4096, progress=None):
+    """A :class:`~ttio.importers.import_result.SpectralStreamSource`
+    over the MassLynx converter's mzML (temporary directory kept until
+    the stream is exhausted)."""
+    from .thermo_raw import _converted_stream
+    src = Path(raw_dir)
+    if not src.is_dir():
+        raise FileNotFoundError(f"Waters .raw directory not found: {src}")
+    cmd_prefix = _resolve_binary(converter)
+    stem = src.name[:-4] if src.name.lower().endswith(".raw") else src.name
+    return _converted_stream(
+        cmd=list(cmd_prefix) + ["-i", str(src), "-o", "{out}"],
+        stem=stem, tmp_prefix="ttio_masslynx_", name=name,
+        batch_spectra=batch_spectra, progress=progress,
+        error_cls=WatersMassLynxError, tool="MassLynx converter")

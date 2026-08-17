@@ -315,6 +315,7 @@ class SpectralStreamSource:
     iter_batches: object                     # () -> Iterator[WrittenRun]
     instrument_config: object | None = None
     batch_spectra: int = 4096
+    chromatograms_after: object | None = None   # () -> list[Chromatogram], read after the batches
 
     def write_into(self, study_group, *, progress=None) -> int:
         from ..spectral_stream_writer import SpectralStreamWriter
@@ -335,5 +336,7 @@ class SpectralStreamSource:
             writer.append_batch(batch)
             n += int(batch.offsets.shape[0])
         if writer is not None:
+            if self.chromatograms_after is not None:
+                writer.set_chromatograms(self.chromatograms_after())
             writer.close()
         return n
