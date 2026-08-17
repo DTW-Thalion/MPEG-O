@@ -42,3 +42,10 @@ def test_run_writes_plan(tmp_path, monkeypatch):
     kinds = {s["kind"] for s in plan["inputs"]}
     assert kinds == {"bam11", "bam_full"}
     assert len(plan["inputs"]) == 2
+    assert all(i["bases"] > 0 for i in plan["inputs"])
+
+
+def test_count_bases_fastq(tmp_path):
+    p = tmp_path / "in.fastq"
+    p.write_text("@r1\nACGT\n+\nIIII\n@r2\nACGTAC\n+\nIIIIII\n")
+    assert prepare.count_bases_fastq(p) == 10

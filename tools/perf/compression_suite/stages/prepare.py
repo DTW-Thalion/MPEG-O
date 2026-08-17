@@ -65,6 +65,18 @@ def fastq_plain(fq: Path, out: Path) -> Path:
     return out
 
 
+def count_bases_bam(bam: Path) -> int:
+    p = subprocess.run(["sh", "-c", f"samtools view '{bam}' | awk '{{n+=length($10)}} END{{print n+0}}'"],
+                       capture_output=True, text=True, check=True)
+    return int(p.stdout.strip() or 0)
+
+
+def count_bases_fastq(fq: Path) -> int:
+    p = subprocess.run(["sh", "-c", f"awk 'NR%4==2{{n+=length($0)}} END{{print n+0}}' '{fq}'"],
+                       capture_output=True, text=True, check=True)
+    return int(p.stdout.strip() or 0)
+
+
 def reference_for(corpus: common.Corpus) -> Path | None:
     if corpus.reference:
         return _local(corpus.reference) if corpus.reference.startswith("file://") \
@@ -93,15 +105,16 @@ def run(corpora: list[common.Corpus]) -> int:
         inputs = []
         ref = reference_for(c)
         if c.tier == "aligned":
-            inputs.append({"name": src.stem, "path": str(src), "kind": "bam_full"})
+            bases = count_bases_bam(src)
+            inputs.append({"name": src.stem, "path": str(src), "kind": "bam_full", "bases": bases})
             s11 = eleven_column(src, pdir / f"{src.stem}.11col.bam")
-            inputs.append({"name": src.stem, "path": str(s11), "kind": "bam11"})
+            inputs.append({"name": src.stem, "path": str(s11), "kind": "bam11", "bases": bases})
         elif c.tier == "unaligned":
             stem = src.name[:-len(".fastq.gz")] if src.name.endswith(".fastq.gz") else src.stem
             fq = fastq_plain(src, pdir / f"{stem}.fastq")
-            inputs.append({"name": stem, "path": str(fq), "kind": "fastq"})
+            inputs.append({"name": stem, "path": str(fq), "kind": "fastq", "bases": count_bases_fastq(fq)})
         else:
-            inputs.append({"name": src.stem, "path": str(src), "kind": "mzml"})
+            inputs.append({"name": src.stem, "path": str(src), "kind": "mzml", "bases": 0})
         plan_path.write_text(json.dumps({"id": c.id, "tier": c.tier, "input_sha256": sha,
                                          "reference": str(ref) if ref else None,
                                          "inputs": inputs}, indent=1))
