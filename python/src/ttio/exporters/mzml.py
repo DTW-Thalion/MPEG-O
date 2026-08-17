@@ -142,11 +142,12 @@ def write_dataset(
     ``progress`` fires every :data:`PROGRESS_INTERVAL_SPECTRA` spectra
     and once more at the end with ``(n_spectra, n_spectra)``.
     """
-    blob = dataset_to_bytes(
-        dataset, zlib_compression=zlib_compression, progress=progress,
-    )
     out = Path(path)
-    out.write_bytes(blob)
+    # Streamed straight to the file: spectra are read in windows
+    # (AcquisitionRun.iter_spectra) and each XML chunk is written as it
+    # is produced, so the export holds neither the run nor the mzML.
+    with open(out, "wb") as fh:
+        _write_mzml(dataset, fh.write, zlib_compression=zlib_compression, progress=progress)
     return out
 
 
@@ -156,7 +157,16 @@ def dataset_to_bytes(
     zlib_compression: bool = False,
     progress: ProgressSinkLike | None = None,
 ) -> bytes:
-    """Build an indexed-mzML byte blob from ``dataset``."""
+    """Build an indexed-mzML byte blob from ``dataset`` in memory
+    (:func:`write_dataset` streams the same output to a file)."""
+    parts: list[bytes] = []
+    _write_mzml(dataset, parts.append, zlib_compression=zlib_compression, progress=progress)
+    return b"".join(parts)
+
+
+def _write_mzml(dataset: SpectralDataset, sink, *, zlib_compression: bool,
+                progress: ProgressSinkLike | None) -> int:
+    """Emit indexed mzML through ``sink(bytes)``; returns the byte count."""
     runs = dataset.ms_runs
     chosen_name = None
     chosen_run = None
@@ -170,13 +180,12 @@ def dataset_to_bytes(
         raise ValueError("dataset has no TTIOMassSpectrum run to export")
 
     n = len(chosen_run)
-    parts: list[bytes] = []
     total = 0  # running byte offset into the output stream
 
     def emit(s: str) -> int:
         nonlocal total
         b = s.encode("utf-8")
-        parts.append(b)
+        sink(b)
         offset_at_start = total
         total += len(b)
         return offset_at_start
@@ -193,8 +202,7 @@ def dataset_to_bytes(
     # indent). Track the same anchor here so the two files produce
     # byte-identical index blocks for the same logical input.
     INDENT = "        "
-    for i in range(n):
-        spec = chosen_run[i]
+    for i, spec in enumerate(chosen_run.iter_spectra()):
         mz = np.ascontiguousarray(spec.mz_array.data, dtype="<f8")
         intensity = np.ascontiguousarray(spec.intensity_array.data, dtype="<f8")
         array_length = int(mz.shape[0])
@@ -374,4 +382,4 @@ def dataset_to_bytes(
     emit('  <fileChecksum>0</fileChecksum>\n')
     emit('</indexedmzML>\n')
 
-    return b"".join(parts)
+    return total
