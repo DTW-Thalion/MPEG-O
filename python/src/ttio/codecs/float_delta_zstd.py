@@ -58,33 +58,47 @@ def _untranspose(buf: bytes, n: int) -> np.ndarray:
     return np.ascontiguousarray(b.T).reshape(-1).view(np.uint64)
 
 
-def encode(values: np.ndarray) -> bytes:
-    """Encode a float64 array into a self-contained FDZ1 stream."""
+def header_bytes(n_values: int, n_blocks: int, block_size: int = BLOCK_SIZE) -> bytes:
+    """The 22-byte FDZ1 stream header."""
+    return MAGIC + struct.pack("<BBQII", VERSION, 0, int(n_values), int(block_size), int(n_blocks))
+
+
+def encode_block(values: np.ndarray) -> tuple[int, bytes]:
+    """Encode one block (at most BLOCK_SIZE float64 values):
+    returns (transform, zstd body) with the none/delta pick."""
     import zstandard
 
     if values.dtype != np.float64:
         raise ValueError(f"FLOAT_DELTA_ZSTD encodes float64 only, got {values.dtype}")
-    u_all = np.ascontiguousarray(values).view(np.uint64)
-    n = len(u_all)
-    n_blocks = (n + BLOCK_SIZE - 1) // BLOCK_SIZE
+    if len(values) == 0 or len(values) > BLOCK_SIZE:
+        raise ValueError(f"FDZ1 block must hold 1..{BLOCK_SIZE} values, got {len(values)}")
     comp = zstandard.ZstdCompressor(level=ZSTD_LEVEL)
+    u = np.ascontiguousarray(values).view(np.uint64)
+    d = np.empty_like(u)
+    d[0] = u[0]
+    np.subtract(u[1:], u[:-1], out=d[1:])
+    body_none = comp.compress(_transpose(u))
+    body_delta = comp.compress(_transpose(d))
+    if len(body_delta) < len(body_none):
+        return TRANSFORM_DELTA, body_delta
+    return TRANSFORM_NONE, body_none
 
-    out = bytearray()
-    out += MAGIC
-    out += struct.pack("<BBQII", VERSION, 0, n, BLOCK_SIZE, n_blocks)
+
+def block_bytes(transform: int, body: bytes) -> bytes:
+    """One block as it appears in the stream: transform byte, body length, body."""
+    return struct.pack("<BI", transform, len(body)) + body
+
+
+def encode(values: np.ndarray) -> bytes:
+    """Encode a float64 array into a self-contained FDZ1 stream."""
+    if values.dtype != np.float64:
+        raise ValueError(f"FLOAT_DELTA_ZSTD encodes float64 only, got {values.dtype}")
+    n = len(values)
+    n_blocks = (n + BLOCK_SIZE - 1) // BLOCK_SIZE
+    out = bytearray(header_bytes(n, n_blocks))
     for bi in range(n_blocks):
-        u = u_all[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE]
-        d = np.empty_like(u)
-        d[0] = u[0]
-        np.subtract(u[1:], u[:-1], out=d[1:])
-        body_none = comp.compress(_transpose(u))
-        body_delta = comp.compress(_transpose(d))
-        if len(body_delta) < len(body_none):
-            transform, body = TRANSFORM_DELTA, body_delta
-        else:
-            transform, body = TRANSFORM_NONE, body_none
-        out += struct.pack("<BI", transform, len(body))
-        out += body
+        transform, body = encode_block(values[bi * BLOCK_SIZE:(bi + 1) * BLOCK_SIZE])
+        out += block_bytes(transform, body)
     return bytes(out)
 
 

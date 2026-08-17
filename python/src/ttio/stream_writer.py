@@ -22,10 +22,12 @@ class StreamWriter:
     -----
     API status: Stable.
 
-    For v0.6 the writer's flush is whole-file regenerative: simple,
-    correct, and bounded for the streaming-demo case (≤ a few
-    thousand spectra). A future milestone may switch to extendable
-    HDF5 datasets.
+    The flush is whole-file regenerative: simple, correct, and bounded
+    for the streaming-demo case (a few thousand spectra), and it keeps
+    the promise that the file is valid after every flush. For large
+    runs use :class:`ttio.spectral_stream_writer.SpectralStreamWriter`,
+    which appends to extendable datasets with bounded memory and
+    finalises the file at close.
 
     Cross-language equivalents
     --------------------------
