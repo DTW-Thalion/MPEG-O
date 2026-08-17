@@ -1,6 +1,17 @@
 # Streaming import/export and `blocks_v1` in Objective-C (sub-project 3)
 
-> **Status (2026-08-17).** Design for the Objective-C implementation of
+> **Status (2026-08-17).** Implemented on branch
+> `streaming-blocks-v1-objc` (plan
+> `docs/superpowers/plans/2026-08-17-streaming-blocks-v1-objc.md`).
+> Deviations from the text below: the mzML producer thread still reads
+> the file with `NSXMLParser initWithData:` (the XML text is held once;
+> the spectra are batched); the FASTQ Phred offset is detected on the
+> first batch; the transport writer keeps its per-read path and the bulk
+> blob accessors return nil for multi-block runs; per-AU and region
+> encryption of genomic channels stay whole-channel only (their tests pin
+> `optLegacyWholeChannel`); the whole-run writers convert float32 signal
+> arrays through `-[TTIOSignalArray float64Buffer]`.
+> Design for the Objective-C implementation of
 > `docs/format-spec.md` section 10.12 and of streaming import/export.
 > Sub-project 3 of 4; sub-project 1 (format + Python) merged as PR #290,
 > sub-project 2 (Java) is PR #291. The format contract is section

@@ -12,6 +12,36 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Changed
+- **Objective-C: streaming import and export; genomic runs written as `blocks_v1`.**
+  The ObjC reference implementation reads the `blocks_v1` layout (format-spec
+  10.12) and writes it by default: `TTIOGenomicRun` opens both layouts and
+  decodes one block at a time (`iterReadsFrom:to:usingBlock:`, `layout`,
+  `blockCount`, `chromosomeNames`, `close`), `+writeMinimalToPath:…genomicRuns:`
+  and the storage-protocol writer route every `TTIOWrittenGenomicRun` through
+  the new `TTIOGenomicStreamWriter` unless `optLegacyWholeChannel` is set. MS
+  runs get `TTIOSpectralStreamWriter` and a lazy `TTIOAcquisitionRun`
+  (`channelRange:start:count:error:`, `iterSpectraWithBatch:usingBlock:`; a
+  codec-17 channel decodes only the FDZ1 blocks a range covers, so opening a
+  dataset no longer decodes every channel). Importers stream: `TTIOBamReader
+  iterBatchesWithRegion:…`/`streamWithName:…` (SAM/CRAM inherit),
+  `TTIOFastqReader iterBatchesFromPath:…`/`streamFromPath:…`, `TTIOMzMLReader
+  streamFromPath:…` (parser thread and bounded queue); `TTIOImportedDataset`
+  carries `genomicStreams`/`spectralStreams` and `TTIOImporterRegistry
+  encodeFormat:` routes BAM/SAM/CRAM and mzML through them (`TtioEncode --extra
+  block_reads=`, `block_bytes=`, `legacy_whole_channel=1`, `reference=<fasta>`,
+  `embed_reference=1`, `batch_reads=`, `batch_spectra=`); `TTIOBamWriter
+  writeReadSideRun:…`, `TTIOFastqWriter writeReadSideRun:…` and
+  `TTIOMzMLWriter writeDataset:toPath:…` write read by read / spectrum by
+  spectrum. Storage providers gain extendable datasets
+  (`createDatasetNamed:…extendable:`, `appendData:`, `writeSlice:atOffset:`)
+  and `TTIOCompoundFieldKindUInt64`; `TTIOSignatureManager` signs
+  `blocks/index` and the datasets inside a channel group; `TTIOLazyReference`
+  (indexed FASTA, `.fai` written in-process when absent) supplies REF_DIFF_V2
+  references chromosome by chromosome. `TTIOSignalArray float64Buffer`
+  converts float32 arrays, so an mzML with 32-bit binary arrays now writes the
+  values it holds. `TtioWriteGenomicFixture --blocks` writes a `blocks_v1`
+  file; an ObjC test decodes the Python-written golden fixture and a Python
+  test reads an ObjC-written `blocks_v1` file.
 - **Java: streaming import and export; genomic runs written as `blocks_v1`.**
   The Java SDK reads the `blocks_v1` layout (format-spec 10.12) and writes it by
   default: `GenomicRun` opens both layouts and decodes one block at a time
