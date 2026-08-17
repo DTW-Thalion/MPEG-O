@@ -120,4 +120,50 @@
     return _offsetsData.length / sizeof(uint64_t);
 }
 
+- (instancetype)copyWithSignalCodecOverrides:(NSDictionary<NSString *, NSNumber *> *)overrides
+{
+    TTIOWrittenGenomicRun *c = [[[self class] alloc]
+        initWithAcquisitionMode:_acquisitionMode
+                   referenceUri:_referenceUri
+                       platform:_platform
+                     sampleName:_sampleName
+                      positions:_positionsData
+               mappingQualities:_mappingQualitiesData
+                          flags:_flagsData
+                      sequences:_sequencesData
+                      qualities:_qualitiesData
+                        offsets:_offsetsData
+                        lengths:_lengthsData
+                         cigars:_cigars
+                      readNames:_readNames
+                mateChromosomes:_mateChromosomes
+                  matePositions:_matePositionsData
+                templateLengths:_templateLengthsData
+                    chromosomes:_chromosomes
+              signalCompression:_signalCompression
+           signalCodecOverrides:overrides];
+    c.optDisableQualitiesV5 = _optDisableQualitiesV5;
+    c.provenanceRecords = _provenanceRecords;
+    c.embedReference = _embedReference;
+    c.referenceChromSeqs = _referenceChromSeqs;
+    c.externalReferencePath = _externalReferencePath;
+    c.bulkV2Blobs = _bulkV2Blobs;
+    c.optLegacyWholeChannel = _optLegacyWholeChannel;
+    return c;
+}
+
+- (instancetype)copyWithProvenance:(NSArray<TTIOProvenanceRecord *> *)records
+{
+    TTIOWrittenGenomicRun *c = [self copyWithSignalCodecOverrides:_signalCodecOverrides];
+    c.provenanceRecords = records ?: @[];
+    return c;
+}
+
+- (instancetype)copyWithOptLegacyWholeChannel:(BOOL)legacy
+{
+    TTIOWrittenGenomicRun *c = [self copyWithSignalCodecOverrides:_signalCodecOverrides];
+    c.optLegacyWholeChannel = legacy;
+    return c;
+}
+
 @end

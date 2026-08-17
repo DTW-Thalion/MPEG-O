@@ -12,6 +12,7 @@
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicWriteContext.h"
+#import "Genomics/TTIOGenomicBlocks.h"
 #import "Genomics/TTIOAlignedRead.h"
 #import "Import/TTIOBamReader.h"
 #import "Providers/TTIOMemoryProvider.h"
@@ -130,10 +131,107 @@ static void gbSharedChromMap(void)
     [TTIOMemoryProvider discardStore:url];
 }
 
+static void gbSliceConcat(void)
+{
+    TTIOWrittenGenomicRun *run = gbM87Run(nil);
+    if (!run) return;
+    NSUInteger n = run.readCount;
+    TTIOWrittenGenomicRun *a = [TTIOGenomicBlocks sliceRun:run from:0 to:4];
+    TTIOWrittenGenomicRun *b = [TTIOGenomicBlocks sliceRun:run from:4 to:n];
+    PASS(a.readCount == 4 && b.readCount == n - 4, "genomic blocks: slice read counts");
+    const uint64_t *bo = (const uint64_t *)b.offsetsData.bytes;
+    PASS(b.readCount > 0 && bo[0] == 0, "genomic blocks: slice offsets rebased to 0");
+    PASS(a.sequencesData.length + b.sequencesData.length == run.sequencesData.length,
+         "genomic blocks: slice bases partition the run");
+    TTIOWrittenGenomicRun *back = [TTIOGenomicBlocks concatRuns:@[a, b]];
+    PASS([back.offsetsData isEqualToData:run.offsetsData]
+         && [back.lengthsData isEqualToData:run.lengthsData]
+         && [back.sequencesData isEqualToData:run.sequencesData]
+         && [back.qualitiesData isEqualToData:run.qualitiesData]
+         && [back.positionsData isEqualToData:run.positionsData]
+         && [back.flagsData isEqualToData:run.flagsData]
+         && [back.mappingQualitiesData isEqualToData:run.mappingQualitiesData]
+         && [back.matePositionsData isEqualToData:run.matePositionsData]
+         && [back.templateLengthsData isEqualToData:run.templateLengthsData]
+         && [back.cigars isEqualToArray:run.cigars]
+         && [back.readNames isEqualToArray:run.readNames]
+         && [back.mateChromosomes isEqualToArray:run.mateChromosomes]
+         && [back.chromosomes isEqualToArray:run.chromosomes],
+         "genomic blocks: concat is the inverse of slice");
+    TTIOWrittenGenomicRun *empty = [TTIOGenomicBlocks sliceRun:run from:3 to:3];
+    PASS(empty.readCount == 0 && empty.sequencesData.length == 0, "genomic blocks: empty slice");
+}
+
+static void gbEncodeBlock(void)
+{
+    TTIOWrittenGenomicRun *run = gbM87Run(@"chr1");
+    if (!run) return;
+    NSError *err = nil;
+    TTIOBlockBlobs *bb = [TTIOGenomicBlocks encodeBlock:run context:[TTIOGenomicWriteContext none] error:&err];
+    PASS(bb != nil, "genomic blocks: encodeBlock (%s)", [[err localizedDescription] UTF8String] ?: "");
+    if (!bb) return;
+    PASS(bb.nReads == run.readCount && bb.nBases == run.sequencesData.length,
+         "genomic blocks: block counts %lu reads %llu bases",
+         (unsigned long)bb.nReads, (unsigned long long)bb.nBases);
+    PASS([bb.codecs[@"qualities"] integerValue] == TTIOCompressionFqzcompNx16Z
+         && [bb.codecs[@"cigars"] integerValue] == TTIOCompressionRansOrder0
+         && [bb.codecs[@"sequences"] integerValue] == TTIOCompressionRansOrder1,
+         "genomic blocks: forced codecs (q=%ld c=%ld s=%ld)",
+         (long)[bb.codecs[@"qualities"] integerValue], (long)[bb.codecs[@"cigars"] integerValue],
+         (long)[bb.codecs[@"sequences"] integerValue]);
+    PASS([bb.blobs[@"read_names"] length] > 0 && [bb.blobs[@"mate_info"] length] > 0,
+         "genomic blocks: read_names and mate_info blobs present");
+    // Byte parity with a storage-path write of the same reads under the
+    // same overrides.
+    NSString *url = [NSString stringWithFormat:@"memory://gb-enc-%d", (int)getpid()];
+    id<TTIOStorageGroup> root = gbMemRoot(url);
+    TTIOWrittenGenomicRun *same = [run copyWithSignalCodecOverrides:@{
+        @"qualities": @(TTIOCompressionFqzcompNx16Z),
+        @"cigars": @(TTIOCompressionRansOrder0),
+        @"sequences": @(TTIOCompressionRansOrder1)}];
+    BOOL ok = [TTIOSpectralDataset writeGenomicRunStorage:same toGroup:root name:@"r"
+                                                  context:[TTIOGenomicWriteContext none] error:&err];
+    PASS(ok, "genomic blocks: reference storage-path write");
+    id<TTIOStorageGroup> sc = [[root openGroupNamed:@"r" error:&err] openGroupNamed:@"signal_channels" error:&err];
+    BOOL parity = YES;
+    for (NSString *ch in @[@"sequences", @"qualities", @"read_names", @"cigars"]) {
+        NSData *ref = [[sc openDatasetNamed:ch error:&err] readAll:&err];
+        if (![ref isEqualToData:bb.blobs[ch]]) { parity = NO; NSLog(@"channel %@ differs", ch); }
+    }
+    NSData *mate = [[[sc openGroupNamed:@"mate_info" error:&err] openDatasetNamed:@"inline_v2" error:&err] readAll:&err];
+    if (![mate isEqualToData:bb.blobs[@"mate_info"]]) parity = NO;
+    PASS(parity, "genomic blocks: block blobs equal a whole-run write of the same reads");
+    [TTIOMemoryProvider discardStore:url];
+
+    // A zero-length read forces RANS_ORDER0 on qualities.
+    TTIOWrittenGenomicRun *whole = gbM87Run(nil);
+    TTIOBlockBlobs *zb = [TTIOGenomicBlocks encodeBlock:whole context:[TTIOGenomicWriteContext none] error:&err];
+    PASS(zb != nil && [zb.codecs[@"qualities"] integerValue] == TTIOCompressionRansOrder0,
+         "genomic blocks: zero-length read selects RANS_ORDER0 qualities");
+}
+
+static void gbRunCopies(void)
+{
+    TTIOWrittenGenomicRun *run = gbM87Run(nil);
+    if (!run) return;
+    run.optDisableQualitiesV5 = YES;
+    run.embedReference = YES;
+    TTIOWrittenGenomicRun *c = [run copyWithOptLegacyWholeChannel:YES];
+    PASS(c.optLegacyWholeChannel && !run.optLegacyWholeChannel && c.optDisableQualitiesV5
+         && c.embedReference && c.readCount == run.readCount,
+         "genomic blocks: copyWithOptLegacyWholeChannel carries the options");
+    TTIOWrittenGenomicRun *p = [run copyWithProvenance:@[]];
+    PASS(p.provenanceRecords.count == 0 && [p.signalCodecOverrides isEqualToDictionary:run.signalCodecOverrides],
+         "genomic blocks: copyWithProvenance keeps the overrides");
+}
+
 void testGenomicBlocks(void)
 {
     @autoreleasepool {
         gbStoragePathRoundTrip();
         gbSharedChromMap();
+        gbSliceConcat();
+        gbEncodeBlock();
+        gbRunCopies();
     }
 }

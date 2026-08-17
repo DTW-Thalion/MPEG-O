@@ -137,6 +137,22 @@ NS_ASSUME_NONNULL_BEGIN
 /** Number of reads in the run. */
 @property (readonly) NSUInteger readCount;
 
+/** Write this run in the pre-1.9 whole-channel layout instead of
+ *  blocks_v1 (format-spec 10.12). Python:
+ *  <code>opt_legacy_whole_channel</code>; Java:
+ *  <code>optLegacyWholeChannel</code>. Defaults to NO. */
+@property (nonatomic) BOOL optLegacyWholeChannel;
+
+/** A copy of this run with a different per-channel codec map. Every
+ *  other field, including the mutable options, is carried over. */
+- (instancetype)copyWithSignalCodecOverrides:(NSDictionary<NSString *, NSNumber *> *)overrides;
+
+/** A copy of this run with a different provenance chain. */
+- (instancetype)copyWithProvenance:(NSArray<TTIOProvenanceRecord *> *)records;
+
+/** A copy of this run with <code>optLegacyWholeChannel</code> set. */
+- (instancetype)copyWithOptLegacyWholeChannel:(BOOL)legacy;
+
 /// Phase 2c-T: verbatim v2 codec blobs for direct on-disk write,
 /// bypassing the v2 codec encode step in the writer. Used by the
 /// transport bulk-mode receiver. nil disables.
