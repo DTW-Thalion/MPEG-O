@@ -117,6 +117,8 @@ TTIOTests_OBJC_FILES = \
 	TestGenomicStreamWriter.m \
 	TestBlocksV1Golden.m \
 	TestGenomicBlocksReader.m \
+	TestFloatDeltaZstdBlocks.m \
+	TestSpectralStreamWriter.m \
 	TestC2bHDF5CompoundType.m \
 	TestC3cCanonicalBytes.m \
 	TestPhase12RunProtocol.m \

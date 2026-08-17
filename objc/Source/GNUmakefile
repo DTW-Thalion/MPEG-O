@@ -39,6 +39,8 @@ libTTIO_HEADER_FILES = \
 	Run/TTIOInstrumentConfig.h \
 	Run/TTIOSpectrumIndex.h \
 	Run/TTIOAcquisitionRun.h \
+	Run/TTIOWrittenSpectralBatch.h \
+	Run/TTIOSpectralStreamWriter.h \
 	Genomics/TTIOAlignedRead.h \
 	Genomics/TTIOBulkV2Blobs.h \
 	Genomics/TTIOGenomicIndex.h \
@@ -187,6 +189,8 @@ libTTIO_OBJC_FILES = \
 	Run/TTIOInstrumentConfig.m \
 	Run/TTIOSpectrumIndex.m \
 	Run/TTIOAcquisitionRun.m \
+	Run/TTIOWrittenSpectralBatch.m \
+	Run/TTIOSpectralStreamWriter.m \
 	Genomics/TTIOAlignedRead.m \
 	Genomics/TTIOBulkV2Blobs.m \
 	Genomics/TTIOGenomicIndex.m \

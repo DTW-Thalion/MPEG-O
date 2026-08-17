@@ -253,6 +253,29 @@
 
 #pragma mark - Equality
 
+- (NSData *)float64Buffer
+{
+    TTIOPrecision p = _encoding.precision;
+    if (p == TTIOPrecisionFloat64) return _buffer;
+    NSMutableData *out = [NSMutableData dataWithLength:_length * sizeof(double)];
+    double *d = out.mutableBytes;
+    const uint8_t *b = _buffer.bytes;
+    NSUInteger n = MIN(_length, _buffer.length / MAX((NSUInteger)1, [_encoding elementSize]));
+    for (NSUInteger i = 0; i < n; i++) {
+        switch (p) {
+            case TTIOPrecisionFloat32: d[i] = ((const float *)b)[i]; break;
+            case TTIOPrecisionInt32:   d[i] = ((const int32_t *)b)[i]; break;
+            case TTIOPrecisionInt64:   d[i] = (double)((const int64_t *)b)[i]; break;
+            case TTIOPrecisionUInt8:   d[i] = b[i]; break;
+            case TTIOPrecisionUInt16:  d[i] = ((const uint16_t *)b)[i]; break;
+            case TTIOPrecisionUInt32:  d[i] = ((const uint32_t *)b)[i]; break;
+            case TTIOPrecisionUInt64:  d[i] = (double)((const uint64_t *)b)[i]; break;
+            default:                   d[i] = 0.0; break;
+        }
+    }
+    return out;
+}
+
 - (BOOL)isEqual:(id)other
 {
     if (other == self) return YES;

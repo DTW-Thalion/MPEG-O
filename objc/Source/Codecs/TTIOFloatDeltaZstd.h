@@ -20,7 +20,50 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/** One encoded FDZ1 block: the transform byte and the zstd body. */
+@interface TTIOFDZEncodedBlock : NSObject
+@property (nonatomic, readonly) uint8_t transform;
+@property (nonatomic, readonly, copy) NSData *body;
+- (instancetype)initWithTransform:(uint8_t)transform body:(NSData *)body;
+@end
+
+/** The block directory of an FDZ1 stream read from its header and the
+ *  block headers only: where each block's body lies and how many values
+ *  it holds, so a range read touches only the blocks it needs. */
+@interface TTIOFDZBlockTable : NSObject
+@property (nonatomic, readonly) uint64_t nValues;
+@property (nonatomic, readonly) uint32_t blockSize;
+@property (nonatomic, readonly) uint32_t nBlocks;
+- (uint64_t)offsetAt:(NSUInteger)block;
+- (uint8_t)transformAt:(NSUInteger)block;
+- (uint32_t)lengthAt:(NSUInteger)block;
+/** Values in block <code>k</code> (the last block may be short). */
+- (NSUInteger)blockValues:(NSUInteger)k;
+@end
+
+/** Reads <code>count</code> bytes at <code>offset</code> of the stream;
+ *  nil on failure. */
+typedef NSData * _Nullable (^TTIOFDZByteRangeReader)(NSUInteger offset, NSUInteger count);
+
 @interface TTIOFloatDeltaZstd : NSObject
+
+/** Values per block, 1 048 576. */
++ (NSUInteger)blockSize;
+/** The 22-byte stream header for <code>nValues</code> values in
+ *  <code>nBlocks</code> blocks. */
++ (NSData *)headerBytesForValues:(uint64_t)nValues blocks:(uint32_t)nBlocks;
+/** Encode one block of float64 values (at most blockSize). */
++ (nullable TTIOFDZEncodedBlock *)encodeBlock:(NSData *)float64Values;
+/** The on-stream bytes of a block: transform, body length, body. */
++ (NSData *)blockBytes:(TTIOFDZEncodedBlock *)block;
+/** Read the block directory through a byte-range reader. */
++ (nullable TTIOFDZBlockTable *)readBlockTableWithReader:(TTIOFDZByteRangeReader)reader
+                                                    error:(NSError **)error;
+/** Decode block <code>k</code> to float64 bytes through a byte-range reader. */
++ (nullable NSData *)decodeBlock:(NSUInteger)k
+                           table:(TTIOFDZBlockTable *)table
+                          reader:(TTIOFDZByteRangeReader)reader
+                           error:(NSError **)error;
 
 /** Encode little-endian float64 bytes (length % 8 == 0) into a
  *  self-contained FDZ1 stream. Returns nil on malloc/zstd failure. */

@@ -54,6 +54,13 @@
  *  unknown (e.g. raw byte buffers without semantic interpretation). */
 @property (readonly, strong) TTIOAxisDescriptor *axis;
 
+/** The values as packed native float64, <code>length * 8</code> bytes:
+ *  <code>buffer</code> itself for a float64 array, a converted copy for
+ *  the other numeric precisions (float32 arrays from mzML, integer
+ *  arrays). The run writers and index builders consume this so a
+ *  32-bit input is never read as 64-bit. */
+- (NSData *)float64Buffer;
+
 /**
  * Designated initialiser. Creates a SignalArray from a raw byte
  * buffer.

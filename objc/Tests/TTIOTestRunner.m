@@ -125,6 +125,8 @@ extern void testGenomicBlocks(void);
 extern void testGenomicStreamWriter(void);
 extern void testBlocksV1Golden(void);
 extern void testGenomicBlocksReader(void);
+extern void testFloatDeltaZstdBlocks(void);
+extern void testSpectralStreamWriter(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
@@ -647,6 +649,14 @@ int main(int argc, const char *argv[])
         START_SET("Genomics: blocks_v1 reader, signatures, transport")
             testGenomicBlocksReader();
         END_SET("Genomics: blocks_v1 reader, signatures, transport")
+
+        START_SET("Spectral: FDZ1 block API")
+            testFloatDeltaZstdBlocks();
+        END_SET("Spectral: FDZ1 block API")
+
+        START_SET("Spectral: stream writer and range reads")
+            testSpectralStreamWriter();
+        END_SET("Spectral: stream writer and range reads")
 
         START_SET("C2b: HDF5CompoundType coverage")
             testC2bHDF5CompoundType();
