@@ -210,8 +210,13 @@ public final class ImportTask extends Task<Void> {
         FastqReader r = (config.fastqPhred == null)
             ? new FastqReader(config.sourcePath)
             : new FastqReader(config.sourcePath, config.fastqPhred);
-        WrittenGenomicRun run = r.read(config.runName, readerSink);
-        writeGenomic(List.of(run), writerSink);
+        // Streamed: the reader's batches feed the blocks_v1 writer, so a
+        // FASTQ of any size never sits in memory whole. Reader progress
+        // (per batch) fills 0..50%, the writer 50..100%.
+        ImportedDataset draft = new ImportedDataset();
+        draft.title = config.datasetTitle == null ? "" : config.datasetTitle;
+        draft.genomicStreams.put("genomic_0001", r.stream("genomic_0001", config.runName));
+        draft.write(config.targetTio, writerSink);
     }
 
     // -- Write helpers --------------------------------------------------

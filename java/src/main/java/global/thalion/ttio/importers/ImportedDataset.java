@@ -90,7 +90,14 @@ public final class ImportedDataset {
             try (global.thalion.ttio.providers.StorageProvider p =
                      global.thalion.ttio.providers.ProviderRegistry.open(
                          written.toString(), global.thalion.ttio.providers.StorageProvider.Mode.READ_WRITE, "hdf5")) {
-                global.thalion.ttio.providers.StorageGroup study = p.rootGroup().openGroup("study");
+                global.thalion.ttio.providers.StorageGroup root = p.rootGroup();
+                global.thalion.ttio.providers.StorageGroup study = root.openGroup("study");
+                if (!genomicStreams.isEmpty()) {
+                    global.thalion.ttio.FeatureFlags flags = global.thalion.ttio.FeatureFlags.readFrom(root);
+                    if (!flags.has(global.thalion.ttio.FeatureFlags.OPT_GENOMIC)) {
+                        flags.with(global.thalion.ttio.FeatureFlags.OPT_GENOMIC).writeTo(root);
+                    }
+                }
                 for (GenomicStreamSource src : genomicStreams.values()) src.writeInto(study, progress);
                 for (SpectralStreamSource src : spectralStreams.values()) src.writeInto(study, progress);
             }
