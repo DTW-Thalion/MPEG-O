@@ -1,0 +1,35 @@
+# tools/perf/compression_suite/manifest.yaml
+# Corpora for the compression benchmark suite. sha256 is filled by
+# `suite.py fetch` on first fetch and enforced afterwards. Sizes and
+# accessions for the fetched corpora are recorded by Task 8.
+corpora:
+  - id: na12878_chr22_lowcov
+    tier: aligned
+    source: file:///home/toddw/TTI-O/data/genomic/na12878/na12878.chr22.lean.mapped.bam
+    sha256: null
+    reference: file:///home/toddw/TTI-O/data/genomic/reference/hs37.chr22.fa
+    notes: 1000 Genomes NA12878 low coverage, chr22 slice (hs37)
+  - id: na12878_wes_chr22
+    tier: aligned
+    source: file:///home/toddw/TTI-O/data/genomic/na12878_wes/na12878_wes.chr22.bam
+    sha256: null
+    reference: file:///home/toddw/TTI-O/data/genomic/reference/hg19.chr22.fa
+    notes: NIST NA12878 WES, chr22 slice (hg19)
+  - id: hg002_2x250_chr22
+    tier: aligned
+    source: file:///home/toddw/TTI-O/data/genomic/hg002_illumina/hg002_illumina.chr22.bam
+    sha256: null
+    reference: file:///home/toddw/TTI-O/data/genomic/reference/hg19.chr22.fa
+    notes: GIAB HG002 Illumina 2x250, chr22 slice
+  - id: hg002_hifi_subset
+    tier: aligned
+    source: file:///home/toddw/TTI-O/data/genomic/hg002_pacbio/hg002_pacbio.subset.bam
+    sha256: null
+    reference: null
+    notes: GIAB HG002 PacBio HiFi subset; reference resolved in Task 7 from the BAM header
+  - id: pxd000001_orbitrap
+    tier: ms
+    source: file:///tmp/ttio-comp-bench/TMT_Erwinia_1uLSike_Top10HCD_isol2_45stepped_60min_01-20141210.mzML
+    sha256: null
+    reference: null
+    notes: PRIDE PXD000001, Orbitrap Velos, on disk from the compression audit
