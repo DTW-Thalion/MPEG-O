@@ -85,6 +85,8 @@ def reference_for(corpus: common.Corpus) -> Path | None:
         return None
     bam = raw_path(corpus)
     names = {sn for sn, _ in _sq(bam)}
+    if not names:  # unaligned BAM (no @SQ): no reference applies
+        return None
     refdir = common.data_dir() / "raw" / "reference"
     if names & {"chr1", "chr22"}:
         return refdir / "GRCh38_no_alt.fa"
