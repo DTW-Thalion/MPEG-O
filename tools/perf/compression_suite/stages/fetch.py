@@ -82,8 +82,12 @@ def run(corpora: list[common.Corpus], manifest_path: Path) -> int:
             fa = _dest_for(c) / f"{c.id}.fa"
             if not Path(str(fa) + ".fai").exists():
                 if local.suffix == ".gz":
+                    # gzip exits 2 on trailing garbage after the last member
+                    # (the 1000 Genomes hs37d5.fa.gz); the output is complete.
                     with open(fa, "wb") as fo:
-                        subprocess.run(["gzip", "-d", "-c", str(local)], stdout=fo, check=True)
+                        p = subprocess.run(["gzip", "-d", "-c", str(local)], stdout=fo)
+                    if p.returncode not in (0, 2) or fa.stat().st_size == 0:
+                        raise RuntimeError(f"gzip -d failed on {local} (rc={p.returncode})")
                 elif local != fa:
                     shutil.copyfile(local, fa)
                 subprocess.run(["samtools", "faidx", str(fa)], check=True)

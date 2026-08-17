@@ -6,8 +6,9 @@ size in REPORT.md has a passing decode-verify. Design:
 docs/superpowers/specs/2026-08-16-compression-suite-design.md.
 
 Prerequisites (WSL Ubuntu): samtools 1.19 or later, podman with the
-docker.io/muefab/genie image, sra-tools (tools/install_sra_tools.sh),
-/usr/bin/time, the project venv with pyyaml, psims and pynumpress.
+docker.io/muefab/genie image pinned in tools/genie_image.txt,
+sra-tools (tools/install_sra_tools.sh), /usr/bin/time, the project
+venv with pyyaml, psims, pynumpress, pyteomics and lxml.
 
     export TTIO_BENCH_DATA=$HOME/ttio-bench-data
     PY=python/.venv/bin/python
@@ -17,6 +18,48 @@ docker.io/muefab/genie image, sra-tools (tools/install_sra_tools.sh),
     $PY tools/perf/compression_suite/suite.py encode
     $PY tools/perf/compression_suite/suite.py report
 
-Stages are idempotent: a result JSON is reused when its input sha256
-and tool version are unchanged. Every format encodes the whole corpus
-file; the TTI-O importers and exporters stream, so nothing is sharded.
+Stages are idempotent: a result JSON is reused when its input sha256,
+the tool version and the format module source are unchanged. Every
+format encodes the whole corpus file; the TTI-O importers and
+exporters stream, so nothing is sharded. `--smoke` runs the corpora
+whose source is a local file.
+
+## What each format is given
+
+Aligned corpora: the untouched BAM (`bam_full`, CRAM and MPEG-G only)
+and the same BAM cut to SAM columns 1-11 with its header kept
+(`bam11`, every format). TTI-O writes the run against the external
+reference (`ttio encode --reference`, sequences as REF_DIFF_V2, the
+reference not embedded) and exports through `REF_PATH`, the same
+footing as CRAM with an external reference. The chr22 slices on disk
+keep every `@SQ` line of the genome they were cut from, so their
+reference is that whole genome (hs37d5, hg19): genie's transcode-sam
+refuses a FASTA that lacks a header contig.
+
+Unaligned corpora: one plain FASTQ per run (`_1` then `_2` for paired
+runs). MS corpora: the mzML as fetched.
+
+## Verification
+
+Aligned: SAM columns 1-11 of every record, sorted, md5. Unaligned:
+(name, sequence, quality) triples, sorted, md5. MS: the m/z and
+intensity arrays of every spectrum in file order as float64, md5;
+numpress rows record the maximum relative error instead. A row whose
+decode differs is `verify: FAIL`, carries no size in the headline and
+per-corpus tables, and is listed with its unverified bytes and the
+reason under "Rows that failed verification".
+
+## Known issues found while building the suite
+
+- genie (MPEG-G reference software) is not lossless on SAM columns
+  1-11: it drops unmapped records that have no adjacent mate, clears
+  FLAG 0x20 and writes TLEN 0. Name-sorted input changes nothing.
+  Aligned MPEG-G rows are therefore `verify: FAIL` with that reason;
+  unaligned FASTQ round-trips through genie exactly.
+- The TTI-O mzML exporter renumbers spectrum ids as scan=1..n; the
+  native ids are not preserved. The verifier compares arrays only.
+- Before #294 a run written against an external FASTA with more than
+  one contig could not be decoded from that FASTA (the resolver
+  compared the reference-set md5 with one chromosome's md5).
+- `ttio export --format fastq|fasta` passed the wrong flags to the
+  dedicated CLIs and exited 2 (fixed on this branch).
