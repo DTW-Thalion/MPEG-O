@@ -19,6 +19,9 @@ import os
 import sqlite3
 from pathlib import Path
 
+import sys
+
+import numpy as np
 import pytest
 
 
@@ -243,3 +246,65 @@ def test_real_tdf_round_trip(tmp_path: Path) -> None:
 
         assert (_element_count("mz_values")
                 == _element_count("inv_ion_mobility_values"))
+
+
+class _FakeOpenTIMS:
+    """opentimspy.OpenTIMS stand-in: 7 MS1 frames + 2 MS2 frames, 5 peaks each."""
+
+    def __init__(self, d_dir):
+        self.frames = np.arange(1, 10)
+        self.ms_types = np.array([0] * 7 + [9] * 2)
+        self.ms1_frames = np.arange(1, 8)
+        self.ms2_frames = np.array([8, 9])
+        self.closed = False
+
+    def query(self, frame_ids, columns):
+        fids = np.asarray(frame_ids, dtype=np.int64)
+        frame = np.repeat(fids, 5)
+        k = np.tile(np.arange(5), len(fids))
+        return {"frame": frame,
+                "mz": 100.0 + frame * 10.0 + k,
+                "intensity": 1000.0 + k,
+                "inv_ion_mobility": 0.8 + 0.01 * k}
+
+    def frame2retention_time(self, frame_ids):
+        return np.asarray(frame_ids, dtype=np.float64) * 0.5
+
+    def close(self):
+        self.closed = True
+
+
+def _install_fake_opentimspy(monkeypatch):
+    import types
+    mod = types.ModuleType("opentimspy")
+    mod.OpenTIMS = _FakeOpenTIMS
+    monkeypatch.setitem(sys.modules, "opentimspy", mod)
+
+
+def test_bruker_stream_batches_frames(tmp_path: Path, monkeypatch) -> None:
+    _install_fake_opentimspy(monkeypatch)
+    from ttio.importers.bruker_tdf import BrukerTDFStream
+    from ttio.spectral_dataset import SpectralDataset
+
+    stream = BrukerTDFStream(tmp_path / "x.d", batch_frames=3, ms2=True)
+    ms1 = list(stream.iter_batches(ms_level=1))
+    assert [int(b.offsets.shape[0]) for b in ms1] == [3, 3, 1]
+    assert set(ms1[0].channel_data) == {"mz", "intensity", "inv_ion_mobility"}
+    ms2 = list(stream.iter_batches(ms_level=2))
+    assert [int(b.offsets.shape[0]) for b in ms2] == [2]
+    sources = stream.stream_sources()
+    assert set(sources) == {"tims_ms1", "tims_ms2"}
+    out = tmp_path / "o.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="i", runs={})
+    with SpectralDataset.open(out, writable=True) as ds:
+        assert sources["tims_ms1"].write_into(ds.study_group) == 7
+        assert sources["tims_ms2"].write_into(ds.study_group) == 2
+    with SpectralDataset.open(out) as ds:
+        r = ds.all_runs["tims_ms1"]
+        assert len(r) == 7
+        sp = r[3]
+        assert np.allclose(np.asarray(sp.signal_array("mz").data), 100.0 + 40.0 + np.arange(5))
+        assert len(ds.all_runs["tims_ms2"]) == 2
+    from ttio.importers import readers
+    draft = readers.BrukerReader().read([str(tmp_path / "x.d")], {"ms2": True, "batch_frames": 3})
+    assert set(draft.spectral_streams) == {"tims_ms1", "tims_ms2"}

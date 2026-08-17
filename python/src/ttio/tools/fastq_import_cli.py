@@ -36,6 +36,12 @@ def _parser() -> argparse.ArgumentParser:
     p.add_argument("--platform", default="")
     p.add_argument("--phred", type=int, choices=(33, 64), default=None,
                    help="force Phred offset (default: auto-detect)")
+    p.add_argument("--block-reads", type=int, default=None,
+                   help="reads per blocks_v1 block (default 1000000)")
+    p.add_argument("--block-bytes", type=int, default=None,
+                   help="sequence bytes per blocks_v1 block (default 256 MiB)")
+    p.add_argument("--legacy-whole-channel", action="store_true",
+                   help="write the v1.8 whole-channel layout (memory-unbounded)")
     return p
 
 
@@ -66,19 +72,22 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     try:
-        run = reader.read(
-            sample_name=args.sample, platform=args.platform,
-        )
+        src = reader.stream_source(name=args.name, sample_name=args.sample,
+                                   platform=args.platform)
+        src.block_reads = args.block_reads
+        src.block_bytes = args.block_bytes
+        src.opt_legacy_whole_channel = args.legacy_whole_channel
         SpectralDataset.write_minimal(
             args.out,
             title="",
             isa_investigation_id="",
             runs={},
-            genomic_runs={args.name: run},
         )
+        with SpectralDataset.open(args.out, writable=True) as ds:
+            n = src.write_into(ds.study_group)
         print(
             f"wrote unaligned run {args.name!r} "
-            f"({len(run.read_names)} reads, "
+            f"({n} reads, "
             f"Phred+{reader.detected_phred_offset}) to {args.out}"
         )
         return 0

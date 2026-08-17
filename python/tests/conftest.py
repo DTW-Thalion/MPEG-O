@@ -179,3 +179,17 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         if "requires_thermorawfileparser" in {m.name for m in item.iter_markers()}:
             if shutil.which("ThermoRawFileParser") is None and shutil.which("thermorawfileparser") is None:
                 item.add_marker(pytest.mark.skip(reason="ThermoRawFileParser CLI not on PATH"))
+
+
+@pytest.fixture()
+def legacy_genomic_layout(monkeypatch):
+    """Write genomic runs in the v1.8 whole-channel layout for the
+    duration of a test. For tests that exercise the whole-channel
+    read/write mechanics themselves (dataset names, bulk reads,
+    per-channel codec attributes); everything else runs on the
+    blocks_v1 default (format-spec 10.12)."""
+    from ttio import spectral_dataset as sd
+    monkeypatch.setattr(
+        sd, "_write_genomic_run_default",
+        lambda study, g_group, name, run: sd._gw._write_genomic_run(g_group, name, run))
+    yield

@@ -213,6 +213,71 @@ class FastqReader:
             acquisition_mode=acquisition_mode,
         )
 
+    def iter_batches(
+        self,
+        *,
+        sample_name: str = "",
+        platform: str = "",
+        reference_uri: str = "",
+        acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
+        batch_reads: int = 100_000,
+        progress: ProgressSinkLike | None = None,
+    ) -> Iterator[WrittenGenomicRun]:
+        """Yield the file as consecutive unaligned
+        :class:`WrittenGenomicRun` batches of at most ``batch_reads``
+        records with bounded memory. The Phred offset is forced by
+        ``force_phred`` or detected from the first batch's qualities
+        (Phred+64 files carry no byte below 59, so a batch of 100 k
+        reads settles it); it is recorded on
+        :attr:`detected_phred_offset`.
+        """
+        if batch_reads < 1:
+            raise ValueError("batch_reads must be >= 1")
+        offset = self._forced
+        pending: list[tuple[str, bytes, bytes]] = []
+        n = 0
+
+        def _emit(records):
+            nonlocal offset
+            if offset is None:
+                offset = detect_phred_offset(b"".join(q for _, _, q in records))
+                self._detected = offset
+            if offset == 64:
+                records = [(nm, sq, bytes((b - 31) & 0xFF for b in ql))
+                           for (nm, sq, ql) in records]
+            return _build_unaligned_run(
+                iter_records=lambda: iter(records), sample_name=sample_name,
+                platform=platform, reference_uri=reference_uri,
+                acquisition_mode=acquisition_mode)
+
+        for rec in self._iter_records_raw():
+            pending.append(rec)
+            n += 1
+            if n % PROGRESS_INTERVAL_READS == 0:
+                _fire(progress, n, -1)
+            if len(pending) >= batch_reads:
+                yield _emit(pending)
+                pending = []
+        if offset is not None:
+            self._detected = offset
+        _fire(progress, n, n)
+        if pending or n == 0:
+            yield _emit(pending)
+
+    def stream_source(self, *, name: str = "genomic_0001", sample_name: str = "",
+                      platform: str = "", reference_uri: str = "",
+                      acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
+                      batch_reads: int = 100_000,
+                      progress: ProgressSinkLike | None = None):
+        """A :class:`~ttio.importers.import_result.GenomicStreamSource`
+        over :meth:`iter_batches`."""
+        from .import_result import GenomicStreamSource
+        return GenomicStreamSource(
+            name=name,
+            iter_batches=lambda: self.iter_batches(
+                sample_name=sample_name, platform=platform, reference_uri=reference_uri,
+                acquisition_mode=acquisition_mode, batch_reads=batch_reads, progress=progress))
+
     def _iter_records_raw(self) -> Iterator[tuple[str, bytes, bytes]]:
         """Yield ``(name, seq, qual)`` with quality bytes verbatim
         (no Phred conversion)."""

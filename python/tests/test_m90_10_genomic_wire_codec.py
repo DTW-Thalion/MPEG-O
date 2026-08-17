@@ -94,9 +94,11 @@ def _au_compressions_per_channel(buffer: io.BytesIO) -> dict[str, list[int]]:
 
 class TestSourceCodecPropagation:
 
+    @pytest.mark.usefixtures("legacy_genomic_layout")
     def test_no_codec_source_emits_uncompressed_wire(self, tmp_path):
         """Backward compat: M82-vintage genomic (no @compression) stays
-        compression=NONE on the wire."""
+        compression=NONE on the wire. blocks_v1 always codes sequences,
+        so this is a whole-channel-layout property."""
         src = _make_genomic_dataset(tmp_path / "src.tio")
         buffer = io.BytesIO()
         file_to_transport(src, buffer)

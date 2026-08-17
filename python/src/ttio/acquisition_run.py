@@ -363,6 +363,13 @@ class AcquisitionRun:
     # this float64 buffer instead of hitting the HDF5 dataset, because
     # Numpress decoding needs the running-sum prefix of the run.
     _numpress_channels: dict[str, np.ndarray] = field(default_factory=dict, repr=False)
+    # FLOAT_DELTA_ZSTD (codec 17) channels are decoded per block, not
+    # whole-channel: the FDZ1 block table per channel, a one-block
+    # cache (block number, values) per channel, and a decode counter.
+    _fdz_channels: set = field(default_factory=set, repr=False)
+    _fdz_tables: dict = field(default_factory=dict, repr=False)
+    _fdz_cache: dict = field(default_factory=dict, repr=False)
+    _fdz_blocks_decoded: dict = field(default_factory=dict, repr=False)
     # M5-handoff: decrypted in-memory channels populated by
     # :meth:`decrypt_with_key`, keyed by channel name. When present,
     # :meth:`_materialize_spectrum` slices from this buffer so spectra
@@ -485,6 +492,7 @@ class AcquisitionRun:
         # signal_channels group, and eagerly decode them here so
         # :meth:`_materialize_spectrum` can just slice a float64 buffer.
         numpress_channels: dict[str, np.ndarray] = {}
+        fdz_channels: set = set()
         for chName in channel_names:
             scale_attr = f"{chName}_numpress_fixed_point"
             if sig_group.has_attribute(scale_attr):
@@ -508,9 +516,7 @@ class AcquisitionRun:
             from . import _hdf5_io as _io
             codec_id = _io.read_int_attr(ds, "compression", default=0) or 0
             if codec_id == 17:
-                from .codecs import float_delta_zstd as _fdz
-                stream = bytes(np.asarray(ds.read(), dtype=np.uint8))
-                numpress_channels[chName] = _fdz.decode(stream)
+                fdz_channels.add(chName)
             elif codec_id != 0:
                 raise ValueError(
                     f"signal channel {chName!r}: @compression={codec_id} "
@@ -539,6 +545,7 @@ class AcquisitionRun:
             uvvis_path_length_cm=uvvis_path_length_cm,
             chromatograms=_read_chromatograms(sgroup),
             _numpress_channels=numpress_channels,
+            _fdz_channels=fdz_channels,
             _bulk_read=bulk_read,
         )
 
@@ -548,8 +555,93 @@ class AcquisitionRun:
         return self.index.count
 
     def __iter__(self) -> Iterator[Spectrum]:
-        for i in range(len(self)):
-            yield self[i]
+        return self.iter_spectra()
+
+    def channel_range(self, channel: str, start: int, count: int) -> np.ndarray:
+        """Values ``[start, start + count)`` of a signal channel as
+        float64, touching only what is needed: decrypted or numpress
+        buffers are sliced, codec 17 channels decode the blocks the
+        range covers (one-block cache per channel), plain channels are
+        read as a hyperslab (or sliced from the full-column cache when
+        it is already loaded)."""
+        if count <= 0:
+            return np.zeros(0, dtype=np.float64)
+        decrypted = self._decrypted_channels.get(channel)
+        if decrypted is not None:
+            return decrypted[start:start + count]
+        decoded = self._numpress_channels.get(channel)
+        if decoded is not None:
+            return decoded[start:start + count]
+        if channel in self._fdz_channels:
+            return self._fdz_range(channel, start, count)
+        full = self._full_channel_cache.get(channel)
+        if full is not None:
+            return full[start:start + count]
+        ds = self._signal_dataset(channel)
+        return np.asarray(ds.read(offset=start, count=count))
+
+    def _fdz_table(self, channel: str):
+        table = self._fdz_tables.get(channel)
+        if table is None:
+            from .codecs import float_delta_zstd as _fdz
+            ds = self._signal_dataset(channel)
+            table = _fdz.read_block_table(
+                lambda off, n: np.asarray(ds.read(offset=off, count=n), dtype=np.uint8).tobytes())
+            self._fdz_tables[channel] = table
+        return table
+
+    def _fdz_block(self, channel: str, k: int) -> np.ndarray:
+        cached = self._fdz_cache.get(channel)
+        if cached is not None and cached[0] == k:
+            return cached[1]
+        from .codecs import float_delta_zstd as _fdz
+        ds = self._signal_dataset(channel)
+        table = self._fdz_table(channel)
+        vals = _fdz.decode_block(
+            lambda off, n: np.asarray(ds.read(offset=off, count=n), dtype=np.uint8).tobytes(),
+            table, k)
+        self._fdz_cache[channel] = (k, vals)
+        self._fdz_blocks_decoded[channel] = self._fdz_blocks_decoded.get(channel, 0) + 1
+        return vals
+
+    def _fdz_range(self, channel: str, start: int, count: int) -> np.ndarray:
+        if count <= 0:
+            return np.zeros(0, dtype=np.float64)
+        table = self._fdz_table(channel)
+        bs = table.block_size
+        k0, k1 = start // bs, (start + count - 1) // bs
+        if k0 == k1:
+            blk = self._fdz_block(channel, k0)
+            o = start - k0 * bs
+            return blk[o:o + count]
+        parts = []
+        for k in range(k0, k1 + 1):
+            blk = self._fdz_block(channel, k)
+            lo = start - k * bs if k == k0 else 0
+            hi = (start + count) - k * bs if k == k1 else len(blk)
+            parts.append(blk[lo:hi])
+        return np.concatenate(parts)
+
+    def iter_spectra(self, batch: int = 4096) -> Iterator[Spectrum]:
+        """Yield every spectrum in order, reading channel data in
+        windows of ``batch`` spectra (bounded memory; codec 17 blocks
+        decode once per window)."""
+        n = len(self)
+        offsets, lengths = self.index.offsets, self.index.lengths
+        for j0 in range(0, n, max(1, batch)):
+            j1 = min(n, j0 + batch)
+            base = int(offsets[j0])
+            total = int(offsets[j1 - 1]) + int(lengths[j1 - 1]) - base
+            arrays = {}
+            for c in self.channel_names:
+                try:
+                    arrays[c] = self.channel_range(c, base, total)
+                except KeyError:
+                    continue
+            for i in range(j0, j1):
+                o = int(offsets[i]) - base
+                ln = int(lengths[i])
+                yield self._build_spectrum(i, {c: a[o:o + ln] for c, a in arrays.items()})
 
     def spectra(self) -> list[Spectrum]:
         """Return all spectra as a list.
@@ -758,13 +850,15 @@ class AcquisitionRun:
         offset = int(self.index.offsets[i])
         length = int(self.index.lengths[i])
 
-        signal_arrays: dict[str, SignalArray] = {}
+        arrays: dict[str, np.ndarray] = {}
         for c in self.channel_names:
             decrypted = self._decrypted_channels.get(c)
             if decrypted is not None:
                 arr = decrypted[offset:offset + length]
             elif (decoded := self._numpress_channels.get(c)) is not None:
                 arr = decoded[offset:offset + length]
+            elif c in self._fdz_channels:
+                arr = self._fdz_range(c, offset, length)
             else:
                 full = self._full_channel_cache.get(c)
                 if full is not None:
@@ -799,6 +893,12 @@ class AcquisitionRun:
                     except KeyError:
                         continue
                     arr = np.asarray(ds.read(offset=offset, count=length))
+            arrays[c] = arr
+        return self._build_spectrum(i, arrays)
+
+    def _build_spectrum(self, i: int, arrays: dict) -> Spectrum:
+        signal_arrays: dict[str, SignalArray] = {}
+        for c, arr in arrays.items():
             axis = _CHANNEL_AXIS.get(c, AxisDescriptor(name=c, unit=""))
             signal_arrays[c] = SignalArray.from_numpy(arr, axis=axis)
 

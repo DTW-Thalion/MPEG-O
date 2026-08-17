@@ -57,6 +57,9 @@ class CompoundFieldKind(Enum):
     """
 
     UINT32 = "uint32"
+    # unsigned 64-bit; used by the blocks_v1 genomic block index
+    # (byte offsets and lengths, format-spec 10.12).
+    UINT64 = "uint64"
     INT64 = "int64"
     FLOAT64 = "float64"
     VL_STRING = "vl_string"
@@ -127,6 +130,26 @@ class StorageDataset(ABC):
     def compound_fields(self) -> tuple[CompoundField, ...] | None:
         """Field schema for compound datasets, or ``None`` for
         primitive datasets."""
+
+    # ── Extendable datasets ────────────────────────────────────────
+
+    @property
+    def extendable(self) -> bool:
+        """``True`` when the dataset was created with
+        ``extendable=True`` and accepts :meth:`append`."""
+        return False
+
+    def append(self, data: Any) -> None:
+        """Append ``data`` (an array of the dataset's dtype, or rows for
+        a compound dataset) and grow :meth:`length` by ``len(data)``.
+        Only valid on extendable datasets."""
+        raise TypeError(f"dataset '{self.name}' is not extendable")
+
+    def write_slice(self, offset: int, data: Any) -> None:
+        """Overwrite ``[offset, offset + len(data))`` in place. Available
+        on every provider for primitive datasets."""
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement write_slice")
 
     # ── Read / write ────────────────────────────────────────────────
 
@@ -305,27 +328,33 @@ class StorageGroup(ABC):
                        length: int, *,
                        chunk_size: int = 0,
                        compression: Compression = Compression.NONE,
-                       compression_level: int = 6) -> StorageDataset:
+                       compression_level: int = 6,
+                       extendable: bool = False) -> StorageDataset:
         """Create a primitive 1-D dataset.
 
         ``chunk_size == 0`` selects a contiguous (unchunked) layout.
         ``compression == NONE`` disables filters regardless of
-        ``compression_level``."""
+        ``compression_level``. ``extendable=True`` (requires
+        ``chunk_size > 0``) creates a dataset that grows through
+        :meth:`StorageDataset.append`; ``length`` is then the initial
+        length (usually 0)."""
 
     def create_dataset_nd(self, name: str, precision: Precision,
                            shape: tuple[int, ...], *,
                            chunks: tuple[int, ...] | None = None,
                            compression: Compression = Compression.NONE,
-                           compression_level: int = 6) -> StorageDataset:
+                           compression_level: int = 6,
+                           extendable: bool = False) -> StorageDataset:
         """Create a multi-dimensional dataset. 1-D path delegates to
         :meth:`create_dataset` for backward compat; overrides extend
-        to higher ranks."""
+        to higher ranks. ``extendable`` grows along axis 0 only."""
         if len(shape) == 1:
             chunk_size = chunks[0] if chunks else 0
             return self.create_dataset(name, precision, shape[0],
                                          chunk_size=chunk_size,
                                          compression=compression,
-                                         compression_level=compression_level)
+                                         compression_level=compression_level,
+                                         extendable=extendable)
         raise NotImplementedError(
             f"{type(self).__name__} does not implement N-D datasets "
             f"(shape={shape})")
@@ -333,8 +362,18 @@ class StorageGroup(ABC):
     @abstractmethod
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
-                                 count: int) -> StorageDataset:
-        """Create a 1-D compound dataset with the given field schema."""
+                                 count: int, *,
+                                 extendable: bool = False,
+                                 chunk_rows: int = 1024) -> StorageDataset:
+        """Create a 1-D compound dataset with the given field schema.
+        ``extendable=True`` makes it grow through
+        :meth:`StorageDataset.append`, ``chunk_rows`` rows per chunk
+        where the backend chunks."""
+
+    @staticmethod
+    def _check_extendable(extendable: bool, chunk_size: int) -> None:
+        if extendable and chunk_size <= 0:
+            raise ValueError("extendable datasets require chunk_size > 0")
 
     # ── Attributes ──────────────────────────────────────────────────
 

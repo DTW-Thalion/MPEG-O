@@ -184,6 +184,14 @@ class GenomicRun:
     # SpectralDataset._from_provider. The returned bytes are identical
     # either way.
     _bulk_read: bool = field(default=True, repr=False, compare=False)
+    # blocks_v1 (format-spec 10.12): the block table, the last
+    # materialised block view (block number, GenomicRun over the view)
+    # and a counter for tests. ``_layout`` is "whole" for v1.8 files.
+    _layout: str = field(default="whole", repr=False, compare=False)
+    _block_table: "Any" = field(default=None, repr=False, compare=False)
+    _block_cache: "tuple[int, GenomicRun] | None" = field(default=None, repr=False, compare=False)
+    _blocks_materialised: int = field(default=0, repr=False, compare=False)
+    _name_tables: "tuple[list, list | None] | None" = field(default=None, repr=False, compare=False)
 
     # ------------------------------------------------------------------
     # Sequence protocol
@@ -193,8 +201,58 @@ class GenomicRun:
         return self.index.count
 
     def __iter__(self) -> Iterator[AlignedRead]:
-        for i in range(len(self)):
-            yield self[i]
+        return self.iter_reads()
+
+    @property
+    def layout(self) -> str:
+        """``"blocks_v1"`` or ``"whole"`` (the v1.8 whole-channel layout)."""
+        return self._layout
+
+    @property
+    def block_count(self) -> int:
+        """Number of blocks (1 for a whole-channel run)."""
+        return self._block_table.count if self._block_table is not None else 1
+
+    def iter_reads(self, start: int = 0, stop: int | None = None) -> Iterator[AlignedRead]:
+        """Yield reads ``[start, stop)`` in order, holding at most one
+        decoded block at a time for ``blocks_v1`` runs."""
+        n = len(self)
+        if stop is None or stop > n:
+            stop = n
+        if start < 0:
+            start += n
+        if self._layout != "blocks_v1":
+            for i in range(max(start, 0), stop):
+                yield self[i]
+            return
+        t = self._block_table
+        i = max(start, 0)
+        while i < stop:
+            b = t.block_for(i)
+            r0 = int(t.read_start[b])
+            b_end = min(r0 + int(t.n_reads[b]), stop)
+            view = self._block_view(b)
+            for j in range(i, b_end):
+                yield view[j - r0]
+            i = b_end
+
+    def _block_view(self, b: int) -> "GenomicRun":
+        if self._block_cache is not None and self._block_cache[0] == b:
+            return self._block_cache[1]
+        from .genomic._block_view import materialise_block, _rows_of
+        if self._name_tables is None:
+            idx = self.group.open_group("genomic_index")
+            sc = self.group.open_group("signal_channels")
+            mate = _rows_of(sc.open_group("mate_info"), "chrom_names") if sc.has_child("mate_info") else None
+            self._name_tables = (_rows_of(idx, "chromosome_names"), mate)
+        grp = materialise_block(self.group, self._block_table, b,
+                                chrom_name_rows=self._name_tables[0],
+                                mate_chrom_rows=self._name_tables[1])
+        sub = GenomicRun.open(grp, self.name, references_group=self._references_group,
+                              bulk_read=self._bulk_read)
+        self._block_cache = (b, sub)
+        self._blocks_materialised += 1
+        return sub
 
     def provenance_chain(self) -> "list":
         """Return per-run provenance records in insertion order.
@@ -228,6 +286,9 @@ class GenomicRun:
                 f"read index {i} out of range [0, {len(self)})"
             )
 
+        if self._layout == "blocks_v1":
+            b = self._block_table.block_for(i)
+            return self._block_view(b)[i - int(self._block_table.read_start[b])]
         offset = int(self.index.offsets[i])
         length = int(self.index.lengths[i])
 
@@ -319,9 +380,22 @@ class GenomicRun:
 
         sgroup = _wrap_hdf5_group(group)
 
-        # Eager: load the genomic index.
+        layout = io.read_string_attr(sgroup, "layout") or "whole"
+        block_table = None
         idx_group = sgroup.open_group("genomic_index")
-        index = GenomicIndex.read(idx_group)
+        if layout == "blocks_v1":
+            # blocks_v1: the block table is small; the per-read index
+            # arrays load lazily on first use (format-spec 10.12).
+            from .genomic._block_view import BlockTable, LazyGenomicIndex
+            block_table = BlockTable.read(sgroup)
+            index = LazyGenomicIndex(idx_group, block_table)
+        elif layout != "whole":
+            raise ValueError(
+                f"genomic run {name!r}: unsupported layout {layout!r} "
+                "(this reader knows the whole-channel layout and blocks_v1)")
+        else:
+            # Eager: load the genomic index.
+            index = GenomicIndex.read(idx_group)
 
         # Eager: list signal channel names.
         sig = sgroup.open_group("signal_channels")
@@ -346,6 +420,8 @@ class GenomicRun:
             channel_names=channel_names,
             _references_group=references_group,
             _bulk_read=bulk_read,
+            _layout=layout,
+            _block_table=block_table,
         )
 
     # ------------------------------------------------------------------
@@ -385,7 +461,23 @@ class GenomicRun:
         # index chromosomes — verbatim mirror of _decode_mate_inline_v2's
         # writer-matching derivation so MATE_INLINE_V2 decode is identical.
         n = int(idx.count)
+        # The writer's id assignment is the mate_info/chrom_names table
+        # (row index = id): encounter order over own chromosomes plus
+        # mate-only names for a whole-channel run, and the run-wide map
+        # for a blocks_v1 run (whose per-block encounter order differs).
+        # Seed from that table when present; otherwise rebuild encounter
+        # order (files without mate_info never need own ids).
         name_to_id: dict[str, int] = {}
+        try:
+            sig = self._signal_channels_group()
+            if sig.has_child("mate_info"):
+                mate_group = sig.open_group("mate_info")
+                if mate_group.has_child("chrom_names"):
+                    for row_i, row in enumerate(io.read_compound_dataset(mate_group, "chrom_names")):
+                        v = row["name"]
+                        name_to_id[v.decode("utf-8") if isinstance(v, bytes) else v] = row_i
+        except KeyError:
+            name_to_id = {}
         own_chrom_ids = np.empty(n, dtype=np.uint16)
         for i, cname in enumerate(idx.chromosomes):
             if cname == "*" or not cname:

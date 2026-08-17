@@ -23,6 +23,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# Whole-channel read mechanics (v1.8 layout).
+pytestmark = pytest.mark.usefixtures("legacy_genomic_layout")
+
 
 def _make_written_run(n_reads: int = 12, read_length: int = 60):
     """Build a synthetic WrittenGenomicRun with cigars/read_names/mate_info."""

@@ -64,6 +64,8 @@ def _reference_md5_for_run(run: WrittenGenomicRun) -> bytes:
     digest when ``reference_chrom_seqs`` is absent.
     """
     import hashlib
+    if run.reference_md5 is not None:
+        return run.reference_md5
     if run.reference_chrom_seqs is None:
         return b""
     md5 = hashlib.md5()
@@ -562,7 +564,7 @@ def _write_genomic_run(parent, name: str, run: WrittenGenomicRun) -> None:
         flags=run.flags,
     )
     idx_group = rg.create_group("genomic_index")
-    idx.write(idx_group)
+    idx.write(idx_group, name_to_id=run.chrom_name_to_id)
 
     # Signal channels — these honour run.signal_compression by default;
     # M86 lets per-channel overrides route sequences/qualities through
@@ -869,21 +871,42 @@ def _build_chrom_id_table(chromosomes: list[str]) -> "tuple[np.ndarray, dict[str
     return ids, name_to_id
 
 
+def _chrom_ids_with_map(chromosomes: list[str],
+                        name_to_id: "dict[str, int]") -> "np.ndarray":
+    """Encounter-order ids from (and extending) a shared map."""
+    ids = np.empty(len(chromosomes), dtype=np.uint16)
+    for i, name in enumerate(chromosomes):
+        if name == "*" or not name:
+            ids[i] = 0xFFFF
+            continue
+        if name not in name_to_id:
+            if len(name_to_id) > 65535:
+                raise ValueError(
+                    "genomic_index: > 65,535 unique chromosome names; "
+                    "uint16 chromosome_ids would overflow.")
+            name_to_id[name] = len(name_to_id)
+        ids[i] = name_to_id[name]
+    return ids
+
+
 def _resolve_mate_chrom_ids(
     mate_chromosomes: list[str],
     own_chrom_ids: "np.ndarray",
     name_to_id: "dict[str, int]",
+    *,
+    extend_in_place: bool = False,
 ) -> "np.ndarray":
     """Map mate chromosome names to int32 ids; -1 for '*'.
 
     Uses the same encounter-order dict as own_chrom_ids; extends the
     dict if a mate references a chrom that never appears as own
     (rare cross-chrom case). The '=' SAM shortcut is resolved to the
-    record's own chrom_id. name_to_id is copied and not mutated.
+    record's own chrom_id. name_to_id is copied and not mutated unless
+    ``extend_in_place`` is set (shared map across blocks).
     """
     n = len(mate_chromosomes)
     out = np.empty(n, dtype=np.int32)
-    local_map = dict(name_to_id)
+    local_map = name_to_id if extend_in_place else dict(name_to_id)
     for i, name in enumerate(mate_chromosomes):
         if name == "*" or not name:
             out[i] = -1
@@ -990,18 +1013,28 @@ def _write_mate_info_inline_v2(sc, run: "WrittenGenomicRun") -> None:
     from .codecs._context import CodecContext, DecodedChannel
     from .enums import Compression as _Compression, Precision as _Precision
 
-    own_chrom_ids, name_to_id = _build_chrom_id_table(run.chromosomes)
-    mate_chrom_ids = _resolve_mate_chrom_ids(
-        run.mate_chromosomes, own_chrom_ids, name_to_id)
+    if run.chrom_name_to_id is not None:
+        # Shared map (blocks_v1): ids are stable across blocks and the
+        # map grows in place.
+        name_to_id = run.chrom_name_to_id
+        own_chrom_ids = _chrom_ids_with_map(run.chromosomes, name_to_id)
+        mate_chrom_ids = _resolve_mate_chrom_ids(
+            run.mate_chromosomes, own_chrom_ids, name_to_id,
+            extend_in_place=True)
+        full_name_to_id = name_to_id
+    else:
+        own_chrom_ids, name_to_id = _build_chrom_id_table(run.chromosomes)
+        mate_chrom_ids = _resolve_mate_chrom_ids(
+            run.mate_chromosomes, own_chrom_ids, name_to_id)
 
-    # After _resolve_mate_chrom_ids, name_to_id may have been extended
-    # for mate-only chroms. Reconstruct the full ordered list from the
-    # (possibly extended) local map used by _resolve_mate_chrom_ids.
-    # Since _resolve_mate_chrom_ids uses a copy, we rebuild from scratch.
-    full_name_to_id: dict[str, int] = dict(name_to_id)
-    for name in run.mate_chromosomes:
-        if name and name not in ("*", "=") and name not in full_name_to_id:
-            full_name_to_id[name] = len(full_name_to_id)
+        # After _resolve_mate_chrom_ids, name_to_id may have been extended
+        # for mate-only chroms. Reconstruct the full ordered list from the
+        # (possibly extended) local map used by _resolve_mate_chrom_ids.
+        # Since _resolve_mate_chrom_ids uses a copy, we rebuild from scratch.
+        full_name_to_id = dict(name_to_id)
+        for name in run.mate_chromosomes:
+            if name and name not in ("*", "=") and name not in full_name_to_id:
+                full_name_to_id[name] = len(full_name_to_id)
     chrom_names_in_order = sorted(full_name_to_id.keys(),
                                   key=lambda n: full_name_to_id[n])
 

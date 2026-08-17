@@ -131,15 +131,13 @@ class BamWriter:
             ``unsorted``.
         """
         _check_samtools()
-
         if provenance_records is None:
-            provenance_records = list(run.provenance_records)
-
-        sam_text = self._build_sam_text(
-            run, provenance_records, sort=sort, progress=progress,
-        )
-
-        self._invoke_samtools(sam_text, sort=sort)
+            provenance_records = list(_provenance_of(run))
+        # SAM text is streamed into the samtools pipe line by line, so
+        # a run of any size (a GenomicRun walked through iter_reads, one
+        # decoded block at a time) exports with bounded memory.
+        chunks = self._iter_sam_text(run, provenance_records, sort=sort, progress=progress)
+        self._invoke_samtools(chunks, sort=sort)
 
     # ------------------------------------------------------------------
     # SAM text assembly
@@ -153,22 +151,32 @@ class BamWriter:
         sort: bool,
         progress: ProgressSinkLike | None = None,
     ) -> str:
-        """Build the full SAM text (header + alignment lines).
+        """The full SAM text (header + alignment lines) as one string;
+        :meth:`write` streams :meth:`_iter_sam_text` instead."""
+        return "".join(self._iter_sam_text(run, provenance_records, sort=sort, progress=progress))
+
+    def _iter_sam_text(
+        self,
+        run,
+        provenance_records: list[ProvenanceRecord],
+        *,
+        sort: bool,
+        progress: ProgressSinkLike | None = None,
+    ):
+        """Yield the header, then one SAM line per read.
 
         Fires ``progress`` every :data:`PROGRESS_INTERVAL_READS` reads
-        with ``total = len(run.read_names)`` and once more at the end
-        with ``(total, total)``.
+        with ``total = len(run)`` and once more at the end with
+        ``(total, total)``.
         """
-        parts: list[str] = []
-        parts.append(self._build_header(run, provenance_records, sort=sort))
-        total = len(run.read_names)
+        yield self._build_header(run, provenance_records, sort=sort)
+        total = _read_count_of(run)
+        idx = 0
         for idx, line in enumerate(self._iter_alignment_lines(run), 1):
-            parts.append(line)
+            yield line
             if idx % PROGRESS_INTERVAL_READS == 0:
                 _fire(progress, idx, total)
         _fire(progress, total, total)
-        # Trailing newline keeps samtools happy on some platforms.
-        return "".join(parts)
 
     @staticmethod
     def _build_header(
@@ -187,7 +195,7 @@ class BamWriter:
         # the SAM unmapped sentinel and not a real reference). Emit
         # in first-seen order so writer output is deterministic.
         seen: set[str] = set()
-        for chrom in run.chromosomes:
+        for chrom in _chromosome_names_of(run):
             if not chrom or chrom == "*" or chrom in seen:
                 continue
             seen.add(chrom)
@@ -242,6 +250,9 @@ class BamWriter:
           sequences/qualities buffers, sliced by
           ``offsets[i]:offsets[i]+lengths[i]``. Empty slice -> ``"*"``.
         """
+        if not isinstance(run, WrittenGenomicRun):
+            yield from BamWriter._iter_alignment_lines_lazy(run)
+            return
         seq_buf = bytes(run.sequences)
         qual_buf = bytes(run.qualities)
 
@@ -299,8 +310,9 @@ class BamWriter:
     # samtools subprocess invocation
     # ------------------------------------------------------------------
 
-    def _invoke_samtools(self, sam_text: str, *, sort: bool) -> None:
-        """Pipe ``sam_text`` through samtools to produce the BAM file.
+    def _invoke_samtools(self, sam_text, *, sort: bool) -> None:
+        """Pipe SAM text (a string or an iterable of string chunks)
+        through samtools to produce the BAM file.
 
         Subclasses (CramWriter) override this to inject reference and
         format flags.
@@ -332,18 +344,31 @@ class BamWriter:
             return view, None
 
     @staticmethod
-    def _run_pipeline(commands: list[list[str]], stdin_text: str) -> None:
-        """Run a 1- or 2-stage samtools pipeline; raise on non-zero exit."""
+    def _run_pipeline(commands: list[list[str]], stdin_text) -> None:
+        """Run a 1- or 2-stage samtools pipeline; raise on non-zero exit.
+        ``stdin_text`` is a string or an iterable of string chunks that
+        are written to the first stage as they come."""
+        chunks = [stdin_text] if isinstance(stdin_text, str) else stdin_text
         if len(commands) == 1:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 commands[0],
-                input=stdin_text.encode("ascii"),
-                capture_output=True,
-                timeout=120,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
             )
+            try:
+                assert proc.stdin is not None
+                for c in chunks:
+                    proc.stdin.write(c.encode("ascii"))
+            finally:
+                proc.stdin.close()
+            err = proc.stderr.read() if proc.stderr else b""
+            proc.wait()
+            for h in (proc.stdout, proc.stderr):
+                if h is not None:
+                    h.close()
             if proc.returncode != 0:
-                stderr = (proc.stderr or b"").decode("utf-8",
-                                                    errors="replace")
+                stderr = (err or b"").decode("utf-8", errors="replace")
                 raise RuntimeError(
                     f"samtools exited {proc.returncode}: "
                     f"{stderr.strip()[:500]}"
@@ -370,11 +395,12 @@ class BamWriter:
         try:
             assert first.stdin is not None
             try:
-                first.stdin.write(stdin_text.encode("ascii"))
+                for c in chunks:
+                    first.stdin.write(c.encode("ascii"))
             finally:
                 first.stdin.close()
-            second_out, second_err = second.communicate(timeout=120)
-            first.wait(timeout=30)
+            second_out, second_err = second.communicate()
+            first.wait()
         except subprocess.TimeoutExpired:
             first.kill()
             second.kill()
@@ -396,3 +422,57 @@ class BamWriter:
                 f"samtools (stage 2, {commands[1][:3]}) exited "
                 f"{second.returncode}: {err.strip()[:500]}"
             )
+
+
+def _provenance_of(run) -> list[ProvenanceRecord]:
+    if isinstance(run, WrittenGenomicRun):
+        return list(run.provenance_records)
+    try:
+        return list(run.provenance_chain())
+    except Exception:
+        return []
+
+
+def _read_count_of(run) -> int:
+    if isinstance(run, WrittenGenomicRun):
+        return len(run.read_names)
+    return len(run)
+
+
+def _chromosome_names_of(run):
+    """Own chromosome names in first-seen order. For a GenomicRun the
+    run-level genomic_index/chromosome_names table is used (no per-read
+    array is loaded)."""
+    if isinstance(run, WrittenGenomicRun):
+        return list(run.chromosomes)
+    try:
+        from .. import _hdf5_io as io
+        rows = io.read_compound_dataset(run.group.open_group("genomic_index"), "chromosome_names")
+        return [(r["name"].decode() if isinstance(r["name"], bytes) else r["name"]) for r in rows]
+    except Exception:
+        return list(run.index.chromosome_names or [])
+
+
+def _lazy_lines(run):
+    for r in run.iter_reads():
+        qname = r.read_name or "*"
+        rname = r.chromosome or "*"
+        mate_chrom = r.mate_chromosome or "*"
+        rnext = "=" if (mate_chrom == rname and rname != "*") else mate_chrom
+        mate_pos = int(r.mate_position)
+        pnext = 0 if mate_pos < 0 else mate_pos
+        seq = r.sequence or "*"
+        q = bytes(r.qualities)
+        if not r.sequence:
+            seq, qual = "*", "*"
+        elif q and all(b == 0xff for b in q):
+            qual = "*"
+        else:
+            qual = q.decode("latin-1")
+        yield (
+            f"{qname}\t{int(r.flags)}\t{rname}\t{int(r.position)}\t{int(r.mapping_quality)}\t"
+            f"{r.cigar or '*'}\t{rnext}\t{pnext}\t{int(r.template_length)}\t{seq}\t{qual}\n"
+        )
+
+
+BamWriter._iter_alignment_lines_lazy = staticmethod(_lazy_lines)

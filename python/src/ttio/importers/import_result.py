@@ -257,3 +257,86 @@ def _empty_run_with_chromatograms(chromatograms: list) -> WrittenRun:
         precursor_mzs=f8, precursor_charges=i4, base_peak_intensities=f8,
         chromatograms=list(chromatograms),
     )
+
+
+@dataclass
+class GenomicStreamSource:
+    """A genomic run delivered as consecutive WrittenGenomicRun batches
+    (see BamReader.iter_batches, FastqReader.iter_batches). Written by
+    ImportedDataset.write through GenomicStreamWriter with bounded
+    memory. ``reference_fasta`` enables REF_DIFF_V2 via LazyReference."""
+
+    name: str
+    iter_batches: object                     # () -> Iterator[WrittenGenomicRun]
+    reference_fasta: object | None = None    # Path or None
+    embed_reference: bool = False
+    block_reads: int | None = None           # None -> writer defaults
+    block_bytes: int | None = None
+    opt_legacy_whole_channel: bool = False
+
+    def write_into(self, study_group, *, progress=None) -> int:
+        from ..genomic.stream_writer import GenomicStreamWriter
+        from ..genomic.lazy_reference import LazyReference
+        ref = LazyReference(self.reference_fasta) if self.reference_fasta else None
+        writer = None
+        n = 0
+        for batch in self.iter_batches():
+            if writer is None:
+                kw = {}
+                if self.block_reads is not None:
+                    kw["block_reads"] = self.block_reads
+                if self.block_bytes is not None:
+                    kw["block_bytes"] = self.block_bytes
+                writer = GenomicStreamWriter(
+                    study_group, self.name,
+                    acquisition_mode=batch.acquisition_mode,
+                    reference_uri=batch.reference_uri, platform=batch.platform,
+                    sample_name=batch.sample_name,
+                    reference_chrom_seqs=ref if ref is not None else batch.reference_chrom_seqs,
+                    embed_reference=self.embed_reference or batch.embed_reference,
+                    opt_disable_qualities_v5=batch.opt_disable_qualities_v5,
+                    signal_codec_overrides=batch.signal_codec_overrides,
+                    signal_compression=batch.signal_compression,
+                    opt_legacy_whole_channel=self.opt_legacy_whole_channel,
+                    provenance_records=batch.provenance_records, **kw)
+            writer.append_batch(batch)
+            n += int(len(batch.lengths))
+        if writer is not None:
+            writer.close()
+        return n
+
+
+@dataclass
+class SpectralStreamSource:
+    """A spectral run delivered as consecutive WrittenRun batches
+    (see mzml.iter_batches). Written through SpectralStreamWriter."""
+
+    name: str
+    iter_batches: object                     # () -> Iterator[WrittenRun]
+    instrument_config: object | None = None
+    batch_spectra: int = 4096
+    chromatograms_after: object | None = None   # () -> list[Chromatogram], read after the batches
+
+    def write_into(self, study_group, *, progress=None) -> int:
+        from ..spectral_stream_writer import SpectralStreamWriter
+        writer = None
+        n = 0
+        for batch in self.iter_batches():
+            if writer is None:
+                writer = SpectralStreamWriter(
+                    study_group, self.name, spectrum_class=batch.spectrum_class,
+                    acquisition_mode=batch.acquisition_mode,
+                    channel_names=list(batch.channel_data.keys()),
+                    instrument_config=self.instrument_config,
+                    batch_spectra=self.batch_spectra,
+                    opt_disable_float_delta=batch.opt_disable_float_delta,
+                    signal_compression=batch.signal_compression,
+                    nucleus_type=batch.nucleus_type, solvent=getattr(batch, "solvent", ""),
+                    provenance_records=batch.provenance_records)
+            writer.append_batch(batch)
+            n += int(batch.offsets.shape[0])
+        if writer is not None:
+            if self.chromatograms_after is not None:
+                writer.set_chromatograms(self.chromatograms_after())
+            writer.close()
+        return n

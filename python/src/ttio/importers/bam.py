@@ -142,6 +142,14 @@ class BamReader:
         """
         return self._path
 
+    def _view_cmd(self, region: str | None) -> list[str]:
+        """The ``samtools view -h`` command for this input; CRAM adds
+        ``--reference``."""
+        cmd = ["samtools", "view", "-h", str(self._path)]
+        if region is not None:
+            cmd.append(region)
+        return cmd
+
     def to_genomic_run(
         self,
         name: str = "genomic_0001",
@@ -151,6 +159,11 @@ class BamReader:
         progress: ProgressSinkLike | None = None,
     ) -> WrittenGenomicRun:
         """Read the BAM/SAM and return a :class:`WrittenGenomicRun`.
+
+        Holds the whole run in memory; for large inputs use
+        :meth:`iter_batches` with a
+        :class:`~ttio.genomic.GenomicStreamWriter` (what ``ttio encode``
+        does).
 
         Parameters
         ----------
@@ -177,16 +190,67 @@ class BamReader:
             If ``samtools view`` exits non-zero (stderr included in
             message) or if a SAM line is malformed.
         """
+        from ..genomic._blocks import concat_runs
+        batches = list(self.iter_batches(region=region, sample_name=sample_name,
+                                         batch_reads=1 << 62, progress=progress))
+        if not batches:
+            return self._empty_run(sample_name)
+        return concat_runs(batches)
+
+    def stream_source(self, *, name: str = "genomic_0001", region: str | None = None,
+                      sample_name: str | None = None, batch_reads: int = 100_000,
+                      progress: ProgressSinkLike | None = None,
+                      reference_fasta: str | os.PathLike[str] | None = None,
+                      embed_reference: bool = False):
+        """A :class:`~ttio.importers.import_result.GenomicStreamSource`
+        that feeds :class:`~ttio.genomic.GenomicStreamWriter` batch by
+        batch. ``reference_fasta`` enables REF_DIFF_V2 through a
+        :class:`~ttio.genomic.lazy_reference.LazyReference`."""
+        from .import_result import GenomicStreamSource
+        return GenomicStreamSource(
+            name=name,
+            iter_batches=lambda: self.iter_batches(region=region, sample_name=sample_name,
+                                                   batch_reads=batch_reads, progress=progress),
+            reference_fasta=Path(reference_fasta) if reference_fasta else None,
+            embed_reference=embed_reference,
+        )
+
+    def _empty_run(self, sample_name: str | None) -> WrittenGenomicRun:
+        z = np.zeros(0, dtype=np.uint8)
+        return WrittenGenomicRun(
+            acquisition_mode=int(AcquisitionMode.GENOMIC_WGS), reference_uri="",
+            platform="", sample_name=sample_name or "",
+            positions=np.zeros(0, dtype=np.int64), mapping_qualities=z,
+            flags=np.zeros(0, dtype=np.uint32), sequences=z, qualities=z,
+            offsets=np.zeros(0, dtype=np.uint64), lengths=np.zeros(0, dtype=np.uint32),
+            cigars=[], read_names=[], mate_chromosomes=[],
+            mate_positions=np.zeros(0, dtype=np.int64),
+            template_lengths=np.zeros(0, dtype=np.int32), chromosomes=[],
+        )
+
+    def iter_batches(
+        self,
+        *,
+        region: str | None = None,
+        sample_name: str | None = None,
+        batch_reads: int = 100_000,
+        progress: ProgressSinkLike | None = None,
+    ):
+        """Yield the input as consecutive :class:`WrittenGenomicRun`
+        batches of at most ``batch_reads`` reads, parsing the
+        ``samtools view`` pipe line by line. Every batch carries the
+        run-level metadata (reference_uri from the first ``@SQ``,
+        platform and sample from ``@RG``); the header ``@PG``
+        provenance rides on the first batch only.
+        """
         _check_samtools()
         if not self._path.exists():
             raise FileNotFoundError(f"BAM/SAM file not found: {self._path}")
-
-        cmd = ["samtools", "view", "-h", str(self._path)]
-        if region is not None:
-            cmd.append(region)
+        if batch_reads < 1:
+            raise ValueError("batch_reads must be >= 1")
 
         proc = subprocess.Popen(
-            cmd,
+            self._view_cmd(region),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -197,28 +261,28 @@ class BamReader:
         rg_sample: str = ""
         rg_platform: str = ""
         provenance: list[ProvenanceRecord] = []
+        provenance_sent = False
 
-        # Per-read accumulators
-        read_names: list[str] = []
-        chromosomes: list[str] = []
-        positions_l: list[int] = []
-        mapping_qualities_l: list[int] = []
-        flags_l: list[int] = []
-        cigars: list[str] = []
-        mate_chromosomes: list[str] = []
-        mate_positions_l: list[int] = []
-        template_lengths_l: list[int] = []
-        offsets_l: list[int] = []
-        lengths_l: list[int] = []
-        seq_chunks: list[bytes] = []
-        qual_chunks: list[bytes] = []
-        running_offset = 0
+        # Per-read accumulators (reset per batch)
+        acc = _BatchAccumulator()
+        total_reads = 0
 
         # Provenance timestamp comes from the file mtime per
         try:
             file_mtime = int(self._path.stat().st_mtime)
         except OSError:
             file_mtime = int(time.time())
+
+        def _emit() -> WrittenGenomicRun:
+            nonlocal provenance_sent
+            effective_sample = sample_name if sample_name is not None else rg_sample
+            reference_uri = sq_names[0] if sq_names else ""
+            prov = [] if provenance_sent else list(provenance)
+            provenance_sent = True
+            return acc.to_run(
+                acquisition_mode=int(AcquisitionMode.GENOMIC_WGS),
+                reference_uri=reference_uri, platform=rg_platform,
+                sample_name=effective_sample, provenance=prov)
 
         try:
             assert proc.stdout is not None
@@ -275,16 +339,6 @@ class BamReader:
                 if rnext == "=":
                     rnext = rname
 
-                read_names.append(qname)
-                flags_l.append(flag)
-                chromosomes.append(rname)
-                positions_l.append(pos)
-                mapping_qualities_l.append(mapq)
-                cigars.append(cigar)
-                mate_chromosomes.append(rnext)
-                mate_positions_l.append(pnext)
-                template_lengths_l.append(tlen)
-
                 # SEQ / QUAL: "*" means absent — contributes 0 bytes.
                 # Per Gotcha §153 cigars[i] keeps "*" literally; SEQ/
                 # QUAL are reduced to empty bytes in the buffer (the
@@ -315,17 +369,17 @@ class BamReader:
                             f"SEQ={len(seq_bytes)} QUAL={len(qual_bytes)}"
                         )
 
-                length = len(seq_bytes)
-                offsets_l.append(running_offset)
-                lengths_l.append(length)
-                seq_chunks.append(seq_bytes)
-                qual_chunks.append(qual_bytes)
-                running_offset += length
+                acc.add(qname, flag, rname, pos, mapq, cigar, rnext, pnext, tlen,
+                        seq_bytes, qual_bytes)
+                total_reads += 1
 
-                if len(read_names) % PROGRESS_INTERVAL_READS == 0:
+                if total_reads % PROGRESS_INTERVAL_READS == 0:
                     # samtools subprocess doesn't pre-count, so total
                     # stays -1 until the final fire below.
-                    _fire(progress, len(read_names), -1)
+                    _fire(progress, total_reads, -1)
+                if acc.n >= batch_reads:
+                    yield _emit()
+                    acc = _BatchAccumulator()
 
             proc.wait()
             if proc.returncode != 0:
@@ -354,47 +408,9 @@ class BamReader:
                     proc.kill()
 
         # Final progress fire: total is now known.
-        _fire(progress, len(read_names), len(read_names))
-
-        # Apply sample_name override .
-        effective_sample = sample_name if sample_name is not None else rg_sample
-
-        # reference_uri: first @SQ wins for v0 of M87
-        # Empty string when no @SQ present.
-        reference_uri = sq_names[0] if sq_names else ""
-
-        # Build numpy arrays.
-        positions = np.asarray(positions_l, dtype=np.int64)
-        mapping_qualities = np.asarray(mapping_qualities_l, dtype=np.uint8)
-        flags = np.asarray(flags_l, dtype=np.uint32)
-        offsets = np.asarray(offsets_l, dtype=np.uint64)
-        lengths = np.asarray(lengths_l, dtype=np.uint32)
-        mate_positions = np.asarray(mate_positions_l, dtype=np.int64)
-        template_lengths = np.asarray(template_lengths_l, dtype=np.int32)
-
-        sequences = np.frombuffer(b"".join(seq_chunks), dtype=np.uint8).copy()
-        qualities = np.frombuffer(b"".join(qual_chunks), dtype=np.uint8).copy()
-
-        return WrittenGenomicRun(
-            acquisition_mode=int(AcquisitionMode.GENOMIC_WGS),
-            reference_uri=reference_uri,
-            platform=rg_platform,
-            sample_name=effective_sample,
-            positions=positions,
-            mapping_qualities=mapping_qualities,
-            flags=flags,
-            sequences=sequences,
-            qualities=qualities,
-            offsets=offsets,
-            lengths=lengths,
-            cigars=cigars,
-            read_names=read_names,
-            mate_chromosomes=mate_chromosomes,
-            mate_positions=mate_positions,
-            template_lengths=template_lengths,
-            chromosomes=chromosomes,
-            provenance_records=provenance,
-        )
+        _fire(progress, total_reads, total_reads)
+        if acc.n > 0 or total_reads == 0:
+            yield _emit()
 
     # ------------------------------------------------------------------
     # Header-line parsing helpers
@@ -463,3 +479,70 @@ class BamReader:
                 )
             )
         # @HD, @CO, @RG: handled elsewhere or ignored in v0.
+
+
+class _BatchAccumulator:
+    """Per-read accumulators for one batch of SAM records."""
+
+    __slots__ = ("read_names", "chromosomes", "positions", "mapqs", "flags", "cigars",
+                 "mate_chromosomes", "mate_positions", "template_lengths", "offsets",
+                 "lengths", "seq_chunks", "qual_chunks", "running", "n")
+
+    def __init__(self) -> None:
+        self.read_names: list[str] = []
+        self.chromosomes: list[str] = []
+        self.positions: list[int] = []
+        self.mapqs: list[int] = []
+        self.flags: list[int] = []
+        self.cigars: list[str] = []
+        self.mate_chromosomes: list[str] = []
+        self.mate_positions: list[int] = []
+        self.template_lengths: list[int] = []
+        self.offsets: list[int] = []
+        self.lengths: list[int] = []
+        self.seq_chunks: list[bytes] = []
+        self.qual_chunks: list[bytes] = []
+        self.running = 0
+        self.n = 0
+
+    def add(self, qname, flag, rname, pos, mapq, cigar, rnext, pnext, tlen,
+            seq_bytes, qual_bytes) -> None:
+        self.read_names.append(qname)
+        self.flags.append(flag)
+        self.chromosomes.append(rname)
+        self.positions.append(pos)
+        self.mapqs.append(mapq)
+        self.cigars.append(cigar)
+        self.mate_chromosomes.append(rnext)
+        self.mate_positions.append(pnext)
+        self.template_lengths.append(tlen)
+        length = len(seq_bytes)
+        self.offsets.append(self.running)
+        self.lengths.append(length)
+        self.seq_chunks.append(seq_bytes)
+        self.qual_chunks.append(qual_bytes)
+        self.running += length
+        self.n += 1
+
+    def to_run(self, *, acquisition_mode, reference_uri, platform, sample_name,
+               provenance) -> WrittenGenomicRun:
+        return WrittenGenomicRun(
+            acquisition_mode=acquisition_mode,
+            reference_uri=reference_uri,
+            platform=platform,
+            sample_name=sample_name,
+            positions=np.asarray(self.positions, dtype=np.int64),
+            mapping_qualities=np.asarray(self.mapqs, dtype=np.uint8),
+            flags=np.asarray(self.flags, dtype=np.uint32),
+            sequences=np.frombuffer(b"".join(self.seq_chunks), dtype=np.uint8).copy(),
+            qualities=np.frombuffer(b"".join(self.qual_chunks), dtype=np.uint8).copy(),
+            offsets=np.asarray(self.offsets, dtype=np.uint64),
+            lengths=np.asarray(self.lengths, dtype=np.uint32),
+            cigars=self.cigars,
+            read_names=self.read_names,
+            mate_chromosomes=self.mate_chromosomes,
+            mate_positions=np.asarray(self.mate_positions, dtype=np.int64),
+            template_lengths=np.asarray(self.template_lengths, dtype=np.int32),
+            chromosomes=self.chromosomes,
+            provenance_records=list(provenance),
+        )

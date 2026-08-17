@@ -45,6 +45,28 @@ from .written_genomic_run import WrittenGenomicRun  # M82
 # P3.10: genomic-write + metadata-IO helper subsystems extracted into
 # private submodules (pure code movement; no API/wire/behaviour change).
 from . import _dataset_write_genomic as _gw
+
+
+def _write_genomic_run_default(study, g_group, name: str, run: WrittenGenomicRun) -> None:
+    """Write one genomic run: blocks_v1 through the stream writer unless
+    the run asks for the v1.8 whole-channel layout."""
+    if getattr(run, "opt_legacy_whole_channel", False):
+        _gw._write_genomic_run(g_group, name, run)
+        return
+    from .genomic.stream_writer import GenomicStreamWriter
+    from .providers.hdf5 import _Group as _H5Group
+    study_sg = _H5Group(study) if isinstance(study, h5py.Group) else study
+    with GenomicStreamWriter(
+            study_sg, name,
+            acquisition_mode=run.acquisition_mode, reference_uri=run.reference_uri,
+            platform=run.platform, sample_name=run.sample_name,
+            reference_chrom_seqs=run.reference_chrom_seqs,
+            embed_reference=run.embed_reference,
+            opt_disable_qualities_v5=run.opt_disable_qualities_v5,
+            signal_codec_overrides=run.signal_codec_overrides,
+            signal_compression=run.signal_compression,
+            provenance_records=run.provenance_records) as w:
+        w.append_batch(run)
 from . import _dataset_write_metadata as _mw
 # Back-compat re-export: tests/test_references_accessor.py imports this
 # private from the old path.
@@ -629,6 +651,12 @@ class SpectralDataset:
             if isinstance(run, run_type)
         }
 
+    @property
+    def study_group(self) -> StorageGroup:
+        """The ``/study`` :class:`StorageGroup` (open with
+        ``writable=True`` to add runs through a stream writer)."""
+        return self.provider.root_group().open_group("study")
+
     def _study_target(self) -> Any:
         """Return the IO target representing ``/study``.
 
@@ -1025,7 +1053,7 @@ class SpectralDataset:
                         g_group, "_run_names", ",".join(genomic_runs.keys())
                     )
                     for gname, grun in genomic_runs.items():
-                        _gw._write_genomic_run(g_group, gname, grun)
+                        _write_genomic_run_default(study, g_group, gname, grun)
 
                 if (image is not None or raman_image is not None
                         or ir_image is not None):
@@ -1100,7 +1128,7 @@ class SpectralDataset:
                     g_group, "_run_names", ",".join(genomic_runs.keys())
                 )
                 for gname, grun in genomic_runs.items():
-                    _gw._write_genomic_run(g_group, gname, grun)
+                    _write_genomic_run_default(study, g_group, gname, grun)
 
             if image is not None:
                 image.write_to(study)   # study is already a StorageGroup here

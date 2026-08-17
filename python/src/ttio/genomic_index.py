@@ -195,8 +195,13 @@ class GenomicIndex:
             chromosome_names=name_table,
         )
 
-    def write(self, idx_group: "StorageGroup") -> None:
+    def write(self, idx_group: "StorageGroup",
+              name_to_id: "dict[str, int] | None" = None) -> None:
         """Write all columns into ``idx_group``.
+
+        ``name_to_id`` (blocks_v1) is a shared chromosome id map that
+        is used and extended in place; ``None`` assigns ids from this
+        run alone.
 
         v1.0 layout: ``chromosome_ids`` (uint16) + ``chromosome_names``
         (compound, one row per unique chromosome). Encounter-order id
@@ -216,8 +221,9 @@ class GenomicIndex:
         )
         io._write_uint32_channel(idx_group, "flags", self.flags, "gzip")
 
-        name_to_id: dict[str, int] = {}
-        names_in_order: list[str] = []
+        if name_to_id is None:
+            name_to_id = {}
+        names_in_order: list[str] = sorted(name_to_id, key=name_to_id.get)
         ids = np.empty(len(self.chromosomes), dtype=np.uint16)
         for i, name in enumerate(self.chromosomes):
             slot = name_to_id.get(name)

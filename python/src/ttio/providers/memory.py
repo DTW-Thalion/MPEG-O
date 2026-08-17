@@ -42,12 +42,13 @@ _STORES: dict[str, "_MemoryRoot"] = {}
 
 class _Dataset(StorageDataset):
     __slots__ = ("_name", "_precision", "_shape", "_chunks", "_fields",
-                 "_data", "_attrs")
+                 "_data", "_attrs", "_extendable")
 
     def __init__(self, name: str, precision: Precision | None,
                  shape: tuple[int, ...],
                  fields: tuple[CompoundField, ...] | None,
-                 chunks: tuple[int, ...] | None = None):
+                 chunks: tuple[int, ...] | None = None,
+                 extendable: bool = False):
         self._name = name
         self._precision = precision
         self._shape = shape
@@ -55,6 +56,40 @@ class _Dataset(StorageDataset):
         self._fields = fields
         self._data: np.ndarray | None = None
         self._attrs: dict[str, Any] = {}
+        self._extendable = extendable
+
+    @property
+    def extendable(self) -> bool:
+        return self._extendable
+
+    def _coerce(self, data) -> np.ndarray:
+        if self._fields is not None and isinstance(data, list):
+            dt = _compound_dtype(self._fields)
+            arr = np.zeros(len(data), dtype=dt)
+            for i, rec in enumerate(data):
+                for f in self._fields:
+                    if f.name in rec:
+                        arr[i][f.name] = rec[f.name]
+            return arr
+        return np.asarray(data)
+
+    def append(self, data) -> None:
+        if not self._extendable:
+            raise TypeError(f"dataset '{self._name}' is not extendable")
+        arr = self._coerce(data)
+        if len(arr) == 0:
+            return
+        if self._data is None or len(self._data) == 0:
+            self._data = np.array(arr, copy=True)
+        else:
+            self._data = np.concatenate([self._data, arr])
+        self._shape = (int(self._data.shape[0]),) + tuple(self._shape[1:])
+
+    def write_slice(self, offset: int, data) -> None:
+        arr = self._coerce(data)
+        if self._data is None:
+            self._data = np.zeros(self._shape, dtype=self._default_dtype())
+        self._data[offset:offset + len(arr)] = arr
 
     @property
     def name(self) -> str:
@@ -174,14 +209,17 @@ class _Group(StorageGroup):
                        length: int, *,
                        chunk_size: int = 0,
                        compression: Compression = Compression.NONE,
-                       compression_level: int = 6) -> StorageDataset:
+                       compression_level: int = 6,
+                       extendable: bool = False) -> StorageDataset:
         # chunk_size / compression args are ignored — in-memory store
         # has no chunk or filter pipeline.
         del compression, compression_level
+        self._check_extendable(extendable, chunk_size)
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         chunks = (chunk_size,) if chunk_size > 0 else None
-        ds = _Dataset(name, precision, (length,), fields=None, chunks=chunks)
+        ds = _Dataset(name, precision, (length,), fields=None, chunks=chunks,
+                      extendable=extendable)
         self._datasets[name] = ds
         return ds
 
@@ -189,22 +227,26 @@ class _Group(StorageGroup):
                            shape: tuple[int, ...], *,
                            chunks: tuple[int, ...] | None = None,
                            compression: Compression = Compression.NONE,
-                           compression_level: int = 6) -> StorageDataset:
+                           compression_level: int = 6,
+                           extendable: bool = False) -> StorageDataset:
         del compression, compression_level
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         ds = _Dataset(name, precision, tuple(shape), fields=None,
-                      chunks=tuple(chunks) if chunks else None)
+                      chunks=tuple(chunks) if chunks else None,
+                      extendable=extendable)
         self._datasets[name] = ds
         return ds
 
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
-                                 count: int) -> StorageDataset:
+                                 count: int, *,
+                                 extendable: bool = False,
+                                 chunk_rows: int = 1024) -> StorageDataset:
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         ds = _Dataset(name, precision=None, shape=(count,),
-                      fields=tuple(fields))
+                      fields=tuple(fields), extendable=extendable)
         self._datasets[name] = ds
         return ds
 
@@ -311,6 +353,8 @@ def _compound_dtype(fields: tuple[CompoundField, ...]) -> np.dtype:
     for f in fields:
         if f.kind == CompoundFieldKind.UINT32:
             items.append((f.name, "<u4"))
+        elif f.kind == CompoundFieldKind.UINT64:
+            items.append((f.name, "<u8"))
         elif f.kind == CompoundFieldKind.INT64:
             items.append((f.name, "<i8"))
         elif f.kind == CompoundFieldKind.FLOAT64:

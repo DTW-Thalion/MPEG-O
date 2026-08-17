@@ -73,6 +73,13 @@ def _wire_channel_encoder(codec: str):
     raise ValueError(f"unsupported wire codec {codec!r}")
 
 
+def _bulk_carriable(run) -> bool:
+    """Whether a genomic run's channel blobs can be carried verbatim:
+    every whole-channel run, and a blocks_v1 run with exactly one block
+    (its blobs are the whole-channel blobs). Multi-block runs go per-AU."""
+    return getattr(run, "layout", "whole") != "blocks_v1" or run.block_count == 1
+
+
 class TransportWriter:
     """Serialize a :class:`SpectralDataset` as a transport byte stream."""
 
@@ -1172,7 +1179,7 @@ class TransportWriter:
         # this flag and dispatch to the bulk path.
         bulk_active = (
             self._use_bulk_mode
-            and len(genomic_runs) > 0
+            and any(_bulk_carriable(g) for _, g in genomic_runs)
             and BULK_MODE_V2_BLOBS_FEATURE not in features
         )
         if bulk_active:
@@ -1357,7 +1364,14 @@ class TransportWriter:
         ``BLOB_V2_MATE_INFO`` packet, and so on. The receiver fills
         the missing channels from the per-AU stream just as in
         per-AU mode.
+
+        A blocks_v1 run (format-spec 10.12) with more than one
+        block has no single per-channel blob to carry verbatim; such
+        runs are sent per-AU. A one-block run's blobs are exactly the
+        whole-channel blobs and are carried as before.
         """
+        if not _bulk_carriable(run):
+            return
         sig = run.group.open_group("signal_channels")
 
         # mate_info/inline_v2 + chrom_names table
@@ -1472,23 +1486,20 @@ class TransportWriter:
         precision_enum = int(Precision.FLOAT64) & 0xFF
         unknown_polarity_wire = _POLARITY_TO_WIRE[Polarity.UNKNOWN]
 
-        # Bulk-read channel arrays once instead of per-spectrum.
+        # Channel data is read in windows of WINDOW spectra through
+        # AcquisitionRun.channel_range (per-block codec 17 decode,
+        # hyperslab reads for plain channels), so a whole channel is
+        # never held at once. Channels missing from the run are skipped.
         index = run.index
-        total_count = int(index.offsets[-1] + index.lengths[-1]) if len(index.offsets) > 0 else 0
-        channel_arrays: list[tuple[int, np.ndarray] | None] = []
+        present: list[int] = []
         for ci, cname in enumerate(channel_names):
-            decoded = run._numpress_channels.get(cname)
-            if decoded is not None:
-                arr = np.ascontiguousarray(decoded, dtype="<f8")
-                channel_arrays.append((ci, arr))
-                continue
             try:
-                ds = run._signal_dataset(cname)
+                run._signal_dataset(cname)
             except KeyError:
-                channel_arrays.append(None)
-                continue
-            arr = np.ascontiguousarray(np.asarray(ds.read(offset=0, count=total_count)), dtype="<f8")
-            channel_arrays.append((ci, arr))
+                if run._numpress_channels.get(cname) is None and cname not in run._decrypted_channels:
+                    continue
+            present.append(ci)
+        WINDOW = 4096
 
         # Index columns are numpy arrays already — slice per-i.
         offsets = index.offsets
@@ -1522,19 +1533,27 @@ class TransportWriter:
         did = dataset_id & 0xFFFF
 
         n_spectra = len(run)
+        window_base = 0
+        window_end = 0
+        window_arrays: list[tuple[int, np.ndarray]] = []
         for j in range(n_spectra):
             start = int(offsets[j])
             length = int(lengths[j])
             stop = start + length
+            if j >= window_end:
+                window_end = min(n_spectra, j + WINDOW)
+                window_base = start
+                total = int(offsets[window_end - 1]) + int(lengths[window_end - 1]) - window_base
+                window_arrays = [
+                    (ci, np.ascontiguousarray(
+                        run.channel_range(channel_names[ci], window_base, total), dtype="<f8"))
+                    for ci in present]
 
-            # Channel data collection from pre-loaded arrays.
+            # Channel data collection from the current window.
             channel_chunks: list[bytes] = []
             n_channels = 0
-            for slot in channel_arrays:
-                if slot is None:
-                    continue
-                ci, full_arr = slot
-                seg = full_arr[start:stop]
+            for ci, win_arr in window_arrays:
+                seg = win_arr[start - window_base:stop - window_base]
                 payload_bytes = compress(seg) if use_compression else seg.tobytes()
                 channel_chunks.append(channel_name_prefixes[ci])
                 channel_chunks.append(channel_suffix_pack(

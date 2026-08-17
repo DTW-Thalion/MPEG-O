@@ -7,6 +7,8 @@ per format and dispatches ``encode`` through ``Reader.read(...).write(...)``.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from .imported_dataset import ImportedDataset
 
 
@@ -34,6 +36,13 @@ class _ImportResultReader:
 class MzMLReader(_ImportResultReader):
     _module = "mzml"
 
+    def read(self, inputs, opts, progress=None) -> ImportedDataset:
+        from .mzml import MzMLStream
+        stream = MzMLStream(inputs[0], batch_spectra=int(opts.get("batch_spectra", 4096)),
+                            progress=progress)
+        return ImportedDataset(title=Path(inputs[0]).stem,
+                               spectral_streams={"run_0001": stream.stream_source()})
+
 
 class MzTabReader(_ImportResultReader):
     _module = "mztab"
@@ -45,12 +54,26 @@ class NmrMLReader(_ImportResultReader):
 
 class ThermoRawReader(_ImportResultReader):
     _module = "thermo_raw"
-    _supports_progress = False  # thermo_raw.read() has no progress kwarg
+    _supports_progress = False
+
+    def read(self, inputs, opts, progress=None) -> ImportedDataset:
+        from . import thermo_raw
+        src = thermo_raw.stream_source(
+            inputs[0], batch_spectra=int(opts.get("batch_spectra", 4096)), progress=progress)
+        return ImportedDataset(title=Path(inputs[0]).stem, spectral_streams={"run_0001": src})
 
 
 class WatersMassLynxReader(_ImportResultReader):
     _module = "waters_masslynx"
-    _supports_progress = False  # waters_masslynx.read() has no progress kwarg
+    _supports_progress = False
+
+    def read(self, inputs, opts, progress=None) -> ImportedDataset:
+        from . import waters_masslynx
+        src = waters_masslynx.stream_source(
+            inputs[0], batch_spectra=int(opts.get("batch_spectra", 4096)), progress=progress)
+        stem = Path(inputs[0]).name
+        stem = stem[:-4] if stem.lower().endswith(".raw") else stem
+        return ImportedDataset(title=stem, spectral_streams={"run_0001": src})
 
 
 class ImzMLReader:
@@ -65,11 +88,12 @@ class ImzMLReader:
 
 class BrukerReader:
     def read(self, inputs, opts, progress=None) -> ImportedDataset:
-        # Matches the old _adapt_bruker: progress is intentionally NOT
-        # threaded (read_dataset accepts it, but the old adapter omitted it).
         from . import bruker_tdf
-        return bruker_tdf.read_dataset(
-            inputs[0], ms2=bool(opts.get("ms2", False)))
+        stream = bruker_tdf.BrukerTDFStream(
+            inputs[0], batch_frames=int(opts.get("batch_frames", 256)),
+            ms2=bool(opts.get("ms2", False)))
+        return ImportedDataset(title=Path(inputs[0]).stem,
+                               spectral_streams=stream.stream_sources())
 
 
 class JcampDxReader:
@@ -94,9 +118,16 @@ class _GenomicReader:
                "CramReader": cram.CramReader}[self._attr]
         name = opts.get("name", "genomic_0001")
         kwargs = {"progress": progress} if progress is not None else {}
-        run = cls(inputs[0]).to_genomic_run(
-            name=name, sample_name=opts.get("sample"), **kwargs)
-        return ImportedDataset(genomic_runs={name: run})
+        reference = opts.get("reference")
+        reader = cls(inputs[0], reference) if self._attr == "CramReader" else cls(inputs[0])
+        src = reader.stream_source(
+            name=name, sample_name=opts.get("sample"), reference_fasta=reference,
+            embed_reference=bool(opts.get("embed_reference", False)),
+            batch_reads=int(opts.get("batch_reads", 100_000)), **kwargs)
+        src.block_reads = opts.get("block_reads")
+        src.block_bytes = opts.get("block_bytes")
+        src.opt_legacy_whole_channel = bool(opts.get("legacy_whole_channel", False))
+        return ImportedDataset(genomic_streams={name: src})
 
 
 class BamReader(_GenomicReader):

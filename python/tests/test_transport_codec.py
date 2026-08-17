@@ -515,6 +515,7 @@ class TestGenomicRoundTrip:
             int(PacketType.END_OF_STREAM),
         ]
 
+    @pytest.mark.usefixtures("legacy_genomic_layout")
     def test_au_carries_genomic_suffix(self, tmp_path):
         src = _make_minimal_genomic_dataset(tmp_path / "src.tio")
         buffer = io.BytesIO()

@@ -20,6 +20,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# These tests exercise the v1.8 whole-channel layout (per-AU and region
+# encryption slice plaintext channels, per-dataset signatures and the
+# refdiff_v2 group shape); every genomic write in this module uses it.
+pytestmark = pytest.mark.usefixtures("legacy_genomic_layout")
+
 from ttio.codecs import ref_diff_v2 as rdv2
 from ttio.enums import Compression
 

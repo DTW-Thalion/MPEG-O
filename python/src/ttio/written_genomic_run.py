@@ -92,6 +92,24 @@ class WrittenGenomicRun:
     # 2.4). Java/ObjC: optDisableQualitiesV5.
     opt_disable_qualities_v5: bool = False
 
+    # blocks_v1 (streaming): a preassigned chromosome name -> id map
+    # shared across the blocks of one run. When set, genomic_index and
+    # mate_info use these ids and extend the map in place for names not
+    # yet present; when None (whole-run write) ids are assigned in
+    # first-seen order from this run alone.
+    chrom_name_to_id: dict[str, int] | None = None
+
+    # Write this run in the v1.8 whole-channel layout instead of the
+    # blocks_v1 default (readers up to v1.8.0 need it). Memory is then
+    # unbounded in the run size.
+    opt_legacy_whole_channel: bool = False
+
+    # Precomputed reference MD5 (the sorted-name concatenation digest,
+    # see genomic.reference_import.compute_reference_md5). The stream
+    # writer computes it once per run so a large reference is not
+    # digested per block; None means compute from reference_chrom_seqs.
+    reference_md5: bytes | None = None
+
     # per-channel codec opt-in. Maps channel name to a TTI-O
     # internal codec id. Only "sequences" and "qualities" are
     # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are

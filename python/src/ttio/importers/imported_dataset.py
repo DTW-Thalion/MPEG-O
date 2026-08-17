@@ -33,9 +33,25 @@ class ImportedDataset:
     ir_image: object | None = None
     subjects: list = field(default_factory=list)
     samples: list = field(default_factory=list)
+    # Streaming sources (GenomicStreamSource / SpectralStreamSource):
+    # written after write_minimal through the stream writers, so a run
+    # of any size never sits in memory whole.
+    genomic_streams: dict = field(default_factory=dict)
+    spectral_streams: dict = field(default_factory=dict)
 
     def write(self, path: str | Path, *, features: list[str] | None = None,
               provider: str = "hdf5", progress=None) -> Path:
+        out = self._write_static(path, features=features, provider=provider, progress=progress)
+        if self.genomic_streams or self.spectral_streams:
+            with SpectralDataset.open(out, writable=True, provider=provider) as ds:
+                for src in self.genomic_streams.values():
+                    src.write_into(ds.study_group, progress=progress)
+                for src in self.spectral_streams.values():
+                    src.write_into(ds.study_group, progress=progress)
+        return out
+
+    def _write_static(self, path: str | Path, *, features: list[str] | None = None,
+                      provider: str = "hdf5", progress=None) -> Path:
         return SpectralDataset.write_minimal(
             path,
             title=self.title or "imported",

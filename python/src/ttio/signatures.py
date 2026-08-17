@@ -223,6 +223,16 @@ _GENOMIC_INDEX_COLUMNS = (
 )
 
 
+def _signal_datasets(sig_group: h5py.Group, cname: str) -> list[tuple[str, h5py.Dataset]]:
+    """The dataset(s) behind a genomic signal channel: the flat dataset,
+    or the datasets inside the channel's group (sequences/refdiff_v2
+    for a whole-channel run, sequences/data for blocks_v1)."""
+    obj = sig_group[cname]
+    if isinstance(obj, h5py.Dataset):
+        return [(cname, obj)]
+    return [(f"{cname}/{k}", v) for k, v in obj.items() if isinstance(v, h5py.Dataset)]
+
+
 def sign_genomic_run(
     run_group: h5py.Group,
     key: bytes,
@@ -247,9 +257,10 @@ def sign_genomic_run(
         sig_group = run_group["signal_channels"]
         for cname in _GENOMIC_SIGNAL_CHANNELS:
             if cname in sig_group:
-                out[f"signal_channels/{cname}"] = sign_dataset(
-                    sig_group[cname], key, algorithm=algorithm,
-                )
+                for path, ds in _signal_datasets(sig_group, cname):
+                    out[f"signal_channels/{path}"] = sign_dataset(
+                        ds, key, algorithm=algorithm,
+                    )
     if "genomic_index" in run_group:
         idx_group = run_group["genomic_index"]
         for cname in _GENOMIC_INDEX_COLUMNS:
@@ -257,6 +268,14 @@ def sign_genomic_run(
                 out[f"genomic_index/{cname}"] = sign_dataset(
                     idx_group[cname], key, algorithm=algorithm,
                 )
+    # blocks_v1 (format-spec 10.12.6): the block index is part of the
+    # signed set, after genomic_index and before signal_channels in the
+    # documented order (each dataset carries its own signature, so the
+    # order only fixes the dict layout).
+    if "blocks" in run_group and "index" in run_group["blocks"]:
+        out["blocks/index"] = sign_dataset(
+            run_group["blocks"]["index"], key, algorithm=algorithm,
+        )
     return out
 
 
@@ -278,10 +297,10 @@ def verify_genomic_run(
     if "signal_channels" in run_group:
         sig_group = run_group["signal_channels"]
         for cname in _GENOMIC_SIGNAL_CHANNELS:
-            if cname in sig_group and not verify_dataset(
-                sig_group[cname], key, algorithm=algorithm,
-            ):
-                return False
+            if cname in sig_group:
+                for _path, ds in _signal_datasets(sig_group, cname):
+                    if not verify_dataset(ds, key, algorithm=algorithm):
+                        return False
     if "genomic_index" in run_group:
         idx_group = run_group["genomic_index"]
         for cname in _GENOMIC_INDEX_COLUMNS:
@@ -289,6 +308,9 @@ def verify_genomic_run(
                 idx_group[cname], key, algorithm=algorithm,
             ):
                 return False
+    if "blocks" in run_group and "index" in run_group["blocks"]:
+        if not verify_dataset(run_group["blocks"]["index"], key, algorithm=algorithm):
+            return False
     return True
 
 
