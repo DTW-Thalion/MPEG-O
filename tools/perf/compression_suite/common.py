@@ -76,5 +76,5 @@ def run_timed(cmd: list[str], cwd=None, stdout=None, env=None) -> Timed:
 
 
 def tool_version(cmd: list[str]) -> str:
-    p = subprocess.run(cmd, capture_output=True, text=True)
+    p = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
     return ((p.stdout or p.stderr).strip().splitlines() or ["unknown"])[0]
