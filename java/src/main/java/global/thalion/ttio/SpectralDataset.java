@@ -1625,6 +1625,14 @@ public class SpectralDataset implements
      */
     @Override
     public void close() {
+        // Runs hold open channel datasets and block views; release them
+        // before the file so the native handle count drops to zero.
+        for (AcquisitionRun r : msRuns.values()) {
+            try { r.close(); } catch (RuntimeException ignored) { }
+        }
+        for (GenomicRun g : genomicRuns.values()) {
+            try { g.close(); } catch (RuntimeException ignored) { }
+        }
         // Prefer closing via the provider (owns the native handle); fall
         // back to direct file close for legacy callers that didn't go
         // through Hdf5Provider.
