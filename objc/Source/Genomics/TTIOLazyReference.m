@@ -83,8 +83,11 @@
  * length, offset of the first base, bases per line, bytes per line. */
 - (NSString *)_buildIndexText:(NSError **)error
 {
-    NSData *raw = [NSData dataWithContentsOfFile:_path options:NSDataReadingMappedIfSafe error:error];
-    if (!raw) return nil;
+    NSData *raw = [NSData dataWithContentsOfFile:_path];
+    if (!raw) {
+        if (error) *error = TTIOMakeError(TTIOErrorFileOpen, @"cannot read reference FASTA: %@", _path);
+        return nil;
+    }
     const uint8_t *b = (const uint8_t *)raw.bytes;
     NSUInteger n = raw.length;
     NSMutableString *out = [NSMutableString string];
