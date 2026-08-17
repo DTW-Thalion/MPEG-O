@@ -23,7 +23,11 @@ class LazyReference(Mapping):
             raise FileNotFoundError(str(self._path))
         fai = Path(str(self._path) + ".fai")
         if not fai.exists():
-            subprocess.run(["samtools", "faidx", str(self._path)], check=True)
+            try:
+                subprocess.run(["samtools", "faidx", str(self._path)], check=True,
+                               capture_output=True)
+            except (OSError, subprocess.CalledProcessError):
+                fai.write_text(build_fai_text(self._path))
         self._entries: dict[str, tuple[int, int, int, int]] = {}
         for line in fai.read_text().splitlines():
             f = line.split("\t")
@@ -73,3 +77,43 @@ class LazyReference(Mapping):
         while len(self._cache) > self._cache_n:
             self._cache.popitem(last=False)
         return seq
+
+    def set_md5(self) -> bytes:
+        """MD5 of the concatenated case-preserved sequences of every
+        chromosome in alphabetic order of name: the reference-set digest
+        every writer records (docs/format-spec.md section 10.10, "MD5
+        computation"). Streams one chromosome at a time."""
+        import hashlib
+        h = hashlib.md5()
+        for name in sorted(self._entries):
+            h.update(self[name])
+        return h.digest()
+
+
+def build_fai_text(fasta: Path) -> str:
+    """samtools faidx text for ``fasta`` (name, length, offset of the
+    first base, bases per line, bytes per line), for hosts without
+    samtools. Requires the fixed line width samtools requires."""
+    rows = []
+    name = None
+    length = line_bases = line_width = 0
+    offset = 0
+    with open(fasta, "rb") as f:
+        pos = 0
+        for raw in f:
+            n = len(raw)
+            if raw.startswith(b">"):
+                if name is not None:
+                    rows.append(f"{name}\t{length}\t{offset}\t{line_bases}\t{line_width}")
+                name = raw[1:].split()[0].decode("ascii") if len(raw) > 1 else ""
+                length = line_bases = line_width = 0
+                offset = pos + n
+            elif name is not None:
+                bases = len(raw.rstrip(b"\r\n"))
+                if line_bases == 0 and bases:
+                    line_bases, line_width = bases, n
+                length += bases
+            pos += n
+    if name is not None:
+        rows.append(f"{name}\t{length}\t{offset}\t{line_bases}\t{line_width}")
+    return "\n".join(rows) + ("\n" if rows else "")

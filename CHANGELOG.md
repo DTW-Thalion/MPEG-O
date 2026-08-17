@@ -11,6 +11,22 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed
+- **External reference resolution (`REF_PATH`) validates a multi-chromosome
+  FASTA.** Writers record the reference-set md5 (every chromosome, alphabetic
+  order, case preserved; format-spec 10.10), but the external-FASTA branch of
+  the resolvers compared it with the md5 of one upper-cased chromosome, so a run
+  written against any FASTA with more than one contig failed to decode from
+  `REF_PATH` (`MD5 mismatch for external reference`) unless the reference was
+  embedded. Python `ReferenceResolver`, Java `codecs.ReferenceResolver` and
+  ObjC `TTIOReferenceResolver` now check the single-chromosome digests first
+  (raw and upper-cased) and then the reference-set digest, read the chromosome
+  through the `.fai`-indexed `LazyReference` (one index and one whole-FASTA
+  digest per path per process instead of a full-file scan per block), and all
+  return the chromosome upper-cased. `LazyReference` gains `set_md5()` /
+  `setMd5()` / `-setMD5`; the Python one builds the `.fai` itself when
+  samtools is absent.
+
 ### Changed
 - **Objective-C: streaming import and export; genomic runs written as `blocks_v1`.**
   The ObjC reference implementation reads the `blocks_v1` layout (format-spec

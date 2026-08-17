@@ -90,16 +90,8 @@ public final class ReferenceResolver {
         // 2. Try external FASTA.
         if (externalReferencePath != null
             && Files.exists(externalReferencePath)) {
-            byte[] seq = readChromFromFasta(externalReferencePath, chromosome);
+            byte[] seq = externalChromosome(externalReferencePath, expectedMd5, chromosome);
             if (seq != null) {
-                byte[] actualMd5 = md5(seq);
-                if (!java.util.Arrays.equals(actualMd5, expectedMd5)) {
-                    throw new RefMissingException(
-                        "MD5 mismatch for external reference at "
-                        + externalReferencePath + ": expected "
-                        + bytesToHex(expectedMd5) + ", got "
-                        + bytesToHex(actualMd5));
-                }
                 return seq;
             }
         }
@@ -156,32 +148,45 @@ public final class ReferenceResolver {
      *  bytes. Returns {@code null} if the chromosome is not present.
      *  Matches headers on the first whitespace-delimited token after
      *  {@code >}. */
-    private static byte[] readChromFromFasta(Path path, String chromosome) {
-        byte[] target = chromosome.getBytes(StandardCharsets.US_ASCII);
-        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
-        boolean inTarget = false;
-        try (java.io.BufferedReader br = java.nio.file.Files.newBufferedReader(
-            path, StandardCharsets.US_ASCII)) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                if (!line.isEmpty() && line.charAt(0) == '>') {
-                    if (inTarget) {
-                        return out.toByteArray();
-                    }
-                    String hdr = line.substring(1).split("\\s+", 2)[0];
-                    inTarget = hdr.equals(chromosome);
-                    out.reset();
-                } else if (inTarget) {
-                    String trimmed = line.strip();
-                    out.write(trimmed.getBytes(StandardCharsets.US_ASCII), 0,
-                        trimmed.length());
-                }
-            }
-        } catch (IOException e) {
+    private static final java.util.Map<Path, global.thalion.ttio.genomics.LazyReference> LAZY =
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<Path, byte[]> SET_MD5 =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Read {@code chromosome} from the external FASTA through its .fai
+     *  index and check {@code expectedMd5} against, in order: the md5 of
+     *  that chromosome's case-preserved bytes, of its upper-cased bytes
+     *  (both the pre-1.9 external check, which only ever matched a
+     *  single-contig FASTA), then the reference-set md5 of the whole
+     *  FASTA (every chromosome, alphabetic order, case preserved: the
+     *  digest the writers record). Returns the upper-cased sequence, or
+     *  null when the chromosome is not in the FASTA. */
+    private static byte[] externalChromosome(Path path, byte[] expectedMd5, String chromosome) {
+        Path key = path.toAbsolutePath();
+        global.thalion.ttio.genomics.LazyReference ref =
+            LAZY.computeIfAbsent(key, k -> new global.thalion.ttio.genomics.LazyReference(k, 2));
+        if (!ref.containsKey(chromosome)) {
             return null;
         }
-        if (inTarget) return out.toByteArray();
-        return null;
+        byte[] raw = ref.get(chromosome);
+        byte[] upper = new byte[raw.length];
+        for (int i = 0; i < raw.length; i++) {
+            byte b = raw[i];
+            upper[i] = (b >= 'a' && b <= 'z') ? (byte) (b - 32) : b;
+        }
+        if (java.util.Arrays.equals(md5(raw), expectedMd5)
+                || java.util.Arrays.equals(md5(upper), expectedMd5)) {
+            return upper;
+        }
+        byte[] setMd5 = SET_MD5.computeIfAbsent(key, k -> ref.setMd5());
+        if (java.util.Arrays.equals(setMd5, expectedMd5)) {
+            return upper;
+        }
+        throw new RefMissingException(
+            "MD5 mismatch for external reference at " + path + ": expected "
+            + bytesToHex(expectedMd5) + ", got " + bytesToHex(setMd5)
+            + " for the whole FASTA and " + bytesToHex(md5(raw))
+            + " for chromosome " + chromosome);
     }
 
     private static byte[] md5(byte[] data) {

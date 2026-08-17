@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import subprocess
+import shutil
 from pathlib import Path
 
 import h5py
@@ -143,3 +145,43 @@ def test_resolver_finds_correct_chrom_in_multi_chrom_fasta(tmp_path, monkeypatch
     md5 = hashlib.md5(expected_seq).digest()
     r = ReferenceResolver(references_group=None)
     assert r.resolve(uri="x", expected_md5=md5, chromosome="22") == expected_seq
+
+
+def test_resolver_external_accepts_reference_set_md5(tmp_path, monkeypatch):
+    """Writers record the md5 of every chromosome concatenated in name
+    order (format-spec 10.10); a multi-chromosome external FASTA must
+    validate against that digest, not only against one chromosome's."""
+    fasta = tmp_path / "multi.fa"
+    fasta.write_bytes(b">chr2\nGGGGCCCC\n>chr1\nacgtACGT\n>chrM\nTTTT\n")
+    monkeypatch.setenv("REF_PATH", str(fasta))
+    set_md5 = hashlib.md5(b"acgtACGT" + b"GGGGCCCC" + b"TTTT").digest()
+    r = ReferenceResolver(references_group=None)
+    assert r.resolve(uri="x", expected_md5=set_md5, chromosome="chr1") == b"ACGTACGT"
+    assert r.resolve(uri="x", expected_md5=set_md5, chromosome="chr2") == b"GGGGCCCC"
+    # the pre-1.9 single-chromosome digests, raw and upper-cased, still pass
+    assert r.resolve(uri="x", expected_md5=hashlib.md5(b"acgtACGT").digest(), chromosome="chr1") == b"ACGTACGT"
+    assert r.resolve(uri="x", expected_md5=hashlib.md5(b"ACGTACGT").digest(), chromosome="chr1") == b"ACGTACGT"
+    with pytest.raises(RefMissingError, match="whole FASTA"):
+        r.resolve(uri="x", expected_md5=b"\x01" * 16, chromosome="chr1")
+
+
+def test_resolver_external_round_trips_a_run_written_against_the_fasta(tmp_path, monkeypatch):
+    """End to end: a BAM imported with --reference (not embedded) exports
+    through REF_PATH pointing at the same two-chromosome FASTA."""
+    from ttio.tools.workbench_cli import main
+    repo = Path(__file__).resolve().parents[2]
+    bam = repo / "python/tests/fixtures/genomic/m87_test.bam"
+    ref = repo / "python/tests/fixtures/genomic/blocks_v1_golden_ref.fa"
+    if not (bam.exists() and ref.exists()) or shutil.which("samtools") is None:
+        pytest.skip("fixture or samtools missing")
+    tio = tmp_path / "m87.tio"
+    assert main(["encode", "--input", str(bam), "--format", "bam",
+                 "--reference", str(ref), "--output", str(tio)]) == 0
+    monkeypatch.setenv("REF_PATH", str(ref))
+    out = tmp_path / "m87.bam"
+    assert main(["export", "--input", str(tio), "--layer", "genomic_0001",
+                 "--format", "bam", "--output", str(out)]) == 0
+    got = subprocess.run(["samtools", "view", str(out)], capture_output=True, text=True).stdout
+    want = subprocess.run(["samtools", "view", str(bam)], capture_output=True, text=True).stdout
+    proj = lambda t: sorted("\t".join(l.split("\t")[:11]) for l in t.splitlines())
+    assert proj(got) == proj(want)

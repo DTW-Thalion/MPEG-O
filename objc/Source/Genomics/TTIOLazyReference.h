@@ -34,6 +34,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly, copy) NSArray<NSString *> *chromosomeNames;
 /** Length of a chromosome without loading it; NSNotFound when unknown. */
 - (NSUInteger)lengthOf:(NSString *)name;
+/** 16-byte MD5 of the concatenated case-preserved sequences of every
+ *  chromosome in alphabetic order of name: the reference-set digest
+ *  every writer records (format spec section 10.10). Streams one
+ *  chromosome at a time. */
+- (NSData *)setMD5;
 
 @end
 

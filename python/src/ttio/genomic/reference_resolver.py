@@ -106,14 +106,8 @@ class ReferenceResolver:
 
         # 2. Try external FASTA.
         if self._external is not None and self._external.exists():
-            seq = _read_chrom_from_fasta(self._external, chromosome)
+            seq = _external_chromosome(self._external, expected_md5, chromosome)
             if seq is not None:
-                actual_md5 = hashlib.md5(seq).digest()
-                if actual_md5 != expected_md5:
-                    raise RefMissingError(
-                        f"MD5 mismatch for external reference at {self._external}: "
-                        f"expected {expected_md5.hex()}, got {actual_md5.hex()}"
-                    )
                 return seq
 
         # 3. Hard error (Q5c).
@@ -125,30 +119,41 @@ class ReferenceResolver:
         )
 
 
-def _read_chrom_from_fasta(path: Path, chromosome: str) -> bytes | None:
-    """Tiny FASTA reader — extract a single chromosome's sequence as bytes.
+_LAZY: dict[Path, "object"] = {}
+_SET_MD5: dict[Path, bytes] = {}
 
-    Returns ``None`` if the chromosome is not present in the FASTA.
-    Matches headers on the first whitespace-delimited token after ``>``.
-    L3 (Task #82 Phase B.1, 2026-05-01): uppercase-normalise the
-    bytes to match the encoder's ``_load_reference_chroms`` —
-    soft-masked FASTAs (lowercase repeat regions) otherwise produce
-    a different MD5 than the encoder computed.
-    """
-    target = chromosome.encode("ascii")
-    out = bytearray()
-    in_target = False
-    with path.open("rb") as fh:
-        for line in fh:
-            if line.startswith(b">"):
-                if in_target:
-                    return bytes(out).upper()
-                # Header line: ">chrom_name optional comment\n"
-                hdr = line[1:].split()[0] if len(line) > 1 else b""
-                in_target = (hdr == target)
-                out.clear()
-            elif in_target:
-                out.extend(line.strip())
-    if in_target:
-        return bytes(out).upper()
-    return None
+
+def _lazy(path: Path):
+    from .lazy_reference import LazyReference
+    ref = _LAZY.get(path)
+    if ref is None:
+        ref = _LAZY[path] = LazyReference(path, cache_chroms=2)
+    return ref
+
+
+def _external_chromosome(path: Path, expected_md5: bytes, chromosome: str) -> bytes | None:
+    """Read ``chromosome`` from the external FASTA through its .fai index
+    and check ``expected_md5`` against, in order: the md5 of that
+    chromosome's case-preserved bytes, of its upper-cased bytes (both
+    the pre-1.9 external check, which only ever matched a
+    single-contig FASTA), then the reference-set md5 of the whole
+    FASTA (every chromosome, alphabetic order, case preserved: the
+    digest the writers record). Returns the upper-cased sequence, or
+    None when the chromosome is not in the FASTA."""
+    ref = _lazy(path)
+    if chromosome not in ref:
+        return None
+    raw = ref[chromosome]
+    upper = raw.upper()
+    if hashlib.md5(raw).digest() == expected_md5 or hashlib.md5(upper).digest() == expected_md5:
+        return upper
+    set_md5 = _SET_MD5.get(path)
+    if set_md5 is None:
+        set_md5 = _SET_MD5[path] = ref.set_md5()
+    if set_md5 == expected_md5:
+        return upper
+    raise RefMissingError(
+        f"MD5 mismatch for external reference at {path}: expected "
+        f"{expected_md5.hex()}, got {set_md5.hex()} for the whole FASTA and "
+        f"{hashlib.md5(raw).hexdigest()} for chromosome {chromosome!r}"
+    )
