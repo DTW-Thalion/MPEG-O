@@ -1,6 +1,13 @@
 # Streaming import/export and `blocks_v1` in Java (sub-project 2)
 
-> **Status (2026-08-17).** Design for the Java implementation of
+> **Status (2026-08-17).** Implemented on branch
+> `streaming-blocks-v1-java` (plan
+> `docs/superpowers/plans/2026-08-17-streaming-blocks-v1-java.md`).
+> Deviations from the text below: SQLite `append` is read-modify-write
+> of the single blob and Zarr `append` rewrites the array (both as the
+> Python providers do); extendable compound datasets on HDF5 take
+> primitive kinds only; the transport per-spectrum path reads channel
+> ranges (`channelRange`) instead of whole channels. Design for the Java implementation of
 > `docs/format-spec.md` section 10.12 and of streaming import/export.
 > Sub-project 2 of 4; sub-project 1 (format + Python) merged as
 > PR #290. The format contract is section 10.12; the Python design is
