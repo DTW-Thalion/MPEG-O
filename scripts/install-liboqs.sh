@@ -61,7 +61,7 @@ trap 'rm -rf "${WORK}"' EXIT
 
 URL="https://github.com/open-quantum-safe/liboqs/archive/refs/tags/${VERSION}.tar.gz"
 echo "Downloading liboqs ${VERSION} from ${URL} ..."
-curl -fsSL "${URL}" -o "${WORK}/liboqs.tar.gz"
+curl -fsSL --retry 12 --retry-delay 30 --retry-all-errors "${URL}" -o "${WORK}/liboqs.tar.gz"
 tar -xf "${WORK}/liboqs.tar.gz" -C "${WORK}"
 cd "${WORK}/liboqs-${VERSION}"
 
