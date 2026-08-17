@@ -833,6 +833,7 @@ def test_opt_genomic_flag_absent_when_no_genomic_runs(tmp_path: Path):
         ds.close()
 
 
+@pytest.mark.usefixtures("legacy_genomic_layout")
 def test_random_access_bulk_reads_channel_once(tmp_path: Path):
     """__getitem__ bulk-reads the byte channel once, then slices in memory.
 

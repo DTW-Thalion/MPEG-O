@@ -67,6 +67,10 @@ def _build_run(n: int = 5) -> WrittenGenomicRun:
             [100 * (i % 3) for i in range(n)], dtype=np.int32,
         ),
         chromosomes=["chr1"] * n,
+        # blocks_v1 read support in Java and ObjC lands with their
+        # streaming specs; until then the cross-language genomic
+        # fixtures use the v1.8 whole-channel layout.
+        opt_legacy_whole_channel=True,
     )
 
 
@@ -147,6 +151,10 @@ def test_bulk_v2_blobs_storage_provider_parity(
         mate_positions=src_run.mate_positions,
         template_lengths=src_run.template_lengths,
         chromosomes=src_run.chromosomes,
+        # blocks_v1 read support in Java and ObjC lands with their
+        # streaming specs; until then the cross-language genomic
+        # fixtures use the v1.8 whole-channel layout.
+        opt_legacy_whole_channel=True,
         bulk_v2_blobs=BulkV2Blobs(
             mate_info_blob=src_mate,
             mate_info_chrom_names=src_chroms,

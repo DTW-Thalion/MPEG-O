@@ -257,6 +257,14 @@ def sign_genomic_run(
                 out[f"genomic_index/{cname}"] = sign_dataset(
                     idx_group[cname], key, algorithm=algorithm,
                 )
+    # blocks_v1 (format-spec 10.12.6): the block index is part of the
+    # signed set, after genomic_index and before signal_channels in the
+    # documented order (each dataset carries its own signature, so the
+    # order only fixes the dict layout).
+    if "blocks" in run_group and "index" in run_group["blocks"]:
+        out["blocks/index"] = sign_dataset(
+            run_group["blocks"]["index"], key, algorithm=algorithm,
+        )
     return out
 
 
@@ -289,6 +297,9 @@ def verify_genomic_run(
                 idx_group[cname], key, algorithm=algorithm,
             ):
                 return False
+    if "blocks" in run_group and "index" in run_group["blocks"]:
+        if not verify_dataset(run_group["blocks"]["index"], key, algorithm=algorithm):
+            return False
     return True
 
 

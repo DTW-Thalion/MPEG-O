@@ -459,6 +459,10 @@ def _synth_genomic_run() -> WrittenGenomicRun:
         mate_positions=np.full(n, -1, dtype=np.int64),
         template_lengths=np.zeros(n, dtype=np.int32),
         chromosomes=["chr1", "chr1", "chr2", "*"],
+        # blocks_v1 read support in Java and ObjC lands with their
+        # streaming specs; until then the cross-language genomic
+        # fixtures use the v1.8 whole-channel layout.
+        opt_legacy_whole_channel=True,
     )
 
 

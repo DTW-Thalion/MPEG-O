@@ -944,6 +944,38 @@ class TestBulkModeWriter:
             rt.close()
 
 
+class TestBulkModeMultiBlock:
+    """A blocks_v1 run with more than one block has no single blob per
+    channel, so bulk mode falls back to per-AU carriage for it."""
+
+    def test_multi_block_run_is_sent_per_au(self, tmp_path):
+        from _genomic_fixture import make_written_genomic_run
+        from ttio.genomic import GenomicStreamWriter
+        run = make_written_genomic_run(n_reads=40, read_len=20, paired=True)
+        src = tmp_path / "mb.tio"
+        SpectralDataset.write_minimal(src, title="mb", isa_investigation_id="ISA-MB", runs={})
+        with SpectralDataset.open(src, writable=True) as ds, GenomicStreamWriter(
+                ds.study_group, "genomic_0001", acquisition_mode=run.acquisition_mode,
+                reference_uri=run.reference_uri, platform=run.platform,
+                sample_name=run.sample_name, block_reads=15) as w:
+            w.append_batch(run)
+        stream = tmp_path / "mb.tis"
+        file_to_transport(src, stream, use_bulk_mode=True)
+        types: list[int] = []
+        with TransportReader(stream) as tr:
+            for header, _payload in tr.iter_packets():
+                types.append(int(header.packet_type))
+        assert int(PacketType.BLOB_V2_MATE_INFO) not in types
+        assert int(PacketType.BLOB_V2_NAME_TOK) not in types
+        rt = transport_to_file(stream, tmp_path / "rt.tio")
+        try:
+            g = rt.genomic_runs["genomic_0001"]
+            assert len(g) == 40
+            assert [r.read_name for r in g] == run.read_names
+        finally:
+            rt.close()
+
+
 class TestSpectrumWithoutSignalArray:
     """Spectrum.has_signal_array(name) returning False makes
     ``_spectrum_to_access_unit`` skip the channel (line 765)."""

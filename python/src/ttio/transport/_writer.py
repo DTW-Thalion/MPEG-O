@@ -73,6 +73,13 @@ def _wire_channel_encoder(codec: str):
     raise ValueError(f"unsupported wire codec {codec!r}")
 
 
+def _bulk_carriable(run) -> bool:
+    """Whether a genomic run's channel blobs can be carried verbatim:
+    every whole-channel run, and a blocks_v1 run with exactly one block
+    (its blobs are the whole-channel blobs). Multi-block runs go per-AU."""
+    return getattr(run, "layout", "whole") != "blocks_v1" or run.block_count == 1
+
+
 class TransportWriter:
     """Serialize a :class:`SpectralDataset` as a transport byte stream."""
 
@@ -1172,7 +1179,7 @@ class TransportWriter:
         # this flag and dispatch to the bulk path.
         bulk_active = (
             self._use_bulk_mode
-            and len(genomic_runs) > 0
+            and any(_bulk_carriable(g) for _, g in genomic_runs)
             and BULK_MODE_V2_BLOBS_FEATURE not in features
         )
         if bulk_active:
@@ -1357,7 +1364,14 @@ class TransportWriter:
         ``BLOB_V2_MATE_INFO`` packet, and so on. The receiver fills
         the missing channels from the per-AU stream just as in
         per-AU mode.
+
+        A blocks_v1 run (format-spec 10.12) with more than one
+        block has no single per-channel blob to carry verbatim; such
+        runs are sent per-AU. A one-block run's blobs are exactly the
+        whole-channel blobs and are carried as before.
         """
+        if not _bulk_carriable(run):
+            return
         sig = run.group.open_group("signal_channels")
 
         # mate_info/inline_v2 + chrom_names table

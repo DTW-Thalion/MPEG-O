@@ -105,3 +105,21 @@ class TestChromosomesSigning:
             assert verify_genomic_run(run, KEY) is False, (
                 "L1: tampered chromosome_ids must verify=False"
             )
+
+
+class TestBlocksIndexSigning:
+    """blocks_v1 (format-spec 10.12.6): the block index is signed."""
+
+    def test_sign_includes_blocks_index_and_detects_tamper(self, tmp_path):
+        path = _make_genomic_dataset(tmp_path / "b.tio")
+        with h5py.File(path, "r+") as f:
+            run = f["/study/genomic_runs/genomic_0001"]
+            assert run.attrs["layout"] in (b"blocks_v1", "blocks_v1")
+            sigs = sign_genomic_run(run, KEY)
+            assert "blocks/index" in sigs and sigs["blocks/index"].startswith("v2:")
+            assert verify_genomic_run(run, KEY) is True
+            idx = run["blocks/index"]
+            row = idx[0]
+            row["n_reads"] = int(row["n_reads"]) + 1
+            idx[0] = row
+            assert verify_genomic_run(run, KEY) is False

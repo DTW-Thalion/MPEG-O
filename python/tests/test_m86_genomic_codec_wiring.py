@@ -35,6 +35,10 @@ import h5py
 import numpy as np
 import pytest
 
+# The M86 codec wiring is specified on the v1.8 whole-channel layout;
+# every write in this module uses it.
+pytestmark = pytest.mark.usefixtures("legacy_genomic_layout")
+
 from ttio.enums import Compression
 from ttio.spectral_dataset import SpectralDataset
 from ttio.written_genomic_run import WrittenGenomicRun

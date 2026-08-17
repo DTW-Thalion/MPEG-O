@@ -17,6 +17,7 @@ SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import numpy as np
@@ -63,8 +64,10 @@ class GenomicStreamWriter:
                  opt_disable_qualities_v5: bool = False,
                  signal_codec_overrides: dict | None = None,
                  signal_compression: str = "gzip",
-                 opt_legacy_whole_channel: bool = False):
+                 opt_legacy_whole_channel: bool = False,
+                 provenance_records=None):
         self._study = study_group
+        self._provenance = list(provenance_records or [])
         self._name = run_name
         self._meta: dict[str, Any] = dict(
             acquisition_mode=int(acquisition_mode), reference_uri=reference_uri,
@@ -187,6 +190,7 @@ class GenomicStreamWriter:
                 whole = _apply_meta(_blocks.concat_runs(self._legacy_parts), self._meta, None)
                 if self._meta["embed_reference"]:
                     _embed_references_for_runs(self._study, {self._name: whole})
+                whole = dataclasses.replace(whole, provenance_records=list(self._provenance))
                 _write_genomic_run(self._runs_group(), self._name, whole)
                 self._read_count = int(len(whole.lengths))
             self._legacy_parts = []
@@ -195,6 +199,10 @@ class GenomicStreamWriter:
         if self._rg is None:
             self._ensure_layout(None)
         self._write_close_tables()
+        if self._provenance:
+            from .._dataset_write_metadata import _write_provenance
+            prov = self._rg.create_group("provenance")
+            _write_provenance(prov, self._provenance, dataset_name="steps")
 
     def __enter__(self) -> "GenomicStreamWriter":
         return self
@@ -300,7 +308,6 @@ class GenomicStreamWriter:
 
 # ----------------------------------------------------------------------
 def _apply_meta(run: WrittenGenomicRun, meta: dict, chrom_map) -> WrittenGenomicRun:
-    import dataclasses
     return dataclasses.replace(
         run,
         acquisition_mode=meta["acquisition_mode"], reference_uri=meta["reference_uri"],
