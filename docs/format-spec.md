@@ -937,6 +937,8 @@ A v1.0 reader rejects any other layout (including the M82
 compound `{value: VL_STRING}` and the v1 NAME_TOKENIZED
 `@compression = 8` flat-byte layout) with a v1.0 migration error.
 
+Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, back to back, addressed through `blocks/index`.
+
 ## 10.6b `NAME_TOKENIZED_V2` wire format (codec id 15)
 
 NAME_TOKENIZED_V2 is a multi-substream + DUP-pool + PREFIX-MATCH
@@ -1035,6 +1037,8 @@ Flat 1-D `UINT8` dataset of length = encoded byte count, with
 `@compression` set to `4` or `5`. **No HDF5 filter** is applied.
 A `@compression` value outside `{4, 5}` is malformed.
 
+Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, back to back, addressed through `blocks/index`.
+
 ### 10.8.2 The rANS-on-cigars serialisation contract
 
 The encoder serialises the `list[str]` of CIGARs to a flat byte
@@ -1126,6 +1130,8 @@ Container header (34 bytes): 4-byte magic `b"MIv2"` + 1-byte version
 `\x01` + 1-byte flags `\x00` + `n_records` (uint64 LE) + `num_cross`
 (uint32 LE) + 4 × uint32 LE substream byte lengths (MF, NS, NP, TS).
 See [docs/codecs/mate_info_v2.md](codecs/mate_info_v2.md) for the full codec.
+
+Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, back to back, addressed through `blocks/index`.
 
 ### 10.9b.2 Reader-side dependency
 
@@ -1388,6 +1394,8 @@ with v1), and per-slice bodies each with a 24-byte sub-header + 5
 rANS-O0-encoded substreams. Full wire format spec at
 `docs/superpowers/specs/2026-05-03-ref-diff-v2-design.md` §4.
 
+Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, back to back, addressed through `blocks/index`.
+
 ### 10.10b.2 Substream taxonomy
 
 | Substream | Content | Encoding |
@@ -1443,6 +1451,8 @@ specified in `docs/codecs/fqzcomp_nx16_z.md` §2). The dataset has
 **no HDF5 filter applied** — codec output is high-entropy and
 double-compression is a CPU loss.
 
+Under `blocks_v1` (section 10.12) this dataset holds one such blob per block, back to back, addressed through `blocks/index`.
+
 ### Default codec selection
 
 When a run has empty `signal_codec_overrides["qualities"]`, the
@@ -1450,6 +1460,86 @@ writer auto-applies FQZCOMP_NX16_Z. Override values
 RANS_ORDER0 / RANS_ORDER1 / QUALITY_BINNED are accepted on the
 `qualities` channel; BASE_PACK and the v2 codecs (13/14/15) are
 rejected as wrong-content.
+
+## 10.12 `blocks_v1` genomic block layout (v1.9)
+
+From v1.9 every genomic writer emits a run as a sequence of
+independently coded blocks. A block is a contiguous range of reads;
+each blob channel of a block is coded with the same codec and wire
+format as sections 10.6 to 10.11 define for a whole run, so a block's
+blob is byte-identical to what a v1.8 writer would produce for a run
+consisting of that block's reads alone. The only new structure is the
+block index. `opt_legacy_whole_channel=True` on a run restores the
+v1.8 whole-channel layout.
+
+### 10.12.1 Run-level
+
+| Attribute | Type | Meaning |
+|---|---|---|
+| `@layout` | fixed string `"blocks_v1"` | Selects this layout. Absent means the v1.8 whole-channel layout. A reader that does not know the value MUST fail with an unsupported-layout error. |
+| `@block_policy` | fixed string | Writer policy, informative, e.g. `reads=1000000,bytes=268435456`. |
+| `@read_count`, `@base_count` | int64 | Totals over the blocks written so far; updated at every flush and at close. |
+
+### 10.12.2 `blocks/index`
+
+Compound dataset, one row per block, extendable, no filter. Field
+order is part of the contract:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `read_start` | uint64 | index of the block's first read |
+| `n_reads` | uint32 | reads in the block |
+| `base_start` | uint64 | offset of the block's first base in the concatenated base space |
+| `n_bases` | uint64 | bases in the block |
+| `sequences_off`, `sequences_len` | uint64 | byte range of the block's blob inside the `sequences` dataset |
+| `qualities_off`, `qualities_len` | uint64 | same for `qualities` |
+| `read_names_off`, `read_names_len` | uint64 | same for `read_names` |
+| `cigars_off`, `cigars_len` | uint64 | same for `cigars` |
+| `mate_info_off`, `mate_info_len` | uint64 | same for `mate_info/inline_v2` |
+
+A channel a run does not carry has `_len = 0` in every row.
+
+### 10.12.3 Channel datasets
+
+Each blob channel is one extendable, unfiltered 1-D `uint8` dataset
+holding the blocks' blobs back to back, with the same `@compression`
+value and dataset name/location as the whole-channel layout:
+`sequences/refdiff_v2` (or flat `sequences` for the non-reference
+codecs), `qualities`, `read_names`, `cigars`, `mate_info/inline_v2`.
+`cigars` defaults to RANS_ORDER0 (id 4, section 10.8) under this
+layout because the v1.8 compound VL-string default has no blob form.
+`mate_info/chrom_names`, `genomic_index/chromosome_names` and the
+reference tables stay run-level; chromosome ids are assigned once per
+run in first-seen order across blocks and both name tables are
+written at close from that map.
+
+Codec consequences the codecs already tolerate: FQZCOMP_NX16_Z
+auto-tunes per block, REF_DIFF_V2 carries its slice index per block,
+NAME_TOKENIZED_V2 restarts its tokenizer per block.
+
+### 10.12.4 `genomic_index/`
+
+`lengths`, `positions`, `mapping_qualities`, `flags`,
+`chromosome_ids` keep their v1.8 element types and are extendable
+chunked datasets. `read_start`/`base_start` in the block index give
+`run[i]` its block with one binary search.
+
+### 10.12.5 Close and partial files
+
+A writer that stops before close leaves a file whose block index and
+datasets agree up to the last flushed block; readers ignore bytes past
+the last indexed block and use the index row count, not
+`@read_count`, when the two disagree.
+
+### 10.12.6 Signatures
+
+`sign_genomic_run` / `verify_genomic_run` cover the same datasets as
+for the whole-channel layout plus `blocks/index` (canonical compound
+bytes), placed after `genomic_index/*` and before `signal_channels/*`.
+
+Cross-language: Java `GenomicStreamWriter` / ObjC
+`TTIOGenomicStreamWriter` and their readers implement this section;
+the golden fixture is `python/tests/fixtures/genomic/blocks_v1_golden.tio`.
 
 ## 11. Subjects + Samples (v0.11)
 

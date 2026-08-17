@@ -99,6 +99,11 @@ class WrittenGenomicRun:
     # first-seen order from this run alone.
     chrom_name_to_id: dict[str, int] | None = None
 
+    # Write this run in the v1.8 whole-channel layout instead of the
+    # blocks_v1 default (readers up to v1.8.0 need it). Memory is then
+    # unbounded in the run size.
+    opt_legacy_whole_channel: bool = False
+
     # per-channel codec opt-in. Maps channel name to a TTI-O
     # internal codec id. Only "sequences" and "qualities" are
     # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are

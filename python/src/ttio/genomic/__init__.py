@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from .reference_import import ReferenceImport, compute_reference_md5
 from .reference_resolver import ReferenceResolver, RefMissingError
+from .stream_writer import GenomicStreamWriter
 
 __all__ = [
+    "GenomicStreamWriter",
     "ReferenceImport",
     "compute_reference_md5",
     "ReferenceResolver",
