@@ -332,14 +332,12 @@ static TTIOJcampDxEncoding _owaJcampEncoding(NSString *s)
     TTIOGenomicRun *run =
         [TTIORunSelection genomicRunIn:dataset layer:layer error:error];
     if (!run) return NO;
-    TTIOWrittenGenomicRun *written =
-        [TTIORunSelection writtenFromGenomicRun:run];
-    // Java GUI: new BamWriter(targetPath).write(w, provenance, /*sort=*/true, sink).
+    // Java GUI: new BamWriter(targetPath).write(run, provenance, /*sort=*/true, sink).
     TTIOBamWriter *w = [[TTIOBamWriter alloc] initWithPath:output];
-    return [w writeRun:written
-     provenanceRecords:dataset.provenanceRecords
-                  sort:YES
-                 error:error];
+    return [w writeReadSideRun:run
+             provenanceRecords:dataset.provenanceRecords
+                          sort:YES
+                         error:error];
 }
 @end
 
@@ -363,15 +361,13 @@ static TTIOJcampDxEncoding _owaJcampEncoding(NSString *s)
     TTIOGenomicRun *run =
         [TTIORunSelection genomicRunIn:dataset layer:layer error:error];
     if (!run) return NO;
-    TTIOWrittenGenomicRun *written =
-        [TTIORunSelection writtenFromGenomicRun:run];
     // Java GUI: new CramWriter(targetPath, reference)
-    //              .write(w, provenance, /*sort=*/true, sink).
+    //              .write(run, provenance, /*sort=*/true, sink).
     TTIOCramWriter *w =
         [[TTIOCramWriter alloc] initWithPath:output referenceFasta:reference];
-    return [w writeRun:written
-     provenanceRecords:dataset.provenanceRecords
-                  sort:YES
-                 error:error];
+    return [w writeReadSideRun:run
+             provenanceRecords:dataset.provenanceRecords
+                          sort:YES
+                         error:error];
 }
 @end

@@ -12,6 +12,7 @@
 #import "Core/TTIOProgressSink.h"
 
 @class TTIOWrittenGenomicRun;
+@class TTIOGenomicRun;
 @class TTIOProvenanceRecord;
 
 NS_ASSUME_NONNULL_BEGIN
@@ -89,6 +90,25 @@ FOUNDATION_EXPORT const NSUInteger TTIOBamWriterProgressIntervalReads;
                 sort:(BOOL)sort
             progress:(nullable TTIOProgressBlock)progress
                error:(NSError **)error;
+
+
+/**
+ * Stream a stored run out read by read (one decoded block resident for
+ * a blocks_v1 run) into the samtools pipe; the header comes from the
+ * run-level chromosome table and attributes. Java
+ * <code>BamWriter.write(GenomicRun, …)</code>.
+ */
+- (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+       provenanceRecords:(nullable NSArray<TTIOProvenanceRecord *> *)provenance
+                    sort:(BOOL)sort
+                progress:(nullable TTIOProgressBlock)progress
+                   error:(NSError **)error;
+
+/** As above without progress. */
+- (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+       provenanceRecords:(nullable NSArray<TTIOProvenanceRecord *> *)provenance
+                    sort:(BOOL)sort
+                   error:(NSError **)error;
 
 @end
 

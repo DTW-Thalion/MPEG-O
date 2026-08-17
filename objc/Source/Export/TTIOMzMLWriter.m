@@ -45,11 +45,83 @@ const NSUInteger TTIOMzMLWriterProgressIntervalSpectra = 100;
  * byte offsets tracked during emission match the final file layout
  * exactly. The mzML spec requires UTF-8.
  */
-static void appendUTF8(NSMutableData *buf, NSString *s)
+/* Where the document goes: an in-memory buffer for +dataForDataset:…,
+ * a file for +writeDataset:toPath:…, both counting the bytes written
+ * so the index offsets are the file offsets. */
+@interface TTIOMzMLOut : NSObject
+@property (nonatomic, readonly) NSUInteger length;
+@property (nonatomic, readonly, strong) NSMutableData *buffer;
+@property (nonatomic, readonly, strong) NSError *writeError;
+- (instancetype)initWithBuffer;
+- (instancetype)initWithFilePath:(NSString *)path error:(NSError **)error;
+- (void)appendBytes:(const void *)bytes length:(NSUInteger)n;
+- (BOOL)finish:(NSError **)error;
+@end
+
+@implementation TTIOMzMLOut {
+    FILE *_fp;
+    NSString *_path;
+    NSUInteger _length;
+}
+- (instancetype)initWithBuffer
+{
+    self = [super init];
+    if (self) _buffer = [NSMutableData data];
+    return self;
+}
+- (instancetype)initWithFilePath:(NSString *)path error:(NSError **)error
+{
+    self = [super init];
+    if (self) {
+        _path = [path copy];
+        _fp = fopen([path fileSystemRepresentation], "wb");
+        if (!_fp) {
+            if (error) *error = [NSError errorWithDomain:@"TTIOMzMLWriter" code:3
+                userInfo:@{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat:@"could not open %@ for writing", path]}];
+            return nil;
+        }
+        setvbuf(_fp, NULL, _IOFBF, 1 << 20);
+    }
+    return self;
+}
+- (NSUInteger)length { return _length; }
+- (void)appendBytes:(const void *)bytes length:(NSUInteger)n
+{
+    if (n == 0) return;
+    if (_buffer) {
+        [_buffer appendBytes:bytes length:n];
+    } else if (_fp && !_writeError) {
+        if (fwrite(bytes, 1, n, _fp) != n) {
+            _writeError = [NSError errorWithDomain:@"TTIOMzMLWriter" code:4
+                userInfo:@{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat:@"short write to %@", _path]}];
+        }
+    }
+    _length += n;
+}
+- (BOOL)finish:(NSError **)error
+{
+    if (_fp) {
+        int rc = fclose(_fp);
+        _fp = NULL;
+        if (rc != 0 && !_writeError) {
+            _writeError = [NSError errorWithDomain:@"TTIOMzMLWriter" code:4
+                userInfo:@{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat:@"could not close %@", _path]}];
+        }
+    }
+    if (_writeError) { if (error) *error = _writeError; return NO; }
+    return YES;
+}
+- (void)dealloc { if (_fp) fclose(_fp); }
+@end
+
+static void appendUTF8(TTIOMzMLOut *out, NSString *s)
 {
     const char *c = [s UTF8String];
     if (!c) return;
-    [buf appendBytes:c length:strlen(c)];
+    [out appendBytes:c length:strlen(c)];
 }
 
 /** Escape the five XML special characters. mzML element text is rare
@@ -114,13 +186,25 @@ static NSString *precisionName(BOOL useFloat32)
                   progress:(TTIOProgressBlock)progress
                      error:(NSError **)error
 {
+    TTIOMzMLOut *out = [[TTIOMzMLOut alloc] initWithBuffer];
+    if (![self emitDataset:dataset zlibCompression:zlibCompression progress:progress
+                       out:out error:error]) return nil;
+    return out.buffer;
+}
+
++ (BOOL)emitDataset:(TTIOSpectralDataset *)dataset
+    zlibCompression:(BOOL)zlibCompression
+           progress:(TTIOProgressBlock)progress
+                out:(TTIOMzMLOut *)body
+              error:(NSError **)error
+{
     if (progress == nil) progress = TTIOProgressDiscard();
     if (!dataset) {
         if (error) *error = [NSError errorWithDomain:@"TTIOMzMLWriter"
                                                   code:1
                                               userInfo:@{NSLocalizedDescriptionKey:
                                                           @"nil dataset"}];
-        return nil;
+        return NO;
     }
 
     // Pick the first run whose spectrumClassName is TTIOMassSpectrum.
@@ -142,7 +226,7 @@ static NSString *precisionName(BOOL useFloat32)
                                                   code:2
                                               userInfo:@{NSLocalizedDescriptionKey:
                                                           @"no TTIOMassSpectrum run to export"}];
-        return nil;
+        return NO;
     }
 
     NSUInteger nSpectra = chosenRun.spectrumIndex.count;
@@ -150,7 +234,6 @@ static NSString *precisionName(BOOL useFloat32)
     // ------------------------------------------------------------------
     // Header / prelude — everything before <spectrumList>.
     // ------------------------------------------------------------------
-    NSMutableData *body = [NSMutableData data];
     NSString *runId = chosenName ?: @"run";
 
     appendUTF8(body, @"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
@@ -531,7 +614,7 @@ static NSString *precisionName(BOOL useFloat32)
     appendUTF8(body, @"  <fileChecksum>0</fileChecksum>\n");
     appendUTF8(body, @"</indexedmzML>\n");
 
-    return body;
+    return YES;
 }
 
 + (BOOL)writeDataset:(TTIOSpectralDataset *)dataset
@@ -552,12 +635,21 @@ static NSString *precisionName(BOOL useFloat32)
             progress:(TTIOProgressBlock)progress
                error:(NSError **)error
 {
-    NSData *data = [self dataForDataset:dataset
-                         zlibCompression:zlibCompression
-                                progress:progress
-                                   error:error];
-    if (!data) return NO;
-    return [data writeToFile:path options:NSDataWritingAtomic error:error];
+    // Straight to the file: each spectrum is formatted and written as
+    // it is read, so the document is never held whole in memory.
+    NSString *tmp = [path stringByAppendingString:@".part"];
+    TTIOMzMLOut *out = [[TTIOMzMLOut alloc] initWithFilePath:tmp error:error];
+    if (!out) return NO;
+    BOOL ok = [self emitDataset:dataset zlibCompression:zlibCompression progress:progress
+                            out:out error:error];
+    ok = [out finish:error] && ok;
+    if (!ok) {
+        [[NSFileManager defaultManager] removeItemAtPath:tmp error:NULL];
+        return NO;
+    }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm removeItemAtPath:path error:NULL];
+    return [fm moveItemAtPath:tmp toPath:path error:error];
 }
 
 @end

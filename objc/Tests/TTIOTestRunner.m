@@ -128,6 +128,7 @@ extern void testGenomicBlocksReader(void);
 extern void testFloatDeltaZstdBlocks(void);
 extern void testSpectralStreamWriter(void);
 extern void testStreamingImporters(void);
+extern void testStreamingExporters(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
@@ -662,6 +663,10 @@ int main(int argc, const char *argv[])
         START_SET("Importers: streaming BAM, FASTQ, mzML")
             testStreamingImporters();
         END_SET("Importers: streaming BAM, FASTQ, mzML")
+
+        START_SET("Exporters: streaming BAM, FASTQ, mzML")
+            testStreamingExporters();
+        END_SET("Exporters: streaming BAM, FASTQ, mzML")
 
         START_SET("C2b: HDF5CompoundType coverage")
             testC2bHDF5CompoundType();

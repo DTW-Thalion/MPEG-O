@@ -120,6 +120,7 @@ TTIOTests_OBJC_FILES = \
 	TestFloatDeltaZstdBlocks.m \
 	TestSpectralStreamWriter.m \
 	TestStreamingImporters.m \
+	TestStreamingExporters.m \
 	TestC2bHDF5CompoundType.m \
 	TestC3cCanonicalBytes.m \
 	TestPhase12RunProtocol.m \
