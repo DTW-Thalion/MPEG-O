@@ -66,7 +66,7 @@ def _genomic_runs_available() -> bool:
 def test_round_trip_preserves_accessor(spec, tmp_path: Path) -> None:
     """Round-trip the isolation fixture for ``spec`` through the
     transport codec and assert the per-accessor comparator passes."""
-    if spec.name == "GENOMIC_RUNS" and not _genomic_runs_available():
+    if spec.name in ("GENOMIC_RUNS", "GENOMIC_RUNS_BLOCKS") and not _genomic_runs_available():
         pytest.skip(
             "GENOMIC_RUNS fixture requires libttio_rans native shim "
             "(NAME_TOKENIZED_V2 codec). Set TTIO_RANS_LIB_PATH or "

@@ -13,6 +13,7 @@ import global.thalion.ttio.Sample;
 import global.thalion.ttio.SpectralDataset;
 import global.thalion.ttio.Spectrum;
 import global.thalion.ttio.Subject;
+import global.thalion.ttio.genomics.AlignedRead;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.ReferenceImport;
 
@@ -177,6 +178,45 @@ public enum AccessorSpec {
                     throw new AssertionError("acquisitionMode mismatch for run "
                         + name + ": " + ra.acquisitionMode() + " vs "
                         + rb.acquisitionMode());
+                }
+            }
+        }
+    },
+
+    /** The GENOMIC_RUNS run in the {@code blocks_v1} layout; compared
+     *  read by read, whichever layout either side was written in. */
+    GENOMIC_RUNS_BLOCKS {
+        @Override public Path buildFixture(Path tmp) throws Exception {
+            return FixtureBuilder.buildGenomicRunsBlocks(tmp.resolve("genomic_blocks.tio"));
+        }
+
+        @Override public void assertContentEquals(SpectralDataset a, SpectralDataset b) {
+            GENOMIC_RUNS.assertContentEquals(a, b);
+            Map<String, GenomicRun> ga = a.genomicRuns();
+            Map<String, GenomicRun> gb = b.genomicRuns();
+            for (String name : ga.keySet()) {
+                java.util.Iterator<AlignedRead> ia = ga.get(name).iterReads();
+                java.util.Iterator<AlignedRead> ib = gb.get(name).iterReads();
+                int i = 0;
+                while (ia.hasNext() && ib.hasNext()) {
+                    AlignedRead ra = ia.next();
+                    AlignedRead rb = ib.next();
+                    boolean same = Objects.equals(ra.readName(), rb.readName())
+                        && Objects.equals(ra.chromosome(), rb.chromosome())
+                        && ra.position() == rb.position()
+                        && ra.mappingQuality() == rb.mappingQuality()
+                        && Objects.equals(ra.cigar(), rb.cigar())
+                        && Objects.equals(ra.sequence(), rb.sequence())
+                        && Arrays.equals(ra.qualities(), rb.qualities())
+                        && ra.flags() == rb.flags()
+                        && Objects.equals(ra.mateChromosome(), rb.mateChromosome())
+                        && ra.matePosition() == rb.matePosition()
+                        && ra.templateLength() == rb.templateLength();
+                    if (!same) {
+                        throw new AssertionError("read " + i + " of run " + name
+                            + " differs: " + ra + " vs " + rb);
+                    }
+                    i++;
                 }
             }
         }

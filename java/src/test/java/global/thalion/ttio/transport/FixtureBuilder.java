@@ -399,9 +399,27 @@ public final class FixtureBuilder {
      * @return {@code target}, unchanged, for fluent use in tests
      */
     public static Path buildGenomicRunsOnly(Path target) throws Exception {
-        WrittenGenomicRun run = synthGenomicRun();
+        WrittenGenomicRun run = synthGenomicRun().withOptLegacyWholeChannel(true);
         SpectralDataset.create(target.toString(),
             "genomic_runs_only", "",
+            List.of(), List.of(run),
+            List.of(), List.of(), List.of(),
+            FeatureFlags.defaultCurrent()).close();
+        return target;
+    }
+
+    /**
+     * The GENOMIC_RUNS fixture written in the {@code blocks_v1} layout
+     * (the writer default): three chromosomes, three blocks. Mirrors
+     * Python's {@code build_genomic_runs_blocks}.
+     *
+     * @param target file path to write
+     * @return {@code target}, unchanged, for fluent use in tests
+     */
+    public static Path buildGenomicRunsBlocks(Path target) throws Exception {
+        WrittenGenomicRun run = synthGenomicRun();
+        SpectralDataset.create(target.toString(),
+            "genomic_runs_blocks", "",
             List.of(), List.of(run),
             List.of(), List.of(), List.of(),
             FeatureFlags.defaultCurrent()).close();
