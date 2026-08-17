@@ -6,6 +6,7 @@
 package global.thalion.ttio;
 
 import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.GenomicBlocks;
 import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.GenomicWriteContext;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
@@ -72,5 +73,69 @@ class GenomicBlocksTest {
                 .openDataset("chromosome_names").readRows();
         assertEquals("chrZ", names.get(0).get("name").toString());
         MemoryProvider.discardStore("memory://gb-shared");
+    }
+
+    @Test
+    void sliceAndConcatAreInverse() throws Exception {
+        WrittenGenomicRun run = m87();
+        WrittenGenomicRun a = GenomicBlocks.sliceRun(run, 0, 4);
+        WrittenGenomicRun b = GenomicBlocks.sliceRun(run, 4, run.readCount());
+        assertEquals(4, a.readCount());
+        assertEquals(0L, a.offsets()[0]);
+        assertEquals(0L, b.offsets()[0]);
+        assertEquals(run.lengths()[4], b.lengths()[0]);
+        WrittenGenomicRun back = GenomicBlocks.concatRuns(java.util.List.of(a, b));
+        assertArrayEquals(run.sequences(), back.sequences());
+        assertArrayEquals(run.qualities(), back.qualities());
+        assertArrayEquals(run.offsets(), back.offsets());
+        assertArrayEquals(run.lengths(), back.lengths());
+        assertEquals(run.readNames(), back.readNames());
+        assertEquals(run.mateChromosomes(), back.mateChromosomes());
+        assertEquals(run.chromosomes(), back.chromosomes());
+    }
+
+    @Test
+    void encodeBlockMatchesTheV18WriterBytes() throws Exception {
+        WrittenGenomicRun run = m87();
+        String chr = run.chromosomes().get(0);
+        int stop = 0;
+        while (stop < run.readCount() && run.chromosomes().get(stop).equals(chr)) stop++;
+        WrittenGenomicRun block = GenomicBlocks.sliceRun(run, 0, stop);
+        GenomicBlocks.BlockBlobs blobs = GenomicBlocks.encodeBlock(block,
+                new GenomicWriteContext(new LinkedHashMap<>(), null));
+        assertEquals(stop, blobs.nReads());
+        assertEquals(Enums.Compression.RANS_ORDER0.ordinal(), blobs.codecs().get("cigars"));
+        assertEquals(Enums.Compression.FQZCOMP_NX16_Z.ordinal(), blobs.codecs().get("qualities"));
+        assertEquals(Enums.Compression.RANS_ORDER1.ordinal(), blobs.codecs().get("sequences"));
+        assertEquals(Enums.Compression.NAME_TOKENIZED_V2.ordinal(), blobs.codecs().get("read_names"));
+        assertEquals(Enums.Compression.MATE_INLINE_V2.ordinal(), blobs.codecs().get("mate_info"));
+
+        Map<String, Enums.Compression> ov = new LinkedHashMap<>();
+        ov.put("cigars", Enums.Compression.RANS_ORDER0);
+        ov.put("qualities", Enums.Compression.FQZCOMP_NX16_Z);
+        ov.put("sequences", Enums.Compression.RANS_ORDER1);
+        WrittenGenomicRun same = block.withSignalCodecOverrides(ov);
+        StorageGroup root = memRoot("memory://gb-cmp");
+        SpectralDatasetGenomicWriter.writeGenomicRunSubtree(root, "r", same, GenomicWriteContext.none());
+        StorageGroup sc = root.openGroup("r").openGroup("signal_channels");
+        assertArrayEquals((byte[]) sc.openDataset("qualities").readAll(), blobs.blobs().get("qualities"));
+        assertArrayEquals((byte[]) sc.openDataset("sequences").readAll(), blobs.blobs().get("sequences"));
+        assertArrayEquals((byte[]) sc.openDataset("cigars").readAll(), blobs.blobs().get("cigars"));
+        assertArrayEquals((byte[]) sc.openDataset("read_names").readAll(), blobs.blobs().get("read_names"));
+        assertArrayEquals((byte[]) sc.openGroup("mate_info").openDataset("inline_v2").readAll(),
+                blobs.blobs().get("mate_info"));
+        MemoryProvider.discardStore("memory://gb-cmp");
+    }
+
+    @Test
+    void zeroLengthReadForcesRansQualities() throws Exception {
+        WrittenGenomicRun run = m87();
+        int z = -1;
+        for (int i = 0; i < run.readCount(); i++) if (run.lengths()[i] == 0) { z = i; break; }
+        org.junit.jupiter.api.Assumptions.assumeTrue(z >= 0, "m87 has a SEQ '*' read");
+        WrittenGenomicRun block = GenomicBlocks.sliceRun(run, z, z + 1);
+        GenomicBlocks.BlockBlobs blobs = GenomicBlocks.encodeBlock(block,
+                new GenomicWriteContext(new LinkedHashMap<>(), null));
+        assertEquals(Enums.Compression.RANS_ORDER0.ordinal(), blobs.codecs().get("qualities"));
     }
 }
