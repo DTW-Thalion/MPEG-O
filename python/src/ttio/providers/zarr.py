@@ -98,6 +98,9 @@ def _schema_to_json(fields: list[CompoundField]) -> str:
     return json.dumps([{"name": f.name, "kind": f.kind.value} for f in fields])
 
 
+_EXTENDABLE_ATTR = "_ttio_extendable"
+
+
 def _schema_from_json(blob: str) -> tuple[CompoundField, ...]:
     return tuple(
         CompoundField(name=entry["name"], kind=CompoundFieldKind(entry["kind"]))
@@ -124,7 +127,8 @@ def _rows_to_json(rows: list[dict[str, Any]],
                     out[f.name] = str(v)
             elif f.kind == CompoundFieldKind.FLOAT64:
                 out[f.name] = float(v) if v is not None else 0.0
-            elif f.kind in (CompoundFieldKind.INT64, CompoundFieldKind.UINT32):
+            elif f.kind in (CompoundFieldKind.INT64, CompoundFieldKind.UINT32,
+                            CompoundFieldKind.UINT64):
                 out[f.name] = int(v) if v is not None else 0
             elif f.kind == CompoundFieldKind.VL_BYTES:
                 # v1.0 parity gap: Zarr compound is JSON-backed, so
@@ -167,6 +171,28 @@ class _ZarrPrimitiveDataset(StorageDataset):
         self._array = array
         self._parent = parent  # zarr.Group; kept for attribute writes
         self._materialized: np.ndarray | None = None
+
+    @property
+    def extendable(self) -> bool:
+        return bool(self._array.attrs.get(_EXTENDABLE_ATTR, False))
+
+    def append(self, data: Any) -> None:
+        if not self.extendable:
+            raise TypeError(f"dataset '{self._name}' is not extendable")
+        arr = np.asarray(data)
+        if arr.dtype != self._array.dtype:
+            arr = arr.astype(self._array.dtype)
+        if arr.shape[0] == 0:
+            return
+        self._array.append(arr, axis=0)
+        self._materialized = None
+
+    def write_slice(self, offset: int, data: Any) -> None:
+        arr = np.asarray(data)
+        if arr.dtype != self._array.dtype:
+            arr = arr.astype(self._array.dtype)
+        self._array[offset:offset + arr.shape[0]] = arr
+        self._materialized = None
 
     @property
     def name(self) -> str:
@@ -283,6 +309,26 @@ class _ZarrCompoundDataset(StorageDataset):
         self._group.attrs[_COMPOUND_COUNT_ATTR] = len(rows)
         self._count = len(rows)
 
+    @property
+    def extendable(self) -> bool:
+        return bool(self._group.attrs.get(_EXTENDABLE_ATTR, False))
+
+    def append(self, data: Any) -> None:
+        if not self.extendable:
+            raise TypeError(f"dataset '{self._name}' is not extendable")
+        if isinstance(data, np.ndarray) and data.dtype.names is not None:
+            new_rows = [{name: _jsonable(row[name]) for name in data.dtype.names}
+                        for row in data]
+        else:
+            new_rows = [dict(r) for r in data]
+        if not new_rows:
+            return
+        rows = _rows_from_json(self._group.attrs.get(_COMPOUND_ROWS_ATTR, "[]"))
+        rows.extend(new_rows)
+        self._group.attrs[_COMPOUND_ROWS_ATTR] = _rows_to_json(rows, self._fields)
+        self._group.attrs[_COMPOUND_COUNT_ATTR] = len(rows)
+        self._count = len(rows)
+
     def has_attribute(self, name: str) -> bool:
         return name in self._group.attrs and not name.startswith("_ttio_")
 
@@ -371,9 +417,11 @@ class _ZarrGroup(StorageGroup):
                        length: int, *,
                        chunk_size: int = 0,
                        compression: Compression = Compression.NONE,
-                       compression_level: int = 6) -> StorageDataset:
+                       compression_level: int = 6,
+                       extendable: bool = False) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
+        self._check_extendable(extendable, chunk_size)
         # zarr 3.x rejects chunk dims of 0 — clamp to >= 1 so empty
         # datasets (length == 0) still create cleanly.
         if chunk_size > 0:
@@ -388,13 +436,16 @@ class _ZarrGroup(StorageGroup):
             compressors=_compressors_for(compression, compression_level),
             overwrite=False,
         )
+        if extendable:
+            arr.attrs[_EXTENDABLE_ATTR] = True
         return _ZarrPrimitiveDataset(name, arr, self._group)
 
     def create_dataset_nd(self, name: str, precision: Precision,
                            shape: tuple[int, ...], *,
                            chunks: tuple[int, ...] | None = None,
                            compression: Compression = Compression.NONE,
-                           compression_level: int = 6) -> StorageDataset:
+                           compression_level: int = 6,
+                           extendable: bool = False) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         # Same zero-chunk clamp as create_dataset.
@@ -410,14 +461,20 @@ class _ZarrGroup(StorageGroup):
             compressors=_compressors_for(compression, compression_level),
             overwrite=False,
         )
+        if extendable:
+            arr.attrs[_EXTENDABLE_ATTR] = True
         return _ZarrPrimitiveDataset(name, arr, self._group)
 
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
-                                 count: int) -> StorageDataset:
+                                 count: int, *,
+                                 extendable: bool = False,
+                                 chunk_rows: int = 1024) -> StorageDataset:
         if name in self._group:
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         g = self._group.create_group(name)
+        if extendable:
+            g.attrs[_EXTENDABLE_ATTR] = True
         g.attrs[_COMPOUND_KIND_ATTR] = _COMPOUND_KIND_VALUE
         g.attrs[_COMPOUND_SCHEMA_ATTR] = _schema_to_json(list(fields))
         g.attrs[_COMPOUND_COUNT_ATTR] = count

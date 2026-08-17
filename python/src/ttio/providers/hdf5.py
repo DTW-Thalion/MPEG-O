@@ -59,6 +59,8 @@ def _fields_from_dtype(dt: np.dtype) -> tuple[CompoundField, ...] | None:
             kind = CompoundFieldKind.VL_STRING
         elif sub.str == "<u4":
             kind = CompoundFieldKind.UINT32
+        elif sub.str == "<u8":
+            kind = CompoundFieldKind.UINT64
         elif sub.str == "<i8":
             kind = CompoundFieldKind.INT64
         elif sub.str == "<f8":
@@ -78,6 +80,8 @@ def _compound_dtype(fields: list[CompoundField]) -> np.dtype:
     for f in fields:
         if f.kind == CompoundFieldKind.UINT32:
             items.append((f.name, "<u4"))
+        elif f.kind == CompoundFieldKind.UINT64:
+            items.append((f.name, "<u8"))
         elif f.kind == CompoundFieldKind.INT64:
             items.append((f.name, "<i8"))
         elif f.kind == CompoundFieldKind.FLOAT64:
@@ -204,6 +208,11 @@ class _Dataset(StorageDataset):
         # previously handled only on Memory + SQLite + Zarr; HDF5
         # needed list-of-dicts support too so the per-AU encryption
         # writer could round-trip through the provider abstraction.
+        self._ds[...] = self._coerce(data)
+
+    def _coerce(self, data: np.ndarray | list) -> Any:
+        """Turn a list of dicts into a structured array for compound
+        datasets; pass everything else through."""
         if (self._ds.dtype.fields is not None
                 and isinstance(data, list)):
             dt = self._ds.dtype
@@ -219,9 +228,28 @@ class _Dataset(StorageDataset):
                             )
                         else:
                             arr[i][fname] = val
-            self._ds[...] = arr
+            return arr
+        return data
+
+    @property
+    def extendable(self) -> bool:
+        ms = self._ds.maxshape
+        return bool(ms) and ms[0] is None
+
+    def append(self, data: np.ndarray | list) -> None:
+        if not self.extendable:
+            raise TypeError(f"dataset '{self.name}' is not extendable")
+        arr = self._coerce(data)
+        n = len(arr)
+        if n == 0:
             return
-        self._ds[...] = data
+        cur = self._ds.shape[0]
+        self._ds.resize(cur + n, axis=0)
+        self._ds[cur:cur + n] = arr
+
+    def write_slice(self, offset: int, data: Any) -> None:
+        arr = self._coerce(data)
+        self._ds[offset:offset + len(arr)] = arr
 
     def has_attribute(self, name: str) -> bool:
         """Return ``True`` when an attribute with this name exists.
@@ -415,7 +443,8 @@ class _Group(StorageGroup):
                        length: int, *,
                        chunk_size: int = 0,
                        compression: Compression = Compression.NONE,
-                       compression_level: int = 6) -> StorageDataset:
+                       compression_level: int = 6,
+                       extendable: bool = False) -> StorageDataset:
         """Create a 1-D primitive dataset under this group.
 
         Parameters
@@ -448,15 +477,18 @@ class _Group(StorageGroup):
         StorageDataset
             Adapter wrapping the new h5py dataset.
         """
+        self._check_extendable(extendable, chunk_size)
         kwargs: dict[str, Any] = {
             "shape": (length,),
             "dtype": precision.numpy_dtype(),
         }
-        if length > 0 and chunk_size > 0:
+        if extendable:
+            kwargs["maxshape"] = (None,)
+        if chunk_size > 0 and (length > 0 or extendable):
             # HDF5 requires chunk shape <= dataset shape in every dimension.
             # Skip chunking (and compression, which requires chunking) for
             # zero-length datasets so empty-run writes don't raise ValueError.
-            kwargs["chunks"] = (min(chunk_size, length),)
+            kwargs["chunks"] = (chunk_size if extendable else min(chunk_size, length),)
             if compression == Compression.ZLIB:
                 kwargs["compression"] = "gzip"
                 kwargs["compression_opts"] = compression_level
@@ -524,7 +556,9 @@ class _Group(StorageGroup):
 
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
-                                 count: int) -> StorageDataset:
+                                 count: int, *,
+                                 extendable: bool = False,
+                                 chunk_rows: int = 1024) -> StorageDataset:
         """Create a compound-record dataset under this group.
 
         Compound datasets carry one record per row, with each field
@@ -551,7 +585,11 @@ class _Group(StorageGroup):
             Adapter wrapping the new compound h5py dataset.
         """
         dt = _compound_dtype(fields)
-        ds = self._grp.create_dataset(name, shape=(count,), dtype=dt)
+        if extendable:
+            ds = self._grp.create_dataset(name, shape=(count,), dtype=dt,
+                                          maxshape=(None,), chunks=(chunk_rows,))
+        else:
+            ds = self._grp.create_dataset(name, shape=(count,), dtype=dt)
         return _Dataset(ds)
 
     def has_attribute(self, name: str) -> bool:

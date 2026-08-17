@@ -335,6 +335,8 @@ def write_compound_dataset(
             elif dt is not None:
                 if dt.str == "<u4":
                     kind = CompoundFieldKind.UINT32
+                elif dt.str == "<u8":
+                    kind = CompoundFieldKind.UINT64
                 elif dt.str == "<i8":
                     kind = CompoundFieldKind.INT64
                 elif dt.str == "<f8":

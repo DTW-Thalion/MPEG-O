@@ -135,8 +135,27 @@ def _decode_attr(value_type: str, value: str) -> Any:
     return value
 
 
+def _ensure_extendable_column(conn: sqlite3.Connection) -> None:
+    """Databases created before extendable datasets lack the column;
+    add it in place (default 0 keeps every existing dataset fixed)."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(datasets)").fetchall()}
+    if "extendable" not in cols:
+        conn.execute("ALTER TABLE datasets ADD COLUMN extendable INTEGER NOT NULL DEFAULT 0")
+        conn.commit()
+
+
 def _fields_to_json(fields: list[CompoundField]) -> str:
     return json.dumps([{"name": f.name, "kind": f.kind.value} for f in fields])
+
+
+def _rows_as_dicts(data: Any) -> list[dict]:
+    if isinstance(data, np.ndarray) and data.dtype.names is not None:
+        out = []
+        for row in data:
+            out.append({n: (row[n].item() if hasattr(row[n], "item") else row[n])
+                        for n in data.dtype.names})
+        return out
+    return [dict(r) for r in data]
 
 
 def _fields_from_json(s: str) -> tuple[CompoundField, ...]:
@@ -162,7 +181,8 @@ class SqliteDataset(StorageDataset):
                  name: str, precision: Precision | None,
                  shape: tuple[int, ...],
                  fields: tuple[CompoundField, ...] | None,
-                 read_only: bool = False) -> None:
+                 read_only: bool = False,
+                 extendable: bool = False) -> None:
         self._conn = conn
         self._dataset_id = dataset_id
         self._name = name
@@ -170,6 +190,56 @@ class SqliteDataset(StorageDataset):
         self._shape = shape
         self._fields = fields
         self._read_only = read_only
+        self._extendable = extendable
+
+    @property
+    def extendable(self) -> bool:
+        return self._extendable
+
+    def append(self, data: Any) -> None:
+        """Append rows/elements. SQLite keeps one BLOB (or one JSON
+        array) per dataset, so append is read-modify-write; the SQLite
+        provider is not the bulk-streaming target."""
+        if not self._extendable:
+            raise TypeError(f"dataset '{self._name}' is not extendable")
+        if self._read_only:
+            raise IOError("provider opened in read-only mode")
+        if self._fields is not None:
+            new_rows = _rows_as_dicts(data)
+            if not new_rows:
+                return
+            rows = list(self.read())
+            rows.extend(new_rows)
+            self._conn.execute(
+                "UPDATE datasets SET compound_rows = ?, shape_json = ? WHERE id = ?",
+                (json.dumps(rows), json.dumps([len(rows)]), self._dataset_id),
+            )
+            self._shape = (len(rows),)
+        else:
+            arr = np.asarray(data)
+            if arr.shape[0] == 0:
+                return
+            cur = self.read()
+            new = np.concatenate([cur, arr.astype(cur.dtype, copy=False)]) if len(cur) else np.array(arr, copy=True)
+            blob = _pack(new, self._precision)  # type: ignore[arg-type]
+            self._conn.execute(
+                "UPDATE datasets SET data = ?, shape_json = ? WHERE id = ?",
+                (blob, json.dumps(list(new.shape)), self._dataset_id),
+            )
+            self._shape = tuple(new.shape)
+        self._conn.commit()
+
+    def write_slice(self, offset: int, data: Any) -> None:
+        if self._read_only:
+            raise IOError("provider opened in read-only mode")
+        arr = np.asarray(data)
+        cur = np.array(self.read(), copy=True)
+        cur[offset:offset + arr.shape[0]] = arr
+        self._conn.execute(
+            "UPDATE datasets SET data = ? WHERE id = ?",
+            (_pack(cur, self._precision), self._dataset_id),  # type: ignore[arg-type]
+        )
+        self._conn.commit()
 
     # ── Type and shape ──────────────────────────────────────────────────
 
@@ -408,7 +478,7 @@ class SqliteGroup(StorageGroup):
 
     def open_dataset(self, name: str) -> SqliteDataset:
         row = self._conn.execute(
-            "SELECT id, kind, precision, shape_json, compound_fields "
+            "SELECT id, kind, precision, shape_json, compound_fields, extendable "
             "FROM datasets WHERE group_id = ? AND name = ?",
             (self._group_id, name),
         ).fetchone()
@@ -416,21 +486,23 @@ class SqliteGroup(StorageGroup):
             raise KeyError(
                 f"dataset '{name}' not found in '{self._name}'"
             )
-        ds_id, kind, prec_name, shape_json, fields_json = row
+        ds_id, kind, prec_name, shape_json, fields_json, ext = row
         precision = _PRECISION_NAME[prec_name] if prec_name else None
         shape = tuple(json.loads(shape_json))
         fields = _fields_from_json(fields_json) if fields_json else None
         return SqliteDataset(self._conn, ds_id, name, precision, shape,
-                             fields, self._read_only)
+                             fields, self._read_only, extendable=bool(ext))
 
     def create_dataset(self, name: str, precision: Precision,
                        length: int, *,
                        chunk_size: int = 0,
                        compression: Compression = Compression.NONE,
-                       compression_level: int = 6) -> SqliteDataset:
-        # chunk_size / compression are silently accepted but ignored —
-        # SQLite has no native chunk/filter pipeline.
-        del chunk_size, compression, compression_level
+                       compression_level: int = 6,
+                       extendable: bool = False) -> SqliteDataset:
+        # compression is silently accepted but ignored — SQLite has no
+        # native chunk/filter pipeline. chunk_size only gates extendable.
+        del compression, compression_level
+        self._check_extendable(extendable, chunk_size)
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         if self._read_only:
@@ -438,22 +510,26 @@ class SqliteGroup(StorageGroup):
         shape_json = json.dumps([length])
         cur = self._conn.execute(
             "INSERT INTO datasets "
-            "(group_id, name, kind, precision, shape_json, data) "
-            "VALUES (?, ?, 'primitive', ?, ?, NULL)",
-            (self._group_id, name, precision.name, shape_json),
+            "(group_id, name, kind, precision, shape_json, data, extendable) "
+            "VALUES (?, ?, 'primitive', ?, ?, NULL, ?)",
+            (self._group_id, name, precision.name, shape_json, int(extendable)),
         )
         self._conn.commit()
         return SqliteDataset(self._conn, cur.lastrowid, name, precision,
-                             (length,), None, self._read_only)
+                             (length,), None, self._read_only, extendable=extendable)
 
     def create_dataset_nd(self, name: str, precision: Precision,
                            shape: tuple[int, ...], *,
                            chunks: tuple[int, ...] | None = None,
                            compression: Compression = Compression.NONE,
-                           compression_level: int = 6) -> SqliteDataset:
-        del chunks, compression, compression_level
+                           compression_level: int = 6,
+                           extendable: bool = False) -> SqliteDataset:
+        del compression, compression_level
         if len(shape) == 1:
-            return self.create_dataset(name, precision, shape[0])
+            return self.create_dataset(name, precision, shape[0],
+                                       chunk_size=(chunks[0] if chunks else 0),
+                                       extendable=extendable)
+        del chunks
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         if self._read_only:
@@ -471,7 +547,9 @@ class SqliteGroup(StorageGroup):
 
     def create_compound_dataset(self, name: str,
                                  fields: list[CompoundField],
-                                 count: int) -> SqliteDataset:
+                                 count: int, *,
+                                 extendable: bool = False,
+                                 chunk_rows: int = 1024) -> SqliteDataset:
         if self.has_child(name):
             raise ValueError(f"'{name}' already exists in '{self._name}'")
         if self._read_only:
@@ -492,13 +570,14 @@ class SqliteGroup(StorageGroup):
         cur = self._conn.execute(
             "INSERT INTO datasets "
             "(group_id, name, kind, precision, shape_json, "
-            " compound_fields, compound_rows) "
-            "VALUES (?, ?, 'compound', NULL, ?, ?, '[]')",
-            (self._group_id, name, shape_json, fields_json),
+            " compound_fields, compound_rows, extendable) "
+            "VALUES (?, ?, 'compound', NULL, ?, ?, '[]', ?)",
+            (self._group_id, name, shape_json, fields_json, int(extendable)),
         )
         self._conn.commit()
         return SqliteDataset(self._conn, cur.lastrowid, name, None,
-                             (count,), tuple(fields), self._read_only)
+                             (count,), tuple(fields), self._read_only,
+                             extendable=extendable)
 
     # ── Attributes ──────────────────────────────────────────────────────
 
@@ -762,6 +841,7 @@ def _init_db(conn: sqlite3.Connection) -> None:
     """Apply DDL and ensure root group exists."""
     conn.executescript(_DDL)
     conn.executescript(_META_INSERTS)
+    _ensure_extendable_column(conn)
     # Ensure root group
     conn.execute(
         "INSERT OR IGNORE INTO groups (parent_id, name) VALUES (NULL, '/')"
