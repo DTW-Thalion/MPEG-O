@@ -1,3 +1,7 @@
+# tools/perf/compression_suite/manifest.yaml
+# Corpora for the compression benchmark suite. sha256 is filled by
+# `suite.py fetch` on first fetch and enforced afterwards. Sizes and
+# accessions for the fetched corpora were recorded by tools/discover.py.
 corpora:
 - id: na12878_chr22_lowcov
   tier: aligned

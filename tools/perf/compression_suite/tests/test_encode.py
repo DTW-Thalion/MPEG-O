@@ -9,11 +9,22 @@ from stages import prepare, encode  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[4]
 BAM = REPO / "python/tests/fixtures/genomic/m87_test.bam"
-REF = REPO / "python/tests/fixtures/genomic/blocks_v1_golden_ref.fa"
+REF_SRC = REPO / "python/tests/fixtures/genomic/blocks_v1_golden_ref.fa"
+
+
+@pytest.fixture
+def REF(tmp_path):
+    """genie writes <stem>.fai and <stem>.sha256 beside the reference it
+    is given, so tests use a scratch copy of the repo fixture."""
+    import shutil
+    dst = tmp_path / "ref" / REF_SRC.name
+    dst.parent.mkdir()
+    shutil.copyfile(REF_SRC, dst)
+    return dst
 pytestmark = pytest.mark.skipif(shutil.which("samtools") is None, reason="samtools missing")
 
 
-def test_encode_writes_verified_results_and_resumes(tmp_path, monkeypatch):
+def test_encode_writes_verified_results_and_resumes(tmp_path, monkeypatch, REF):
     monkeypatch.setenv("TTIO_BENCH_DATA", str(tmp_path))
     monkeypatch.setattr(encode, "RESULTS", tmp_path / "results")
     c = common.Corpus(id="toy", tier="aligned", source=f"file://{BAM}", sha256=None, reference=f"file://{REF}")
@@ -33,7 +44,7 @@ def test_encode_writes_verified_results_and_resumes(tmp_path, monkeypatch):
     assert {f: f.stat().st_mtime_ns for f in files} == mtimes
 
 
-def test_failed_verify_is_recorded_not_raised(tmp_path, monkeypatch):
+def test_failed_verify_is_recorded_not_raised(tmp_path, monkeypatch, REF):
     monkeypatch.setenv("TTIO_BENCH_DATA", str(tmp_path))
     monkeypatch.setattr(encode, "RESULTS", tmp_path / "results")
     import verify

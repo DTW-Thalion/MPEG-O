@@ -40,11 +40,18 @@ def _fetch_sra(acc: str, dest_dir: Path) -> Path:
 
 
 def _pin(manifest_path: Path, corpus_id: str, sha: str) -> None:
-    doc = yaml.safe_load(manifest_path.read_text())
+    text = manifest_path.read_text()
+    header = []
+    for line in text.splitlines(keepends=True):
+        if line.startswith("#") or not line.strip():
+            header.append(line)
+        else:
+            break
+    doc = yaml.safe_load(text)
     for c in doc["corpora"]:
         if c["id"] == corpus_id:
             c["sha256"] = sha
-    manifest_path.write_text(yaml.safe_dump(doc, sort_keys=False))
+    manifest_path.write_text("".join(header) + yaml.safe_dump(doc, sort_keys=False, width=1000))
 
 
 def _dest_for(corpus: common.Corpus) -> Path:
