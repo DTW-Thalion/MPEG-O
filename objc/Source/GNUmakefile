@@ -43,6 +43,8 @@ libTTIO_HEADER_FILES = \
 	Genomics/TTIOBulkV2Blobs.h \
 	Genomics/TTIOGenomicIndex.h \
 	Genomics/TTIOWrittenGenomicRun.h \
+	Genomics/TTIOGenomicWriteContext.h \
+	Dataset/TTIOSpectralDataset+GenomicWrite.h \
 	Genomics/TTIOGenomicRun.h \
 	Genomics/TTIOPackedReference.h \
 	Genomics/TTIOReferenceImport.h \
@@ -184,6 +186,7 @@ libTTIO_OBJC_FILES = \
 	Genomics/TTIOBulkV2Blobs.m \
 	Genomics/TTIOGenomicIndex.m \
 	Genomics/TTIOWrittenGenomicRun.m \
+	Genomics/TTIOGenomicWriteContext.m \
 	Genomics/TTIOGenomicRun.m \
 	Genomics/TTIOPackedReference.m \
 	Genomics/TTIOReferenceImport.m \

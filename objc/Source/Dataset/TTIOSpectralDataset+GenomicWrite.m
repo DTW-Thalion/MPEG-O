@@ -47,7 +47,9 @@
 #import "Codecs/TTIORans.h"
 #import "Codecs/TTIOBasePack.h"
 #import "Codecs/TTIOQuality.h"                 // M86 Phase D
-#import "Codecs/TTIOFqzcompNx16Z.h"             // M94.Z v1.2
+#import "Codecs/TTIOFqzcompNx16Z.h"
+#import "Genomics/TTIOGenomicWriteContext.h"
+#import "Dataset/TTIOSpectralDataset+GenomicWrite.h"             // M94.Z v1.2
 #import "Codecs/TTIODeltaRans.h"                // M95 v1.2
 #import "Codecs/TTIOFloatDeltaZstd.h"           // codec id 17, Phase 2 MS default
 #import "Codecs/TTIOMateInfoV2.h"               // inline mate-pair codec
@@ -913,16 +915,33 @@ static void _TTIO_V17_ValidateMateInfoV2Overrides(TTIOWrittenGenomicRun *run)
  *  and mateChromIds (int32: -1 for '*', own-chrom-id for '=', else
  *  chrom_id from encounter-ordered table extended with mate-only entries).
  *  Also fills chromNamesInOrder with the full chrom_id → name table. */
+static BOOL _TTIO_V17_BuildChromTablesShared(TTIOWrittenGenomicRun *run,
+                                              NSMutableDictionary<NSString *, NSNumber *> *shared,
+                                              NSData * _Nonnull * _Nonnull ownChromIdsOut,
+                                              NSData * _Nonnull * _Nonnull mateChromIdsOut,
+                                              NSMutableArray<NSString *> * _Nonnull * _Nonnull chromNamesOut);
+
 static BOOL _TTIO_V17_BuildChromTables(TTIOWrittenGenomicRun *run,
                                         NSData * _Nonnull * _Nonnull ownChromIdsOut,
                                         NSData * _Nonnull * _Nonnull mateChromIdsOut,
                                         NSMutableArray<NSString *> * _Nonnull * _Nonnull chromNamesOut)
 {
+    return _TTIO_V17_BuildChromTablesShared(run, nil, ownChromIdsOut, mateChromIdsOut, chromNamesOut);
+}
+
+// With a shared map (blocks_v1) ids are stable across blocks and the map
+// grows in place; chromNamesOut then lists every name in id order.
+static BOOL _TTIO_V17_BuildChromTablesShared(TTIOWrittenGenomicRun *run,
+                                              NSMutableDictionary<NSString *, NSNumber *> *shared,
+                                              NSData * _Nonnull * _Nonnull ownChromIdsOut,
+                                              NSData * _Nonnull * _Nonnull mateChromIdsOut,
+                                              NSMutableArray<NSString *> * _Nonnull * _Nonnull chromNamesOut)
+{
     NSUInteger n = run.readCount;
 
     // Build encounter-ordered chrom_id table from own chromosomes.
     NSMutableDictionary<NSString *, NSNumber *> *nameToId =
-        [NSMutableDictionary dictionaryWithCapacity:32];
+        shared ?: [NSMutableDictionary dictionaryWithCapacity:32];
     NSMutableArray<NSString *> *chromNames = [NSMutableArray arrayWithCapacity:32];
 
     NSMutableData *ownChromIdsData =
@@ -934,9 +953,8 @@ static BOOL _TTIO_V17_BuildChromTables(TTIOWrittenGenomicRun *run,
         NSString *name = ownChroms[i];
         NSNumber *existingId = nameToId[name];
         if (existingId == nil) {
-            NSUInteger newId = chromNames.count;
+            NSUInteger newId = nameToId.count;
             nameToId[name] = @(newId);
-            [chromNames addObject:name];
             ownIds[i] = (uint16_t)newId;
         } else {
             ownIds[i] = (uint16_t)[existingId unsignedIntegerValue];
@@ -959,15 +977,15 @@ static BOOL _TTIO_V17_BuildChromTables(TTIOWrittenGenomicRun *run,
         } else {
             NSNumber *existingId = nameToId[name];
             if (existingId == nil) {
-                NSUInteger newId = chromNames.count;
+                NSUInteger newId = nameToId.count;
                 nameToId[name] = @(newId);
-                [chromNames addObject:name];
                 mateIds[i] = (int32_t)newId;
             } else {
                 mateIds[i] = (int32_t)[existingId unsignedIntegerValue];
             }
         }
     }
+    [chromNames addObjectsFromArray:[TTIOGenomicIndex namesInIdOrder:nameToId]];
 
     *ownChromIdsOut  = ownChromIdsData;
     *mateChromIdsOut = mateChromIdsData;
@@ -1191,11 +1209,12 @@ static BOOL _TTIO_V17_WriteMateInfoInlineV2HDF5(TTIOHDF5Group *sc,
 /** Storage-protocol path: twin of _TTIO_V17_WriteMateInfoInlineV2HDF5. */
 static BOOL _TTIO_V17_WriteMateInfoInlineV2Storage(id<TTIOStorageGroup> sc,
                                                     TTIOWrittenGenomicRun *run,
+                                                    NSMutableDictionary<NSString *, NSNumber *> *shared,
                                                     NSError **error)
 {
     NSData *ownChromIds = nil, *mateChromIds = nil;
     NSMutableArray<NSString *> *chromNames = nil;
-    if (!_TTIO_V17_BuildChromTables(run, &ownChromIds, &mateChromIds, &chromNames)) {
+    if (!_TTIO_V17_BuildChromTablesShared(run, shared, &ownChromIds, &mateChromIds, &chromNames)) {
         if (error) *error = [NSError errorWithDomain:@"TTIOSpectralDatasetErrorDomain"
                                                 code:2100
                                             userInfo:@{NSLocalizedDescriptionKey:
@@ -1590,6 +1609,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesHDF5(TTIOHDF5Group *sc,
 /** Storage-protocol path: twin of _TTIO_V18_WriteRefDiffV2SequencesHDF5. */
 static BOOL _TTIO_V18_WriteRefDiffV2SequencesStorage(id<TTIOStorageGroup> sc,
                                                        TTIOWrittenGenomicRun *run,
+                                                       NSData *precomputedMD5,
                                                        NSError **error)
 {
     NSString *chrom = nil;
@@ -1607,7 +1627,7 @@ static BOOL _TTIO_V18_WriteRefDiffV2SequencesStorage(id<TTIOStorageGroup> sc,
     }
 
     NSData *offsets = _TTIO_V18_BuildOffsetsPlusOne(run);
-    NSData *md5 = _TTIO_M93_ReferenceMD5ForRun(run);
+    NSData *md5 = precomputedMD5 ?: _TTIO_M93_ReferenceMD5ForRun(run);
 
     NSError *encErr = nil;
     NSData *encoded =
@@ -1708,6 +1728,49 @@ static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16Z(TTIOHDF5Group *sc,
                                          error);
 }
 
+/** Storage-protocol twin of _TTIO_M94Z_WriteQualitiesFqzcompNx16Z. */
+static BOOL _TTIO_M94Z_WriteQualitiesFqzcompNx16ZStorage(id<TTIOStorageGroup> sc,
+                                                           TTIOWrittenGenomicRun *run,
+                                                           NSError **error)
+{
+    NSUInteger n = run.lengthsData.length / sizeof(uint32_t);
+    const uint32_t *lens = (const uint32_t *)run.lengthsData.bytes;
+    const uint32_t *flgs = (const uint32_t *)run.flagsData.bytes;
+    NSMutableArray *readLengths = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *revcompFlags = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        [readLengths addObject:@(lens[i])];
+        uint32_t f = (run.flagsData.length >= (i + 1) * sizeof(uint32_t)) ? flgs[i] : 0;
+        [revcompFlags addObject:(f & 16u) ? @1 : @0];
+    }
+    TTIOCodecContext *fqzCtx = [TTIOCodecContext emptyContext];
+    fqzCtx.readLengths = readLengths;
+    fqzCtx.revcompFlags = revcompFlags;
+    if (!run.optDisableQualitiesV5
+        && run.sequencesData.length == run.qualitiesData.length) {
+        fqzCtx.sequences = run.sequencesData;
+    }
+    id<TTIOCodec> fqzCodec = [TTIOCodecRegistry codecForId:TTIOCompressionFqzcompNx16Z];
+    TTIOEncodedChannel *fqzEnc =
+        [fqzCodec encode:[[TTIODecodedBytes alloc] initWithData:run.qualitiesData]
+                 context:fqzCtx
+                   error:error];
+    NSData *encoded = ((TTIOEncodedDatasetBytes *)fqzEnc).bytes;
+    if (!encoded) return NO;
+    id<TTIOStorageDataset> ds = [sc createDatasetNamed:@"qualities"
+                                              precision:TTIOPrecisionUInt8
+                                                 length:encoded.length
+                                              chunkSize:65536
+                                            compression:TTIOCompressionNone
+                                       compressionLevel:0
+                                                  error:error];
+    if (!ds) return NO;
+    if (![ds writeAll:encoded error:error]) return NO;
+    return [ds setAttributeValue:@((uint8_t)TTIOCompressionFqzcompNx16Z)
+                         forName:@"compression"
+                           error:error];
+}
+
 /* Write an index array as a 1-D HDF5 dataset matching what
  * TTIOSpectrumIndex -writeToGroup:error: emits (same precision,
  * chunkSize=1024, compression level 6). The format is load-bearing:
@@ -1773,6 +1836,77 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 
 @implementation TTIOSpectralDataset (GenomicWrite)
 
++ (NSData *)referenceMD5ForRun:(TTIOWrittenGenomicRun *)run
+{
+    return _TTIO_M93_ReferenceMD5ForRun(run);
+}
+
++ (BOOL)embedReferencesForRuns:(NSArray<TTIOWrittenGenomicRun *> *)runs
+                       inStudy:(id<TTIOStorageGroup>)study
+                         error:(NSError **)error
+{
+    NSMutableDictionary<NSString *, NSData *> *needsEmbedMD5 = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, NSDictionary<NSString *, NSData *> *> *needsEmbedSeqs =
+        [NSMutableDictionary dictionary];
+    for (TTIOWrittenGenomicRun *run in runs) {
+        if (!run.embedReference || run.referenceChromSeqs == nil) continue;
+        NSData *md5 = _TTIO_M93_ReferenceMD5ForRun(run);
+        NSString *uri = run.referenceUri ?: @"";
+        NSData *existing = needsEmbedMD5[uri];
+        if (existing) {
+            if (![existing isEqualToData:md5]) {
+                if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                    @"reference_uri '%@' carries two different MD5s across runs", uri);
+                return NO;
+            }
+            continue;
+        }
+        needsEmbedMD5[uri] = md5;
+        needsEmbedSeqs[uri] = run.referenceChromSeqs;
+    }
+    if (needsEmbedMD5.count == 0) return YES;
+    id<TTIOStorageGroup> refsG = [study hasChildNamed:@"references"]
+        ? [study openGroupNamed:@"references" error:error]
+        : [study createGroupNamed:@"references" error:error];
+    if (!refsG) return NO;
+    NSArray *uris = [[needsEmbedMD5 allKeys] sortedArrayUsingSelector:@selector(compare:)];
+    for (NSString *uri in uris) {
+        NSData *md5 = needsEmbedMD5[uri];
+        const uint8_t *pb = (const uint8_t *)md5.bytes;
+        NSMutableString *hex = [NSMutableString stringWithCapacity:32];
+        for (int i = 0; i < 16 && i < (int)md5.length; i++) [hex appendFormat:@"%02x", pb[i]];
+        if ([refsG hasChildNamed:uri]) {
+            id<TTIOStorageGroup> existingG = [refsG openGroupNamed:uri error:error];
+            id have = [existingG attributeValueForName:@"md5" error:NULL];
+            NSString *haveHex = [have isKindOfClass:[NSData class]]
+                ? [[NSString alloc] initWithData:have encoding:NSUTF8StringEncoding]
+                : [have description];
+            if (haveHex.length && ![haveHex isEqualToString:hex]) {
+                if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                    @"reference_uri '%@' already embedded with a different MD5", uri);
+                return NO;
+            }
+            continue;
+        }
+        id<TTIOStorageGroup> refG = [refsG createGroupNamed:uri error:error];
+        if (!refG) return NO;
+        if (![refG setAttributeValue:hex forName:@"md5" error:error]) return NO;
+        if (![refG setAttributeValue:uri forName:@"reference_uri" error:error]) return NO;
+        id<TTIOStorageGroup> chromsG = [refG createGroupNamed:@"chromosomes" error:error];
+        if (!chromsG) return NO;
+        NSDictionary<NSString *, NSData *> *seqs = needsEmbedSeqs[uri];
+        NSArray *cnames = [[seqs allKeys] sortedArrayUsingSelector:@selector(compare:)];
+        for (NSString *cname in cnames) {
+            id<TTIOStorageGroup> cg = [chromsG createGroupNamed:cname error:error];
+            if (!cg) return NO;
+            NSData *seq = seqs[cname];
+            if (![cg setAttributeValue:@((int64_t)seq.length) forName:@"length" error:error]) return NO;
+            if (![TTIOPackedReference writeChromosomeDataset:cg sequence:seq error:error]) return NO;
+        }
+    }
+    return YES;
+}
+
 // provider-agnostic write of one /study/genomic_runs/<name>/
 // subtree via the StorageGroup protocol. Used by the memory:// /
 // sqlite:// / zarr:// write path. The HDF5 fast path uses
@@ -1781,6 +1915,16 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 + (BOOL)writeGenomicRunStorage:(TTIOWrittenGenomicRun *)run
                          toGroup:(id<TTIOStorageGroup>)parent
                             name:(NSString *)name
+                           error:(NSError **)error
+{
+    return [self writeGenomicRunStorage:run toGroup:parent name:name
+                                context:[TTIOGenomicWriteContext none] error:error];
+}
+
++ (BOOL)writeGenomicRunStorage:(TTIOWrittenGenomicRun *)run
+                         toGroup:(id<TTIOStorageGroup>)parent
+                            name:(NSString *)name
+                         context:(TTIOGenomicWriteContext *)ctx
                            error:(NSError **)error
 {
     // validate signal-channel codec overrides before any
@@ -1818,7 +1962,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                   flags:run.flagsData];
     id<TTIOStorageGroup> idxG = [rg createGroupNamed:@"genomic_index" error:error];
     if (!idxG) return NO;
-    if (![idx writeToGroup:idxG error:error]) return NO;
+    if (![idx writeToGroup:idxG nameToId:ctx.chromNameToId error:error]) return NO;
 
     // signal_channels subgroup.
     id<TTIOStorageGroup> sc = [rg createGroupNamed:@"signal_channels" error:error];
@@ -1851,7 +1995,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
             }
             if (!_TTIO_PhaseT_WriteRefDiffV2BulkStorage(sc, _bulkObjC.refDiffBlob, error)) return NO;
         } else if (seqOvr == nil && _TTIO_V18_UseRefDiffV2(run)) {
-            if (!_TTIO_V18_WriteRefDiffV2SequencesStorage(sc, run, error)) return NO;
+            if (!_TTIO_V18_WriteRefDiffV2SequencesStorage(sc, run, ctx.referenceMD5, error)) return NO;
         } else {
             if (!_TTIO_M86_WriteByteChannelStorage(sc, @"sequences",
                                                    run.sequencesData, codec,
@@ -1859,10 +2003,15 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
                                                    error)) return NO;
         }
     }
-    if (!_TTIO_M86_WriteByteChannelStorage(sc, @"qualities",
-                                           run.qualitiesData, codec,
-                                           run.signalCodecOverrides[@"qualities"],
-                                           error)) return NO;
+    NSNumber *qualOvr = run.signalCodecOverrides[@"qualities"]
+                        ?: _TTIO_M94_DefaultQualitiesCodec(run);
+    if (qualOvr != nil
+        && (TTIOCompression)[qualOvr unsignedIntegerValue] == TTIOCompressionFqzcompNx16Z) {
+        if (!_TTIO_M94Z_WriteQualitiesFqzcompNx16ZStorage(sc, run, error)) return NO;
+    } else if (!_TTIO_M86_WriteByteChannelStorage(sc, @"qualities",
+                                                  run.qualitiesData, codec,
+                                                  run.signalCodecOverrides[@"qualities"],
+                                                  error)) return NO;
 
     // 3 compound datasets via the storage-protocol's compound API.
     NSArray *vlValueField = @[
@@ -1976,7 +2125,7 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
     } else if (run.readCount == 0) {
         // Omit the mate_info group — no children to write.
     } else if ([TTIOMateInfoV2 nativeAvailable]) {
-        if (!_TTIO_V17_WriteMateInfoInlineV2Storage(sc, run, error)) return NO;
+        if (!_TTIO_V17_WriteMateInfoInlineV2Storage(sc, run, ctx.chromNameToId, error)) return NO;
     } else {
         [NSException raise:NSInternalInconsistencyException
                     format:@"mate_info inline_v2 codec requires the "

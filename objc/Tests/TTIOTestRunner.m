@@ -121,6 +121,7 @@ extern void testC3ProvidersErrorPaths(void);
 extern void testC5ProtectionGap(void);
 extern void testC3bProvidersWritePaths(void);
 extern void testProviderExtendable(void);
+extern void testGenomicBlocks(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
@@ -627,6 +628,10 @@ int main(int argc, const char *argv[])
         START_SET("Providers: extendable datasets and UInt64")
             testProviderExtendable();
         END_SET("Providers: extendable datasets and UInt64")
+
+        START_SET("Genomics: storage-path writer and blocks")
+            testGenomicBlocks();
+        END_SET("Genomics: storage-path writer and blocks")
 
         START_SET("C2b: HDF5CompoundType coverage")
             testC2bHDF5CompoundType();

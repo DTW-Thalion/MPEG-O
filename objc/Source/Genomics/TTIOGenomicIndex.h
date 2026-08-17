@@ -108,6 +108,18 @@
                 error:(NSError **)error;
 
 /**
+ * Writes the index; nameToId, when given, is the shared chromosome id
+ * map of a blocks_v1 run: existing entries keep their ids and new names
+ * are appended in place.
+ */
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
+             nameToId:(NSMutableDictionary<NSString *, NSNumber *> *)nameToId
+                error:(NSError **)error;
+
+/** Names of nameToId sorted by id. */
++ (NSArray<NSString *> *)namesInIdOrder:(NSDictionary<NSString *, NSNumber *> *)nameToId;
+
+/**
  * Reads the index from <code>group/genomic_index/</code>.
  *
  * @param group Source parent group.
