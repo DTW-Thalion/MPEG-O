@@ -90,6 +90,8 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOThermoRawReader.h \
 	Import/TTIOBrukerTDFReader.h \
 	Import/TTIOBamReader.h \
+	Import/TTIOGenomicStreamSource.h \
+	Import/TTIOSpectralStreamSource.h \
 	Import/TTIOSamReader.h \
 	Import/TTIOCramReader.h \
 	Import/TTIOImzMLReader.h \
@@ -243,6 +245,8 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOThermoRawReader.m \
 	Import/TTIOBrukerTDFReader.m \
 	Import/TTIOBamReader.m \
+	Import/TTIOGenomicStreamSource.m \
+	Import/TTIOSpectralStreamSource.m \
 	Import/TTIOSamReader.m \
 	Import/TTIOCramReader.m \
 	Import/TTIOImzMLReader.m \

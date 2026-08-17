@@ -6,7 +6,14 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "Import/TTIOImportedDataset.h"
+#import "Import/TTIOGenomicStreamSource.h"
+#import "Import/TTIOSpectralStreamSource.h"
 #import "Dataset/TTIOSpectralDataset.h"
+#import "Providers/TTIOProviderRegistry.h"
+#import "Providers/TTIOStorageProtocols.h"
+#import "HDF5/TTIOFeatureFlags.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "HDF5/TTIOHDF5Errors.h"
 
 @implementation TTIOImportedDataset
 
@@ -18,6 +25,8 @@
         _isaInvestigationId = @"";
         _msRuns = [[NSMutableDictionary alloc] init];
         _genomicRuns = [[NSMutableDictionary alloc] init];
+        _genomicStreams = [[NSMutableDictionary alloc] init];
+        _spectralStreams = [[NSMutableDictionary alloc] init];
         _identifications = [[NSMutableArray alloc] init];
         _quantifications = [[NSMutableArray alloc] init];
         _provenanceRecords = [[NSMutableArray alloc] init];
@@ -34,10 +43,69 @@
 
 - (BOOL)writeToPath:(NSString *)path error:(NSError *_Nullable *_Nullable)error
 {
+    return [self writeToPath:path progress:nil error:error];
+}
+
+- (BOOL)writeToPath:(NSString *)path
+           progress:(TTIOProgressBlock)progress
+              error:(NSError *_Nullable *_Nullable)error
+{
     // Write-through delegate (subprocess / image importers) wins.
     if (self.writeDelegate) {
         return self.writeDelegate(path, error);
     }
+    if (![self _writeStaticToPath:path error:error]) return NO;
+    if (self.genomicStreams.count == 0 && self.spectralStreams.count == 0) return YES;
+    return [self _writeStreamsToPath:path progress:progress error:error];
+}
+
+/* The streams are appended through a read-write reopen of the file
+ * the static write produced, the genomic feature flag added when a
+ * genomic stream is the first genomic content. */
+- (BOOL)_writeStreamsToPath:(NSString *)path
+                   progress:(TTIOProgressBlock)progress
+                      error:(NSError *_Nullable *_Nullable)error
+{
+    id<TTIOStorageProvider> p = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path mode:TTIOStorageOpenModeReadWrite provider:@"hdf5" error:error];
+    if (!p) return NO;
+    BOOL ok = YES;
+    @try {
+        id<TTIOStorageGroup> root = [p rootGroupWithError:error];
+        id<TTIOStorageGroup> study = root ? [root openGroupNamed:@"study" error:error] : nil;
+        if (!study) { ok = NO; return NO; }
+        if (self.genomicStreams.count > 0 && [root respondsToSelector:@selector(unwrap)]) {
+            TTIOHDF5Group *h5root = [(id)root performSelector:@selector(unwrap)];
+            NSString *flag = [TTIOFeatureFlags featureOptGenomic];
+            if (h5root && ![TTIOFeatureFlags root:h5root supportsFeature:flag]) {
+                NSMutableArray *features =
+                    [[TTIOFeatureFlags featuresForRoot:h5root] mutableCopy] ?: [NSMutableArray array];
+                [features addObject:flag];
+                NSString *version = [TTIOFeatureFlags formatVersionForRoot:h5root];
+                if (![TTIOFeatureFlags writeFormatVersion:version features:features
+                                                    toRoot:h5root error:error]) { ok = NO; return NO; }
+            }
+        }
+        NSArray *gNames = [[self.genomicStreams allKeys] sortedArrayUsingSelector:@selector(compare:)];
+        for (NSString *name in gNames) {
+            if ([self.genomicStreams[name] writeIntoStudy:study progress:progress error:error] == NSNotFound) {
+                ok = NO; return NO;
+            }
+        }
+        NSArray *sNames = [[self.spectralStreams allKeys] sortedArrayUsingSelector:@selector(compare:)];
+        for (NSString *name in sNames) {
+            if ([self.spectralStreams[name] writeIntoStudy:study progress:progress error:error] == NSNotFound) {
+                ok = NO; return NO;
+            }
+        }
+    } @finally {
+        [p close];
+    }
+    return ok;
+}
+
+- (BOOL)_writeStaticToPath:(NSString *)path error:(NSError *_Nullable *_Nullable)error
+{
 
     // In-memory draft -> canonical mixed-dictionary write API. Images are
     // NOT written here (writeMinimal has no image parameter); they are

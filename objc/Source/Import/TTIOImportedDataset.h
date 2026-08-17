@@ -9,11 +9,14 @@
 #define TTIO_IMPORTED_DATASET_H
 
 #import <Foundation/Foundation.h>
+#import "Core/TTIOProgressSink.h"
 
 @class TTIOSpectralDataset;
 @class TTIOMSImage;
 @class TTIORamanImage;
 @class TTIOIRImage;
+@class TTIOGenomicStreamSource;
+@class TTIOSpectralStreamSource;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -67,6 +70,14 @@ typedef BOOL (^TTIOImportedDatasetWriteDelegate)(NSString *outputPath,
  *  <code>TTIOWrittenGenomicRun</code>. */
 @property (nonatomic, strong) NSMutableDictionary<NSString *, id> *genomicRuns;
 
+/** Genomic runs delivered as batch streams; written after the static
+ *  content through TTIOGenomicStreamWriter (blocks_v1). */
+@property (nonatomic, strong) NSMutableDictionary<NSString *, TTIOGenomicStreamSource *> *genomicStreams;
+
+/** Spectral runs delivered as batch streams; written after the static
+ *  content through TTIOSpectralStreamWriter. */
+@property (nonatomic, strong) NSMutableDictionary<NSString *, TTIOSpectralStreamSource *> *spectralStreams;
+
 /** Dataset-wide identifications. */
 @property (nonatomic, strong) NSMutableArray *identifications;
 
@@ -110,6 +121,11 @@ typedef BOOL (^TTIOImportedDatasetWriteDelegate)(NSString *outputPath,
  * @return <code>YES</code> on success.
  */
 - (BOOL)writeToPath:(NSString *)path error:(NSError *_Nullable *_Nullable)error;
+
+/** As <code>-writeToPath:error:</code>, reporting stream progress. */
+- (BOOL)writeToPath:(NSString *)path
+           progress:(nullable TTIOProgressBlock)progress
+              error:(NSError *_Nullable *_Nullable)error;
 
 @end
 

@@ -19,6 +19,8 @@
  */
 
 #import "TTIOMzMLReader.h"
+#import "Import/TTIOSpectralStreamSource.h"
+#import "Run/TTIOWrittenSpectralBatch.h"
 #import "TTIOBase64.h"
 #import "TTIOCVTermMapper.h"
 
@@ -43,6 +45,75 @@ const NSUInteger TTIOMzMLReaderProgressIntervalSpectra = 100;
 @interface TTIOMzMLReader () <NSXMLParserDelegate>
 @property (nonatomic, copy) TTIOProgressBlock progressBlock;
 @property (nonatomic) NSUInteger progressSpectraSeen;
+/** When set, finished spectra go here instead of the run buffer and
+ *  no dataset is built at </run>. */
+@property (nonatomic, copy) void (^spectrumSink)(TTIOMassSpectrum *spectrum);
+@end
+
+/* The producer side of +streamFromPath:runName:batchSpectra:progress:
+ * parses on its own thread and pushes TTIOWrittenSpectralBatch objects
+ * into a queue of at most kMzMLStreamQueueCapacity batches; the
+ * consumer pops in order. */
+static const NSUInteger kMzMLStreamQueueCapacity = 4;
+
+@interface TTIOMzMLBatchQueue : NSObject
+@property (nonatomic, readonly) NSCondition *cond;
+@property (nonatomic, readonly) NSMutableArray<TTIOWrittenSpectralBatch *> *queue;
+@property (nonatomic) BOOL done;
+@property (nonatomic) BOOL cancelled;
+@property (nonatomic, strong) NSError *error;
+@property (nonatomic, copy) NSArray<TTIOChromatogram *> *chromatograms;
+@end
+
+@implementation TTIOMzMLBatchQueue
+- (instancetype)init
+{
+    self = [super init];
+    if (self) { _cond = [[NSCondition alloc] init]; _queue = [NSMutableArray array]; }
+    return self;
+}
+- (BOOL)push:(TTIOWrittenSpectralBatch *)b
+{
+    [_cond lock];
+    while (_queue.count >= kMzMLStreamQueueCapacity && !_cancelled) [_cond wait];
+    BOOL ok = !_cancelled;
+    if (ok) [_queue addObject:b];
+    [_cond broadcast];
+    [_cond unlock];
+    return ok;
+}
+- (TTIOWrittenSpectralBatch *)pop
+{
+    [_cond lock];
+    while (_queue.count == 0 && !_done) [_cond wait];
+    TTIOWrittenSpectralBatch *b = nil;
+    if (_queue.count > 0) { b = _queue[0]; [_queue removeObjectAtIndex:0]; }
+    [_cond broadcast];
+    [_cond unlock];
+    return b;
+}
+- (void)finishWithError:(NSError *)error chromatograms:(NSArray<TTIOChromatogram *> *)chroms
+{
+    [_cond lock];
+    _error = error;
+    _chromatograms = chroms;
+    _done = YES;
+    [_cond broadcast];
+    [_cond unlock];
+}
+- (void)cancel
+{
+    [_cond lock];
+    _cancelled = YES;
+    [_cond broadcast];
+    [_cond unlock];
+}
+- (void)drain
+{
+    [_cond lock];
+    [_queue removeAllObjects];
+    [_cond unlock];
+}
 @end
 
 @implementation TTIOMzMLReader
@@ -238,7 +309,7 @@ const NSUInteger TTIOMzMLReaderProgressIntervalSpectra = 100;
         return NO;
     }
 
-    if (!_dataset) {
+    if (!_dataset && !_spectrumSink) {
         // <run> closed but build failed, or no run present
         if (error) {
             *error = [NSError errorWithDomain:TTIOMzMLReaderErrorDomain
@@ -705,7 +776,8 @@ didStartElement:(NSString *)elementName
                    message:err.localizedDescription ?: @"TTIOMassSpectrum init failed"];
         return;
     }
-    [_runSpectra addObject:spec];
+    if (_spectrumSink) _spectrumSink(spec);
+    else [_runSpectra addObject:spec];
     [self resetSpectrumState];
 
     // Per-N progress fire. Total unknown mid-parse (mzML's
@@ -781,6 +853,85 @@ didStartElement:(NSString *)elementName
     if (!_internalError) {
         _internalError = parseError;
     }
+}
+
+
++ (NSUInteger)defaultBatchSpectra { return 4096; }
+
++ (TTIOSpectralStreamSource *)streamFromPath:(NSString *)path
+                                     runName:(NSString *)runName
+                                batchSpectra:(NSUInteger)batchSpectra
+                                    progress:(TTIOProgressBlock)progress
+{
+    NSUInteger batchN = MAX(batchSpectra, (NSUInteger)1);
+    NSArray *channelNames = @[@"intensity", @"mz"];
+    __block NSArray<TTIOChromatogram *> *chromsOut = @[];
+    TTIOSpectralBatchProducer producer = ^BOOL(BOOL (^emit)(TTIOWrittenSpectralBatch *, NSError **), NSError **error) {
+        TTIOMzMLBatchQueue *q = [[TTIOMzMLBatchQueue alloc] init];
+        NSThread *thread = [[NSThread alloc] initWithBlock:^{
+            @autoreleasepool {
+                TTIOMzMLReader *r = [[TTIOMzMLReader alloc] init];
+                r.progressBlock = progress ?: TTIOProgressDiscard();
+                NSMutableArray<TTIOMassSpectrum *> *pending = [NSMutableArray arrayWithCapacity:batchN];
+                __block BOOL cancelled = NO;
+                r.spectrumSink = ^(TTIOMassSpectrum *sp) {
+                    if (cancelled) return;
+                    [pending addObject:sp];
+                    if (pending.count >= batchN) {
+                        TTIOWrittenSpectralBatch *b = [TTIOWrittenSpectralBatch batchWithSpectra:pending
+                                                                                    channelNames:channelNames];
+                        [pending removeAllObjects];
+                        if (![q push:b]) cancelled = YES;
+                    }
+                };
+                NSError *err = nil;
+                NSData *data = [NSData dataWithContentsOfFile:path];
+                BOOL ok = NO;
+                if (!data) {
+                    err = [NSError errorWithDomain:TTIOMzMLReaderErrorDomain
+                                              code:TTIOMzMLReaderErrorParseFailed
+                                          userInfo:@{NSLocalizedDescriptionKey:
+                                              [NSString stringWithFormat:@"Cannot read %@", path]}];
+                } else {
+                    ok = [r parseData:data error:&err];
+                }
+                if (ok && !cancelled && pending.count > 0) {
+                    TTIOWrittenSpectralBatch *b = [TTIOWrittenSpectralBatch batchWithSpectra:pending
+                                                                                channelNames:channelNames];
+                    [pending removeAllObjects];
+                    if (![q push:b]) cancelled = YES;
+                }
+                [q finishWithError:(ok ? nil : err) chromatograms:r.chromatograms];
+            }
+        }];
+        thread.name = @"ttio-mzml-stream";
+        [thread start];
+        BOOL ok = YES;
+        TTIOWrittenSpectralBatch *b;
+        while ((b = [q pop]) != nil) {
+            NSError *e = nil;
+            if (!emit(b, &e)) {
+                if (error && e) *error = e;
+                ok = NO;
+                [q cancel];
+                break;
+            }
+        }
+        while (![thread isFinished]) [NSThread sleepForTimeInterval:0.001];
+        [q drain];
+        if (ok && q.error) {
+            if (error) *error = q.error;
+            ok = NO;
+        }
+        chromsOut = q.chromatograms ?: @[];
+        return ok;
+    };
+    return [[TTIOSpectralStreamSource alloc] initWithName:runName
+                                                  batches:producer
+                                          acquisitionMode:TTIOAcquisitionModeMS1DDA
+                                         instrumentConfig:nil
+                                             batchSpectra:batchN
+                                       chromatogramsAfter:^NSArray<TTIOChromatogram *> *{ return chromsOut; }];
 }
 
 @end

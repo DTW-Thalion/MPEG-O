@@ -26,6 +26,8 @@
 #import "Import/TTIOBamReader.h"
 #import "Import/TTIOSamReader.h"
 #import "Import/TTIOCramReader.h"
+#import "Import/TTIOGenomicStreamSource.h"
+#import "Import/TTIOSpectralStreamSource.h"
 
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Image/TTIOMSImage.h"
@@ -57,6 +59,42 @@ static NSString *_ofrOptString(NSDictionary<NSString *, id> *opts,
         ? (NSString *)v : dflt;
 }
 
+// The streaming knobs an importer accepts in its opts (the --extra k=v
+// pairs of TtioEncode): reference, embed_reference, batch_reads,
+// batch_spectra, block_reads, block_bytes, legacy_whole_channel.
+static BOOL _ofrOptFlag(NSDictionary<NSString *, id> *opts, NSString *key)
+{
+    id v = opts[key];
+    if ([v isKindOfClass:[NSNumber class]]) return [v boolValue];
+    if ([v isKindOfClass:[NSString class]]) {
+        NSString *l = [(NSString *)v lowercaseString];
+        return [l isEqualToString:@"1"] || [l isEqualToString:@"true"] || [l isEqualToString:@"yes"];
+    }
+    return NO;
+}
+
+static NSNumber *_ofrOptNumber(NSDictionary<NSString *, id> *opts, NSString *key)
+{
+    id v = opts[key];
+    if ([v isKindOfClass:[NSNumber class]]) return v;
+    if ([v isKindOfClass:[NSString class]] && [(NSString *)v length]) {
+        return @([(NSString *)v longLongValue]);
+    }
+    return nil;
+}
+
+static NSUInteger _ofrBatchReads(NSDictionary<NSString *, id> *opts)
+{
+    NSNumber *n = _ofrOptNumber(opts, @"batch_reads");
+    return n && [n unsignedIntegerValue] > 0 ? [n unsignedIntegerValue] : TTIOBamReaderDefaultBatchReads;
+}
+
+static NSUInteger _ofrBatchSpectra(NSDictionary<NSString *, id> *opts)
+{
+    NSNumber *n = _ofrOptNumber(opts, @"batch_spectra");
+    return n && [n unsignedIntegerValue] > 0 ? [n unsignedIntegerValue] : [TTIOMzMLReader defaultBatchSpectra];
+}
+
 #pragma mark - mzML (write-through delegate)
 
 @implementation TTIOMzMLReaderAdapter
@@ -65,19 +103,18 @@ static NSString *_ofrOptString(NSDictionary<NSString *, id> *opts,
                                     progress:(nullable TTIOProgressBlock)progress
                                        error:(NSError *_Nullable *_Nullable)error
 {
-    (void)options;
     if (inputs.count == 0) {
         if (error) *error = _ofrError(1, @"mzML import: no input path");
         return nil;
     }
-    TTIOSpectralDataset *parsed = progress
-        ? [TTIOMzMLReader readFromFilePath:inputs[0] progress:progress error:error]
-        : [TTIOMzMLReader readFromFilePath:inputs[0] error:error];
-    if (!parsed) return nil;
-    return [TTIOImportedDataset datasetWithWriteDelegate:
-        ^BOOL(NSString *out, NSError *_Nullable *_Nullable e) {
-            return [parsed writeToFilePath:out error:e];
-        }];
+    NSString *stem = [[inputs[0] lastPathComponent] stringByDeletingPathExtension];
+    NSString *name = _ofrOptString(options, @"name", stem ?: @"run");
+    TTIOImportedDataset *d = [[TTIOImportedDataset alloc] init];
+    d.title = stem ?: @"";
+    d.spectralStreams[name] = [TTIOMzMLReader streamFromPath:inputs[0] runName:name
+                                                batchSpectra:_ofrBatchSpectra(options)
+                                                    progress:progress];
+    return d;
 }
 @end
 
@@ -359,17 +396,22 @@ static TTIOImportedDataset *_ofrBuildGenomicDraft(TTIOBamReader *reader,
                                                   TTIOProgressBlock progress,
                                                   NSError *_Nullable *_Nullable error)
 {
+    (void)error;
     NSString *name   = _ofrOptString(opts, @"name", @"genomic_0001");
     NSString *region = _ofrOptString(opts, @"region", nil);
     NSString *sample = _ofrOptString(opts, @"sample", nil);
 
-    TTIOWrittenGenomicRun *run =
-        [reader toGenomicRunWithName:name region:region sampleName:sample
-                            progress:progress error:error];
-    if (!run) return nil;
-
+    TTIOGenomicStreamSource *src =
+        [[reader streamWithName:name region:region sampleName:sample
+                 referenceFasta:_ofrOptString(opts, @"reference", nil)
+                 embedReference:_ofrOptFlag(opts, @"embed_reference")
+                     batchReads:_ofrBatchReads(opts)
+                       progress:progress]
+            sourceWithBlockReads:_ofrOptNumber(opts, @"block_reads")
+                      blockBytes:_ofrOptNumber(opts, @"block_bytes")
+                          legacy:_ofrOptFlag(opts, @"legacy_whole_channel")];
     TTIOImportedDataset *d = [[TTIOImportedDataset alloc] init];
-    d.genomicRuns[name] = run;
+    d.genomicStreams[name] = src;
     return d;
 }
 
