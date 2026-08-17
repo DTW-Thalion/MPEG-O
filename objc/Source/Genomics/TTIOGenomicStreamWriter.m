@@ -15,6 +15,7 @@
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "Dataset/TTIOCompoundIO.h"
+#import <pthread.h>
 
 static NSString *const kLayout = @"blocks_v1";
 static const NSUInteger kDefaultBlockReads = 1000000;
@@ -107,11 +108,12 @@ static const NSUInteger kIndexArrayChunk = 65536;
 + (NSString *)layout { return kLayout; }
 + (NSUInteger)channelChunk { return kChannelChunk; }
 
-+ (NSArray<TTIOCompoundField *> *)indexFields
+static NSArray *gIndexFields = nil;
+static pthread_once_t gIndexFieldsOnce = PTHREAD_ONCE_INIT;
+
+static void ttioBuildIndexFields(void)
 {
-    static NSArray *fields = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
+    @autoreleasepool {
         NSMutableArray *f = [NSMutableArray array];
         [f addObject:[TTIOCompoundField fieldWithName:@"read_start" kind:TTIOCompoundFieldKindUInt64]];
         [f addObject:[TTIOCompoundField fieldWithName:@"n_reads" kind:TTIOCompoundFieldKindUInt32]];
@@ -127,9 +129,14 @@ static const NSUInteger kIndexArrayChunk = 65536;
             [f addObject:[TTIOCompoundField fieldWithName:[ch stringByAppendingString:@"_codec"]
                                                      kind:TTIOCompoundFieldKindUInt32]];
         }
-        fields = [f copy];
-    });
-    return fields;
+        gIndexFields = [f copy];
+    }
+}
+
++ (NSArray<TTIOCompoundField *> *)indexFields
+{
+    pthread_once(&gIndexFieldsOnce, ttioBuildIndexFields);
+    return gIndexFields;
 }
 
 - (instancetype)initWithStudyGroup:(id<TTIOStorageGroup>)study
