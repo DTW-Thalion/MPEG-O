@@ -387,14 +387,14 @@ def cmd_export(args) -> int:
     fmt = registry.normalize(args.format)
     if fmt == "fastq":
         from ttio.tools import fastq_export_cli as backend
-        return _delegate_to(backend, ["--input", args.input,
-                                       "--output", args.output,
-                                       "--layer", args.layer] + (args.extra or []))
+        return _delegate_to(backend, ["--in", args.input,
+                                       "--name", args.layer,
+                                       "--out", args.output] + (args.extra or []))
     if fmt == "fasta":
         from ttio.tools import fasta_export_cli as backend
-        return _delegate_to(backend, ["--input", args.input,
-                                       "--output", args.output,
-                                       "--layer", args.layer] + (args.extra or []))
+        return _delegate_to(backend, ["run", "--in", args.input,
+                                       "--name", args.layer,
+                                       "--out", args.output] + (args.extra or []))
     if registry.is_registry_format(fmt):
         try:
             registry.export(fmt, args.input, args.layer, args.output,

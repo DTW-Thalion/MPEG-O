@@ -113,6 +113,33 @@ def test_cli_export_mzml(tmp_path, capsys):
     assert "exported" in capsys.readouterr().out
 
 
+def _write_fastq_tio(tmp_path):
+    fq = tmp_path / "in.fastq"
+    fq.write_text("@r1\nACGTACGT\n+\nIIIIIIII\n@r2\nGGCCAATT\n+\n!!!!####\n")
+    src = tmp_path / "reads.tio"
+    assert main(["encode", "--input", str(fq), "--format", "fastq",
+                 "--output", str(src)]) == 0
+    return fq, str(src)
+
+
+def test_cli_export_fastq(tmp_path):
+    fq, src = _write_fastq_tio(tmp_path)
+    out = tmp_path / "out.fastq"
+    rc = main(["export", "--input", src, "--layer", "genomic_0001",
+               "--format", "fastq", "--output", str(out)])
+    assert rc == 0
+    assert out.read_text() == fq.read_text()
+
+
+def test_cli_export_fasta_reads(tmp_path):
+    _, src = _write_fastq_tio(tmp_path)
+    out = tmp_path / "out.fa"
+    rc = main(["export", "--input", src, "--layer", "genomic_0001",
+               "--format", "fasta", "--output", str(out), "--extra", "--no-fai"])
+    assert rc == 0
+    assert out.read_text() == ">r1\nACGTACGT\n>r2\nGGCCAATT\n"
+
+
 def test_registry_isa_export(tmp_path):
     src = _write_ms_tio(tmp_path)
     out_dir = tmp_path / "isa_bundle"
