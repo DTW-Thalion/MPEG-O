@@ -1335,6 +1335,19 @@ auto-embed path used this form while
 a name-framed `name + 0x0A + seq + 0x0A` form; see CHANGELOG for
 details).
 
+**External reference (`REF_PATH`).** When a run's reference is not
+embedded, the readers resolve it from the FASTA named by the
+`REF_PATH` environment variable (or an explicit resolver argument),
+through its `.fai` index. The recorded 16-byte `reference_md5` is
+checked against, in order: the md5 of the requested chromosome's
+case-preserved bytes, of its upper-cased bytes (the pre-1.9 check,
+which only matched a single-contig FASTA), and the reference-set md5
+of the whole FASTA computed with the formula above (every
+chromosome, alphabetic order, case preserved). A run written against
+a multi-chromosome FASTA therefore validates against that same
+FASTA. Since v1.9 all three implementations apply the same order and
+return the chromosome upper-cased.
+
 **Read-side accessor (v1.1.0+).** A freshly-opened dataset exposes
 embedded references through the `references()` accessor
 (`references` property in Python,

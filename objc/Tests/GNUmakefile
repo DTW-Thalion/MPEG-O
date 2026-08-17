@@ -117,6 +117,7 @@ TTIOTests_OBJC_FILES = \
 	TestGenomicStreamWriter.m \
 	TestBlocksV1Golden.m \
 	TestGenomicBlocksReader.m \
+	TestReferenceResolverExternal.m \
 	TestFloatDeltaZstdBlocks.m \
 	TestSpectralStreamWriter.m \
 	TestStreamingImporters.m \

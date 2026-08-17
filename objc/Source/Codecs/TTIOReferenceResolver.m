@@ -6,10 +6,12 @@
 
 #import "Codecs/TTIOReferenceResolver.h"
 #import "Genomics/TTIOPackedReference.h"
+#import "Genomics/TTIOLazyReference.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOHDF5Dataset.h"
 
 #include <openssl/md5.h>
+#include <pthread.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -149,43 +151,37 @@ static NSData *hexToData(NSString *hex)
 
 // ── External FASTA reading ─────────────────────────────────────────
 
-static NSData *read_fasta_chrom(NSString *path, NSString *chrom)
+/* One TTIOLazyReference (and its reference-set digest) per FASTA path
+ * for the process: the .fai index makes a chromosome read O(its
+ * length), and the whole-FASTA digest is computed at most once. */
+static NSMutableDictionary<NSString *, TTIOLazyReference *> *rr_lazy = nil;
+static NSMutableDictionary<NSString *, NSData *> *rr_setMD5 = nil;
+static pthread_mutex_t rr_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static NSData *md5_of(NSData *d)
 {
-    NSData *all = [NSData dataWithContentsOfFile:path];
-    if (!all) return nil;
-    NSData *targetData = [chrom dataUsingEncoding:NSASCIIStringEncoding];
-    if (!targetData) return nil;
-    const uint8_t *p = (const uint8_t *)all.bytes;
-    NSUInteger n = all.length;
-    NSMutableData *out = [NSMutableData data];
-    BOOL inTarget = NO;
-    NSUInteger i = 0;
-    while (i < n) {
-        // Read one line.
-        NSUInteger lineStart = i;
-        while (i < n && p[i] != '\n') i++;
-        NSUInteger lineEnd = i;
-        if (i < n) i++;  // consume \n
-        if (lineEnd > lineStart && p[lineStart] == '>') {
-            if (inTarget) return out;
-            // Match header up to first whitespace.
-            NSUInteger hs = lineStart + 1;
-            NSUInteger he = hs;
-            while (he < lineEnd && p[he] != ' ' && p[he] != '\t' && p[he] != '\r') he++;
-            NSData *hdr = [NSData dataWithBytes:p + hs length:he - hs];
-            inTarget = [hdr isEqualToData:targetData];
-            [out setLength:0];
-        } else if (inTarget) {
-            // Strip trailing \r and whitespace.
-            NSUInteger e2 = lineEnd;
-            while (e2 > lineStart && (p[e2 - 1] == '\r' || p[e2 - 1] == ' ' || p[e2 - 1] == '\t')) e2--;
-            if (e2 > lineStart) [out appendBytes:p + lineStart length:e2 - lineStart];
-        }
-    }
-    if (inTarget) return out;
-    return nil;
+    uint8_t digest[16];
+    MD5_CTX c; MD5_Init(&c); MD5_Update(&c, d.bytes, d.length); MD5_Final(digest, &c);
+    return [NSData dataWithBytes:digest length:16];
 }
 
+static NSData *upper_of(NSData *d)
+{
+    NSMutableData *u = [d mutableCopy];
+    uint8_t *p = (uint8_t *)u.mutableBytes;
+    for (NSUInteger i = 0; i < u.length; i++) {
+        if (p[i] >= 'a' && p[i] <= 'z') p[i] = (uint8_t)(p[i] - 32);
+    }
+    return u;
+}
+
+/* Read the chromosome through the .fai index and check expectedMD5
+ * against, in order: the md5 of the chromosome's case-preserved bytes,
+ * of its upper-cased bytes (both the pre-1.9 external check, which only
+ * ever matched a single-contig FASTA), then the reference-set md5 of
+ * the whole FASTA (every chromosome, alphabetic order, case preserved:
+ * the digest the writers record). Returns the upper-cased sequence,
+ * nil (no error) when the chromosome is not in the FASTA. */
 - (nullable NSData *)readExternalChromosome:(NSString *)chromosome
                                 expectedMD5:(NSData *)expectedMD5
                                       error:(NSError **)error
@@ -193,18 +189,35 @@ static NSData *read_fasta_chrom(NSString *path, NSString *chrom)
     if (!_external) return nil;
     NSFileManager *fm = [NSFileManager defaultManager];
     if (![fm fileExistsAtPath:_external]) return nil;
-    NSData *seq = read_fasta_chrom(_external, chromosome);
-    if (!seq) return nil;
-    uint8_t digest[16];
-    MD5_CTX c; MD5_Init(&c); MD5_Update(&c, seq.bytes, seq.length); MD5_Final(digest, &c);
-    NSData *actual = [NSData dataWithBytes:digest length:16];
-    if (![actual isEqualToData:expectedMD5]) {
-        rr_set_error(error, 5,
-            @"MD5 mismatch for external reference at %@: expected %@, got %@",
-            _external, hex16(expectedMD5), hex16(actual));
-        return nil;
+    NSString *key = [_external stringByStandardizingPath];
+    pthread_mutex_lock(&rr_lock);
+    if (!rr_lazy) { rr_lazy = [NSMutableDictionary new]; rr_setMD5 = [NSMutableDictionary new]; }
+    TTIOLazyReference *ref = rr_lazy[key];
+    if (!ref) {
+        NSError *e = nil;
+        ref = [[TTIOLazyReference alloc] initWithFastaPath:key cacheChroms:2 error:&e];
+        if (!ref) {
+            pthread_mutex_unlock(&rr_lock);
+            rr_set_error(error, 5, @"cannot index external reference at %@: %@", _external, e);
+            return nil;
+        }
+        rr_lazy[key] = ref;
     }
-    return seq;
+    NSData *raw = [ref objectForKey:chromosome];
+    if (!raw) { pthread_mutex_unlock(&rr_lock); return nil; }
+    NSData *upper = upper_of(raw);
+    if ([md5_of(raw) isEqualToData:expectedMD5] || [md5_of(upper) isEqualToData:expectedMD5]) {
+        pthread_mutex_unlock(&rr_lock);
+        return upper;
+    }
+    NSData *setMD5 = rr_setMD5[key];
+    if (!setMD5) { setMD5 = [ref setMD5]; rr_setMD5[key] = setMD5; }
+    pthread_mutex_unlock(&rr_lock);
+    if ([setMD5 isEqualToData:expectedMD5]) return upper;
+    rr_set_error(error, 5,
+        @"MD5 mismatch for external reference at %@: expected %@, got %@ for the whole FASTA and %@ for chromosome %@",
+        _external, hex16(expectedMD5), hex16(setMD5), hex16(md5_of(raw)), chromosome);
+    return nil;
 }
 
 // ── Public resolve ─────────────────────────────────────────────────

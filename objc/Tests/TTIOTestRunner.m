@@ -125,6 +125,7 @@ extern void testGenomicBlocks(void);
 extern void testGenomicStreamWriter(void);
 extern void testBlocksV1Golden(void);
 extern void testGenomicBlocksReader(void);
+extern void testReferenceResolverExternal(void);
 extern void testFloatDeltaZstdBlocks(void);
 extern void testSpectralStreamWriter(void);
 extern void testStreamingImporters(void);
@@ -651,6 +652,10 @@ int main(int argc, const char *argv[])
         START_SET("Genomics: blocks_v1 reader, signatures, transport")
             testGenomicBlocksReader();
         END_SET("Genomics: blocks_v1 reader, signatures, transport")
+
+        START_SET("Codecs: reference resolver, external FASTA")
+            testReferenceResolverExternal();
+        END_SET("Codecs: reference resolver, external FASTA")
 
         START_SET("Spectral: FDZ1 block API")
             testFloatDeltaZstdBlocks();

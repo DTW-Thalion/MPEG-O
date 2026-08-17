@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "Genomics/TTIOLazyReference.h"
+#include <openssl/md5.h>
 #import "HDF5/TTIOHDF5Errors.h"
 
 @interface TTIOFaiEntry : NSObject
@@ -126,6 +127,20 @@
 
 - (NSString *)fastaPath { return _path; }
 - (NSArray<NSString *> *)chromosomeNames { return [_names copy]; }
+
+- (NSData *)setMD5
+{
+    NSArray<NSString *> *sorted = [_names sortedArrayUsingSelector:@selector(compare:)];
+    MD5_CTX c;
+    MD5_Init(&c);
+    for (NSString *name in sorted) {
+        NSData *seq = [self objectForKey:name];
+        if (seq.length) MD5_Update(&c, seq.bytes, seq.length);
+    }
+    uint8_t digest[16];
+    MD5_Final(digest, &c);
+    return [NSData dataWithBytes:digest length:16];
+}
 
 - (NSUInteger)lengthOf:(NSString *)name
 {

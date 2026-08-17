@@ -69,6 +69,24 @@ public final class LazyReference extends AbstractMap<String, byte[]> {
     /** The FASTA path. */
     public Path path() { return fasta; }
 
+    /** MD5 of the concatenated case-preserved sequences of every
+     *  chromosome in alphabetic order of name: the reference-set digest
+     *  every writer records (format spec section 10.10). Streams one
+     *  chromosome at a time. */
+    public byte[] setMd5() {
+        try {
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
+            java.util.List<String> names = new java.util.ArrayList<>(lengths.keySet());
+            java.util.Collections.sort(names);
+            for (String n : names) {
+                md.update(file.getSequence(n).getBases());
+            }
+            return md.digest();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     /** Length of {@code name} from the index, without loading it. */
     public long lengthOf(String name) {
         Long n = lengths.get(name);
