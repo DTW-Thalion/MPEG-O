@@ -96,18 +96,18 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
                     holder = {}
                     t_enc = common.run_timed([sys_executable(), "-c", _ENC_SNIPPET,
                                               key, str(inp), str(work), str(ref or "")])
-                    enc = next(p for p in work.iterdir() if not p.name.startswith("dec"))
+                    enc = Path((work / "enc.path").read_text().strip())
                     rec.update(output_bytes=enc.stat().st_size, encode_s=t_enc.wall_s,
                                encode_rss_mb=t_enc.peak_rss_mb, breakdown=breakdown(key, enc))
                     dec_dir = work / "dec"; dec_dir.mkdir()
                     t_dec = common.run_timed([sys_executable(), "-c", _DEC_SNIPPET,
                                               key, str(enc), str(dec_dir), str(ref or "")])
-                    dec = next(dec_dir.iterdir())
+                    dec = Path((work / "dec.path").read_text().strip())
                     rec.update(decode_s=t_dec.wall_s, decode_rss_mb=t_dec.peak_rss_mb)
                     rec["verify"], rec["max_rel_error"], rec["verify_note"] = _verify(
                         c.tier, item["kind"], inp, dec, fmt.lossy)
                 except Exception as e:  # a broken encoder is a FAIL row, not a crash of the suite
-                    rec.update(verify="FAIL", error=str(e)[-500:])
+                    rec.update(verify="FAIL", error=str(e)[-3000:])
                     rec.setdefault("output_bytes", 0); rec.setdefault("encode_s", 0.0)
                     rec.setdefault("decode_s", 0.0); rec.setdefault("encode_rss_mb", 0.0)
                     rec.setdefault("decode_rss_mb", 0.0)
@@ -138,7 +138,8 @@ import sys; from pathlib import Path
 sys.path.insert(0, %r)
 import formats; reg = formats.load_all()
 key, inp, work, ref = sys.argv[1:5]
-reg[key].encode(Path(inp), Path(work), Path(ref) if ref else None)
+out = reg[key].encode(Path(inp), Path(work), Path(ref) if ref else None)
+(Path(work) / "enc.path").write_text(str(out))
 """ % str(HERE)
 
 _DEC_SNIPPET = """
@@ -146,5 +147,6 @@ import sys; from pathlib import Path
 sys.path.insert(0, %r)
 import formats; reg = formats.load_all()
 key, enc, out, ref = sys.argv[1:5]
-reg[key].decode(Path(enc), Path(out), Path(ref) if ref else None)
+dec = reg[key].decode(Path(enc), Path(out), Path(ref) if ref else None)
+(Path(out).parent / "dec.path").write_text(str(dec))
 """ % str(HERE)
