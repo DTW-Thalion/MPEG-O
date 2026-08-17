@@ -4,7 +4,7 @@
 
 **Goal:** A rerunnable suite under `tools/perf/compression_suite/` that measures whole real datasets (GIAB/1000G BAMs, NCBI SRA runs, PRIDE mzML) as TTI-O vs CRAM 3.0/3.1 vs MPEG-G (genie) and vs mzML.gz/numpress, decode-verifies every size, and renders a committed `REPORT.md`.
 
-**Architecture:** A manifest (`manifest.yaml`) names corpora by accession + sha256. `suite.py` runs four idempotent stages (`fetch`, `prepare`, `encode`, `report`); each format family is one module with `encode / decode / version`; `verify.py` reduces any decoded output to a normalised md5 so formats are compared on identical information; `report.py` turns per-shard JSON results into tables. Whole datasets are processed as a fixed shard set (50 Mb genomic windows for aligned BAMs, 20 M-read chunks for FASTQ) because TTI-O importers hold one run in memory; every format encodes every shard and the report sums them.
+**Architecture:** A manifest (`manifest.yaml`) names corpora by accession + sha256. `suite.py` runs four idempotent stages (`fetch`, `prepare`, `encode`, `report`); each format family is one module with `encode / decode / version`; `verify.py` reduces any decoded output to a normalised md5 so formats are compared on identical information; `report.py` turns per-corpus JSON results into tables. Every format encodes the whole file: since v1.9 the TTI-O importers and exporters stream (blocks_v1 layout), so no input is sharded.
 
 **Tech Stack:** Python 3.12 (project venv at `python/.venv`), PyYAML, samtools 1.19.2 (CRAM 3.0/3.1), podman image `docker.io/muefab/genie` (MPEG-G reference software), sra-tools (`prefetch`, `fasterq-dump`), psims + pynumpress (mzML writing), `/usr/bin/time -v`, `ttio encode` / `ttio export` (TTI-O CLI).
 
@@ -17,7 +17,7 @@
 - Primary aligned comparison is on 11-column BAMs (SAM cols 1-11, header kept); full-tag CRAM/MPEG-G is a secondary column. TTI-O is never run on full-tag input.
 - Every size counted in the report has a passing decode-verify; a failed verify is `verify: FAIL` with no size.
 - Threads = 1 for size runs (`samtools -@ 1`, genie `--threads 1`).
-- Shards: aligned = 50 Mb windows per contig (`samtools view -b in.bam chr:start-end`); unaligned = 20,000,000 reads per shard; MS = whole file (mzML runs are chosen at 1-4 GB each).
+- Whole files, no shards: every format encodes the corpus file as one input (mzML runs are chosen at 1-4 GB each). Peak RSS of the TTI-O rows is a measured result, not a constraint.
 - Nothing in this suite runs in CI. `results/` and `REPORT.md` are committed; data is not.
 - Public text (README, REPORT, commit messages): plain statements of fact, digits for numbers, no em dashes, no bullets in commit messages.
 
@@ -243,7 +243,7 @@ def main(argv=None) -> int:
     pe.add_argument("--formats", default="all",
                     help="comma list of format keys or 'all'")
     pe.add_argument("--smoke", action="store_true",
-                    help="on-disk corpora only, first shard only")
+                    help="on-disk corpora only")
     sub.add_parser("report")
     args = ap.parse_args(argv)
     corpora = common.load_manifest(Path(args.manifest))
@@ -287,10 +287,8 @@ docker.io/muefab/genie image, sra-tools (tools/install_sra_tools.sh),
     $PY tools/perf/compression_suite/suite.py report
 
 Stages are idempotent: a result JSON is reused when its input sha256
-and tool version are unchanged. Aligned BAMs are processed as 50 Mb
-windows and FASTQ as 20 M read chunks because the TTI-O importers hold
-one run in memory; every format encodes the same shards and the report
-sums them.
+and tool version are unchanged. Every format encodes the whole corpus
+file; the TTI-O importers and exporters stream, so nothing is sharded.
 ```
 
 - [ ] **Step 7: Install pyyaml/psims/pynumpress into the venv and run tests**
@@ -1090,7 +1088,7 @@ git commit -F /home/toddw/msg.txt   # subject: "perf: FASTQ.gz and mzML/numpress
 
 ---
 
-### Task 7: prepare stage (11-column BAM, sharding, references)
+### Task 7: prepare stage (11-column BAM, references)
 
 **Files:**
 - Create: `tools/perf/compression_suite/stages/__init__.py` (empty)
@@ -1100,10 +1098,9 @@ git commit -F /home/toddw/msg.txt   # subject: "perf: FASTQ.gz and mzML/numpress
 **Interfaces:**
 - Consumes: `common.Corpus`, `common.data_dir`, `common.sha256_of`.
 - Produces: `prepare.run(corpora) -> int` and, per corpus, a `prepared/<id>/plan.json`:
-  `{"id", "tier", "input_sha256", "reference": path|null, "shards": [{"name", "path", "kind": "bam11"|"bam_full"|"fastq"|"mzml"}]}`.
+  `{"id", "tier", "input_sha256", "reference": path|null, "inputs": [{"name", "path", "kind": "bam11"|"bam_full"|"fastq"|"mzml"}]}` (an aligned corpus has two inputs, the 11-column BAM and the untouched BAM; the other tiers one).
 - Produces: `prepare.eleven_column(bam: Path, out: Path) -> Path` (`samtools view -h | cut -f1-11 | samtools view -b -o out`).
-- Produces: `prepare.window_shards(bam: Path, out_dir: Path, window_bp=50_000_000) -> list[Path]` (from `@SQ` lengths; `samtools view -b bam chr:start-end`; empty windows dropped; needs an index, created if missing).
-- Produces: `prepare.fastq_shards(fastq_or_gz: Path, out_dir: Path, reads_per_shard=20_000_000) -> list[Path]`.
+- Produces: `prepare.fastq_plain(fastq_or_gz: Path, out: Path) -> Path` (a gz source is decompressed once so every format starts from the same plain FASTQ).
 - Produces: `prepare.reference_for(corpus) -> Path | None` (manifest reference, else the GRCh38/GRCh37 fetched by Task 8 chosen from the BAM's `@SQ` names/lengths).
 
 - [ ] **Step 1: Write the failing tests**
@@ -1132,23 +1129,16 @@ def test_eleven_column_strips_tags_keeps_header(tmp_path):
     assert verify.sam11_md5(out) == verify.sam11_md5(BAM)
 
 
-def test_window_shards_cover_all_reads(tmp_path):
-    shards = prepare.window_shards(BAM, tmp_path, window_bp=1000)
-    assert len(shards) >= 1
-    n_in = int(subprocess.run(["samtools", "view", "-c", str(BAM)], capture_output=True, text=True).stdout)
-    n_out = sum(int(subprocess.run(["samtools", "view", "-c", str(s)], capture_output=True, text=True).stdout)
-                for s in shards)
-    # Reads are assigned to the window of their leftmost position; unmapped
-    # reads land in the trailing "unmapped" shard.
-    assert n_out == n_in
-
-
-def test_fastq_shards(tmp_path):
-    p = tmp_path / "in.fastq"
-    p.write_text("".join(f"@r{i}\nACGT\n+\nIIII\n" for i in range(7)))
-    shards = prepare.fastq_shards(p, tmp_path, reads_per_shard=3)
-    assert [s.name for s in shards] == ["in.shard000.fastq", "in.shard001.fastq", "in.shard002.fastq"]
-    assert sum(sum(1 for _ in open(s)) for s in shards) == 28
+def test_fastq_plain_decompresses_gz(tmp_path):
+    import gzip
+    text = "".join(f"@r{i}\nACGT\n+\nIIII\n" for i in range(7))
+    src = tmp_path / "in.fastq.gz"
+    with gzip.open(src, "wt") as f:
+        f.write(text)
+    out = prepare.fastq_plain(src, tmp_path / "in.fastq")
+    assert out.read_text() == text
+    plain = tmp_path / "p.fastq"; plain.write_text(text)
+    assert prepare.fastq_plain(plain, tmp_path / "p2.fastq").read_text() == text
 
 
 def test_run_writes_plan(tmp_path, monkeypatch):
@@ -1157,8 +1147,9 @@ def test_run_writes_plan(tmp_path, monkeypatch):
                       reference=f"file://{REPO}/python/tests/fixtures/genomic/m87_ref.fa")
     assert prepare.run([c]) == 0
     plan = json.loads((tmp_path / "prepared/toy/plan.json").read_text())
-    kinds = {s["kind"] for s in plan["shards"]}
+    kinds = {s["kind"] for s in plan["inputs"]}
     assert kinds == {"bam11", "bam_full"}
+    assert len(plan["inputs"]) == 2
 ```
 
 - [ ] **Step 2: Run to verify failure**
@@ -1170,11 +1161,12 @@ Expected: FAIL (`No module named 'stages'`).
 
 ```python
 # tools/perf/compression_suite/stages/prepare.py
-"""prepare: 11-column BAMs, shards, references -> prepared/<id>/plan.json."""
+"""prepare: 11-column BAMs, plain FASTQ, references -> prepared/<id>/plan.json."""
 from __future__ import annotations
 
 import gzip
 import json
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -1219,54 +1211,14 @@ def _sq(bam: Path) -> list[tuple[str, int]]:
     return out
 
 
-def window_shards(bam: Path, out_dir: Path, window_bp: int = 50_000_000) -> list[Path]:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    if not (bam.with_suffix(bam.suffix + ".bai").exists() or Path(str(bam) + ".csi").exists()):
-        subprocess.run(["samtools", "index", str(bam)], check=True)
-    shards = []
-    for sn, ln in _sq(bam):
-        for start in range(1, ln + 1, window_bp):
-            end = min(start + window_bp - 1, ln)
-            out = out_dir / f"{bam.stem}.{sn}_{start}_{end}.bam"
-            subprocess.run(["samtools", "view", "-b", "-o", str(out), str(bam), f"{sn}:{start}-{end}"], check=True)
-            n = int(subprocess.run(["samtools", "view", "-c", str(out)], capture_output=True, text=True).stdout)
-            if n == 0:
-                out.unlink(); continue
-            # keep only reads whose leftmost position starts inside the window
-            kept = out_dir / f"{bam.stem}.{sn}_{start}_{end}.w.bam"
-            expr = f"pos >= {start} && pos <= {end}"
-            subprocess.run(["samtools", "view", "-b", "-e", expr, "-o", str(kept), str(out)], check=True)
-            out.unlink(); kept.rename(out)
-            n = int(subprocess.run(["samtools", "view", "-c", str(out)], capture_output=True, text=True).stdout)
-            if n == 0:
-                out.unlink(); continue
-            shards.append(out)
-    un = out_dir / f"{bam.stem}.unmapped.bam"
-    subprocess.run(["samtools", "view", "-b", "-f", "4", "-o", str(un), str(bam)], check=True)
-    if int(subprocess.run(["samtools", "view", "-c", str(un)], capture_output=True, text=True).stdout) > 0:
-        shards.append(un)
+def fastq_plain(fq: Path, out: Path) -> Path:
+    out.parent.mkdir(parents=True, exist_ok=True)
+    if fq.name.endswith(".gz"):
+        with gzip.open(fq, "rb") as fi, open(out, "wb") as fo:
+            shutil.copyfileobj(fi, fo, 1 << 24)
     else:
-        un.unlink()
-    return shards
-
-
-def fastq_shards(fq: Path, out_dir: Path, reads_per_shard: int = 20_000_000) -> list[Path]:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stem = fq.name[:-len(".fastq.gz")] if fq.name.endswith(".fastq.gz") else fq.stem
-    opener = gzip.open if fq.name.endswith(".gz") else open
-    shards, idx, count, fo = [], 0, 0, None
-    with opener(fq, "rt") as fi:
-        while True:
-            rec = [fi.readline() for _ in range(4)]
-            if not rec[0]:
-                break
-            if fo is None or count == reads_per_shard:
-                if fo: fo.close()
-                p = out_dir / f"{stem}.shard{idx:03d}.fastq"; shards.append(p)
-                fo = open(p, "w"); idx += 1; count = 0
-            fo.writelines(rec); count += 1
-    if fo: fo.close()
-    return shards
+        shutil.copyfile(fq, out)
+    return out
 
 
 def reference_for(corpus: common.Corpus) -> Path | None:
@@ -1292,35 +1244,35 @@ def run(corpora: list[common.Corpus]) -> int:
         sha = common.sha256_of(src)
         if plan_path.exists() and json.loads(plan_path.read_text()).get("input_sha256") == sha:
             print(f"prepare: {c.id} up to date"); continue
-        shards = []
+        inputs = []
         ref = reference_for(c)
         if c.tier == "aligned":
-            for s in window_shards(src, pdir / "full"):
-                shards.append({"name": s.stem, "path": str(s), "kind": "bam_full"})
-                s11 = eleven_column(s, pdir / "11col" / s.name)
-                shards.append({"name": s.stem, "path": str(s11), "kind": "bam11"})
+            inputs.append({"name": src.stem, "path": str(src), "kind": "bam_full"})
+            s11 = eleven_column(src, pdir / f"{src.stem}.11col.bam")
+            inputs.append({"name": src.stem, "path": str(s11), "kind": "bam11"})
         elif c.tier == "unaligned":
-            for s in fastq_shards(src, pdir / "shards"):
-                shards.append({"name": s.stem, "path": str(s), "kind": "fastq"})
+            stem = src.name[:-len(".fastq.gz")] if src.name.endswith(".fastq.gz") else src.stem
+            fq = fastq_plain(src, pdir / f"{stem}.fastq")
+            inputs.append({"name": stem, "path": str(fq), "kind": "fastq"})
         else:
-            shards.append({"name": src.stem, "path": str(src), "kind": "mzml"})
+            inputs.append({"name": src.stem, "path": str(src), "kind": "mzml"})
         plan_path.write_text(json.dumps({"id": c.id, "tier": c.tier, "input_sha256": sha,
                                          "reference": str(ref) if ref else None,
-                                         "shards": shards}, indent=1))
-        print(f"prepare: {c.id}: {len(shards)} shards")
+                                         "inputs": inputs}, indent=1))
+        print(f"prepare: {c.id}: {len(inputs)} inputs")
     return 0
 ```
 
 - [ ] **Step 4: Run tests**
 
 Run: `cd /home/toddw/TTI-O && python/.venv/bin/python -m pytest tools/perf/compression_suite/tests/test_prepare.py -q`
-Expected: 4 passed. If `samtools view -e` is unsupported by 1.19 (it is supported since 1.12), replace the position filter with `awk` on SAM column 4.
+Expected: 3 passed.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add tools/perf/compression_suite/stages tools/perf/compression_suite/tests/test_prepare.py
-git commit -F /home/toddw/msg.txt   # subject: "perf: prepare stage: 11-column BAMs, window and read shards"
+git commit -F /home/toddw/msg.txt   # subject: "perf: prepare stage: 11-column BAMs, plain FASTQ, references"
 ```
 
 ---
@@ -1610,15 +1562,15 @@ git commit -F /home/toddw/msg.txt   # subject: "perf: fetch stage with sha256 pi
 
 **Interfaces:**
 - Consumes: `formats.load_all()`, `verify.*`, `common.run_timed`, `prepared/<id>/plan.json`.
-- Produces: `encode.run(corpora, formats_csv: str, smoke: bool) -> int`; writes `results/<id>/<format>.<shard>.json`:
+- Produces: `encode.run(corpora, formats_csv: str, smoke: bool) -> int`; writes `results/<id>/<format>.<kind>.json`:
   ```json
-  {"corpus": "...", "tier": "...", "format": "cram31_small", "shard": "...", "kind": "bam11",
+  {"corpus": "...", "tier": "...", "format": "cram31_small", "input": "...", "kind": "bam11",
    "input_bytes": 0, "output_bytes": 0, "encode_s": 0.0, "decode_s": 0.0,
    "encode_rss_mb": 0.0, "decode_rss_mb": 0.0, "verify": "PASS|FAIL",
    "max_rel_error": null, "tool_version": "...", "input_sha256": "...", "lossy": false,
    "breakdown": {}}
   ```
-- Produces: `encode.FORMATS_BY_TIER = {"aligned": [...], "unaligned": [...], "ms": [...]}` (which formats run on which shard kind: `bam11` gets every aligned key; `bam_full` gets `bam`, `cram30`, `cram31_*`, `mpegg` and never `ttio`).
+- Produces: `encode.FORMATS_BY_TIER = {"aligned": [...], "unaligned": [...], "ms": [...]}` (which formats run on which input kind: `bam11` gets every aligned key; `bam_full` gets `bam`, `cram30`, `cram31_*`, `mpegg` and never `ttio`).
 - Produces: `encode.breakdown(fmt_key, enc_path) -> dict` (TTI-O: `h5ls -rv` storage bytes summed per channel name; CRAM: empty unless `samtools cram_size` exists).
 - Resume key: an existing result JSON is skipped when its `input_sha256` and `tool_version` match; the encode runs `run_timed` around `fmt.encode`, then `fmt.decode`, then the tier's verify function.
 
@@ -1681,7 +1633,7 @@ Expected: FAIL (`cannot import name 'encode'`).
 
 ```python
 # tools/perf/compression_suite/stages/encode.py
-"""encode: every format x every shard, timed, decode-verified, resumable."""
+"""encode: every format x every input, timed, decode-verified, resumable."""
 from __future__ import annotations
 
 import json
@@ -1745,27 +1697,22 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
             continue
         plan = json.loads(plan_path.read_text())
         ref = Path(plan["reference"]) if plan.get("reference") else None
-        shards = plan["shards"]
-        if smoke:
-            first11 = [s for s in shards if s["kind"] != "bam_full"][:1]
-            firstfull = [s for s in shards if s["kind"] == "bam_full"][:1]
-            shards = first11 + firstfull
-        for shard in shards:
+        for item in plan["inputs"]:
             for key in FORMATS_BY_TIER[c.tier]:
                 if wanted and key not in wanted:
                     continue
-                if shard["kind"] == "bam_full" and key not in FULL_TAG_FORMATS:
+                if item["kind"] == "bam_full" and key not in FULL_TAG_FORMATS:
                     continue
                 fmt = reg[key]
-                out_json = RESULTS / c.id / f"{key}.{shard['name']}.{shard['kind']}.json"
-                inp = Path(shard["path"]); sha = common.sha256_of(inp); ver = fmt.version()
+                out_json = RESULTS / c.id / f"{key}.{item['kind']}.json"
+                inp = Path(item["path"]); sha = common.sha256_of(inp); ver = fmt.version()
                 if out_json.exists():
                     prev = json.loads(out_json.read_text())
                     if prev.get("input_sha256") == sha and prev.get("tool_version") == ver:
                         continue
                 work = Path(tempfile.mkdtemp(prefix=f"{c.id}.{key}.", dir=common.data_dir() / "out"))
-                rec = {"corpus": c.id, "tier": c.tier, "format": key, "shard": shard["name"],
-                       "kind": shard["kind"], "input_bytes": inp.stat().st_size, "input_sha256": sha,
+                rec = {"corpus": c.id, "tier": c.tier, "format": key, "input": item["name"],
+                       "kind": item["kind"], "input_bytes": inp.stat().st_size, "input_sha256": sha,
                        "tool_version": ver, "lossy": fmt.lossy, "breakdown": {}, "max_rel_error": None}
                 try:
                     holder = {}
@@ -1779,7 +1726,7 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
                                               key, str(enc), str(dec_dir), str(ref or "")])
                     dec = next(dec_dir.iterdir())
                     rec.update(decode_s=t_dec.wall_s, decode_rss_mb=t_dec.peak_rss_mb)
-                    rec["verify"], rec["max_rel_error"] = _verify(c.tier, shard["kind"], inp, dec, fmt.lossy)
+                    rec["verify"], rec["max_rel_error"] = _verify(c.tier, item["kind"], inp, dec, fmt.lossy)
                 except Exception as e:  # a broken encoder is a FAIL row, not a crash of the suite
                     rec.update(verify="FAIL", error=str(e)[-500:])
                     rec.setdefault("output_bytes", 0); rec.setdefault("encode_s", 0.0)
@@ -1789,7 +1736,7 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
                     shutil.rmtree(work, ignore_errors=True)
                 out_json.parent.mkdir(parents=True, exist_ok=True)
                 out_json.write_text(json.dumps(rec, indent=1))
-                print(f"encode: {c.id} {shard['name']} {key}: {rec.get('output_bytes')} B {rec['verify']}")
+                print(f"encode: {c.id} {item['kind']} {key}: {rec.get('output_bytes')} B {rec['verify']}")
     return 0
 
 
@@ -1826,7 +1773,7 @@ Expected: 2 passed. Note the `mkdtemp(dir=data_dir()/"out")` requires that direc
 
 ```bash
 git add tools/perf/compression_suite/stages/encode.py tools/perf/compression_suite/tests/test_encode.py
-git commit -F /home/toddw/msg.txt   # subject: "perf: encode stage: timed, decode-verified, resumable per shard"
+git commit -F /home/toddw/msg.txt   # subject: "perf: encode stage: timed, decode-verified, resumable"
 ```
 
 ---
@@ -1839,8 +1786,8 @@ git commit -F /home/toddw/msg.txt   # subject: "perf: encode stage: timed, decod
 
 **Interfaces:**
 - Consumes: `results/<id>/*.json` records from Task 9.
-- Produces: `report.aggregate(results_dir) -> dict[corpus_id, dict[(format, kind), Agg]]` where `Agg` sums `input_bytes`, `output_bytes`, `encode_s`, `decode_s`, takes max RSS, counts shards, and is `verify = "PASS"` only if every shard passed; `report.render(agg, env: dict) -> str` (markdown); `report.run(results_dir, out_md) -> int`.
-- Baseline per tier: aligned `bam` (bam11 kind), unaligned `fastq_gz`, ms `mzml_gz`. Ratio = baseline bytes / format bytes. bytes/base uses the base count recorded by `prepare` (add `"bases"` per shard to `plan.json` in `prepare.run` via `samtools stats`-free counting: `samtools view <bam> | awk '{s+=length($10)} END{print s}'`; for FASTQ sum of sequence lengths during sharding). Report `bytes/base` for genomic corpora only.
+- Produces: `report.aggregate(results_dir) -> dict[corpus_id, dict[(format, kind), Agg]]` holding one record per (format, kind) with `rss_mb` = max of the encode and decode peak RSS; `report.render(agg, env: dict) -> str` (markdown); `report.run(results_dir, out_md) -> int`.
+- Baseline per tier: aligned `bam` (bam11 kind), unaligned `fastq_gz`, ms `mzml_gz`. Ratio = baseline bytes / format bytes. bytes/base uses the base count recorded by `prepare` (add `"bases"` per input to `plan.json` in `prepare.run`: `samtools view <bam> | awk '{s+=length($10)} END{print s}'` for BAM, `awk 'NR%4==2{s+=length($0)} END{print s}'` for FASTQ). Report `bytes/base` for genomic corpora only.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -1855,7 +1802,7 @@ import report  # noqa: E402
 
 
 def _rec(**kw):
-    base = {"corpus": "toy", "tier": "aligned", "format": "bam", "shard": "s0", "kind": "bam11",
+    base = {"corpus": "toy", "tier": "aligned", "format": "bam", "input": "toy", "kind": "bam11",
             "input_bytes": 100, "output_bytes": 50, "encode_s": 1.0, "decode_s": 0.5,
             "encode_rss_mb": 10.0, "decode_rss_mb": 5.0, "verify": "PASS", "max_rel_error": None,
             "tool_version": "samtools 1.19.2", "input_sha256": "x", "lossy": False, "breakdown": {},
@@ -1863,14 +1810,14 @@ def _rec(**kw):
     base.update(kw); return base
 
 
-def test_aggregate_sums_shards_and_flags_fail(tmp_path):
+def test_aggregate_keeps_one_row_per_format_and_flags_fail(tmp_path):
     d = tmp_path / "toy"; d.mkdir()
-    (d / "bam.s0.bam11.json").write_text(json.dumps(_rec()))
-    (d / "bam.s1.bam11.json").write_text(json.dumps(_rec(shard="s1", output_bytes=30)))
-    (d / "ttio.s0.bam11.json").write_text(json.dumps(_rec(format="ttio", output_bytes=20)))
-    (d / "ttio.s1.bam11.json").write_text(json.dumps(_rec(format="ttio", shard="s1", output_bytes=10, verify="FAIL")))
+    (d / "bam.bam11.json").write_text(json.dumps(_rec(output_bytes=80)))
+    (d / "bam.bam_full.json").write_text(json.dumps(_rec(kind="bam_full", output_bytes=120)))
+    (d / "ttio.bam11.json").write_text(json.dumps(_rec(format="ttio", output_bytes=20, verify="FAIL")))
     agg = report.aggregate(tmp_path)
     assert agg["toy"][("bam", "bam11")].output_bytes == 80
+    assert agg["toy"][("bam", "bam_full")].output_bytes == 120
     assert agg["toy"][("bam", "bam11")].verify == "PASS"
     assert agg["toy"][("ttio", "bam11")].verify == "FAIL"
     md = report.render(agg, {"cpu": "x", "date": "2026-08-16"})
@@ -1912,7 +1859,6 @@ class Agg:
     encode_s: float = 0.0
     decode_s: float = 0.0
     rss_mb: float = 0.0
-    shards: int = 0
     bases: int = 0
     verify: str = "PASS"
     lossy: bool = False
@@ -1925,18 +1871,13 @@ def aggregate(results_dir: Path) -> dict[str, dict[tuple[str, str], Agg]]:
     out: dict[str, dict[tuple[str, str], Agg]] = {}
     for f in sorted(Path(results_dir).glob("*/*.json")):
         r = json.loads(f.read_text())
-        a = out.setdefault(r["corpus"], {}).setdefault((r["format"], r["kind"]), Agg(tier=r["tier"]))
-        a.input_bytes += r.get("input_bytes", 0); a.output_bytes += r.get("output_bytes", 0)
-        a.encode_s += r.get("encode_s", 0.0); a.decode_s += r.get("decode_s", 0.0)
-        a.rss_mb = max(a.rss_mb, r.get("encode_rss_mb", 0.0), r.get("decode_rss_mb", 0.0))
-        a.shards += 1; a.bases += r.get("bases", 0) or 0
-        a.lossy = r.get("lossy", False); a.tool_version = r.get("tool_version", "")
-        if r.get("verify") != "PASS":
-            a.verify = "FAIL"
-        if r.get("max_rel_error") is not None:
-            a.max_rel_error = max(a.max_rel_error or 0.0, r["max_rel_error"])
-        for k, v in (r.get("breakdown") or {}).items():
-            a.breakdown[k] = a.breakdown.get(k, 0) + v
+        a = Agg(tier=r["tier"], input_bytes=r.get("input_bytes", 0), output_bytes=r.get("output_bytes", 0),
+                encode_s=r.get("encode_s", 0.0), decode_s=r.get("decode_s", 0.0),
+                rss_mb=max(r.get("encode_rss_mb", 0.0), r.get("decode_rss_mb", 0.0)),
+                bases=r.get("bases", 0) or 0, verify="PASS" if r.get("verify") == "PASS" else "FAIL",
+                lossy=r.get("lossy", False), tool_version=r.get("tool_version", ""),
+                max_rel_error=r.get("max_rel_error"), breakdown=dict(r.get("breakdown") or {}))
+        out.setdefault(r["corpus"], {})[(r["format"], r["kind"])] = a
     return out
 
 
@@ -1963,8 +1904,8 @@ def render(agg: dict, env: dict) -> str:
         tier = next(iter(table.values())).tier
         base = table.get(BASELINE[tier])
         lines += [f"## {cid}", "",
-                  "| format | kind | bytes | ratio | bytes/base | encode s | decode s | peak RSS MB | shards | lossy | tool | verify |",
-                  "|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|---|"]
+                  "| format | kind | bytes | ratio | bytes/base | encode s | decode s | peak RSS MB | lossy | tool | verify |",
+                  "|---|---|---:|---:|---:|---:|---:|---:|---|---|---|"]
         for (key, kind), a in sorted(table.items()):
             ok = a.verify == "PASS"
             size = _fmt_bytes(a.output_bytes) if ok else ""
@@ -1972,7 +1913,7 @@ def render(agg: dict, env: dict) -> str:
             bpb = f"{a.output_bytes / a.bases:.4f}" if ok and a.bases and tier != "ms" else ""
             lossy = "yes" + (f" (max rel err {a.max_rel_error:.1e})" if a.max_rel_error is not None else "") if a.lossy else "no"
             lines.append(f"| {key} | {kind} | {size} | {ratio} | {bpb} | {a.encode_s:.1f} | {a.decode_s:.1f} | "
-                         f"{a.rss_mb:.0f} | {a.shards} | {lossy} | {a.tool_version} | {a.verify} |")
+                         f"{a.rss_mb:.0f} | {lossy} | {a.tool_version} | {a.verify} |")
         lines.append("")
         for (key, kind), a in sorted(table.items()):
             if a.breakdown and a.verify == "PASS":
@@ -1999,7 +1940,7 @@ def run(results_dir: Path, out_md: Path) -> int:
 
 - [ ] **Step 4: Add `bases` to prepare's plan and to encode's record**
 
-In `stages/prepare.py`, after each shard is created, count bases: for BAM shards `int(subprocess.run(["sh","-c",f"samtools view {s} | awk '{{n+=length($10)}} END{{print n+0}}'"], capture_output=True, text=True).stdout)`; for FASTQ shards sum `len(seq)` while writing; store `"bases": n` in each shard dict (mzML: 0). In `stages/encode.py`, copy `shard.get("bases", 0)` into `rec["bases"]`. Re-run `tests/test_prepare.py` and `tests/test_encode.py`.
+In `stages/prepare.py`, after each input is created, count bases: for BAM `int(subprocess.run(["sh","-c",f"samtools view {s} | awk '{{n+=length($10)}} END{{print n+0}}'"], capture_output=True, text=True).stdout)`; for FASTQ `awk 'NR%4==2{n+=length($0)} END{print n+0}'`; store `"bases": n` in each input dict (mzML: 0). In `stages/encode.py`, copy `item.get("bases", 0)` into `rec["bases"]`. Re-run `tests/test_prepare.py` and `tests/test_encode.py`.
 
 - [ ] **Step 5: Run tests**
 
@@ -2033,10 +1974,10 @@ $PY tools/perf/compression_suite/suite.py report
 ```
 Expected: every row `PASS`. If a row is `FAIL`, open its JSON `error` field and fix the format module (a real bug in an encoder or in TTI-O's import/export is a finding; record it in the README's "Known issues" section and keep the FAIL row).
 
-- [ ] **Step 2: Check the memory ceiling for the shard size**
+- [ ] **Step 2: Read the TTI-O peak RSS**
 
-Run: `grep -h encode_rss_mb tools/perf/compression_suite/results/*/ttio.*.json | sort -t: -k2 -n | tail -3`
-The 50 Mb-window shard of the HG002 2x250 chr22 BAM must stay under 20,000 MB peak RSS. If it does not, set `window_bp` to 25,000,000 in `prepare.run` and rerun prepare + encode for that corpus.
+Run: `grep -h encode_rss_mb tools/perf/compression_suite/results/*/ttio*.json | sort -t: -k2 -n | tail -3`
+The streaming importers keep the TTI-O rows near the block working set (about 2 GB at the default 1 M-read blocks per docs/format-spec.md section 10.12.3). A row far above that is a finding: record it in the README and keep the number.
 
 - [ ] **Step 3: Read REPORT.md, then commit results and report**
 
@@ -2074,7 +2015,7 @@ git commit -F /home/toddw/msg.txt   # subject: "perf: full compression benchmark
 
 - [ ] **Step 4: Open the PR**
 
-Push via Windows git (`"/c/Program Files/Git/bin/git.exe" -C "//wsl.localhost/Ubuntu/home/toddw/TTI-O" push -u origin compression-suite`), then `gh pr create --body-file <gated body>` with the 5-part body under 200 words: what the suite is, how sizes are verified, what it deliberately does not do (no CI, sharded ingestion, no lossy TTI-O tier), the test path (`tools/perf/compression_suite/tests`), and the headline numbers per corpus.
+Push via Windows git (`"/c/Program Files/Git/bin/git.exe" -C "//wsl.localhost/Ubuntu/home/toddw/TTI-O" push -u origin compression-suite`), then `gh pr create --body-file <gated body>` with the 5-part body under 200 words: what the suite is, how sizes are verified, what it deliberately does not do (no CI, no lossy TTI-O tier), the test path (`tools/perf/compression_suite/tests`), and the headline numbers per corpus.
 
 ---
 
@@ -2082,10 +2023,10 @@ Push via Windows git (`"/c/Program Files/Git/bin/git.exe" -C "//wsl.localhost/Ub
 
 - Spec §2 layout: Tasks 1, 7-10 create every listed file (`stages/` holds fetch/prepare/encode; the spec's `formats/`, `verify.py`, `report.py`, `tools/`, `results/`, `REPORT.md` all appear). `tools/build_genie.sh` from the spec is replaced by the pinned container image (`tools/genie_image.txt`), which the spec's §9 allows ("pin ... record it in tools/").
 - Spec §3 corpora: on-disk five in Task 1, fetched six plus two references in Task 8 with the selection criteria and discovery script.
-- Spec §4 information constancy: Task 7 (11-column shards, full-tag shards), Task 9 (`FULL_TAG_FORMATS`, TTI-O never on full-tag).
+- Spec §4 information constancy: Task 7 (11-column and full-tag inputs), Task 9 (`FULL_TAG_FORMATS`, TTI-O never on full-tag).
 - Spec §5 formats: Tasks 3-6 cover every key; threads=1 in samtools and genie; psims numpress names verified at Task 6 step 4.
 - Spec §6 measurement: Task 1 `run_timed`, Task 9 child-process timing and verify; FAIL rows carry no size (Task 10 render).
 - Spec §7 report: headline + per-corpus tables + environment + breakdown (Task 10); CRAM breakdown omitted since `samtools cram_size` is not in 1.19 (spec §9 says omit).
 - Spec §8 validation: unit tests per task, `--smoke` (Task 11), full run (Task 12).
 - Type consistency: `Corpus`, `Timed`, `Format` protocol, registry keys, `plan.json` and result JSON field names are identical across Tasks 1, 3-10.
-- Sharding is a plan-level constraint not in the spec text; it is stated in this plan's header and README because TTI-O importers hold a run in memory. It does not change what is measured (whole datasets, identical shard set for every format).
+- Revised 2026-08-17: the earlier draft sharded aligned BAMs into 50 Mb windows and FASTQ into 20 M-read chunks because the TTI-O importers held a run in memory. The v1.9 streaming importers and exporters (blocks_v1, PRs #290-#292) removed that limit, so every format now encodes the whole file and the report has one row per format and input kind.
