@@ -113,8 +113,11 @@ class Compression(IntEnum):
     ZSTD = 16
     # Lossless float64 channel codec: per-block none/delta on the
     # u64 bit view + byte-plane transpose + zstd. Spec at
-    # docs/superpowers/specs/2026-08-16-float-delta-codec-design.md;
-    # opt-in via WrittenRun.signal_compression="float_delta_zstd".
+    # docs/superpowers/specs/2026-08-16-float-delta-codec-design.md.
+    # On disk: the MS float64 channel default (opt_disable_float_delta
+    # to opt out). On the transport wire: the default spectral AU
+    # channel codec when TransportWriter(use_compression=True), one
+    # FDZ1 stream per channel.
     FLOAT_DELTA_ZSTD = 17
 
 

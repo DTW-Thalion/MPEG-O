@@ -788,7 +788,8 @@ class TestSpectrumToAccessUnit:
         try:
             run = ds.all_runs["run_0001"]
             spectrum = run[0]
-            au = _spectrum_to_access_unit(spectrum, run, use_compression=True)
+            au = _spectrum_to_access_unit(spectrum, run, use_compression=True,
+                                          compression_codec="zlib")
             assert all(ch.compression == int(Compression.ZLIB) for ch in au.channels)
             # The compressed bytes round-trip through zlib.decompress.
             for ch in au.channels:

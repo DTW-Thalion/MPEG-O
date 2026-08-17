@@ -86,9 +86,11 @@ def main(argv: list[str] | None = None) -> int:
              "(=, '') byte-for-byte. No effect on MS-only inputs.",
     )
     parser.add_argument(
-        "--compress", choices=["zlib", "zstd"], default=None,
+        "--compress", choices=["float_delta_zstd", "zstd", "zlib"],
+        default=None,
         help="compress spectral AU channels with the chosen wire codec "
-             "(zlib = compression id 1, zstd = id 16).",
+             "(float_delta_zstd = compression id 17, zstd = id 16, "
+             "zlib = id 1).",
     )
     parser.add_argument(
         "--image-processed", action="store_true",
@@ -107,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
             use_checksum=args.checksum,
             use_bulk_mode=args.bulk,
             use_compression=args.compress is not None,
-            compression_codec=args.compress or "zlib",
+            compression_codec=args.compress or "float_delta_zstd",
         )
     return 0
 

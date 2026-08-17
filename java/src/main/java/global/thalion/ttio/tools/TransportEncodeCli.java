@@ -24,8 +24,13 @@ import java.util.List;
  * <pre>
  *   java -cp target/classes:&lt;deps&gt; \
  *        global.thalion.ttio.tools.TransportEncodeCli \
- *        [--bulk] [--image-processed] input.tio output.tis
+ *        [--bulk] [--image-processed] [--compress &lt;codec&gt;] \
+ *        input.tio output.tis
  * </pre>
+ *
+ * <p>{@code --compress} turns spectral AU channel compression on with
+ * the named codec: {@code float_delta_zstd} (wire id 17), {@code zstd}
+ * (id 16) or {@code zlib} (id 1).
  */
 public final class TransportEncodeCli {
 
@@ -38,10 +43,16 @@ public final class TransportEncodeCli {
         String input = null, output = null;
         boolean bulk = false;
         boolean imageProcessed = false;
-        for (String a : args) {
+        String compress = null;
+        for (int i = 0; i < args.length; i++) {
+            String a = args[i];
             if ("--bulk".equals(a)) { bulk = true; continue; }
             if ("--image-processed".equals(a)) {
                 imageProcessed = true;
+                continue;
+            }
+            if ("--compress".equals(a) && i + 1 < args.length) {
+                compress = args[++i];
                 continue;
             }
             if (input == null) { input = a; }
@@ -49,8 +60,9 @@ public final class TransportEncodeCli {
         }
         if (input == null || output == null) {
             System.err.println(
-                "usage: TransportEncodeCli [--bulk] "
-                + "[--image-processed] <input.tio> <output.tis>");
+                "usage: TransportEncodeCli [--bulk] [--image-processed] "
+                + "[--compress float_delta_zstd|zstd|zlib] "
+                + "<input.tio> <output.tis>");
             System.exit(2);
         }
         if (imageProcessed) {
@@ -75,6 +87,10 @@ public final class TransportEncodeCli {
             try (SpectralDataset ds = SpectralDataset.open(input);
                  TransportWriter tw = new TransportWriter(Path.of(output))) {
                 tw.setUseBulkMode(bulk);
+                if (compress != null) {
+                    tw.setUseCompression(true);
+                    tw.setCompressionCodec(compress);
+                }
                 tw.writeDataset(ds);
             }
         }

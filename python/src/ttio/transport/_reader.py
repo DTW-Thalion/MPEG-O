@@ -1207,18 +1207,7 @@ def _ingest_access_unit_bytes(rd: dict, payload: bytes) -> None:
             raise NotImplementedError(
                 f"precision {precision} not yet supported (FLOAT64 only)"
             )
-        if compression == _COMPRESSION_NONE_WIRE:
-            raw = data
-        elif compression == _COMPRESSION_ZLIB_WIRE:
-            raw = zlib.decompress(data)
-        elif compression == _COMPRESSION_ZSTD_WIRE:
-            raw = _zstd_decompress(data, n_elements * 8)
-        else:
-            raise NotImplementedError(
-                f"compression {compression} not yet supported "
-                "(current codec: NONE, ZLIB, ZSTD)"
-            )
-        arr = np.frombuffer(raw, dtype="<f8").copy()
+        arr = _decode_wire_channel(compression, data, n_elements)
         seen[name] = True
         if length == 0:
             length = len(arr)
@@ -1248,6 +1237,7 @@ _FLOAT64_WIRE = int(Precision.FLOAT64)
 _COMPRESSION_NONE_WIRE = int(Compression.NONE)
 _COMPRESSION_ZLIB_WIRE = int(Compression.ZLIB)
 _COMPRESSION_ZSTD_WIRE = int(Compression.ZSTD)
+_COMPRESSION_FDZ_WIRE = int(Compression.FLOAT_DELTA_ZSTD)
 
 
 def _zstd_decompress(data: bytes, max_output_size: int) -> bytes:
@@ -1260,6 +1250,33 @@ def _zstd_decompress(data: bytes, max_output_size: int) -> bytes:
         data, max_output_size=max_output_size)
 
 
+def _decode_wire_channel(compression: int, data: bytes, n_elements: int) -> np.ndarray:
+    """Decode one spectral AU channel's ``data`` bytes to a fresh
+    little-endian float64 array, dispatching on the wire compression
+    byte (spec §4.3.1)."""
+    if compression == _COMPRESSION_NONE_WIRE:
+        raw = data
+    elif compression == _COMPRESSION_ZLIB_WIRE:
+        raw = zlib.decompress(data)
+    elif compression == _COMPRESSION_ZSTD_WIRE:
+        raw = _zstd_decompress(data, n_elements * 8)
+    elif compression == _COMPRESSION_FDZ_WIRE:
+        from ..codecs import float_delta_zstd
+        arr = float_delta_zstd.decode(data)
+        if len(arr) != n_elements:
+            raise ValueError(
+                f"FLOAT_DELTA_ZSTD channel decoded {len(arr)} values but the "
+                f"channel header declares n_elements={n_elements}"
+            )
+        return arr
+    else:
+        raise NotImplementedError(
+            f"compression {compression} not yet supported "
+            "(current codec: NONE, ZLIB, ZSTD, FLOAT_DELTA_ZSTD)"
+        )
+    return np.frombuffer(raw, dtype="<f8").copy()
+
+
 def _ingest_access_unit(rd: dict, au: AccessUnit) -> None:
     arr_by_name: dict[str, np.ndarray] = {}
     for ch in au.channels:
@@ -1267,18 +1284,7 @@ def _ingest_access_unit(rd: dict, au: AccessUnit) -> None:
             raise NotImplementedError(
                 f"precision {ch.precision} not yet supported (FLOAT64 only)"
             )
-        if ch.compression == int(Compression.NONE):
-            raw = ch.data
-        elif ch.compression == int(Compression.ZLIB):
-            raw = zlib.decompress(ch.data)
-        elif ch.compression == int(Compression.ZSTD):
-            raw = _zstd_decompress(ch.data, ch.n_elements * 8)
-        else:
-            raise NotImplementedError(
-                f"compression {ch.compression} not yet supported "
-                "(current codec: NONE, ZLIB, ZSTD)"
-            )
-        arr_by_name[ch.name] = np.frombuffer(raw, dtype="<f8").copy()
+        arr_by_name[ch.name] = _decode_wire_channel(ch.compression, ch.data, ch.n_elements)
 
     lengths = {len(a) for a in arr_by_name.values()}
     if len(lengths) > 1:

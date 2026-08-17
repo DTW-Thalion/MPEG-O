@@ -52,6 +52,26 @@ from ._common import (
     _read_mate_chrom_names_table,
 )
 
+#: Writer-side names for the spectral AU channel codecs, in the order
+#: a reader gained them. Wire ids: zlib 1, zstd 16, float_delta_zstd 17.
+_WIRE_CODECS = ("float_delta_zstd", "zstd", "zlib")
+
+
+def _wire_channel_encoder(codec: str):
+    """Return ``(compression id, encode)`` for a wire codec name, where
+    ``encode`` maps a little-endian float64 array to the channel's
+    ``data`` bytes."""
+    if codec == "float_delta_zstd":
+        from ..codecs import float_delta_zstd
+        return int(Compression.FLOAT_DELTA_ZSTD), float_delta_zstd.encode
+    if codec == "zstd":
+        import zstandard
+        zc = zstandard.ZstdCompressor(level=3)
+        return int(Compression.ZSTD), lambda arr: zc.compress(arr.tobytes())
+    if codec == "zlib":
+        return int(Compression.ZLIB), lambda arr: zlib.compress(arr.tobytes())
+    raise ValueError(f"unsupported wire codec {codec!r}")
+
 
 class TransportWriter:
     """Serialize a :class:`SpectralDataset` as a transport byte stream."""
@@ -63,7 +83,7 @@ class TransportWriter:
         use_checksum: bool = False,
         use_compression: bool = False,
         use_bulk_mode: bool = False,
-        compression_codec: str = "zlib",
+        compression_codec: str = "float_delta_zstd",
     ):
         """Construct a writer targeting ``output``.
 
@@ -83,12 +103,15 @@ class TransportWriter:
             The reader detects the per-channel compression byte and
             decompresses transparently. Default ``False``.
         compression_codec : str, optional
-            ``"zlib"`` (default, wire id 1) or ``"zstd"`` (wire id 16,
-            level 3 — same ratio class as zlib at a fraction of the
-            encode cost). Only consulted when ``use_compression`` is
-            ``True``. Readers older than the zstd addition reject
-            id 16 with an unsupported-compression error, so flip a
-            deployment to zstd only after its readers are current.
+            ``"float_delta_zstd"`` (default, wire id 17: the codec-17
+            FDZ1 stream per channel, the smallest of the three on
+            per-AU float64 payloads), ``"zstd"`` (wire id 16, level 3)
+            or ``"zlib"`` (wire id 1). Only consulted when
+            ``use_compression`` is ``True``. Readers older than a
+            codec's addition reject its id with an
+            unsupported-compression error (id 16: pre-1.8.0 readers;
+            id 17: 1.8.0 and older), so name ``"zlib"`` explicitly
+            until a deployment's readers are current.
         use_bulk_mode : bool, optional
             When ``True``, the writer probes each genomic run for
             v2 codec blobs on disk and emits ``BlobV2*`` packets
@@ -105,10 +128,10 @@ class TransportWriter:
             self._stream = output  # type: ignore[assignment]
         self._use_checksum = use_checksum
         self._use_compression = use_compression
-        if compression_codec not in ("zlib", "zstd"):
+        if compression_codec not in _WIRE_CODECS:
             raise ValueError(
                 f"unsupported compression_codec {compression_codec!r}; "
-                "expected 'zlib' or 'zstd'"
+                "expected 'float_delta_zstd', 'zstd' or 'zlib'"
             )
         self._compression_codec = compression_codec
         # Phase 2c-T: when True, the writer probes each genomic run for
@@ -1440,11 +1463,12 @@ class TransportWriter:
         is_ms_class = run.spectrum_class == "TTIOMassSpectrum"
         is_pixel_class = wire_class == 4
         use_compression = self._use_compression
-        use_zstd = use_compression and self._compression_codec == "zstd"
-        if use_zstd:
-            compression_enum = int(Compression.ZSTD) & 0xFF
+        if use_compression:
+            compression_enum, compress = _wire_channel_encoder(self._compression_codec)
+            compression_enum &= 0xFF
         else:
-            compression_enum = int(Compression.ZLIB if use_compression else Compression.NONE) & 0xFF
+            compression_enum = int(Compression.NONE) & 0xFF
+            compress = None
         precision_enum = int(Precision.FLOAT64) & 0xFF
         unknown_polarity_wire = _POLARITY_TO_WIRE[Polarity.UNKNOWN]
 
@@ -1491,12 +1515,6 @@ class TransportWriter:
         pixel_pack = _AU_PIXEL_STRUCT.pack
         crc32c_ = crc32c
         checksum_pack = _CHECKSUM_STRUCT.pack
-        if use_zstd:
-            import zstandard
-            _zc = zstandard.ZstdCompressor(level=3)
-            compress = _zc.compress
-        else:
-            compress = zlib.compress
         use_checksum = self._use_checksum
         flags = int(PacketFlag.HAS_CHECKSUM) if use_checksum else 0
         ac_type = int(PacketType.ACCESS_UNIT) & 0xFF
@@ -1516,8 +1534,8 @@ class TransportWriter:
                 if slot is None:
                     continue
                 ci, full_arr = slot
-                raw = full_arr[start:stop].tobytes()
-                payload_bytes = compress(raw) if use_compression else raw
+                seg = full_arr[start:stop]
+                payload_bytes = compress(seg) if use_compression else seg.tobytes()
                 channel_chunks.append(channel_name_prefixes[ci])
                 channel_chunks.append(channel_suffix_pack(
                     precision_enum,
@@ -1676,7 +1694,7 @@ def _spectrum_to_access_unit(
     run: AcquisitionRun,
     *,
     use_compression: bool = False,
-    compression_codec: str = "zlib",
+    compression_codec: str = "float_delta_zstd",
 ) -> AccessUnit:
     wire_class = _SPECTRUM_CLASS_TO_WIRE.get(run.spectrum_class, 0)
     ms_level = 0
@@ -1693,16 +1711,11 @@ def _spectrum_to_access_unit(
             continue
         sa = spectrum.signal_array(cname)
         arr = np.asarray(sa.data).astype("<f8", copy=False)
-        raw = arr.tobytes()
-        if use_compression and compression_codec == "zstd":
-            import zstandard
-            payload = zstandard.ZstdCompressor(level=3).compress(raw)
-            compression = int(Compression.ZSTD)
-        elif use_compression:
-            payload = zlib.compress(raw)
-            compression = int(Compression.ZLIB)
+        if use_compression:
+            compression, encode = _wire_channel_encoder(compression_codec)
+            payload = encode(arr)
         else:
-            payload = raw
+            payload = arr.tobytes()
             compression = int(Compression.NONE)
         channels.append(ChannelData(
             name=cname,

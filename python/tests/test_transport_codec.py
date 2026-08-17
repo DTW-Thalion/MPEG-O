@@ -149,14 +149,15 @@ class TestInMemoryRoundTrip:
 class TestCompression:
 
     def test_zlib_wire_compression_roundtrip(self, tmp_path):
-        """use_compression=True should produce a smaller .tis than
+        """compression_codec="zlib" should produce a smaller .tis than
         the uncompressed baseline while preserving signal values."""
         src = _make_minimal_dataset(tmp_path / "src.tio")
 
         plain = tmp_path / "plain.tis"
         compressed = tmp_path / "compressed.tis"
         file_to_transport(src, plain)
-        file_to_transport(src, compressed, use_compression=True)
+        file_to_transport(src, compressed, use_compression=True,
+                          compression_codec="zlib")
 
         # The 3-spectrum fixture is small, so compressed may only be
         # mildly smaller; require strict ≤ rather than > to tolerate
@@ -210,7 +211,8 @@ class TestCompression:
         plain = tmp_path / "plain.tis"
         compressed = tmp_path / "compressed.tis"
         file_to_transport(src, plain)
-        file_to_transport(src, compressed, use_compression=True)
+        file_to_transport(src, compressed, use_compression=True,
+                          compression_codec="zlib")
         # Constant+repetitive data: zlib should compress substantially
         # (well under half).
         assert compressed.stat().st_size < plain.stat().st_size / 2, (
@@ -253,6 +255,115 @@ class TestCompression:
         finally:
             original.close()
             rt.close()
+
+    def _au_channel_codes(self, path):
+        """Return the set of channel compression bytes seen in AUs."""
+        from ttio.enums import Compression  # noqa: F401
+        codes = set()
+        with TransportReader(path) as tr:
+            for hdr, payload in tr.iter_packets():
+                if hdr.packet_type == PacketType.ACCESS_UNIT:
+                    au = AccessUnit.from_bytes(payload)
+                    codes.update(ch.compression for ch in au.channels)
+        return codes
+
+    def test_float_delta_zstd_is_the_default_wire_codec(self, tmp_path):
+        """use_compression=True with no codec named emits id 17."""
+        from ttio.enums import Compression
+        src = _make_minimal_dataset(tmp_path / "src.tio")
+        out = tmp_path / "default.tis"
+        file_to_transport(src, out, use_compression=True)
+        assert self._au_channel_codes(out) == {int(Compression.FLOAT_DELTA_ZSTD)}
+
+    def test_zlib_still_selectable(self, tmp_path):
+        from ttio.enums import Compression
+        src = _make_minimal_dataset(tmp_path / "src.tio")
+        out = tmp_path / "zlib.tis"
+        file_to_transport(src, out, use_compression=True,
+                          compression_codec="zlib")
+        assert self._au_channel_codes(out) == {int(Compression.ZLIB)}
+
+    def test_float_delta_zstd_wire_roundtrip(self, tmp_path):
+        """compression_codec="float_delta_zstd" emits wire id 17 as an
+        FDZ1 stream per channel and the reader restores the values
+        bit-exactly, on both the bulk hot path and the per-spectrum
+        path."""
+        from ttio.enums import Compression
+        from ttio.transport._writer import _spectrum_to_access_unit
+        src = _make_minimal_dataset(tmp_path / "src.tio")
+
+        compressed = tmp_path / "fdz.tis"
+        file_to_transport(src, compressed, use_compression=True,
+                          compression_codec="float_delta_zstd")
+        assert self._au_channel_codes(compressed) == {int(Compression.FLOAT_DELTA_ZSTD)}
+        with TransportReader(compressed) as tr:
+            for hdr, payload in tr.iter_packets():
+                if hdr.packet_type == PacketType.ACCESS_UNIT:
+                    for ch in AccessUnit.from_bytes(payload).channels:
+                        assert ch.data[:4] == b"FDZ1"
+
+        rt = transport_to_file(compressed, tmp_path / "rt.tio")
+        original = SpectralDataset.open(src)
+        try:
+            for name in original.all_runs:
+                ra, rb = original.all_runs[name], rt.all_runs[name]
+                for i in range(len(ra)):
+                    for c in ra.channel_names:
+                        assert np.array_equal(
+                            np.asarray(ra[i].signal_array(c).data),
+                            np.asarray(rb[i].signal_array(c).data),
+                        )
+                    # per-spectrum path agrees with the hot path
+                    au = _spectrum_to_access_unit(
+                        ra[i], ra, use_compression=True,
+                        compression_codec="float_delta_zstd")
+                    for ch in au.channels:
+                        assert ch.compression == int(Compression.FLOAT_DELTA_ZSTD)
+                        assert ch.data[:4] == b"FDZ1"
+        finally:
+            original.close()
+            rt.close()
+
+    def test_float_delta_zstd_element_count_mismatch_rejected(self, tmp_path):
+        """An FDZ1 payload whose n_values differs from the channel
+        header's n_elements is rejected rather than misread."""
+        from ttio.codecs import float_delta_zstd as fdz
+        from ttio.enums import Compression, Precision
+        from ttio.transport import ChannelData
+        buffer = io.BytesIO()
+        with TransportWriter(buffer) as tw:
+            tw.write_stream_header(
+                format_version="1.2", title="bad", isa_investigation="x",
+                features=[], n_datasets=1,
+            )
+            tw.write_dataset_header(
+                dataset_id=1, name="r", acquisition_mode=0,
+                spectrum_class="TTIOMassSpectrum",
+                channel_names=["mz", "intensity"],
+                instrument_json="{}",
+            )
+            vals = np.arange(8, dtype="<f8")
+            bad = ChannelData(
+                name="mz", precision=int(Precision.FLOAT64),
+                compression=int(Compression.FLOAT_DELTA_ZSTD),
+                n_elements=7, data=fdz.encode(vals),
+            )
+            good = ChannelData(
+                name="intensity", precision=int(Precision.FLOAT64),
+                compression=int(Compression.FLOAT_DELTA_ZSTD),
+                n_elements=7, data=fdz.encode(vals[:7]),
+            )
+            au = AccessUnit(
+                spectrum_class=0, acquisition_mode=0, ms_level=1,
+                polarity=0, retention_time=1.0, precursor_mz=0.0,
+                precursor_charge=0, ion_mobility=0.0,
+                base_peak_intensity=0.0, channels=[bad, good],
+            ).to_bytes()
+            tw._emit(PacketType.ACCESS_UNIT, au, dataset_id=1, au_sequence=0)
+            tw.write_end_of_stream()
+        buffer.seek(0)
+        with pytest.raises(ValueError, match="n_elements"):
+            transport_to_file(buffer, tmp_path / "rt.tio")
 
     def test_unknown_compression_codec_rejected(self, tmp_path):
         import pytest

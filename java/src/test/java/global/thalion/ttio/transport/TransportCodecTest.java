@@ -216,6 +216,7 @@ class TransportCodecTest {
         }
         try (TransportWriter tw = new TransportWriter(compressed)) {
             tw.setUseCompression(true);
+            tw.setCompressionCodec("zlib");
             tw.writeDataset(src);
         }
         src.close();
@@ -273,6 +274,107 @@ class TransportCodecTest {
         TransportWriter tw = new TransportWriter(new ByteArrayOutputStream());
         assertThrows(IllegalArgumentException.class,
                 () -> tw.setCompressionCodec("brotli"));
+    }
+
+    /** Compression bytes of every spectral AU channel in a stream. */
+    private static java.util.Set<Integer> auChannelCodes(byte[] streamBytes) throws Exception {
+        java.util.Set<Integer> codes = new java.util.HashSet<>();
+        try (TransportReader tr = new TransportReader(streamBytes)) {
+            for (TransportReader.PacketRecord p : tr.readAllPackets()) {
+                if (p.header.packetType != PacketType.ACCESS_UNIT) continue;
+                for (ChannelData ch : AccessUnit.decode(p.payload).channels) {
+                    codes.add(ch.compression);
+                }
+            }
+        }
+        return codes;
+    }
+
+    @Test
+    void floatDeltaZstdIsTheDefaultWireCodec(@TempDir Path dir) throws Exception {
+        try (SpectralDataset src0 = makeFixture(dir)) { /* close */ }
+        SpectralDataset src = SpectralDataset.open(dir.resolve("src.tio").toString());
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        try (TransportWriter tw = new TransportWriter(stream)) {
+            tw.setUseCompression(true);
+            tw.writeDataset(src);
+        }
+        src.close();
+        assertEquals(java.util.Set.of(Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()),
+                auChannelCodes(stream.toByteArray()));
+    }
+
+    @Test
+    void floatDeltaZstdWireCompressionRoundTrips(@TempDir Path dir) throws Exception {
+        try (SpectralDataset src0 = makeFixture(dir)) { /* close */ }
+        SpectralDataset src = SpectralDataset.open(dir.resolve("src.tio").toString());
+
+        ByteArrayOutputStream compressed = new ByteArrayOutputStream();
+        try (TransportWriter tw = new TransportWriter(compressed)) {
+            tw.setUseCompression(true);
+            tw.setCompressionCodec("float_delta_zstd");
+            tw.writeDataset(src);
+        }
+        byte[] streamBytes = compressed.toByteArray();
+        assertEquals(java.util.Set.of(Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()),
+                auChannelCodes(streamBytes));
+        // Every channel payload is an FDZ1 stream.
+        try (TransportReader tr = new TransportReader(streamBytes)) {
+            for (TransportReader.PacketRecord p : tr.readAllPackets()) {
+                if (p.header.packetType != PacketType.ACCESS_UNIT) continue;
+                for (ChannelData ch : AccessUnit.decode(p.payload).channels) {
+                    assertEquals("FDZ1", new String(ch.data, 0, 4,
+                            java.nio.charset.StandardCharsets.US_ASCII));
+                }
+            }
+        }
+
+        Path out = dir.resolve("rt_fdz.tio");
+        try (TransportReader tr = new TransportReader(streamBytes);
+             SpectralDataset rt = tr.materializeTo(out.toString())) {
+            AcquisitionRun a = src.msRuns().get("run_0001");
+            AcquisitionRun b = rt.msRuns().get("run_0001");
+            assertNotNull(b);
+            assertEquals(a.spectrumCount(), b.spectrumCount());
+            for (String cname : a.channels().keySet()) {
+                assertArrayEquals(a.channels().get(cname), b.channels().get(cname),
+                        "channel " + cname + " bit-exact");
+            }
+        }
+        src.close();
+    }
+
+    @Test
+    void floatDeltaZstdElementCountMismatchIsRejected(@TempDir Path dir) throws Exception {
+        double[] vals = new double[8];
+        for (int i = 0; i < 8; i++) vals[i] = i;
+        byte[] eight = global.thalion.ttio.codecs.FloatDeltaZstd.encode(vals);
+        byte[] seven = global.thalion.ttio.codecs.FloatDeltaZstd.encode(
+                java.util.Arrays.copyOf(vals, 7));
+        int fdz = Enums.Compression.FLOAT_DELTA_ZSTD.ordinal();
+        int f64 = Enums.Precision.FLOAT64.ordinal();
+        List<ChannelData> channels = List.of(
+                new ChannelData("mz", f64, fdz, 7, eight),
+                new ChannelData("intensity", f64, fdz, 7, seven));
+        AccessUnit au = new AccessUnit(0, 0, 1, 0, 1.0, 0.0, 0, 0.0, 0.0,
+                channels, 0, 0, 0);
+
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        try (TransportWriter tw = new TransportWriter(stream)) {
+            tw.writeStreamHeader("1.2", "bad", "x", List.of(), 1);
+            tw.writeDatasetHeader(1, "r", 0, "TTIOMassSpectrum",
+                    List.of("mz", "intensity"), "{}", 1);
+            tw.writeAccessUnit(1, 0, au);
+            tw.writeEndOfStream();
+        }
+        Path out = dir.resolve("rt_bad.tio");
+        IllegalStateException e = assertThrows(IllegalStateException.class, () -> {
+            try (TransportReader tr = new TransportReader(stream.toByteArray());
+                 SpectralDataset rt = tr.materializeTo(out.toString())) {
+                /* materialize */
+            }
+        });
+        assertTrue(e.getMessage().contains("n_elements"), e.getMessage());
     }
 
     @Test

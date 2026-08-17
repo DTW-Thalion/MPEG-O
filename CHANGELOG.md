@@ -11,6 +11,22 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed
+- **FLOAT_DELTA_ZSTD (compression id 17) on the transport wire, and the default
+  wire codec.** Spectral AU channels can carry one FDZ1 stream per channel, and it
+  is now what `use_compression=True` / `setUseCompression(true)` / `useCompression =
+  YES` emit when no codec is named; `zstd` (id 16) and `zlib` (id 1) stay
+  selectable through the same selector, and all three readers decode id 17 (a
+  payload whose value count differs from the channel header is rejected). Measured
+  on 4,341 real MS2 AUs (PXD000001, mean 175 points): −6.0% bytes vs zstd-3 and
+  −14.4% vs zlib-6. Per-run zstd dictionaries were measured in the same pass and
+  not adopted: −3.5% on raw float64, and the Java reader's pure-JVM zstd
+  (aircompressor) does not support dictionaries. **Reader compatibility:**
+  compressed streams written with default settings are not readable by releases up
+  to and including v1.8.0; name `zlib` explicitly until a deployment's readers are
+  current. The three transport-encode CLIs gain `--compress
+  float_delta_zstd|zstd|zlib`.
+
 ## [1.8.0] - 2026-08-16
 
 The compression release. Spectral float64 channels gain byte-shuffle and the

@@ -20,6 +20,9 @@
 #import "Spectra/TTIOMassSpectrum.h"
 #import "Core/TTIOSignalArray.h"
 #import "ValueClasses/TTIOEnums.h"
+#import "Transport/TTIOAccessUnit.h"
+#import "Transport/TTIOTransportPacket.h"
+#import "Codecs/TTIOFloatDeltaZstd.h"
 
 static NSString *tmp(NSString *n) {
     return [NSString stringWithFormat:@"/tmp/ttio_m70_%d_%@", (int)getpid(), n];
@@ -207,6 +210,101 @@ static BOOL roundTripWithCodec(NSUInteger nRuns, NSUInteger nSpectra,
     return eq;
 }
 
+/* Write with compression on and the given codec (or the writer's
+ * default when useDefault is YES); return the single compression byte
+ * seen across all AU channels, or -1 on any mismatch/failure. Also
+ * checks every FDZ1 payload starts with the FDZ1 magic. */
+static int wireChannelCode(TTIOCompression codec, BOOL useDefault)
+{
+    NSString *src = tmp(@"src-code.tio");
+    NSString *mots = tmp(@"stream-code.tis");
+    rm(src); rm(mots);
+    NSError *err = nil;
+    if (!buildDataset(src, 1, 5, 4, &err)) return -1;
+    TTIOSpectralDataset *source = [TTIOSpectralDataset readFromFilePath:src error:&err];
+    TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
+    tw.useCompression = YES;
+    if (!useDefault) tw.compressionCodec = codec;
+    if (![tw writeDataset:source error:&err]) { [tw close]; return -1; }
+    [tw close];
+
+    TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithInputPath:mots];
+    NSArray<TTIOTransportPacketRecord *> *pkts = [tr readAllPacketsWithError:&err];
+    if (!pkts) return -1;
+    int code = -2;
+    for (TTIOTransportPacketRecord *p in pkts) {
+        if (p.header.packetType != TTIOTransportPacketAccessUnit) continue;
+        TTIOAccessUnit *au = [TTIOAccessUnit decodeFromBytes:p.payload.bytes
+                                                       length:p.payload.length
+                                                        error:&err];
+        if (!au) return -1;
+        for (TTIOTransportChannelData *ch in au.channels) {
+            if (code == -2) code = ch.compression;
+            else if (code != ch.compression) return -1;
+            if (ch.compression == TTIOCompressionFloatDeltaZstd &&
+                (ch.data.length < 4 || memcmp(ch.data.bytes, "FDZ1", 4) != 0)) return -1;
+        }
+    }
+    rm(src); rm(mots);
+    return code;
+}
+
+/* An FDZ1 payload whose value count differs from the channel header's
+ * n_elements must be rejected by the reader. */
+static BOOL fdzElementCountMismatchRejected(void)
+{
+    NSString *mots = tmp(@"stream-badfdz.tis");
+    NSString *rt = tmp(@"rt-badfdz.tio");
+    rm(mots); rm(rt);
+    NSError *err = nil;
+    double vals[8]; for (int i = 0; i < 8; i++) vals[i] = i;
+    NSData *eight = [TTIOFloatDeltaZstd encodeFloat64:[NSData dataWithBytes:vals length:64]];
+    NSData *seven = [TTIOFloatDeltaZstd encodeFloat64:[NSData dataWithBytes:vals length:56]];
+    if (!eight || !seven) return NO;
+    TTIOTransportChannelData *bad =
+        [[TTIOTransportChannelData alloc] initWithName:@"mz"
+                                              precision:TTIOPrecisionFloat64
+                                            compression:TTIOCompressionFloatDeltaZstd
+                                              nElements:7
+                                                   data:eight];
+    TTIOTransportChannelData *good =
+        [[TTIOTransportChannelData alloc] initWithName:@"intensity"
+                                              precision:TTIOPrecisionFloat64
+                                            compression:TTIOCompressionFloatDeltaZstd
+                                              nElements:7
+                                                   data:seven];
+    TTIOAccessUnit *au = [[TTIOAccessUnit alloc] initWithSpectrumClass:0
+                                                       acquisitionMode:0
+                                                               msLevel:1
+                                                              polarity:0
+                                                         retentionTime:1.0
+                                                           precursorMz:0.0
+                                                       precursorCharge:0
+                                                           ionMobility:0.0
+                                                     basePeakIntensity:0.0
+                                                              channels:@[bad, good]
+                                                                pixelX:0 pixelY:0 pixelZ:0];
+    TTIOTransportWriter *tw = [[TTIOTransportWriter alloc] initWithOutputPath:mots];
+    BOOL ok = [tw writeStreamHeaderWithFormatVersion:@"1.2" title:@"bad"
+                                     isaInvestigation:@"x" features:@[]
+                                            nDatasets:1 error:&err];
+    if (ok) ok = [tw writeDatasetHeaderWithDatasetId:1 name:@"r" acquisitionMode:0
+                                        spectrumClass:@"TTIOMassSpectrum"
+                                         channelNames:@[@"mz", @"intensity"]
+                                       instrumentJSON:@"{}" expectedAUCount:1
+                                                error:&err];
+    if (ok) ok = [tw writeAccessUnit:au datasetId:1 auSequence:0 error:&err];
+    if (ok) ok = [tw writeEndOfStreamWithError:&err];
+    [tw close];
+    if (!ok) return NO;
+    TTIOTransportReader *tr = [[TTIOTransportReader alloc] initWithInputPath:mots];
+    err = nil;
+    BOOL wrote = [tr writeTtioToPath:rt error:&err];
+    rm(mots); rm(rt);
+    return !wrote && err != nil &&
+           [err.localizedDescription rangeOfString:@"n_elements"].location != NSNotFound;
+}
+
 void testTransportConformance(void)
 {
     PASS(roundTrip(1, 5, 4, NO), "single run, 5 spectra × 4 pts: round-trip bit-equal");
@@ -221,4 +319,16 @@ void testTransportConformance(void)
          "round-trip with ZSTD wire compression (id 16): bit-equal");
     PASS(roundTripWithCodec(1, 20, 128, TTIOCompressionZstd),
          "round-trip with ZSTD wire compression + larger spectra: bit-equal");
+    PASS(roundTripWithCodec(1, 5, 4, TTIOCompressionFloatDeltaZstd),
+         "round-trip with FLOAT_DELTA_ZSTD wire compression (id 17): bit-equal");
+    PASS(roundTripWithCodec(1, 20, 128, TTIOCompressionFloatDeltaZstd),
+         "round-trip with FLOAT_DELTA_ZSTD wire compression + larger spectra: bit-equal");
+    PASS(wireChannelCode(TTIOCompressionZlib, YES) == TTIOCompressionFloatDeltaZstd,
+         "useCompression with no codec named emits wire id 17 (FDZ1 per channel)");
+    PASS(wireChannelCode(TTIOCompressionZlib, NO) == TTIOCompressionZlib,
+         "compressionCodec = zlib still emits wire id 1");
+    PASS(wireChannelCode(TTIOCompressionZstd, NO) == TTIOCompressionZstd,
+         "compressionCodec = zstd still emits wire id 16");
+    PASS(fdzElementCountMismatchRejected(),
+         "FDZ1 payload with n_values != n_elements is rejected by the reader");
 }

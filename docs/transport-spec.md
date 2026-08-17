@@ -246,7 +246,8 @@ precision:           uint8        # matches Precision enum: 0=float32,
                                   # 4=uint32, 5=complex128
 compression:         uint8        # M79 Compression enum id: 0=none,
                                   # 1=zlib, 2=lz4, 3=numpress_delta,
-                                  # 16=zstd (RFC 8878, single frame)
+                                  # 16=zstd (RFC 8878, single frame),
+                                  # 17=float_delta_zstd (one FDZ1 stream)
 n_elements:          uint32
 data_length:         uint32       # compressed byte length
 data:                bytes[data_length]
@@ -286,16 +287,28 @@ Channel payloads are conveyed in their native container encoding.
 When `compression = 0` (`none`) the receiver decodes raw IEEE-754
 values of the declared precision. When nonzero, the receiver MUST
 apply the matching decoder (`zlib` / `lz4` / `numpress_delta` /
-`zstd`). `complex128` packs Re/Im as two consecutive float64s.
+`zstd` / `float_delta_zstd`). `complex128` packs Re/Im as two
+consecutive float64s.
 For `zstd` (id 16) the payload is one standard RFC 8878 frame; the
 plaintext size is `n_elements` times the element width, so readers
-decode into an exact buffer. Writers emit zstd only on request
-(`compression_codec="zstd"` on the Python writer,
-`setCompressionCodec("zstd")` on Java, `compressionCodec =
-TTIOCompressionZstd` on ObjC — level 3 in all three); readers
-older than the zstd addition reject id 16 with their
-unsupported-compression error, so flip a deployment's writers only
-after its readers are current.
+decode into an exact buffer.
+For `float_delta_zstd` (id 17) the payload is one self-contained
+FDZ1 stream exactly as the codec-17 on-disk format defines it
+(`docs/superpowers/specs/2026-08-16-float-delta-codec-design.md`:
+magic, header, per-block transform byte + zstd frame of the
+transposed byte planes). Its `n_values` MUST equal the channel's
+`n_elements`; readers reject a mismatch. Encoders MAY differ
+byte-wise across languages; decoders MUST accept any conforming
+stream. On per-AU float64 payloads it is the smallest of the three
+codecs (measured on real MS2 spectra: -6% vs zstd, -14% vs zlib).
+Writers choose the codec through a selector (`compression_codec` on
+the Python writer, `setCompressionCodec` on Java, `compressionCodec`
+on ObjC); `float_delta_zstd` is the default when compression is
+enabled, `zstd` (level 3) and `zlib` remain selectable. Readers older
+than a codec's addition reject its id with their unsupported-
+compression error (id 16: releases before 1.8.0; id 17: 1.8.0 and
+older), so name `zlib` explicitly until a deployment's readers are
+current.
 
 #### 4.3.2 Encrypted-channel AU (`ENCRYPTED` set, v0.10+)
 
