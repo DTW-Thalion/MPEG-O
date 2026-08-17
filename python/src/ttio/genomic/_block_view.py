@@ -27,6 +27,7 @@ class BlockTable:
     base_start: np.ndarray      # uint64
     n_bases: np.ndarray         # uint64
     ranges: dict[str, tuple[np.ndarray, np.ndarray]]   # channel -> (off, len)
+    codecs: dict[str, np.ndarray] | None = None        # channel -> codec id per block
 
     @property
     def count(self) -> int:
@@ -51,9 +52,12 @@ class BlockTable:
             return np.asarray([r[name] for r in rows], dtype=dt)
         ranges = {ch: (col(f"{ch}_off", np.uint64), col(f"{ch}_len", np.uint64))
                   for ch in _blocks.BLOCK_CHANNELS}
+        codecs = None
+        if rows and f"{_blocks.BLOCK_CHANNELS[0]}_codec" in rows[0]:
+            codecs = {ch: col(f"{ch}_codec", np.uint32) for ch in _blocks.BLOCK_CHANNELS}
         return cls(read_start=col("read_start", np.uint64), n_reads=col("n_reads", np.uint32),
                    base_start=col("base_start", np.uint64), n_bases=col("n_bases", np.uint64),
-                   ranges=ranges)
+                   ranges=ranges, codecs=codecs)
 
 
 _INDEX_ARRAYS = (("lengths", Precision.UINT32), ("positions", Precision.INT64),
@@ -103,17 +107,20 @@ def materialise_block(run_group, table: BlockTable, b: int, *,
     # signal channels
     src_sc = run_group.open_group("signal_channels")
     dst_sc = view.create_group("signal_channels")
+    from ..enums import Compression
     for ch in _blocks.BLOCK_CHANNELS:
         off, ln = int(table.ranges[ch][0][b]), int(table.ranges[ch][1][b])
         if ln == 0:
             continue
+        codec = int(table.codecs[ch][b]) if table.codecs is not None else None
         if ch == "sequences":
-            try:
-                g = src_sc.open_group("sequences")
-                src = g.open_dataset("refdiff_v2")
+            g = src_sc.open_group("sequences")
+            src = g.open_dataset("data")
+            if codec is None:
+                codec = int(src.get_attribute("compression"))
+            if codec == int(Compression.REF_DIFF_V2):
                 dst_parent, dst_name = dst_sc.create_group("sequences"), "refdiff_v2"
-            except Exception:
-                src = src_sc.open_dataset("sequences")
+            else:
                 dst_parent, dst_name = dst_sc, "sequences"
         elif ch == "mate_info":
             src = src_sc.open_group("mate_info").open_dataset("inline_v2")
@@ -124,6 +131,8 @@ def materialise_block(run_group, table: BlockTable, b: int, *,
         ds = dst_parent.create_dataset(dst_name, Precision.UINT8, ln)
         ds.write(np.asarray(src.read(off, ln), dtype=np.uint8))
         _copy_attrs(src, ds)
+        if codec is not None:
+            io.write_int_attr(ds, "compression", codec, dtype="<u1")
     if src_sc.has_child("mate_info"):
         if mate_chrom_rows is None:
             mate_chrom_rows = _rows_of(src_sc.open_group("mate_info"), "chrom_names")

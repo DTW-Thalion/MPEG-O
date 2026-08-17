@@ -112,11 +112,30 @@ def encode_block(block: WrittenGenomicRun) -> BlockBlobs:
     # which has no blob form, so blocks_v1 defaults cigars to the
     # existing RANS_ORDER0 wiring (format-spec 10.8) unless the caller
     # chose a cigars codec.
-    if "cigars" not in block.signal_codec_overrides:
-        block = dataclasses.replace(
-            block,
-            signal_codec_overrides={**block.signal_codec_overrides,
-                                    "cigars": Compression.RANS_ORDER0})
+    overrides = dict(block.signal_codec_overrides)
+    if "cigars" not in overrides:
+        overrides["cigars"] = Compression.RANS_ORDER0
+    # blocks_v1 always codes qualities with FQZCOMP_NX16_Z (the v1.8
+    # writer only does so when another v1.5 codec is active on the run,
+    # else it leaves zlib-filtered raw bytes, which have no blob form).
+    if "qualities" not in overrides:
+        # FQZCOMP_NX16_Z: the v1.8 kernel fails to decode a stream in
+        # which a zero-length read (SEQ '*', e.g. a secondary
+        # alignment) precedes another read (rc=-6); such blocks use
+        # RANS_ORDER0 for qualities. Recorded per block in the
+        # qualities_codec index column.
+        lens = np.asarray(block.lengths)
+        if len(lens) and (lens == 0).any():
+            overrides["qualities"] = Compression.RANS_ORDER0
+        else:
+            overrides["qualities"] = Compression.FQZCOMP_NX16_Z
+    # Sequences without a reference: RANS_ORDER1 instead of raw bytes.
+    # With a reference the REF_DIFF_V2 default applies (and falls back
+    # to BASE_PACK on its own for unmapped blocks).
+    if "sequences" not in overrides and block.reference_chrom_seqs is None:
+        overrides["sequences"] = Compression.RANS_ORDER1
+    if overrides != block.signal_codec_overrides:
+        block = dataclasses.replace(block, signal_codec_overrides=overrides)
     root = MemoryProvider.open("memory://ttio-block-encode", mode="w").root_group()
     _write_genomic_run(root, "b", block)
     sc = root.open_group("b").open_group("signal_channels")

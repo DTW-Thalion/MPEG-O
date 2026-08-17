@@ -104,6 +104,12 @@ class WrittenGenomicRun:
     # unbounded in the run size.
     opt_legacy_whole_channel: bool = False
 
+    # Precomputed reference MD5 (the sorted-name concatenation digest,
+    # see genomic.reference_import.compute_reference_md5). The stream
+    # writer computes it once per run so a large reference is not
+    # digested per block; None means compute from reference_chrom_seqs.
+    reference_md5: bytes | None = None
+
     # per-channel codec opt-in. Maps channel name to a TTI-O
     # internal codec id. Only "sequences" and "qualities" are
     # accepted; only RANS_ORDER0, RANS_ORDER1, BASE_PACK are

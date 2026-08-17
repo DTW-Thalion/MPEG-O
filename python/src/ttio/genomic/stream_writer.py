@@ -41,6 +41,8 @@ INDEX_FIELDS: list[CompoundField] = (
      CompoundField("n_bases", CompoundFieldKind.UINT64)]
     + [CompoundField(f"{ch}_{k}", CompoundFieldKind.UINT64)
        for ch in _blocks.BLOCK_CHANNELS for k in ("off", "len")]
+    + [CompoundField(f"{ch}_codec", CompoundFieldKind.UINT32)
+       for ch in _blocks.BLOCK_CHANNELS]
 )
 
 _INDEX_ARRAYS = (
@@ -87,6 +89,8 @@ class GenomicStreamWriter:
         self._pending_reads = 0
         self._pending_bytes = 0
         self._chrom_map: dict[str, int] = {}
+        self._pending_chrom: str | None = None
+        self._reference_md5: bytes | None = None
         self._read_count = 0
         self._base_count = 0
         self._block_count = 0
@@ -123,22 +127,35 @@ class GenomicStreamWriter:
         if self._legacy:
             self._legacy_parts.append(batch)
             return
+        # A block never spans two chromosomes: REF_DIFF_V2 encodes one
+        # chromosome per blob, and a coordinate-sorted BAM streams
+        # through it as long same-chromosome stretches. Unmapped reads
+        # ('*') form their own blocks (BASE_PACK fallback per block).
+        chroms = batch.chromosomes
         start = 0
         while start < n:
-            room_reads = self._block_reads - self._pending_reads
-            room_bytes = self._block_bytes - self._pending_bytes
-            stop = min(n, start + max(room_reads, 1))
-            cum = np.cumsum(np.asarray(batch.lengths[start:stop], dtype=np.int64))
-            fit = int(np.searchsorted(cum, room_bytes, side="right"))
-            if fit < stop - start:
-                stop = start + max(fit, 1)
-            part = batch if (start, stop) == (0, n) else _blocks.slice_run(batch, start, stop)
-            self._pending.append(part)
-            self._pending_reads += stop - start
-            self._pending_bytes += int(np.asarray(part.lengths, dtype=np.int64).sum())
-            if self._pending_reads >= self._block_reads or self._pending_bytes >= self._block_bytes:
+            chrom = chroms[start]
+            seg_end = start + 1
+            while seg_end < n and chroms[seg_end] == chrom:
+                seg_end += 1
+            if self._pending and self._pending_chrom != chrom:
                 self.flush()
-            start = stop
+            self._pending_chrom = chrom
+            while start < seg_end:
+                room_reads = self._block_reads - self._pending_reads
+                room_bytes = self._block_bytes - self._pending_bytes
+                stop = min(seg_end, start + max(room_reads, 1))
+                cum = np.cumsum(np.asarray(batch.lengths[start:stop], dtype=np.int64))
+                fit = int(np.searchsorted(cum, room_bytes, side="right"))
+                if fit < stop - start:
+                    stop = start + max(fit, 1)
+                part = batch if (start, stop) == (0, n) else _blocks.slice_run(batch, start, stop)
+                self._pending.append(part)
+                self._pending_reads += stop - start
+                self._pending_bytes += int(np.asarray(part.lengths, dtype=np.int64).sum())
+                if self._pending_reads >= self._block_reads or self._pending_bytes >= self._block_bytes:
+                    self.flush()
+                start = stop
 
     def flush(self) -> None:
         """Encode and write the pending reads as one block."""
@@ -148,7 +165,11 @@ class GenomicStreamWriter:
         self._pending = []
         self._pending_reads = 0
         self._pending_bytes = 0
-        block = _apply_meta(block, self._meta, self._chrom_map)
+        if self._reference_md5 is None and self._meta["reference_chrom_seqs"] is not None:
+            from .._dataset_write_genomic import _reference_md5_for_run
+            probe = _apply_meta(block, self._meta, None)
+            self._reference_md5 = _reference_md5_for_run(probe)
+        block = _apply_meta(block, self._meta, self._chrom_map, self._reference_md5)
         if not self._embedded and self._meta["embed_reference"]:
             from .._dataset_write_genomic import _embed_references_for_runs
             _embed_references_for_runs(self._study, {self._name: block})
@@ -160,6 +181,7 @@ class GenomicStreamWriter:
         for ch in _blocks.BLOCK_CHANNELS:
             data = blobs.blobs[ch]
             ds = self._ds.get(ch)
+            row[f"{ch}_codec"] = int(blobs.compression[ch])
             if ds is None:
                 if data:
                     ds = self._create_channel(ch, blobs)
@@ -256,17 +278,21 @@ class GenomicStreamWriter:
     def _create_channel(self, ch: str, blobs: _blocks.BlockBlobs):
         sc = self._rg.open_group("signal_channels")
         if ch == "sequences":
-            self._seq_layout = blobs.seq_layout
-            if blobs.seq_layout == "refdiff_v2":
-                parent, name = sc.create_group("sequences"), "refdiff_v2"
-            else:
-                parent, name = sc, "sequences"
+            # blocks_v1 keeps every block's sequences blob, whatever its
+            # codec (REF_DIFF_V2, or the BASE_PACK/rANS fallback of an
+            # unmapped or reference-less block), in sequences/data; the
+            # per-block codec is the sequences_codec index column.
+            parent, name = sc.create_group("sequences"), "data"
         elif ch == "mate_info":
             parent, name = sc.create_group("mate_info"), "inline_v2"
         else:
             parent, name = sc, ch
+        # Codec output is high-entropy: no filter. A raw channel (codec 0)
+        # keeps the v1.8 zlib filter so it is not stored uncompressed.
+        raw = int(blobs.compression[ch]) == 0
         ds = parent.create_dataset(name, Precision.UINT8, 0, chunk_size=CHANNEL_CHUNK,
-                                   compression=Compression.NONE, extendable=True)
+                                   compression=(Compression.ZLIB if raw else Compression.NONE),
+                                   compression_level=6, extendable=True)
         io.write_int_attr(ds, "compression", int(blobs.compression[ch]), dtype="<u1")
         for k, v in blobs.extra_attrs.get(ch, {}).items():
             ds.set_attribute(k, v)
@@ -307,9 +333,11 @@ class GenomicStreamWriter:
 
 
 # ----------------------------------------------------------------------
-def _apply_meta(run: WrittenGenomicRun, meta: dict, chrom_map) -> WrittenGenomicRun:
+def _apply_meta(run: WrittenGenomicRun, meta: dict, chrom_map,
+                reference_md5: bytes | None = None) -> WrittenGenomicRun:
     return dataclasses.replace(
         run,
+        reference_md5=reference_md5,
         acquisition_mode=meta["acquisition_mode"], reference_uri=meta["reference_uri"],
         platform=meta["platform"], sample_name=meta["sample_name"],
         reference_chrom_seqs=meta["reference_chrom_seqs"],

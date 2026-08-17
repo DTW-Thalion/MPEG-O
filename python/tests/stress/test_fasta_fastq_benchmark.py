@@ -35,6 +35,11 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+# These tests exercise the v1.8 whole-channel layout (per-AU and region
+# encryption slice plaintext channels, per-dataset signatures and the
+# refdiff_v2 group shape); every genomic write in this module uses it.
+pytestmark = pytest.mark.usefixtures("legacy_genomic_layout")
+
 from ttio import SpectralDataset, WrittenGenomicRun
 from ttio.exporters.fasta import FastaWriter
 from ttio.exporters.fastq import FastqWriter

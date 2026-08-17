@@ -68,6 +68,9 @@ def _read_mate_chrom_names_table(mate_grp) -> list[str]:
     return [str(r.get("name", "")) for r in records]
 
 
+_WIRE_CODEC_IDS = frozenset({0, 4, 5, 6})   # NONE, RANS_ORDER0, RANS_ORDER1, BASE_PACK
+
+
 def _apply_wire_codec(plaintext: bytes, codec: int) -> bytes:
     """Encode ``plaintext`` with the wire codec id (NONE → identity)."""
     if codec == 0:  # NONE
@@ -112,30 +115,23 @@ def _iter_genomic_run_access_units(run) -> Iterator[tuple[int, "AccessUnit"]]:
     genomic AUs without duplicating the per-read construction. Both
     callers see byte-identical AUs.
     """
-    index = run.index
-    n_reads = index.count
-    # Bulk-read sequences and qualities once; slice per AU.
-    if n_reads > 0:
-        total_bases = int(index.offsets[-1]) + int(index.lengths[-1])
-        seq_full = run._byte_channel_slice("sequences", 0, total_bases)
-        qual_full = run._byte_channel_slice("qualities", 0, total_bases)
-    else:
-        seq_full = b""
-        qual_full = b""
-    chromosomes = index.chromosomes
-    positions = index.positions
-    mqs = index.mapping_qualities
-    flags_arr = index.flags
-    offsets = index.offsets
-    lengths = index.lengths
+    n_reads = len(run)
     precision_uint8 = int(Precision.UINT8) & 0xFF
     compression_none = int(Compression.NONE) & 0xFF
     acq_mode = int(run.acquisition_mode) & 0xFF
+    # M90.10 wire codec: a whole-channel run whose sequences/qualities
+    # dataset names an M86 codec is re-encoded per AU with that codec.
+    # A blocks_v1 run (format-spec 10.12) keeps its blobs per block and
+    # is sent with the plain per-AU channel bytes.
     seq_codec = qual_codec = compression_none
+    blocks = getattr(run, "layout", "whole") == "blocks_v1"
     try:
         sig_group = run.group.open_group("signal_channels")
         if sig_group.has_child("sequences"):
-            seq_ds = sig_group.open_dataset("sequences")
+            if blocks:
+                seq_ds = sig_group.open_group("sequences").open_dataset("data")
+            else:
+                seq_ds = sig_group.open_dataset("sequences")
             seq_codec = (io_attr_int(seq_ds, "compression",
                                         default=0) or 0) & 0xFF
         if sig_group.has_child("qualities"):
@@ -144,16 +140,22 @@ def _iter_genomic_run_access_units(run) -> Iterator[tuple[int, "AccessUnit"]]:
                                          default=0) or 0) & 0xFF
     except Exception:
         seq_codec = qual_codec = compression_none
+    # Only the per-AU wire codecs propagate (RANS_ORDER0/1, BASE_PACK);
+    # a whole-run codec (REF_DIFF_V2, FQZCOMP_NX16_Z, ...) has no per-AU
+    # form and those channels are sent as plain bytes.
+    if seq_codec not in _WIRE_CODEC_IDS:
+        seq_codec = compression_none
+    if qual_codec not in _WIRE_CODEC_IDS:
+        qual_codec = compression_none
 
-    for i in range(n_reads):
-        start = int(offsets[i])
-        length = int(lengths[i])
-        stop = start + length
-        seq_bytes = seq_full[start:stop]
-        qual_bytes = qual_full[start:stop]
-        seq_payload = _apply_wire_codec(bytes(seq_bytes), seq_codec)
-        qual_payload = _apply_wire_codec(bytes(qual_bytes), qual_codec)
-        r = run[i]
+    # iter_reads holds one decoded block at a time for blocks_v1 and
+    # walks the whole-channel caches for the v1.8 layout.
+    for i, r in enumerate(run.iter_reads()):
+        seq_bytes = (r.sequence or "").encode("ascii")
+        qual_bytes = bytes(r.qualities)
+        length = len(seq_bytes)
+        seq_payload = _apply_wire_codec(seq_bytes, seq_codec)
+        qual_payload = _apply_wire_codec(qual_bytes, qual_codec)
         cigar_bytes = (r.cigar or "").encode("utf-8")
         name_bytes = (r.read_name or "").encode("utf-8")
         mate_chr_bytes = (r.mate_chromosome or "").encode("utf-8")
@@ -181,10 +183,10 @@ def _iter_genomic_run_access_units(run) -> Iterator[tuple[int, "AccessUnit"]]:
             ion_mobility=0.0,
             base_peak_intensity=0.0,
             channels=channels,
-            chromosome=chromosomes[i],
-            position=int(positions[i]),
-            mapping_quality=int(mqs[i]),
-            flags=int(flags_arr[i]) & 0xFFFF,
+            chromosome=r.chromosome,
+            position=int(r.position),
+            mapping_quality=int(r.mapping_quality),
+            flags=int(r.flags) & 0xFFFF,
             mate_position=int(r.mate_position),
             template_length=int(r.template_length),
         )

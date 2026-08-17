@@ -64,6 +64,8 @@ def _reference_md5_for_run(run: WrittenGenomicRun) -> bytes:
     digest when ``reference_chrom_seqs`` is absent.
     """
     import hashlib
+    if run.reference_md5 is not None:
+        return run.reference_md5
     if run.reference_chrom_seqs is None:
         return b""
     md5 = hashlib.md5()

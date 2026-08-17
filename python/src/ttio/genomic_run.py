@@ -461,7 +461,23 @@ class GenomicRun:
         # index chromosomes — verbatim mirror of _decode_mate_inline_v2's
         # writer-matching derivation so MATE_INLINE_V2 decode is identical.
         n = int(idx.count)
+        # The writer's id assignment is the mate_info/chrom_names table
+        # (row index = id): encounter order over own chromosomes plus
+        # mate-only names for a whole-channel run, and the run-wide map
+        # for a blocks_v1 run (whose per-block encounter order differs).
+        # Seed from that table when present; otherwise rebuild encounter
+        # order (files without mate_info never need own ids).
         name_to_id: dict[str, int] = {}
+        try:
+            sig = self._signal_channels_group()
+            if sig.has_child("mate_info"):
+                mate_group = sig.open_group("mate_info")
+                if mate_group.has_child("chrom_names"):
+                    for row_i, row in enumerate(io.read_compound_dataset(mate_group, "chrom_names")):
+                        v = row["name"]
+                        name_to_id[v.decode("utf-8") if isinstance(v, bytes) else v] = row_i
+        except KeyError:
+            name_to_id = {}
         own_chrom_ids = np.empty(n, dtype=np.uint16)
         for i, cname in enumerate(idx.chromosomes):
             if cname == "*" or not cname:

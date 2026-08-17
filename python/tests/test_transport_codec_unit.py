@@ -906,10 +906,12 @@ def _make_genomic_dataset(path: Path) -> Path:
     return path
 
 
+@pytest.mark.usefixtures("legacy_genomic_layout")
 class TestBulkModeWriter:
     """Exercise ``_emit_genomic_run_v2_blobs`` (lines 415-468) by
     encoding a genomic dataset with the v2 blobs on disk under
-    ``use_bulk_mode=True``.
+    ``use_bulk_mode=True``. Verbatim blob carriage is a whole-channel
+    layout feature; the fixture writes that layout.
     """
 
     def test_bulk_mode_emits_blob_packets(self, tmp_path):

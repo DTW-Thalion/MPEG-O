@@ -38,7 +38,8 @@ def test_encode_block_equals_whole_run_writer_bytes():
     # same override so the byte comparison is like for like.
     from ttio.enums import Compression
     import dataclasses
-    ref = dataclasses.replace(run, signal_codec_overrides={"cigars": Compression.RANS_ORDER0})
+    ref = dataclasses.replace(run, signal_codec_overrides={"cigars": Compression.RANS_ORDER0,
+                                                           "qualities": Compression.FQZCOMP_NX16_Z})
     prov = MemoryProvider.open("memory://blocks-enc-test", mode="w")
     root = prov.root_group()
     _write_genomic_run(root, "r", ref)

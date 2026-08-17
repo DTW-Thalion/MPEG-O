@@ -605,6 +605,8 @@ class AcquisitionRun:
         return vals
 
     def _fdz_range(self, channel: str, start: int, count: int) -> np.ndarray:
+        if count <= 0:
+            return np.zeros(0, dtype=np.float64)
         table = self._fdz_table(channel)
         bs = table.block_size
         k0, k1 = start // bs, (start + count - 1) // bs

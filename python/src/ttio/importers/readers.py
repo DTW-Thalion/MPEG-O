@@ -94,9 +94,16 @@ class _GenomicReader:
                "CramReader": cram.CramReader}[self._attr]
         name = opts.get("name", "genomic_0001")
         kwargs = {"progress": progress} if progress is not None else {}
-        run = cls(inputs[0]).to_genomic_run(
-            name=name, sample_name=opts.get("sample"), **kwargs)
-        return ImportedDataset(genomic_runs={name: run})
+        reference = opts.get("reference")
+        reader = cls(inputs[0], reference) if self._attr == "CramReader" else cls(inputs[0])
+        src = reader.stream_source(
+            name=name, sample_name=opts.get("sample"), reference_fasta=reference,
+            embed_reference=bool(opts.get("embed_reference", False)),
+            batch_reads=int(opts.get("batch_reads", 100_000)), **kwargs)
+        src.block_reads = opts.get("block_reads")
+        src.block_bytes = opts.get("block_bytes")
+        src.opt_legacy_whole_channel = bool(opts.get("legacy_whole_channel", False))
+        return ImportedDataset(genomic_streams={name: src})
 
 
 class BamReader(_GenomicReader):

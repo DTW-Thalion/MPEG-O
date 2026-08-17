@@ -71,7 +71,7 @@ def test_block_blob_equals_whole_run_writer_for_that_block(tmp_path):
                     ("read_names", sc.open_dataset("read_names")),
                     ("cigars", sc.open_dataset("cigars")),
                     ("mate_info", sc.open_group("mate_info").open_dataset("inline_v2")),
-                    ("sequences", sc.open_group("sequences").open_dataset("refdiff_v2"))):
+                    ("sequences", sc.open_group("sequences").open_dataset("data"))):
         off, ln = int(rows[1][f"{ch}_off"]), int(rows[1][f"{ch}_len"])
         assert ds_.read(off, ln).tobytes() == expected.blobs[ch], ch
         assert int(ds_.get_attribute("compression")) == expected.compression[ch], ch
