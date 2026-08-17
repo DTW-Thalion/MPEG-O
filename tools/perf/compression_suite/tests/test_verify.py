@@ -47,3 +47,15 @@ def test_mzml_arrays_md5_stable_and_sensitive(tmp_path):
     a = verify.mzml_arrays_md5(MZML)
     assert a == verify.mzml_arrays_md5(MZML)
     assert verify.mzml_max_rel_error(MZML, MZML) == 0.0
+
+
+def test_sam11_diff_summary_names_the_columns(tmp_path):
+    hdr = "@SQ\tSN:chr1\tLN:1000\n"
+    a = tmp_path / "a.sam"; b = tmp_path / "b.sam"
+    a.write_text(hdr + "r1\t99\tchr1\t10\t60\t4M\t=\t20\t14\tACGT\tIIII\n"
+                       "r2\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\tIIII\n")
+    b.write_text(hdr + "r1\t67\tchr1\t10\t60\t4M\t=\t20\t0\tACGT\tIIII\n")
+    assert verify.sam11_diff_summary(a, a) == ""
+    s = verify.sam11_diff_summary(a, b)
+    assert "1 records missing from output" in s
+    assert "FLAG(0x20) in 1" in s and "TLEN in 1" in s
