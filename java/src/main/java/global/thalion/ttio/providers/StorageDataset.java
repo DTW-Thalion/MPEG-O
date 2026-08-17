@@ -77,6 +77,27 @@ public interface StorageDataset extends AutoCloseable {
      *  {@code offset}. Same return-type rules as {@link #readAll()}. */
     Object readSlice(long offset, long count);
 
+    /** @return {@code true} when the dataset was created extendable and
+     *  accepts {@link #append}. */
+    default boolean extendable() { return false; }
+
+    /** Grow the dataset along its first axis by the elements (or compound
+     *  rows, as {@code List<Object[]>} in field order) of {@code data}.
+     *
+     *  @throws UnsupportedOperationException when the dataset is not
+     *          extendable */
+    default void append(Object data) {
+        throw new UnsupportedOperationException(
+            "dataset '" + name() + "' is not extendable");
+    }
+
+    /** Overwrite {@code data.length} elements in place starting at
+     *  {@code offset}; the dataset does not grow. */
+    default void writeSlice(long offset, Object data) {
+        throw new UnsupportedOperationException(
+            getClass().getSimpleName() + " does not implement writeSlice");
+    }
+
     /** Write all elements.
      *
      *  @param data  primitive array matching {@link #precision} for
@@ -222,7 +243,7 @@ public interface StorageDataset extends AutoCloseable {
                 lb.putInt(i);
                 out.write(lb.array());
             }
-            case INT64 -> {
+            case INT64, UINT64 -> {
                 long l = ((Number) value).longValue();
                 ByteBuffer lb = ByteBuffer.allocate(8).order(ByteOrder.LITTLE_ENDIAN);
                 lb.putLong(l);

@@ -26,16 +26,95 @@ public class Hdf5Dataset implements AutoCloseable {
 
     private long datasetId;
     private final Precision precision;
-    private final long length;
+    private long length;
     private final Hdf5File file;
+    private final boolean extendable;
     private boolean closed;
 
     Hdf5Dataset(long datasetId, Precision precision, long length, Hdf5File file) {
+        this(datasetId, precision, length, file, false);
+    }
+
+    Hdf5Dataset(long datasetId, Precision precision, long length, Hdf5File file,
+                boolean extendable) {
         this.datasetId = datasetId;
         this.precision = precision;
         this.length = length;
         this.file = file;
+        this.extendable = extendable;
         this.closed = false;
+    }
+
+    /** @return {@code true} when the dataset was created with an
+     *  unlimited first dimension and accepts {@link #append}. */
+    public boolean isExtendable() { return extendable; }
+
+    /** Extend the dataset by the elements of {@code data} and write them
+     *  after the current end. */
+    public void append(Object data) {
+        if (!extendable) {
+            throw new UnsupportedOperationException("dataset is not extendable");
+        }
+        long n = elementCount(data);
+        if (n == 0) return;
+        file.lockForWriting();
+        try {
+            H5.H5Dset_extent(datasetId, new long[]{ length + n });
+            writeRange(length, n, data);
+            length += n;
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetWriteException("H5Dset_extent failed: " + e.getMessage());
+        } finally {
+            file.unlockForWriting();
+        }
+    }
+
+    /** Overwrite {@code data}'s elements in place starting at {@code offset}. */
+    public void writeSlice(long offset, Object data) {
+        long n = elementCount(data);
+        if (n == 0) return;
+        if (offset < 0 || offset + n > length) {
+            throw new Hdf5Errors.OutOfRangeException(offset, n, length);
+        }
+        file.lockForWriting();
+        try {
+            writeRange(offset, n, data);
+        } finally {
+            file.unlockForWriting();
+        }
+    }
+
+    private void writeRange(long offset, long n, Object data) {
+        long htype = -1, fspace = -1, mspace = -1;
+        try {
+            fspace = H5.H5Dget_space(datasetId);
+            H5.H5Sselect_hyperslab(fspace, HDF5Constants.H5S_SELECT_SET,
+                    new long[]{ offset }, null, new long[]{ n }, null);
+            mspace = H5.H5Screate_simple(1, new long[]{ n }, null);
+            htype = Hdf5Group.hdf5TypeFor(precision);
+            Object buf = (precision == Precision.COMPLEX128)
+                    ? doublesToCompoundBytes((double[]) data) : data;
+            int status = H5.H5Dwrite(datasetId, htype, mspace, fspace,
+                    HDF5Constants.H5P_DEFAULT, buf);
+            if (status < 0) throw new Hdf5Errors.DatasetWriteException("H5Dwrite (range) failed");
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetWriteException("H5Dwrite (range) failed: " + e.getMessage());
+        } finally {
+            if (mspace >= 0) try { H5.H5Sclose(mspace); } catch (Exception ignored) {}
+            if (fspace >= 0) try { H5.H5Sclose(fspace); } catch (Exception ignored) {}
+            if (precision == Precision.COMPLEX128 && htype >= 0)
+                try { H5.H5Tclose(htype); } catch (Exception ignored) {}
+        }
+    }
+
+    private long elementCount(Object data) {
+        if (data instanceof double[] a) return precision == Precision.COMPLEX128 ? a.length / 2 : a.length;
+        if (data instanceof float[] a) return a.length;
+        if (data instanceof int[] a) return a.length;
+        if (data instanceof long[] a) return a.length;
+        if (data instanceof short[] a) return a.length;
+        if (data instanceof byte[] a) return a.length;
+        throw new IllegalArgumentException("unsupported array type " + data.getClass());
     }
 
     /** @return the underlying HDF5 dataset id. */

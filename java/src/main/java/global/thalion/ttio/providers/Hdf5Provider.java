@@ -219,6 +219,35 @@ public final class Hdf5Provider implements StorageProvider {
             return new Hdf5DatasetAdapter(ds, name);
         }
 
+        @Override
+        public StorageDataset createDataset(String name, Precision precision,
+                                             long length, int chunkSize,
+                                             Compression compression,
+                                             int compressionLevel,
+                                             boolean extendable) {
+            StorageGroup.requireChunkForExtendable(extendable, chunkSize);
+            if (!extendable) {
+                return createDataset(name, precision, length, chunkSize,
+                                      compression, compressionLevel);
+            }
+            Hdf5Dataset ds = delegate.createDataset(name, precision, length,
+                    chunkSize, compression, compressionLevel, true);
+            return new Hdf5DatasetAdapter(ds, name);
+        }
+
+        @Override
+        public StorageDataset createCompoundDataset(String name,
+                                                     List<CompoundField> fields,
+                                                     long count,
+                                                     boolean extendable,
+                                                     int chunkRows) {
+            StorageGroup.requireChunkForExtendable(extendable, chunkRows);
+            if (!extendable) return createCompoundDataset(name, fields, count);
+            Hdf5CompoundIO.Schema schema = toSchema(fields);
+            Hdf5CompoundIO.createExtendableCompound(delegate, name, schema, chunkRows);
+            return new Hdf5CompoundDatasetAdapter(delegate, name, schema, (int) count, true);
+        }
+
         /** N-D datasets. Stored as a flat 1-D HDF5 dataset
          *  plus a {@code @shape_json} attribute recording the original
          *  rank and per-axis lengths. This matches the SqliteProvider
@@ -279,7 +308,7 @@ public final class Hdf5Provider implements StorageProvider {
             // when the caller supplies data via a packer. At create-time
             // we only need the handle so we can expose metadata; the
             // actual H5Dcreate happens when writeAll is called below.
-            return new Hdf5CompoundDatasetAdapter(delegate, name, schema, (int) count);
+            return new Hdf5CompoundDatasetAdapter(delegate, name, schema, (int) count, false);
         }
 
         @Override public boolean hasAttribute(String name) {
@@ -397,6 +426,11 @@ public final class Hdf5Provider implements StorageProvider {
             return delegate.readData(offset, count);
         }
         @Override public void writeAll(Object data) { delegate.writeData(data); }
+        @Override public boolean extendable() { return delegate.isExtendable(); }
+        @Override public void append(Object data) { delegate.append(data); }
+        @Override public void writeSlice(long offset, Object data) {
+            delegate.writeSlice(offset, data);
+        }
 
         @Override public boolean hasAttribute(String n) {
             // route through Hdf5Dataset's attribute API so the
@@ -460,19 +494,60 @@ public final class Hdf5Provider implements StorageProvider {
         private final String name;
         private final Hdf5CompoundIO.Schema schema;
         private final int count;
+        private final boolean extendable;
         private boolean written;
 
         Hdf5CompoundDatasetAdapter(Hdf5Group parent, String name,
                                     Hdf5CompoundIO.Schema schema, int count) {
+            this(parent, name, schema, count,
+                 Hdf5CompoundIO.isExtendable(parent, name));
+        }
+
+        Hdf5CompoundDatasetAdapter(Hdf5Group parent, String name,
+                                    Hdf5CompoundIO.Schema schema, int count,
+                                    boolean extendable) {
             this.parent = parent;
             this.name = name;
             this.schema = schema;
             this.count = count;
+            this.extendable = extendable;
         }
 
         @Override public String name() { return name; }
         @Override public Precision precision() { return null; }
-        @Override public long[] shape() { return new long[]{ count }; }
+        @Override public long[] shape() {
+            return new long[]{ extendable
+                ? Hdf5CompoundIO.rowCount(parent, name) : count };
+        }
+        @Override public boolean extendable() { return extendable; }
+
+        @Override
+        public void append(Object data) {
+            if (!extendable) {
+                throw new UnsupportedOperationException(
+                    "dataset '" + name + "' is not extendable");
+            }
+            Hdf5CompoundIO.appendCompoundRows(parent, name, schema, toRows(data));
+            written = true;
+        }
+
+        @SuppressWarnings("unchecked")
+        private List<Object[]> toRows(Object data) {
+            List<?> list = (List<?>) data;
+            if (list.isEmpty() || list.get(0) instanceof Object[]) {
+                return (List<Object[]>) list;
+            }
+            List<Object[]> rows = new ArrayList<>(list.size());
+            for (Object o : list) {
+                Map<String, Object> m = (Map<String, Object>) o;
+                Object[] row = new Object[schema.fields.size()];
+                for (int i = 0; i < row.length; i++) {
+                    row[i] = m.get(schema.fields.get(i).name());
+                }
+                rows.add(row);
+            }
+            return rows;
+        }
 
         @Override public List<CompoundField> compoundFields() {
             return schema.fields.stream()
@@ -483,6 +558,10 @@ public final class Hdf5Provider implements StorageProvider {
         @SuppressWarnings("unchecked")
         @Override
         public void writeAll(Object data) {
+            if (extendable) {
+                append(data);
+                return;
+            }
             List<Object[]> rows = (List<Object[]>) data;
             Hdf5CompoundIO.writeCompoundDataset(parent, name, schema, rows.size(),
                     (row, pool) -> {
@@ -641,6 +720,7 @@ public final class Hdf5Provider implements StorageProvider {
             return switch (k) {
                 case UINT32 -> CompoundField.Kind.UINT32;
                 case INT64 -> CompoundField.Kind.INT64;
+                case UINT64 -> CompoundField.Kind.UINT64;
                 case FLOAT64 -> CompoundField.Kind.FLOAT64;
                 case VL_STRING -> CompoundField.Kind.VL_STRING;
                 case VL_BYTES -> CompoundField.Kind.VL_BYTES;
@@ -680,7 +760,9 @@ public final class Hdf5Provider implements StorageProvider {
                     } else if (cls == HDF5Constants.H5T_INTEGER && size == 4) {
                         kind = Hdf5CompoundIO.FieldKind.UINT32;
                     } else if (cls == HDF5Constants.H5T_INTEGER && size == 8) {
-                        kind = Hdf5CompoundIO.FieldKind.INT64;
+                        kind = H5.H5Tget_sign(mt) == HDF5Constants.H5T_SGN_NONE
+                            ? Hdf5CompoundIO.FieldKind.UINT64
+                            : Hdf5CompoundIO.FieldKind.INT64;
                     } else if (cls == HDF5Constants.H5T_FLOAT && size == 8) {
                         kind = Hdf5CompoundIO.FieldKind.FLOAT64;
                     } else {
@@ -725,6 +807,7 @@ public final class Hdf5Provider implements StorageProvider {
                 .map(f -> new Hdf5CompoundIO.Field(f.name(), switch (f.kind()) {
                     case UINT32 -> Hdf5CompoundIO.FieldKind.UINT32;
                     case INT64 -> Hdf5CompoundIO.FieldKind.INT64;
+                    case UINT64 -> Hdf5CompoundIO.FieldKind.UINT64;
                     case FLOAT64 -> Hdf5CompoundIO.FieldKind.FLOAT64;
                     case VL_STRING -> Hdf5CompoundIO.FieldKind.VL_STRING;
                     case VL_BYTES -> Hdf5CompoundIO.FieldKind.VL_BYTES;

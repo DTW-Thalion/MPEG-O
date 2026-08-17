@@ -85,6 +85,52 @@ public interface StorageGroup extends AutoCloseable {
                                   Compression compression,
                                   int compressionLevel);
 
+    /** Create a primitive 1-D dataset, optionally extendable along its
+     *  single axis. Extendable datasets need {@code chunkSize > 0} and
+     *  accept {@link StorageDataset#append}.
+     *
+     *  @throws IllegalArgumentException when {@code extendable} and
+     *          {@code chunkSize <= 0}
+     *  @throws UnsupportedOperationException when the provider has no
+     *          extendable datasets */
+    default StorageDataset createDataset(String name, Precision precision,
+                                          long length, int chunkSize,
+                                          Compression compression,
+                                          int compressionLevel,
+                                          boolean extendable) {
+        requireChunkForExtendable(extendable, chunkSize);
+        if (extendable) {
+            throw new UnsupportedOperationException(
+                getClass().getSimpleName() + " does not implement extendable datasets");
+        }
+        return createDataset(name, precision, length, chunkSize,
+                              compression, compressionLevel);
+    }
+
+    /** Create a 1-D compound dataset, optionally extendable in rows of
+     *  {@code chunkRows}. */
+    default StorageDataset createCompoundDataset(String name,
+                                                  List<CompoundField> fields,
+                                                  long count,
+                                                  boolean extendable,
+                                                  int chunkRows) {
+        requireChunkForExtendable(extendable, chunkRows);
+        if (extendable) {
+            throw new UnsupportedOperationException(
+                getClass().getSimpleName() + " does not implement extendable compound datasets");
+        }
+        return createCompoundDataset(name, fields, count);
+    }
+
+    /** @throws IllegalArgumentException when {@code extendable} and
+     *  {@code chunk <= 0} */
+    static void requireChunkForExtendable(boolean extendable, long chunk) {
+        if (extendable && chunk <= 0) {
+            throw new IllegalArgumentException(
+                "extendable datasets need a chunk size > 0");
+        }
+    }
+
     /** Create a multi-dimensional dataset. 1-D delegates to
      *  {@link #createDataset}; higher ranks require provider override. */
     default StorageDataset createDatasetND(String name, Precision precision,
