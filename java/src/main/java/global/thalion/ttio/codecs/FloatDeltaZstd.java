@@ -66,36 +66,124 @@ public final class FloatDeltaZstd {
         return java.util.Arrays.copyOf(buf, n);
     }
 
-    /** Encode a float64 array (as raw longs of its bit pattern). */
-    public static byte[] encode(double[] values) {
-        long[] u = new long[values.length];
-        for (int i = 0; i < values.length; i++) {
-            u[i] = Double.doubleToRawLongBits(values[i]);
-        }
-        int n = u.length;
-        int nBlocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
+    /** The 22-byte FDZ1 stream header for {@code nValues} values in
+     *  {@code nBlocks} blocks of {@link #BLOCK_SIZE}. */
+    public static byte[] headerBytes(long nValues, int nBlocks) {
         ByteBuffer hdr = ByteBuffer.allocate(HEADER_LEN).order(ByteOrder.LITTLE_ENDIAN);
         hdr.put(MAGIC).put((byte) VERSION).put((byte) 0)
-           .putLong(n).putInt(BLOCK_SIZE).putInt(nBlocks);
-        out.writeBytes(hdr.array());
-        long[] d = new long[Math.min(BLOCK_SIZE, Math.max(n, 1))];
+           .putLong(nValues).putInt(BLOCK_SIZE).putInt(nBlocks);
+        return hdr.array();
+    }
+
+    /** One encoded block: the transform byte and the zstd body. */
+    public record EncodedBlock(int transform, byte[] body) {}
+
+    /** Encode one block of at most {@link #BLOCK_SIZE} values. */
+    public static EncodedBlock encodeBlock(double[] values) {
+        int len = values.length;
+        long[] u = new long[len];
+        for (int i = 0; i < len; i++) u[i] = Double.doubleToRawLongBits(values[i]);
+        long[] d = new long[Math.max(len, 1)];
+        if (len > 0) d[0] = u[0];
+        for (int i = 1; i < len; i++) d[i] = u[i] - u[i - 1];
+        byte[] bodyNone = zstd(transpose(u, 0, len));
+        byte[] bodyDelta = zstd(transpose(d, 0, len));
+        int transform = bodyDelta.length < bodyNone.length ? TRANSFORM_DELTA : TRANSFORM_NONE;
+        return new EncodedBlock(transform, transform == TRANSFORM_DELTA ? bodyDelta : bodyNone);
+    }
+
+    /** The on-stream bytes of a block: 5-byte block header plus body. */
+    public static byte[] blockBytes(EncodedBlock b) {
+        ByteBuffer bh = ByteBuffer.allocate(5 + b.body().length).order(ByteOrder.LITTLE_ENDIAN);
+        bh.put((byte) b.transform()).putInt(b.body().length).put(b.body());
+        return bh.array();
+    }
+
+    /** Encode a float64 array (as raw longs of its bit pattern). */
+    public static byte[] encode(double[] values) {
+        int n = values.length;
+        int nBlocks = (n + BLOCK_SIZE - 1) / BLOCK_SIZE;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.writeBytes(headerBytes(n, nBlocks));
         for (int bi = 0; bi < nBlocks; bi++) {
             int off = bi * BLOCK_SIZE;
             int len = Math.min(BLOCK_SIZE, n - off);
-            d[0] = u[off];
-            for (int i = 1; i < len; i++) d[i] = u[off + i] - u[off + i - 1];
-            byte[] bodyNone = zstd(transpose(u, off, len));
-            byte[] bodyDelta = zstd(transpose(d, 0, len));
-            int transform = bodyDelta.length < bodyNone.length
-                    ? TRANSFORM_DELTA : TRANSFORM_NONE;
-            byte[] body = transform == TRANSFORM_DELTA ? bodyDelta : bodyNone;
-            ByteBuffer bh = ByteBuffer.allocate(5).order(ByteOrder.LITTLE_ENDIAN);
-            bh.put((byte) transform).putInt(body.length);
-            out.writeBytes(bh.array());
-            out.writeBytes(body);
+            out.writeBytes(blockBytes(encodeBlock(java.util.Arrays.copyOfRange(values, off, off + len))));
         }
         return out.toByteArray();
+    }
+
+    /** Reads {@code count} bytes at {@code offset} of a stored stream. */
+    @FunctionalInterface
+    public interface ByteRangeReader {
+        byte[] read(long offset, int count);
+    }
+
+    /** Header fields and the byte range of every block of a stream. */
+    public record BlockTable(long nValues, int blockSize, int nBlocks,
+                             long[] offsets, int[] transforms, int[] lengths) {
+        /** Values in block {@code k}. */
+        public int blockValues(int k) {
+            long start = (long) k * blockSize;
+            return (int) Math.min(blockSize, nValues - start);
+        }
+    }
+
+    /** Walk the block headers of a stream without reading the bodies. */
+    public static BlockTable readBlockTable(ByteRangeReader r) {
+        byte[] hdr = r.read(0, HEADER_LEN);
+        if (hdr.length < HEADER_LEN || hdr[0] != 'F' || hdr[1] != 'D' || hdr[2] != 'Z' || hdr[3] != '1') {
+            throw new IllegalArgumentException("not an FDZ1 stream");
+        }
+        ByteBuffer in = ByteBuffer.wrap(hdr).order(ByteOrder.LITTLE_ENDIAN);
+        in.position(4);
+        int version = in.get() & 0xFF;
+        in.get();
+        long nValues = in.getLong();
+        int blockSize = in.getInt();
+        int nBlocks = in.getInt();
+        if (version != VERSION) throw new IllegalArgumentException("unknown FDZ1 version " + version);
+        if (nValues < 0 || blockSize <= 0 || nBlocks != (nValues + blockSize - 1) / blockSize) {
+            throw new IllegalArgumentException("malformed FDZ1 header");
+        }
+        long[] offsets = new long[nBlocks];
+        int[] transforms = new int[nBlocks];
+        int[] lengths = new int[nBlocks];
+        long pos = HEADER_LEN;
+        for (int k = 0; k < nBlocks; k++) {
+            byte[] bh = r.read(pos, 5);
+            if (bh.length < 5) throw new IllegalArgumentException("FDZ1 stream truncated at block header");
+            ByteBuffer b = ByteBuffer.wrap(bh).order(ByteOrder.LITTLE_ENDIAN);
+            transforms[k] = b.get() & 0xFF;
+            lengths[k] = b.getInt();
+            if (lengths[k] < 0) throw new IllegalArgumentException("malformed FDZ1 block header");
+            offsets[k] = pos + 5;
+            pos += 5 + lengths[k];
+        }
+        return new BlockTable(nValues, blockSize, nBlocks, offsets, transforms, lengths);
+    }
+
+    /** Decode block {@code k} of a stream described by {@code t}. */
+    public static double[] decodeBlock(ByteRangeReader r, BlockTable t, int k) {
+        int len = t.blockValues(k);
+        byte[] body = r.read(t.offsets()[k], t.lengths()[k]);
+        byte[] planes = new byte[len * 8];
+        ZstdDecompressor dec = new ZstdDecompressor();
+        int inflated = dec.decompress(body, 0, body.length, planes, 0, planes.length);
+        if (inflated != planes.length) {
+            throw new IllegalArgumentException("FDZ1 block inflated to the wrong size");
+        }
+        long[] u = new long[len];
+        untranspose(planes, u, 0, len);
+        int transform = t.transforms()[k];
+        if (transform == TRANSFORM_DELTA) {
+            for (int i = 1; i < len; i++) u[i] += u[i - 1];
+        } else if (transform != TRANSFORM_NONE) {
+            throw new IllegalArgumentException("unknown FDZ1 transform " + transform);
+        }
+        double[] out = new double[len];
+        for (int i = 0; i < len; i++) out[i] = Double.longBitsToDouble(u[i]);
+        return out;
     }
 
     /** Decode an FDZ1 stream back to the exact float64 array. */

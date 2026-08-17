@@ -123,9 +123,51 @@ public record WrittenGenomicRun(
      *  auto-tune set (spec 2.4). Python:
      *  {@code opt_disable_qualities_v5}; ObjC:
      *  {@code optDisableQualitiesV5}. */
-    boolean optDisableQualitiesV5
+    boolean optDisableQualitiesV5,
+    /** Write this run in the v1.8 whole-channel layout instead of
+     *  {@code blocks_v1} (format-spec 10.12). Python:
+     *  {@code opt_legacy_whole_channel}. */
+    boolean optLegacyWholeChannel
 ) {
-    /** Previous canonical signature (25 components); qualities V5
+    /** Previous canonical signature (26 components); the run is written
+     *  as {@code blocks_v1}. */
+    public WrittenGenomicRun(
+        AcquisitionMode acquisitionMode,
+        String referenceUri,
+        String platform,
+        String sampleName,
+        long[] positions,
+        byte[] mappingQualities,
+        int[]  flags,
+        byte[] sequences,
+        byte[] qualities,
+        long[] offsets,
+        int[]  lengths,
+        List<String> cigars,
+        List<String> readNames,
+        List<String> mateChromosomes,
+        long[] matePositions,
+        int[]  templateLengths,
+        List<String> chromosomes,
+        Compression signalCompression,
+        Map<String, Compression> signalCodecOverrides,
+        List<ProvenanceRecord> provenanceRecords,
+        boolean embedReference,
+        Map<String, byte[]> referenceChromSeqs,
+        Path externalReferencePath,
+        BulkV2Blobs bulkV2Blobs,
+        boolean optDisableQualitiesV5
+    ) {
+        this(acquisitionMode, referenceUri, platform, sampleName,
+             positions, mappingQualities, flags, sequences, qualities,
+             offsets, lengths, cigars, readNames, mateChromosomes,
+             matePositions, templateLengths, chromosomes,
+             signalCompression, signalCodecOverrides, provenanceRecords,
+             embedReference, referenceChromSeqs, externalReferencePath,
+             bulkV2Blobs, optDisableQualitiesV5, false);
+    }
+
+    /** Signature before qualities V5 (25 components); qualities V5
      *  stays enabled. */
     public WrittenGenomicRun(
         AcquisitionMode acquisitionMode,
@@ -343,7 +385,8 @@ public record WrittenGenomicRun(
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
-            embed, chromSeqs, externalPath, bulkV2Blobs);
+            embed, chromSeqs, externalPath, bulkV2Blobs,
+            optDisableQualitiesV5, optLegacyWholeChannel);
     }
 
     /** Phase 2c-T builder: returns a new instance with the given
@@ -357,7 +400,44 @@ public record WrittenGenomicRun(
             matePositions, templateLengths, chromosomes,
             signalCompression, signalCodecOverrides, provenanceRecords,
             embedReference, referenceChromSeqs, externalReferencePath,
-            blobs);
+            blobs, optDisableQualitiesV5, optLegacyWholeChannel);
+    }
+
+    /** Same run written in the v1.8 whole-channel layout when
+     *  {@code legacy} is true, as {@code blocks_v1} otherwise. */
+    public WrittenGenomicRun withOptLegacyWholeChannel(boolean legacy) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            bulkV2Blobs, optDisableQualitiesV5, legacy);
+    }
+
+    /** Same run with the given per-channel codec overrides. */
+    public WrittenGenomicRun withSignalCodecOverrides(Map<String, Compression> overrides) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, overrides, provenanceRecords,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel);
+    }
+
+    /** Same run with the given provenance records. */
+    public WrittenGenomicRun withProvenance(List<ProvenanceRecord> records) {
+        return new WrittenGenomicRun(
+            acquisitionMode, referenceUri, platform, sampleName,
+            positions, mappingQualities, flags, sequences, qualities,
+            offsets, lengths, cigars, readNames, mateChromosomes,
+            matePositions, templateLengths, chromosomes,
+            signalCompression, signalCodecOverrides, records,
+            embedReference, referenceChromSeqs, externalReferencePath,
+            bulkV2Blobs, optDisableQualitiesV5, optLegacyWholeChannel);
     }
 
     /** Number of reads (derived from {@link #offsets} length). */

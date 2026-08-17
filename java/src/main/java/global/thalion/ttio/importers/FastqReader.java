@@ -17,6 +17,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -222,61 +223,165 @@ public class FastqReader {
         void accept(String name, byte[] seq, byte[] qual);
     }
 
+    /** Reads per streamed batch. */
+    public static final int DEFAULT_BATCH_READS = 100_000;
+
+    /** Batches of {@code batchReads} reads as unaligned
+     *  {@link WrittenGenomicRun}s. The Phred offset is the forced one or
+     *  detected on the first batch. The iterator implements
+     *  {@link AutoCloseable} and closes the input at EOF. */
+    public Iterator<WrittenGenomicRun> iterBatches(
+            String sampleName, String platform, String referenceUri,
+            AcquisitionMode acquisitionMode, int batchReads) throws IOException {
+        if (batchReads < 1) throw new IllegalArgumentException("batchReads must be >= 1");
+        InputStream in = FastaReader.openMaybeGzip(path);
+        BufferedReader br = new BufferedReader(new InputStreamReader(in, StandardCharsets.ISO_8859_1));
+        return new Iterator<>() {
+            final List<String> names = new ArrayList<>();
+            final List<byte[]> seqs = new ArrayList<>();
+            final List<byte[]> quals = new ArrayList<>();
+            final int[] lineNo = {0};
+            WrittenGenomicRun next;
+            boolean done;
+
+            @Override public boolean hasNext() {
+                if (next != null) return true;
+                if (done) return false;
+                try {
+                    while (names.size() < batchReads) {
+                        String[] rec = readRecord(br, lineNo);
+                        if (rec == null) break;
+                        names.add(rec[0]);
+                        seqs.add(rec[1].getBytes(StandardCharsets.ISO_8859_1));
+                        quals.add(rec[2].getBytes(StandardCharsets.ISO_8859_1));
+                    }
+                } catch (IOException e) {
+                    throw new java.io.UncheckedIOException(e);
+                }
+                if (names.isEmpty()) {
+                    finish();
+                    return false;
+                }
+                next = batch();
+                names.clear(); seqs.clear(); quals.clear();
+                return true;
+            }
+
+            @Override public WrittenGenomicRun next() {
+                if (!hasNext()) throw new java.util.NoSuchElementException();
+                WrittenGenomicRun r = next;
+                next = null;
+                return r;
+            }
+
+            private void finish() {
+                if (done) return;
+                done = true;
+                try { br.close(); } catch (IOException ignored) { }
+                if (detectedPhred == null) detectedPhred = forcedPhred != null ? forcedPhred : 33;
+            }
+
+            private WrittenGenomicRun batch() {
+                if (detectedPhred == null) {
+                    if (forcedPhred != null) {
+                        detectedPhred = forcedPhred;
+                    } else {
+                        ByteArrayOutputStream concat = new ByteArrayOutputStream();
+                        for (byte[] q : quals) concat.write(q, 0, q.length);
+                        detectedPhred = detectPhredOffset(concat.toByteArray());
+                    }
+                }
+                List<Long> offsetsL = new ArrayList<>(names.size());
+                List<Integer> lengthsL = new ArrayList<>(names.size());
+                ByteArrayOutputStream seqBuf = new ByteArrayOutputStream();
+                ByteArrayOutputStream qualBuf = new ByteArrayOutputStream();
+                long running = 0L;
+                for (int i = 0; i < names.size(); i++) {
+                    byte[] s = seqs.get(i), q = quals.get(i);
+                    if (detectedPhred == 64) {
+                        byte[] q33 = new byte[q.length];
+                        for (int j = 0; j < q.length; j++) q33[j] = (byte) ((q[j] & 0xFF) - 31);
+                        q = q33;
+                    }
+                    offsetsL.add(running);
+                    lengthsL.add(s.length);
+                    seqBuf.write(s, 0, s.length);
+                    qualBuf.write(q, 0, q.length);
+                    running += s.length;
+                }
+                return FastaReader.buildUnalignedRun(new ArrayList<>(names), seqBuf.toByteArray(),
+                    qualBuf.toByteArray(), offsetsL, lengthsL, sampleName, platform, referenceUri,
+                    acquisitionMode);
+            }
+        };
+    }
+
+    /** {@link #iterBatches} as a {@link GenomicStreamSource}. */
+    public GenomicStreamSource stream(String name, String sampleName, int batchReads) {
+        return new GenomicStreamSource(name, () -> {
+            try {
+                return iterBatches(sampleName, "", "", AcquisitionMode.GENOMIC_WGS, batchReads);
+            } catch (IOException e) {
+                throw new java.io.UncheckedIOException(e);
+            }
+        }, null, false, null, null, false);
+    }
+
+    /** Default batch of 100 000 reads. */
+    public GenomicStreamSource stream(String name, String sampleName) {
+        return stream(name, sampleName, DEFAULT_BATCH_READS);
+    }
+
+    /** One record as {@code {name, seq, qual}}, or {@code null} at EOF. */
+    private static String[] readRecord(BufferedReader br, int[] lineNo) throws IOException {
+        String hdr;
+        do {
+            hdr = br.readLine();
+            if (hdr == null) return null;
+            lineNo[0]++;
+        } while (hdr.isEmpty());
+        if (hdr.charAt(0) != '@') {
+            throw new FastqParseException(
+                "line " + lineNo[0] + ": expected '@<name>' header, got " + truncate(hdr, 60));
+        }
+        int i = 1;
+        while (i < hdr.length() && (hdr.charAt(i) == ' ' || hdr.charAt(i) == '\t')) i++;
+        int start = i;
+        while (i < hdr.length() && hdr.charAt(i) != ' ' && hdr.charAt(i) != '\t') i++;
+        String name = hdr.substring(start, i);
+        String seqLine = br.readLine();
+        lineNo[0]++;
+        if (seqLine == null) {
+            throw new FastqParseException("truncated record at line " + lineNo[0] + " (missing sequence)");
+        }
+        String plus = br.readLine();
+        lineNo[0]++;
+        if (plus == null || !plus.startsWith("+")) {
+            throw new FastqParseException("line " + lineNo[0] + ": expected '+' separator, got "
+                + (plus == null ? "<EOF>" : truncate(plus, 60)));
+        }
+        String qualLine = br.readLine();
+        lineNo[0]++;
+        if (qualLine == null) {
+            throw new FastqParseException("truncated record at line " + lineNo[0] + " (missing qualities)");
+        }
+        if (seqLine.length() != qualLine.length()) {
+            throw new FastqParseException("line " + lineNo[0] + ": SEQ/QUAL length mismatch ("
+                + seqLine.length() + " vs " + qualLine.length() + ") for read '" + name + "'");
+        }
+        return new String[]{ name, seqLine, qualLine };
+    }
+
     private static void iterateRecords(InputStream in, FastqRecordSink sink) throws IOException {
         BufferedReader br = new BufferedReader(
             new InputStreamReader(in, StandardCharsets.ISO_8859_1)
         );
-        int lineNo = 0;
+        int[] lineNo = {0};
         while (true) {
-            String hdr = br.readLine();
-            if (hdr == null) return;
-            lineNo++;
-            if (hdr.isEmpty()) continue;
-            if (hdr.charAt(0) != '@') {
-                throw new FastqParseException(
-                    "line " + lineNo + ": expected '@<name>' header, got "
-                        + truncate(hdr, 60)
-                );
-            }
-            // Name = first whitespace-delimited token after '@'.
-            int i = 1;
-            while (i < hdr.length() && (hdr.charAt(i) == ' ' || hdr.charAt(i) == '\t')) i++;
-            int start = i;
-            while (i < hdr.length() && hdr.charAt(i) != ' ' && hdr.charAt(i) != '\t') i++;
-            String name = hdr.substring(start, i);
-
-            String seqLine = br.readLine();
-            lineNo++;
-            if (seqLine == null) {
-                throw new FastqParseException(
-                    "truncated record at line " + lineNo + " (missing sequence)"
-                );
-            }
-            String plus = br.readLine();
-            lineNo++;
-            if (plus == null || !plus.startsWith("+")) {
-                throw new FastqParseException(
-                    "line " + lineNo + ": expected '+' separator, got "
-                        + (plus == null ? "<EOF>" : truncate(plus, 60))
-                );
-            }
-            String qualLine = br.readLine();
-            lineNo++;
-            if (qualLine == null) {
-                throw new FastqParseException(
-                    "truncated record at line " + lineNo + " (missing qualities)"
-                );
-            }
-            byte[] seq = seqLine.getBytes(StandardCharsets.ISO_8859_1);
-            byte[] qual = qualLine.getBytes(StandardCharsets.ISO_8859_1);
-            if (seq.length != qual.length) {
-                throw new FastqParseException(
-                    "line " + lineNo + ": SEQ/QUAL length mismatch ("
-                        + seq.length + " vs " + qual.length + ") for read '"
-                        + name + "'"
-                );
-            }
-            sink.accept(name, seq, qual);
+            String[] rec = readRecord(br, lineNo);
+            if (rec == null) return;
+            sink.accept(rec[0], rec[1].getBytes(StandardCharsets.ISO_8859_1),
+                rec[2].getBytes(StandardCharsets.ISO_8859_1));
         }
     }
 

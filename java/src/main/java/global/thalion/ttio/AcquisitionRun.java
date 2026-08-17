@@ -44,8 +44,8 @@ public class AcquisitionRun implements
         global.thalion.ttio.protocols.Run,
         AutoCloseable {
 
-    private static final int CHUNK_SIZE = 65536;
-    private static final int COMPRESSION_LEVEL = 6;
+    static final int CHUNK_SIZE = 65536;
+    static final int COMPRESSION_LEVEL = 6;
 
     private final String name;
     private final AcquisitionMode acquisitionMode;
@@ -69,8 +69,92 @@ public class AcquisitionRun implements
     // {@code "genomics"} for genomic-read runs.
     private final String modality;
 
-    // Channel data (concatenated across all spectra)
+    // Channel data (concatenated across all spectra), as given to the
+    // constructor. Runs opened from storage keep their channels in
+    // lazyChannels instead and decode ranges on demand.
     private final Map<String, double[]> channels;
+    private Map<String, LazyChannel> lazyChannels;
+    private Map<String, double[]> materialisedChannels;
+
+    /** A stored channel dataset read by range: codec 17 decodes only the
+     *  FDZ1 blocks a range covers (one-block cache); codec 0 reads a
+     *  hyperslab. */
+    private static final class LazyChannel {
+        final StorageDataset ds;
+        final int codec;
+        global.thalion.ttio.codecs.FloatDeltaZstd.BlockTable table;
+        int cachedBlock = -1;
+        double[] cachedValues;
+        double[] full;
+
+        LazyChannel(StorageDataset ds, int codec) { this.ds = ds; this.codec = codec; }
+
+        private global.thalion.ttio.codecs.FloatDeltaZstd.BlockTable table() {
+            if (table == null) {
+                table = global.thalion.ttio.codecs.FloatDeltaZstd.readBlockTable(
+                    (off, n) -> (byte[]) ds.readSlice(off, n));
+            }
+            return table;
+        }
+
+        private double[] block(int k) {
+            if (cachedBlock != k) {
+                cachedValues = global.thalion.ttio.codecs.FloatDeltaZstd.decodeBlock(
+                    (off, n) -> (byte[]) ds.readSlice(off, n), table(), k);
+                cachedBlock = k;
+            }
+            return cachedValues;
+        }
+
+        double[] range(long start, int count) {
+            if (count <= 0) return new double[0];
+            if (full != null) return Arrays.copyOfRange(full, (int) start, (int) start + count);
+            if (codec == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()) {
+                var t = table();
+                int bs = t.blockSize();
+                int k0 = (int) (start / bs), k1 = (int) ((start + count - 1) / bs);
+                if (k0 == k1) {
+                    double[] blk = block(k0);
+                    int o = (int) (start - (long) k0 * bs);
+                    return Arrays.copyOfRange(blk, o, o + count);
+                }
+                double[] out = new double[count];
+                int pos = 0;
+                for (int k = k0; k <= k1; k++) {
+                    double[] blk = block(k);
+                    int lo = k == k0 ? (int) (start - (long) k * bs) : 0;
+                    int hi = k == k1 ? (int) (start + count - (long) k * bs) : blk.length;
+                    System.arraycopy(blk, lo, out, pos, hi - lo);
+                    pos += hi - lo;
+                }
+                return out;
+            }
+            if (codec != 0) {
+                throw new IllegalStateException(
+                    "signal channel '" + ds.name() + "': @compression=" + codec
+                    + " is not a spectral channel codec (FLOAT_DELTA_ZSTD=17 is the only one wired)");
+            }
+            return (double[]) ds.readSlice(start, count);
+        }
+
+        double[] fullValues() {
+            if (full == null) {
+                if (codec == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()) {
+                    full = global.thalion.ttio.codecs.FloatDeltaZstd.decode((byte[]) ds.readAll());
+                } else if (codec != 0) {
+                    throw new IllegalStateException(
+                        "signal channel '" + ds.name() + "': @compression=" + codec
+                        + " is not a spectral channel codec (FLOAT_DELTA_ZSTD=17 is the only one wired)");
+                } else {
+                    full = (double[]) ds.readAll();
+                }
+                cachedValues = null;
+                cachedBlock = -1;
+                table = null;
+            }
+            return full;
+        }
+    }
 
     // Streamable cursor and Provenanceable cache.
     private int cursor = 0;
@@ -233,7 +317,86 @@ public class AcquisitionRun implements
     public InstrumentConfig instrumentConfig() { return instrumentConfig; }
 
     /** @return Unmodifiable view of the run's concatenated channel buffers keyed by channel name. */
-    public Map<String, double[]> channels() { return channels; }
+    public Map<String, double[]> channels() {
+        if (lazyChannels == null) return channels;
+        if (materialisedChannels == null) {
+            Map<String, double[]> m = new LinkedHashMap<>(channels);
+            for (var e : lazyChannels.entrySet()) m.put(e.getKey(), e.getValue().fullValues());
+            materialisedChannels = Collections.unmodifiableMap(m);
+        }
+        return materialisedChannels;
+    }
+
+    /** Channel names in storage order (eager channels first). */
+    public List<String> channelNames() {
+        List<String> out = new ArrayList<>(channels.keySet());
+        if (lazyChannels != null) {
+            for (String c : lazyChannels.keySet()) if (!out.contains(c)) out.add(c);
+        }
+        return out;
+    }
+
+    /** {@code true} when the run carries {@code name}. */
+    public boolean hasChannel(String name) {
+        return channels.containsKey(name)
+            || (lazyChannels != null && lazyChannels.containsKey(name))
+            || decryptedChannels.containsKey(name);
+    }
+
+    /** Values {@code [start, start + count)} of a channel, reading only
+     *  what the range needs; {@code null} when the channel is absent. */
+    public double[] channelRange(String channel, long start, int count) {
+        double[] overlay = decryptedChannels.get(channel);
+        if (overlay != null) return Arrays.copyOfRange(overlay, (int) start, (int) start + count);
+        double[] eager = channels.get(channel);
+        if (eager != null) return Arrays.copyOfRange(eager, (int) start, (int) start + count);
+        if (lazyChannels != null) {
+            LazyChannel lc = lazyChannels.get(channel);
+            if (lc != null) return lc.range(start, count);
+        }
+        return null;
+    }
+
+    /** Every spectrum in order, reading channel data in windows of
+     *  {@code batch} spectra (codec-17 blocks decode once per window). */
+    public java.util.Iterator<Spectrum> iterSpectra(int batch) {
+        int n = spectrumIndex.count();
+        int window = Math.max(1, batch);
+        List<String> names = channelNames();
+        return new java.util.Iterator<>() {
+            int next = 0;
+            int winStart = 0, winEnd = 0;
+            long winBase = 0;
+            final Map<String, double[]> arrays = new LinkedHashMap<>();
+
+            @Override public boolean hasNext() { return next < n; }
+
+            @Override public Spectrum next() {
+                if (next >= n) throw new java.util.NoSuchElementException();
+                if (next >= winEnd) {
+                    winStart = next;
+                    winEnd = Math.min(n, winStart + window);
+                    winBase = spectrumIndex.offsetAt(winStart);
+                    long total = spectrumIndex.offsetAt(winEnd - 1) + spectrumIndex.lengthAt(winEnd - 1) - winBase;
+                    arrays.clear();
+                    for (String c : names) {
+                        double[] a = channelRange(c, winBase, (int) total);
+                        if (a != null) arrays.put(c, a);
+                    }
+                }
+                int i = next++;
+                long o = spectrumIndex.offsetAt(i) - winBase;
+                int len = spectrumIndex.lengthAt(i);
+                return buildSpectrum(i, c -> {
+                    double[] a = arrays.get(c);
+                    return a == null ? null : Arrays.copyOfRange(a, (int) o, (int) o + len);
+                });
+            }
+        };
+    }
+
+    /** {@link #iterSpectra(int)} with 4096-spectrum windows. */
+    public java.util.Iterator<Spectrum> iterSpectra() { return iterSpectra(4096); }
 
     /** @return Unmodifiable list of chromatograms attached to this run. */
     public List<Chromatogram> chromatograms() { return chromatograms; }
@@ -265,19 +428,29 @@ public class AcquisitionRun implements
 
     /** Read a single spectrum's channel data by index (hyperslab). */
     public double[] channelSlice(String channelName, int spectrumIdx) {
-        double[] data = decryptedChannels.getOrDefault(channelName,
-                channels.get(channelName));
-        if (data == null) return null;
         long offset = spectrumIndex.offsetAt(spectrumIdx);
         int length = spectrumIndex.lengthAt(spectrumIdx);
-        return Arrays.copyOfRange(data, (int) offset, (int) offset + length);
+        return channelSliceOrNull(channelName, offset, length);
     }
 
-    /** Channel array that prefers the post-decrypt overlay, falling
-     *  back to the on-disk-loaded channels. v1.1 Issue B. */
-    private double[] effectiveChannel(String name) {
+    /** The per-spectrum slice of a channel, or {@code null} when the
+     *  channel is absent or too short (e.g. an encrypted channel not yet
+     *  decrypted). */
+    private double[] channelSliceOrNull(String name, long offset, int length) {
         double[] overlay = decryptedChannels.get(name);
-        return overlay != null ? overlay : channels.getOrDefault(name, new double[0]);
+        if (overlay != null) return slice(overlay, offset, length);
+        double[] eager = channels.get(name);
+        if (eager != null) return slice(eager, offset, length);
+        if (lazyChannels != null) {
+            LazyChannel lc = lazyChannels.get(name);
+            if (lc == null) return null;
+            if (lc.full != null) return slice(lc.full, offset, length);
+            long total = lc.codec == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()
+                ? lc.table().nValues() : lc.ds.length();
+            if (total < offset + length) return new double[0];
+            return lc.range(offset, length);
+        }
+        return null;
     }
 
     /** Hyperslab a concatenated channel buffer; empty when the channel
@@ -320,11 +493,16 @@ public class AcquisitionRun implements
     public Spectrum objectAtIndex(int index) {
         long offset = spectrumIndex.offsetAt(index);
         int length = spectrumIndex.lengthAt(index);
+        return buildSpectrum(index, c -> channelSliceOrNull(c, offset, length));
+    }
 
-        double[] mz = effectiveChannel("mz");
-        double[] intensity = effectiveChannel("intensity");
-        double[] chemShift = effectiveChannel("chemical_shift");
-
+    /** Build spectrum {@code index} from per-channel slices; a
+     *  {@code null} slice reads as an empty channel. */
+    private Spectrum buildSpectrum(int index, java.util.function.Function<String, double[]> sliceOf) {
+        java.util.function.Function<String, double[]> ch = c -> {
+            double[] v = sliceOf.apply(c);
+            return v == null ? new double[0] : v;
+        };
         double scanTime = spectrumIndex.retentionTimeAt(index);
         double precursorMz = spectrumIndex.precursorMzAt(index);
         int precursorCharge = spectrumIndex.precursorChargeAt(index);
@@ -338,39 +516,31 @@ public class AcquisitionRun implements
                 Enums.SpectrumKind.fromPersisted(spectrumClassOverride);
             switch (kind) {
                 case IR -> {
-                    return new IRSpectrum(
-                        slice(effectiveChannel("wavenumber"), offset, length),
-                        slice(effectiveChannel("intensity"), offset, length),
+                    return new IRSpectrum(ch.apply("wavenumber"), ch.apply("intensity"),
                         index, scanTime, irMode, irResolutionCmInv,
                         irNumberOfScans);
                 }
                 case RAMAN -> {
-                    return new RamanSpectrum(
-                        slice(effectiveChannel("wavenumber"), offset, length),
-                        slice(effectiveChannel("intensity"), offset, length),
+                    return new RamanSpectrum(ch.apply("wavenumber"), ch.apply("intensity"),
                         index, scanTime, ramanExcitationWavelengthNm,
                         ramanLaserPowerMw, ramanIntegrationTimeSec);
                 }
                 case UVVIS -> {
-                    return new UVVisSpectrum(
-                        slice(effectiveChannel("wavelength"), offset, length),
-                        slice(effectiveChannel("absorbance"), offset, length),
+                    return new UVVisSpectrum(ch.apply("wavelength"), ch.apply("absorbance"),
                         index, scanTime, uvvisPathLengthCm, solvent);
                 }
                 default -> { /* fall through to NMR / MS */ }
             }
         }
 
-        if (chemShift.length > 0) {
-            double[] cs = java.util.Arrays.copyOfRange(chemShift, (int) offset, (int) offset + length);
-            double[] it = java.util.Arrays.copyOfRange(intensity, (int) offset, (int) offset + length);
-            return new NMRSpectrum(cs, it, index, scanTime,
+        if (hasChannel("chemical_shift")) {
+            return new NMRSpectrum(ch.apply("chemical_shift"), ch.apply("intensity"), index, scanTime,
                 nucleusType != null ? nucleusType : "",
                 spectrometerFrequencyMHz);
         }
 
-        double[] mzSlice = java.util.Arrays.copyOfRange(mz, (int) offset, (int) offset + length);
-        double[] intSlice = java.util.Arrays.copyOfRange(intensity, (int) offset, (int) offset + length);
+        double[] mzSlice = ch.apply("mz");
+        double[] intSlice = ch.apply("intensity");
         return new MassSpectrum(mzSlice, intSlice, index, scanTime,
             precursorMz, precursorCharge,
             spectrumIndex.msLevelAt(index),
@@ -715,14 +885,15 @@ public class AcquisitionRun implements
             }
 
             SpectrumIndex index = SpectrumIndex.readFrom(runGroup);
-            Map<String, double[]> channels = readSignalChannels(runGroup);
+            Map<String, LazyChannel> lazy = openSignalChannels(runGroup);
             InstrumentConfig config = readInstrumentConfig(runGroup);
             List<Chromatogram> chroms = readChromatograms(runGroup);
             List<ProvenanceRecord> provenance = readProvenance(runGroup);
 
             AcquisitionRun run = new AcquisitionRun(runName, mode, index, config,
-                    channels, chroms, provenance, nucleusType, freqMHz,
+                    Map.of(), chroms, provenance, nucleusType, freqMHz,
                     modality, solvent);
+            run.lazyChannels = lazy;
 
             // Vibrational runs (IR / Raman / UV-Vis) carry a
             // @spectrum_class that the acquisition-mode switch can't
@@ -778,7 +949,7 @@ public class AcquisitionRun implements
                     || (signalCompression == Compression.ZLIB
                         && !optDisableFloatDelta
                         && "TTIOMassSpectrum".equals(spectrumClassName()));
-            for (var entry : channels.entrySet()) {
+            for (var entry : channels().entrySet()) {
                 if (!first) channelNames.append(",");
                 channelNames.append(entry.getKey());
 
@@ -822,8 +993,11 @@ public class AcquisitionRun implements
         }
     }
 
-    private static Map<String, double[]> readSignalChannels(StorageGroup runGroup) {
-        Map<String, double[]> channels = new LinkedHashMap<>();
+    /** Open every {@code <channel>_values} dataset for range reads; the
+     *  datasets stay open for the run's lifetime and are released by
+     *  {@link #close()}. Nothing is decoded here. */
+    private static Map<String, LazyChannel> openSignalChannels(StorageGroup runGroup) {
+        Map<String, LazyChannel> channels = new LinkedHashMap<>();
         if (!runGroup.hasChild("signal_channels")) return channels;
 
         try (StorageGroup sc = runGroup.openGroup("signal_channels")) {
@@ -831,32 +1005,13 @@ public class AcquisitionRun implements
             for (String ch : namesStr.split(",")) {
                 String dsName = ch.strip() + "_values";
                 if (sc.hasChild(dsName)) {
-                    try (StorageDataset ds = sc.openDataset(dsName)) {
-                        // FLOAT_DELTA_ZSTD (codec id 17): the dataset
-                        // is a flat uint8 FDZ1 stream — decode whole,
-                        // matching Python's decode-once-cache and the
-                        // eager double[] model here.
-                        int codecId = 0;
-                        if (ds.hasAttribute("compression")) {
-                            Object v = ds.getAttribute("compression");
-                            if (v instanceof Number num) codecId = num.intValue();
-                        }
-                        if (codecId == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()) {
-                            byte[] stream = (byte[]) ds.readAll();
-                            channels.put(ch.strip(),
-                                global.thalion.ttio.codecs.FloatDeltaZstd.decode(stream));
-                        } else if (codecId != 0) {
-                            throw new IllegalStateException(
-                                "signal channel '" + ch.strip() + "': @compression="
-                                + codecId + " is not a spectral channel codec "
-                                + "(FLOAT_DELTA_ZSTD=17 is the only one wired)");
-                        } else {
-                            // route through the storage protocol, not
-                            // Hdf5Dataset directly. Providers decide how
-                            // to materialise the underlying array.
-                            channels.put(ch.strip(), (double[]) ds.readAll());
-                        }
+                    StorageDataset ds = sc.openDataset(dsName);
+                    int codecId = 0;
+                    if (ds.hasAttribute("compression")) {
+                        Object v = ds.getAttribute("compression");
+                        if (v instanceof Number num) codecId = num.intValue();
                     }
+                    channels.put(ch.strip(), new LazyChannel(ds, codecId));
                 }
             }
         }
@@ -864,6 +1019,10 @@ public class AcquisitionRun implements
     }
 
     private void writeInstrumentConfig(StorageGroup runGroup) {
+        writeInstrumentConfig(runGroup, instrumentConfig);
+    }
+
+    static void writeInstrumentConfig(StorageGroup runGroup, InstrumentConfig instrumentConfig) {
         try (StorageGroup ic = runGroup.createGroup("instrument_config")) {
             if (instrumentConfig.manufacturer() != null)
                 ic.setAttribute("manufacturer", instrumentConfig.manufacturer());
@@ -898,6 +1057,10 @@ public class AcquisitionRun implements
      *  {@code chromatogram_index/offsets} column is omitted; readers
      *  synthesize it from {@code cumsum(lengths)}. */
     private void writeChromatograms(StorageGroup runGroup) {
+        writeChromatograms(runGroup, chromatograms);
+    }
+
+    static void writeChromatograms(StorageGroup runGroup, List<Chromatogram> chromatograms) {
         try (StorageGroup cg = runGroup.createGroup("chromatograms")) {
             cg.setAttribute("count", (long) chromatograms.size());
 
@@ -973,6 +1136,10 @@ public class AcquisitionRun implements
     }
 
     private void writeProvenance(StorageGroup runGroup) {
+        writeProvenance(runGroup, provenanceRecords);
+    }
+
+    static void writeProvenance(StorageGroup runGroup, List<ProvenanceRecord> provenanceRecords) {
         // Per-run provenance. On the HDF5 fast path we write the
         // canonical compound dataset {@code provenance/steps} matching
         // Python's writer (cross-language round-trip). The JSON
@@ -1107,6 +1274,10 @@ public class AcquisitionRun implements
      */
     @Override
     public void close() {
-        // No storage handles held — all closed after read/write
+        if (lazyChannels != null) {
+            for (LazyChannel lc : lazyChannels.values()) {
+                try { lc.ds.close(); } catch (RuntimeException ignored) { }
+            }
+        }
     }
 }

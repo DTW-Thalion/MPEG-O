@@ -65,6 +65,7 @@ public final class Hdf5CompoundIO {
     public enum FieldKind {
         UINT32(4, HDF5Constants.H5T_NATIVE_UINT32),
         INT64(8, HDF5Constants.H5T_NATIVE_INT64),
+        UINT64(8, HDF5Constants.H5T_NATIVE_UINT64),
         FLOAT64(8, HDF5Constants.H5T_NATIVE_DOUBLE),
         VL_STRING(8, -1),
         /** hvl_t on 64-bit: {size_t len; void* p} = 16 bytes. */
@@ -226,7 +227,7 @@ public final class Hdf5CompoundIO {
                     int off = base + schema.offsets[i];
                     switch (schema.fields.get(i).kind()) {
                         case UINT32  -> buf.putInt(off, ((Number) vals[i]).intValue());
-                        case INT64   -> buf.putLong(off, ((Number) vals[i]).longValue());
+                        case INT64, UINT64 -> buf.putLong(off, ((Number) vals[i]).longValue());
                         case FLOAT64 -> buf.putDouble(off, ((Number) vals[i]).doubleValue());
                         default -> { /* no VL fields in this path */ }
                     }
@@ -337,7 +338,7 @@ public final class Hdf5CompoundIO {
                             switch (f.kind()) {
                                 case UINT32  ->
                                     buf.putInt(off, ((Number) vals[origIdx]).intValue());
-                                case INT64   ->
+                                case INT64, UINT64 ->
                                     buf.putLong(off, ((Number) vals[origIdx]).longValue());
                                 case FLOAT64 ->
                                     buf.putDouble(off, ((Number) vals[origIdx]).doubleValue());
@@ -531,7 +532,7 @@ public final class Hdf5CompoundIO {
                         int off = row * primSchema.totalSize + primSchema.offsets[primIdx];
                         rec[i] = switch (f.kind()) {
                             case UINT32  -> bb.getInt(off);
-                            case INT64   -> bb.getLong(off);
+                            case INT64, UINT64 -> bb.getLong(off);
                             case FLOAT64 -> bb.getDouble(off);
                             default      -> ""; // unreachable
                         };
@@ -545,6 +546,176 @@ public final class Hdf5CompoundIO {
         } finally {
             if (memType >= 0) try { H5.H5Tclose(memType); } catch (Exception ignored) {}
             if (dset >= 0)    try { H5.H5Dclose(dset);    } catch (Exception ignored) {}
+            owner.unlockForReading();
+        }
+    }
+
+    // -- Extendable compound datasets (primitive kinds only) -----------
+
+    private static void requirePrimitiveSchema(Schema schema, String datasetName) {
+        for (Field f : schema.fields) {
+            if (f.kind() == FieldKind.VL_STRING || f.kind() == FieldKind.VL_BYTES) {
+                throw new UnsupportedOperationException(
+                    "extendable compound '" + datasetName
+                    + "': variable-length fields are not supported; primitive kinds only");
+            }
+        }
+    }
+
+    private static long compoundType(Schema schema) throws HDF5LibraryException {
+        long ctype = H5.H5Tcreate(HDF5Constants.H5T_COMPOUND, schema.totalSize);
+        for (int i = 0; i < schema.fields.size(); i++) {
+            Field f = schema.fields.get(i);
+            H5.H5Tinsert(ctype, f.name(), schema.offsets[i], f.kind().nativeType);
+        }
+        return ctype;
+    }
+
+    private static byte[] packRows(Schema schema, List<Object[]> rows) {
+        ByteBuffer buf = ByteBuffer.allocate(schema.totalSize * rows.size())
+                .order(ByteOrder.nativeOrder());
+        for (int row = 0; row < rows.size(); row++) {
+            Object[] vals = rows.get(row);
+            int base = row * schema.totalSize;
+            for (int i = 0; i < schema.fields.size(); i++) {
+                int off = base + schema.offsets[i];
+                switch (schema.fields.get(i).kind()) {
+                    case UINT32 -> buf.putInt(off, ((Number) vals[i]).intValue());
+                    case INT64, UINT64 -> buf.putLong(off, ((Number) vals[i]).longValue());
+                    case FLOAT64 -> buf.putDouble(off, ((Number) vals[i]).doubleValue());
+                    default -> { }
+                }
+            }
+        }
+        return buf.array();
+    }
+
+    /**
+     * Create an empty compound dataset with an unlimited first dimension,
+     * chunked in {@code chunkRows} records. Rows are added with
+     * {@link #appendCompoundRows}. Primitive field kinds only.
+     */
+    public static void createExtendableCompound(Hdf5Group parent, String datasetName,
+                                                Schema schema, int chunkRows) {
+        requirePrimitiveSchema(schema, datasetName);
+        if (chunkRows <= 0) {
+            throw new IllegalArgumentException("chunkRows must be > 0");
+        }
+        Hdf5File owner = parent.owningFile();
+        owner.lockForWriting();
+        long ctype = -1, dspace = -1, plist = -1, dset = -1;
+        try {
+            ctype = compoundType(schema);
+            dspace = H5.H5Screate_simple(1, new long[]{0},
+                    new long[]{HDF5Constants.H5S_UNLIMITED});
+            plist = H5.H5Pcreate(HDF5Constants.H5P_DATASET_CREATE);
+            H5.H5Pset_chunk(plist, 1, new long[]{chunkRows});
+            dset = H5.H5Dcreate(parent.getGroupId(), datasetName, ctype, dspace,
+                    HDF5Constants.H5P_DEFAULT, plist, HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) {
+                throw new Hdf5Errors.Hdf5Exception(
+                        "H5Dcreate failed for extendable compound '%s'".formatted(datasetName), null);
+            }
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetWriteException(
+                    "extendable compound create '%s' failed: %s".formatted(datasetName, e.getMessage()));
+        } finally {
+            if (dset >= 0)   try { H5.H5Dclose(dset);   } catch (Exception ig) {}
+            if (plist >= 0)  try { H5.H5Pclose(plist);  } catch (Exception ig) {}
+            if (dspace >= 0) try { H5.H5Sclose(dspace); } catch (Exception ig) {}
+            if (ctype >= 0)  try { H5.H5Tclose(ctype);  } catch (Exception ig) {}
+            owner.unlockForWriting();
+        }
+    }
+
+    /**
+     * Append rows ({@code Object[]} per record, field order) to a dataset
+     * created by {@link #createExtendableCompound}.
+     */
+    public static void appendCompoundRows(Hdf5Group parent, String datasetName,
+                                          Schema schema, List<Object[]> rows) {
+        requirePrimitiveSchema(schema, datasetName);
+        if (rows.isEmpty()) return;
+        Hdf5File owner = parent.owningFile();
+        owner.lockForWriting();
+        long ctype = -1, dset = -1, fspace = -1, mspace = -1;
+        try {
+            dset = H5.H5Dopen(parent.getGroupId(), datasetName, HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) {
+                throw new Hdf5Errors.DatasetOpenException(datasetName);
+            }
+            long cur = currentCount(dset);
+            long n = rows.size();
+            H5.H5Dset_extent(dset, new long[]{cur + n});
+            fspace = H5.H5Dget_space(dset);
+            H5.H5Sselect_hyperslab(fspace, HDF5Constants.H5S_SELECT_SET,
+                    new long[]{cur}, null, new long[]{n}, null);
+            mspace = H5.H5Screate_simple(1, new long[]{n}, null);
+            ctype = compoundType(schema);
+            int rc = H5.H5Dwrite(dset, ctype, mspace, fspace,
+                    HDF5Constants.H5P_DEFAULT, packRows(schema, rows));
+            if (rc < 0) {
+                throw new Hdf5Errors.DatasetWriteException(
+                        "H5Dwrite (append) failed for compound '%s'".formatted(datasetName));
+            }
+        } catch (HDF5LibraryException e) {
+            throw new Hdf5Errors.DatasetWriteException(
+                    "compound append '%s' failed: %s".formatted(datasetName, e.getMessage()));
+        } finally {
+            if (mspace >= 0) try { H5.H5Sclose(mspace); } catch (Exception ig) {}
+            if (fspace >= 0) try { H5.H5Sclose(fspace); } catch (Exception ig) {}
+            if (ctype >= 0)  try { H5.H5Tclose(ctype);  } catch (Exception ig) {}
+            if (dset >= 0)   try { H5.H5Dclose(dset);   } catch (Exception ig) {}
+            owner.unlockForWriting();
+        }
+    }
+
+    private static long currentCount(long dset) throws HDF5LibraryException {
+        long space = H5.H5Dget_space(dset);
+        try {
+            long[] dims = {0};
+            H5.H5Sget_simple_extent_dims(space, dims, null);
+            return dims[0];
+        } finally {
+            H5.H5Sclose(space);
+        }
+    }
+
+    /** @return the record count of an existing compound dataset. */
+    public static long rowCount(Hdf5Group parent, String datasetName) {
+        Hdf5File owner = parent.owningFile();
+        owner.lockForReading();
+        long dset = -1;
+        try {
+            dset = H5.H5Dopen(parent.getGroupId(), datasetName, HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) return 0;
+            return currentCount(dset);
+        } catch (HDF5LibraryException e) {
+            return 0;
+        } finally {
+            if (dset >= 0) try { H5.H5Dclose(dset); } catch (Exception ig) {}
+            owner.unlockForReading();
+        }
+    }
+
+    /** @return {@code true} when the dataset exists with an unlimited
+     *  first dimension. */
+    public static boolean isExtendable(Hdf5Group parent, String datasetName) {
+        Hdf5File owner = parent.owningFile();
+        owner.lockForReading();
+        long dset = -1, space = -1;
+        try {
+            dset = H5.H5Dopen(parent.getGroupId(), datasetName, HDF5Constants.H5P_DEFAULT);
+            if (dset < 0) return false;
+            space = H5.H5Dget_space(dset);
+            long[] dims = {0}, maxdims = {0};
+            H5.H5Sget_simple_extent_dims(space, dims, maxdims);
+            return maxdims[0] == HDF5Constants.H5S_UNLIMITED;
+        } catch (HDF5LibraryException e) {
+            return false;
+        } finally {
+            if (space >= 0) try { H5.H5Sclose(space); } catch (Exception ig) {}
+            if (dset >= 0)  try { H5.H5Dclose(dset);  } catch (Exception ig) {}
             owner.unlockForReading();
         }
     }
@@ -618,7 +789,7 @@ public final class Hdf5CompoundIO {
                         int off = row * schema.totalSize + schema.offsets[i];
                         rec[i] = switch (f.kind()) {
                             case UINT32  -> bb.getInt(off);
-                            case INT64   -> bb.getLong(off);
+                            case INT64, UINT64 -> bb.getLong(off);
                             case FLOAT64 -> bb.getDouble(off);
                             default      -> null; // unreachable: no VL in this branch
                         };
@@ -659,7 +830,7 @@ public final class Hdf5CompoundIO {
                             int origIdx = schema.fields.indexOf(f);
                             result[row][origIdx] = switch (f.kind()) {
                                 case UINT32  -> bb.getInt(off);
-                                case INT64   -> bb.getLong(off);
+                                case INT64, UINT64 -> bb.getLong(off);
                                 case FLOAT64 -> bb.getDouble(off);
                                 default -> null;
                             };
@@ -728,7 +899,7 @@ public final class Hdf5CompoundIO {
                     if (rec[i] == null) {
                         rec[i] = switch (schema.fields.get(i).kind()) {
                             case UINT32    -> 0;
-                            case INT64     -> 0L;
+                            case INT64, UINT64 -> 0L;
                             case FLOAT64   -> 0.0;
                             case VL_STRING -> "";
                             case VL_BYTES  -> new byte[0];
@@ -768,7 +939,7 @@ public final class Hdf5CompoundIO {
             for (int i = 0; i < schema.fields.size(); i++) {
                 rec[i] = switch (schema.fields.get(i).kind()) {
                     case UINT32    -> 0;
-                    case INT64     -> 0L;
+                    case INT64, UINT64 -> 0L;
                     case FLOAT64   -> 0.0;
                     case VL_STRING -> "";
                     case VL_BYTES  -> new byte[0];

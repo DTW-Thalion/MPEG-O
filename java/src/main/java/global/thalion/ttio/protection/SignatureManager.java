@@ -286,11 +286,16 @@ public final class SignatureManager {
             try (StorageGroup sig = runGroup.openGroup("signal_channels")) {
                 for (String cname : GENOMIC_SIGNAL_CHANNELS) {
                     if (!sig.hasChild(cname)) continue;
-                    try (StorageDataset ds = sig.openDataset(cname)) {
-                        byte[] canonical = ds.readCanonicalBytes();
-                        String s = sign(canonical, key, algorithm);
-                        ds.setAttribute("ttio_signature", s);
-                        out.put("signal_channels/" + cname, s);
+                    for (String[] pd : channelDatasets(sig, cname)) {
+                        StorageGroup parent = pd[0].isEmpty() ? sig : sig.openGroup(pd[0]);
+                        try (StorageDataset ds = parent.openDataset(pd[1])) {
+                            byte[] canonical = ds.readCanonicalBytes();
+                            String s = sign(canonical, key, algorithm);
+                            ds.setAttribute("ttio_signature", s);
+                            out.put("signal_channels/" + (pd[0].isEmpty() ? "" : pd[0] + "/") + pd[1], s);
+                        } finally {
+                            if (parent != sig) parent.close();
+                        }
                     }
                 }
             }
@@ -306,6 +311,45 @@ public final class SignatureManager {
                         out.put("genomic_index/" + cname, s);
                     }
                 }
+            }
+        }
+        if (runGroup.hasChild("blocks")) {
+            try (StorageGroup blocks = runGroup.openGroup("blocks")) {
+                if (blocks.hasChild("index")) {
+                    try (StorageDataset ds = blocks.openDataset("index")) {
+                        String s = sign(ds.readCanonicalBytes(), key, algorithm);
+                        ds.setAttribute("ttio_signature", s);
+                        out.put("blocks/index", s);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The dataset(s) behind a genomic signal channel as
+     *  {@code {parentGroupName, datasetName}} pairs ({@code ""} parent =
+     *  the flat dataset; a group channel such as {@code sequences/data}
+     *  under blocks_v1 or {@code sequences/refdiff_v2} lists its child
+     *  datasets). */
+    private static java.util.List<String[]> channelDatasets(StorageGroup sig, String cname) {
+        java.util.List<String[]> out = new java.util.ArrayList<>();
+        StorageGroup g = null;
+        try {
+            g = sig.openGroup(cname);
+        } catch (RuntimeException e) {
+            g = null;
+        }
+        if (g == null) {
+            out.add(new String[]{ "", cname });
+            return out;
+        }
+        try (StorageGroup grp = g) {
+            for (String child : grp.childNames()) {
+                boolean isGroup;
+                try (StorageGroup sub = grp.openGroup(child)) { isGroup = true; }
+                catch (RuntimeException e) { isGroup = false; }
+                if (!isGroup) out.add(new String[]{ cname, child });
             }
         }
         return out;
@@ -336,8 +380,13 @@ public final class SignatureManager {
             try (StorageGroup sig = runGroup.openGroup("signal_channels")) {
                 for (String cname : GENOMIC_SIGNAL_CHANNELS) {
                     if (!sig.hasChild(cname)) continue;
-                    if (!verifyOneDataset(sig, cname, key, algorithm)) {
-                        return false;
+                    for (String[] pd : channelDatasets(sig, cname)) {
+                        StorageGroup parent = pd[0].isEmpty() ? sig : sig.openGroup(pd[0]);
+                        try {
+                            if (!verifyOneDataset(parent, pd[1], key, algorithm)) return false;
+                        } finally {
+                            if (parent != sig) parent.close();
+                        }
                     }
                 }
             }
@@ -349,6 +398,14 @@ public final class SignatureManager {
                     if (!verifyOneDataset(idx, cname, key, algorithm)) {
                         return false;
                     }
+                }
+            }
+        }
+        if (runGroup.hasChild("blocks")) {
+            try (StorageGroup blocks = runGroup.openGroup("blocks")) {
+                if (blocks.hasChild("index")
+                        && !verifyOneDataset(blocks, "index", key, algorithm)) {
+                    return false;
                 }
             }
         }

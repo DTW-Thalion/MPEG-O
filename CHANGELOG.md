@@ -12,6 +12,29 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Changed
+- **Java: streaming import and export; genomic runs written as `blocks_v1`.**
+  The Java SDK reads the `blocks_v1` layout (format-spec 10.12) and writes it by
+  default: `GenomicRun` opens both layouts and decodes one block at a time
+  (`iterReads`, `layout()`, `blockCount()`, `chromosomeNames()`),
+  `SpectralDataset.create` and every genomic write go through the new
+  `genomics.GenomicStreamWriter` unless `WrittenGenomicRun.optLegacyWholeChannel`
+  is set. MS runs get `SpectralStreamWriter` and a lazy `AcquisitionRun`
+  (`channelRange`, `iterSpectra`; `channels()` keeps its meaning but decodes on
+  first call, so `SpectralDataset.open` no longer decodes every channel).
+  Importers stream: `BamReader.iterBatches`/`stream`, `FastqReader.iterBatches`/
+  `stream`, `MzMLReader.stream`; `ImportedDataset` carries `genomicStreams` /
+  `spectralStreams` and `ImporterRegistry.encode` routes BAM/SAM/CRAM and mzML
+  through them (`--extra block_reads=`, `block_bytes=`, `legacy_whole_channel=1`,
+  `reference=<fasta>`, `embed_reference=1`); `BamWriter`, `FastqWriter` and
+  `MzMLWriter` write read by read / spectrum by spectrum. Storage providers gain
+  extendable datasets (`createDataset(..., extendable)`, `append`, `writeSlice`)
+  and `CompoundField.Kind.UINT64`; `SignatureManager` signs `blocks/index` and
+  the datasets inside a channel group; the transport writer sends multi-block
+  runs per AU. `LazyReference` (htsjdk indexed FASTA) supplies REF_DIFF_V2
+  references chromosome by chromosome. tio-browser streams FASTQ imports. A Java
+  test decodes the Python-written golden fixture and a Python test reads a
+  Java-written `blocks_v1` file; the cross-language fixtures stay on the
+  whole-channel layout until ObjC reads blocks.
 - **Streaming import and export; genomic runs stored as `blocks_v1`.** Every
   Python importer (BAM/SAM/CRAM, FASTQ, mzML, Thermo RAW, Waters .raw, Bruker .d)
   and exporter (SAM/BAM, FASTQ, mzML) now streams: a run of any size is written

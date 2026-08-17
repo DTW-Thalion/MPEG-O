@@ -33,8 +33,7 @@ public final class BamWriterAdapter implements Writer {
     public void write(SpectralDataset ds, String layer, Path output,
                       Map<String, Object> opts) throws IOException {
         GenomicRun run = RunSelection.genomicRun(ds, layer);
-        WrittenGenomicRun written = RunSelection.toWritten(run);
         // GUI: new BamWriter(targetPath).write(w, provenance, /*sort=*/true, sink).
-        new BamWriter(output).write(written, ds.provenanceRecords(), true, null);
+        new BamWriter(output).write(run, ds.provenanceRecords(), true, null);
     }
 }

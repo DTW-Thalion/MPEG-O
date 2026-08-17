@@ -45,7 +45,7 @@ The Java implementation mirrors the three-layer ObjC/Python pattern:
 | Storage providers | `global.thalion.ttio.providers` | `Hdf5Provider`, `MemoryProvider`, `SqliteProvider`, `ZarrProvider` (`StorageProvider` / `StorageGroup` / `StorageDataset` protocols) |
 | Protocols | `global.thalion.ttio.protocols` | `Run`, `Indexable`, `Streamable`, `Provenanceable`, `Encryptable`, `CVAnnotatable` |
 | Core + enums | `global.thalion.ttio` | `SignalArray`, `Spectrum`, `AcquisitionRun`, `SpectralDataset`, `FeatureFlags`, `NumpressCodec`, `ProvenanceRecord`, `Enums.SpectrumKind` (v1.7.0) |
-| Genomics | `global.thalion.ttio.genomics` | `AlignedRead`, `GenomicIndex`, `GenomicRun`, `WrittenGenomicRun` |
+| Genomics | `global.thalion.ttio.genomics` | `AlignedRead`, `GenomicIndex`, `GenomicRun`, `WrittenGenomicRun`, `GenomicStreamWriter`, `GenomicBlocks`, `LazyReference` |
 | Codecs | `global.thalion.ttio.codecs` | `Rans`, `BasePack`, `Quality`, `NameTokenizerV2` |
 | Transport | `global.thalion.ttio.transport` | `TransportWriter`, `TransportReader`, `AUFilter`, `TransportServer`, `TransportClient` |
 | Importers | `global.thalion.ttio.importers` | `MzMLReader`, `NmrMLReader`, `CVTermMapper`, `BamReader`, `CramReader` |
@@ -54,6 +54,38 @@ The Java implementation mirrors the three-layer ObjC/Python pattern:
 
 See [`../ARCHITECTURE.md`](../ARCHITECTURE.md) for the full class mapping
 table and design notes.
+
+### Streaming import and export
+
+Runs of any size are written and read with bounded memory
+(`docs/format-spec.md` section 10.12 for the genomic layout):
+
+- `genomics.GenomicStreamWriter` writes a genomic run as `blocks_v1`:
+  reads are buffered until a block is full (`Options.blockReads`,
+  default 1 000 000, or `blockBytes`, default 256 MiB, of sequence
+  bytes; a block never spans two chromosomes), encoded through the
+  whole-channel writer and appended to extendable per-channel datasets
+  with a `blocks/index` row per block. `SpectralDataset.create` uses it
+  for every `WrittenGenomicRun` unless `optLegacyWholeChannel` is set.
+  `GenomicRun` reads both layouts; `iterReads()` holds one decoded
+  block, `readAt(i)` caches the last block.
+- `SpectralStreamWriter` appends spectra (`append`, `appendBatch` of
+  `WrittenSpectralBatch`) to extendable datasets and finalises the
+  codec-17 header at close; `AcquisitionRun.channelRange` and
+  `iterSpectra` decode only the FDZ1 blocks a range covers.
+- Importers: `BamReader.iterBatches`/`stream`, `FastqReader.iterBatches`/
+  `stream`, `MzMLReader.stream`; put the sources in
+  `ImportedDataset.genomicStreams`/`spectralStreams` and `write()`.
+  `ImporterRegistry.encode` (and `EncodeCli --extra`) accept
+  `block_reads`, `block_bytes`, `legacy_whole_channel`, `reference`
+  (FASTA for REF_DIFF_V2 through `LazyReference`), `embed_reference`,
+  `batch_reads`, `batch_spectra`.
+- Exporters: `BamWriter.write(GenomicRun, ...)`, `FastqWriter.write(GenomicRun, ...)`
+  and `MzMLWriter.write` stream record by record.
+- Providers: `StorageGroup.createDataset(..., extendable)`,
+  `createCompoundDataset(..., extendable, chunkRows)`,
+  `StorageDataset.append` / `writeSlice`; `CompoundField.Kind.UINT64`.
+  Extendable compound datasets on HDF5 take primitive kinds only.
 
 ## Test Suite (755 tests, 0 failures, 0 errors, 0 skipped)
 

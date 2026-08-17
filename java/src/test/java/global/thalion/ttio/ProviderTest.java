@@ -33,8 +33,84 @@ class ProviderTest {
         return switch (provider) {
             case "hdf5" -> tempDir.resolve("provider_" + System.nanoTime() + ".h5").toString();
             case "memory" -> "memory://test-" + System.nanoTime();
+            case "sqlite" -> tempDir.resolve("provider_" + System.nanoTime() + ".sqlite").toString();
+            case "zarr" -> tempDir.resolve("provider_" + System.nanoTime() + ".zarr").toString();
             default -> throw new IllegalArgumentException(provider);
         };
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"hdf5", "memory", "sqlite", "zarr"})
+    void extendablePrimitiveAppendAndSlice(String provider) {
+        String url = urlFor(provider);
+        try (StorageProvider p = ProviderRegistry.open(url, StorageProvider.Mode.CREATE, provider)) {
+            StorageGroup root = p.rootGroup();
+            try (StorageDataset ds = root.createDataset("blob", Precision.UINT8, 0, 4,
+                    Compression.NONE, 0, true)) {
+                assertTrue(ds.extendable());
+                assertEquals(0, ds.length());
+                ds.append(new byte[]{1, 2, 3});
+                ds.append(new byte[]{4, 5, 6, 7, 8});
+                ds.append(new byte[0]);
+                assertEquals(8, ds.length());
+                assertArrayEquals(new byte[]{3, 4, 5, 6}, (byte[]) ds.readSlice(2, 4));
+                ds.writeSlice(1, new byte[]{9, 9});
+                assertArrayEquals(new byte[]{1, 9, 9, 4, 5, 6, 7, 8}, (byte[]) ds.readAll());
+            }
+            try (StorageDataset ds = root.createDataset("vals", Precision.FLOAT64, 0, 2,
+                    Compression.NONE, 0, true)) {
+                ds.append(new double[]{1.5, 2.5, 3.5});
+                assertEquals(3, ds.length());
+                assertArrayEquals(new double[]{2.5, 3.5}, (double[]) ds.readSlice(1, 2), 0.0);
+            }
+            try (StorageDataset fixed = root.createDataset("fixed", Precision.UINT8, 2, 0,
+                    Compression.NONE, 0)) {
+                assertFalse(fixed.extendable());
+                assertThrows(UnsupportedOperationException.class, () -> fixed.append(new byte[]{1}));
+            }
+            assertThrows(IllegalArgumentException.class, () -> root.createDataset("bad",
+                    Precision.UINT8, 0, 0, Compression.NONE, 0, true));
+        }
+        try (StorageProvider p = ProviderRegistry.open(url, StorageProvider.Mode.READ, provider)) {
+            try (StorageDataset ds = p.rootGroup().openDataset("blob")) {
+                assertTrue(ds.extendable());
+                assertEquals(8, ds.length());
+                assertArrayEquals(new byte[]{1, 9, 9, 4, 5, 6, 7, 8}, (byte[]) ds.readAll());
+            }
+        }
+        if ("memory".equals(provider)) MemoryProvider.discardStore(url);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"hdf5", "memory", "sqlite", "zarr"})
+    void extendableCompoundWithUint64(String provider) {
+        String url = urlFor(provider);
+        List<CompoundField> fields = List.of(
+            new CompoundField("start", CompoundField.Kind.UINT64),
+            new CompoundField("n", CompoundField.Kind.UINT32),
+            new CompoundField("score", CompoundField.Kind.FLOAT64));
+        try (StorageProvider p = ProviderRegistry.open(url, StorageProvider.Mode.CREATE, provider)) {
+            try (StorageDataset ds = p.rootGroup().createCompoundDataset("idx", fields, 0, true, 2)) {
+                assertTrue(ds.extendable());
+                ds.append(java.util.Collections.singletonList(new Object[]{0L, 4, 0.5}));
+                ds.append(java.util.Arrays.asList(new Object[]{4L, 1, 1.5}, new Object[]{5L, 2, 2.5}));
+                assertEquals(3, ds.length());
+                List<Map<String, Object>> rows = ds.readRows();
+                assertEquals(3, rows.size());
+                assertEquals(5L, ((Number) rows.get(2).get("start")).longValue());
+                assertEquals(2, ((Number) rows.get(2).get("n")).intValue());
+                assertEquals(2.5, ((Number) rows.get(2).get("score")).doubleValue(), 0.0);
+            }
+        }
+        try (StorageProvider p = ProviderRegistry.open(url, StorageProvider.Mode.READ, provider)) {
+            try (StorageDataset ds = p.rootGroup().openDataset("idx")) {
+                assertEquals(3, ds.readRows().size());
+                assertEquals(CompoundField.Kind.UINT64, ds.compoundFields().get(0).kind());
+                byte[] canon = ds.readCanonicalBytes();
+                assertEquals(3 * (8 + 4 + 8), canon.length);
+            }
+        }
+        if ("memory".equals(provider)) MemoryProvider.discardStore(url);
     }
 
     @Test

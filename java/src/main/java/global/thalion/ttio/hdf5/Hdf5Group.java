@@ -177,11 +177,30 @@ public class Hdf5Group implements AutoCloseable {
                                      long length, long chunkSize,
                                      Compression compression,
                                      int compressionLevel) {
+        return createDataset(name, precision, length, chunkSize, compression,
+                compressionLevel, false);
+    }
+
+    /**
+     * Create a 1-D dataset; {@code extendable} gives it an unlimited first
+     * dimension (needs {@code chunkSize > 0}) so {@link Hdf5Dataset#append}
+     * can grow it.
+     */
+    public Hdf5Dataset createDataset(String name, Precision precision,
+                                     long length, long chunkSize,
+                                     Compression compression,
+                                     int compressionLevel,
+                                     boolean extendable) {
+        if (extendable && chunkSize <= 0) {
+            throw new IllegalArgumentException(
+                    "extendable dataset '" + name + "' needs chunkSize > 0");
+        }
         file.lockForWriting();
         long space = -1, plist = -1, htype = -1, did = -1;
         try {
             long[] dims = { length };
-            space = H5.H5Screate_simple(1, dims, null);
+            long[] maxdims = extendable ? new long[]{ HDF5Constants.H5S_UNLIMITED } : null;
+            space = H5.H5Screate_simple(1, dims, maxdims);
             if (space < 0) throw new Hdf5Errors.DatasetCreateException(
                     "H5Screate_simple failed for '" + name + "'");
 
@@ -189,8 +208,8 @@ public class Hdf5Group implements AutoCloseable {
             if (plist < 0) throw new Hdf5Errors.DatasetCreateException(
                     "H5Pcreate failed for '" + name + "'");
 
-            if (chunkSize > 0 && length > 0) {
-                long[] chunk = { Math.min(chunkSize, length) };
+            if (chunkSize > 0 && (length > 0 || extendable)) {
+                long[] chunk = { extendable ? chunkSize : Math.min(chunkSize, length) };
                 H5.H5Pset_chunk(plist, 1, chunk);
                 // Byte-shuffle ahead of the compressor for multi-byte
                 // elements. Core HDF5 filter, self-describing, so every
@@ -221,7 +240,7 @@ public class Hdf5Group implements AutoCloseable {
             if (did < 0) throw new Hdf5Errors.DatasetCreateException(
                     "H5Dcreate2 failed for '" + name + "'");
 
-            return new Hdf5Dataset(did, precision, length, file);
+            return new Hdf5Dataset(did, precision, length, file, extendable);
         } catch (HDF5LibraryException e) {
             if (did >= 0) try { H5.H5Dclose(did); } catch (Exception ignored) {}
             throw new Hdf5Errors.DatasetCreateException(
@@ -260,10 +279,12 @@ public class Hdf5Group implements AutoCloseable {
             // captured dims[0] and silently truncated the total element count.
             int rank = H5.H5Sget_simple_extent_ndims(space);
             long[] dims = new long[Math.max(rank, 1)]; // guard against rank=0 scalar
+            long[] maxdims = new long[Math.max(rank, 1)];
             if (rank > 0) {
-                H5.H5Sget_simple_extent_dims(space, dims, null);
+                H5.H5Sget_simple_extent_dims(space, dims, maxdims);
             }
             H5.H5Sclose(space);
+            boolean extendable = rank == 1 && maxdims[0] == HDF5Constants.H5S_UNLIMITED;
 
             long htid = H5.H5Dget_type(did);
             Precision precision = precisionFromType(htid);
@@ -271,7 +292,7 @@ public class Hdf5Group implements AutoCloseable {
 
             long total = 1;
             for (int i = 0; i < rank; i++) total *= dims[i];
-            return new Hdf5Dataset(did, precision, total, file);
+            return new Hdf5Dataset(did, precision, total, file, extendable);
         } catch (HDF5LibraryException e) {
             throw new Hdf5Errors.DatasetOpenException(name);
         } finally {

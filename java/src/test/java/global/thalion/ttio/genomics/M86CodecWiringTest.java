@@ -140,7 +140,7 @@ class M86CodecWiringTest {
             // baseline (test #10) is a clean uncompressed reference;
             // overrides are still independent per Gotcha §99.
             Compression.NONE,
-            overrides == null ? Map.of() : overrides);
+            overrides == null ? Map.of() : overrides).withOptLegacyWholeChannel(true);
     }
 
     private static Path writeRun(Path tmp, WrittenGenomicRun run, String fname) {
@@ -283,7 +283,7 @@ class M86CodecWiringTest {
             seq, qual,
             offsets(), lengths(),
             cigars(), readNames(), chr1List(), new long[N_READS], new int[N_READS],
-            chr1List(), Compression.ZLIB);
+            chr1List(), Compression.ZLIB).withOptLegacyWholeChannel(true);
         Path file = writeRun(tmp, run, "nocodec.tio");
         try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
             GenomicRun gr = ds.genomicRuns().get("genomic_0001");
@@ -490,7 +490,7 @@ class M86CodecWiringTest {
             AcquisitionMode.GENOMIC_WGS, "GRCh38.p14", "ILLUMINA", "M86_BIG",
             positions, mapqs, flags, seq, qual, offsets, lengths,
             cigars, readNames, mateChroms, matePos, tlens, chroms,
-            Compression.NONE, overrides);
+            Compression.NONE, overrides).withOptLegacyWholeChannel(true);
     }
 
     // ── 11. Cross-language fixtures — REMOVED in Phase 2c.
@@ -886,7 +886,7 @@ class M86CodecWiringTest {
             positions, mapqs, flags, seq, qual, offsets, lengths,
             cigars, readNames, mateChroms, matePos, tlens, chroms,
             Compression.NONE,
-            overrides == null ? Map.of() : overrides);
+            overrides == null ? Map.of() : overrides).withOptLegacyWholeChannel(true);
     }
 
     /** Build a uniform-CIGAR run (all "100M") — the columnar-mode
@@ -927,7 +927,7 @@ class M86CodecWiringTest {
             positions, mapqs, flags, seq, qual, offsets, lengths,
             cigars, readNames, mateChroms, matePos, tlens, chroms,
             Compression.NONE,
-            overrides == null ? Map.of() : overrides);
+            overrides == null ? Map.of() : overrides).withOptLegacyWholeChannel(true);
     }
 
     // ── 35. Phase C: round-trip cigars via rANS order-1 ────────────

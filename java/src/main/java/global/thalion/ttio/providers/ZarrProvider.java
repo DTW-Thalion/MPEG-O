@@ -176,6 +176,7 @@ public final class ZarrProvider implements StorageProvider {
     private static final String SCHEMA_ATTR = "_ttio_schema";
     private static final String ROWS_ATTR   = "_ttio_rows";
     private static final String COUNT_ATTR  = "_ttio_count";
+    private static final String EXTENDABLE_ATTR = "_ttio_extendable";
     private static final String COMPOUND_KIND = "compound";
     private static final String ZARR_JSON   = "zarr.json";
 
@@ -530,12 +531,23 @@ public final class ZarrProvider implements StorageProvider {
                                              long length, int chunkSize,
                                              Compression compression,
                                              int compressionLevel) {
+            return createDataset(n, precision, length, chunkSize, compression,
+                                  compressionLevel, false);
+        }
+
+        @Override
+        public StorageDataset createDataset(String n, Precision precision,
+                                             long length, int chunkSize,
+                                             Compression compression,
+                                             int compressionLevel,
+                                             boolean extendable) {
+            StorageGroup.requireChunkForExtendable(extendable, chunkSize);
             if (compression != Compression.NONE && compression != null) {
                 throw new UnsupportedOperationException(
                         "ZarrProvider (Java): writing compressed chunks not yet supported");
             }
             long[] shape = { length };
-            long[] chunks = { chunkSize > 0 ? chunkSize : length };
+            long[] chunks = { chunkSize > 0 ? chunkSize : Math.max(length, 1) };
             Path p = dir.resolve(n);
             if (Files.exists(p)) {
                 throw new IllegalArgumentException("already exists: " + n);
@@ -543,6 +555,11 @@ public final class ZarrProvider implements StorageProvider {
             try {
                 Files.createDirectories(p);
                 writeZArray(p, shape, chunks, precision);
+                if (extendable) {
+                    Map<String, Object> attrs = readZAttrs(p);
+                    attrs.put(EXTENDABLE_ATTR, Boolean.TRUE);
+                    writeZAttrs(p, attrs);
+                }
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -581,6 +598,16 @@ public final class ZarrProvider implements StorageProvider {
         public StorageDataset createCompoundDataset(String n,
                                                      List<CompoundField> fields,
                                                      long count) {
+            return createCompoundDataset(n, fields, count, false, 0);
+        }
+
+        @Override
+        public StorageDataset createCompoundDataset(String n,
+                                                     List<CompoundField> fields,
+                                                     long count,
+                                                     boolean extendable,
+                                                     int chunkRows) {
+            StorageGroup.requireChunkForExtendable(extendable, chunkRows);
             Path p = dir.resolve(n);
             if (Files.exists(p)) {
                 throw new IllegalArgumentException("already exists: " + n);
@@ -593,6 +620,7 @@ public final class ZarrProvider implements StorageProvider {
                 attrs.put(SCHEMA_ATTR, schemaToJson(fields));
                 attrs.put(COUNT_ATTR, count);
                 attrs.put(ROWS_ATTR, "[]");
+                if (extendable) attrs.put(EXTENDABLE_ATTR, Boolean.TRUE);
                 writeZAttrs(p, attrs);
             } catch (IOException e) {
                 throw new RuntimeException(e);
@@ -652,8 +680,9 @@ public final class ZarrProvider implements StorageProvider {
         private final String name;
         private final Path dir;
         private final Precision precision;
-        private final long[] shape;
+        private long[] shape;
         private final long[] chunks;
+        private final boolean extendable;
         private Object compressor;  // null = uncompressed; non-null = v3 codec entry (e.g. gzip)
 
         @SuppressWarnings("unchecked")
@@ -673,6 +702,9 @@ public final class ZarrProvider implements StorageProvider {
 
                 this.compressor = compressionCodecFromCodecs(
                         (List<Object>) meta.get("codecs"), name);
+                Object attrs = meta.get("attributes");
+                this.extendable = attrs instanceof Map<?, ?> am
+                        && Boolean.TRUE.equals(am.get(EXTENDABLE_ATTR));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -683,6 +715,48 @@ public final class ZarrProvider implements StorageProvider {
         @Override public long[] shape() { return shape.clone(); }
         @Override public long[] chunks() { return chunks.clone(); }
         @Override public List<CompoundField> compoundFields() { return null; }
+        @Override public boolean extendable() { return extendable; }
+
+        /** Rewrites the array: the chunks the data occupies plus the
+         *  shape in {@code zarr.json}. */
+        @Override
+        public void append(Object data) {
+            if (!extendable) {
+                throw new UnsupportedOperationException(
+                    "dataset '" + name + "' is not extendable");
+            }
+            int nb = java.lang.reflect.Array.getLength(data);
+            if (nb == 0) return;
+            Object cur = readAll();
+            int na = java.lang.reflect.Array.getLength(cur);
+            Object out = java.lang.reflect.Array.newInstance(data.getClass().getComponentType(), na + nb);
+            System.arraycopy(cur, 0, out, 0, na);
+            System.arraycopy(data, 0, out, na, nb);
+            resize(na + nb);
+            writeAll(out);
+        }
+
+        @Override
+        public void writeSlice(long offset, Object data) {
+            Object cur = readAll();
+            int n = java.lang.reflect.Array.getLength(data);
+            if (offset < 0 || offset + n > java.lang.reflect.Array.getLength(cur)) {
+                throw new IndexOutOfBoundsException("writeSlice out of range");
+            }
+            System.arraycopy(data, 0, cur, (int) offset, n);
+            writeAll(cur);
+        }
+
+        private void resize(long newLength) {
+            try {
+                Map<String, Object> meta = readZArray(dir);
+                meta.put("shape", longArrayToList(new long[]{ newLength }));
+                writeMeta(dir, meta);
+                this.shape = new long[]{ newLength };
+            } catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+        }
 
         private long totalElements() {
             long n = 1;
@@ -818,6 +892,14 @@ public final class ZarrProvider implements StorageProvider {
                 int[] o = new int[count];
                 System.arraycopy(a, offset, o, 0, count); return o;
             }
+            if (src instanceof short[] a) {
+                short[] o = new short[count];
+                System.arraycopy(a, offset, o, 0, count); return o;
+            }
+            if (src instanceof byte[] a) {
+                byte[] o = new byte[count];
+                System.arraycopy(a, offset, o, 0, count); return o;
+            }
             throw new IllegalStateException("unsupported element type " + src.getClass());
         }
 
@@ -906,7 +988,9 @@ public final class ZarrProvider implements StorageProvider {
             catch (IOException e) { throw new RuntimeException(e); }
         }
 
-        @Override public boolean hasAttribute(String n) { return attrs().containsKey(n); }
+        @Override public boolean hasAttribute(String n) {
+            return !n.startsWith("_ttio_") && attrs().containsKey(n);
+        }
         @Override public Object getAttribute(String n) { return attrs().get(n); }
         @Override public void setAttribute(String n, Object v) {
             Map<String, Object> m = attrs(); m.put(n, coerceForJson(v)); saveAttrs(m);
@@ -915,7 +999,11 @@ public final class ZarrProvider implements StorageProvider {
             Map<String, Object> m = attrs(); if (m.remove(n) != null) saveAttrs(m);
         }
         @Override public List<String> attributeNames() {
-            return new ArrayList<>(attrs().keySet());
+            List<String> out = new ArrayList<>();
+            for (String k : attrs().keySet()) {
+                if (!k.startsWith("_ttio_")) out.add(k);
+            }
+            return out;
         }
     }
 
@@ -929,6 +1017,8 @@ public final class ZarrProvider implements StorageProvider {
         private List<CompoundField> fields;
         private long count;
 
+        private final boolean extendable;
+
         ZCompoundDataset(String name, Path dir) {
             this.name = name;
             this.dir = dir;
@@ -937,6 +1027,7 @@ public final class ZarrProvider implements StorageProvider {
                 this.fields = schemaFromJson((String) attrs.get(SCHEMA_ATTR));
                 Object c = attrs.get(COUNT_ATTR);
                 this.count = c == null ? 0L : ((Number) c).longValue();
+                this.extendable = Boolean.TRUE.equals(attrs.get(EXTENDABLE_ATTR));
             } catch (IOException e) {
                 throw new RuntimeException(e);
             }
@@ -946,6 +1037,19 @@ public final class ZarrProvider implements StorageProvider {
         @Override public Precision precision() { return null; }
         @Override public long[] shape() { return new long[]{ count }; }
         @Override public List<CompoundField> compoundFields() { return fields; }
+        @Override public boolean extendable() { return extendable; }
+
+        @Override
+        @SuppressWarnings("unchecked")
+        public void append(Object data) {
+            if (!extendable) {
+                throw new UnsupportedOperationException(
+                    "dataset '" + name + "' is not extendable");
+            }
+            List<Object> rows = new ArrayList<>((List<Map<String, Object>>) readAll());
+            rows.addAll((List<?>) data);
+            writeAll(rows);
+        }
 
         @Override
         public Object readAll() {
@@ -1075,6 +1179,7 @@ public final class ZarrProvider implements StorageProvider {
         return switch (k) {
             case UINT32 -> "uint32";
             case INT64 -> "int64";
+            case UINT64 -> "uint64";
             case FLOAT64 -> "float64";
             case VL_STRING -> "vl_string";
             case VL_BYTES -> throw new UnsupportedOperationException(
@@ -1087,6 +1192,7 @@ public final class ZarrProvider implements StorageProvider {
         return switch (s) {
             case "uint32" -> CompoundField.Kind.UINT32;
             case "int64"  -> CompoundField.Kind.INT64;
+            case "uint64" -> CompoundField.Kind.UINT64;
             case "float64" -> CompoundField.Kind.FLOAT64;
             case "vl_string" -> CompoundField.Kind.VL_STRING;
             default -> throw new IllegalArgumentException("unknown kind: " + s);
@@ -1099,7 +1205,7 @@ public final class ZarrProvider implements StorageProvider {
                     (v instanceof byte[] b ? new String(b, StandardCharsets.UTF_8)
                             : v.toString());
             case FLOAT64 -> v == null ? 0.0 : ((Number) v).doubleValue();
-            case INT64, UINT32 -> v == null ? 0L : ((Number) v).longValue();
+            case INT64, UINT64, UINT32 -> v == null ? 0L : ((Number) v).longValue();
             case VL_BYTES -> throw new UnsupportedOperationException(
                 "Zarr provider does not yet support VL_BYTES compound fields");
         };

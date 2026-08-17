@@ -87,7 +87,7 @@ class M90ParityTest {
             "GRCh38.p14", "ILLUMINA", "NA12878",
             positions, mqs, flags, sequences, qualities,
             offsets, lengths, cigars, readNames, mateChroms,
-            mateP, tlens, chromsList, Compression.ZLIB, ovr);
+            mateP, tlens, chromsList, Compression.ZLIB, ovr).withOptLegacyWholeChannel(true);
     }
 
     private static void writeGenomicFixture(Path path, WrittenGenomicRun run) {
@@ -243,7 +243,7 @@ class M90ParityTest {
             "GRCh38.p14", "ILLUMINA", "NA12878",
             positions, mqs, flags, sequences, qualities,
             offsets, lengths, cigars, readNames, mateChroms,
-            mateP, tlens, chroms, Compression.ZLIB);
+            mateP, tlens, chroms, Compression.ZLIB).withOptLegacyWholeChannel(true);
     }
 
     @Test
@@ -411,7 +411,7 @@ class M90ParityTest {
             "GRCh38.p14", "ILLUMINA", "NA12878",
             positions, mqs, flags, sequences, qualities,
             offsets, lengths, cigars, readNames, mateChroms,
-            mateP, tlens, chroms, Compression.ZLIB, ovr);
+            mateP, tlens, chroms, Compression.ZLIB, ovr).withOptLegacyWholeChannel(true);
     }
 
     @Test

@@ -342,7 +342,7 @@ public class SpectrumIndex {
     // uncompressed (chunkSize=0, Compression.NONE) which saved a
     // zlib pass but inflated files by ~4.8 MB at 100 K spectra and
     // broke bit-level parity with the other two writers.
-    private static final int INDEX_CHUNK_SIZE = 4096;
+    static final int INDEX_CHUNK_SIZE = 4096;
 
     private static void writeDataset(StorageGroup group, String name,
                                      Precision precision, Object data) {

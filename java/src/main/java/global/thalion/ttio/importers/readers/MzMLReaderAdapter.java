@@ -21,9 +21,10 @@ public final class MzMLReaderAdapter implements Reader {
     public ImportedDataset read(List<String> inputs, Map<String, Object> opts,
                                 ProgressSink progress) throws IOException {
         ImportedDataset d = new ImportedDataset();
-        d.runs.add(progress == null
-            ? MzMLReader.read(inputs.get(0))
-            : MzMLReader.read(inputs.get(0), progress));
+        java.io.File f = new java.io.File(inputs.get(0));
+        String name = BamReaderAdapter.optString(opts, "name",
+            f.getName().replaceFirst("\\.mzML$", ""));
+        d.spectralStreams.put(name, MzMLReader.stream(f, name, StreamOpts.batchSpectra(opts), progress));
         return d;
     }
 }

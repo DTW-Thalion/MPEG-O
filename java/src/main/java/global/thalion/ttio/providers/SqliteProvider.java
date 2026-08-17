@@ -66,6 +66,7 @@ public final class SqliteProvider implements StorageProvider {
         "  data             BLOB," +
         "  compound_fields  TEXT," +
         "  compound_rows    TEXT," +
+        "  extendable       INTEGER NOT NULL DEFAULT 0," +
         "  UNIQUE(group_id, name)" +
         ");" +
         "CREATE TABLE IF NOT EXISTS group_attributes (" +
@@ -266,6 +267,36 @@ public final class SqliteProvider implements StorageProvider {
             ps.executeUpdate();
         }
         // All DDL ran in auto-commit mode; no explicit commit needed here.
+        ensureExtendableColumn();
+    }
+
+    /** Databases created before extendable datasets lack the column. */
+    private void ensureExtendableColumn() throws SQLException {
+        boolean present = false;
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(datasets)")) {
+            while (rs.next()) {
+                if ("extendable".equals(rs.getString("name"))) { present = true; break; }
+            }
+        }
+        if (!present) {
+            try (Statement st = conn.createStatement()) {
+                st.execute("ALTER TABLE datasets ADD COLUMN extendable INTEGER NOT NULL DEFAULT 0");
+            }
+        }
+    }
+
+    /** {@code true} when the open database has the {@code extendable} column. */
+    boolean hasExtendableColumn() {
+        try (Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery("PRAGMA table_info(datasets)")) {
+            while (rs.next()) {
+                if ("extendable".equals(rs.getString("name"))) return true;
+            }
+            return false;
+        } catch (SQLException e) {
+            return false;
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -552,6 +583,7 @@ public final class SqliteProvider implements StorageProvider {
         return switch (kind) {
             case UINT32 -> "uint32";
             case INT64 -> "int64";
+            case UINT64 -> "uint64";
             case FLOAT64 -> "float64";
             case VL_STRING -> "vl_string";
             case VL_BYTES -> throw new UnsupportedOperationException(
@@ -564,6 +596,7 @@ public final class SqliteProvider implements StorageProvider {
         return switch (value.toLowerCase(Locale.ROOT)) {
             case "uint32" -> CompoundField.Kind.UINT32;
             case "int64" -> CompoundField.Kind.INT64;
+            case "uint64" -> CompoundField.Kind.UINT64;
             case "float64" -> CompoundField.Kind.FLOAT64;
             case "vl_string" -> CompoundField.Kind.VL_STRING;
             default -> throw new IllegalArgumentException("Unknown CompoundFieldKind: " + value);
@@ -761,8 +794,10 @@ public final class SqliteProvider implements StorageProvider {
 
         @Override
         public StorageDataset openDataset(String name) {
+            boolean hasExt = provider.hasExtendableColumn();
             try (PreparedStatement ps = conn.prepareStatement(
-                    "SELECT id, kind, precision, shape_json, compound_fields " +
+                    "SELECT id, kind, precision, shape_json, compound_fields" +
+                    (hasExt ? ", extendable " : " ") +
                     "FROM datasets WHERE group_id = ? AND name = ?")) {
                 ps.setLong(1, groupId); ps.setString(2, name);
                 ResultSet rs = ps.executeQuery();
@@ -773,10 +808,11 @@ public final class SqliteProvider implements StorageProvider {
                 String precName = rs.getString(3);
                 String shapeJson = rs.getString(4);
                 String fieldsJson = rs.getString(5);
+                boolean extendable = hasExt && rs.getInt(6) != 0;
                 Precision prec = precName != null ? Precision.valueOf(precName) : null;
                 long[] shape = shapeFromJson(shapeJson);
                 List<CompoundField> fields = fieldsJson != null ? fieldsFromJson(fieldsJson) : null;
-                return new SqliteDataset(provider, dsId, name, prec, shape, fields, readOnly);
+                return new SqliteDataset(provider, dsId, name, prec, shape, fields, readOnly, extendable);
             } catch (SQLException e) {
                 throw new RuntimeException("openDataset failed", e);
             }
@@ -787,25 +823,37 @@ public final class SqliteProvider implements StorageProvider {
                                              long length, int chunkSize,
                                              Compression compression,
                                              int compressionLevel) {
+            return createDataset(name, precision, length, chunkSize,
+                                  compression, compressionLevel, false);
+        }
+
+        @Override
+        public StorageDataset createDataset(String name, Precision precision,
+                                             long length, int chunkSize,
+                                             Compression compression,
+                                             int compressionLevel,
+                                             boolean extendable) {
+            StorageGroup.requireChunkForExtendable(extendable, chunkSize);
             requireWritable();
             if (hasChild(name)) throw new IllegalArgumentException(
                     "'" + name + "' already exists in '" + groupName + "'");
             String shapeJson = "[" + length + "]";
             try (PreparedStatement ps = conn.prepareStatement(
-                    "INSERT INTO datasets (group_id, name, kind, precision, shape_json, data) " +
-                    "VALUES (?, ?, 'primitive', ?, ?, NULL)",
+                    "INSERT INTO datasets (group_id, name, kind, precision, shape_json, data, extendable) " +
+                    "VALUES (?, ?, 'primitive', ?, ?, NULL, ?)",
                     Statement.RETURN_GENERATED_KEYS)) {
                 ps.setLong(1, groupId);
                 ps.setString(2, name);
                 ps.setString(3, precision.name());
                 ps.setString(4, shapeJson);
+                ps.setInt(5, extendable ? 1 : 0);
                 ps.executeUpdate();
                 provider.maybeCommit();
                 ResultSet keys = ps.getGeneratedKeys();
                 keys.next();
                 long dsId = keys.getLong(1);
                 return new SqliteDataset(provider, dsId, name, precision,
-                        new long[]{length}, null, readOnly);
+                        new long[]{length}, null, readOnly, extendable);
             } catch (SQLException e) {
                 throw new RuntimeException("createDataset failed", e);
             }
@@ -849,6 +897,16 @@ public final class SqliteProvider implements StorageProvider {
         public StorageDataset createCompoundDataset(String name,
                                                      List<CompoundField> fields,
                                                      long count) {
+            return createCompoundDataset(name, fields, count, false, 0);
+        }
+
+        @Override
+        public StorageDataset createCompoundDataset(String name,
+                                                     List<CompoundField> fields,
+                                                     long count,
+                                                     boolean extendable,
+                                                     int chunkRows) {
+            StorageGroup.requireChunkForExtendable(extendable, chunkRows);
             requireWritable();
             if (hasChild(name)) throw new IllegalArgumentException(
                     "'" + name + "' already exists in '" + groupName + "'");
@@ -856,19 +914,20 @@ public final class SqliteProvider implements StorageProvider {
             String shapeJson = "[" + count + "]";
             try (PreparedStatement ps = conn.prepareStatement(
                     "INSERT INTO datasets (group_id, name, kind, precision, shape_json, " +
-                    "compound_fields, compound_rows) VALUES (?, ?, 'compound', NULL, ?, ?, '[]')",
+                    "compound_fields, compound_rows, extendable) VALUES (?, ?, 'compound', NULL, ?, ?, '[]', ?)",
                     Statement.RETURN_GENERATED_KEYS)) {
                 ps.setLong(1, groupId);
                 ps.setString(2, name);
                 ps.setString(3, shapeJson);
                 ps.setString(4, fieldsJson);
+                ps.setInt(5, extendable ? 1 : 0);
                 ps.executeUpdate();
                 provider.maybeCommit();
                 ResultSet keys = ps.getGeneratedKeys();
                 keys.next();
                 long dsId = keys.getLong(1);
                 return new SqliteDataset(provider, dsId, name, null,
-                        new long[]{count}, List.copyOf(fields), readOnly);
+                        new long[]{count}, List.copyOf(fields), readOnly, extendable);
             } catch (SQLException e) {
                 throw new RuntimeException("createCompoundDataset failed", e);
             }
@@ -970,10 +1029,18 @@ public final class SqliteProvider implements StorageProvider {
         private long[] shape;
         private final List<CompoundField> fields;
         private final boolean readOnly;
+        private final boolean extendable;
 
         SqliteDataset(SqliteProvider provider, long datasetId, String name,
                        Precision precision, long[] shape,
                        List<CompoundField> fields, boolean readOnly) {
+            this(provider, datasetId, name, precision, shape, fields, readOnly, false);
+        }
+
+        SqliteDataset(SqliteProvider provider, long datasetId, String name,
+                       Precision precision, long[] shape,
+                       List<CompoundField> fields, boolean readOnly,
+                       boolean extendable) {
             this.provider = provider;
             this.conn = provider.conn;
             this.datasetId = datasetId;
@@ -982,12 +1049,60 @@ public final class SqliteProvider implements StorageProvider {
             this.shape = shape;
             this.fields = fields;
             this.readOnly = readOnly;
+            this.extendable = extendable;
         }
 
         @Override public String name() { return dsName; }
         @Override public Precision precision() { return precision; }
         @Override public long[] shape() { return shape.clone(); }
         @Override public List<CompoundField> compoundFields() { return fields; }
+        @Override public boolean extendable() { return extendable; }
+
+        /** Read-modify-write: one blob (or one JSON row list) per dataset. */
+        @Override
+        @SuppressWarnings("unchecked")
+        public void append(Object data) {
+            if (!extendable) {
+                throw new UnsupportedOperationException(
+                    "dataset '" + dsName + "' is not extendable");
+            }
+            if (fields != null) {
+                List<Map<String, Object>> rows = new ArrayList<>((List<Map<String, Object>>) readAll());
+                for (Object o : (List<?>) data) {
+                    if (o instanceof Map<?, ?> m) {
+                        rows.add((Map<String, Object>) m);
+                    } else {
+                        Object[] arr = (Object[]) o;
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 0; i < fields.size() && i < arr.length; i++) {
+                            row.put(fields.get(i).name(), arr[i]);
+                        }
+                        rows.add(row);
+                    }
+                }
+                writeAll(rows);
+                shape = new long[]{ rows.size() };
+                return;
+            }
+            Object cur = readAll();
+            int na = arrayLength(cur), nb = arrayLength(data);
+            if (nb == 0) return;
+            Object out = java.lang.reflect.Array.newInstance(data.getClass().getComponentType(), na + nb);
+            System.arraycopy(cur, 0, out, 0, na);
+            System.arraycopy(data, 0, out, na, nb);
+            writeAll(out);
+        }
+
+        @Override
+        public void writeSlice(long offset, Object data) {
+            Object cur = readAll();
+            int n = arrayLength(data);
+            if (offset < 0 || offset + n > arrayLength(cur)) {
+                throw new IndexOutOfBoundsException("writeSlice out of range");
+            }
+            System.arraycopy(data, 0, cur, (int) offset, n);
+            writeAll(cur);
+        }
 
         // ── Read ────────────────────────────────────────────────────────
 
@@ -1042,8 +1157,21 @@ public final class SqliteProvider implements StorageProvider {
         public void writeAll(Object data) {
             requireWritable();
             if (fields != null) {
-                @SuppressWarnings("unchecked")
-                List<Map<String, Object>> rows = (List<Map<String, Object>>) data;
+                List<Map<String, Object>> rows = new ArrayList<>();
+                for (Object o : (List<?>) data) {
+                    if (o instanceof Map<?, ?> m) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> mm = (Map<String, Object>) m;
+                        rows.add(mm);
+                    } else {
+                        Object[] arr = (Object[]) o;
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        for (int i = 0; i < fields.size() && i < arr.length; i++) {
+                            row.put(fields.get(i).name(), arr[i]);
+                        }
+                        rows.add(row);
+                    }
+                }
                 String json = rowsToJson(rows);
                 try (PreparedStatement ps = conn.prepareStatement(
                         "UPDATE datasets SET compound_rows = ? WHERE id = ?")) {
@@ -1197,6 +1325,16 @@ public final class SqliteProvider implements StorageProvider {
             }
             if (src instanceof long[] a) {
                 long[] out = new long[count];
+                System.arraycopy(a, offset, out, 0, count);
+                return out;
+            }
+            if (src instanceof byte[] a) {
+                byte[] out = new byte[count];
+                System.arraycopy(a, offset, out, 0, count);
+                return out;
+            }
+            if (src instanceof short[] a) {
+                short[] out = new short[count];
                 System.arraycopy(a, offset, out, 0, count);
                 return out;
             }

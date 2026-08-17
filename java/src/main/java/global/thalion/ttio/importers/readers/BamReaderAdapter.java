@@ -31,7 +31,10 @@ public final class BamReaderAdapter implements Reader {
 
         ImportedDataset d = new ImportedDataset();
         BamReader r = new BamReader(Path.of(inputs.get(0)));
-        d.genomicRuns.add(r.toGenomicRun(name, region, sample, progress));
+        d.genomicStreams.put(name, r.stream(name, region, sample, StreamOpts.referencePath(opts),
+            StreamOpts.flag(opts, "embed_reference"), StreamOpts.batchReads(opts))
+            .withPolicy(StreamOpts.blockReads(opts), StreamOpts.blockBytes(opts),
+                        StreamOpts.flag(opts, "legacy_whole_channel")));
         return d;
     }
 

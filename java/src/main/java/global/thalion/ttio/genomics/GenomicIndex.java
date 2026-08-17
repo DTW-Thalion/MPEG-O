@@ -29,8 +29,8 @@ import java.util.Objects;
  */
 public final class GenomicIndex {
 
-    private static final int CHUNK_SIZE = 65536;
-    private static final int COMPRESSION_LEVEL = 6;
+    static final int CHUNK_SIZE = 65536;
+    static final int COMPRESSION_LEVEL = 6;
 
     private final long[]   offsets;          // uint64 — byte offset into sequence channel
     private final int[]    lengths;          // uint32 — read length in bases
@@ -170,6 +170,13 @@ public final class GenomicIndex {
      *  it from {@code cumsum(lengths)}.
      */
     public void writeTo(StorageGroup idxGroup) {
+        writeTo(idxGroup, null);
+    }
+
+    /** Write the index; {@code nameToId}, when given, is the shared
+     *  chromosome id map of a {@code blocks_v1} run: existing entries
+     *  keep their ids and new names are appended in place. */
+    public void writeTo(StorageGroup idxGroup, java.util.Map<String, Integer> nameToId) {
         writeInts (idxGroup, "lengths",          Precision.UINT32, lengths);
         writeLongs(idxGroup, "positions",        Precision.INT64,  positions);
         writeBytes(idxGroup, "mapping_qualities", Precision.UINT8, mappingQualities);
@@ -183,7 +190,7 @@ public final class GenomicIndex {
         // byte-string 1.77M times. Encounter-order id assignment —
         // first occurrence gets the next unused id; cross-language
         // byte-exact contract.
-        java.util.LinkedHashMap<String, Integer> nameToId = new java.util.LinkedHashMap<>();
+        if (nameToId == null) nameToId = new java.util.LinkedHashMap<>();
         short[] ids = new short[chromosomes.size()];
         for (int i = 0; i < chromosomes.size(); i++) {
             String name = chromosomes.get(i);
@@ -219,11 +226,20 @@ public final class GenomicIndex {
         List<CompoundField> nameFields = List.of(
             new CompoundField("name", CompoundField.Kind.VL_STRING));
         List<Object[]> nameRows = new ArrayList<>(nameToId.size());
-        for (String n : nameToId.keySet()) nameRows.add(new Object[]{ n });
+        for (String n : namesInIdOrder(nameToId)) nameRows.add(new Object[]{ n });
         try (StorageDataset ds = idxGroup.createCompoundDataset(
                 "chromosome_names", nameFields, nameRows.size())) {
             ds.writeAll(nameRows);
         }
+    }
+
+    /** Names of {@code nameToId} sorted by id. */
+    public static List<String> namesInIdOrder(java.util.Map<String, Integer> nameToId) {
+        List<java.util.Map.Entry<String, Integer>> entries = new ArrayList<>(nameToId.entrySet());
+        entries.sort(java.util.Map.Entry.comparingByValue());
+        List<String> out = new ArrayList<>(entries.size());
+        for (var e : entries) out.add(e.getKey());
+        return out;
     }
 
     /** Read a {@link GenomicIndex} from an existing {@code genomic_index/}

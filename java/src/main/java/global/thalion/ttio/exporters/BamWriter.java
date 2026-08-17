@@ -6,6 +6,8 @@
 package global.thalion.ttio.exporters;
 
 import global.thalion.ttio.ProvenanceRecord;
+import global.thalion.ttio.genomics.AlignedRead;
+import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.importers.BamReader;
 import global.thalion.ttio.io.ProgressSink;
@@ -150,6 +152,39 @@ public class BamWriter {
         }
     }
 
+    /** Stream a stored {@link GenomicRun} out read by read through
+     *  {@link GenomicRun#iterReads()}: one decoded block resident for a
+     *  {@code blocks_v1} run. The header comes from the run-level
+     *  chromosome table and attributes. */
+    public void write(GenomicRun run, List<ProvenanceRecord> provenance,
+                      boolean sort, ProgressSink progress) throws IOException {
+        Objects.requireNonNull(run, "run");
+        if (provenance == null) provenance = List.of();
+        if (progress == null) progress = ProgressSink.discard();
+        SAMFileHeader header = buildHeader(run.chromosomeNames(), run.sampleName(),
+            run.platform(), provenance, sort);
+        long total = run.readCount();
+        try (SAMFileWriter writer = makeWriter(header, sort)) {
+            java.util.Iterator<AlignedRead> it = run.iterReads();
+            long done = 0;
+            while (it.hasNext()) {
+                writer.addAlignment(buildSamRecord(it.next(), header));
+                done++;
+                if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
+                    progress.onProgress(done, total);
+                }
+            }
+            progress.onProgress(total, total);
+        }
+    }
+
+    /** {@link #write(GenomicRun, List, boolean, ProgressSink)} without
+     *  progress. */
+    public void write(GenomicRun run, List<ProvenanceRecord> provenance, boolean sort)
+            throws IOException {
+        write(run, provenance, sort, ProgressSink.discard());
+    }
+
     // ------------------------------------------------------------------
     // Header
     // ------------------------------------------------------------------
@@ -162,6 +197,15 @@ public class BamWriter {
     SAMFileHeader buildHeader(WrittenGenomicRun run,
                               List<ProvenanceRecord> provenance,
                               boolean sort) {
+        return buildHeader(run.chromosomes(), run.sampleName(), run.platform(),
+            provenance, sort);
+    }
+
+    /** {@code chromosomes} may list every read's chromosome or the
+     *  run-level table; {@code @SQ} lines are emitted once per unique
+     *  name in first-seen order, {@code *} excluded. */
+    SAMFileHeader buildHeader(List<String> chromosomes, String sample, String platform,
+                              List<ProvenanceRecord> provenance, boolean sort) {
         SAMFileHeader header = new SAMFileHeader();
         header.setSortOrder(sort
             ? SAMFileHeader.SortOrder.coordinate
@@ -171,7 +215,7 @@ public class BamWriter {
         // (excluding "*" SAM unmapped sentinel).
         SAMSequenceDictionary dict = new SAMSequenceDictionary();
         Set<String> seen = new LinkedHashSet<>();
-        for (String chrom : run.chromosomes()) {
+        for (String chrom : chromosomes) {
             if (chrom == null || chrom.isEmpty() || "*".equals(chrom)) continue;
             if (!seen.add(chrom)) continue;
             dict.addSequence(new SAMSequenceRecord(chrom, (int) DEFAULT_SQ_LENGTH));
@@ -179,8 +223,6 @@ public class BamWriter {
         header.setSequenceDictionary(dict);
 
         // @RG — single line if either sample or platform is set.
-        String sample = run.sampleName();
-        String platform = run.platform();
         boolean hasSample = sample != null && !sample.isEmpty();
         boolean hasPlatform = platform != null && !platform.isEmpty();
         if (hasSample || hasPlatform) {
@@ -222,6 +264,43 @@ public class BamWriter {
     // ------------------------------------------------------------------
     // Records
     // ------------------------------------------------------------------
+
+    /** One {@link AlignedRead} as a SAM record (same field rules as the
+     *  array-based builder). */
+    private SAMRecord buildSamRecord(AlignedRead r, SAMFileHeader header) {
+        SAMRecord rec = new SAMRecord(header);
+        String qname = r.readName();
+        rec.setReadName((qname == null || qname.isEmpty()) ? "*" : qname);
+        rec.setFlags(r.flags());
+        String rname = r.chromosome();
+        rec.setReferenceName((rname == null || rname.isEmpty()) ? "*" : rname);
+        rec.setAlignmentStart(r.position() > Integer.MAX_VALUE ? 0 : (int) r.position());
+        rec.setMappingQuality(r.mappingQuality() & 0xFF);
+        String cigar = r.cigar();
+        rec.setCigarString((cigar == null || cigar.isEmpty()) ? "*" : cigar);
+        String mate = r.mateChromosome();
+        rec.setMateReferenceName((mate == null || mate.isEmpty()) ? "*" : mate);
+        rec.setMateAlignmentStart(r.matePosition() < 0 ? 0 : (int) r.matePosition());
+        rec.setInferredInsertSize(r.templateLength());
+        String seq = r.sequence();
+        if (seq == null || seq.isEmpty()) {
+            rec.setReadBases(SAMRecord.NULL_SEQUENCE);
+            rec.setBaseQualities(SAMRecord.NULL_QUALS);
+        } else {
+            rec.setReadBases(seq.getBytes(StandardCharsets.US_ASCII));
+            byte[] q = r.qualities();
+            boolean allFF = q != null && q.length > 0;
+            if (q != null) for (byte b : q) if ((b & 0xFF) != 0xFF) { allFF = false; break; }
+            if (q == null || q.length == 0 || allFF) {
+                rec.setBaseQualities(SAMRecord.NULL_QUALS);
+            } else {
+                byte[] raw = new byte[q.length];
+                for (int k = 0; k < q.length; k++) raw[k] = (byte) ((q[k] & 0xFF) - 33);
+                rec.setBaseQualities(raw);
+            }
+        }
+        return rec;
+    }
 
     private SAMRecord buildSamRecord(WrittenGenomicRun run,
                                      SAMFileHeader header, int i) {

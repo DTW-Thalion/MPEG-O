@@ -25,6 +25,8 @@ public record CompoundField(String name, Kind kind) {
         UINT32,
         /** Signed 64-bit integer field. */
         INT64,
+        /** Unsigned 64-bit integer field; carried as a Java {@code long}. */
+        UINT64,
         /** 64-bit IEEE 754 floating-point field. */
         FLOAT64,
         /** Variable-length UTF-8 string field. */

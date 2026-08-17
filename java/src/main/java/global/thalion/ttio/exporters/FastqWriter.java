@@ -198,72 +198,46 @@ public final class FastqWriter {
             ? gzipOutput
             : path.getFileName().toString().toLowerCase().endsWith(".gz");
 
-        // Pre-fetch the whole sequences + qualities byte arrays + the
-        // read_names list once, then slice in-memory per record.
-        // Skips the per-read AlignedRead materialisation (which would
-        // also decode cigar / mate triple — fields FASTQ does not
-        // need). Mirrors the 24× speedup the Python FastqWriter saw
-        // from this same pattern.
-        int n = run.readCount();
-        long total = n;
-        byte[] seqAll = n > 0 ? run.sequencesFull() : new byte[0];
-        byte[] qualAll = n > 0 ? run.qualitiesFull() : new byte[0];
-        List<String> namesAll = run.readNamesAll();
-
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        // Stream read by read: one decoded block resident for a
+        // blocks_v1 run; nothing whole-channel is fetched.
+        long total = run.readCount();
         Set<String> seen = new HashSet<>();
-        for (int i = 0; i < n; i++) {
-            int off = (int) run.index().offsetAt(i);
-            int len = run.index().lengthAt(i);
-            byte[] seq = new byte[len];
-            System.arraycopy(seqAll, off, seq, 0, len);
-            byte[] qual;
-            if (qualAll.length >= off + len) {
-                qual = new byte[len];
-                System.arraycopy(qualAll, off, qual, 0, len);
-            } else {
-                qual = new byte[0];
-            }
-            for (int j = 0; j < qual.length; j++) {
-                if ((qual[j] & 0xFF) == QUAL_UNKNOWN_BYTE) {
-                    qual[j] = PHRED33_FILL;
-                }
-            }
-            if (qual.length == 0 && seq.length > 0) {
-                qual = new byte[seq.length];
-                java.util.Arrays.fill(qual, PHRED33_FILL);
-            }
-            if (phredOffset == 64) {
+        OutputStream raw = Files.newOutputStream(path);
+        try (OutputStream out = new java.io.BufferedOutputStream(
+                gz ? new GZIPOutputStream(raw) : raw, 1 << 16)) {
+            java.util.Iterator<global.thalion.ttio.genomics.AlignedRead> it = run.iterReads();
+            long i = 0;
+            while (it.hasNext()) {
+                global.thalion.ttio.genomics.AlignedRead r = it.next();
+                byte[] seq = r.sequence() == null ? new byte[0]
+                    : r.sequence().getBytes(StandardCharsets.US_ASCII);
+                byte[] qual = r.qualities() == null ? new byte[0] : r.qualities().clone();
                 for (int j = 0; j < qual.length; j++) {
-                    qual[j] = (byte) ((qual[j] & 0xFF) + 31);
+                    if ((qual[j] & 0xFF) == QUAL_UNKNOWN_BYTE) qual[j] = PHRED33_FILL;
                 }
-            }
-            String name = namesAll.get(i);
-            if (seen.contains(name)) name = name + "#" + i;
-            seen.add(name);
-            buf.write('@');
-            buf.write(name.getBytes(StandardCharsets.UTF_8));
-            buf.write('\n');
-            buf.write(seq);
-            buf.write('\n');
-            buf.write('+');
-            buf.write('\n');
-            buf.write(qual);
-            buf.write('\n');
-            long done = (long) (i + 1);
-            if (done % PROGRESS_INTERVAL_READS == 0 && done < total) {
-                progress.onProgress(done, total);
-            }
-        }
-        byte[] body = buf.toByteArray();
-
-        if (gz) {
-            try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(path))) {
-                out.write(body);
-            }
-        } else {
-            try (OutputStream out = Files.newOutputStream(path)) {
-                out.write(body);
+                if (qual.length == 0 && seq.length > 0) {
+                    qual = new byte[seq.length];
+                    java.util.Arrays.fill(qual, PHRED33_FILL);
+                }
+                if (phredOffset == 64) {
+                    for (int j = 0; j < qual.length; j++) qual[j] = (byte) ((qual[j] & 0xFF) + 31);
+                }
+                String name = r.readName() == null ? "" : r.readName();
+                if (seen.contains(name)) name = name + "#" + i;
+                seen.add(name);
+                out.write('@');
+                out.write(name.getBytes(StandardCharsets.UTF_8));
+                out.write('\n');
+                out.write(seq);
+                out.write('\n');
+                out.write('+');
+                out.write('\n');
+                out.write(qual);
+                out.write('\n');
+                i++;
+                if (i % PROGRESS_INTERVAL_READS == 0 && i < total) {
+                    progress.onProgress(i, total);
+                }
             }
         }
         progress.onProgress(total, total);

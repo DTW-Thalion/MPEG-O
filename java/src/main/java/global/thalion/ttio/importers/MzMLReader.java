@@ -134,10 +134,137 @@ public class MzMLReader {
         return result;
     }
 
+    /** Spectra per streamed batch. */
+    public static final int DEFAULT_BATCH_SPECTRA = 4096;
+
+    /** Parse {@code file} as a stream of {@link WrittenSpectralBatch}es of
+     *  {@code batchSpectra} spectra. The SAX parser runs on a daemon
+     *  thread feeding a bounded queue; the iterator implements
+     *  {@link AutoCloseable} and stops the parser when closed early.
+     *  Chromatograms are collected during the parse and returned by the
+     *  source's {@code chromatogramsAfter} once the last batch is out. */
+    public static SpectralStreamSource stream(File file, String runName, int batchSpectra,
+                                              ProgressSink progress) {
+        if (batchSpectra < 1) throw new IllegalArgumentException("batchSpectra must be >= 1");
+        final ProgressSink sink = progress != null ? progress : ProgressSink.discard();
+        final List<Chromatogram>[] chromsOut = new List[]{ List.of() };
+        java.util.function.Supplier<Iterator<WrittenSpectralBatch>> batches = () -> {
+            BatchStream bs = new BatchStream(file, batchSpectra, sink, chromsOut);
+            bs.start();
+            return bs;
+        };
+        return new SpectralStreamSource(runName, batches, AcquisitionMode.MS1_DDA, null,
+            batchSpectra, () -> chromsOut[0]);
+    }
+
+    /** {@link #stream(File, String, int, ProgressSink)} with the default
+     *  batch and the file's base name as run name. */
+    public static SpectralStreamSource stream(File file) {
+        return stream(file, file.getName().replaceFirst("\\.mzML$", ""), DEFAULT_BATCH_SPECTRA, null);
+    }
+
+    /** Producer thread + bounded queue behind {@link #stream}. */
+    private static final class BatchStream implements Iterator<WrittenSpectralBatch>, AutoCloseable {
+        private static final Object DONE = new Object();
+        private final File file;
+        private final int batchSpectra;
+        private final ProgressSink progress;
+        private final List<Chromatogram>[] chromsOut;
+        private final java.util.concurrent.ArrayBlockingQueue<Object> queue =
+            new java.util.concurrent.ArrayBlockingQueue<>(4);
+        private volatile boolean cancelled;
+        private Thread producer;
+        private Object head;
+
+        BatchStream(File file, int batchSpectra, ProgressSink progress, List<Chromatogram>[] chromsOut) {
+            this.file = file; this.batchSpectra = batchSpectra; this.progress = progress;
+            this.chromsOut = chromsOut;
+        }
+
+        void start() {
+            producer = new Thread(() -> {
+                MzMLHandler handler = new MzMLHandler(progress);
+                handler.batchSpectra = batchSpectra;
+                handler.sink = b -> {
+                    try {
+                        while (!cancelled && !queue.offer(b, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) { }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        cancelled = true;
+                    }
+                    if (cancelled) throw new CancelledParse();
+                };
+                Object outcome = DONE;
+                try {
+                    SAXParserFactory factory = SAXParserFactory.newInstance();
+                    factory.setNamespaceAware(true);
+                    factory.newSAXParser().parse(file, handler);
+                    handler.emitRemainder();
+                    chromsOut[0] = List.copyOf(handler.chromatograms);
+                    progress.onProgress(handler.spectraEmitted, handler.spectraEmitted);
+                } catch (CancelledParse c) {
+                    return;
+                } catch (Throwable t) {
+                    outcome = t;
+                }
+                try {
+                    while (!cancelled && !queue.offer(outcome, 100, java.util.concurrent.TimeUnit.MILLISECONDS)) { }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }, "mzml-stream-" + file.getName());
+            producer.setDaemon(true);
+            producer.start();
+        }
+
+        @Override public boolean hasNext() {
+            if (head == null) {
+                try {
+                    head = queue.take();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new RuntimeException(e);
+                }
+            }
+            if (head instanceof Throwable t) {
+                head = DONE;
+                if (t instanceof MzMLParseException m) throw new java.io.UncheckedIOException(new IOException(m));
+                if (t instanceof RuntimeException r) throw r;
+                if (t instanceof Error err) throw err;
+                throw new java.io.UncheckedIOException(new IOException(
+                    "failed to parse mzML '" + file + "': " + t.getMessage(), t));
+            }
+            return head != DONE;
+        }
+
+        @Override public WrittenSpectralBatch next() {
+            if (!hasNext()) throw new NoSuchElementException();
+            WrittenSpectralBatch b = (WrittenSpectralBatch) head;
+            head = null;
+            return b;
+        }
+
+        @Override public void close() {
+            cancelled = true;
+            queue.clear();
+            if (producer != null) {
+                try { producer.join(2000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            }
+        }
+    }
+
+    private static final class CancelledParse extends RuntimeException {
+        private static final long serialVersionUID = 1L;
+    }
+
     private static class MzMLHandler extends DefaultHandler {
         // Progress reporting
         private final ProgressSink progress;
         long spectraEmitted = 0L;
+        // Streaming: when sink != null, every batchSpectra spectra are
+        // handed to it and the accumulators are cleared.
+        java.util.function.Consumer<WrittenSpectralBatch> sink;
+        int batchSpectra = Integer.MAX_VALUE;
 
         MzMLHandler(ProgressSink progress) {
             this.progress = (progress != null) ? progress : ProgressSink.discard();
@@ -432,6 +559,60 @@ public class MzMLReader {
             isolationTargetMzsList.add(curIsolationTargetMz);
             isolationLowerOffsetsList.add(curIsolationLowerOffset);
             isolationUpperOffsetsList.add(curIsolationUpperOffset);
+            if (sink != null && mzArrays.size() >= batchSpectra) emitBatch();
+        }
+
+        /** Hand the accumulated spectra to the sink and clear. */
+        void emitBatch() {
+            if (mzArrays.isEmpty()) return;
+            sink.accept(drainBatch());
+        }
+
+        void emitRemainder() {
+            if (sink != null) emitBatch();
+        }
+
+        private WrittenSpectralBatch drainBatch() {
+            int n = mzArrays.size();
+            int total = 0;
+            for (double[] a : mzArrays) total += a.length;
+            double[] allMz = new double[total];
+            double[] allInt = new double[total];
+            long[] offsets = new long[n];
+            int[] lengths = new int[n];
+            int pos = 0;
+            for (int i = 0; i < n; i++) {
+                offsets[i] = pos;
+                lengths[i] = mzArrays.get(i).length;
+                System.arraycopy(mzArrays.get(i), 0, allMz, pos, lengths[i]);
+                System.arraycopy(intensityArrays.get(i), 0, allInt, pos, lengths[i]);
+                pos += lengths[i];
+            }
+            int[] m74Methods = null;
+            double[] m74Target = null, m74Lower = null, m74Upper = null;
+            if (anyActivationDetail) {
+                m74Methods = activationMethodsList.stream().mapToInt(Integer::intValue).toArray();
+                m74Target = isolationTargetMzsList.stream().mapToDouble(Double::doubleValue).toArray();
+                m74Lower = isolationLowerOffsetsList.stream().mapToDouble(Double::doubleValue).toArray();
+                m74Upper = isolationUpperOffsetsList.stream().mapToDouble(Double::doubleValue).toArray();
+            }
+            Map<String, double[]> data = new LinkedHashMap<>();
+            data.put("mz", allMz);
+            data.put("intensity", allInt);
+            WrittenSpectralBatch b = new WrittenSpectralBatch(offsets, lengths,
+                retentionTimes.stream().mapToDouble(Double::doubleValue).toArray(),
+                msLevels.stream().mapToInt(Integer::intValue).toArray(),
+                polarities.stream().mapToInt(Integer::intValue).toArray(),
+                precursorMzs.stream().mapToDouble(Double::doubleValue).toArray(),
+                precursorCharges.stream().mapToInt(Integer::intValue).toArray(),
+                basePeakIntensities.stream().mapToDouble(Double::doubleValue).toArray(),
+                m74Methods, m74Target, m74Lower, m74Upper, null, data);
+            mzArrays.clear(); intensityArrays.clear(); retentionTimes.clear(); msLevels.clear();
+            polarities.clear(); precursorMzs.clear(); precursorCharges.clear();
+            basePeakIntensities.clear(); activationMethodsList.clear();
+            isolationTargetMzsList.clear(); isolationLowerOffsetsList.clear();
+            isolationUpperOffsetsList.clear();
+            return b;
         }
 
         private void finishChromatogram() {

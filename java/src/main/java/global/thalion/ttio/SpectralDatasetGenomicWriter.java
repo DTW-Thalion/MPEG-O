@@ -15,7 +15,7 @@ import java.util.*;
 
 /** Package-private helper extracted from {@link SpectralDataset} (P3.10).
  *  Pure code movement; no behavior change. */
-final class SpectralDatasetGenomicWriter {
+public final class SpectralDatasetGenomicWriter {
 
     private SpectralDatasetGenomicWriter() { }
 
@@ -41,6 +41,17 @@ final class SpectralDatasetGenomicWriter {
             global.thalion.ttio.providers.StorageGroup parent,
             String name,
             WrittenGenomicRun run) {
+        writeGenomicRunSubtree(parent, name, run,
+            global.thalion.ttio.genomics.GenomicWriteContext.none());
+    }
+
+    /** Whole-channel writer entry point; {@code ctx} carries the state a
+     *  {@code blocks_v1} writer shares across blocks. */
+    public static void writeGenomicRunSubtree(
+            global.thalion.ttio.providers.StorageGroup parent,
+            String name,
+            WrittenGenomicRun run,
+            global.thalion.ttio.genomics.GenomicWriteContext ctx) {
         // M86 Phase D/E/B: per-channel allowed-codec map (Gotcha §119).
         // Sequences accepts RANS+BASE_PACK; qualities additionally
         // accepts QUALITY_BINNED. Phase B adds
@@ -219,7 +230,7 @@ final class SpectralDatasetGenomicWriter {
                 run.offsets(), run.lengths(), run.chromosomes(),
                 run.positions(), run.mappingQualities(), run.flags());
             try (var ig = rg.createGroup("genomic_index")) {
-                idx.writeTo(ig);
+                idx.writeTo(ig, ctx.chromNameToId());
             }
 
             // signal_channels: 5 typed channels + 3 compound datasets.
@@ -263,7 +274,7 @@ final class SpectralDatasetGenomicWriter {
                     }
                     writeBulkSequencesRefDiff(sc, bulkBlobs.refDiffBlob());
                 } else if (useRefDiffPath) {
-                    writeSequencesRefDiff(sc, run);
+                    writeSequencesRefDiff(sc, run, ctx.referenceMd5());
                 } else {
                     writeByteChannelWithCodec(sc, "sequences",
                         run.sequences(), run.signalCompression(),
@@ -437,7 +448,7 @@ final class SpectralDatasetGenomicWriter {
                         + "Phase 2c — there is no non-native code path "
                         + "for mate_info with readCount > 0.)");
                 } else {
-                    writeMateInfoV2(sc, run);
+                    writeMateInfoV2(sc, run, ctx.chromNameToId());
                 }
             }
 
@@ -449,30 +460,37 @@ final class SpectralDatasetGenomicWriter {
             // (memory/sqlite/zarr) and legacy Java readers still see
             // the chain.
             if (!run.provenanceRecords().isEmpty()) {
-                try (var prov = rg.createGroup("provenance")) {
-                    Hdf5Group h5 = global.thalion.ttio.providers.Hdf5Provider
-                        .tryUnwrapHdf5Group(prov);
-                    if (h5 != null) {
-                        List<ProvenanceRecord> recs = run.provenanceRecords();
-                        Hdf5CompoundIO.writeCompoundDataset(h5, "steps",
-                            Hdf5CompoundIO.provenanceSchema(),
-                            recs.size(),
-                            (row, pool) -> {
-                                ProvenanceRecord r = recs.get(row);
-                                return new Object[]{
-                                    r.timestampUnix(),
-                                    pool.addString(r.software()),
-                                    pool.addString(r.parametersJson()),
-                                    pool.addString(r.inputRefsJson()),
-                                    pool.addString(r.outputRefsJson())
-                                };
-                            });
-                    }
-                }
-                rg.setAttribute("provenance_json",
-                    SpectralDataset.buildProvenanceJsonArray(run.provenanceRecords()));
+                writeRunProvenance(rg, run.provenanceRecords());
             }
         }
+    }
+
+    /** Per-run provenance: the compound {@code provenance/steps} on HDF5
+     *  and the {@code provenance_json} attribute on every provider. */
+    public static void writeRunProvenance(
+            global.thalion.ttio.providers.StorageGroup rg,
+            List<ProvenanceRecord> recs) {
+        try (var prov = rg.createGroup("provenance")) {
+            Hdf5Group h5 = global.thalion.ttio.providers.Hdf5Provider
+                .tryUnwrapHdf5Group(prov);
+            if (h5 != null) {
+                Hdf5CompoundIO.writeCompoundDataset(h5, "steps",
+                    Hdf5CompoundIO.provenanceSchema(),
+                    recs.size(),
+                    (row, pool) -> {
+                        ProvenanceRecord r = recs.get(row);
+                        return new Object[]{
+                            r.timestampUnix(),
+                            pool.addString(r.software()),
+                            pool.addString(r.parametersJson()),
+                            pool.addString(r.inputRefsJson()),
+                            pool.addString(r.outputRefsJson())
+                        };
+                    });
+            }
+        }
+        rg.setAttribute("provenance_json",
+            SpectralDataset.buildProvenanceJsonArray(recs));
     }
 
     /** Task 13 (mate_info v2): write the CRAM-style inline_v2 blob.
@@ -501,13 +519,23 @@ final class SpectralDatasetGenomicWriter {
     static void writeMateInfoV2(
             global.thalion.ttio.providers.StorageGroup sc,
             WrittenGenomicRun run) {
+        writeMateInfoV2(sc, run, null);
+    }
+
+    /** {@code shared}, when given, is the run-wide chromosome id map of a
+     *  {@code blocks_v1} run; it is extended in place with mate-only
+     *  names so ids stay stable across blocks. */
+    static void writeMateInfoV2(
+            global.thalion.ttio.providers.StorageGroup sc,
+            WrittenGenomicRun run,
+            java.util.Map<String, Integer> shared) {
         int n = run.readCount();
 
         // Build encounter-order chrom table, starting from own chroms.
         // The GenomicIndex writer uses the same encounter order; we
         // replicate it here so chrom_ids are consistent on the read side.
-        java.util.LinkedHashMap<String, Integer> chromToId =
-            new java.util.LinkedHashMap<>();
+        java.util.Map<String, Integer> chromToId =
+            shared != null ? shared : new java.util.LinkedHashMap<>();
         for (String chr : run.chromosomes()) {
             if (!chromToId.containsKey(chr)) {
                 chromToId.put(chr, chromToId.size());
@@ -586,7 +614,7 @@ final class SpectralDatasetGenomicWriter {
                 new global.thalion.ttio.providers.CompoundField("name",
                     global.thalion.ttio.providers.CompoundField.Kind.VL_STRING));
             List<Object[]> nameRows = new ArrayList<>(chromToId.size());
-            for (String chromName : chromToId.keySet()) {
+            for (String chromName : GenomicIndex.namesInIdOrder(chromToId)) {
                 nameRows.add(new Object[]{ chromName });
             }
             try (var ds = mateGroup.createCompoundDataset(
@@ -680,7 +708,7 @@ final class SpectralDatasetGenomicWriter {
     /** Compute the canonical reference MD5 for a run as
      *  {@code md5(concat(referenceChromSeqs[k] for k in sorted(keys)))}.
      *  Mirrors the Python {@code _reference_md5_for_run} helper. */
-    static byte[] referenceMd5ForRun(WrittenGenomicRun run) {
+    public static byte[] referenceMd5ForRun(WrittenGenomicRun run) {
         if (run.referenceChromSeqs() == null) {
             return new byte[0];
         }
@@ -714,7 +742,7 @@ final class SpectralDatasetGenomicWriter {
      *  {@code referenceChromSeqs} contribute; the dedup key is the
      *  reference URI. When the same URI carries two different MD5s
      *  across runs, raises {@link IllegalArgumentException}. */
-    static void embedReferencesForRuns(
+    public static void embedReferencesForRuns(
             global.thalion.ttio.providers.StorageGroup study,
             List<WrittenGenomicRun> genomicRuns) {
         java.util.Map<String, byte[]> needsEmbedMd5 =
@@ -832,6 +860,15 @@ final class SpectralDatasetGenomicWriter {
     static void writeSequencesRefDiff(
             global.thalion.ttio.providers.StorageGroup sc,
             WrittenGenomicRun run) {
+        writeSequencesRefDiff(sc, run, null);
+    }
+
+    /** {@code precomputedMd5}, when given, replaces the per-run digest of
+     *  the reference (a {@code blocks_v1} writer computes it once). */
+    static void writeSequencesRefDiff(
+            global.thalion.ttio.providers.StorageGroup sc,
+            WrittenGenomicRun run,
+            byte[] precomputedMd5) {
         byte[] chromSeq = null;
         if (run.referenceChromSeqs() != null) {
             java.util.Set<String> uniqueChroms =
@@ -871,7 +908,7 @@ final class SpectralDatasetGenomicWriter {
         if (useV2) {
             // v1.8 path: encode via RefDiffV2 and write as a GROUP with
             // a refdiff_v2 child dataset (@compression = 14).
-            byte[] md5 = referenceMd5ForRun(run);
+            byte[] md5 = precomputedMd5 != null ? precomputedMd5 : referenceMd5ForRun(run);
             int n = run.readCount();
             // Build n_reads+1 offsets from run.offsets (n entries) + total.
             long[] offsets64 = run.offsets();

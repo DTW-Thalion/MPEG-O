@@ -85,7 +85,7 @@ class M90FinalTest {
             sequencesConcat, qualitiesConcat,
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chromosomes,
-            Enums.Compression.ZLIB);
+            Enums.Compression.ZLIB).withOptLegacyWholeChannel(true);
     }
 
     /** 4 reads: 2 chr1, 2 chr6 — matches the Python M90.11 fixture. */
@@ -124,7 +124,7 @@ class M90FinalTest {
             positions, mapqs, flags, sequences, qualities,
             offsets, lengths, cigars, readNames, mateChromosomes,
             matePositions, templateLengths, chroms,
-            Enums.Compression.ZLIB);
+            Enums.Compression.ZLIB).withOptLegacyWholeChannel(true);
         String path = tempDir.resolve(name).toString();
         SpectralDataset.create(path, "M90.11 fixture", "ISA-M90-11",
             List.of(), List.of(run),

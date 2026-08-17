@@ -59,7 +59,7 @@ class FormatReadersTest {
         ImportedDataset ds = new MzMLReaderAdapter()
             .read(List.of(mzml.toString()), Map.of(), null);
         assertNotNull(ds);
-        assertFalse(ds.runs.isEmpty(), "adapter produced no runs");
+        assertFalse(ds.runs.isEmpty() && ds.spectralStreams.isEmpty(), "adapter produced no runs");
 
         // Write the draft and reopen: at least one MS run must survive.
         Path out = tmp.resolve("d.tio");

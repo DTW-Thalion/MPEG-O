@@ -35,12 +35,37 @@ public final class TtioWriteGenomicFixture {
 
     private TtioWriteGenomicFixture() {}
 
+    /** Write {@code bam} as one {@code blocks_v1} run of {@code blockReads}
+     *  reads per block (the cross-language decode check reads it back). */
+    static void writeBlocks(String out, String bam, int blockReads) throws Exception {
+        WrittenGenomicRun run = new global.thalion.ttio.importers.BamReader(
+            java.nio.file.Path.of(bam)).toGenomicRun("genomic_0001");
+        try (global.thalion.ttio.providers.StorageProvider p =
+                 global.thalion.ttio.providers.ProviderRegistry.open(
+                     out, global.thalion.ttio.providers.StorageProvider.Mode.CREATE, "hdf5")) {
+            global.thalion.ttio.providers.StorageGroup root = p.rootGroup();
+            FeatureFlags.defaultCurrent().with(FeatureFlags.OPT_GENOMIC).writeTo(root);
+            global.thalion.ttio.providers.StorageGroup study = root.createGroup("study");
+            study.setAttribute("title", "blocks_v1 java fixture");
+            try (global.thalion.ttio.genomics.GenomicStreamWriter w =
+                     new global.thalion.ttio.genomics.GenomicStreamWriter(study, "genomic_0001",
+                         global.thalion.ttio.genomics.GenomicStreamWriter.Options.fromRun(run)
+                             .withBlockPolicy(blockReads, Long.MAX_VALUE))) {
+                w.appendBatch(run);
+            }
+        }
+    }
+
     public static void main(String[] args) {
         if (args.length < 1) {
-            System.err.println("usage: TtioWriteGenomicFixture <out-path>");
+            System.err.println("usage: TtioWriteGenomicFixture <out-path> [--blocks <bam> <block-reads>]");
             System.exit(2);
         }
         try {
+            if (args.length >= 4 && "--blocks".equals(args[1])) {
+                writeBlocks(args[0], args[2], Integer.parseInt(args[3]));
+                return;
+            }
             WrittenGenomicRun run = build();
             SpectralDataset.create(
                 args[0],

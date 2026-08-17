@@ -77,7 +77,13 @@ public class CramWriter extends BamWriter {
     SAMFileHeader buildHeader(WrittenGenomicRun run,
                               List<ProvenanceRecord> provenance,
                               boolean sort) {
-        SAMFileHeader header = super.buildHeader(run, provenance, sort);
+        return buildHeader(run.chromosomes(), run.sampleName(), run.platform(), provenance, sort);
+    }
+
+    @Override
+    SAMFileHeader buildHeader(List<String> chromosomes, String sample, String platform,
+                              List<ProvenanceRecord> provenance, boolean sort) {
+        SAMFileHeader header = super.buildHeader(chromosomes, sample, platform, provenance, sort);
         Map<String, Integer> refLengths = scanFastaLengths();
         SAMSequenceDictionary updated = new SAMSequenceDictionary();
         for (SAMSequenceRecord seq : header.getSequenceDictionary().getSequences()) {
