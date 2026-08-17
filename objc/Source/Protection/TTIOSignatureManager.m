@@ -601,6 +601,52 @@ static BOOL fileHasObjectAtPath(NSString *filePath, NSString *objectPath)
     return exists > 0;
 }
 
+// The signal-channel datasets of a run, as sub-paths under the run
+// group. A channel stored as a group (blocks_v1 sequences/data, the
+// v1.8 refdiff_v2 group) contributes each child dataset; a plain
+// dataset contributes itself. blocks/index follows when present.
+static NSArray<NSString *> *genomicSignedSubPaths(NSString *filePath, NSString *runPath)
+{
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    TTIOHDF5File *f = [TTIOHDF5File openReadOnlyAtPath:filePath error:NULL];
+    if (!f) return out;
+    TTIOHDF5Group *rootGroup = [f rootGroup];
+    hid_t root = rootGroup.groupId;
+    for (size_t i = 0; i < sizeof(kSignalChannelNames) / sizeof(kSignalChannelNames[0]); i++) {
+        NSString *sub = [NSString stringWithFormat:@"signal_channels/%@", kSignalChannelNames[i]];
+        NSString *full = [NSString stringWithFormat:@"%@/%@", runPath, sub];
+        if (H5Lexists(root, [full UTF8String], H5P_DEFAULT) <= 0) continue;
+        H5O_info2_t info; memset(&info, 0, sizeof(info));
+        if (H5Oget_info_by_name3(root, [full UTF8String], &info, H5O_INFO_BASIC, H5P_DEFAULT) < 0) continue;
+        if (info.type != H5O_TYPE_GROUP) { [out addObject:sub]; continue; }
+        hid_t g = H5Gopen2(root, [full UTF8String], H5P_DEFAULT);
+        if (g < 0) continue;
+        H5G_info_t ginfo; memset(&ginfo, 0, sizeof(ginfo));
+        if (H5Gget_info(g, &ginfo) >= 0) {
+            for (hsize_t k = 0; k < ginfo.nlinks; k++) {
+                char nameBuf[512];
+                ssize_t len = H5Lget_name_by_idx(g, ".", H5_INDEX_NAME, H5_ITER_INC, k,
+                                                 nameBuf, sizeof(nameBuf), H5P_DEFAULT);
+                if (len <= 0) continue;
+                H5O_info2_t cinfo; memset(&cinfo, 0, sizeof(cinfo));
+                if (H5Oget_info_by_name3(g, nameBuf, &cinfo, H5O_INFO_BASIC, H5P_DEFAULT) < 0) continue;
+                if (cinfo.type == H5O_TYPE_DATASET) {
+                    [out addObject:[NSString stringWithFormat:@"%@/%s", sub, nameBuf]];
+                }
+            }
+        }
+        H5Gclose(g);
+    }
+    NSString *blocks = [NSString stringWithFormat:@"%@/blocks", runPath];
+    if (H5Lexists(root, [blocks UTF8String], H5P_DEFAULT) > 0
+        && H5Lexists(root, [[blocks stringByAppendingString:@"/index"] UTF8String], H5P_DEFAULT) > 0) {
+        [out addObject:@"blocks/index"];
+    }
+    (void)rootGroup;
+    [f close];
+    return out;
+}
+
 + (NSDictionary<NSString *, NSString *> *)
     signGenomicRun:(NSString *)runName
             inFile:(NSString *)filePath
@@ -612,11 +658,8 @@ static BOOL fileHasObjectAtPath(NSString *filePath, NSString *objectPath)
     NSString *runPath =
         [NSString stringWithFormat:@"/study/genomic_runs/%@", runName];
 
-    // ── signal_channels/{sequences, qualities}
-    for (size_t i = 0; i < sizeof(kSignalChannelNames) / sizeof(kSignalChannelNames[0]); i++) {
-        NSString *cname = kSignalChannelNames[i];
-        NSString *subPath =
-            [NSString stringWithFormat:@"signal_channels/%@", cname];
+    // ── signal_channels/{sequences, qualities} datasets, blocks/index
+    for (NSString *subPath in genomicSignedSubPaths(filePath, runPath)) {
         NSString *fullPath =
             [NSString stringWithFormat:@"%@/%@", runPath, subPath];
         if (!fileHasObjectAtPath(filePath, fullPath)) continue;
@@ -684,11 +727,9 @@ static BOOL fileHasObjectAtPath(NSString *filePath, NSString *objectPath)
 {
     NSString *runPath =
         [NSString stringWithFormat:@"/study/genomic_runs/%@", runName];
-    for (size_t i = 0; i < sizeof(kSignalChannelNames) / sizeof(kSignalChannelNames[0]); i++) {
-        NSString *cname = kSignalChannelNames[i];
+    for (NSString *subPath in genomicSignedSubPaths(filePath, runPath)) {
         NSString *fullPath =
-            [NSString stringWithFormat:@"%@/signal_channels/%@",
-                runPath, cname];
+            [NSString stringWithFormat:@"%@/%@", runPath, subPath];
         if (!fileHasObjectAtPath(filePath, fullPath)) continue;
         NSError *vErr = nil;
         if (![self verifyDataset:fullPath

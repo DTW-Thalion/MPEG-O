@@ -48,6 +48,7 @@ static NSString *const kZ_KIND_ATTR   = @"_ttio_kind";
 static NSString *const kZ_SCHEMA_ATTR = @"_ttio_schema";
 static NSString *const kZ_ROWS_ATTR   = @"_ttio_rows";
 static NSString *const kZ_COUNT_ATTR  = @"_ttio_count";
+static NSString *const kZ_EXTENDABLE_ATTR = @"_ttio_extendable";
 static NSString *const kZ_COMPOUND_KIND = @"compound";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -139,8 +140,10 @@ static NSString *zKindToString(TTIOCompoundFieldKind kind)
     switch (kind) {
         case TTIOCompoundFieldKindUInt32:   return @"uint32";
         case TTIOCompoundFieldKindInt64:    return @"int64";
+        case TTIOCompoundFieldKindUInt64:   return @"uint64";
         case TTIOCompoundFieldKindFloat64:  return @"float64";
         case TTIOCompoundFieldKindVLString: return @"vl_string";
+        default: break;
     }
     return @"vl_string";
 }
@@ -149,6 +152,7 @@ static TTIOCompoundFieldKind zKindFromString(NSString *s)
 {
     if ([s isEqualToString:@"uint32"])    return TTIOCompoundFieldKindUInt32;
     if ([s isEqualToString:@"int64"])     return TTIOCompoundFieldKindInt64;
+    if ([s isEqualToString:@"uint64"])    return TTIOCompoundFieldKindUInt64;
     if ([s isEqualToString:@"float64"])   return TTIOCompoundFieldKindFloat64;
     return TTIOCompoundFieldKindVLString;
 }
@@ -342,9 +346,53 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
 @property (nonatomic, copy) NSArray<NSNumber *> *shape;
 @property (nonatomic, copy) NSArray<NSNumber *> *chunks;
 @property (nonatomic, strong) id compressor;  // nil = uncompressed; NSDictionary{id=zlib,level=…}
+@property (nonatomic, assign) BOOL extendable;
 @end
 
 @implementation _ZPrimitiveDataset
+
+- (BOOL)isExtendable { return self.extendable; }
+
+// Rewrites the array: shape in zarr.json plus every chunk.
+- (BOOL)appendData:(id)data error:(NSError **)error
+{
+    if (!self.extendable) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"dataset '%@' is not extendable", self.name);
+        return NO;
+    }
+    NSData *add = (NSData *)data;
+    if (add.length == 0) return YES;
+    NSMutableData *buf = [NSMutableData dataWithData:[self readAll:error] ?: [NSData data]];
+    [buf appendData:add];
+    NSUInteger bpe = zBytesPerElement(self.precision);
+    if (![self _resize:buf.length / MAX(1, bpe) error:error]) return NO;
+    return [self writeAll:buf error:error];
+}
+
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    NSMutableData *buf = [NSMutableData dataWithData:[self readAll:error] ?: [NSData data]];
+    NSUInteger bpe = MAX(1, zBytesPerElement(self.precision));
+    NSData *src = (NSData *)data;
+    NSUInteger start = offset * bpe;
+    if (start + src.length > buf.length) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange, @"writeSlice out of range");
+        return NO;
+    }
+    [buf replaceBytesInRange:NSMakeRange(start, src.length) withBytes:src.bytes];
+    return [self writeAll:buf error:error];
+}
+
+- (BOOL)_resize:(NSUInteger)newLength error:(NSError **)error
+{
+    NSMutableDictionary *meta = zReadMeta(self.dir, error);
+    if (!meta) return NO;
+    meta[@"shape"] = @[@(newLength)];
+    if (!zWriteMeta(self.dir, meta, error)) return NO;
+    self.shape = @[@(newLength)];
+    return YES;
+}
 
 - (NSArray<TTIOCompoundField *> *)compoundFields { return nil; }
 
@@ -444,6 +492,7 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
     (void)error;
     NSUInteger bpe = zBytesPerElement(self.precision);
     NSUInteger total = [self totalElements];
+    if (total == 0) return [NSData data];
     NSMutableData *out = [NSMutableData dataWithLength:total * bpe];
 
     // Enumerate chunk grid.
@@ -554,6 +603,7 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
     NSUInteger bpe = zBytesPerElement(self.precision);
     NSUInteger total = [self totalElements];
     NSUInteger expected = total * bpe;
+    if (total == 0 && src.length == 0) return YES;
     if (src.length != expected) {
         if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
             @"ZarrProvider writeAll: expected %lu bytes, got %lu",
@@ -604,6 +654,7 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
 
 - (BOOL)hasAttributeNamed:(NSString *)n
 {
+    if ([n hasPrefix:@"_ttio_"]) return NO;
     return zReadZAttrs(self.dir)[n] != nil;
 }
 - (id)attributeValueForName:(NSString *)n error:(NSError **)error
@@ -639,9 +690,32 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
 @property (nonatomic, copy) NSString *dir;
 @property (nonatomic, copy) NSArray<TTIOCompoundField *> *fields;
 @property (nonatomic, assign) NSUInteger count;
+@property (nonatomic, assign) BOOL extendable;
 @end
 
 @implementation _ZCompoundDataset
+
+- (BOOL)isExtendable { return self.extendable; }
+
+- (BOOL)appendData:(id)data error:(NSError **)error
+{
+    if (!self.extendable) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"dataset '%@' is not extendable", self.name);
+        return NO;
+    }
+    NSMutableArray *rows = [NSMutableArray arrayWithArray:[self readAll:error] ?: @[]];
+    [rows addObjectsFromArray:(NSArray *)data];
+    return [self writeAll:rows error:error];
+}
+
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    (void)data; (void)offset;
+    if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+        @"writeSlice is not supported on compound datasets");
+    return NO;
+}
 
 - (TTIOPrecision)precision { return TTIOPrecisionFloat64; }  // N/A
 - (NSArray<NSNumber *> *)shape  { return @[@(self.count)]; }
@@ -697,6 +771,11 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
                 case TTIOCompoundFieldKindInt64:
                     out[f.name] = @([v longLongValue]);
                     break;
+                case TTIOCompoundFieldKindUInt64:
+                    out[f.name] = @([v unsignedLongLongValue]);
+                    break;
+                default:
+                    break;
             }
         }
         [rows addObject:out];
@@ -741,11 +820,14 @@ static NSArray<TTIOCompoundField *> *zSchemaFromList(NSArray *list)
                     [out appendBytes:&u length:4];
                     break;
                 }
-                case TTIOCompoundFieldKindInt64: {
+                case TTIOCompoundFieldKindInt64:
+                case TTIOCompoundFieldKindUInt64: {
                     int64_t i = (int64_t)[v longLongValue];
                     [out appendBytes:&i length:8];
                     break;
                 }
+                default:
+                    break;
             }
         }
     }
@@ -911,6 +993,7 @@ static BOOL zIsGroupDir(NSString *p)
         _ZCompoundDataset *ds = [[_ZCompoundDataset alloc] init];
         ds.name = n; ds.dir = p; ds.fields = fields;
         ds.count = c.unsignedIntegerValue;
+        ds.extendable = [a[kZ_EXTENDABLE_ATTR] boolValue];
         return ds;
     }
     if ([self isArrayDir:p]) {
@@ -955,6 +1038,9 @@ static BOOL zIsGroupDir(NSString *p)
         ds.shape = meta[@"shape"];
         ds.chunks = chunkShape;
         ds.compressor = compressor;
+        id attrs = meta[@"attributes"];
+        ds.extendable = [attrs isKindOfClass:[NSDictionary class]]
+            && [attrs[kZ_EXTENDABLE_ATTR] boolValue];
         return ds;
     }
     if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
@@ -1059,6 +1145,58 @@ static BOOL zIsGroupDir(NSString *p)
     if (!zWriteZAttrs(p, a, error)) return nil;
     _ZCompoundDataset *ds = [[_ZCompoundDataset alloc] init];
     ds.name = n; ds.dir = p; ds.fields = fields; ds.count = count;
+    return ds;
+}
+
+- (id<TTIOStorageDataset>)createDatasetNamed:(NSString *)n
+                                    precision:(TTIOPrecision)precision
+                                       length:(NSUInteger)length
+                                    chunkSize:(NSUInteger)chunkSize
+                                  compression:(TTIOCompression)compression
+                             compressionLevel:(int)compressionLevel
+                                   extendable:(BOOL)extendable
+                                        error:(NSError **)error
+{
+    if (extendable && chunkSize == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable dataset '%@' needs chunkSize > 0", n);
+        return nil;
+    }
+    _ZPrimitiveDataset *ds = (_ZPrimitiveDataset *)[self createDatasetNamed:n precision:precision
+                                                                       length:length chunkSize:chunkSize
+                                                                  compression:compression
+                                                             compressionLevel:compressionLevel error:error];
+    if (!ds) return nil;
+    if (extendable) {
+        NSMutableDictionary *a = zReadZAttrs(ds.dir);
+        a[kZ_EXTENDABLE_ATTR] = @YES;
+        if (!zWriteZAttrs(ds.dir, a, error)) return nil;
+        ds.extendable = YES;
+    }
+    return ds;
+}
+
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)n
+                                                fields:(NSArray<TTIOCompoundField *> *)fields
+                                                 count:(NSUInteger)count
+                                            extendable:(BOOL)extendable
+                                             chunkRows:(NSUInteger)chunkRows
+                                                 error:(NSError **)error
+{
+    if (extendable && chunkRows == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable compound '%@' needs chunkRows > 0", n);
+        return nil;
+    }
+    _ZCompoundDataset *ds = (_ZCompoundDataset *)[self createCompoundDatasetNamed:n fields:fields
+                                                                            count:count error:error];
+    if (!ds) return nil;
+    if (extendable) {
+        NSMutableDictionary *a = zReadZAttrs(ds.dir);
+        a[kZ_EXTENDABLE_ATTR] = @YES;
+        if (!zWriteZAttrs(ds.dir, a, error)) return nil;
+        ds.extendable = YES;
+    }
     return ds;
 }
 

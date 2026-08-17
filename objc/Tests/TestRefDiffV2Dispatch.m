@@ -103,7 +103,7 @@ static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL hasReference)
     }
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
          initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                     referenceUri:@"GRCh38"
                         platform:@"ILLUMINA"
@@ -122,7 +122,7 @@ static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL hasReference)
                  templateLengths:tlD
                      chromosomes:chroms
                signalCompression:TTIOCompressionZlib
-            signalCodecOverrides:@{}];
+            signalCodecOverrides:@{}]) copyWithOptLegacyWholeChannel:YES];
 
     if (hasReference) {
         run.referenceChromSeqs = @{ @"22": rdv2dRef() };

@@ -205,6 +205,20 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
 
 - (BOOL)writeToGroup:(id<TTIOStorageGroup>)group error:(NSError **)error
 {
+    return [self writeToGroup:group nameToId:nil error:error];
+}
+
++ (NSArray<NSString *> *)namesInIdOrder:(NSDictionary<NSString *, NSNumber *> *)nameToId
+{
+    return [nameToId keysSortedByValueUsingComparator:^NSComparisonResult(NSNumber *a, NSNumber *b) {
+        return [a compare:b];
+    }];
+}
+
+- (BOOL)writeToGroup:(id<TTIOStorageGroup>)group
+             nameToId:(NSMutableDictionary<NSString *, NSNumber *> *)sharedNameToId
+                error:(NSError **)error
+{
     // v1.10 #10 (offsets-cumsum): the redundant ``offsets`` column is
     // omitted on disk — readers derive it from cumsum(lengths).
     if (!writeTypedChannel(group, @"lengths",           TTIOPrecisionUInt32, _lengthsData,          error)) return NO;
@@ -218,26 +232,26 @@ static NSData *readTypedChannel(id<TTIOStorageGroup> g, NSString *name,
     // HDF5 fractal-heap overhead per chr22 file (one heap block per
     // chunk × 432 chunks). Encounter-order id assignment —
     // first occurrence gets the next unused id.
-    NSMutableDictionary<NSString *, NSNumber *> *nameToId = [NSMutableDictionary dictionary];
-    NSMutableArray<NSString *> *namesInOrder = [NSMutableArray array];
+    NSMutableDictionary<NSString *, NSNumber *> *nameToId =
+        sharedNameToId ?: [NSMutableDictionary dictionary];
     NSMutableData *idsData = [NSMutableData dataWithLength:_chromosomes.count * sizeof(uint16_t)];
     uint16_t *idsBuf = (uint16_t *)idsData.mutableBytes;
     NSUInteger idx = 0;
     for (NSString *name in _chromosomes) {
         NSNumber *slot = nameToId[name];
         if (!slot) {
-            if (namesInOrder.count > 65535) {
+            if (nameToId.count > 65535) {
                 if (error) *error = [NSError errorWithDomain:@"TTIOGenomicIndex"
                                                          code:1
                                                      userInfo:@{NSLocalizedDescriptionKey: @"> 65,535 unique chromosome names; uint16 chromosome_ids would overflow"}];
                 return NO;
             }
-            slot = @(namesInOrder.count);
+            slot = @(nameToId.count);
             nameToId[name] = slot;
-            [namesInOrder addObject:name];
         }
         idsBuf[idx++] = (uint16_t)slot.unsignedShortValue;
     }
+    NSArray<NSString *> *namesInOrder = [TTIOGenomicIndex namesInIdOrder:nameToId];
     if (!writeTypedChannel(group, @"chromosome_ids", TTIOPrecisionUInt16, idsData, error)) return NO;
 
     NSArray *nameFields = @[[TTIOCompoundField fieldWithName:@"name"

@@ -39,10 +39,19 @@ libTTIO_HEADER_FILES = \
 	Run/TTIOInstrumentConfig.h \
 	Run/TTIOSpectrumIndex.h \
 	Run/TTIOAcquisitionRun.h \
+	Run/TTIOWrittenSpectralBatch.h \
+	Run/TTIOSpectralStreamWriter.h \
 	Genomics/TTIOAlignedRead.h \
 	Genomics/TTIOBulkV2Blobs.h \
 	Genomics/TTIOGenomicIndex.h \
 	Genomics/TTIOWrittenGenomicRun.h \
+	Genomics/TTIOGenomicWriteContext.h \
+	Genomics/TTIOGenomicBlocks.h \
+	Genomics/TTIOGenomicStreamWriter.h \
+	Genomics/TTIOBlockTable.h \
+	Genomics/TTIOBlockView.h \
+	Genomics/TTIOLazyReference.h \
+	Dataset/TTIOSpectralDataset+GenomicWrite.h \
 	Genomics/TTIOGenomicRun.h \
 	Genomics/TTIOPackedReference.h \
 	Genomics/TTIOReferenceImport.h \
@@ -81,6 +90,8 @@ libTTIO_HEADER_FILES = \
 	Import/TTIOThermoRawReader.h \
 	Import/TTIOBrukerTDFReader.h \
 	Import/TTIOBamReader.h \
+	Import/TTIOGenomicStreamSource.h \
+	Import/TTIOSpectralStreamSource.h \
 	Import/TTIOSamReader.h \
 	Import/TTIOCramReader.h \
 	Import/TTIOImzMLReader.h \
@@ -180,10 +191,18 @@ libTTIO_OBJC_FILES = \
 	Run/TTIOInstrumentConfig.m \
 	Run/TTIOSpectrumIndex.m \
 	Run/TTIOAcquisitionRun.m \
+	Run/TTIOWrittenSpectralBatch.m \
+	Run/TTIOSpectralStreamWriter.m \
 	Genomics/TTIOAlignedRead.m \
 	Genomics/TTIOBulkV2Blobs.m \
 	Genomics/TTIOGenomicIndex.m \
 	Genomics/TTIOWrittenGenomicRun.m \
+	Genomics/TTIOGenomicWriteContext.m \
+	Genomics/TTIOGenomicBlocks.m \
+	Genomics/TTIOGenomicStreamWriter.m \
+	Genomics/TTIOBlockTable.m \
+	Genomics/TTIOBlockView.m \
+	Genomics/TTIOLazyReference.m \
 	Genomics/TTIOGenomicRun.m \
 	Genomics/TTIOPackedReference.m \
 	Genomics/TTIOReferenceImport.m \
@@ -226,6 +245,8 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOThermoRawReader.m \
 	Import/TTIOBrukerTDFReader.m \
 	Import/TTIOBamReader.m \
+	Import/TTIOGenomicStreamSource.m \
+	Import/TTIOSpectralStreamSource.m \
 	Import/TTIOSamReader.m \
 	Import/TTIOCramReader.m \
 	Import/TTIOImzMLReader.m \

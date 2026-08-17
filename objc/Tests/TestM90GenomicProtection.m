@@ -110,7 +110,7 @@ static BOOL m90BuildSimpleGenomic(NSString *path,
         [NSMutableData dataWithLength:n * sizeof(int32_t)];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -128,7 +128,7 @@ static BOOL m90BuildSimpleGenomic(NSString *path,
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:chromosomes
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
 
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M90 fixture"
@@ -492,7 +492,7 @@ static BOOL m90BuildSixReadGenomic(NSString *path, NSError **error)
         [NSMutableData dataWithLength:n * sizeof(int32_t)];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -510,7 +510,7 @@ static BOOL m90BuildSixReadGenomic(NSString *path, NSError **error)
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:chromosomes
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
 
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M90.3 fixture"
@@ -822,7 +822,7 @@ static BOOL m90BuildRegionFixture(NSString *path, NSError **error)
         [NSMutableData dataWithLength:n * sizeof(int32_t)];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -840,7 +840,7 @@ static BOOL m90BuildRegionFixture(NSString *path, NSError **error)
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:chromosomes
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
 
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M90.4 region fixture"

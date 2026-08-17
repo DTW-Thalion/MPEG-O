@@ -13,6 +13,7 @@
 
 @class TTIOWrittenGenomicRun;
 @class TTIOProvenanceRecord;
+@class TTIOGenomicStreamSource;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -20,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
  *  during BAM/SAM parsing. Mirrors Java's
  *  {@code BamReader.PROGRESS_INTERVAL_READS}. */
 FOUNDATION_EXPORT const NSUInteger TTIOBamReaderProgressIntervalReads;
+/** Reads per streamed batch by default (100 000). */
+FOUNDATION_EXPORT const NSUInteger TTIOBamReaderDefaultBatchReads;
 
 /**
  * <p><em>Inherits From:</em> NSObject</p>
@@ -120,6 +123,42 @@ FOUNDATION_EXPORT const NSUInteger TTIOBamReaderProgressIntervalReads;
                                                sampleName:(nullable NSString *)sampleName
                                                  progress:(nullable TTIOProgressBlock)progress
                                                     error:(NSError **)error;
+
+
+/**
+ * Walk the alignments in batches of <code>batchReads</code> reads,
+ * reading the samtools pipe line by line, so a file of any size is
+ * imported with bounded memory. Each batch is a run of its own with
+ * the file's run-level metadata; <code>block</code> returns NO to stop
+ * (its <code>error</code> is reported). YES when the whole file was
+ * consumed and samtools exited cleanly.
+ */
+- (BOOL)iterBatchesWithRegion:(nullable NSString *)region
+                   sampleName:(nullable NSString *)sampleName
+                   batchReads:(NSUInteger)batchReads
+                     progress:(nullable TTIOProgressBlock)progress
+                        error:(NSError **)error
+                   usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block;
+
+/**
+ * The batches of <code>-iterBatchesWithRegion:…</code> as a
+ * TTIOGenomicStreamSource; <code>referenceFasta</code> (indexed FASTA,
+ * may be nil) becomes the writer's lazy reference and
+ * <code>embedReference</code> asks for it to be embedded.
+ */
+- (TTIOGenomicStreamSource *)streamWithName:(nullable NSString *)name
+                                     region:(nullable NSString *)region
+                                 sampleName:(nullable NSString *)sampleName
+                             referenceFasta:(nullable NSString *)referenceFasta
+                             embedReference:(BOOL)embedReference
+                                 batchReads:(NSUInteger)batchReads
+                                   progress:(nullable TTIOProgressBlock)progress;
+
+/** The <code>samtools view</code> argument vector; subclasses add
+ *  their own options (CRAM adds <code>--reference</code>). nil with
+ *  <code>error</code> when the input cannot be read. */
+- (nullable NSArray<NSString *> *)samtoolsArgumentsForRegion:(nullable NSString *)region
+                                                        error:(NSError **)error;
 
 @end
 

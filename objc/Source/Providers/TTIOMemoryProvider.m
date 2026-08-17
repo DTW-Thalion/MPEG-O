@@ -50,12 +50,14 @@
     NSArray<TTIOCompoundField *> *_fields;
     id            _data;
     NSMutableDictionary<NSString *, id> *_attrs;
+    BOOL          _extendable;
 }
 - (instancetype)initWithName:(NSString *)name
                     precision:(TTIOPrecision)precision
                         shape:(NSArray<NSNumber *> *)shape
                        chunks:(NSArray<NSNumber *> *)chunks
                        fields:(NSArray<TTIOCompoundField *> *)fields;
+@property (nonatomic, assign) BOOL extendable;
 @end
 
 #pragma mark - Group impl
@@ -190,6 +192,46 @@
     return d;
 }
 
+- (id<TTIOStorageDataset>)createDatasetNamed:(NSString *)name
+                                     precision:(TTIOPrecision)precision
+                                        length:(NSUInteger)length
+                                     chunkSize:(NSUInteger)chunkSize
+                                   compression:(TTIOCompression)compression
+                              compressionLevel:(int)compressionLevel
+                                    extendable:(BOOL)extendable
+                                         error:(NSError **)error
+{
+    if (extendable && chunkSize == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"extendable dataset '%@' needs chunkSize > 0", name);
+        return nil;
+    }
+    TTIOMemDataset *d = (TTIOMemDataset *)[self createDatasetNamed:name precision:precision
+                                                              length:length chunkSize:chunkSize
+                                                         compression:compression
+                                                    compressionLevel:compressionLevel error:error];
+    d.extendable = extendable;
+    return d;
+}
+
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
+                                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                                                  count:(NSUInteger)count
+                                             extendable:(BOOL)extendable
+                                              chunkRows:(NSUInteger)chunkRows
+                                                  error:(NSError **)error
+{
+    if (extendable && chunkRows == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+                @"extendable compound '%@' needs chunkRows > 0", name);
+        return nil;
+    }
+    TTIOMemDataset *d = (TTIOMemDataset *)[self createCompoundDatasetNamed:name fields:fields
+                                                                     count:count error:error];
+    d.extendable = extendable;
+    return d;
+}
+
 - (BOOL)hasAttributeNamed:(NSString *)name { return _attrs[name] != nil; }
 
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
@@ -251,7 +293,12 @@
 - (NSUInteger)length { return _shape.count > 0 ? [_shape[0] unsignedIntegerValue] : 0; }
 - (NSArray<TTIOCompoundField *> *)compoundFields { return _fields; }
 
-- (id)readAll:(NSError **)error { (void)error; return _data; }
+- (id)readAll:(NSError **)error
+{
+    (void)error;
+    if (_data == nil && _extendable) return _fields ? (id)@[] : (id)[NSData data];
+    return _data;
+}
 
 - (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
 {
@@ -312,6 +359,72 @@
 - (BOOL)writeAll:(id)data error:(NSError **)error
 {
     _data = [data copy];
+    if (_extendable) {
+        NSUInteger n = _fields ? [(NSArray *)_data count]
+                               : [(NSData *)_data length] / MAX(1, [self _elemSize]);
+        _shape = @[@(n)];
+    }
+    return YES;
+}
+
+- (BOOL)isExtendable { return _extendable; }
+- (void)setExtendable:(BOOL)e { _extendable = e; }
+- (BOOL)extendable { return _extendable; }
+
+- (NSUInteger)_elemSize
+{
+    switch (_precision) {
+        case TTIOPrecisionFloat32:   return 4;
+        case TTIOPrecisionFloat64:   return 8;
+        case TTIOPrecisionInt32:     return 4;
+        case TTIOPrecisionInt64:     return 8;
+        case TTIOPrecisionUInt32:    return 4;
+        case TTIOPrecisionComplex128:return 16;
+        case TTIOPrecisionUInt8:     return 1;
+        case TTIOPrecisionUInt16:    return 2;
+        case TTIOPrecisionUInt64:    return 8;
+        default:                     return 8;
+    }
+}
+
+- (BOOL)appendData:(id)data error:(NSError **)error
+{
+    if (!_extendable) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"dataset '%@' is not extendable", _name);
+        return NO;
+    }
+    if (_fields) {
+        NSMutableArray *rows = [NSMutableArray arrayWithArray:(NSArray *)(_data ?: @[])];
+        [rows addObjectsFromArray:(NSArray *)data];
+        _data = rows;
+        _shape = @[@(rows.count)];
+        return YES;
+    }
+    NSMutableData *buf = [NSMutableData dataWithData:(NSData *)(_data ?: [NSData data])];
+    [buf appendData:(NSData *)data];
+    _data = buf;
+    _shape = @[@(buf.length / MAX(1, [self _elemSize]))];
+    return YES;
+}
+
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    if (_fields || ![_data isKindOfClass:[NSData class]]) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"writeSlice: primitive dataset with data required");
+        return NO;
+    }
+    NSUInteger elem = MAX(1, [self _elemSize]);
+    NSData *src = (NSData *)data;
+    NSUInteger start = offset * elem;
+    if (start + src.length > [(NSData *)_data length]) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange, @"writeSlice out of range");
+        return NO;
+    }
+    NSMutableData *buf = [NSMutableData dataWithData:(NSData *)_data];
+    [buf replaceBytesInRange:NSMakeRange(start, src.length) withBytes:src.bytes];
+    _data = buf;
     return YES;
 }
 

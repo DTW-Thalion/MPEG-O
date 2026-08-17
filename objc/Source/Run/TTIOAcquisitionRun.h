@@ -199,6 +199,42 @@
 - (NSArray *)spectra;
 
 /**
+ * Element range <code>[start, start + count)</code> of a channel as
+ * packed float64 bytes, read without materialising spectra: a decrypted
+ * or already-cached column is sliced; a FLOAT_DELTA_ZSTD channel decodes
+ * only the blocks the range covers (one block cached per channel); an
+ * uncompressed channel is read as a hyperslab. Java
+ * <code>AcquisitionRun.channelRange</code>.
+ */
+- (NSData *)channelRange:(NSString *)channelName
+                   start:(NSUInteger)start
+                   count:(NSUInteger)count
+                   error:(NSError **)error;
+
+/**
+ * Iterate the spectra in index order, reading the channels
+ * <code>batch</code> spectra at a time through
+ * <code>-channelRange:start:count:error:</code>, so a run is walked with
+ * bounded memory. Set <code>*stop</code> to end early. Returns NO with
+ * <code>error</code> when a read fails.
+ */
+- (BOOL)iterSpectraWithBatch:(NSUInteger)batch
+                       error:(NSError **)error
+                  usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block;
+
+/** Write chromatograms under <code>runGroup/chromatograms/</code> in the
+ *  layout <code>-writeToGroup:name:error:</code> uses. */
++ (BOOL)writeChromatograms:(NSArray<TTIOChromatogram *> *)chromatograms
+                toRunGroup:(id<TTIOStorageGroup>)runGroup
+                     error:(NSError **)error;
+
+/** Write per-run provenance (compound <code>provenance/steps</code> on
+ *  HDF5, always the <code>@provenance_json</code> mirror). */
++ (BOOL)writeProvenance:(NSArray<TTIOProvenanceRecord *> *)records
+             toRunGroup:(id<TTIOStorageGroup>)runGroup
+                  error:(NSError **)error;
+
+/**
  * @param range Closed retention-time range in seconds.
  * @return Indices in ascending order whose retention time falls
  *         inside the range.

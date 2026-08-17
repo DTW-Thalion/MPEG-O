@@ -121,7 +121,8 @@ static void byteswapInPlace(void *buf, NSUInteger count, NSUInteger width)
                     [out appendBytes:buf length:4];
                     break;
                 }
-                case TTIOCompoundFieldKindInt64: {
+                case TTIOCompoundFieldKindInt64:
+                case TTIOCompoundFieldKindUInt64: {
                     int64_t v = (int64_t)[value longLongValue];
                     uint8_t buf[8];
                     for (int i = 0; i < 8; i++) {

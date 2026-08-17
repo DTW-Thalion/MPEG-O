@@ -56,6 +56,7 @@ static const char *kDDL =
     "  data             BLOB,"
     "  compound_fields  TEXT,"
     "  compound_rows    TEXT,"
+    "  extendable       INTEGER NOT NULL DEFAULT 0,"
     "  UNIQUE(group_id, name)"
     ");"
     "CREATE TABLE IF NOT EXISTS group_attributes ("
@@ -149,6 +150,7 @@ static NSString *kindString(TTIOCompoundFieldKind k)
     switch (k) {
         case TTIOCompoundFieldKindUInt32:   return @"uint32";
         case TTIOCompoundFieldKindInt64:    return @"int64";
+        case TTIOCompoundFieldKindUInt64:   return @"uint64";
         case TTIOCompoundFieldKindFloat64:  return @"float64";
         case TTIOCompoundFieldKindVLString: return @"vl_string";
         default:                            return @"vl_string";
@@ -160,6 +162,7 @@ static TTIOCompoundFieldKind kindFromString(NSString *s)
 {
     if ([s isEqualToString:@"uint32"])    return TTIOCompoundFieldKindUInt32;
     if ([s isEqualToString:@"int64"])     return TTIOCompoundFieldKindInt64;
+    if ([s isEqualToString:@"uint64"])    return TTIOCompoundFieldKindUInt64;
     if ([s isEqualToString:@"float64"])   return TTIOCompoundFieldKindFloat64;
     if ([s isEqualToString:@"vl_string"]) return TTIOCompoundFieldKindVLString;
     return TTIOCompoundFieldKindVLString;
@@ -245,6 +248,7 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
     NSArray<NSNumber *>         *_shape;
     NSArray<TTIOCompoundField *> *_fields;
     BOOL        _readOnly;
+    BOOL        _extendable;
 }
 - (instancetype)initWithDB:(sqlite3 *)db
                  datasetId:(int64_t)datasetId
@@ -253,7 +257,22 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
                      shape:(NSArray<NSNumber *> *)shape
                     fields:(NSArray<TTIOCompoundField *> *)fields
                   readOnly:(BOOL)readOnly;
+@property (nonatomic, assign) BOOL extendable;
 @end
+
+// Databases created before extendable datasets lack the column.
+static BOOL sqliteHasExtendableColumn(sqlite3 *db)
+{
+    sqlite3_stmt *stmt = NULL;
+    if (sqlite3_prepare_v2(db, "PRAGMA table_info(datasets)", -1, &stmt, NULL) != SQLITE_OK) return NO;
+    BOOL found = NO;
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const char *col = (const char *)sqlite3_column_text(stmt, 1);
+        if (col && strcmp(col, "extendable") == 0) { found = YES; break; }
+    }
+    sqlite3_finalize(stmt);
+    return found;
+}
 
 @implementation TTIOSqliteDataset
 
@@ -287,6 +306,73 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
     return (_shape.count > 0) ? (NSUInteger)[_shape[0] unsignedIntegerValue] : 0;
 }
 - (NSArray<TTIOCompoundField *> *)compoundFields { return _fields; }
+- (BOOL)isExtendable { return _extendable; }
+- (BOOL)extendable { return _extendable; }
+- (void)setExtendable:(BOOL)e { _extendable = e; }
+
+// Read-modify-write: one blob (or one JSON row list) per dataset.
+- (BOOL)appendData:(id)data error:(NSError **)error
+{
+    if (!_extendable) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"dataset '%@' is not extendable", _name);
+        return NO;
+    }
+    if (_fields) {
+        NSMutableArray *rows = [NSMutableArray arrayWithArray:[self readAll:error] ?: @[]];
+        [rows addObjectsFromArray:(NSArray *)data];
+        if (![self writeAll:rows error:error]) return NO;
+        return [self _updateShape:rows.count error:error];
+    }
+    NSMutableData *buf = [NSMutableData dataWithData:[self readAll:error] ?: [NSData data]];
+    [buf appendData:(NSData *)data];
+    if (![self writeAll:buf error:error]) return NO;
+    NSUInteger elem = precisionElementSize(_precision);
+    return [self _updateShape:buf.length / MAX(1, elem) error:error];
+}
+
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    if (_fields) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"writeSlice is not supported on compound datasets");
+        return NO;
+    }
+    NSMutableData *buf = [NSMutableData dataWithData:[self readAll:error] ?: [NSData data]];
+    NSUInteger elem = MAX(1, precisionElementSize(_precision));
+    NSData *src = (NSData *)data;
+    NSUInteger start = offset * elem;
+    if (start + src.length > buf.length) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange, @"writeSlice out of range");
+        return NO;
+    }
+    [buf replaceBytesInRange:NSMakeRange(start, src.length) withBytes:src.bytes];
+    return [self writeAll:buf error:error];
+}
+
+- (BOOL)_updateShape:(NSUInteger)n error:(NSError **)error
+{
+    NSString *shapeStr = [NSString stringWithFormat:@"[%lu]", (unsigned long)n];
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(_db, "UPDATE datasets SET shape_json = ? WHERE id = ?", -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"SQLite prepare error: %s", sqlite3_errmsg(_db));
+        return NO;
+    }
+    sqlite3_bind_text(stmt, 1, [shapeStr UTF8String], -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int64(stmt, 2, _datasetId);
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"SQLite step error %d: %s", rc, sqlite3_errmsg(_db));
+        return NO;
+    }
+    sqlite3_exec(_db, "COMMIT; BEGIN", NULL, NULL, NULL);
+    _shape = @[@(n)];
+    return YES;
+}
 
 // ── Read all ────────────────────────────────────────────────
 
@@ -792,9 +878,13 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
 - (id<TTIOStorageDataset>)openDatasetNamed:(NSString *)name error:(NSError **)error
 {
     sqlite3_stmt *stmt = NULL;
+    BOOL hasExt = sqliteHasExtendableColumn(_db);
     sqlite3_prepare_v2(_db,
-        "SELECT id, kind, precision, shape_json, compound_fields "
-        "FROM datasets WHERE group_id = ? AND name = ?",
+        hasExt
+        ? "SELECT id, kind, precision, shape_json, compound_fields, extendable "
+          "FROM datasets WHERE group_id = ? AND name = ?"
+        : "SELECT id, kind, precision, shape_json, compound_fields "
+          "FROM datasets WHERE group_id = ? AND name = ?",
         -1, &stmt, NULL);
     sqlite3_bind_int64(stmt, 1, _groupId);
     sqlite3_bind_text(stmt, 2, [name UTF8String], -1, SQLITE_TRANSIENT);
@@ -806,6 +896,7 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
         const char *precName = (const char *)sqlite3_column_text(stmt, 2);
         const char *shapeStr = (const char *)sqlite3_column_text(stmt, 3);
         const char *fieldsStr= (const char *)sqlite3_column_text(stmt, 4);
+        BOOL extendable      = hasExt && sqlite3_column_int(stmt, 5) != 0;
 
         TTIOPrecision prec = precisionFromName(precName);
 
@@ -837,6 +928,7 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
         ds = [[TTIOSqliteDataset alloc]
               initWithDB:_db datasetId:dsId name:name precision:prec
                    shape:shape fields:fields readOnly:_readOnly];
+        ds.extendable = extendable;
     } else if (error) {
         *error = TTIOMakeError(TTIOErrorDatasetOpen,
             @"dataset '%@' not found in '%@'", name, _name);
@@ -1022,6 +1114,72 @@ static BOOL stepAndExpect(sqlite3_stmt *stmt, int expected,
     return [[TTIOSqliteDataset alloc]
             initWithDB:_db datasetId:newId name:name precision:0
                  shape:shape fields:[fields copy] readOnly:_readOnly];
+}
+
+- (id<TTIOStorageDataset>)createDatasetNamed:(NSString *)name
+                                     precision:(TTIOPrecision)precision
+                                        length:(NSUInteger)length
+                                     chunkSize:(NSUInteger)chunkSize
+                                   compression:(TTIOCompression)compression
+                              compressionLevel:(int)compressionLevel
+                                    extendable:(BOOL)extendable
+                                         error:(NSError **)error
+{
+    if (extendable && chunkSize == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable dataset '%@' needs chunkSize > 0", name);
+        return nil;
+    }
+    TTIOSqliteDataset *ds = (TTIOSqliteDataset *)[self createDatasetNamed:name precision:precision
+                                                                    length:length chunkSize:chunkSize
+                                                               compression:compression
+                                                          compressionLevel:compressionLevel error:error];
+    if (!ds) return nil;
+    if (extendable && ![self _markExtendable:ds error:error]) return nil;
+    return ds;
+}
+
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
+                                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                                                  count:(NSUInteger)count
+                                             extendable:(BOOL)extendable
+                                              chunkRows:(NSUInteger)chunkRows
+                                                  error:(NSError **)error
+{
+    if (extendable && chunkRows == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable compound '%@' needs chunkRows > 0", name);
+        return nil;
+    }
+    TTIOSqliteDataset *ds = (TTIOSqliteDataset *)[self createCompoundDatasetNamed:name fields:fields
+                                                                            count:count error:error];
+    if (!ds) return nil;
+    if (extendable && ![self _markExtendable:ds error:error]) return nil;
+    return ds;
+}
+
+- (BOOL)_markExtendable:(TTIOSqliteDataset *)ds error:(NSError **)error
+{
+    sqlite3_stmt *stmt = NULL;
+    int rc = sqlite3_prepare_v2(_db, "UPDATE datasets SET extendable = 1 WHERE group_id = ? AND name = ?",
+                                -1, &stmt, NULL);
+    if (rc != SQLITE_OK) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
+            @"SQLite prepare error: %s", sqlite3_errmsg(_db));
+        return NO;
+    }
+    sqlite3_bind_int64(stmt, 1, _groupId);
+    sqlite3_bind_text(stmt, 2, [ds.name UTF8String], -1, SQLITE_TRANSIENT);
+    rc = sqlite3_step(stmt);
+    sqlite3_finalize(stmt);
+    if (rc != SQLITE_DONE) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetCreate,
+            @"SQLite step error %d: %s", rc, sqlite3_errmsg(_db));
+        return NO;
+    }
+    sqlite3_exec(_db, "COMMIT; BEGIN", NULL, NULL, NULL);
+    ds.extendable = YES;
+    return YES;
 }
 
 // ── Group attributes ────────────────────────────────────────
@@ -1262,6 +1420,11 @@ static NSString *resolveURLToPath(NSString *url)
         sqlite3_free(errmsg);
         sqlite3_close(_db); _db = NULL;
         return NO;
+    }
+    if (!sqliteHasExtendableColumn(_db)) {
+        sqlite3_exec(_db,
+            "ALTER TABLE datasets ADD COLUMN extendable INTEGER NOT NULL DEFAULT 0",
+            NULL, NULL, NULL);
     }
     // Ensure root group '/'
     sqlite3_exec(_db,

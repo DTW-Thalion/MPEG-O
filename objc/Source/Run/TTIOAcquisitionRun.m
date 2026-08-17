@@ -113,6 +113,14 @@ static void _buildStdChannelEncoding(void)
     // so it can never serve stale bytes after the dataset handles change.
     NSMutableDictionary<NSString *, NSData *> *_cachedFullChannels;
 
+    // FLOAT_DELTA_ZSTD channels are left encoded on disk at open; a
+    // range read decodes the blocks it covers through the block table,
+    // keeping the last block per channel.
+    NSMutableSet<NSString *> *_fdzChannels;
+    NSMutableDictionary<NSString *, TTIOFDZBlockTable *> *_fdzTables;
+    NSMutableDictionary<NSString *, NSData *> *_fdzBlockCache;
+    NSMutableDictionary<NSString *, NSNumber *> *_fdzBlockCacheIndex;
+
     // Persistence context attached post-load for protocol encryption
     NSString *_persistenceFilePath;
     NSString *_persistenceRunName;
@@ -275,7 +283,7 @@ static void _buildStdChannelEncoding(void)
 
             double maxI = 0;
             TTIOSignalArray *inA = ms.intensityArray;
-            const double *intP = inA.buffer.bytes;
+            const double *intP = [inA float64Buffer].bytes;
             NSUInteger m = inA.length;
             for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
             bpp[i] = maxI;
@@ -301,7 +309,7 @@ static void _buildStdChannelEncoding(void)
             double maxI = 0;
             TTIOSignalArray *inA = s.signalArrays[@"intensity"];
             if (inA) {
-                const double *intP = inA.buffer.bytes;
+                const double *intP = [inA float64Buffer].bytes;
                 NSUInteger m = inA.length;
                 for (NSUInteger j = 0; j < m; j++) if (intP[j] > maxI) maxI = intP[j];
             }
@@ -413,25 +421,7 @@ static void _buildStdChannelEncoding(void)
     // mirror with a canonical-byte-order signature path that covers the
     // compound dataset directly; until then the mirror is intentional.
     if (_provenance.count > 0) {
-        id<TTIOStorageGroup> provGroup =
-            [runGroup createGroupNamed:@"provenance" error:error];
-        if (!provGroup) return NO;
-        if (![TTIOCompoundIO writeProvenance:_provenance
-                                   intoGroup:provGroup
-                                datasetNamed:@"steps"
-                                       error:error]) return NO;
-
-        NSMutableArray *plists = [NSMutableArray arrayWithCapacity:_provenance.count];
-        for (TTIOProvenanceRecord *r in _provenance) [plists addObject:[r asPlist]];
-        NSError *jErr = nil;
-        NSData *json = [NSJSONSerialization dataWithJSONObject:plists options:0 error:&jErr];
-        if (!json) {
-            if (error) *error = jErr;
-            return NO;
-        }
-        NSString *jstr = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
-        if (![runGroup setAttributeValue:jstr
-                                 forName:@"provenance_json" error:error]) return NO;
+        if (![[self class] writeProvenance:_provenance toRunGroup:runGroup error:error]) return NO;
     }
 
     if (![_instrumentConfig writeToGroup:runGroup error:error]) return NO;
@@ -478,7 +468,7 @@ static void _buildStdChannelEncoding(void)
             TTIOSignalArray *arr = s.signalArrays[chName];
             NSUInteger n = arr.length;
             memcpy((uint8_t *)raw + cursor * sizeof(double),
-                   arr.buffer.bytes, n * sizeof(double));
+                   [arr float64Buffer].bytes, n * sizeof(double));
             cursor += n;
         }
         NSData *all = [NSData dataWithBytesNoCopy:raw length:totalBytes freeWhenDone:YES];
@@ -556,18 +546,43 @@ static void _buildStdChannelEncoding(void)
 
     // chromatograms under <run>/chromatograms/
     if (_chromatograms.count > 0) {
-        if (![self writeChromatogramsToRunGroup:runGroup error:error]) return NO;
+        if (![[self class] writeChromatograms:_chromatograms toRunGroup:runGroup error:error]) return NO;
     }
 
     return YES;
+}
+
++ (BOOL)writeProvenance:(NSArray<TTIOProvenanceRecord *> *)records
+             toRunGroup:(id<TTIOStorageGroup>)runGroup
+                  error:(NSError **)error
+{
+    id<TTIOStorageGroup> provGroup =
+        [runGroup createGroupNamed:@"provenance" error:error];
+    if (!provGroup) return NO;
+    if (![TTIOCompoundIO writeProvenance:records
+                               intoGroup:provGroup
+                            datasetNamed:@"steps"
+                                   error:error]) return NO;
+
+    NSMutableArray *plists = [NSMutableArray arrayWithCapacity:records.count];
+    for (TTIOProvenanceRecord *r in records) [plists addObject:[r asPlist]];
+    NSError *jErr = nil;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:plists options:0 error:&jErr];
+    if (!json) {
+        if (error) *error = jErr;
+        return NO;
+    }
+    NSString *jstr = [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+    return [runGroup setAttributeValue:jstr forName:@"provenance_json" error:error];
 }
 
 // M24 helper — lays out /chromatograms/ with concatenated time/intensity
 // datasets and a chromatogram_index/ subgroup of parallel metadata.
 // chromatogram_index/offsets is omitted on disk; readers
 // compute it from cumsum(lengths).
-- (BOOL)writeChromatogramsToRunGroup:(id<TTIOStorageGroup>)runGroup
-                                error:(NSError **)error
++ (BOOL)writeChromatograms:(NSArray<TTIOChromatogram *> *)_chromatograms
+                toRunGroup:(id<TTIOStorageGroup>)runGroup
+                     error:(NSError **)error
 {
     NSUInteger nChroms = _chromatograms.count;
     id<TTIOStorageGroup> chromGroup =
@@ -862,6 +877,7 @@ static void _buildStdChannelEncoding(void)
         [NSMutableDictionary dictionaryWithCapacity:channelNames.count];
     NSMutableDictionary<NSString *, NSData *> *numpressChannels =
         [NSMutableDictionary dictionary];
+    NSMutableSet<NSString *> *fdzChannels = [NSMutableSet set];
     TTIOCompression runCompression = TTIOCompressionZlib;
     for (NSString *chName in channelNames) {
         NSString *dsName = [chName stringByAppendingString:@"_values"];
@@ -910,11 +926,10 @@ static void _buildStdChannelEncoding(void)
         NSNumber *codecNum = [ds attributeValueForName:@"compression" error:NULL];
         NSUInteger codecId = codecNum ? [codecNum unsignedIntegerValue] : 0;
         if (codecId == TTIOCompressionFloatDeltaZstd) {
-            NSData *stream = [ds readAll:error];
-            if (!stream) return nil;
-            NSData *decoded = [TTIOFloatDeltaZstd decodeStream:stream error:error];
-            if (!decoded) return nil;
-            numpressChannels[chName] = decoded;
+            /* Left encoded: -channelRange:start:count:error: decodes
+               block-wise through the FDZ1 block table. */
+            [fdzChannels addObject:chName];
+            channelDatasets[chName] = ds;
             runCompression = TTIOCompressionFloatDeltaZstd;
             continue;
         }
@@ -945,6 +960,7 @@ static void _buildStdChannelEncoding(void)
     run->_streamPosition       = 0;
     run->_provenance           = provenance;
     run->_numpressChannels     = numpressChannels.count > 0 ? numpressChannels : nil;
+    run->_fdzChannels          = fdzChannels.count > 0 ? fdzChannels : nil;
     run->_signalCompression    = runCompression;
 
     // read chromatograms if present. Absence means v0.3 file → empty list.
@@ -1032,6 +1048,199 @@ static void _buildStdChannelEncoding(void)
 
 #pragma mark - Random access
 
+// The whole column of a channel, decoded, from the memory caches or
+// the dataset (readAll, or the full FDZ1 stream decoded), and kept in
+// _cachedFullChannels. nil with *error on failure.
+- (NSData *)_fullChannel:(NSString *)chName error:(NSError **)error
+{
+    NSData *plaintext = _decryptedChannels[chName];
+    NSData *decoded = plaintext ?: _numpressChannels[chName];
+    if (decoded) return decoded;
+    NSData *full = _cachedFullChannels[chName];
+    if (full) return full;
+    @synchronized (self) {
+        full = _cachedFullChannels[chName];
+        if (!full) {
+            id<TTIOStorageDataset> ds = _storageDatasets[chName];
+            if (!ds) {
+                if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
+                    @"signal channel '%@' has no open dataset", chName);
+                return nil;
+            }
+            full = [ds readAll:error];
+            if (full && [_fdzChannels containsObject:chName]) {
+                full = [TTIOFloatDeltaZstd decodeStream:full error:error];
+            }
+            if (full) {
+                if (!_cachedFullChannels) _cachedFullChannels = [NSMutableDictionary dictionary];
+                _cachedFullChannels[chName] = full;
+            }
+        }
+    }
+    return full;
+}
+
+- (NSData *)_fdzRange:(NSString *)chName
+                start:(NSUInteger)start
+                count:(NSUInteger)count
+                error:(NSError **)error
+{
+    id<TTIOStorageDataset> ds = _storageDatasets[chName];
+    if (!ds) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
+            @"signal channel '%@' has no open dataset", chName);
+        return nil;
+    }
+    TTIOFDZByteRangeReader reader = ^NSData *(NSUInteger offset, NSUInteger n) {
+        id raw = [ds readSliceAtOffset:offset count:n error:NULL];
+        return [raw isKindOfClass:[NSData class]] ? raw : nil;
+    };
+    TTIOFDZBlockTable *table;
+    @synchronized (self) {
+        if (!_fdzTables) _fdzTables = [NSMutableDictionary dictionary];
+        table = _fdzTables[chName];
+        if (!table) {
+            table = [TTIOFloatDeltaZstd readBlockTableWithReader:reader error:error];
+            if (!table) return nil;
+            _fdzTables[chName] = table;
+        }
+    }
+    if ((uint64_t)start + count > table.nValues) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange,
+            @"channel '%@' range [%lu, %lu) beyond %llu values", chName,
+            (unsigned long)start, (unsigned long)(start + count), (unsigned long long)table.nValues);
+        return nil;
+    }
+    NSMutableData *out = [NSMutableData dataWithCapacity:count * sizeof(double)];
+    NSUInteger bs = table.blockSize;
+    NSUInteger pos = start, end = start + count;
+    while (pos < end) {
+        NSUInteger k = pos / bs;
+        NSData *block = nil;
+        @synchronized (self) {
+            if ([_fdzBlockCacheIndex[chName] unsignedIntegerValue] == k && _fdzBlockCache[chName]) {
+                block = _fdzBlockCache[chName];
+            }
+        }
+        if (!block) {
+            block = [TTIOFloatDeltaZstd decodeBlock:k table:table reader:reader error:error];
+            if (!block) return nil;
+            @synchronized (self) {
+                if (!_fdzBlockCache) _fdzBlockCache = [NSMutableDictionary dictionary];
+                if (!_fdzBlockCacheIndex) _fdzBlockCacheIndex = [NSMutableDictionary dictionary];
+                _fdzBlockCache[chName] = block;
+                _fdzBlockCacheIndex[chName] = @(k);
+            }
+        }
+        NSUInteger blockStart = k * bs;
+        NSUInteger from = pos - blockStart;
+        NSUInteger to = MIN(end - blockStart, block.length / sizeof(double));
+        [out appendBytes:(const uint8_t *)block.bytes + from * sizeof(double) length:(to - from) * sizeof(double)];
+        pos = blockStart + to;
+    }
+    return out;
+}
+
+- (NSData *)channelRange:(NSString *)chName
+                  offset:(NSUInteger)start
+                   count:(NSUInteger)count
+                   error:(NSError **)error
+{
+    NSData *plaintext = _decryptedChannels[chName];
+    NSData *decoded = plaintext ?: _numpressChannels[chName] ?: _cachedFullChannels[chName];
+    if (decoded) {
+        if ((start + count) * sizeof(double) > decoded.length) {
+            if (error) *error = TTIOMakeError(TTIOErrorOutOfRange,
+                @"channel '%@' range [%lu, %lu) beyond %lu values", chName,
+                (unsigned long)start, (unsigned long)(start + count),
+                (unsigned long)(decoded.length / sizeof(double)));
+            return nil;
+        }
+        return [NSData dataWithBytes:(const uint8_t *)decoded.bytes + start * sizeof(double)
+                              length:count * sizeof(double)];
+    }
+    if ([_fdzChannels containsObject:chName]) {
+        return [self _fdzRange:chName start:start count:count error:error];
+    }
+    id<TTIOStorageDataset> ds = _storageDatasets[chName];
+    if (!ds) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
+            @"signal channel '%@' has no open dataset", chName);
+        return nil;
+    }
+    if (count == 0) return [NSData data];
+    id raw = [ds readSliceAtOffset:start count:count error:error];
+    if (![raw isKindOfClass:[NSData class]]) return nil;
+    return [NSData dataWithData:raw];
+}
+
+- (NSData *)channelRange:(NSString *)channelName
+                   start:(NSUInteger)start
+                   count:(NSUInteger)count
+                   error:(NSError **)error
+{
+    if (_inMemorySpectra) {
+        NSMutableData *out = [NSMutableData dataWithCapacity:count * sizeof(double)];
+        NSUInteger cursor = 0;
+        for (TTIOSpectrum *sp in _inMemorySpectra) {
+            TTIOSignalArray *a = sp.signalArrays[channelName];
+            NSUInteger n = a.length;
+            NSUInteger from = start > cursor ? start - cursor : 0;
+            NSUInteger to = MIN(n, start + count > cursor ? start + count - cursor : 0);
+            if (to > from) {
+                [out appendBytes:(const uint8_t *)[a float64Buffer].bytes + from * sizeof(double)
+                          length:(to - from) * sizeof(double)];
+            }
+            cursor += n;
+            if (cursor >= start + count) break;
+        }
+        return out;
+    }
+    return [self channelRange:channelName offset:start count:count error:error];
+}
+
+- (BOOL)iterSpectraWithBatch:(NSUInteger)batch
+                       error:(NSError **)error
+                  usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block
+{
+    NSUInteger n = [self count];
+    if (batch < 1) batch = 1;
+    BOOL halted = NO;
+    if (_inMemorySpectra) {
+        for (NSUInteger i = 0; i < n && !halted; i++) block(_inMemorySpectra[i], i, &halted);
+        return YES;
+    }
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    for (NSUInteger b0 = 0; b0 < n && !halted; b0 += batch) {
+        NSUInteger b1 = MIN(n, b0 + batch);
+        NSUInteger start = (NSUInteger)[_spectrumIndex offsetAt:b0];
+        NSUInteger end = (NSUInteger)([_spectrumIndex offsetAt:b1 - 1] + [_spectrumIndex lengthAt:b1 - 1]);
+        NSMutableDictionary<NSString *, NSData *> *cols = [NSMutableDictionary dictionary];
+        for (NSString *c in _channelNames) {
+            NSData *d = [self channelRange:c offset:start count:end - start error:error];
+            if (!d) return NO;
+            cols[c] = d;
+        }
+        for (NSUInteger i = b0; i < b1 && !halted; i++) {
+            NSUInteger off = (NSUInteger)[_spectrumIndex offsetAt:i] - start;
+            NSUInteger len = [_spectrumIndex lengthAt:i];
+            NSMutableDictionary *arrays = [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
+            for (NSString *c in _channelNames) {
+                NSData *d = [NSData dataWithBytes:(const uint8_t *)cols[c].bytes + off * sizeof(double)
+                                           length:len * sizeof(double)];
+                arrays[c] = [[TTIOSignalArray alloc] initWithOwnedBuffer:d length:len encoding:enc axis:nil];
+            }
+            id sp = [self _spectrumAtIndex:i channels:arrays error:error];
+            if (!sp) return NO;
+            block(sp, i, &halted);
+        }
+    }
+    return YES;
+}
+
 - (id)spectrumAtIndex:(NSUInteger)index error:(NSError **)error
 {
     if (_inMemorySpectra) {
@@ -1062,67 +1271,23 @@ static void _buildStdChannelEncoding(void)
     NSMutableDictionary<NSString *, TTIOSignalArray *> *channels =
         [NSMutableDictionary dictionaryWithCapacity:_channelNames.count];
     for (NSString *chName in _channelNames) {
-        NSData *d = nil;
-        NSData *plaintext = _decryptedChannels[chName];
-        NSData *decoded = plaintext ?: _numpressChannels[chName];
-        if (decoded) {
-            // Unified element-wise slice: M21 Numpress-delta or
-            // M5-handoff decrypted-channels (both are contiguous
-            // float64 buffers keyed by off/len in element units).
-            const uint8_t *base = (const uint8_t *)decoded.bytes;
-            d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
-                               length:(NSUInteger)len * sizeof(double)];
-        } else {
-            // Fix #1: lazy whole-column cache. On a miss, read the entire
-            // channel column ONCE via the storage protocol's readAll: and
-            // retain it; on a hit (and after the first miss) slice it
-            // element-wise with the SAME base+off*sizeof(double) /
-            // len*sizeof(double) logic the cached branches above use. The
-            // sliced bytes are byte-identical to the prior per-spectrum
-            // readSliceAtOffset:count: read (readAll and the hyperslab
-            // read both return packed little-endian float64), eliminating
-            // ~one HDF5 hyperslab round-trip per channel per spectrum.
-            // Works uniformly across HDF5/Memory/SQLite backends; M43's
-            // cross-backend byte-identity tests guarantee equivalence.
-            // @synchronized(self) guards lazy population so concurrent
-            // first reads can't race on the mutable cache.
-            NSData *full = _cachedFullChannels[chName];
-            if (!full) {
-                @synchronized (self) {
-                    full = _cachedFullChannels[chName];
-                    if (!full) {
-                        id<TTIOStorageDataset> ds = _storageDatasets[chName];
-                        full = [ds readAll:error];
-                        if (full) {
-                            if (!_cachedFullChannels) {
-                                _cachedFullChannels =
-                                    [NSMutableDictionary dictionary];
-                            }
-                            _cachedFullChannels[chName] = full;
-                        }
-                    }
-                }
-            }
-            if (full) {
-                const uint8_t *base = (const uint8_t *)full.bytes;
-                d = [NSData dataWithBytes:base + (NSUInteger)off * sizeof(double)
-                                   length:(NSUInteger)len * sizeof(double)];
-            } else {
-                d = nil;  // readAll: failed; *error already set
-            }
-        }
+        NSData *d = [self channelRange:chName offset:(NSUInteger)off count:len error:error];
         if (!d) return nil;
-        // `d` is always a fresh, unaliased, immutable NSData built by
-        // +dataWithBytes:length: (in both the decrypted/numpress and the
-        // cached-full-column branches above), so it never aliases the
-        // cache and is safe to hand off without a defensive copy.
         TTIOSignalArray *sa = [[TTIOSignalArray alloc] initWithOwnedBuffer:d
                                                                     length:len
                                                                   encoding:enc
                                                                       axis:nil];
         channels[chName] = sa;
     }
+    return [self _spectrumAtIndex:index channels:channels error:error];
+}
 
+// Build the spectrum object of the persisted class from its channel
+// arrays and the index row.
+- (id)_spectrumAtIndex:(NSUInteger)index
+              channels:(NSDictionary<NSString *, TTIOSignalArray *> *)channels
+                 error:(NSError **)error
+{
     // _spectrumClassName remains the persisted source of truth; the enum
     // is an in-code dispatch key only (P3.8). An unrecognised class falls
     // through to the unknown-class error below, exactly as before.
@@ -1234,6 +1399,10 @@ static void _buildStdChannelEncoding(void)
 - (NSArray *)spectra
 {
     NSUInteger n = [self count];
+    if (!_inMemorySpectra) {
+        // Whole columns once, then per-spectrum slices from memory.
+        for (NSString *c in _channelNames) (void)[self _fullChannel:c error:NULL];
+    }
     NSMutableArray *out = [NSMutableArray arrayWithCapacity:n];
     for (NSUInteger i = 0; i < n; i++) {
         id obj = [self spectrumAtIndex:i error:NULL];
@@ -1281,7 +1450,12 @@ static void _buildStdChannelEncoding(void)
     _storageSignalGroup  = nil;
     // Fix #1: drop the whole-column cache when the backing handles go
     // away so it can never serve bytes from a closed/replaced dataset.
-    @synchronized (self) { _cachedFullChannels = nil; }
+    @synchronized (self) {
+        _cachedFullChannels = nil;
+        _fdzTables = nil;
+        _fdzBlockCache = nil;
+        _fdzBlockCacheIndex = nil;
+    }
 }
 
 #pragma mark - TTIOProvenanceable
@@ -1395,7 +1569,12 @@ static void _buildStdChannelEncoding(void)
     // Fix #1: the datasets were just rebuilt from a reopened file; any
     // previously cached columns belonged to the old handles. Invalidate
     // so the next read repopulates from the fresh datasets.
-    @synchronized (self) { _cachedFullChannels = nil; }
+    @synchronized (self) {
+        _cachedFullChannels = nil;
+        _fdzTables = nil;
+        _fdzBlockCache = nil;
+        _fdzBlockCacheIndex = nil;
+    }
     return YES;
 }
 

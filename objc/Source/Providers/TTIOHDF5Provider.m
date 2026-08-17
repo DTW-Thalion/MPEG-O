@@ -37,6 +37,11 @@
                            name:(NSString *)name
                          fields:(NSArray<TTIOCompoundField *> *)fields
                           count:(NSUInteger)count;
+- (instancetype)initWithParent:(TTIOHDF5Group *)parent
+                           name:(NSString *)name
+                         fields:(NSArray<TTIOCompoundField *> *)fields
+                          count:(NSUInteger)count
+                     extendable:(BOOL)extendable;
 @end
 
 // ──────────────────────────────────────────────────────────────
@@ -91,6 +96,18 @@
 - (BOOL)writeAll:(id)data error:(NSError **)error
 {
     return [_ds writeData:(NSData *)data error:error];
+}
+
+- (BOOL)isExtendable { return [_ds isExtendable]; }
+
+- (BOOL)appendData:(id)data error:(NSError **)error
+{
+    return [_ds appendData:(NSData *)data error:error];
+}
+
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    return [_ds writeSlice:(NSData *)data atOffset:offset error:error];
 }
 
 - (NSArray<NSDictionary<NSString *, id> *> *)readRows:(NSError **)error
@@ -178,6 +195,13 @@
 
 - (id<TTIOStorageDataset>)openDatasetNamed:(NSString *)name error:(NSError **)error
 {
+    NSArray<TTIOCompoundField *> *schema =
+        [TTIOCompoundIO schemaOfCompoundInGroup:_group name:name];
+    if (schema != nil) {
+        return [[TTIOHDF5CompoundDatasetAdapter alloc]
+                initWithParent:_group name:name fields:schema
+                         count:[TTIOCompoundIO rowCountInGroup:_group name:name]];
+    }
     TTIOHDF5Dataset *d = [_group openDatasetNamed:name error:error];
     if (!d) return nil;
     TTIOHDF5DatasetAdapter *adapter =
@@ -302,6 +326,37 @@
             initWithParent:_group name:name fields:fields count:count];
 }
 
+- (id<TTIOStorageDataset>)createDatasetNamed:(NSString *)name
+                                     precision:(TTIOPrecision)precision
+                                        length:(NSUInteger)length
+                                     chunkSize:(NSUInteger)chunkSize
+                                   compression:(TTIOCompression)compression
+                              compressionLevel:(int)compressionLevel
+                                    extendable:(BOOL)extendable
+                                         error:(NSError **)error
+{
+    TTIOHDF5Dataset *d = [_group createDatasetNamed:name
+                                          precision:precision
+                                             length:length
+                                          chunkSize:chunkSize
+                                        compression:compression
+                                   compressionLevel:compressionLevel
+                                         extendable:extendable
+                                              error:error];
+    return d ? [[TTIOHDF5DatasetAdapter alloc] initWithDataset:d name:name] : nil;
+}
+
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
+                                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                                                  count:(NSUInteger)count
+                                             extendable:(BOOL)extendable
+                                              chunkRows:(NSUInteger)chunkRows
+                                                  error:(NSError **)error
+{
+    return [(id<TTIOStorageGroup>)_group createCompoundDatasetNamed:name fields:fields count:count
+                                   extendable:extendable chunkRows:chunkRows error:error];
+}
+
 - (BOOL)hasAttributeNamed:(NSString *)name { return [_group hasAttributeNamed:name]; }
 
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
@@ -339,6 +394,7 @@
     NSString *_name;
     NSArray<TTIOCompoundField *> *_fields;
     NSUInteger _count;
+    BOOL _extendable;
 }
 
 - (instancetype)initWithParent:(TTIOHDF5Group *)parent
@@ -346,20 +402,54 @@
                          fields:(NSArray<TTIOCompoundField *> *)fields
                           count:(NSUInteger)count
 {
+    return [self initWithParent:parent name:name fields:fields count:count
+                     extendable:[TTIOCompoundIO isExtendableCompoundInGroup:parent name:name]];
+}
+
+- (instancetype)initWithParent:(TTIOHDF5Group *)parent
+                           name:(NSString *)name
+                         fields:(NSArray<TTIOCompoundField *> *)fields
+                          count:(NSUInteger)count
+                     extendable:(BOOL)extendable
+{
     self = [super init];
     if (self) {
         _parent = parent;
         _name   = [name copy];
         _fields = [fields copy];
         _count  = count;
+        _extendable = extendable;
     }
     return self;
 }
 
 - (NSString *)name { return _name; }
 - (TTIOPrecision)precision { return 0; }
-- (NSUInteger)length { return _count; }
-- (NSArray<NSNumber *> *)shape { return @[@(_count)]; }
+- (NSUInteger)length
+{
+    return _extendable ? [TTIOCompoundIO rowCountInGroup:_parent name:_name] : _count;
+}
+- (NSArray<NSNumber *> *)shape { return @[@([self length])]; }
+- (BOOL)isExtendable { return _extendable; }
+
+- (BOOL)appendData:(id)data error:(NSError **)error
+{
+    if (!_extendable) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+            @"compound dataset '%@' is not extendable", _name);
+        return NO;
+    }
+    return [TTIOCompoundIO appendRows:(NSArray *)data toGroup:_parent name:_name
+                               fields:_fields error:error];
+}
+
+- (BOOL)writeSlice:(id)data atOffset:(NSUInteger)offset error:(NSError **)error
+{
+    (void)data; (void)offset;
+    if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
+        @"writeSlice is not supported on compound datasets");
+    return NO;
+}
 - (NSArray<NSNumber *> *)chunks { return nil; }
 - (NSArray<TTIOCompoundField *> *)compoundFields { return _fields; }
 
@@ -385,6 +475,7 @@
 
 - (BOOL)writeAll:(id)data error:(NSError **)error
 {
+    if (_extendable) return [self appendData:data error:error];
     return [TTIOCompoundIO writeGeneric:(NSArray *)data
                                intoGroup:_parent
                             datasetNamed:_name
@@ -405,31 +496,45 @@
                                                        fields:_fields];
 }
 
-- (BOOL)hasAttributeNamed:(NSString *)name { (void)name; return NO; }
+// Attributes ride on a transient TTIOHDF5Dataset handle over the
+// compound dataset (its precision is not used for attribute I/O).
+- (TTIOHDF5Dataset *)_handle
+{
+    return [_parent openDatasetNamed:_name error:NULL];
+}
+- (BOOL)hasAttributeNamed:(NSString *)name
+{
+    return [[self _handle] hasAttributeNamed:name];
+}
 - (id)attributeValueForName:(NSString *)name error:(NSError **)error
 {
-    (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
-            @"compound-dataset attributes not yet routed");
-    return nil;
+    TTIOHDF5Dataset *h = [self _handle];
+    if (!h) {
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeRead,
+                @"compound dataset '%@' not found", _name);
+        return nil;
+    }
+    return [h attributeValueForName:name error:error];
 }
 - (BOOL)setAttributeValue:(id)value forName:(NSString *)name error:(NSError **)error
 {
-    (void)value; (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
-            @"compound-dataset attributes not yet routed");
-    return NO;
+    TTIOHDF5Dataset *h = [self _handle];
+    if (!h) {
+        if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
+                @"compound dataset '%@' not found", _name);
+        return NO;
+    }
+    return [h setAttributeValue:value forName:name error:error];
 }
 
 - (BOOL)deleteAttributeNamed:(NSString *)name error:(NSError **)error
 {
-    (void)name;
-    if (error) *error = TTIOMakeError(TTIOErrorAttributeWrite,
-            @"compound-dataset attributes not yet routed");
-    return NO;
+    TTIOHDF5Dataset *h = [self _handle];
+    if (!h) return NO;
+    return [h deleteAttributeNamed:name error:error];
 }
 
-- (NSArray<NSString *> *)attributeNames { return @[]; }
+- (NSArray<NSString *> *)attributeNames { return [[self _handle] attributeNames] ?: @[]; }
 
 @end
 
@@ -511,7 +616,17 @@
                                                          count:(NSUInteger)count
 {
     return [[TTIOHDF5CompoundDatasetAdapter alloc]
-            initWithParent:parent name:name fields:fields count:count];
+            initWithParent:parent name:name fields:fields count:count extendable:NO];
+}
+
++ (id<TTIOStorageDataset>)adapterForCompoundDatasetWithParent:(TTIOHDF5Group *)parent
+                                                          name:(NSString *)name
+                                                        fields:(NSArray<TTIOCompoundField *> *)fields
+                                                         count:(NSUInteger)count
+                                                    extendable:(BOOL)extendable
+{
+    return [[TTIOHDF5CompoundDatasetAdapter alloc]
+            initWithParent:parent name:name fields:fields count:count extendable:extendable];
 }
 
 @end

@@ -15,6 +15,8 @@
  */
 #import "TTIOBamWriter.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Genomics/TTIOGenomicRun.h"
+#import "Genomics/TTIOAlignedRead.h"
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "HDF5/TTIOHDF5Errors.h"
 
@@ -100,13 +102,23 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
               provenanceRecords:(NSArray<TTIOProvenanceRecord *> *)provenance
                            sort:(BOOL)sort
 {
+    return [self buildHeaderForChromosomes:run.chromosomes sampleName:run.sampleName
+                                  platform:run.platform provenanceRecords:provenance sort:sort];
+}
+
+- (NSString *)buildHeaderForChromosomes:(NSArray<NSString *> *)chromosomes
+                             sampleName:(NSString *)sampleName
+                               platform:(NSString *)platform
+                      provenanceRecords:(NSArray<TTIOProvenanceRecord *> *)provenance
+                                   sort:(BOOL)sort
+{
     NSMutableArray<NSString *> *lines = [NSMutableArray array];
     NSString *so = sort ? @"coordinate" : @"unsorted";
     [lines addObject:[NSString stringWithFormat:@"@HD\tVN:1.6\tSO:%@", so]];
 
     // @SQ — first-seen order, dropping "*" and empty strings.
     NSMutableSet<NSString *> *seen = [NSMutableSet set];
-    for (NSString *chrom in run.chromosomes) {
+    for (NSString *chrom in chromosomes) {
         if (chrom.length == 0) continue;
         if ([chrom isEqualToString:@"*"]) continue;
         if ([seen containsObject:chrom]) continue;
@@ -116,15 +128,15 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
     }
 
     // @RG — single line if either sample_name or platform is set.
-    if (run.sampleName.length > 0 || run.platform.length > 0) {
+    if (sampleName.length > 0 || platform.length > 0) {
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
         [parts addObject:@"@RG"];
         [parts addObject:@"ID:rg1"];
-        if (run.sampleName.length > 0) {
-            [parts addObject:[NSString stringWithFormat:@"SM:%@", run.sampleName]];
+        if (sampleName.length > 0) {
+            [parts addObject:[NSString stringWithFormat:@"SM:%@", sampleName]];
         }
-        if (run.platform.length > 0) {
-            [parts addObject:[NSString stringWithFormat:@"PL:%@", run.platform]];
+        if (platform.length > 0) {
+            [parts addObject:[NSString stringWithFormat:@"PL:%@", platform]];
         }
         [lines addObject:[parts componentsJoinedByString:@"\t"]];
     }
@@ -275,6 +287,34 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
     return out;
 }
 
+// One SAM alignment line from a decoded read; the same field rules as
+// the run-side builder above.
+- (NSString *)alignmentLineForRead:(TTIOAlignedRead *)r
+{
+    NSString *qname = r.readName.length ? r.readName : @"*";
+    NSString *rname = r.chromosome.length ? r.chromosome : @"*";
+    NSString *cigar = r.cigar.length ? r.cigar : @"*";
+    NSString *mateChrom = r.mateChromosome.length ? r.mateChromosome : @"*";
+    NSString *rnext = ([mateChrom isEqualToString:rname] && ![rname isEqualToString:@"*"]) ? @"=" : mateChrom;
+    int64_t pnext = r.matePosition < 0 ? 0 : r.matePosition;
+    NSString *seqStr, *qualStr;
+    NSUInteger len = r.sequence.length;
+    if (len == 0) {
+        seqStr = @"*"; qualStr = @"*";
+    } else {
+        seqStr = r.sequence;
+        NSData *q = r.qualities;
+        BOOL allFF = q.length > 0;
+        const uint8_t *qb = q.bytes;
+        for (NSUInteger k = 0; k < q.length; k++) if (qb[k] != 0xFF) { allFF = NO; break; }
+        qualStr = (q.length == 0 || allFF) ? @"*"
+            : ([[NSString alloc] initWithData:q encoding:NSISOLatin1StringEncoding] ?: @"*");
+    }
+    return [NSString stringWithFormat:@"%@\t%u\t%@\t%lld\t%u\t%@\t%@\t%lld\t%d\t%@\t%@\n",
+            qname, (unsigned)r.flags, rname, (long long)r.position, (unsigned)r.mappingQuality,
+            cigar, rnext, (long long)pnext, (int)r.templateLength, seqStr, qualStr];
+}
+
 // ── samtools command builder (overridable). Returns an array of arg
 // arrays. Single element for one-stage; two for view + sort.
 - (NSArray<NSArray<NSString *> *> *)samtoolsCommandsForSort:(BOOL)sort
@@ -297,6 +337,21 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
                    samBytes:(NSData *)samBytes
                       error:(NSError **)error
 {
+    return [self runSamtoolsPipeline:commands samtoolsBin:samtoolsBin
+                              feeder:^BOOL(NSFileHandle *stdinHandle, NSError **e) {
+        (void)e;
+        [stdinHandle writeData:samBytes];
+        return YES;
+    } error:error];
+}
+
+// The feeder writes the SAM text into samtools' stdin as it goes and
+// returns NO (with *error) to abort; the handle is closed here.
+- (BOOL)runSamtoolsPipeline:(NSArray<NSArray<NSString *> *> *)commands
+                samtoolsBin:(NSString *)samtoolsBin
+                     feeder:(BOOL (^)(NSFileHandle *stdinHandle, NSError **error))feeder
+                      error:(NSError **)error
+{
     if (commands.count == 1) {
         NSTask *task = [[NSTask alloc] init];
         task.launchPath = samtoolsBin;
@@ -314,18 +369,20 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
                 @"failed to launch samtools: %@", exc.reason ?: @"unknown");
             return NO;
         }
+        BOOL fed = YES;
         @try {
-            [[inPipe fileHandleForWriting] writeData:samBytes];
+            fed = feeder([inPipe fileHandleForWriting], error);
             [[inPipe fileHandleForWriting] closeFile];
         } @catch (NSException *exc) {
             if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
                 @"failed to pipe SAM text to samtools: %@",
                 exc.reason ?: @"unknown");
-            return NO;
+            fed = NO;
         }
         [[outPipe fileHandleForReading] readDataToEndOfFile];
         NSData *errData = [[errPipe fileHandleForReading] readDataToEndOfFile];
         [task waitUntilExit];
+        if (!fed) return NO;
         if (task.terminationStatus != 0) {
             NSString *errText = [[NSString alloc] initWithData:errData
                                                        encoding:NSUTF8StringEncoding] ?: @"";
@@ -369,14 +426,15 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
         return NO;
     }
 
+    BOOL fed = YES;
     @try {
-        [[firstIn fileHandleForWriting] writeData:samBytes];
+        fed = feeder([firstIn fileHandleForWriting], error);
         [[firstIn fileHandleForWriting] closeFile];
     } @catch (NSException *exc) {
         if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite,
             @"failed to pipe SAM text to samtools: %@",
             exc.reason ?: @"unknown");
-        return NO;
+        fed = NO;
     }
 
     [first waitUntilExit];
@@ -387,6 +445,7 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
     NSData *secondErrData = [[secondErr fileHandleForReading] readDataToEndOfFile];
     [second waitUntilExit];
 
+    if (!fed) return NO;
     if (first.terminationStatus != 0) {
         NSString *errText = [[NSString alloc] initWithData:firstErrData
                                                    encoding:NSUTF8StringEncoding] ?: @"";
@@ -422,6 +481,63 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
                      sort:sort
                  progress:nil
                     error:error];
+}
+
+- (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+       provenanceRecords:(NSArray<TTIOProvenanceRecord *> *)provenance
+                    sort:(BOOL)sort
+                progress:(TTIOProgressBlock)progress
+                   error:(NSError **)error
+{
+    NSString *samtoolsBin = nil;
+    if (!bamWriterSamtoolsAvailable(&samtoolsBin, error)) {
+        return NO;
+    }
+    if (!run) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"writeReadSideRun: run must not be nil");
+        return NO;
+    }
+    TTIOProgressBlock sink = progress ?: TTIOProgressDiscard();
+    NSArray<TTIOProvenanceRecord *> *provs = provenance ?: @[];
+    NSString *header = [self buildHeaderForChromosomes:[run chromosomeNames]
+                                            sampleName:run.sampleName
+                                              platform:run.platform
+                                     provenanceRecords:provs
+                                                  sort:sort];
+    NSUInteger total = run.readCount;
+    NSArray<NSArray<NSString *> *> *commands = [self samtoolsCommandsForSort:sort];
+    return [self runSamtoolsPipeline:commands samtoolsBin:samtoolsBin
+                              feeder:^BOOL(NSFileHandle *stdinHandle, NSError **e) {
+        [stdinHandle writeData:[header dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data]];
+        NSMutableData *chunk = [NSMutableData dataWithCapacity:1 << 20];
+        __block NSUInteger done = 0;
+        BOOL ok = [run iterReadsFrom:0 to:total error:e
+                          usingBlock:^(TTIOAlignedRead *r, NSUInteger index, BOOL *stop) {
+            (void)index; (void)stop;
+            NSString *line = [self alignmentLineForRead:r];
+            [chunk appendData:[line dataUsingEncoding:NSISOLatin1StringEncoding] ?: [NSData data]];
+            done++;
+            if (chunk.length >= (1 << 20)) {
+                [stdinHandle writeData:chunk];
+                [chunk setLength:0];
+            }
+            if ((done % TTIOBamWriterProgressIntervalReads) == 0 && done < total) {
+                sink((int64_t)done, (int64_t)total);
+            }
+        }];
+        if (chunk.length > 0) [stdinHandle writeData:chunk];
+        if (ok) sink((int64_t)total, (int64_t)total);
+        return ok;
+    } error:error];
+}
+
+- (BOOL)writeReadSideRun:(TTIOGenomicRun *)run
+       provenanceRecords:(NSArray<TTIOProvenanceRecord *> *)provenance
+                    sort:(BOOL)sort
+                   error:(NSError **)error
+{
+    return [self writeReadSideRun:run provenanceRecords:provenance sort:sort progress:nil error:error];
 }
 
 - (BOOL)writeRun:(TTIOWrittenGenomicRun *)run

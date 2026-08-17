@@ -199,96 +199,94 @@ const NSUInteger TTIOFastqWriterProgressIntervalReads = 1000;
         gz = (gzipOutput == 1);
     }
 
-    // Pre-fetch the whole sequences + qualities byte buffers + the
-    // read-names list once, then slice in-memory per record. Skips
-    // per-read TTIOAlignedRead materialisation, which would also
-    // decode the cigar / mate triple — fields FASTQ does not need.
-    // Mirrors the 24× speedup the Python FastqWriter saw from this
-    // same pattern.
+    // Reads stream out through -iterReadsFrom:to:usingBlock: (one
+    // decoded block resident for a blocks_v1 run) into a 1 MiB chunk
+    // flushed to the file (plain or gzip) as it fills.
     NSUInteger n = [run count];
-    NSData *seqAll  = [run wholeSequencesData];
-    NSData *qualAll = [run wholeQualitiesData];
-    NSArray<NSString *> *namesAll = [run allReadNames];
-    const uint8_t *seqBytes  = seqAll.bytes;
-    const uint8_t *qualBytes = qualAll.bytes;
-    NSUInteger qualLen = qualAll.length;
-    TTIOGenomicIndex *idx = run.index;
-
-    NSMutableData *body = [NSMutableData dataWithCapacity:64 * 1024];
-    NSMutableSet<NSString *> *seen = [NSMutableSet set];
-    for (NSUInteger i = 0; i < n; i++) {
-        uint64_t off = [idx offsetAt:i];
-        uint32_t len = [idx lengthAt:i];
-        // Build qual slice with sentinel mapping + phred shift.
-        NSMutableData *qualSlice = [NSMutableData dataWithCapacity:len];
-        if (qualLen >= off + len && len > 0) {
-            uint8_t *out = malloc(len);
-            for (uint32_t j = 0; j < len; j++) {
-                uint8_t b = qualBytes[off + j];
-                if (b == kQualUnknownByte) b = kPhred33Fill;
-                if (phredOffset == 64) b = (uint8_t)((b + 31) & 0xFF);
-                out[j] = b;
-            }
-            [qualSlice appendBytes:out length:len];
-            free(out);
-        } else if (len > 0) {
-            uint8_t fill = (phredOffset == 64) ? (uint8_t)('!' + 31) : kPhred33Fill;
-            uint8_t *out = malloc(len);
-            memset(out, fill, len);
-            [qualSlice appendBytes:out length:len];
-            free(out);
+    gzFile gf = NULL;
+    FILE *fp = NULL;
+    NSString *tmp = [path stringByAppendingString:@".part"];
+    if (gz) {
+        gf = gzopen([tmp fileSystemRepresentation], "wb");
+    } else {
+        fp = fopen([tmp fileSystemRepresentation], "wb");
+    }
+    if (!gf && !fp) {
+        if (error) {
+            *error = [NSError errorWithDomain:kErrDom code:2
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"could not open %@ for writing", path] }];
         }
-        NSString *name = (i < namesAll.count) ? namesAll[i] : @"";
+        return NO;
+    }
+    __block BOOL writeOk = YES;
+    BOOL (^flush)(NSData *) = ^BOOL(NSData *chunk) {
+        if (chunk.length == 0) return YES;
+        if (gf) {
+            if (gzwrite(gf, chunk.bytes, (unsigned)chunk.length) != (int)chunk.length) writeOk = NO;
+        } else if (fwrite(chunk.bytes, 1, chunk.length, fp) != chunk.length) {
+            writeOk = NO;
+        }
+        return writeOk;
+    };
+    NSMutableData *body = [NSMutableData dataWithCapacity:1 << 20];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
+    __block NSUInteger done = 0;
+    NSError *iterErr = nil;
+    BOOL ok = [run iterReadsFrom:0 to:n error:&iterErr
+                      usingBlock:^(TTIOAlignedRead *r, NSUInteger i, BOOL *stop) {
+        NSData *seq = [r.sequence dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data];
+        NSUInteger len = seq.length;
+        NSData *q = r.qualities;
+        NSMutableData *qualSlice = [NSMutableData dataWithLength:len];
+        uint8_t *out = qualSlice.mutableBytes;
+        const uint8_t *qb = q.bytes;
+        for (NSUInteger j = 0; j < len; j++) {
+            uint8_t b = (j < q.length) ? qb[j] : kQualUnknownByte;
+            if (b == kQualUnknownByte) b = kPhred33Fill;
+            if (phredOffset == 64) b = (uint8_t)((b + 31) & 0xFF);
+            out[j] = b;
+        }
+        NSString *name = r.readName ?: @"";
         if ([seen containsObject:name]) {
             name = [NSString stringWithFormat:@"%@#%lu", name, (unsigned long)i];
         }
         [seen addObject:name];
-        uint8_t at = '@';
+        uint8_t at = '@', lf = '\n', plus = '+';
         [body appendBytes:&at length:1];
         [body appendData:[name dataUsingEncoding:NSUTF8StringEncoding]];
-        uint8_t lf = '\n';
         [body appendBytes:&lf length:1];
-        if (len > 0) {
-            [body appendBytes:seqBytes + off length:len];
-        }
+        [body appendData:seq];
         [body appendBytes:&lf length:1];
-        uint8_t plus = '+';
         [body appendBytes:&plus length:1];
         [body appendBytes:&lf length:1];
         [body appendData:qualSlice];
         [body appendBytes:&lf length:1];
-
-        // Per-N progress fire. Total = n.
-        if (((i + 1) % TTIOFastqWriterProgressIntervalReads) == 0) {
-            progress((int64_t)(i + 1), (int64_t)n);
+        done++;
+        if (body.length >= (1 << 20)) {
+            if (!flush(body)) *stop = YES;
+            [body setLength:0];
         }
+        if ((done % TTIOFastqWriterProgressIntervalReads) == 0) {
+            progress((int64_t)done, (int64_t)n);
+        }
+    }];
+    if (ok && writeOk) flush(body);
+    if (gf) gzclose(gf);
+    if (fp) fclose(fp);
+    if (!ok || !writeOk) {
+        [[NSFileManager defaultManager] removeItemAtPath:tmp error:NULL];
+        if (error) {
+            *error = iterErr ?: [NSError errorWithDomain:kErrDom code:3
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"short write to %@", path] }];
+        }
+        return NO;
     }
-    // Final fire.
     progress((int64_t)n, (int64_t)n);
-
-    if (gz) {
-        gzFile gf = gzopen([path fileSystemRepresentation], "wb");
-        if (gf == NULL) {
-            if (error) {
-                *error = [NSError errorWithDomain:kErrDom code:2
-                                         userInfo:@{ NSLocalizedDescriptionKey :
-                                                     [NSString stringWithFormat:@"could not open %@ for writing", path] }];
-            }
-            return NO;
-        }
-        int written = gzwrite(gf, body.bytes, (unsigned)body.length);
-        gzclose(gf);
-        if (written != (int)body.length) {
-            if (error) {
-                *error = [NSError errorWithDomain:kErrDom code:3
-                                         userInfo:@{ NSLocalizedDescriptionKey :
-                                                     [NSString stringWithFormat:@"short gzip write to %@", path] }];
-            }
-            return NO;
-        }
-        return YES;
-    }
-    return [body writeToFile:path options:NSDataWritingAtomic error:error];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm removeItemAtPath:path error:NULL];
+    return [fm moveItemAtPath:tmp toPath:path error:error];
 }
 
 @end

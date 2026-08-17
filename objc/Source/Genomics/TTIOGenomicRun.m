@@ -18,6 +18,10 @@
 #import "TTIOGenomicRun.h"
 #import "TTIOAlignedRead.h"
 #import "TTIOGenomicIndex.h"
+#import "TTIOBlockTable.h"
+#import "HDF5/TTIOHDF5Errors.h"
+#import "TTIOBlockView.h"
+#import "TTIOGenomicBlocks.h"
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"
 #import "Dataset/TTIOCompoundIO.h"
@@ -45,6 +49,7 @@
 #import <hdf5.h>
 
 @implementation TTIOGenomicRun {
+    TTIOGenomicIndex *_index;
     id<TTIOStorageGroup> _group;
     id<TTIOStorageGroup> _signalChannelsGroup;       // lazily opened, cached
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_signalCache;
@@ -118,9 +123,180 @@
     // the TTIOCodecRegistry decode adapters. Mirrors the field
     // derivations the bespoke decode methods built inline.
     TTIOCodecContext *_codecCtxCache;
+    // blocks_v1 (format-spec 10.12): the block table, the last
+    // materialised block view, and the reference resolver shared with
+    // the views. _layout is "whole" for the v1.8 whole-channel layout.
+    NSString *_layout;
+    TTIOBlockTable *_blockTable;
+    TTIOGenomicRun *_cachedView;
+    TTIOBlockView *_cachedHandle;
+    NSUInteger _cachedBlock;
+    TTIOReferenceResolver *_injectedResolver;
+    TTIOReferenceResolver *_viewResolver;
+    BOOL _viewResolverBuilt;
+    NSArray<NSString *> *_chromNamesTable;
+    NSArray<NSString *> *_mateChromNamesTable;
 }
 
-- (NSUInteger)readCount { return _index.count; }
+@synthesize index = _index;
+
+- (NSUInteger)readCount
+{
+    return _blockTable ? (NSUInteger)_blockTable.readCount : [self index].count;
+}
+
+- (TTIOGenomicIndex *)index
+{
+    if (_index == nil) {
+        id<TTIOStorageGroup> ig = [_group openGroupNamed:@"genomic_index" error:NULL];
+        if (ig) _index = [TTIOGenomicIndex readFromGroup:ig error:NULL];
+    }
+    return _index;
+}
+
+- (NSString *)layout { return _layout ?: @"whole"; }
+
+- (NSUInteger)blockCount { return _blockTable ? _blockTable.count : 1; }
+
+- (NSArray<NSString *> *)chromosomeNames
+{
+    if (_chromNamesTable == nil) {
+        id<TTIOStorageGroup> ig = [_group openGroupNamed:@"genomic_index" error:NULL];
+        _chromNamesTable = ig ? [TTIOBlockView readNamesIn:ig named:@"chromosome_names"] : @[];
+    }
+    return _chromNamesTable;
+}
+
+- (void)close
+{
+    [self _dropCachedView];
+}
+
+- (void)dealloc
+{
+    [self _dropCachedView];
+}
+
+// ── blocks_v1 dispatch ─────────────────────────────────────────
+
+/* The TTIOGenomicRun over block b, materialised on demand; the last
+ * one is cached. */
+- (TTIOGenomicRun *)_blockView:(NSUInteger)b error:(NSError **)error
+{
+    if (_cachedView != nil && _cachedBlock == b) return _cachedView;
+    if (_mateChromNamesTable == nil) {
+        id<TTIOStorageGroup> sc = [self signalChannelsGroupWithError:NULL];
+        id<TTIOStorageGroup> mate = (sc && [sc hasChildNamed:@"mate_info"])
+            ? [sc openGroupNamed:@"mate_info" error:NULL] : nil;
+        _mateChromNamesTable = mate ? [TTIOBlockView readNamesIn:mate named:@"chrom_names"] : @[];
+    }
+    TTIOBlockView *h = [TTIOBlockView materialiseBlock:b ofRun:_group table:_blockTable
+                                            chromNames:[self chromosomeNames]
+                                        mateChromNames:_mateChromNamesTable
+                                                 error:error];
+    if (!h) return nil;
+    TTIOGenomicRun *sub = [TTIOGenomicRun openFromGroup:h.group name:_name
+                                      referenceResolver:[self _resolverForViews] error:error];
+    if (!sub) { [h discard]; return nil; }
+    [self _dropCachedView];
+    _cachedBlock = b;
+    _cachedView = sub;
+    _cachedHandle = h;
+    return sub;
+}
+
+- (void)_dropCachedView
+{
+    _cachedView = nil;
+    if (_cachedHandle) { [_cachedHandle discard]; _cachedHandle = nil; }
+    _cachedBlock = NSNotFound;
+}
+
+- (TTIOReferenceResolver *)_resolverForViews
+{
+    if (_injectedResolver != nil) return _injectedResolver;
+    if (!_viewResolverBuilt) {
+        _viewResolverBuilt = YES;
+        _viewResolver = [self _resolverFromOwningFile];
+    }
+    return _viewResolver;
+}
+
+/* Built exactly as the REF_DIFF_V2 decode path builds it from the run
+ * group's HDF5 root; nil on non-HDF5 backends. */
+- (TTIOReferenceResolver *)_resolverFromOwningFile
+{
+    if (![_group respondsToSelector:@selector(unwrap)]) return nil;
+    TTIOHDF5Group *runG = [(id)_group performSelector:@selector(unwrap)];
+    hid_t fid = H5Iget_file_id([runG groupId]);
+    if (fid < 0) return nil;
+    TTIOHDF5Group *rootHDF5 = nil;
+    hid_t rootId = H5Gopen2(fid, "/", H5P_DEFAULT);
+    if (rootId >= 0) {
+        rootHDF5 = [[TTIOHDF5Group alloc] initWithGroupId:rootId retainer:nil];
+    }
+    H5Idec_ref(fid);
+    if (rootHDF5 == nil) return nil;
+    return [[TTIOReferenceResolver alloc] initWithRootGroup:rootHDF5
+                                      externalReferencePath:nil];
+}
+
+- (BOOL)_blockRange:(NSUInteger)start
+                 to:(NSUInteger)stop
+              error:(NSError **)error
+         usingBlock:(BOOL (^)(TTIOGenomicRun *view, NSUInteger blockIndex, NSUInteger localStart, NSUInteger localStop))body
+{
+    NSUInteger i = start;
+    while (i < stop) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) {
+            if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:0
+                userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                    @"index %lu out of range [0, %llu)", (unsigned long)i, _blockTable.readCount]}];
+            return NO;
+        }
+        NSUInteger r0 = (NSUInteger)[_blockTable readStartAt:b];
+        NSUInteger bEnd = r0 + [_blockTable nReadsAt:b];
+        NSUInteger segEnd = MIN(stop, bEnd);
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        if (!view) return NO;
+        if (!body(view, b, i - r0, segEnd - r0)) return NO;
+        i = segEnd;
+    }
+    return YES;
+}
+
+- (BOOL)iterReadsFrom:(NSUInteger)start
+                   to:(NSUInteger)stop
+                error:(NSError **)error
+           usingBlock:(void (^)(TTIOAlignedRead *read, NSUInteger index, BOOL *stop))block
+{
+    NSUInteger n = [self readCount];
+    stop = MIN(stop, n);
+    __block BOOL halted = NO;
+    if (_blockTable) {
+        __block NSError *inner = nil;
+        TTIOBlockTable *table = _blockTable;
+        BOOL ok = [self _blockRange:start to:stop error:error
+                         usingBlock:^BOOL(TTIOGenomicRun *view, NSUInteger b, NSUInteger ls, NSUInteger le) {
+            NSUInteger r0 = (NSUInteger)[table readStartAt:b];
+            for (NSUInteger j = ls; j < le && !halted; j++) {
+                TTIOAlignedRead *r = [view readAtIndex:j error:&inner];
+                if (!r) return NO;
+                block(r, r0 + j, &halted);
+            }
+            return YES;
+        }];
+        if (!ok && inner && error && *error == nil) *error = inner;
+        return ok;
+    }
+    for (NSUInteger i = start; i < stop && !halted; i++) {
+        TTIOAlignedRead *r = [self readAtIndex:i error:error];
+        if (!r) return NO;
+        block(r, i, &halted);
+    }
+    return YES;
+}
 
 - (instancetype)initWithName:(NSString *)name
               acquisitionMode:(TTIOAcquisitionMode)mode
@@ -147,6 +323,8 @@
         _decodedMateInfo     = [NSMutableDictionary dictionary];
         _mateInfoLinkType    = -1;  // not yet probed
         _sequencesLinkType   = -1;  // not yet probed
+        _cachedBlock         = NSNotFound;
+        _layout              = @"whole";
     }
     return self;
 }
@@ -155,12 +333,37 @@
                           name:(NSString *)name
                          error:(NSError **)error
 {
+    return [self openFromGroup:runGroup name:name referenceResolver:nil error:error];
+}
+
++ (instancetype)openFromGroup:(id<TTIOStorageGroup>)runGroup
+                          name:(NSString *)name
+             referenceResolver:(id)resolver
+                         error:(NSError **)error
+{
     if (!runGroup) return nil;
 
-    id<TTIOStorageGroup> idxGroup = [runGroup openGroupNamed:@"genomic_index" error:error];
-    if (!idxGroup) return nil;
-    TTIOGenomicIndex *index = [TTIOGenomicIndex readFromGroup:idxGroup error:error];
-    if (!index) return nil;
+    NSString *layout = @"whole";
+    if ([runGroup hasAttributeNamed:@"layout"]) {
+        id lv = [runGroup attributeValueForName:@"layout" error:NULL];
+        if (lv) layout = [lv description];
+    }
+    TTIOGenomicIndex *index = nil;
+    TTIOBlockTable *table = nil;
+    if ([layout isEqualToString:@"blocks_v1"]) {
+        table = [TTIOBlockTable readFromRunGroup:runGroup error:error];
+        if (!table) return nil;
+    } else if ([layout isEqualToString:@"whole"]) {
+        id<TTIOStorageGroup> idxGroup = [runGroup openGroupNamed:@"genomic_index" error:error];
+        if (!idxGroup) return nil;
+        index = [TTIOGenomicIndex readFromGroup:idxGroup error:error];
+        if (!index) return nil;
+    } else {
+        if (error) *error = TTIOMakeError(TTIOErrorUnsupportedLayout,
+            @"genomic run '%@': unsupported layout '%@' (this reader knows the "
+            @"whole-channel layout and blocks_v1)", name, layout);
+        return nil;
+    }
 
     // Integer attribute: the storage-protocol adapter tries
     // stringAttributeNamed first which silently returns garbage bytes
@@ -182,7 +385,7 @@
     NSString *platform  = [runGroup attributeValueForName:@"platform"         error:error];
     NSString *sampleN   = [runGroup attributeValueForName:@"sample_name"      error:error];
 
-    return [[TTIOGenomicRun alloc]
+    TTIOGenomicRun *run = [[TTIOGenomicRun alloc]
         initWithName:name
      acquisitionMode:(TTIOAcquisitionMode)modeValue
             modality:modality ?: @"genomic_sequencing"
@@ -191,6 +394,10 @@
           sampleName:sampleN ?: @""
                index:index
                group:runGroup];
+    run->_layout = layout;
+    run->_blockTable = table;
+    run->_injectedResolver = resolver;
+    return run;
 }
 
 - (id<TTIOStorageGroup>)signalChannelsGroupWithError:(NSError **)error
@@ -274,6 +481,12 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 - (uint8_t)wireCompressionForChannel:(NSString *)name
 {
     if (!name.length) return 0;
+    if (_blockTable) {
+        if (_blockTable.count == 0 || !_blockTable.hasCodecs) return 0;
+        NSUInteger c = [_blockTable codecOf:name at:0];
+        return (c == TTIOCompressionRansOrder0 || c == TTIOCompressionRansOrder1
+                || c == TTIOCompressionBasePack) ? (uint8_t)c : 0;
+    }
     id<TTIOStorageDataset> ds = [self signalDatasetNamed:name error:NULL];
     if (!ds) return 0;
     id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
@@ -296,7 +509,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     if (_codecCtxCache) return _codecCtxCache;
 
     TTIOCodecContext *ctx = [TTIOCodecContext emptyContext];
-    NSUInteger n = _index ? _index.count : 0;
+    NSUInteger n = [self index] ? [self index].count : 0;
 
     // readLengths / revcompFlags / totalBases (fqzcomp + refdiff).
     // revcomp = run.flags & 16 (mirrors -_ttio_m94z_decodeFqzcompNx16Z:
@@ -307,10 +520,10 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
         [NSMutableArray arrayWithCapacity:n];
     NSUInteger totalBases = 0;
     for (NSUInteger i = 0; i < n; i++) {
-        NSUInteger len = [_index lengthAt:i];
+        NSUInteger len = [[self index] lengthAt:i];
         [readLengths addObject:@(len)];
         totalBases += len;
-        uint32_t f = [_index flagsAt:i];
+        uint32_t f = [[self index] flagsAt:i];
         [revcompFlags addObject:((f & 16u) != 0) ? @1 : @0];
     }
     ctx.readLengths  = readLengths;
@@ -335,14 +548,14 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     // positions int64-LE (mirrors -_decodeRefDiffV2Sequences:).
     NSMutableData *positions = [NSMutableData dataWithLength:n * sizeof(int64_t)];
     int64_t *posPtr = (int64_t *)positions.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) posPtr[i] = [_index positionAt:i];
+    for (NSUInteger i = 0; i < n; i++) posPtr[i] = [[self index] positionAt:i];
     ctx.positions = positions;
 
     // chromosomes (refdiff single-chrom constraint).
     NSMutableArray<NSString *> *chromosomes =
         [NSMutableArray arrayWithCapacity:n];
     for (NSUInteger i = 0; i < n; i++) {
-        NSString *c = [_index chromosomeAt:i];
+        NSString *c = [[self index] chromosomeAt:i];
         [chromosomes addObject:c ?: @""];
     }
     ctx.chromosomes = chromosomes;
@@ -352,12 +565,23 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     NSMutableData *ownChromIds =
         [NSMutableData dataWithLength:n * sizeof(uint16_t)];
     uint16_t *ownIdsPtr = (uint16_t *)ownChromIds.mutableBytes;
+    // The ids are those of the mate_info/chrom_names sidecar when the
+    // run has one (own chromosomes come first in it, so this equals the
+    // encounter order for a whole-channel run and stays right for a
+    // block whose first chromosome is not the run's first); encounter
+    // order otherwise.
     NSMutableDictionary<NSString *, NSNumber *> *nameToId =
         [NSMutableDictionary dictionaryWithCapacity:32];
+    NSArray<NSString *> *sidecar = [self readMateInfoChromNamesTable];
+    for (NSUInteger j = 0; j < sidecar.count; j++) {
+        if (nameToId[sidecar[j]] == nil) nameToId[sidecar[j]] = @(j);
+    }
     for (NSUInteger i = 0; i < n; i++) {
-        NSString *name = [_index chromosomeAt:i];
+        NSString *name = [[self index] chromosomeAt:i];
         NSNumber *existingId = nameToId[name];
-        if (existingId == nil) {
+        if (existingId == nil && sidecar.count > 0) {
+            ownIdsPtr[i] = (uint16_t)0xFFFF;
+        } else if (existingId == nil) {
             NSUInteger newId = nameToId.count;
             nameToId[name] = @(newId);
             ownIdsPtr[i] = (uint16_t)newId;
@@ -370,7 +594,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     NSMutableData *ownPositions =
         [NSMutableData dataWithLength:n * sizeof(int64_t)];
     int64_t *ownPosPtr = (int64_t *)ownPositions.mutableBytes;
-    for (NSUInteger i = 0; i < n; i++) ownPosPtr[i] = [_index positionAt:i];
+    for (NSUInteger i = 0; i < n; i++) ownPosPtr[i] = [[self index] positionAt:i];
     ctx.ownPositions = ownPositions;
     ctx.nRecords = @(n);
 
@@ -381,7 +605,7 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
     ctx.cigarsProvider = ^NSArray<NSString *> *(void) {
         TTIOGenomicRun *s = weakSelf;
         if (s == nil) return @[];
-        NSUInteger cn = s->_index ? s->_index.count : 0;
+        NSUInteger cn = [s index] ? [s index].count : 0;
         if (cn > 0) {
             NSError *cigErr = nil;
             (void)[s cigarAtIndex:0 error:&cigErr];
@@ -415,7 +639,9 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
             H5Idec_ref(fid);
         }
     }
-    if (rootHDF5 != nil) {
+    if (_injectedResolver != nil) {
+        ctx.referenceResolver = _injectedResolver;
+    } else if (rootHDF5 != nil) {
         ctx.referenceResolver = [[TTIOReferenceResolver alloc]
                 initWithRootGroup:rootHDF5
             externalReferencePath:nil];
@@ -436,11 +662,37 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 //
 // for the sequences channel, probe whether signal_channels/sequences
 // is a GROUP (refdiff_v2 layout) and decode via TTIORefDiffV2 when true.
+/* blocks_v1: a base range [offset, offset+count) of sequences or
+ * qualities, concatenated over the blocks it touches. */
+- (NSData *)_blockByteChannelSliceNamed:(NSString *)name
+                                 offset:(NSUInteger)offset
+                                  count:(NSUInteger)count
+                                  error:(NSError **)error
+{
+    NSMutableData *out = [NSMutableData dataWithCapacity:count];
+    NSUInteger nb = _blockTable.count;
+    for (NSUInteger b = 0; b < nb && count > 0; b++) {
+        NSUInteger bs = (NSUInteger)[_blockTable baseStartAt:b];
+        NSUInteger bn = (NSUInteger)[_blockTable nBasesAt:b];
+        if (bs + bn <= offset) continue;
+        if (bs >= offset + count) break;
+        NSUInteger from = offset > bs ? offset - bs : 0;
+        NSUInteger to = MIN(bn, offset + count - bs);
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        if (!view) return nil;
+        NSData *part = [view byteChannelSliceNamed:name offset:from count:to - from error:error];
+        if (!part) return nil;
+        [out appendData:part];
+    }
+    return out;
+}
+
 - (NSData *)byteChannelSliceNamed:(NSString *)name
                             offset:(NSUInteger)offset
                              count:(NSUInteger)count
                              error:(NSError **)error
 {
+    if (_blockTable) return [self _blockByteChannelSliceNamed:name offset:offset count:count error:error];
     // refdiff_v2 group layout probe for sequences channel. Routed via
     // the codec registry (REF_DIFF_V2 group-payload adapter); the
     // adapter opens the sequences GROUP / refdiff_v2 dataset from the
@@ -579,6 +831,17 @@ static uint8_t _ttio_m86_read_compression_attr_protocol(id<TTIOStorageDataset> d
 // helper (Gotcha §126).
 - (NSString *)readNameAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if (_blockTable) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) {
+            if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2040
+                userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                    @"read_names index %lu out of range [0, %llu)", (unsigned long)i, _blockTable.readCount]}];
+            return nil;
+        }
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        return view ? [view readNameAtIndex:i - (NSUInteger)[_blockTable readStartAt:b] error:error] : nil;
+    }
     if (_decodedReadNames != nil) {
         if (i >= _decodedReadNames.count) {
             if (error) *error = [NSError
@@ -762,6 +1025,17 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
 // pattern Phase E uses for read_names).
 - (NSString *)cigarAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if (_blockTable) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) {
+            if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:2060
+                userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                    @"cigars index %lu out of range [0, %llu)", (unsigned long)i, _blockTable.readCount]}];
+            return nil;
+        }
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        return view ? [view cigarAtIndex:i - (NSUInteger)[_blockTable readStartAt:b] error:error] : nil;
+    }
     if (_decodedCigars != nil) {
         if (i >= _decodedCigars.count) {
             if (error) *error = [NSError
@@ -1144,7 +1418,7 @@ static int _ttio_m86_cigars_varint_read(const uint8_t *buf, size_t buf_len,
         blob = (NSData *)raw;
     }
 
-    NSUInteger n = _index.count;
+    NSUInteger n = [self index].count;
 
     // own_chrom_ids (encounter-order uint16, must match writer) and
     // own_positions are now derived in -_codecContext and consumed by
@@ -1243,6 +1517,12 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (NSString *)_mateChromAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if (_blockTable) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) return nil;
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        return view ? [view _mateChromAtIndex:i - (NSUInteger)[_blockTable readStartAt:b] error:error] : nil;
+    }
     if ([self _mateInfoIsInlineV2]) {
         if (![self _decodeMateInfoInlineV2:error]) return nil;
         NSArray<NSString *> *chroms = _decodedMateInfo[@"chrom"];
@@ -1255,6 +1535,12 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (int64_t)_matePosAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if (_blockTable) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) return 0;
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        return view ? [view _matePosAtIndex:i - (NSUInteger)[_blockTable readStartAt:b] error:error] : 0;
+    }
     if ([self _mateInfoIsInlineV2]) {
         if (![self _decodeMateInfoInlineV2:error]) return 0;
         NSData *bytes = _decodedMateInfo[@"pos"];
@@ -1270,6 +1556,12 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (int32_t)_mateTlenAtIndex:(NSUInteger)i error:(NSError **)error
 {
+    if (_blockTable) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) return 0;
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        return view ? [view _mateTlenAtIndex:i - (NSUInteger)[_blockTable readStartAt:b] error:error] : 0;
+    }
     if ([self _mateInfoIsInlineV2]) {
         if (![self _decodeMateInfoInlineV2:error]) return 0;
         NSData *bytes = _decodedMateInfo[@"tlen"];
@@ -1285,23 +1577,34 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (TTIOAlignedRead *)readAtIndex:(NSUInteger)i error:(NSError **)error
 {
-    if (i >= _index.count) {
+    if (_blockTable) {
+        NSUInteger b = [_blockTable blockForRead:i];
+        if (b == NSNotFound) {
+            if (error) *error = [NSError errorWithDomain:@"TTIOGenomicRun" code:0
+                userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                    @"index %lu out of range [0, %llu)", (unsigned long)i, _blockTable.readCount]}];
+            return nil;
+        }
+        TTIOGenomicRun *view = [self _blockView:b error:error];
+        return view ? [view readAtIndex:i - (NSUInteger)[_blockTable readStartAt:b] error:error] : nil;
+    }
+    if (i >= [self index].count) {
         if (error) *error = [NSError
             errorWithDomain:@"TTIOGenomicRun" code:0
                    userInfo:@{NSLocalizedDescriptionKey:
                        [NSString stringWithFormat:
                             @"index %lu out of range [0, %lu)",
-                            (unsigned long)i, (unsigned long)_index.count]}];
+                            (unsigned long)i, (unsigned long)[self index].count]}];
         return nil;
     }
 
-    uint64_t offset = [_index offsetAt:i];
-    uint32_t length = [_index lengthAt:i];
+    uint64_t offset = [[self index] offsetAt:i];
+    uint32_t length = [[self index] lengthAt:i];
 
-    int64_t  position = [_index positionAt:i];
-    uint8_t  mapq     = [_index mappingQualityAt:i];
-    uint32_t flag     = [_index flagsAt:i];
-    NSString *chrom   = [_index chromosomeAt:i];
+    int64_t  position = [[self index] positionAt:i];
+    uint8_t  mapq     = [[self index] mappingQualityAt:i];
+    uint32_t flag     = [[self index] flagsAt:i];
+    NSString *chrom   = [[self index] chromosomeAt:i];
 
     // routed through byteChannelSliceNamed: so codec-compressed
     // channels (@compression > 0) are decoded transparently before
@@ -1367,7 +1670,7 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
                                           start:(int64_t)start
                                             end:(int64_t)end
 {
-    NSIndexSet *indices = [_index indicesForRegion:chromosome start:start end:end];
+    NSIndexSet *indices = [[self index] indicesForRegion:chromosome start:start end:end];
     NSMutableArray *result = [NSMutableArray arrayWithCapacity:indices.count];
     [indices enumerateIndexesUsingBlock:^(NSUInteger idx, BOOL *stop) {
         NSError *err = nil;
@@ -1381,7 +1684,7 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (NSUInteger)count
 {
-    return _index ? _index.count : 0;
+    return [self readCount];
 }
 
 - (id)objectAtIndex:(NSUInteger)index
@@ -1395,24 +1698,46 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
     // read-side gap. Reads from <run>/provenance/steps using the same
     // compound layout as TTIOAcquisitionRun. Returns @[] for runs with
     // no provenance attached.
-    if (![_group respondsToSelector:@selector(unwrap)]) return @[];
-    TTIOHDF5Group *runH5 = [(id)_group performSelector:@selector(unwrap)];
-    if (!runH5) return @[];
-    if (![runH5 hasChildNamed:@"provenance"]) return @[];
-    TTIOHDF5Group *provGroup =
-        [runH5 openGroupNamed:@"provenance" error:NULL];
-    if (!provGroup || ![provGroup hasChildNamed:@"steps"]) return @[];
-    NSArray *records =
-        [TTIOCompoundIO readProvenanceFromGroup:provGroup
-                                   datasetNamed:@"steps"
-                                          error:NULL];
-    return records ? [records copy] : @[];
+    if ([_group respondsToSelector:@selector(unwrap)]) {
+        TTIOHDF5Group *runH5 = [(id)_group performSelector:@selector(unwrap)];
+        if (runH5 && [runH5 hasChildNamed:@"provenance"]) {
+            TTIOHDF5Group *provGroup =
+                [runH5 openGroupNamed:@"provenance" error:NULL];
+            if (provGroup && [provGroup hasChildNamed:@"steps"]) {
+                NSArray *records =
+                    [TTIOCompoundIO readProvenanceFromGroup:provGroup
+                                               datasetNamed:@"steps"
+                                                      error:NULL];
+                if (records) return [records copy];
+            }
+        }
+    }
+    // The storage-protocol writers keep the JSON mirror only.
+    if ([_group hasAttributeNamed:@"provenance_json"]) {
+        id v = [_group attributeValueForName:@"provenance_json" error:NULL];
+        NSString *json = [v isKindOfClass:[NSString class]] ? v : [v description];
+        NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
+        NSArray *plists = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL] : nil;
+        if ([plists isKindOfClass:[NSArray class]]) {
+            NSMutableArray *out = [NSMutableArray arrayWithCapacity:plists.count];
+            for (NSDictionary *pl in plists) {
+                if ([pl isKindOfClass:[NSDictionary class]]) {
+                    [out addObject:[TTIOProvenanceRecord fromPlist:pl]];
+                }
+            }
+            return out;
+        }
+    }
+    return @[];
 }
 
 #pragma mark - Phase 2c-T verbatim v2 blob accessors
 
 - (nullable NSData *)readMateInfoInlineV2BlobBytes
 {
+    if (_blockTable) {
+        return _blockTable.count == 1 ? [[self _blockView:0 error:NULL] readMateInfoInlineV2BlobBytes] : nil;
+    }
     id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
     if (!sig) return nil;
     if ([sig respondsToSelector:@selector(unwrap)]) {
@@ -1470,6 +1795,9 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (nullable NSData *)readNameTokV2BlobBytes
 {
+    if (_blockTable) {
+        return _blockTable.count == 1 ? [[self _blockView:0 error:NULL] readNameTokV2BlobBytes] : nil;
+    }
     id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
     if (!sig) return nil;
     uint8_t codec = [self wireCompressionForChannel:@"read_names"];
@@ -1492,6 +1820,9 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (nullable NSData *)readRefDiffV2BlobBytes
 {
+    if (_blockTable) {
+        return _blockTable.count == 1 ? [[self _blockView:0 error:NULL] readRefDiffV2BlobBytes] : nil;
+    }
     id<TTIOStorageGroup> sig = [self signalChannelsGroupWithError:NULL];
     if (!sig) return nil;
     if ([sig respondsToSelector:@selector(unwrap)]) {
@@ -1521,9 +1852,13 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (NSUInteger)_totalBaseCount
 {
-    NSUInteger n = _index.count;
+    if (_blockTable) {
+        NSUInteger nb = _blockTable.count;
+        return nb == 0 ? 0 : (NSUInteger)([_blockTable baseStartAt:nb - 1] + [_blockTable nBasesAt:nb - 1]);
+    }
+    NSUInteger n = [self index].count;
     if (n == 0) return 0;
-    return (NSUInteger)([_index offsetAt:n - 1] + [_index lengthAt:n - 1]);
+    return (NSUInteger)([[self index] offsetAt:n - 1] + [[self index] lengthAt:n - 1]);
 }
 
 - (NSData *)wholeSequencesData
@@ -1560,7 +1895,16 @@ static void _ttio_v17_reject_legacy_mate_layout(NSError **error)
 
 - (NSArray<NSString *> *)allReadNames
 {
-    NSUInteger n = _index.count;
+    if (_blockTable) {
+        NSMutableArray<NSString *> *all = [NSMutableArray arrayWithCapacity:(NSUInteger)_blockTable.readCount];
+        for (NSUInteger b = 0; b < _blockTable.count; b++) {
+            TTIOGenomicRun *view = [self _blockView:b error:NULL];
+            if (!view) return @[];
+            [all addObjectsFromArray:[view allReadNames]];
+        }
+        return all;
+    }
+    NSUInteger n = [self index].count;
     if (n == 0) return @[];
     // Touch index 0 to trigger the one-shot v2 decode + cache.
     NSError *err = nil;

@@ -112,6 +112,15 @@ TTIOTests_OBJC_FILES = \
 	TestC3ProvidersErrorPaths.m \
 	TestC5ProtectionGap.m \
 	TestC3bProvidersWritePaths.m \
+	TestProviderExtendable.m \
+	TestGenomicBlocks.m \
+	TestGenomicStreamWriter.m \
+	TestBlocksV1Golden.m \
+	TestGenomicBlocksReader.m \
+	TestFloatDeltaZstdBlocks.m \
+	TestSpectralStreamWriter.m \
+	TestStreamingImporters.m \
+	TestStreamingExporters.m \
 	TestC2bHDF5CompoundType.m \
 	TestC3cCanonicalBytes.m \
 	TestPhase12RunProtocol.m \

@@ -34,6 +34,7 @@ typedef NS_ENUM(NSInteger, TTIOErrorCode) {
     TTIOErrorInvalidArgument,
     TTIOErrorTypeMismatch,
     TTIOErrorOutOfRange,
+    TTIOErrorUnsupportedLayout,
 };
 
 /**

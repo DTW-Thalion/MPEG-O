@@ -135,8 +135,8 @@ void testFormatReaders(void)
             [mzAdapter readInputs:@[mzmlPath] options:@{} progress:nil error:&err];
         PASS([mzDraft isKindOfClass:[TTIOImportedDataset class]],
              "OT5: MzML adapter returns a TTIOImportedDataset draft");
-        PASS(mzDraft.writeDelegate != nil,
-             "OT5: MzML draft carries a write-through delegate");
+        PASS(mzDraft.writeDelegate != nil || mzDraft.spectralStreams.count == 1,
+             "OT5: MzML draft carries a write-through delegate or a spectral stream");
 
         NSString *mzTio = ofrTmp(@"mzml_out.tio");
         unlink(mzTio.fileSystemRepresentation);

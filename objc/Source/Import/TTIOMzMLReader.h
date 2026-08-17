@@ -13,6 +13,7 @@
 
 @class TTIOSpectralDataset;
 @class TTIOChromatogram;
+@class TTIOSpectralStreamSource;
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -172,6 +173,22 @@ NS_ASSUME_NONNULL_END
 
 @property (readonly, strong) TTIOSpectralDataset                *dataset;
 @property (readonly, copy)   NSArray<TTIOChromatogram *>        *chromatograms;
+
+/** Spectra per streamed batch by default (4096). */
++ (NSUInteger)defaultBatchSpectra;
+
+/**
+ * The file as a TTIOSpectralStreamSource: the parser runs on a
+ * background thread and hands spectra over in batches of
+ * <code>batchSpectra</code> through a bounded queue, so the run is
+ * written with bounded memory; the chromatograms follow once the parse
+ * ends. Python: <code>MzMLReader.stream</code>; Java:
+ * <code>MzMLReader.stream</code>.
+ */
++ (TTIOSpectralStreamSource *)streamFromPath:(NSString *)path
+                                     runName:(NSString *)runName
+                                batchSpectra:(NSUInteger)batchSpectra
+                                    progress:(nullable TTIOProgressBlock)progress;
 
 @end
 

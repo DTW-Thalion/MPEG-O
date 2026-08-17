@@ -13,6 +13,11 @@
  * identical bytes.
  *
  * Usage: TtioWriteGenomicFixture <out-path>
+ *        TtioWriteGenomicFixture <out-path> --blocks <bam> <block-reads>
+ *
+ * The --blocks form streams the BAM through TTIOBamReader and
+ * TTIOGenomicStreamWriter into one blocks_v1 run of <block-reads> reads
+ * per block; the cross-language decode check reads it back.
  *
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
@@ -21,6 +26,9 @@
 
 #import "Dataset/TTIOSpectralDataset.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
+#import "Import/TTIOBamReader.h"
+#import "Import/TTIOGenomicStreamSource.h"
+#import "Import/TTIOImportedDataset.h"
 #import "ValueClasses/TTIOEnums.h"
 
 static TTIOWrittenGenomicRun *MakeRun(void)
@@ -96,14 +104,38 @@ static TTIOWrittenGenomicRun *MakeRun(void)
               signalCompression:TTIOCompressionZlib];
 }
 
+static int WriteBlocks(NSString *path, NSString *bam, NSUInteger blockReads)
+{
+    TTIOBamReader *reader = [[TTIOBamReader alloc] initWithPath:bam];
+    TTIOGenomicStreamSource *src =
+        [[reader streamWithName:@"genomic_0001" region:nil sampleName:nil referenceFasta:nil
+                 embedReference:NO batchReads:TTIOBamReaderDefaultBatchReads progress:nil]
+            sourceWithBlockReads:@(blockReads) blockBytes:@(NSUIntegerMax) legacy:NO];
+    TTIOImportedDataset *d = [[TTIOImportedDataset alloc] init];
+    d.title = @"blocks_v1 objc fixture";
+    d.genomicStreams[@"genomic_0001"] = src;
+    NSError *err = nil;
+    if (![d writeToPath:path error:&err]) {
+        fprintf(stderr, "TtioWriteGenomicFixture --blocks: %s\n",
+                err.localizedDescription.UTF8String ?: "unknown");
+        return 1;
+    }
+    return 0;
+}
+
 int main(int argc, const char *argv[])
 {
     @autoreleasepool {
         if (argc < 2) {
-            fprintf(stderr, "usage: TtioWriteGenomicFixture <out-path>\n");
+            fprintf(stderr, "usage: TtioWriteGenomicFixture <out-path> [--blocks <bam> <block-reads>]\n");
             return 2;
         }
         NSString *path = [NSString stringWithUTF8String:argv[1]];
+        if (argc >= 5 && strcmp(argv[2], "--blocks") == 0) {
+            [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+            return WriteBlocks(path, [NSString stringWithUTF8String:argv[3]],
+                               (NSUInteger)strtoull(argv[4], NULL, 10));
+        }
 
         TTIOWrittenGenomicRun *run = MakeRun();
         NSError *err = nil;

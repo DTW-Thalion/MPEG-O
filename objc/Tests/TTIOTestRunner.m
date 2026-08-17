@@ -120,6 +120,15 @@ extern void testC2HDF5ErrorPaths(void);
 extern void testC3ProvidersErrorPaths(void);
 extern void testC5ProtectionGap(void);
 extern void testC3bProvidersWritePaths(void);
+extern void testProviderExtendable(void);
+extern void testGenomicBlocks(void);
+extern void testGenomicStreamWriter(void);
+extern void testBlocksV1Golden(void);
+extern void testGenomicBlocksReader(void);
+extern void testFloatDeltaZstdBlocks(void);
+extern void testSpectralStreamWriter(void);
+extern void testStreamingImporters(void);
+extern void testStreamingExporters(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
@@ -622,6 +631,42 @@ int main(int argc, const char *argv[])
         START_SET("C3b: providers write-path coverage")
             testC3bProvidersWritePaths();
         END_SET("C3b: providers write-path coverage")
+
+        START_SET("Providers: extendable datasets and UInt64")
+            testProviderExtendable();
+        END_SET("Providers: extendable datasets and UInt64")
+
+        START_SET("Genomics: storage-path writer and blocks")
+            testGenomicBlocks();
+        END_SET("Genomics: storage-path writer and blocks")
+
+        START_SET("Genomics: stream writer, blocks_v1 layout, lazy reference")
+            testGenomicStreamWriter();
+        END_SET("Genomics: stream writer, blocks_v1 layout, lazy reference")
+
+        START_SET("Genomics: blocks_v1 golden fixture")
+            testBlocksV1Golden();
+        END_SET("Genomics: blocks_v1 golden fixture")
+
+        START_SET("Genomics: blocks_v1 reader, signatures, transport")
+            testGenomicBlocksReader();
+        END_SET("Genomics: blocks_v1 reader, signatures, transport")
+
+        START_SET("Spectral: FDZ1 block API")
+            testFloatDeltaZstdBlocks();
+        END_SET("Spectral: FDZ1 block API")
+
+        START_SET("Spectral: stream writer and range reads")
+            testSpectralStreamWriter();
+        END_SET("Spectral: stream writer and range reads")
+
+        START_SET("Importers: streaming BAM, FASTQ, mzML")
+            testStreamingImporters();
+        END_SET("Importers: streaming BAM, FASTQ, mzML")
+
+        START_SET("Exporters: streaming BAM, FASTQ, mzML")
+            testStreamingExporters();
+        END_SET("Exporters: streaming BAM, FASTQ, mzML")
 
         START_SET("C2b: HDF5CompoundType coverage")
             testC2bHDF5CompoundType();

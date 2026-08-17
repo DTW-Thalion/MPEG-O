@@ -22,6 +22,7 @@
 #import "Providers/TTIOStorageProtocols.h"
 #import "Providers/TTIOCompoundField.h"
 #import "Providers/TTIOHDF5Provider.h"
+#import "Dataset/TTIOCompoundIO.h"
 #import <hdf5.h>
 
 @implementation TTIOHDF5Group
@@ -129,6 +130,25 @@
                        compressionLevel:(int)compressionLevel
                                   error:(NSError **)error
 {
+    return [self createDatasetNamed:name precision:precision length:length
+                          chunkSize:chunkSize compression:compression
+                   compressionLevel:compressionLevel extendable:NO error:error];
+}
+
+- (TTIOHDF5Dataset *)createDatasetNamed:(NSString *)name
+                              precision:(TTIOPrecision)precision
+                                 length:(NSUInteger)length
+                              chunkSize:(NSUInteger)chunkSize
+                            compression:(TTIOCompression)compression
+                       compressionLevel:(int)compressionLevel
+                             extendable:(BOOL)extendable
+                                  error:(NSError **)error
+{
+    if (extendable && chunkSize == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable dataset '%@' needs chunkSize > 0", name);
+        return nil;
+    }
     // Single-exit refactor: all early-return paths set (did, errCode, errMsg)
     // and goto cleanup, which releases the write lock and constructs the result.
     hid_t space = -1, plist = -1, htype = -1, did = -1;
@@ -138,7 +158,8 @@
     [_file lockForWriting];
 
     hsize_t dims[1] = { (hsize_t)length };
-    space = H5Screate_simple(1, dims, NULL);
+    hsize_t maxdims[1] = { H5S_UNLIMITED };
+    space = H5Screate_simple(1, dims, extendable ? maxdims : NULL);
     if (space < 0) {
         errMsg = [NSString stringWithFormat:@"H5Screate_simple failed for '%@'", name];
         goto cleanup;
@@ -150,8 +171,8 @@
         goto cleanup;
     }
 
-    if (chunkSize > 0 && length > 0) {
-        hsize_t chunk[1] = { (hsize_t)MIN(chunkSize, length) };
+    if (chunkSize > 0 && (length > 0 || extendable)) {
+        hsize_t chunk[1] = { (hsize_t)(extendable ? chunkSize : MIN(chunkSize, length)) };
         H5Pset_chunk(plist, 1, chunk);
         /* Byte-shuffle ahead of the compressor for multi-byte elements.
            Core HDF5 filter, self-describing, so every reader decodes it
@@ -206,7 +227,8 @@ cleanup:
     return [[TTIOHDF5Dataset alloc] initWithDatasetId:did
                                             precision:precision
                                                length:length
-                                             retainer:self];
+                                             retainer:self
+                                           extendable:extendable];
 }
 
 - (TTIOHDF5Dataset *)openDatasetNamed:(NSString *)name error:(NSError **)error
@@ -222,7 +244,10 @@ cleanup:
 
     hid_t space = H5Dget_space(did);
     hsize_t dims[1] = { 0 };
-    H5Sget_simple_extent_dims(space, dims, NULL);
+    hsize_t maxdims[1] = { 0 };
+    int rank = H5Sget_simple_extent_ndims(space);
+    H5Sget_simple_extent_dims(space, dims, maxdims);
+    BOOL extendable = (rank == 1 && maxdims[0] == H5S_UNLIMITED);
     H5Sclose(space);
 
     hid_t htype = H5Dget_type(did);
@@ -254,7 +279,8 @@ cleanup:
     return [[TTIOHDF5Dataset alloc] initWithDatasetId:did
                                             precision:precision
                                                length:(NSUInteger)dims[0]
-                                             retainer:self];
+                                             retainer:self
+                                           extendable:extendable];
 }
 
 #pragma mark - Attributes
@@ -731,6 +757,31 @@ static BOOL ttioNumberIsFloatingPoint(NSNumber *n)
     NSString *shapeAttr = [NSString stringWithFormat:@"__shape_%@__", name];
     [self setStringAttribute:shapeAttr value:sb error:error];
     return ds;
+}
+
+- (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
+                                                 fields:(NSArray<TTIOCompoundField *> *)fields
+                                                  count:(NSUInteger)count
+                                             extendable:(BOOL)extendable
+                                              chunkRows:(NSUInteger)chunkRows
+                                                  error:(NSError **)error
+{
+    if (!extendable) {
+        return [self createCompoundDatasetNamed:name fields:fields count:count error:error];
+    }
+    if (chunkRows == 0) {
+        if (error) *error = TTIOMakeError(TTIOErrorInvalidArgument,
+            @"extendable compound '%@' needs chunkRows > 0", name);
+        return nil;
+    }
+    if (![TTIOCompoundIO createExtendableCompoundInGroup:self name:name
+                                                   fields:fields chunkRows:chunkRows
+                                                    error:error]) return nil;
+    return [TTIOHDF5Provider adapterForCompoundDatasetWithParent:self
+                                                            name:name
+                                                          fields:fields
+                                                           count:0
+                                                      extendable:YES];
 }
 
 - (id<TTIOStorageDataset>)createCompoundDatasetNamed:(NSString *)name
