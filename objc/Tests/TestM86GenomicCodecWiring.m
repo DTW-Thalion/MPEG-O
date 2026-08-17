@@ -103,7 +103,7 @@ static TTIOWrittenGenomicRun *m86MakeRun(
         [mateChroms addObject:@"chr1"];
         [chroms addObject:@"chr1"];
     }
-    return [[TTIOWrittenGenomicRun alloc]
+    return [([[TTIOWrittenGenomicRun alloc]
         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                    referenceUri:@"GRCh38.p14"
                        platform:@"ILLUMINA"
@@ -122,7 +122,7 @@ static TTIOWrittenGenomicRun *m86MakeRun(
                 templateLengths:m86_dataFromBytes(templateLengths, sizeof(templateLengths))
                     chromosomes:chroms
               signalCompression:baseCompression
-            signalCodecOverrides:codecOverrides];
+            signalCodecOverrides:codecOverrides]) copyWithOptLegacyWholeChannel:YES];
 }
 
 static NSString *m86TmpPath(const char *tag)
@@ -506,7 +506,7 @@ static TTIOWrittenGenomicRun *m86MakeLargeRun(
         [chroms addObject:@"chr1"];
     }
 
-    return [[TTIOWrittenGenomicRun alloc]
+    return [([[TTIOWrittenGenomicRun alloc]
         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                    referenceUri:@"GRCh38.p14"
                        platform:@"ILLUMINA"
@@ -525,7 +525,7 @@ static TTIOWrittenGenomicRun *m86MakeLargeRun(
                 templateLengths:tlens
                     chromosomes:chroms
               signalCompression:baseCompression
-            signalCodecOverrides:codecOverrides];
+            signalCodecOverrides:codecOverrides]) copyWithOptLegacyWholeChannel:YES];
 }
 
 /** Storage size of the sequences dataset, via H5Dget_storage_size. */
@@ -819,7 +819,7 @@ static void testSizeWinQualityBinned(void)
 
     TTIOWrittenGenomicRun * (^buildRun)(NSDictionary *) =
         ^(NSDictionary *overrides) {
-            return [[TTIOWrittenGenomicRun alloc]
+            return [([[TTIOWrittenGenomicRun alloc]
                 initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                            referenceUri:@"GRCh38.p14"
                                platform:@"ILLUMINA"
@@ -838,7 +838,7 @@ static void testSizeWinQualityBinned(void)
                         templateLengths:tlens
                             chromosomes:chroms
                       signalCompression:TTIOCompressionNone
-                    signalCodecOverrides:overrides];
+                    signalCodecOverrides:overrides]) copyWithOptLegacyWholeChannel:YES];
         };
 
     TTIOWrittenGenomicRun *raw = buildRun(@{});
@@ -1122,7 +1122,7 @@ static TTIOWrittenGenomicRun *m86PhEMakeRun(
         [mateChroms addObject:@"chr1"];
         [chroms addObject:@"chr1"];
     }
-    return [[TTIOWrittenGenomicRun alloc]
+    return [([[TTIOWrittenGenomicRun alloc]
         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                    referenceUri:@"GRCh38.p14"
                        platform:@"ILLUMINA"
@@ -1141,7 +1141,7 @@ static TTIOWrittenGenomicRun *m86PhEMakeRun(
                 templateLengths:tlens
                     chromosomes:chroms
               signalCompression:baseCompression
-            signalCodecOverrides:codecOverrides];
+            signalCodecOverrides:codecOverrides]) copyWithOptLegacyWholeChannel:YES];
 }
 
 /** Build a 1000-read run with structured Illumina names for the
@@ -1198,7 +1198,7 @@ static TTIOWrittenGenomicRun *m86PhEMakeLargeRun(
         [chroms addObject:@"chr1"];
     }
 
-    return [[TTIOWrittenGenomicRun alloc]
+    return [([[TTIOWrittenGenomicRun alloc]
         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                    referenceUri:@"GRCh38.p14"
                        platform:@"ILLUMINA"
@@ -1217,7 +1217,7 @@ static TTIOWrittenGenomicRun *m86PhEMakeLargeRun(
                 templateLengths:tlens
                     chromosomes:chroms
               signalCompression:baseCompression
-            signalCodecOverrides:codecOverrides];
+            signalCodecOverrides:codecOverrides]) copyWithOptLegacyWholeChannel:YES];
 }
 
 /** Storage size of any signal_channels child dataset. */
@@ -1299,7 +1299,7 @@ static TTIOWrittenGenomicRun *m86PhCMakeRun(
         }
     }
     (void)flags; (void)tlens;
-    return [[TTIOWrittenGenomicRun alloc]
+    return [([[TTIOWrittenGenomicRun alloc]
         initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                    referenceUri:@"GRCh38.p14"
                        platform:@"ILLUMINA"
@@ -1318,7 +1318,7 @@ static TTIOWrittenGenomicRun *m86PhCMakeRun(
                 templateLengths:tlens
                     chromosomes:chroms
               signalCompression:baseCompression
-            signalCodecOverrides:codecOverrides];
+            signalCodecOverrides:codecOverrides]) copyWithOptLegacyWholeChannel:YES];
 }
 
 /** Build the canonical Phase C 1000-read mixed-CIGAR list — the

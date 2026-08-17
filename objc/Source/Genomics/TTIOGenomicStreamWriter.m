@@ -13,6 +13,8 @@
 #import "Dataset/TTIOProvenanceRecord.h"
 #import "Providers/TTIOCompoundField.h"
 #import "HDF5/TTIOHDF5Errors.h"
+#import "HDF5/TTIOHDF5Group.h"
+#import "Dataset/TTIOCompoundIO.h"
 
 static NSString *const kLayout = @"blocks_v1";
 static const NSUInteger kDefaultBlockReads = 1000000;
@@ -363,6 +365,13 @@ static const NSUInteger kIndexArrayChunk = 65536;
     if (_rg == nil && ![self _ensureLayout:error]) return NO;
     if (![self _writeCloseTables:error]) return NO;
     if (_opt.provenanceRecords.count > 0) {
+        id<TTIOStorageGroup> prov = [_rg createGroupNamed:@"provenance" error:error];
+        if (!prov) return NO;
+        if ([prov respondsToSelector:@selector(unwrap)]) {
+            TTIOHDF5Group *h5 = [(id)prov performSelector:@selector(unwrap)];
+            if (h5 && ![TTIOCompoundIO writeProvenance:_opt.provenanceRecords intoGroup:h5
+                                          datasetNamed:@"steps" error:error]) return NO;
+        }
         NSMutableArray *plists = [NSMutableArray arrayWithCapacity:_opt.provenanceRecords.count];
         for (TTIOProvenanceRecord *r in _opt.provenanceRecords) [plists addObject:[r asPlist]];
         NSError *jErr = nil;

@@ -123,6 +123,8 @@ extern void testC3bProvidersWritePaths(void);
 extern void testProviderExtendable(void);
 extern void testGenomicBlocks(void);
 extern void testGenomicStreamWriter(void);
+extern void testBlocksV1Golden(void);
+extern void testGenomicBlocksReader(void);
 extern void testC2bHDF5CompoundType(void);
 extern void testC3cCanonicalBytes(void);
 extern void testPhase12RunProtocol(void);
@@ -171,14 +173,6 @@ extern void testCoverageGapWatchdog(void);
 int main(int argc, const char *argv[])
 {
     @autoreleasepool {
-        START_SET("Genomics: storage-path writer and blocks")
-            testGenomicBlocks();
-        END_SET("Genomics: storage-path writer and blocks")
-
-        START_SET("Genomics: stream writer, blocks_v1 layout, lazy reference")
-            testGenomicStreamWriter();
-        END_SET("Genomics: stream writer, blocks_v1 layout, lazy reference")
-
         START_SET("TTIOValueRange")
             testValueRange();
         END_SET("TTIOValueRange")
@@ -637,6 +631,22 @@ int main(int argc, const char *argv[])
         START_SET("Providers: extendable datasets and UInt64")
             testProviderExtendable();
         END_SET("Providers: extendable datasets and UInt64")
+
+        START_SET("Genomics: storage-path writer and blocks")
+            testGenomicBlocks();
+        END_SET("Genomics: storage-path writer and blocks")
+
+        START_SET("Genomics: stream writer, blocks_v1 layout, lazy reference")
+            testGenomicStreamWriter();
+        END_SET("Genomics: stream writer, blocks_v1 layout, lazy reference")
+
+        START_SET("Genomics: blocks_v1 golden fixture")
+            testBlocksV1Golden();
+        END_SET("Genomics: blocks_v1 golden fixture")
+
+        START_SET("Genomics: blocks_v1 reader, signatures, transport")
+            testGenomicBlocksReader();
+        END_SET("Genomics: blocks_v1 reader, signatures, transport")
 
         START_SET("C2b: HDF5CompoundType coverage")
             testC2bHDF5CompoundType();

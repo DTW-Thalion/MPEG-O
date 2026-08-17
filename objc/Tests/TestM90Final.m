@@ -112,7 +112,7 @@ static BOOL m90fBuildHeadersFixture(NSString *path, NSError **error)
         [NSMutableData dataWithLength:n * sizeof(int32_t)];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -130,7 +130,7 @@ static BOOL m90fBuildHeadersFixture(NSString *path, NSError **error)
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:chromosomes
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
 
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M90.11 headers fixture"
@@ -679,7 +679,7 @@ static BOOL m90fBuildOverlapFixture(NSString *path, NSError **error)
         @[@"chr1", @"chr1", @"chr1", @"chr1", @"chr1", @"chr1"];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -697,7 +697,7 @@ static BOOL m90fBuildOverlapFixture(NSString *path, NSError **error)
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:chromosomes
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M90.13 overlap fixture"
                                  isaInvestigationId:@"ISA-M90-13"
@@ -833,7 +833,7 @@ static void testM90_13EmptyCigarFallsBackToPosition(void)
     NSData *tlensData = [NSData dataWithBytes:&tl length:sizeof(tl)];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -851,7 +851,7 @@ static void testM90_13EmptyCigarFallsBackToPosition(void)
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:@[@"chr1"]
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
     [TTIOSpectralDataset writeMinimalToPath:path
                                        title:@"x"
                           isaInvestigationId:@"x"
@@ -938,7 +938,7 @@ static BOOL m90fBuildSeededFixture(NSString *path, NSError **error)
         @[@"chr1", @"chr1", @"chr1", @"chr1"];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
             initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                        referenceUri:@"GRCh38.p14"
                            platform:@"ILLUMINA"
@@ -956,7 +956,7 @@ static BOOL m90fBuildSeededFixture(NSString *path, NSError **error)
                       matePositions:matePosData
                     templateLengths:tlensData
                         chromosomes:chromosomes
-                  signalCompression:TTIOCompressionZlib];
+                  signalCompression:TTIOCompressionZlib]) copyWithOptLegacyWholeChannel:YES];
     return [TTIOSpectralDataset writeMinimalToPath:path
                                               title:@"M90.14 seeded fixture"
                                  isaInvestigationId:@"ISA-M90-14"

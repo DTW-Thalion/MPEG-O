@@ -46,6 +46,8 @@ libTTIO_HEADER_FILES = \
 	Genomics/TTIOGenomicWriteContext.h \
 	Genomics/TTIOGenomicBlocks.h \
 	Genomics/TTIOGenomicStreamWriter.h \
+	Genomics/TTIOBlockTable.h \
+	Genomics/TTIOBlockView.h \
 	Genomics/TTIOLazyReference.h \
 	Dataset/TTIOSpectralDataset+GenomicWrite.h \
 	Genomics/TTIOGenomicRun.h \
@@ -192,6 +194,8 @@ libTTIO_OBJC_FILES = \
 	Genomics/TTIOGenomicWriteContext.m \
 	Genomics/TTIOGenomicBlocks.m \
 	Genomics/TTIOGenomicStreamWriter.m \
+	Genomics/TTIOBlockTable.m \
+	Genomics/TTIOBlockView.m \
 	Genomics/TTIOLazyReference.m \
 	Genomics/TTIOGenomicRun.m \
 	Genomics/TTIOPackedReference.m \

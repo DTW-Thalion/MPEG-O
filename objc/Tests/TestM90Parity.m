@@ -71,7 +71,7 @@ static TTIOWrittenGenomicRun *makeM90GenomicRun(NSDictionary<NSString *, NSNumbe
     NSData *tlenData = [NSData dataWithBytes:tl length:sizeof(tl)];
 
     TTIOWrittenGenomicRun *run =
-        [[TTIOWrittenGenomicRun alloc]
+        [([[TTIOWrittenGenomicRun alloc]
          initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
                     referenceUri:@"GRCh38.p14"
                         platform:@"ILLUMINA"
@@ -90,7 +90,7 @@ static TTIOWrittenGenomicRun *makeM90GenomicRun(NSDictionary<NSString *, NSNumbe
                  templateLengths:tlenData
                      chromosomes:chroms
                signalCompression:TTIOCompressionNone
-            signalCodecOverrides:(codecOverrides ?: @{})];
+            signalCodecOverrides:(codecOverrides ?: @{})]) copyWithOptLegacyWholeChannel:YES];
     return run;
 }
 

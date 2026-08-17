@@ -136,6 +136,13 @@
 
 - (NSEnumerator *)keyEnumerator { return [[_names copy] objectEnumerator]; }
 
+- (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state
+                                  objects:(__unsafe_unretained id [])buffer
+                                    count:(NSUInteger)len
+{
+    return [_names countByEnumeratingWithState:state objects:buffer count:len];
+}
+
 - (NSData *)objectForKey:(NSString *)name
 {
     if (![name isKindOfClass:[NSString class]]) return nil;

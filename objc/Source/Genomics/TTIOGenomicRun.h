@@ -60,8 +60,32 @@
 /** Sample identifier. */
 @property (readonly, copy) NSString *sampleName;
 
-/** Per-read index loaded eagerly at open. */
+/** Per-read index. Loaded at open for the whole-channel layout, on
+ *  first access under blocks_v1. */
 @property (readonly, strong) TTIOGenomicIndex *index;
+
+/** <code>blocks_v1</code> or <code>whole</code> (the v1.8 whole-channel
+ *  layout). */
+@property (readonly, copy) NSString *layout;
+
+/** Number of blocks; 1 for a whole-channel run. */
+@property (readonly) NSUInteger blockCount;
+
+/** Run-level chromosome name table (genomic_index/chromosome_names),
+ *  read without loading the per-read arrays. */
+- (NSArray<NSString *> *)chromosomeNames;
+
+/** Reads [start, stop) in order, holding at most one decoded block at a
+ *  time under blocks_v1. The block receives each read and may set
+ *  <code>*stop</code> to end early. Returns NO with <code>error</code>
+ *  when a read fails to decode. */
+- (BOOL)iterReadsFrom:(NSUInteger)start
+                   to:(NSUInteger)stop
+                error:(NSError **)error
+           usingBlock:(void (^)(TTIOAlignedRead *read, NSUInteger index, BOOL *stop))block;
+
+/** Drop the cached block view and its memory store. */
+- (void)close;
 
 /** @return Number of reads in the run. */
 - (NSUInteger)readCount;
@@ -152,6 +176,15 @@
  */
 + (instancetype)openFromGroup:(id<TTIOStorageGroup>)runGroup
                          name:(NSString *)name
+                        error:(NSError **)error;
+
+/** As <code>+openFromGroup:name:error:</code>; <code>resolver</code>,
+ *  when given, is used for REF_DIFF decodes instead of one built from
+ *  the run group's HDF5 file (block views live in a memory provider and
+ *  share their parent's). */
++ (instancetype)openFromGroup:(id<TTIOStorageGroup>)runGroup
+                         name:(NSString *)name
+            referenceResolver:(nullable id)resolver
                         error:(NSError **)error;
 
 /**
