@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -51,11 +52,16 @@ def _sq(bam: Path) -> list[tuple[str, int]]:
 
 def fastq_plain(fq: Path, out: Path) -> Path:
     out.parent.mkdir(parents=True, exist_ok=True)
+    if out.exists():
+        out.unlink()
     if fq.name.endswith(".gz"):
         with gzip.open(fq, "rb") as fi, open(out, "wb") as fo:
             shutil.copyfileobj(fi, fo, 1 << 24)
     else:
-        shutil.copyfile(fq, out)
+        try:
+            os.link(fq, out)
+        except OSError:
+            shutil.copyfile(fq, out)
     return out
 
 
@@ -75,6 +81,8 @@ def reference_for(corpus: common.Corpus) -> Path | None:
 
 def run(corpora: list[common.Corpus]) -> int:
     for c in corpora:
+        if c.tier == "reference":
+            continue
         src = raw_path(c)
         pdir = common.data_dir() / "prepared" / c.id
         pdir.mkdir(parents=True, exist_ok=True)
