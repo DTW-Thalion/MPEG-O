@@ -36,3 +36,17 @@ def test_ttio_fastq_round_trip(tmp_path):
     enc = fmt.encode(p, tmp_path, None)
     dec = fmt.decode(enc, tmp_path, None)
     assert verify.fastq_md5(dec) == verify.fastq_md5(p)
+
+
+@pytest.mark.skipif(shutil.which("samtools") is None, reason="samtools missing")
+def test_ttio_bam_with_reference_round_trip(tmp_path):
+    import h5py
+    ref = REPO / "python/tests/fixtures/genomic/blocks_v1_golden_ref.fa"
+    fmt = formats.REGISTRY["ttio"]
+    enc = fmt.encode(BAM, tmp_path, ref)
+    with h5py.File(enc, "r") as f:
+        run = f["study/genomic_runs"][sorted(f["study/genomic_runs"].keys())[0]]
+        codecs = set(int(x) for x in run["blocks/index"]["sequences_codec"])
+    assert 14 in codecs  # REF_DIFF_V2 on at least one block
+    dec = fmt.decode(enc, tmp_path, ref)
+    assert verify.sam11_md5(dec) == verify.sam11_md5(BAM)

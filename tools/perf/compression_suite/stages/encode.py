@@ -80,15 +80,18 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
                 fmt = reg[key]
                 out_json = RESULTS / c.id / f"{key}.{item['kind']}.json"
                 inp = Path(item["path"]); sha = common.sha256_of(inp); ver = fmt.version()
+                mod_sha = _module_sha(fmt)
                 if out_json.exists():
                     prev = json.loads(out_json.read_text())
-                    if prev.get("input_sha256") == sha and prev.get("tool_version") == ver:
+                    if (prev.get("input_sha256") == sha and prev.get("tool_version") == ver
+                            and prev.get("format_module_sha256") == mod_sha):
                         continue
                 work = Path(tempfile.mkdtemp(prefix=f"{c.id}.{key}.", dir=common.data_dir() / "out"))
                 rec = {"corpus": c.id, "tier": c.tier, "format": key, "input": item["name"],
                        "kind": item["kind"], "input_bytes": inp.stat().st_size, "input_sha256": sha,
                        "tool_version": ver, "lossy": fmt.lossy, "breakdown": {}, "max_rel_error": None,
-                       "verify_note": "", "bases": item.get("bases", 0)}
+                       "verify_note": "", "bases": item.get("bases", 0),
+                       "format_module_sha256": mod_sha}
                 try:
                     holder = {}
                     t_enc = common.run_timed([sys_executable(), "-c", _ENC_SNIPPET,
@@ -114,6 +117,13 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
                 out_json.write_text(json.dumps(rec, indent=1))
                 print(f"encode: {c.id} {item['kind']} {key}: {rec.get('output_bytes')} B {rec['verify']}")
     return 0
+
+
+def _module_sha(fmt) -> str:
+    """sha256 of the format module's source: part of the resume key, so
+    a changed encoder re-runs its rows."""
+    import inspect
+    return common.sha256_of(Path(inspect.getfile(type(fmt))))
 
 
 def sys_executable() -> str:

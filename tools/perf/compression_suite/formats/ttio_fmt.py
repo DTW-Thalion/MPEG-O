@@ -30,20 +30,31 @@ class _Ttio:
         self.key, self.tier, self.in_fmt, self.out_fmt, self.out_ext = key, tier, in_fmt, out_fmt, out_ext
 
     def encode(self, inp: Path, out_dir: Path, ref: Path | None) -> Path:
+        """An aligned run is written against the external reference
+        (REF_DIFF_V2 sequences, reference not embedded), the same footing
+        as CRAM with an external reference."""
         out = out_dir / f"{inp.name}.{self.key}.tio"
         if out.exists():
             out.unlink()
-        subprocess.run([TTIO_CLI, "encode", "--input", str(inp), "--format", self.in_fmt,
-                        "--output", str(out)], check=True)
+        cmd = [TTIO_CLI, "encode", "--input", str(inp), "--format", self.in_fmt,
+               "--output", str(out)]
+        if ref is not None and self.tier == "aligned":
+            cmd += ["--reference", str(ref)]
+        subprocess.run(cmd, check=True)
         return out
 
     def decode(self, enc: Path, out_dir: Path, ref: Path | None) -> Path:
+        """REF_PATH is the reader's external-reference hook
+        (ttio.genomic.reference_resolver.ReferenceResolver)."""
         out = out_dir / f"{enc.name}.decoded{self.out_ext}"
         if out.exists():
             out.unlink()
+        env = dict(os.environ)
+        if ref is not None:
+            env["REF_PATH"] = str(ref)
         subprocess.run([TTIO_CLI, "export", "--input", str(enc), "--layer",
                         layer_name(enc, self.tier), "--format", self.out_fmt,
-                        "--output", str(out)], check=True)
+                        "--output", str(out)], check=True, env=env)
         return out
 
     def version(self) -> str:

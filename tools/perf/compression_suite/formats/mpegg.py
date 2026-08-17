@@ -18,11 +18,20 @@ GENIE_IMAGE = (HERE / "tools" / "genie_image.txt").read_text().strip()
 
 
 def genie(op: str, args: list[str], mounts: list[Path]) -> None:
+    """Run one genie operation. genie exits 0 after printing an
+    [ERROR ...] line (transcode-sam on a contig missing from the
+    reference, for example), so the log is scanned and any such line
+    raises."""
     cmd = ["podman", "run", "--rm"]
     for m in sorted({str(p.resolve()) for p in mounts}):
         cmd += ["-v", f"{m}:{m}:Z"]
     cmd += [GENIE_IMAGE, op, *args]
-    subprocess.run(cmd, check=True)
+    p = subprocess.run(cmd, capture_output=True, text=True, errors="replace")
+    log = (p.stdout or "") + (p.stderr or "")
+    errors = [l for l in log.splitlines() if l.startswith("[ERROR")]
+    if p.returncode != 0 or errors:
+        raise RuntimeError(f"genie {op} failed (rc={p.returncode}): "
+                           + "; ".join(e[:200] for e in errors[:3]))
 
 
 class _Genie:
