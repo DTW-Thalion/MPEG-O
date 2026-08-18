@@ -6,7 +6,7 @@ main entry point.
 from __future__ import annotations
 
 # Keep in sync with [project].version in pyproject.toml.
-__version__ = "1.7.1"
+__version__ = "1.8.0"
 FORMAT_VERSION = "1.0"
 
 from .enums import (
