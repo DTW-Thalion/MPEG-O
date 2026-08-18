@@ -4,6 +4,7 @@ from __future__ import annotations
 import dataclasses
 
 import numpy as np
+import pytest
 
 from _genomic_fixture import make_written_genomic_run
 from ttio import _hdf5_io as io
@@ -151,3 +152,125 @@ def test_placed_unmapped_read_keeps_refdiff_block(tmp_path):
         got = b"".join(r.sequence.encode() for r in g.iter_reads())
         assert got == bytes(seqs)
         assert g[5].cigar == "*" and g[21].cigar == "*"
+
+
+def _big_synthetic_run(n=60_000, seed=7):
+    """A synthetic run over two chromosomes with placed-unmapped reads and
+    cross-chromosome mates, big enough for several 20k-read blocks."""
+    from ttio.written_genomic_run import WrittenGenomicRun
+    rng = np.random.default_rng(seed)
+    L = 100
+    ref = {"chr1": bytes(rng.choice(list(b"ACGT"), 400_000)),
+           "chr2": bytes(rng.choice(list(b"ACGT"), 400_000))}
+    half = n // 2
+    chroms = ["chr1"] * half + ["chr2"] * (n - half)
+    positions = np.concatenate([np.sort(rng.integers(1, 399_000, half)),
+                                np.sort(rng.integers(1, 399_000, n - half))]).astype(np.int64)
+    seqs = bytearray()
+    cigars, mates = [], []
+    flags = np.full(n, 0x3, dtype=np.uint32)
+    mpos = np.full(n, -1, dtype=np.int64)
+    for i in range(n):
+        s_ = bytearray(ref[chroms[i]][positions[i] - 1:positions[i] - 1 + L])
+        for k in rng.integers(0, L, 3):
+            s_[k] = ord("ACGT"[rng.integers(0, 4)])
+        seqs.extend(s_)
+        if i % 97 == 0:
+            cigars.append("*"); flags[i] = 0x5
+        else:
+            cigars.append(f"{L}M")
+        if i % 13 == 0:
+            mates.append("chr2" if chroms[i] == "chr1" else "chr1"); mpos[i] = int(positions[(i * 7) % n])
+        elif i % 3 == 0:
+            mates.append("="); mpos[i] = int(positions[i]) + 200
+        else:
+            mates.append("")
+    return WrittenGenomicRun(
+        acquisition_mode=7, reference_uri="synthetic", platform="ILLUMINA", sample_name="s",
+        positions=positions, mapping_qualities=np.full(n, 60, dtype=np.uint8), flags=flags,
+        sequences=np.frombuffer(bytes(seqs), dtype=np.uint8),
+        qualities=np.frombuffer(bytes(rng.integers(2, 40, n * L, dtype=np.uint8)), dtype=np.uint8),
+        offsets=(np.arange(n) * L).astype(np.uint64), lengths=np.full(n, L, dtype=np.uint32),
+        cigars=cigars, read_names=[f"r{i:06d}" for i in range(n)],
+        mate_chromosomes=mates, mate_positions=mpos,
+        template_lengths=np.zeros(n, dtype=np.int32), chromosomes=chroms,
+        reference_chrom_seqs=ref, embed_reference=True,
+    )
+
+
+def _write_with_threads(tmp_path, run, threads, block_reads=20_000):
+    out = tmp_path / f"t{threads}.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="i", runs={})
+    ds = SpectralDataset.open(out, writable=True)
+    with GenomicStreamWriter(ds.study_group, "g", acquisition_mode=7, reference_uri="synthetic",
+                             platform="ILLUMINA", sample_name="s",
+                             reference_chrom_seqs=run.reference_chrom_seqs, embed_reference=True,
+                             block_reads=block_reads, threads=threads) as w:
+        n = int(len(run.lengths))
+        for a in range(0, n, 7_001):          # blocks are cut inside batches
+            w.append_batch(_blocks.slice_run(run, a, min(n, a + 7_001)))
+        assert w.threads == threads
+    ds.close()
+    return out
+
+
+def _run_bytes(path):
+    """Every genomic dataset's raw bytes and every attribute, in a stable
+    order: the identity contract between the serial and threaded writer."""
+    import h5py
+    out = {}
+    with h5py.File(path, "r") as f:
+        def visit(name, obj):
+            if name.startswith("study/genomic_runs") or name.startswith("study/references"):
+                attrs = {k: (v.tobytes() if hasattr(v, "tobytes") else v) for k, v in obj.attrs.items()}
+                data = None
+                if isinstance(obj, h5py.Dataset) and obj.shape != ():
+                    arr = obj[()]
+                    # a VL string dataset's buffer holds pointers; compare its values
+                    data = repr(arr.tolist()) if h5py.check_vlen_dtype(obj.dtype) or arr.dtype.kind == "O"                         or (arr.dtype.fields and any(h5py.check_vlen_dtype(t[0]) for t in arr.dtype.fields.values()))                         else arr.tobytes()
+                out[name] = (attrs, data)
+        f.visititems(visit)
+    return out
+
+
+def test_threaded_writer_is_byte_identical_to_serial(tmp_path):
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    run = _big_synthetic_run()
+    a = _write_with_threads(tmp_path, run, 1)
+    b = _write_with_threads(tmp_path, run, 6)
+    ba, bb = _run_bytes(a), _run_bytes(b)
+    assert ba.keys() == bb.keys()
+    for k in ba:
+        assert ba[k] == bb[k], f"{k} differs between threads=1 and threads=6"
+    with SpectralDataset.open(b) as ds:
+        g = ds.genomic_runs["g"]
+        assert len(g) == 60_000
+        assert g.layout == "blocks_v1" and g.block_count == 4   # 20k, 10k (chr1 ends), 20k, 10k
+        assert g[97].cigar == "*" and g[0].cigar == "*" and g[98].cigar == "100M"
+        assert g[59_999].sequence == run.sequences.tobytes()[59_999 * 100:].decode()
+
+
+def _mini(chroms, mates):
+    return make_written_genomic_run(len(chroms), 8, chromosomes=chroms, mate_chromosomes=mates)
+
+
+def test_register_block_chromosomes_matches_the_encoder_order():
+    from ttio.genomic.stream_writer import register_block_chromosomes
+    m = {}
+    register_block_chromosomes(_mini(["chr2", "*", "chr2"], ["chr1", "*", "="]), m)
+    assert m == {"chr2": 0, "*": 1, "chr1": 2}
+    register_block_chromosomes(_mini(["chr3"], ["chr2"]), m)
+    assert m == {"chr2": 0, "*": 1, "chr1": 2, "chr3": 3}
+
+
+def test_threads_default_and_window(monkeypatch, tmp_path):
+    monkeypatch.setenv("TTIO_THREADS", "4")
+    out = tmp_path / "w.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="i", runs={})
+    ds = SpectralDataset.open(out, writable=True)
+    w = GenomicStreamWriter(ds.study_group, "g", acquisition_mode=7,
+                            reference_uri="", platform="", sample_name="")
+    assert w.threads == 4 and w._window == 5
+    w.close(); ds.close()

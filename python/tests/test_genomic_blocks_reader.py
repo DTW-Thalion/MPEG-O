@@ -73,8 +73,8 @@ def test_partial_file_reads_up_to_last_flushed_block(tmp_path):
                             reference_uri=run.reference_uri, platform=run.platform,
                             sample_name=run.sample_name,
                             reference_chrom_seqs=run.reference_chrom_seqs,
-                            embed_reference=True, block_reads=20)
-    w.append_batch(run)          # 2 full blocks flushed, 10 reads pending
+                            embed_reference=True, block_reads=20, threads=1)
+    w.append_batch(run)          # 2 full blocks written (serial writer), 10 reads pending
     w._write_close_tables()      # tables present, the pending reads are lost
     ds.close()
     with SpectralDataset.open(p) as ds2:

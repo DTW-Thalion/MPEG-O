@@ -8,6 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import subprocess
+import threading
 from collections import OrderedDict
 from collections.abc import Mapping
 from pathlib import Path
@@ -38,6 +39,7 @@ class LazyReference(Mapping):
         self._cache: OrderedDict[str, bytes] = OrderedDict()
         self._cache_n = max(1, int(cache_chroms))
         self._set_md5: bytes | None = None
+        self._lock = threading.Lock()   # blocks on the same chromosome may read concurrently
 
     @property
     def path(self) -> Path:
@@ -56,12 +58,16 @@ class LazyReference(Mapping):
         return self._entries[name][0]
 
     def __getitem__(self, name: str) -> bytes:
+        if name not in self._entries:
+            raise KeyError(name)
+        with self._lock:
+            return self._read_locked(name)
+
+    def _read_locked(self, name: str) -> bytes:
         seq = self._cache.get(name)
         if seq is not None:
             self._cache.move_to_end(name)
             return seq
-        if name not in self._entries:
-            raise KeyError(name)
         length, offset, line_bases, line_width = self._entries[name]
         if length == 0:
             return b""
@@ -91,6 +97,12 @@ class LazyReference(Mapping):
         the process."""
         if self._set_md5 is not None:
             return self._set_md5
+        with self._lock:
+            return self._set_md5_locked()
+
+    def _set_md5_locked(self) -> bytes:
+        if self._set_md5 is not None:
+            return self._set_md5
         st = self._path.stat()
         stamp = f"{st.st_size} {int(st.st_mtime)}"
         sidecar = Path(str(self._path) + ".ttio-md5")
@@ -104,7 +116,7 @@ class LazyReference(Mapping):
         import hashlib
         h = hashlib.md5()
         for name in sorted(self._entries):
-            h.update(self[name])
+            h.update(self._read_locked(name))
         self._set_md5 = h.digest()
         try:
             sidecar.write_text(f"{self._set_md5.hex()} {stamp}\n")

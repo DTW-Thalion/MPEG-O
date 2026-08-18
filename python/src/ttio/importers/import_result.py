@@ -273,6 +273,7 @@ class GenomicStreamSource:
     block_reads: int | None = None           # None -> writer defaults
     block_bytes: int | None = None
     opt_legacy_whole_channel: bool = False
+    threads: int | None = None                # None -> TTIO_THREADS
 
     def write_into(self, study_group, *, progress=None) -> int:
         from ..genomic.stream_writer import GenomicStreamWriter
@@ -298,7 +299,8 @@ class GenomicStreamSource:
                     signal_codec_overrides=batch.signal_codec_overrides,
                     signal_compression=batch.signal_compression,
                     opt_legacy_whole_channel=self.opt_legacy_whole_channel,
-                    provenance_records=batch.provenance_records, **kw)
+                    provenance_records=batch.provenance_records,
+                    threads=self.threads, **kw)
             writer.append_batch(batch)
             n += int(len(batch.lengths))
         if writer is not None:
