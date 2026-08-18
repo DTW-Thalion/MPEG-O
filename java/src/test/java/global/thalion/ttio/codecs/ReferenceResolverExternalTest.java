@@ -34,6 +34,14 @@ class ReferenceResolverExternalTest {
         byte[] set = md5(chr1, "GGGGCCCC".getBytes(StandardCharsets.US_ASCII),
                          "TTTT".getBytes(StandardCharsets.US_ASCII));
         assertArrayEquals(set, new LazyReference(fa).setMd5());
+        // the digest is cached beside the FASTA and reused while size and mtime match
+        Path side = tmp.resolve("multi.fa.ttio-md5");
+        String[] parts = Files.readString(side).trim().split("\\s+");
+        assertArrayEquals(set, java.util.HexFormat.of().parseHex(parts[0]));
+        Files.writeString(side, "00000000000000000000000000000000 " + parts[1] + " " + parts[2] + "\n");
+        assertArrayEquals(new byte[16], new LazyReference(fa).setMd5());
+        Files.writeString(side, "00000000000000000000000000000000 1 1\n");
+        assertArrayEquals(set, new LazyReference(fa).setMd5());
 
         ReferenceResolver r = new ReferenceResolver(null, fa);
         assertArrayEquals(chr1Upper, r.resolve("x", set, "chr1"));

@@ -68,6 +68,9 @@ def _reference_md5_for_run(run: WrittenGenomicRun) -> bytes:
         return run.reference_md5
     if run.reference_chrom_seqs is None:
         return b""
+    set_md5 = getattr(run.reference_chrom_seqs, "set_md5", None)
+    if callable(set_md5):  # LazyReference: cached whole-FASTA digest
+        return set_md5()
     md5 = hashlib.md5()
     for chrom_name in sorted(run.reference_chrom_seqs):
         md5.update(run.reference_chrom_seqs[chrom_name])

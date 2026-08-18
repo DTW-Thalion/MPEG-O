@@ -35,6 +35,7 @@ public final class LazyReference extends AbstractMap<String, byte[]> {
     private final LinkedHashMap<String, Long> lengths = new LinkedHashMap<>();
     private final int cacheChroms;
     private final LinkedHashMap<String, byte[]> cache;
+    private byte[] setMd5;
 
     /** Two chromosomes cached. */
     public LazyReference(Path fasta) { this(fasta, 2); }
@@ -74,6 +75,26 @@ public final class LazyReference extends AbstractMap<String, byte[]> {
      *  every writer records (format spec section 10.10). Streams one
      *  chromosome at a time. */
     public byte[] setMd5() {
+        if (setMd5 != null) return setMd5.clone();
+        Path sidecar = fasta.resolveSibling(fasta.getFileName() + ".ttio-md5");
+        String stamp;
+        try {
+            stamp = Files.size(fasta) + " " + (Files.getLastModifiedTime(fasta).toMillis() / 1000L);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        // Cached in <fasta>.ttio-md5 as "<hex> <size> <mtime_s>", the same
+        // sidecar the Python and ObjC readers use; trusted while size and
+        // mtime match, rewritten otherwise, skipped when not writable.
+        try {
+            String[] parts = Files.readString(sidecar).trim().split("\\s+");
+            if (parts.length == 3 && parts[0].length() == 32 && (parts[1] + " " + parts[2]).equals(stamp)) {
+                setMd5 = java.util.HexFormat.of().parseHex(parts[0]);
+                return setMd5.clone();
+            }
+        } catch (IOException | IllegalArgumentException ignored) {
+            // no usable sidecar
+        }
         try {
             java.security.MessageDigest md = java.security.MessageDigest.getInstance("MD5");
             java.util.List<String> names = new java.util.ArrayList<>(lengths.keySet());
@@ -81,10 +102,16 @@ public final class LazyReference extends AbstractMap<String, byte[]> {
             for (String n : names) {
                 md.update(file.getSequence(n).getBases());
             }
-            return md.digest();
+            setMd5 = md.digest();
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
+        try {
+            Files.writeString(sidecar, java.util.HexFormat.of().formatHex(setMd5) + " " + stamp + "\n");
+        } catch (IOException ignored) {
+            // read-only location: the in-process cache still applies
+        }
+        return setMd5.clone();
     }
 
     /** Length of {@code name} from the index, without loading it. */

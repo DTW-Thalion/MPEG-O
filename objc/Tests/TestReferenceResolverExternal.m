@@ -40,6 +40,19 @@ void testReferenceResolverExternal(void)
     TTIOLazyReference *lazy = [[TTIOLazyReference alloc] initWithFastaPath:fa error:&e];
     PASS(lazy != nil, "rre: LazyReference opens the FASTA");
     PASS([[lazy setMD5] isEqualToData:setMD5], "rre: setMD5 is the sorted-concatenation digest");
+    NSString *side = [fa stringByAppendingString:@".ttio-md5"];
+    NSString *sideText = [NSString stringWithContentsOfFile:side encoding:NSASCIIStringEncoding error:NULL];
+    NSArray *parts = [[sideText stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]
+                      componentsSeparatedByString:@" "];
+    PASS(parts.count == 3 && [(NSString *)parts[0] length] == 32, "rre: sidecar written as <hex> <size> <mtime>");
+    [[NSString stringWithFormat:@"00000000000000000000000000000000 %@ %@\n", parts[1], parts[2]]
+        writeToFile:side atomically:YES encoding:NSASCIIStringEncoding error:NULL];
+    uint8_t z[16] = {0};
+    TTIOLazyReference *lazy2 = [[TTIOLazyReference alloc] initWithFastaPath:fa error:&e];
+    PASS([[lazy2 setMD5] isEqualToData:[NSData dataWithBytes:z length:16]], "rre: sidecar trusted while size and mtime match");
+    [@"00000000000000000000000000000000 1 1\n" writeToFile:side atomically:YES encoding:NSASCIIStringEncoding error:NULL];
+    TTIOLazyReference *lazy3 = [[TTIOLazyReference alloc] initWithFastaPath:fa error:&e];
+    PASS([[lazy3 setMD5] isEqualToData:setMD5], "rre: stale sidecar recomputed");
 
     TTIOReferenceResolver *r = [[TTIOReferenceResolver alloc] initWithRootGroup:nil
                                                             externalReferencePath:fa];
@@ -63,4 +76,5 @@ void testReferenceResolverExternal(void)
 
     unlink([fa fileSystemRepresentation]);
     unlink([fai fileSystemRepresentation]);
+    unlink([[fa stringByAppendingString:@".ttio-md5"] fileSystemRepresentation]);
 }

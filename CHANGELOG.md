@@ -11,6 +11,22 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Changed
+- **FQZCOMP auto-tune runs its three candidate encodes concurrently.** The V5
+  auto-tune encodes every block three times (V4, then the S5 and S6
+  sequence-context models) and keeps the smallest; a profile of the NA12878 chr22
+  encode put 58 percent of the wall time there. The three encodes now run on
+  three threads with the sequential tie order kept, so the stream is byte for
+  byte the one the sequential loop chose. WES chr22 11-column encode 35.5 s to
+  25.1 s, peak RSS +430 MB. `TTIO_M94Z_SEQUENTIAL=1` restores the one-thread loop.
+- **The reference-set md5 of an external FASTA is cached beside it.** Writing or
+  reading a run against an external reference computed the digest of the whole
+  FASTA on every run (hs37d5: about 7 s, 15 percent of the chr22 encode and of
+  the decode). `LazyReference` in Python, Java and ObjC keeps it in
+  `<fasta>.ttio-md5` as `<hex> <size> <mtime_s>`, reuses it while size and mtime
+  match, and skips the write when the location is read-only (the digest is still
+  cached in the process); the writers take it from the LazyReference.
+
 ### Fixed
 - **REF_DIFF_V2 carries unmapped reads.** A read whose CIGAR is `*` (an unmapped
   read placed on its mate's contig, FLAG 0x4) used to switch the whole channel,
