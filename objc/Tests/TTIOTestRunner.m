@@ -123,6 +123,9 @@ extern void testC3bProvidersWritePaths(void);
 extern void testProviderExtendable(void);
 extern void testGenomicBlocks(void);
 extern void testGenomicStreamWriter(void);
+extern void testGenomicStreamWriterThreads(void);
+extern void testSpectralStreamWriterThreads(void);
+extern void testThreads(void);
 extern void testBlocksV1Golden(void);
 extern void testGenomicBlocksReader(void);
 extern void testReferenceResolverExternal(void);
@@ -652,6 +655,12 @@ int main(int argc, const char *argv[])
         START_SET("Genomics: blocks_v1 reader, signatures, transport")
             testGenomicBlocksReader();
         END_SET("Genomics: blocks_v1 reader, signatures, transport")
+
+        START_SET("Threads: knob, pool, block-parallel writer")
+            testThreads();
+            testGenomicStreamWriterThreads();
+            testSpectralStreamWriterThreads();
+        END_SET("Threads: knob, pool, block-parallel writer")
 
         START_SET("Codecs: reference resolver, external FASTA")
             testReferenceResolverExternal();

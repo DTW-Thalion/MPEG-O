@@ -14,6 +14,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOBamWriter.h"
+#import "Core/TTIOThreads.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOAlignedRead.h"
@@ -512,7 +513,7 @@ static BOOL bamWriterSamtoolsAvailable(NSString **outBinary, NSError **error)
         [stdinHandle writeData:[header dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data]];
         NSMutableData *chunk = [NSMutableData dataWithCapacity:1 << 20];
         __block NSUInteger done = 0;
-        BOOL ok = [run iterReadsFrom:0 to:total error:e
+        BOOL ok = [run iterReadsFrom:0 to:total threads:[TTIOThreads resolve:nil] error:e
                           usingBlock:^(TTIOAlignedRead *r, NSUInteger index, BOOL *stop) {
             (void)index; (void)stop;
             NSString *line = [self alignmentLineForRead:r];

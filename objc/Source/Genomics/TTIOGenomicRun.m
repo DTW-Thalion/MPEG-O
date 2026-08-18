@@ -16,6 +16,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOGenomicRun.h"
+#import "Core/TTIOThreads.h"
 #import "TTIOAlignedRead.h"
 #import "TTIOGenomicIndex.h"
 #import "TTIOBlockTable.h"
@@ -47,6 +48,17 @@
 #import "Codecs/Registry/TTIODecodedChannel.h"
 #import "Codecs/Registry/TTIOCodecContext.h"
 #import <hdf5.h>
+
+/** One prefetched block view in flight. */
+@interface TTIOInFlightView : NSObject
+@property (nonatomic, strong, nullable) TTIOGenomicRun *view;
+@property (nonatomic, strong, nullable) TTIOBlockView *handle;
+@property (nonatomic, strong, nullable) NSError *error;
+@property (nonatomic) BOOL done;
+@end
+
+@implementation TTIOInFlightView
+@end
 
 @implementation TTIOGenomicRun {
     TTIOGenomicIndex *_index;
@@ -181,19 +193,26 @@
 
 /* The TTIOGenomicRun over block b, materialised on demand; the last
  * one is cached. */
-- (TTIOGenomicRun *)_blockView:(NSUInteger)b error:(NSError **)error
+/* The view handle for block b, materialised on the caller's thread
+ * (storage reads). */
+- (TTIOBlockView *)_materialiseHandle:(NSUInteger)b error:(NSError **)error
 {
-    if (_cachedView != nil && _cachedBlock == b) return _cachedView;
     if (_mateChromNamesTable == nil) {
         id<TTIOStorageGroup> sc = [self signalChannelsGroupWithError:NULL];
         id<TTIOStorageGroup> mate = (sc && [sc hasChildNamed:@"mate_info"])
             ? [sc openGroupNamed:@"mate_info" error:NULL] : nil;
         _mateChromNamesTable = mate ? [TTIOBlockView readNamesIn:mate named:@"chrom_names"] : @[];
     }
-    TTIOBlockView *h = [TTIOBlockView materialiseBlock:b ofRun:_group table:_blockTable
-                                            chromNames:[self chromosomeNames]
-                                        mateChromNames:_mateChromNamesTable
-                                                 error:error];
+    return [TTIOBlockView materialiseBlock:b ofRun:_group table:_blockTable
+                                chromNames:[self chromosomeNames]
+                            mateChromNames:_mateChromNamesTable
+                                     error:error];
+}
+
+- (TTIOGenomicRun *)_blockView:(NSUInteger)b error:(NSError **)error
+{
+    if (_cachedView != nil && _cachedBlock == b) return _cachedView;
+    TTIOBlockView *h = [self _materialiseHandle:b error:error];
     if (!h) return nil;
     TTIOGenomicRun *sub = [TTIOGenomicRun openFromGroup:h.group name:_name
                                       referenceResolver:[self _resolverForViews] error:error];
@@ -264,6 +283,98 @@
         i = segEnd;
     }
     return YES;
+}
+
+- (BOOL)iterReadsFrom:(NSUInteger)start
+                   to:(NSUInteger)stop
+              threads:(NSUInteger)threads
+                error:(NSError **)error
+           usingBlock:(void (^)(TTIOAlignedRead *read, NSUInteger index, BOOL *stop))block
+{
+    NSUInteger n = [self readCount];
+    NSUInteger hi = MIN(stop, n);
+    NSUInteger nthreads = threads ? threads : [TTIOThreads resolve:nil];
+    if (!_blockTable || nthreads <= 1 || start >= hi) {
+        return [self iterReadsFrom:start to:hi error:error usingBlock:block];
+    }
+    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:nthreads];
+    NSUInteger bFirst = [_blockTable blockForRead:start];
+    NSUInteger bLast = [_blockTable blockForRead:hi - 1];
+    if (bFirst == NSNotFound || bLast == NSNotFound) {
+        [pool close];
+        return [self iterReadsFrom:start to:hi error:error usingBlock:block];
+    }
+    NSMutableDictionary<NSNumber *, TTIOInFlightView *> *pending = [NSMutableDictionary dictionary];
+    NSCondition *cond = [NSCondition new];
+    __weak typeof(self) weakSelf = self;
+    void (^submit)(NSUInteger) = ^(NSUInteger b) {
+        typeof(self) sself = weakSelf;
+        if (!sself || b > bLast || pending[@(b)]) return;
+        NSError *me = nil;
+        TTIOBlockView *h = [sself _materialiseHandle:b error:&me];   /* storage reads, this thread */
+        TTIOInFlightView *f = [TTIOInFlightView new];
+        pending[@(b)] = f;
+        if (!h) { f.error = me; f.done = YES; return; }
+        [pool.queue addOperationWithBlock:^{
+            NSError *ie = nil;
+            TTIOGenomicRun *v = nil;
+            @try {
+                v = [TTIOGenomicRun openFromGroup:h.group name:sself->_name
+                                referenceResolver:[sself _resolverForViews] error:&ie];
+                if (v && [v readCount] > 0) [v readAtIndex:0 error:&ie];  /* warm every channel cache */
+            } @catch (NSException *ex) {
+                v = nil;
+                ie = TTIOMakeError(TTIOErrorDatasetRead, @"%@: %@", ex.name, ex.reason);
+            }
+            [cond lock];
+            f.view = v;
+            f.handle = h;
+            f.error = ie;
+            f.done = YES;
+            [cond broadcast];
+            [cond unlock];
+        }];
+    };
+    for (NSUInteger b = bFirst; b <= MIN(bLast, bFirst + nthreads - 1); b++) submit(b);
+    BOOL halted = NO, ok = YES;
+    NSUInteger i = start;
+    for (NSUInteger b = bFirst; b <= bLast && i < hi && !halted; b++) {
+        TTIOInFlightView *f = pending[@(b)];
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+        [pending removeObjectForKey:@(b)];
+        if (!f.view) {
+            if (error) *error = f.error;
+            ok = NO;
+            [f.handle discard];
+            break;
+        }
+        submit(b + nthreads);
+        NSUInteger r0 = (NSUInteger)[_blockTable readStartAt:b];
+        NSUInteger bEnd = MIN(r0 + [_blockTable nReadsAt:b], hi);
+        for (NSUInteger j = i; j < bEnd && !halted; j++) {
+            NSError *re = nil;
+            TTIOAlignedRead *r = [f.view readAtIndex:j - r0 error:&re];
+            if (!r) {
+                if (error) *error = re;
+                ok = NO;
+                halted = YES;
+                break;
+            }
+            block(r, j, &halted);
+        }
+        [f.handle discard];
+        i = bEnd;
+    }
+    for (TTIOInFlightView *f in pending.allValues) {
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+        [f.handle discard];
+    }
+    [pool close];
+    return ok;
 }
 
 - (BOOL)iterReadsFrom:(NSUInteger)start

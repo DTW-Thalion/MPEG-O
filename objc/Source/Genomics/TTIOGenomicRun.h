@@ -79,6 +79,14 @@
  *  time under blocks_v1. The block receives each read and may set
  *  <code>*stop</code> to end early. Returns NO with <code>error</code>
  *  when a read fails to decode. */
+/** As -iterReadsFrom:to:error:usingBlock: with the next `threads` blocks
+ *  decoding ahead on a pool (0 = TTIO_THREADS; <= 1 is the serial walk). */
+- (BOOL)iterReadsFrom:(NSUInteger)start
+                   to:(NSUInteger)stop
+              threads:(NSUInteger)threads
+                error:(NSError **)error
+           usingBlock:(void (^)(TTIOAlignedRead *read, NSUInteger index, BOOL *stop))block;
+
 - (BOOL)iterReadsFrom:(NSUInteger)start
                    to:(NSUInteger)stop
                 error:(NSError **)error

@@ -57,6 +57,8 @@ int main(int argc, const char *argv[])
                 [inputs addObject:@(argv[++i])];
             } else if (strcmp(a, "--output") == 0 && i + 1 < argc) {
                 output = @(argv[++i]);
+            } else if (strcmp(a, "--threads") == 0 && i + 1 < argc) {
+                setenv("TTIO_THREADS", argv[++i], 1);
             } else if (strcmp(a, "--extra") == 0 && i + 1 < argc) {
                 NSString *kv = @(argv[++i]);
                 NSRange eq = [kv rangeOfString:@"="];

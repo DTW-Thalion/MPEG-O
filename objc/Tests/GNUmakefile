@@ -115,6 +115,7 @@ TTIOTests_OBJC_FILES = \
 	TestProviderExtendable.m \
 	TestGenomicBlocks.m \
 	TestGenomicStreamWriter.m \
+	TestThreads.m \
 	TestBlocksV1Golden.m \
 	TestGenomicBlocksReader.m \
 	TestReferenceResolverExternal.m \

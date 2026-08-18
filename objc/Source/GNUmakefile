@@ -26,6 +26,7 @@ libTTIO_HEADER_FILES = \
 	Core/TTIOSignalArray.h \
 	Core/TTIONumpress.h \
 	Core/TTIOProgressSink.h \
+	Core/TTIOThreads.h \
 	Spectra/TTIOSpectrum.h \
 	Spectra/TTIOMassSpectrum.h \
 	Spectra/TTIONMRSpectrum.h \
@@ -176,6 +177,7 @@ libTTIO_OBJC_FILES = \
 	HDF5/TTIOHDF5CompoundType.m \
 	HDF5/TTIOFeatureFlags.m \
 	Core/TTIOSignalArray.m \
+	Core/TTIOThreads.m \
 	Core/TTIONumpress.m \
 	Core/TTIOProgressSink.m \
 	Spectra/TTIOSpectrum.m \
