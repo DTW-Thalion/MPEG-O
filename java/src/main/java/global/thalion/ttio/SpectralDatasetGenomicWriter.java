@@ -543,7 +543,7 @@ public final class SpectralDatasetGenomicWriter {
         }
         // Extend with mate-only chroms (non-'*', non-'', non-'=').
         for (String mc : run.mateChromosomes()) {
-            if (mc == null || mc.isEmpty() || "*".equals(mc)) continue;
+            if (mc == null || mc.isEmpty() || "*".equals(mc) || "=".equals(mc)) continue;
             if (!chromToId.containsKey(mc)) {
                 chromToId.put(mc, chromToId.size());
             }
