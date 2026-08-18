@@ -11,6 +11,16 @@ def test_version_string() -> None:
         f"version {ttio.__version__!r} doesn't look like SemVer"
 
 
+def test_version_matches_pyproject() -> None:
+    """ttio.__version__ is the version pyproject.toml declares (the 1.8.0
+    release left __init__ at 1.7.1, and `ttio --version` reported it)."""
+    import tomllib
+    from pathlib import Path
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    declared = tomllib.loads(pyproject.read_text())["project"]["version"]
+    assert ttio.__version__ == declared
+
+
 def test_format_version() -> None:
     # FORMAT_VERSION is the on-disk .tio container version; it bumps
     # on backward-incompatible HDF5 layout changes (currently "1.3"
