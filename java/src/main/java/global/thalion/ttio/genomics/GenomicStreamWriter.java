@@ -239,8 +239,12 @@ public final class GenomicStreamWriter implements AutoCloseable {
             return;
         }
         drain(threads);   // window: threads in the pool plus this one
+        // The worker reads the map while later flushes mutate it: give each
+        // block a snapshot (registration above fixed every id it needs).
+        GenomicWriteContext bctx =
+            new GenomicWriteContext(new java.util.LinkedHashMap<>(chromMap), referenceMd5);
         WrittenGenomicRun fb = block;
-        inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, ctx))));
+        inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, bctx))));
     }
 
     /** Write completed blocks in sequence order; wait on the oldest until

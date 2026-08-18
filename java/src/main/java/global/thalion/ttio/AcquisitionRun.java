@@ -122,14 +122,21 @@ public class AcquisitionRun implements
                 }
                 Map<Integer, double[]> blocks = new LinkedHashMap<>();
                 if (threads > 1) {
-                    // storage reads on this thread, decodes on the pool
+                    // storage reads on this thread, decodes on the pool; the
+                    // one-block cache still serves a block the previous
+                    // range call already decoded.
+                    if (cachedBlock >= k0 && cachedBlock <= k1) {
+                        blocks.put(cachedBlock, cachedValues);
+                    }
                     Map<Integer, byte[]> raw = new LinkedHashMap<>();
                     for (int k = k0; k <= k1; k++) {
+                        if (blocks.containsKey(k)) continue;
                         raw.put(k, (byte[]) ds.readSlice(t.offsets()[k], t.lengths()[k]));
                     }
                     try (global.thalion.ttio.Threads.PoolScope scope = global.thalion.ttio.Threads.pool(threads)) {
                         Map<Integer, java.util.concurrent.Future<double[]>> futs = new LinkedHashMap<>();
                         for (int k = k0; k <= k1; k++) {
+                            if (blocks.containsKey(k)) continue;
                             final int kk = k;
                             final byte[] body = raw.get(k);
                             final long base = t.offsets()[k];
@@ -139,6 +146,7 @@ public class AcquisitionRun implements
                                     t, kk)));
                         }
                         for (int k = k0; k <= k1; k++) {
+                            if (!futs.containsKey(k)) continue;
                             try {
                                 blocks.put(k, futs.get(k).get());
                             } catch (InterruptedException e) {
