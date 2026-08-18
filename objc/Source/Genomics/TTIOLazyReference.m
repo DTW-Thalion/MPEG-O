@@ -5,6 +5,7 @@
  */
 #import "Genomics/TTIOLazyReference.h"
 #include <openssl/md5.h>
+#include <math.h>
 #import "HDF5/TTIOHDF5Errors.h"
 
 @interface TTIOFaiEntry : NSObject
@@ -23,6 +24,7 @@
     NSMutableArray<NSString *> *_lru;
     NSMutableDictionary<NSString *, NSData *> *_cache;
     NSUInteger _cacheN;
+    NSData *_setMD5;
 }
 
 /* NSDictionary's -init routes here; the storage is ours. */
@@ -128,8 +130,38 @@
 - (NSString *)fastaPath { return _path; }
 - (NSArray<NSString *> *)chromosomeNames { return [_names copy]; }
 
+static NSData *lr_hexToData(NSString *hex)
+{
+    if (hex.length != 32) return nil;
+    uint8_t b[16];
+    for (NSUInteger i = 0; i < 16; i++) {
+        unsigned v = 0;
+        if (sscanf([[hex substringWithRange:NSMakeRange(i * 2, 2)] UTF8String], "%2x", &v) != 1) return nil;
+        b[i] = (uint8_t)v;
+    }
+    return [NSData dataWithBytes:b length:16];
+}
+
+/* Cached in <fasta>.ttio-md5 as "<hex> <size> <mtime_s>", the same sidecar
+ * the Python and Java readers use; trusted while size and mtime match,
+ * rewritten otherwise, skipped when the location is not writable. */
 - (NSData *)setMD5
 {
+    if (_setMD5) return _setMD5;
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:_path error:NULL];
+    unsigned long long size = [attrs fileSize];
+    long long mtime = (long long)floor([[attrs fileModificationDate] timeIntervalSince1970]);
+    NSString *stamp = [NSString stringWithFormat:@"%llu %lld", size, mtime];
+    NSString *sidecar = [_path stringByAppendingString:@".ttio-md5"];
+    NSString *text = [NSString stringWithContentsOfFile:sidecar encoding:NSASCIIStringEncoding error:NULL];
+    if (text) {
+        NSArray<NSString *> *parts = [[text stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]] componentsSeparatedByString:@" "];
+        if (parts.count == 3 && [[NSString stringWithFormat:@"%@ %@", parts[1], parts[2]] isEqualToString:stamp]) {
+            NSData *cached = lr_hexToData(parts[0]);
+            if (cached) { _setMD5 = cached; return _setMD5; }
+        }
+    }
     NSArray<NSString *> *sorted = [_names sortedArrayUsingSelector:@selector(compare:)];
     MD5_CTX c;
     MD5_Init(&c);
@@ -139,7 +171,12 @@
     }
     uint8_t digest[16];
     MD5_Final(digest, &c);
-    return [NSData dataWithBytes:digest length:16];
+    _setMD5 = [NSData dataWithBytes:digest length:16];
+    NSMutableString *hex = [NSMutableString stringWithCapacity:32];
+    for (int i = 0; i < 16; i++) [hex appendFormat:@"%02x", digest[i]];
+    [[NSString stringWithFormat:@"%@ %@\n", hex, stamp] writeToFile:sidecar atomically:YES
+                                                            encoding:NSASCIIStringEncoding error:NULL];
+    return _setMD5;
 }
 
 - (NSUInteger)lengthOf:(NSString *)name

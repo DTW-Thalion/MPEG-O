@@ -13,3 +13,23 @@ def test_build_fai_text_matches_samtools(tmp_path):
     assert ref["chrA"] == b"ACGTACGTAC" and ref["chrB"] == b"" and ref["chrC"] == b"GG"
     import hashlib
     assert ref.set_md5() == hashlib.md5(b"ACGTACGTAC" + b"" + b"GG").digest()
+
+
+def test_set_md5_sidecar_cache(tmp_path):
+    import hashlib, os, time
+    from ttio.genomic.lazy_reference import LazyReference
+    fa = tmp_path / "r.fa"
+    fa.write_bytes(b">b\nGGGG\n>a\nacgt\n")
+    want = hashlib.md5(b"acgt" + b"GGGG").digest()
+    ref = LazyReference(fa)
+    assert ref.set_md5() == want
+    side = tmp_path / "r.fa.ttio-md5"
+    st = fa.stat()
+    assert side.read_text().split() == [want.hex(), str(st.st_size), str(int(st.st_mtime))]
+    # a fresh instance takes the sidecar; a wrong sidecar is recomputed
+    assert LazyReference(fa).set_md5() == want
+    side.write_text("00" * 16 + f" {st.st_size} {int(st.st_mtime)}\n")
+    assert LazyReference(fa).set_md5() == bytes(16)   # trusted while size and mtime match
+    side.write_text("00" * 16 + " 1 1\n")
+    assert LazyReference(fa).set_md5() == want         # stale stamp: recomputed and rewritten
+    assert side.read_text().split()[0] == want.hex()

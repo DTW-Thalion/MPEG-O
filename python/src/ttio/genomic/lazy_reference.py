@@ -37,6 +37,7 @@ class LazyReference(Mapping):
             self._entries[f[0]] = (int(f[1]), int(f[2]), int(f[3]), int(f[4]))
         self._cache: OrderedDict[str, bytes] = OrderedDict()
         self._cache_n = max(1, int(cache_chroms))
+        self._set_md5: bytes | None = None
 
     @property
     def path(self) -> Path:
@@ -82,12 +83,34 @@ class LazyReference(Mapping):
         """MD5 of the concatenated case-preserved sequences of every
         chromosome in alphabetic order of name: the reference-set digest
         every writer records (docs/format-spec.md section 10.10, "MD5
-        computation"). Streams one chromosome at a time."""
+        computation"). Streams one chromosome at a time, once: the digest
+        is cached in ``<fasta>.ttio-md5`` as ``<hex> <size> <mtime_s>``
+        (the same sidecar the Java and ObjC readers use) and reused while
+        the FASTA's size and modification time are unchanged. A sidecar
+        that cannot be written is skipped; the digest is still cached in
+        the process."""
+        if self._set_md5 is not None:
+            return self._set_md5
+        st = self._path.stat()
+        stamp = f"{st.st_size} {int(st.st_mtime)}"
+        sidecar = Path(str(self._path) + ".ttio-md5")
+        try:
+            parts = sidecar.read_text().split()
+            if len(parts) == 3 and parts[1] + " " + parts[2] == stamp and len(parts[0]) == 32:
+                self._set_md5 = bytes.fromhex(parts[0])
+                return self._set_md5
+        except (OSError, ValueError):
+            pass
         import hashlib
         h = hashlib.md5()
         for name in sorted(self._entries):
             h.update(self[name])
-        return h.digest()
+        self._set_md5 = h.digest()
+        try:
+            sidecar.write_text(f"{self._set_md5.hex()} {stamp}\n")
+        except OSError:
+            pass
+        return self._set_md5
 
 
 def build_fai_text(fasta: Path) -> str:

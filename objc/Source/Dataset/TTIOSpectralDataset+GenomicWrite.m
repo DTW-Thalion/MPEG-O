@@ -29,6 +29,7 @@
 #import "HDF5/TTIOHDF5File.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "Genomics/TTIOPackedReference.h"
+#import "Genomics/TTIOLazyReference.h"
 #import "HDF5/TTIOHDF5Dataset.h"
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Types.h"
@@ -1302,6 +1303,9 @@ static BOOL _TTIO_M94_RunIsV15Candidate(TTIOWrittenGenomicRun *run)
 static NSData *_TTIO_M93_ReferenceMD5ForRun(TTIOWrittenGenomicRun *run)
 {
     if (run.referenceChromSeqs == nil) return [NSData data];
+    if ([run.referenceChromSeqs isKindOfClass:[TTIOLazyReference class]]) {
+        return [(TTIOLazyReference *)run.referenceChromSeqs setMD5];  /* cached whole-FASTA digest */
+    }
     NSArray *names = [[run.referenceChromSeqs allKeys]
         sortedArrayUsingSelector:@selector(compare:)];
     uint8_t digest[16];

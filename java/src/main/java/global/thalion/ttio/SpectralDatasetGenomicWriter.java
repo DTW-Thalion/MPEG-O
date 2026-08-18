@@ -712,6 +712,9 @@ public final class SpectralDatasetGenomicWriter {
         if (run.referenceChromSeqs() == null) {
             return new byte[0];
         }
+        if (run.referenceChromSeqs() instanceof global.thalion.ttio.genomics.LazyReference lazy) {
+            return lazy.setMd5();  // cached whole-FASTA digest
+        }
         try {
             java.security.MessageDigest md =
                 java.security.MessageDigest.getInstance("MD5");
