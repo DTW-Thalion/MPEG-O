@@ -41,16 +41,26 @@ def breakdown(fmt_key: str, enc: Path) -> dict:
     return {}
 
 
+_INPUT_DIGEST: dict = {}
+
+
+def _digest_cached(fn, path: Path) -> str:
+    key = (fn.__name__, str(path))
+    if key not in _INPUT_DIGEST:
+        _INPUT_DIGEST[key] = fn(path)
+    return _INPUT_DIGEST[key]
+
+
 def _verify(tier: str, kind: str, inp: Path, dec: Path, lossy: bool):
     """Returns (verify, max_rel_error, note). The note is filled on an
     aligned FAIL with the column-level summary so the report can say
     what the format did not carry."""
     if tier in ("aligned",):
-        if verify.sam11_md5(dec) == verify.sam11_md5(inp):
+        if verify.sam11_md5(dec) == _digest_cached(verify.sam11_md5, inp):
             return "PASS", None, ""
         return "FAIL", None, verify.sam11_diff_summary(inp, dec)
     if tier == "unaligned":
-        return ("PASS" if verify.fastq_md5(dec) == verify.fastq_md5(inp) else "FAIL"), None, ""
+        return ("PASS" if verify.fastq_md5(dec) == _digest_cached(verify.fastq_md5, inp) else "FAIL"), None, ""
     if lossy:
         err = verify.mzml_max_rel_error(inp, dec)
         return ("PASS" if err < 1e-3 else "FAIL"), err, ""

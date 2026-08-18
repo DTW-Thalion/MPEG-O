@@ -14,40 +14,62 @@ def _open_text(path: Path):
     return gzip.open(path, "rt") if str(path).endswith(".gz") else open(path, "rt")
 
 
+_MOD = 1 << 128
+
+
+def _multiset_digest(items) -> str:
+    """Order-independent digest of a stream of byte strings in constant
+    memory: the sum of every item's md5 (as a 128-bit integer) modulo
+    2**128, followed by the item count. Equal multisets give equal
+    digests; a 130 GB SAM never has to be held or sorted in memory."""
+    total = 0
+    n = 0
+    for it in items:
+        total = (total + int.from_bytes(hashlib.md5(it).digest(), "little")) % _MOD
+        n += 1
+    return f"{total:032x}-{n}"
+
+
+def _sam11_records(path: Path):
+    """SAM columns 1-11 of every record, streamed from samtools view."""
+    with subprocess.Popen(["samtools", "view", str(path)], stdout=subprocess.PIPE) as p:
+        assert p.stdout is not None
+        for line in p.stdout:
+            c = line.rstrip(b"\n").split(b"\t", 11)[:11]
+            yield b"\t".join(c)
+        if p.wait() != 0:
+            raise RuntimeError(f"samtools view failed on {path}")
+
+
 def _sam11_lines(path: Path) -> list[str]:
-    p = subprocess.run(["samtools", "view", str(path)], capture_output=True, text=True, check=True)
-    rows = []
-    for line in p.stdout.splitlines():
-        c = line.split("\t", 11)[:11]
-        rows.append("\t".join(c))
+    """Every 11-column record, sorted, in memory: only for the diff
+    summary of small files (see sam11_diff_summary)."""
+    rows = [r.decode() for r in _sam11_records(path)]
     rows.sort()
     return rows
 
 
 def sam11_md5(path: Path) -> str:
-    """md5 over SAM columns 1-11 of every record, order-independent."""
-    rows = _sam11_lines(path)
-    h = hashlib.md5()
-    for r in rows:
-        h.update(r.encode()); h.update(b"\n")
-    return h.hexdigest()
+    """Digest over SAM columns 1-11 of every record, order-independent
+    (see _multiset_digest)."""
+    return _multiset_digest(_sam11_records(path))
 
 
-def fastq_md5(path: Path) -> str:
-    """md5 over sorted (name, seq, qual) triples; name is cut at the first space."""
-    triples = []
-    with _open_text(path) as f:
+def _fastq_triples(path: Path):
+    opener = gzip.open if str(path).endswith(".gz") else open
+    with opener(path, "rb") as f:
         while True:
             name = f.readline()
             if not name:
                 break
-            seq = f.readline().rstrip("\n"); f.readline(); qual = f.readline().rstrip("\n")
-            triples.append(name[1:].split()[0] + "\t" + seq + "\t" + qual)
-    triples.sort()
-    h = hashlib.md5()
-    for t in triples:
-        h.update(t.encode()); h.update(b"\n")
-    return h.hexdigest()
+            seq = f.readline().rstrip(b"\n"); f.readline(); qual = f.readline().rstrip(b"\n")
+            yield name[1:].split()[0] + b"\t" + seq + b"\t" + qual
+
+
+def fastq_md5(path: Path) -> str:
+    """Digest over (name, seq, qual) triples, order-independent; the
+    name is cut at the first space."""
+    return _multiset_digest(_fastq_triples(path))
 
 
 def _iter_mzml(path: Path):
@@ -81,6 +103,7 @@ def mzml_max_rel_error(a: Path, b: Path) -> float:
     return worst
 
 
+DIFF_SUMMARY_MAX_BYTES = 2 * 1024 ** 3
 _SAM11_COLS = ["QNAME", "FLAG", "RNAME", "POS", "MAPQ", "CIGAR", "RNEXT", "PNEXT", "TLEN", "SEQ", "QUAL"]
 
 
@@ -89,6 +112,8 @@ def sam11_diff_summary(a: Path, b: Path) -> str:
     from ``a``: records only in one file, and, for the records with the
     same QNAME and mate flag on both sides, which columns differ. Empty
     string when equal. Used to annotate a verify FAIL, never to pass one."""
+    if a.stat().st_size > DIFF_SUMMARY_MAX_BYTES or b.stat().st_size > DIFF_SUMMARY_MAX_BYTES:
+        return "decode differs from input (diff summary skipped: input larger than 2 GB)"
     def rows(p):
         out = {}
         for line in _sam11_lines(p):

@@ -2,6 +2,8 @@
 """BAM baseline and CRAM 3.0 / 3.1 profiles via samtools."""
 from __future__ import annotations
 
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -40,7 +42,32 @@ class _SamtoolsFormat:
         return common.tool_version(["samtools", "--version"])
 
 
-register(_SamtoolsFormat("bam", "bam", ".bam"))
+class _BamBaseline(_SamtoolsFormat):
+    """The BAM row is the input as prepared: the 11-column BAM was written
+    by `samtools view -b` (the same command this row would run) and the
+    full BAM is the file as distributed. Encode and decode hard-link
+    the file into the work dir, so a 130 GB input costs no disk and no
+    time; the decoded copy still goes through the digest."""
+
+    def _link(self, src: Path, dst: Path) -> Path:
+        if dst.exists():
+            dst.unlink()
+        try:
+            os.link(src, dst)
+        except OSError:
+            shutil.copyfile(src, dst)
+        return dst
+
+    def encode(self, inp: Path, out_dir: Path, ref: Path | None) -> Path:
+        if inp.suffix != ".bam":
+            return super().encode(inp, out_dir, ref)
+        return self._link(inp, out_dir / f"{inp.stem}.{self.key}{self.ext}")
+
+    def decode(self, enc: Path, out_dir: Path, ref: Path | None) -> Path:
+        return self._link(enc, out_dir / f"{enc.name}.decoded.bam")
+
+
+register(_BamBaseline("bam", "bam", ".bam"))
 register(_SamtoolsFormat("cram30", "cram,version=3.0", ".cram"))
 register(_SamtoolsFormat("cram31_normal", "cram,version=3.1", ".cram"))
 register(_SamtoolsFormat("cram31_small", "cram,version=3.1,small", ".cram"))

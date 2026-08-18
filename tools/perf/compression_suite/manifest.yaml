@@ -36,37 +36,37 @@ corpora:
 - id: hg002_2x250_full
   tier: aligned
   source: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/NIST_Illumina_2x250bps/novoalign_bams/HG002.GRCh38.2x250.bam
-  sha256: null
+  sha256: 5a370b1da0b9fb899ef35fd3d6e89545c4349c4ff37f5c0619ec708ddc19c88a
   reference: GRCh38_full_plus_hs38d1.fa
   notes: GIAB HG002 Illumina 2x250 whole-genome BAM (novoalign to GRCh38_full_plus_hs38d1_analysis_set_minus_alts), 130,770,531,934 bytes; the chr22 slice on disk came from it
 - id: hg002_hifi_full
   tier: aligned
   source: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/PacBio_CCS_15kb_20kb_chemistry2/GRCh38/HG002.SequelII.merged_15kb_20kb.pbmm2.GRCh38.haplotag.10x.bam
-  sha256: null
+  sha256: 0165821055c244b4ffb1c696d2917c5ac8d67794a9034088311e778e2b808112
   reference: GRCh38_no_alt.fa
   notes: GIAB HG002 PacBio HiFi 15 kb + 20 kb libraries, pbmm2 to GRCh38 (haplotagged), 119,797,572,056 bytes; the smaller of the two whole-genome HiFi BAMs in that directory
 - id: hg002_illumina_wgs_sra
   tier: unaligned
   source: sra:SRR12898326
-  sha256: null
+  sha256: b0cf0f27201dbf7e8bc5a20c1486d358c2a7a812718b39730e712046c720dd92
   reference: null
   notes: NextSeq 500 paired-end WGS of HG002 (NGS2 study), 54.5 Gbase, 181.6 M read pairs, 35.2 GB gz; the smallest plain PE WGS run of HG002 in the 30-150 Gbase range (the smaller HiSeq 2500 runs are 6 kb mate-pair libraries)
 - id: hg002_hifi_sra
   tier: unaligned
   source: sra:SRR10382244
-  sha256: null
+  sha256: 746fd5cd0bc12efd71f77e5cd201bc0be4f4c5307d87c067877ed3526dd5c995
   reference: null
   notes: Sequel II 20 kb CCS run of HG002 (SRX7083058 family, PRJNA586863), 25.0 Gbase, 1.35 M reads, 20.8 GB gz; one SMRT cell of the same data set as hg002_hifi_full
 - id: orbitrap_exploris
   tier: ms
   source: ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2026/07/PXD078067/5_TAP_Pdr1_R376W_PTM.mzML
-  sha256: null
+  sha256: fe651700067c66c2d22a0e91e47da8d5e403853e7e284fc586d4bc4068f2ef07
   reference: null
   notes: PRIDE PXD078067, Orbitrap Exploris 480 DDA (Candida glabrata TAP PTM run), 1.85 GB mzML
 - id: timstof_pasef
   tier: ms
   source: ftp://ftp.pride.ebi.ac.uk/pride/data/archive/2026/07/PXD079084/HT_MSP2600273_P3_1_Slot2-43_1_8160_calibrated.mzML
-  sha256: null
+  sha256: 4456ec7e58c26736a94bdef19a666626ccc5af27579ef8fbd678f3d82abc38cd
   reference: null
   notes: PRIDE PXD079084, timsTOF Pro 2 (Chlamydomonas), 1.01 GB calibrated mzML
 - id: GRCh38_no_alt
@@ -90,6 +90,6 @@ corpora:
 - id: GRCh38_full_plus_hs38d1
   tier: reference
   source: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_full_plus_hs38d1_analysis_set.fna.gz
-  sha256: null
+  sha256: b7a165ad7e1fbb8c8a3022d1460cffac88445a0ef33ff41ecd89bff8716a25e0
   reference: null
   notes: GRCh38 full analysis set plus hs38d1 decoys (UCSC names); the HG002 2x250 BAMs were aligned to its minus-alts subset, and every contig their headers name is in it; decompressed to raw/reference/GRCh38_full_plus_hs38d1.fa by fetch
