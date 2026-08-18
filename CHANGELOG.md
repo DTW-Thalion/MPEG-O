@@ -12,6 +12,22 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Changed
+- **Block-parallel encode and decode.** `GenomicStreamWriter`, `SpectralStreamWriter`
+  and the sequential readers (`iter_reads`, the exporters, `iter_spectra`,
+  `channel_range`) in Python, Java and ObjC run codec work for several blocks at
+  once: writers do the ordered work (chromosome ids, reference md5, sequence
+  number) on the caller's thread, encode blocks on a pool of `TTIO_THREADS`
+  workers (unset or 0 = cores minus 8, 1 = the serial path) with at most
+  `threads + 1` blocks in flight, and append them in order from the caller's
+  thread, so the file is byte for byte the serial writer's; readers decode the
+  next `threads` blocks ahead. `threads=` on the writers and readers and
+  `--threads` on the CLIs override the environment. While a pool exists the
+  FQZCOMP auto-tune runs its candidates in sequence
+  (`ttio_m94z_set_autotune_threads`). Measured on the chr22
+  slices (two to three blocks, so the window barely fills): low-coverage encode
+  30.7 s to 25.8 s and export 40.2 s to 30.2 s at 24 threads; the WES slice,
+  dominated by one block, stays put (encode 24.1 s serial, 27.7 s threaded;
+  export 13.5 s both). Outputs are byte-identical (cmp) in every pairing.
 - **FQZCOMP auto-tune runs its three candidate encodes concurrently.** The V5
   auto-tune encodes every block three times (V4, then the S5 and S6
   sequence-context models) and keeps the smallest; a profile of the NA12878 chr22

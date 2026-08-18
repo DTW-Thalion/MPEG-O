@@ -100,3 +100,4 @@ tools/perf/htscodecs/
 # binaries built outside the canonical build_and_run_*.sh harnesses.
 tools/perf/_out_*/
 tools/perf/_build_*/
+*.ttio-md5
