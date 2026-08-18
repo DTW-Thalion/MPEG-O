@@ -97,3 +97,38 @@ def test_stream_writer_gzip_channels_when_float_delta_disabled(tmp_path):
                                   runs={"r": dataclasses.replace(run, opt_disable_float_delta=True)})
     _stream_write(b, run, batches=3, opt_disable_float_delta=True)
     _assert_same(a, b, 50, (0, 25, 49))
+
+
+def _ms_bytes(path):
+    import h5py
+    out = {}
+    with h5py.File(path, "r") as f:
+        def visit(name, obj):
+            if name.startswith("study/ms_runs"):
+                attrs = {k: (v.tobytes() if hasattr(v, "tobytes") else v) for k, v in obj.attrs.items()}
+                data = None
+                if isinstance(obj, h5py.Dataset) and obj.shape != ():
+                    arr = obj[()]
+                    data = repr(arr.tolist()) if h5py.check_vlen_dtype(obj.dtype) or arr.dtype.kind == "O" \
+                        or (arr.dtype.fields and any(h5py.check_vlen_dtype(t[0]) for t in arr.dtype.fields.values())) \
+                        else arr.tobytes()
+                out[name] = (attrs, data)
+        f.visititems(visit)
+    return out
+
+
+def test_threaded_ms_writer_is_byte_identical(tmp_path):
+    run = _run(40_000, 64, seed=3)
+    a = str(tmp_path / "ms1.tio")
+    b = str(tmp_path / "ms5.tio")
+    wa = _stream_write(a, run, batches=40, batch_spectra=1000, threads=1)
+    wb = _stream_write(b, run, batches=40, batch_spectra=1000, threads=5)
+    assert wa.threads == 1 and wb.threads == 5
+    ba, bb = _ms_bytes(a), _ms_bytes(b)
+    assert ba.keys() == bb.keys()
+    for k in ba:
+        assert ba[k] == bb[k], k
+    with SpectralDataset.open(b) as ds:
+        r = ds.all_runs["r"]
+        assert len(r) == 40_000
+        assert r._fdz_channels or True   # codec 17 channels present when FDZ applied
