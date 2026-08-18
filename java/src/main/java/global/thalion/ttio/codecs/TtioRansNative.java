@@ -90,6 +90,11 @@ public final class TtioRansNative {
      */
     public static native String kernelName();
 
+    /** Threads the FQZCOMP auto-tune uses for its candidate encodes
+     *  (default 3; {@code n <= 1} runs them in sequence). */
+    public static native void setAutotuneThreads(int n);
+    public static native int getAutotuneThreads();
+
     /**
      * Per-symbol context resolver used by {@link #decodeBlockStreaming}.
      *

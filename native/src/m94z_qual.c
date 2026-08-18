@@ -40,6 +40,28 @@ static int encode_v5_candidate(
                              scratch_stream, stream_len);
 }
 
+static int g_autotune_threads = -1;   /* -1: not initialised */
+static pthread_mutex_t g_autotune_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static int autotune_threads(void) {
+    pthread_mutex_lock(&g_autotune_lock);
+    if (g_autotune_threads < 0) {
+        const char *e = getenv("TTIO_M94Z_SEQUENTIAL");
+        g_autotune_threads = (e && e[0] == '1') ? 1 : 3;
+    }
+    int n = g_autotune_threads;
+    pthread_mutex_unlock(&g_autotune_lock);
+    return n;
+}
+
+void ttio_m94z_set_autotune_threads(int n) {
+    pthread_mutex_lock(&g_autotune_lock);
+    g_autotune_threads = n <= 1 ? 1 : 3;
+    pthread_mutex_unlock(&g_autotune_lock);
+}
+
+int ttio_m94z_get_autotune_threads(void) { return autotune_threads(); }
+
 /* One auto-tune candidate: V4 (pm == NULL) or a seqctx parameter set. */
 typedef struct {
     const uint8_t *qual_in; size_t n_qualities;
@@ -131,8 +153,7 @@ int ttio_m94z_qual_encode(
             return TTIO_SEQCTX_ERR_OOM;
         }
     }
-    const char *seq_env = getenv("TTIO_M94Z_SEQUENTIAL");
-    int sequential = seq_env && seq_env[0] == '1';
+    int sequential = autotune_threads() <= 1;
     pthread_t th[3];
     int started[3] = {0, 0, 0};
     for (int i = 0; i < 3; i++) {

@@ -156,3 +156,18 @@ class TestFileLevel:
                 f["/study/genomic_runs/genomic_0001/signal_channels/"
                   "qualities"][()])
             assert blob[4] == 4
+
+
+def test_autotune_threads_setter_round_trips():
+    from ttio.codecs import fqzcomp_nx16_z as fz
+    from ttio.codecs._native_loader import load_ttio_rans
+    if load_ttio_rans() is None:
+        pytest.skip("native lib")
+    before = fz.get_autotune_threads()
+    try:
+        fz.set_autotune_threads(1)
+        assert fz.get_autotune_threads() == 1
+        fz.set_autotune_threads(3)
+        assert fz.get_autotune_threads() == 3
+    finally:
+        fz.set_autotune_threads(before)

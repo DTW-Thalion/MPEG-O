@@ -68,6 +68,20 @@ static int copy_table_2d(
     return TTIO_RANS_OK;
 }
 
+JNIEXPORT void JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_setAutotuneThreads(JNIEnv *env, jclass cls, jint n)
+{
+    (void)env; (void)cls;
+    ttio_m94z_set_autotune_threads((int)n);
+}
+
+JNIEXPORT jint JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_getAutotuneThreads(JNIEnv *env, jclass cls)
+{
+    (void)env; (void)cls;
+    return (jint)ttio_m94z_get_autotune_threads();
+}
+
 JNIEXPORT jint JNICALL
 Java_global_thalion_ttio_codecs_TtioRansNative_encodeBlock(
     JNIEnv *env, jclass clazz,

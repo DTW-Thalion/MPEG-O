@@ -477,4 +477,15 @@ public final class FqzcompNx16Z {
             "M94Z unsupported version byte: " + versionByte
             + " (only V4 = 4 is recognised in v1.0+)");
     }
+
+    /** Threads the FQZCOMP auto-tune uses for its candidate encodes
+     *  (default 3; {@code n <= 1} runs them in sequence). No-op when the
+     *  native library is absent. */
+    public static void setAutotuneThreads(int n) {
+        if (TtioRansNative.isAvailable()) TtioRansNative.setAutotuneThreads(n);
+    }
+
+    public static int getAutotuneThreads() {
+        return TtioRansNative.isAvailable() ? TtioRansNative.getAutotuneThreads() : 1;
+    }
 }

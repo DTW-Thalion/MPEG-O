@@ -360,6 +360,24 @@ else:
     _TTIOM94ZParams = None
 
 
+def set_autotune_threads(n: int) -> None:
+    """Threads the FQZCOMP auto-tune uses for its candidate encodes
+    (default 3; <= 1 runs them in sequence). A writer or reader that runs
+    blocks on its own pool sets 1 while the pool exists."""
+    if not _HAVE_NATIVE_LIB:
+        return
+    _native_lib.ttio_m94z_set_autotune_threads.argtypes = [ctypes.c_int]
+    _native_lib.ttio_m94z_set_autotune_threads.restype = None
+    _native_lib.ttio_m94z_set_autotune_threads(int(n))
+
+
+def get_autotune_threads() -> int:
+    if not _HAVE_NATIVE_LIB:
+        return 1
+    _native_lib.ttio_m94z_get_autotune_threads.restype = ctypes.c_int
+    return int(_native_lib.ttio_m94z_get_autotune_threads())
+
+
 def _native_kernel_name() -> str:
     """Return the native kernel name (``"scalar"``/``"sse4.1"``/``"avx2"``).
 
