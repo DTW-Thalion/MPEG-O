@@ -57,6 +57,7 @@ public final class EncodeCli {
                     }
                     return 0;
                 }
+                case "--threads" -> System.setProperty("ttio.threads", args[++i]);
                 case "--input" -> {
                     if (i + 1 >= args.length) {
                         return usage();

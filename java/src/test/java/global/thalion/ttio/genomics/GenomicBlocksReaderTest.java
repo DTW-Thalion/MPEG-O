@@ -130,7 +130,7 @@ class GenomicBlocksReaderTest {
         try (StorageProvider p = ProviderRegistry.open(out.toString(), StorageProvider.Mode.CREATE, "hdf5")) {
             StorageGroup study = p.rootGroup().createGroup("study");
             GenomicStreamWriter w = new GenomicStreamWriter(study, "genomic_0001",
-                    GenomicStreamWriter.Options.fromRun(run).withBlockPolicy(2, Long.MAX_VALUE));
+                    GenomicStreamWriter.Options.fromRun(run).withBlockPolicy(2, Long.MAX_VALUE), 1);
             w.appendBatch(GenomicBlocks.sliceRun(run, 0, 4));   // two blocks flushed
             w.appendBatch(GenomicBlocks.sliceRun(run, 4, 5));   // pending; no close()
         }

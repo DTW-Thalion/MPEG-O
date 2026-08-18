@@ -74,7 +74,7 @@ public final class LazyReference extends AbstractMap<String, byte[]> {
      *  chromosome in alphabetic order of name: the reference-set digest
      *  every writer records (format spec section 10.10). Streams one
      *  chromosome at a time. */
-    public byte[] setMd5() {
+    public synchronized byte[] setMd5() {
         if (setMd5 != null) return setMd5.clone();
         Path sidecar = fasta.resolveSibling(fasta.getFileName() + ".ttio-md5");
         String stamp;
@@ -126,7 +126,7 @@ public final class LazyReference extends AbstractMap<String, byte[]> {
     @Override public Set<String> keySet() { return java.util.Collections.unmodifiableSet(lengths.keySet()); }
 
     @Override
-    public byte[] get(Object key) {
+    public synchronized byte[] get(Object key) {
         if (!(key instanceof String name) || !lengths.containsKey(name)) return null;
         byte[] seq = cache.get(name);
         if (seq != null) return seq;

@@ -154,4 +154,139 @@ class GenomicStreamWriterTest {
             assertFalse(rg.hasAttribute("layout"));
         }
     }
+
+    // ── block-parallel writer ─────────────────────────────────────────
+
+    /** Two chromosomes, placed-unmapped reads (every 97th, cigar "*"),
+     *  cross-chromosome mates (every 13th), "=" mates (every 3rd);
+     *  mirrors the Python test's _big_synthetic_run. */
+    static WrittenGenomicRun bigSyntheticRun(int n, long seed) {
+        java.util.Random rng = new java.util.Random(seed);
+        final int L = 100;
+        byte[] alphabet = {'A', 'C', 'G', 'T'};
+        byte[] ref1 = new byte[400_000], ref2 = new byte[400_000];
+        for (int i = 0; i < ref1.length; i++) { ref1[i] = alphabet[rng.nextInt(4)]; ref2[i] = alphabet[rng.nextInt(4)]; }
+        Map<String, byte[]> refs = new java.util.LinkedHashMap<>();
+        refs.put("chr1", ref1); refs.put("chr2", ref2);
+        int half = n / 2;
+        long[] pos1 = new long[half], pos2 = new long[n - half];
+        for (int i = 0; i < half; i++) pos1[i] = 1 + rng.nextInt(399_000);
+        for (int i = 0; i < n - half; i++) pos2[i] = 1 + rng.nextInt(399_000);
+        Arrays.sort(pos1); Arrays.sort(pos2);
+        long[] positions = new long[n];
+        List<String> chroms = new java.util.ArrayList<>(n);
+        for (int i = 0; i < half; i++) { positions[i] = pos1[i]; chroms.add("chr1"); }
+        for (int i = 0; i < n - half; i++) { positions[half + i] = pos2[i]; chroms.add("chr2"); }
+        byte[] seqs = new byte[n * L], quals = new byte[n * L];
+        int[] flags = new int[n];
+        long[] mpos = new long[n];
+        int[] tlen = new int[n];
+        List<String> cigars = new java.util.ArrayList<>(n), names = new java.util.ArrayList<>(n), mates = new java.util.ArrayList<>(n);
+        long[] offsets = new long[n];
+        int[] lengths = new int[n];
+        byte[] mq = new byte[n];
+        for (int i = 0; i < n; i++) {
+            byte[] ref = refs.get(chroms.get(i));
+            int p0 = (int) positions[i] - 1;
+            System.arraycopy(ref, p0, seqs, i * L, L);
+            for (int k = 0; k < 3; k++) seqs[i * L + rng.nextInt(L)] = alphabet[rng.nextInt(4)];
+            for (int k = 0; k < L; k++) quals[i * L + k] = (byte) (2 + rng.nextInt(38));
+            offsets[i] = (long) i * L; lengths[i] = L; mq[i] = 60;
+            names.add(String.format("r%06d", i));
+            flags[i] = 0x3; mpos[i] = -1;
+            if (i % 97 == 0) { cigars.add("*"); flags[i] = 0x5; } else cigars.add(L + "M");
+            if (i % 13 == 0) { mates.add(chroms.get(i).equals("chr1") ? "chr2" : "chr1"); mpos[i] = positions[(i * 7) % n]; }
+            else if (i % 3 == 0) { mates.add("="); mpos[i] = positions[i] + 200; }
+            else mates.add("");
+        }
+        return new WrittenGenomicRun(
+            global.thalion.ttio.Enums.AcquisitionMode.GENOMIC_WGS,
+            "synthetic", "ILLUMINA", "s",
+            positions, mq, flags, seqs, quals, offsets, lengths,
+            cigars, names, mates, mpos, tlen, chroms,
+            global.thalion.ttio.Enums.Compression.ZLIB)
+            .withReference(true, refs, null);
+    }
+
+    static StorageGroup writeWithThreads(String url, WrittenGenomicRun run, int threads, int blockReads) {
+        StorageGroup study = study(url);
+        GenomicStreamWriter.Options o = GenomicStreamWriter.Options.fromRun(run)
+            .withBlockPolicy(blockReads, Long.MAX_VALUE)
+            .withReference(run.referenceChromSeqs(), true);
+        try (GenomicStreamWriter w = new GenomicStreamWriter(study, "g", o, threads)) {
+            int n = run.readCount();
+            for (int a = 0; a < n; a += 7_001) {
+                w.appendBatch(GenomicBlocks.sliceRun(run, a, Math.min(n, a + 7_001)));
+            }
+            assertEquals(threads, w.threads());
+        }
+        return study;
+    }
+
+    static String canon(Object raw) {
+        if (raw == null) return "null";
+        if (raw instanceof byte[] a) return Arrays.toString(a);
+        if (raw instanceof int[] a) return Arrays.toString(a);
+        if (raw instanceof long[] a) return Arrays.toString(a);
+        if (raw instanceof short[] a) return Arrays.toString(a);
+        if (raw instanceof double[] a) return Arrays.toString(a);
+        if (raw instanceof float[] a) return Arrays.toString(a);
+        if (raw instanceof Object[] a) {
+            StringBuilder b = new StringBuilder("[");
+            for (Object o : a) b.append(canon(o)).append(",");
+            return b.append("]").toString();
+        }
+        if (raw instanceof java.util.List<?> l) {
+            StringBuilder b = new StringBuilder("L[");
+            for (Object o : l) b.append(canon(o)).append(",");
+            return b.append("]").toString();
+        }
+        return String.valueOf(raw);
+    }
+
+    static void collect(StorageGroup g, String prefix, Map<String, String> out) {
+        StringBuilder attrs = new StringBuilder();
+        for (String a : g.attributeNames()) attrs.append(a).append("=").append(canon(g.getAttribute(a))).append(";");
+        out.put(prefix, attrs.toString());
+        for (String c : g.childNames()) {
+            try (StorageGroup sub = g.openGroup(c)) {
+                collect(sub, prefix + "/" + c, out);
+            } catch (RuntimeException e) {
+                try (global.thalion.ttio.providers.StorageDataset ds = g.openDataset(c)) {
+                    StringBuilder da = new StringBuilder();
+                    for (String a : ds.attributeNames()) da.append(a).append("=").append(canon(ds.getAttribute(a))).append(";");
+                    out.put(prefix + "/" + c, da + "|" + canon(ds.readAll()));
+                }
+            }
+        }
+    }
+
+    @Test
+    void threadedWriterIsByteIdenticalToSerial() throws Exception {
+        WrittenGenomicRun run = bigSyntheticRun(60_000, 7);
+        StorageGroup a = writeWithThreads("memory://gswt-a", run, 1, 20_000);
+        StorageGroup b = writeWithThreads("memory://gswt-b", run, 6, 20_000);
+        Map<String, String> ma = new java.util.TreeMap<>(), mb = new java.util.TreeMap<>();
+        collect(a, "", ma);
+        collect(b, "", mb);
+        assertEquals(ma.keySet(), mb.keySet());
+        for (String k : ma.keySet()) assertEquals(ma.get(k), mb.get(k), k + " differs between threads=1 and threads=6");
+        try (GenomicRun g = GenomicRun.readFrom(b.openGroup("genomic_runs").openGroup("g"), "g")) {
+            assertEquals(60_000, g.readCount());
+            assertEquals(4, g.blockCount());   // 20k, 10k (chr1 ends), 20k, 10k
+        }
+    }
+
+    @Test
+    void registerBlockChromosomesMatchesEncoderOrder() throws Exception {
+        WrittenGenomicRun m87 = m87();
+        Map<String, Integer> m = new java.util.LinkedHashMap<>();
+        GenomicStreamWriter.registerBlockChromosomes(m87, m);
+        // m87: chromosomes chr1, chr2, "*"; own names in read order first
+        assertEquals(0, m.get("chr1"));
+        assertTrue(m.containsKey("chr2") && m.containsKey("*"));
+        int size = m.size();
+        GenomicStreamWriter.registerBlockChromosomes(m87, m);
+        assertEquals(size, m.size());   // idempotent
+    }
 }
