@@ -13,10 +13,11 @@
  "verify_note": "",
  "bases": 178409733,
  "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
- "output_bytes": 81004052,
- "encode_s": 9.96,
- "encode_rss_mb": 179.30859375,
- "decode_s": 13.75,
- "decode_rss_mb": 155.5546875,
+ "reference": "/home/toddw/ttio-bench-data/raw/reference/hs37d5.fa",
+ "output_bytes": 81004049,
+ "encode_s": 9.76,
+ "encode_rss_mb": 170.78125,
+ "decode_s": 13.46,
+ "decode_rss_mb": 155.9921875,
  "verify": "PASS"
 }

@@ -41,9 +41,19 @@ def aggregate(results_dir: Path) -> dict[str, dict[tuple[str, str], Agg]]:
                 bases=r.get("bases", 0) or 0, verify="PASS" if r.get("verify") == "PASS" else "FAIL",
                 lossy=r.get("lossy", False), tool_version=r.get("tool_version", ""),
                 max_rel_error=r.get("max_rel_error"), breakdown=dict(r.get("breakdown") or {}),
-                verify_note=r.get("verify_note") or r.get("error") or "")
+                verify_note=r.get("verify_note") or _reason(r.get("error") or ""))
         out.setdefault(r["corpus"], {})[(r["format"], r["kind"])] = a
     return out
+
+
+def _reason(error: str) -> str:
+    """The last error line of a failed row's captured error, one line,
+    at most 240 characters."""
+    lines = [l.strip() for l in error.splitlines() if l.strip()]
+    picked = [l for l in lines if l.startswith(("RuntimeError", "Error", "[ERROR")) or "failed" in l]
+    text = (picked[-1] if picked else (lines[-1] if lines else "decode differs from input"))
+    text = text.replace("RuntimeError: ", "").replace("|", "/")
+    return text[:240]
 
 
 def _fmt_bytes(n: int) -> str:

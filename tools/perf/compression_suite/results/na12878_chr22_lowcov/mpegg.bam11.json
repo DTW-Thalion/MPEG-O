@@ -12,11 +12,12 @@
  "max_rel_error": null,
  "verify_note": "28 records missing from output; columns differing: FLAG(0x20) in 2766, FLAG(0x28) in 7369, FLAG(0x8) in 7323, TLEN in 1736970",
  "bases": 178409733,
- "format_module_sha256": "3b33bbcb7a1182dc681b6f60682c8fa8644be0d7129e9398c6388a2dc024b676",
+ "format_module_sha256": "9611d26677323d435402821246286ae1a2cfc69daf0cc905656bf16b1c039cdd",
+ "reference": "/home/toddw/ttio-bench-data/raw/reference/hs37d5.fa",
  "output_bytes": 93879106,
- "encode_s": 21.92,
- "encode_rss_mb": 45.16015625,
- "decode_s": 24.0,
+ "encode_s": 22.05,
+ "encode_rss_mb": 45.0,
+ "decode_s": 24.26,
  "decode_rss_mb": 45.0,
  "verify": "FAIL"
 }

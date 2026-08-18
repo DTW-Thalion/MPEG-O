@@ -13,10 +13,11 @@
  "verify_note": "",
  "bases": 2644605844,
  "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
- "output_bytes": 1054566667,
- "encode_s": 43.55,
- "encode_rss_mb": 248.25,
- "decode_s": 90.06,
- "decode_rss_mb": 44.94140625,
+ "reference": "/home/toddw/ttio-bench-data/raw/reference/GRCh38_no_alt.fa",
+ "output_bytes": 1054572085,
+ "encode_s": 44.01,
+ "encode_rss_mb": 246.5,
+ "decode_s": 88.88,
+ "decode_rss_mb": 44.9453125,
  "verify": "PASS"
 }

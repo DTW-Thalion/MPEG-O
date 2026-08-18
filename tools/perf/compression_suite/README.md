@@ -24,6 +24,22 @@ format encodes the whole corpus file; the TTI-O importers and
 exporters stream, so nothing is sharded. `--smoke` runs the corpora
 whose source is a local file.
 
+## Smoke run (2026-08-17)
+
+The five on-disk corpora (three chr22 slices, the unaligned HG002 HiFi
+subset, PXD000001) through every format: encode stage 76 minutes at one
+thread on an i9-13950HX, WSL2, 31 GB RAM. TTI-O peak RSS 1.6 to 3.7 GB
+on the chr22 slices with the hs37d5 and hg19 references and 10.6 GB on
+the HG002 2x250 slice against the 3.2 GB GRCh38 FASTA (the reference
+index and the working set of a 10.6 M-read block). Headline sizes for
+the 11-column inputs, bytes: NA12878 chr22 low coverage BAM 150.8 M,
+CRAM 3.1 small 81.0 M, TTI-O 73.5 M; NA12878 WES chr22 BAM 66.4 M, CRAM
+3.1 small 32.0 M, TTI-O 64.1 M; HG002 2x250 chr22 BAM 1,475 M, CRAM 3.1
+small 825 M, TTI-O 1,613 M; HG002 HiFi subset (unaligned) BAM 188.4 M,
+CRAM 3.1 small 168.7 M, TTI-O 169.8 M; PXD000001 mzML.gz 298.7 M, TTI-O
+175.8 M. The WES and 2x250 TTI-O numbers are the BASE_PACK fallback
+described under known issues.
+
 ## What each format is given
 
 Aligned corpora: the untouched BAM (`bam_full`, CRAM and MPEG-G only)
@@ -65,9 +81,17 @@ reason under "Rows that failed verification".
   not in this suite; the numbers here are the writer as it stands.
 - genie (MPEG-G reference software) is not lossless on SAM columns
   1-11: it drops unmapped records that have no adjacent mate, clears
-  FLAG 0x20 and writes TLEN 0. Name-sorted input changes nothing.
-  Aligned MPEG-G rows are therefore `verify: FAIL` with that reason;
-  unaligned FASTQ round-trips through genie exactly.
+  FLAG 0x20 and 0x8 and writes TLEN 0 (NA12878 chr22 low coverage: 28
+  records missing, TLEN differs in 1,736,970). Name-sorted input
+  changes nothing. It also refuses a FASTA that lacks any header
+  contig, cannot take unaligned SAM (a dummy -r gets past the option
+  check, then every unmapped record is dropped) or reads longer than
+  511 bases in that mode, and `genie run` segfaulted on the NA12878
+  WES mgrec. Aligned MPEG-G rows are therefore `verify: FAIL` with
+  the reason; unaligned FASTQ round-trips through genie exactly.
+- mzML+numpress on PXD000001 records a maximum relative error of
+  9.4e-2 (small intensities); the row is lossy and marked FAIL at the
+  1e-3 threshold, with the error in the JSON.
 - The TTI-O mzML exporter renumbers spectrum ids as scan=1..n; the
   native ids are not preserved. The verifier compares arrays only.
 - Before #294 a run written against an external FASTA with more than

@@ -13,10 +13,11 @@
  "verify_note": "",
  "bases": 95035281,
  "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
+ "reference": "/home/toddw/ttio-bench-data/raw/reference/hg19.fa",
  "output_bytes": 36635717,
- "encode_s": 7.68,
+ "encode_s": 7.73,
  "encode_rss_mb": 246.0,
- "decode_s": 3.82,
- "decode_rss_mb": 68.58984375,
+ "decode_s": 3.78,
+ "decode_rss_mb": 72.6015625,
  "verify": "PASS"
 }

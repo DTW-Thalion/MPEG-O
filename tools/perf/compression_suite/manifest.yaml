@@ -19,8 +19,8 @@ corpora:
   tier: aligned
   source: file:///home/toddw/TTI-O/data/genomic/hg002_illumina/hg002_illumina.chr22.bam
   sha256: 4af014843e6c13b7fa73105a28514023a186caff0a08be4db4171bf4b83bc99d
-  reference: GRCh38_no_alt.fa
-  notes: GIAB HG002 Illumina 2x250, chr22 slice of HG002.GRCh38.2x250.bam (novoalign to GRCh38, UCSC names); whole GRCh38 no-alt reference for the same reason as na12878_chr22_lowcov
+  reference: GRCh38_full_plus_hs38d1.fa
+  notes: GIAB HG002 Illumina 2x250, chr22 slice of HG002.GRCh38.2x250.bam (novoalign to GRCh38_full_plus_hs38d1_analysis_set_minus_alts, UCSC names); the header lists the hs38d1 decoy contigs, which GRCh38_no_alt lacks and genie insists on
 - id: hg002_hifi_subset
   tier: aligned
   source: file:///home/toddw/TTI-O/data/genomic/hg002_pacbio/hg002_pacbio.subset.bam
@@ -37,8 +37,8 @@ corpora:
   tier: aligned
   source: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/NIST_Illumina_2x250bps/novoalign_bams/HG002.GRCh38.2x250.bam
   sha256: null
-  reference: GRCh38_no_alt.fa
-  notes: GIAB HG002 Illumina 2x250 whole-genome BAM (GRCh38, novoalign), 130,770,531,934 bytes; the chr22 slice on disk came from it
+  reference: GRCh38_full_plus_hs38d1.fa
+  notes: GIAB HG002 Illumina 2x250 whole-genome BAM (novoalign to GRCh38_full_plus_hs38d1_analysis_set_minus_alts), 130,770,531,934 bytes; the chr22 slice on disk came from it
 - id: hg002_hifi_full
   tier: aligned
   source: https://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/AshkenazimTrio/HG002_NA24385_son/PacBio_CCS_15kb_20kb_chemistry2/GRCh38/HG002.SequelII.merged_15kb_20kb.pbmm2.GRCh38.haplotag.10x.bam
@@ -72,7 +72,7 @@ corpora:
 - id: GRCh38_no_alt
   tier: reference
   source: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_no_alt_analysis_set.fna.gz
-  sha256: null
+  sha256: fb4243ebb014caf27111f24dd62b7ce42160f28581da6f8fcd6cba5977778d02
   reference: null
   notes: GRCh38 no-alt analysis set (UCSC names), 872,949,833 bytes gz; decompressed to raw/reference/GRCh38_no_alt.fa by fetch
 - id: hs37d5
@@ -87,3 +87,9 @@ corpora:
   sha256: ac73947d38df63ccb00724520a5c31d880c1ca423702ca7ccb7e6c2182a362d9
   reference: null
   notes: UCSC hg19 (chr-prefixed names), the genome the WES and HG002 2x250 chr22 slices were aligned to; decompressed to raw/reference/hg19.fa by fetch
+- id: GRCh38_full_plus_hs38d1
+  tier: reference
+  source: https://ftp.ncbi.nlm.nih.gov/genomes/all/GCA/000/001/405/GCA_000001405.15_GRCh38/seqs_for_alignment_pipelines.ucsc_ids/GCA_000001405.15_GRCh38_full_plus_hs38d1_analysis_set.fna.gz
+  sha256: null
+  reference: null
+  notes: GRCh38 full analysis set plus hs38d1 decoys (UCSC names); the HG002 2x250 BAMs were aligned to its minus-alts subset, and every contig their headers name is in it; decompressed to raw/reference/GRCh38_full_plus_hs38d1.fa by fetch
