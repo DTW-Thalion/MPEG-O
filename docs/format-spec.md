@@ -1346,7 +1346,11 @@ of the whole FASTA computed with the formula above (every
 chromosome, alphabetic order, case preserved). A run written against
 a multi-chromosome FASTA therefore validates against that same
 FASTA. Since v1.9 all three implementations apply the same order and
-return the chromosome upper-cased.
+return the chromosome upper-cased. The whole-FASTA digest is cached in
+`<fasta>.ttio-md5` as `<hex> <size> <mtime_s>` by whichever
+implementation computes it first, and reused by all of them while the
+FASTA's size and modification time match; a location that cannot be
+written is simply recomputed per process.
 
 **Read-side accessor (v1.1.0+).** A freshly-opened dataset exposes
 embedded references through the `references()` accessor
