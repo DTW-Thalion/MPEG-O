@@ -213,9 +213,12 @@ class GenomicRun:
         """Number of blocks (1 for a whole-channel run)."""
         return self._block_table.count if self._block_table is not None else 1
 
-    def iter_reads(self, start: int = 0, stop: int | None = None) -> Iterator[AlignedRead]:
-        """Yield reads ``[start, stop)`` in order, holding at most one
-        decoded block at a time for ``blocks_v1`` runs."""
+    def iter_reads(self, start: int = 0, stop: int | None = None, *,
+                   threads: int | None = None) -> Iterator[AlignedRead]:
+        """Yield reads ``[start, stop)`` in order. Under ``blocks_v1`` the
+        next ``threads`` blocks decode ahead on a pool (``threads`` from
+        the argument, else TTIO_THREADS, else cores minus 8); one thread
+        keeps the one-block path, holding one decoded block at a time."""
         n = len(self)
         if stop is None or stop > n:
             stop = n
@@ -225,20 +228,47 @@ class GenomicRun:
             for i in range(max(start, 0), stop):
                 yield self[i]
             return
+        from ._threads import resolve_threads, pool_context
         t = self._block_table
+        nthreads = resolve_threads(threads)
         i = max(start, 0)
-        while i < stop:
-            b = t.block_for(i)
-            r0 = int(t.read_start[b])
-            b_end = min(r0 + int(t.n_reads[b]), stop)
-            view = self._block_view(b)
-            for j in range(i, b_end):
-                yield view[j - r0]
-            i = b_end
+        if nthreads <= 1 or i >= stop:
+            while i < stop:
+                b = t.block_for(i)
+                r0 = int(t.read_start[b])
+                b_end = min(r0 + int(t.n_reads[b]), stop)
+                view = self._block_view(b)
+                for j in range(i, b_end):
+                    yield view[j - r0]
+                i = b_end
+            return
+        import concurrent.futures as _cf
+        b_first, b_last = t.block_for(i), t.block_for(stop - 1)
+        with pool_context(nthreads), _cf.ThreadPoolExecutor(
+                max_workers=nthreads, thread_name_prefix="ttio-block-decode") as pool:
+            pending: dict[int, "_cf.Future"] = {}
 
-    def _block_view(self, b: int) -> "GenomicRun":
-        if self._block_cache is not None and self._block_cache[0] == b:
-            return self._block_cache[1]
+            def submit(b: int) -> None:
+                if b <= b_last and b not in pending:
+                    pending[b] = pool.submit(self._warm, self._prefetch_view(b))
+
+            for b in range(b_first, min(b_last, b_first + nthreads - 1) + 1):
+                submit(b)
+            b = b_first
+            while i < stop:
+                view = pending.pop(b).result()
+                submit(b + nthreads)
+                r0 = int(t.read_start[b])
+                b_end = min(r0 + int(t.n_reads[b]), stop)
+                for j in range(i, b_end):
+                    yield view[j - r0]
+                i = b_end
+                b += 1
+
+    def _prefetch_view(self, b: int) -> "GenomicRun":
+        """The block view for ``b``, built on the caller's thread (storage
+        reads) but not yet decoded; :meth:`_warm` decodes it and is safe
+        to run on a pool thread."""
         from .genomic._block_view import materialise_block, _rows_of
         if self._name_tables is None:
             idx = self.group.open_group("genomic_index")
@@ -248,10 +278,21 @@ class GenomicRun:
         grp = materialise_block(self.group, self._block_table, b,
                                 chrom_name_rows=self._name_tables[0],
                                 mate_chrom_rows=self._name_tables[1])
-        sub = GenomicRun.open(grp, self.name, references_group=self._references_group,
-                              bulk_read=self._bulk_read)
-        self._block_cache = (b, sub)
         self._blocks_materialised += 1
+        return GenomicRun.open(grp, self.name, references_group=self._references_group,
+                               bulk_read=self._bulk_read)
+
+    @staticmethod
+    def _warm(view: "GenomicRun") -> "GenomicRun":
+        if len(view):
+            view[0]          # decodes every channel of the block into its caches
+        return view
+
+    def _block_view(self, b: int) -> "GenomicRun":
+        if self._block_cache is not None and self._block_cache[0] == b:
+            return self._block_cache[1]
+        sub = self._prefetch_view(b)
+        self._block_cache = (b, sub)
         return sub
 
     def provenance_chain(self) -> "list":

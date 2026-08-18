@@ -132,3 +132,18 @@ def test_threaded_ms_writer_is_byte_identical(tmp_path):
         r = ds.all_runs["r"]
         assert len(r) == 40_000
         assert r._fdz_channels or True   # codec 17 channels present when FDZ applied
+
+
+def test_channel_range_threaded_matches_serial(tmp_path):
+    run = _run(20_000, 64, seed=5)
+    path = str(tmp_path / "cr.tio")
+    _stream_write(path, run, batches=20, batch_spectra=1000, threads=1)
+    with SpectralDataset.open(path) as ds:
+        r = ds.all_runs["r"]
+        n = int(r.index.offsets[-1] + r.index.lengths[-1])
+        a = r.channel_range("mz", 1000, n - 2000, threads=1)
+        b = r.channel_range("mz", 1000, n - 2000, threads=4)
+        assert np.array_equal(a, b)
+        s1 = [float(sp.signal_array("intensity").data.sum()) for sp in r.iter_spectra(threads=1)]
+        s4 = [float(sp.signal_array("intensity").data.sum()) for sp in r.iter_spectra(threads=4)]
+        assert s1 == s4 and len(s1) == 20_000
