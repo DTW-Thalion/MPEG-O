@@ -114,3 +114,35 @@ def test_fastq_import_memory_ceiling(tmp_path):
     assert (after - before) / 1024 < 2000, f"peak RSS grew by {(after - before) / 1024:.0f} MB"
     with SpectralDataset.open(str(out)) as ds:
         assert len(ds.genomic_runs["genomic_0001"]) == 2_000_000
+
+
+@pytest.mark.slow
+def test_threaded_writer_memory_window(tmp_path):
+    """RSS with threads=8 stays under 9 times the one-block working set.
+
+    The writer holds at most threads + 1 blocks in flight, so the peak of
+    an 8-thread write is bounded by 9 one-block working sets on top of the
+    fixed cost the serial write also pays.
+    """
+    import sys
+    import textwrap
+
+    script = textwrap.dedent("""
+        import resource, sys
+        sys.path.insert(0, "tests")
+        from pathlib import Path
+        from test_genomic_stream_writer import _big_synthetic_run, _write_with_threads
+        run = _big_synthetic_run(n=200_000)
+        _write_with_threads(Path(sys.argv[1]), run, int(sys.argv[2]), block_reads=20_000)
+        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    """)
+
+    def rss(threads):
+        out = subprocess.run(
+            [sys.executable, "-c", script, str(tmp_path), str(threads)],
+            capture_output=True, text=True, check=True,
+            cwd=str(Path(__file__).resolve().parents[1]))
+        return int(out.stdout.strip().splitlines()[-1])
+
+    one, eight = rss(1), rss(8)
+    assert eight < 9 * one, (one, eight)

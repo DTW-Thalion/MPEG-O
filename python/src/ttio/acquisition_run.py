@@ -624,15 +624,19 @@ class AcquisitionRun:
             from .codecs import float_delta_zstd as _fdz
             import concurrent.futures as _cf
             ds = self._signal_dataset(channel)
+            cached = self._fdz_cache.get(channel)
+            todo = [k for k in ks if cached is None or cached[0] != k]
             raw = {k: np.asarray(ds.read(offset=int(table.offsets[k]), count=int(table.lengths[k])),
-                                 dtype=np.uint8).tobytes() for k in ks}
+                                 dtype=np.uint8).tobytes() for k in todo}
             with pool_context(nthreads), _cf.ThreadPoolExecutor(
                     max_workers=nthreads, thread_name_prefix="ttio-fdz-decode") as pool:
                 futs = {k: pool.submit(_fdz.decode_block_bytes, int(table.transforms[k]), raw[k],
-                                       table.block_values(k)) for k in ks}
-                blocks = {k: futs[k].result() for k in ks}
+                                       table.block_values(k)) for k in todo}
+                blocks = {k: futs[k].result() for k in todo}
+            if cached is not None and cached[0] in ks:
+                blocks[cached[0]] = cached[1]
             self._fdz_cache[channel] = (k1, blocks[k1])
-            self._fdz_blocks_decoded[channel] = self._fdz_blocks_decoded.get(channel, 0) + len(ks)
+            self._fdz_blocks_decoded[channel] = self._fdz_blocks_decoded.get(channel, 0) + len(todo)
         else:
             blocks = {k: self._fdz_block(channel, k) for k in ks}
         parts = []
