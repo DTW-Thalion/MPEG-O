@@ -557,7 +557,8 @@ class AcquisitionRun:
     def __iter__(self) -> Iterator[Spectrum]:
         return self.iter_spectra()
 
-    def channel_range(self, channel: str, start: int, count: int) -> np.ndarray:
+    def channel_range(self, channel: str, start: int, count: int, *,
+                      threads: int | None = None) -> np.ndarray:
         """Values ``[start, start + count)`` of a signal channel as
         float64, touching only what is needed: decrypted or numpress
         buffers are sliced, codec 17 channels decode the blocks the
@@ -573,7 +574,7 @@ class AcquisitionRun:
         if decoded is not None:
             return decoded[start:start + count]
         if channel in self._fdz_channels:
-            return self._fdz_range(channel, start, count)
+            return self._fdz_range(channel, start, count, threads)
         full = self._full_channel_cache.get(channel)
         if full is not None:
             return full[start:start + count]
@@ -604,7 +605,8 @@ class AcquisitionRun:
         self._fdz_blocks_decoded[channel] = self._fdz_blocks_decoded.get(channel, 0) + 1
         return vals
 
-    def _fdz_range(self, channel: str, start: int, count: int) -> np.ndarray:
+    def _fdz_range(self, channel: str, start: int, count: int,
+                   threads: int | None = None) -> np.ndarray:
         if count <= 0:
             return np.zeros(0, dtype=np.float64)
         table = self._fdz_table(channel)
@@ -614,18 +616,42 @@ class AcquisitionRun:
             blk = self._fdz_block(channel, k0)
             o = start - k0 * bs
             return blk[o:o + count]
+        from ._threads import resolve_threads, pool_context
+        ks = list(range(k0, k1 + 1))
+        nthreads = resolve_threads(threads)
+        if nthreads > 1:
+            # storage reads on this thread, decodes on the pool
+            from .codecs import float_delta_zstd as _fdz
+            import concurrent.futures as _cf
+            ds = self._signal_dataset(channel)
+            cached = self._fdz_cache.get(channel)
+            todo = [k for k in ks if cached is None or cached[0] != k]
+            raw = {k: np.asarray(ds.read(offset=int(table.offsets[k]), count=int(table.lengths[k])),
+                                 dtype=np.uint8).tobytes() for k in todo}
+            with pool_context(nthreads), _cf.ThreadPoolExecutor(
+                    max_workers=nthreads, thread_name_prefix="ttio-fdz-decode") as pool:
+                futs = {k: pool.submit(_fdz.decode_block_bytes, int(table.transforms[k]), raw[k],
+                                       table.block_values(k)) for k in todo}
+                blocks = {k: futs[k].result() for k in todo}
+            if cached is not None and cached[0] in ks:
+                blocks[cached[0]] = cached[1]
+            self._fdz_cache[channel] = (k1, blocks[k1])
+            self._fdz_blocks_decoded[channel] = self._fdz_blocks_decoded.get(channel, 0) + len(todo)
+        else:
+            blocks = {k: self._fdz_block(channel, k) for k in ks}
         parts = []
-        for k in range(k0, k1 + 1):
-            blk = self._fdz_block(channel, k)
+        for k in ks:
+            blk = blocks[k]
             lo = start - k * bs if k == k0 else 0
             hi = (start + count) - k * bs if k == k1 else len(blk)
             parts.append(blk[lo:hi])
         return np.concatenate(parts)
 
-    def iter_spectra(self, batch: int = 4096) -> Iterator[Spectrum]:
+    def iter_spectra(self, batch: int = 4096, *, threads: int | None = None) -> Iterator[Spectrum]:
         """Yield every spectrum in order, reading channel data in
         windows of ``batch`` spectra (bounded memory; codec 17 blocks
-        decode once per window)."""
+        decode once per window, on a pool of ``threads`` when a window
+        spans several blocks)."""
         n = len(self)
         offsets, lengths = self.index.offsets, self.index.lengths
         for j0 in range(0, n, max(1, batch)):
@@ -635,7 +661,7 @@ class AcquisitionRun:
             arrays = {}
             for c in self.channel_names:
                 try:
-                    arrays[c] = self.channel_range(c, base, total)
+                    arrays[c] = self.channel_range(c, base, total, threads=threads)
                 except KeyError:
                     continue
             for i in range(j0, j1):

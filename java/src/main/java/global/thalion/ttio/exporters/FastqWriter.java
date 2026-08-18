@@ -205,7 +205,7 @@ public final class FastqWriter {
         OutputStream raw = Files.newOutputStream(path);
         try (OutputStream out = new java.io.BufferedOutputStream(
                 gz ? new GZIPOutputStream(raw) : raw, 1 << 16)) {
-            java.util.Iterator<global.thalion.ttio.genomics.AlignedRead> it = run.iterReads();
+            java.util.Iterator<global.thalion.ttio.genomics.AlignedRead> it = run.iterReads(0, run.readCount(), global.thalion.ttio.Threads.resolve(null));
             long i = 0;
             while (it.hasNext()) {
                 global.thalion.ttio.genomics.AlignedRead r = it.next();

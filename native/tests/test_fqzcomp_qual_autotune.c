@@ -15,6 +15,7 @@
  * HG002 Illumina / HG002 PacBio HiFi inputs.
  */
 #include "fqzcomp_qual.h"
+#include "ttio_rans.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -38,7 +39,21 @@ static uint8_t *read_file(const char *path, size_t *len) {
     return buf;
 }
 
+static int test_autotune_threads_setter(void) {
+    int initial = ttio_m94z_get_autotune_threads();
+    if (initial != 3 && initial != 1) { fprintf(stderr, "initial %d\n", initial); return 1; }
+    ttio_m94z_set_autotune_threads(1);
+    if (ttio_m94z_get_autotune_threads() != 1) return 1;
+    ttio_m94z_set_autotune_threads(0);   /* <= 1 clamps to 1 */
+    if (ttio_m94z_get_autotune_threads() != 1) return 1;
+    ttio_m94z_set_autotune_threads(3);
+    if (ttio_m94z_get_autotune_threads() != 3) return 1;
+    printf("autotune threads setter: PASS\n");
+    return 0;
+}
+
 int main(int argc, char **argv) {
+    if (test_autotune_threads_setter() != 0) return 1;
     if (argc < 5) {
         fprintf(stderr,
                 "usage: %s qual.bin lens.bin flags.bin out.fqz\n", argv[0]);

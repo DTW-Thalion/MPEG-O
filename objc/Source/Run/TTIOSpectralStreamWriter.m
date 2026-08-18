@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "Run/TTIOSpectralStreamWriter.h"
+#import "Core/TTIOThreads.h"
 #import "Run/TTIOWrittenSpectralBatch.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOInstrumentConfig.h"
@@ -58,6 +59,7 @@ static const NSUInteger kChannelChunk = 65536;
     o.nucleusType = _nucleusType;
     o.solvent = _solvent;
     o.provenanceRecords = _provenanceRecords;
+    o.threads = _threads;
     return o;
 }
 
@@ -65,7 +67,22 @@ static const NSUInteger kChannelChunk = 65536;
 
 typedef struct { NSString *name; TTIOPrecision precision; } TTIOIndexColumnSpec;
 
+/** One codec-17 block in flight for one channel. */
+@interface TTIOInFlightFdz : NSObject
+@property (nonatomic, strong, nullable) NSData *encoded;
+@property (nonatomic) NSUInteger nValues;
+@property (nonatomic, strong, nullable) NSError *error;
+@property (nonatomic) BOOL done;
+@end
+
+@implementation TTIOInFlightFdz
+@end
+
 @implementation TTIOSpectralStreamWriter {
+    NSUInteger _threads;
+    TTIOThreadPool *_pool;
+    NSMutableDictionary<NSString *, NSMutableArray<TTIOInFlightFdz *> *> *_fdzInflight;
+    NSCondition *_fdzCond;
     id<TTIOStorageGroup> _study;
     NSString *_name;
     TTIOSpectralStreamWriterOptions *_opt;
@@ -115,6 +132,10 @@ static NSArray *ttioM74Columns(void)
         _idx = [NSMutableDictionary dictionary];
         _sig = [NSMutableDictionary dictionary];
         _fdzBuf = [NSMutableDictionary dictionary];
+        _threads = [TTIOThreads resolve:_opt.threads ? @(_opt.threads) : nil];
+        _pool = [TTIOThreadPool poolWithThreads:_threads];
+        _fdzInflight = [NSMutableDictionary dictionary];
+        _fdzCond = [NSCondition new];
         _fdzValues = [NSMutableDictionary dictionary];
         _fdzBlocks = [NSMutableDictionary dictionary];
         _pending = [NSMutableArray array];
@@ -152,6 +173,42 @@ static NSArray *ttioM74Columns(void)
     return YES;
 }
 
+- (NSUInteger)threads { return _threads; }
+
+/** Append completed blocks of a channel in emission order; wait on the
+ *  oldest until at most blockUntil remain in flight. */
+- (BOOL)_drainFdz:(NSString *)c until:(NSUInteger)blockUntil error:(NSError **)error
+{
+    NSMutableArray<TTIOInFlightFdz *> *q = _fdzInflight[c];
+    if (!q) return YES;
+    while (q.count > 0) {
+        TTIOInFlightFdz *f = q.firstObject;
+        [_fdzCond lock];
+        if (q.count <= blockUntil && !f.done) {
+            [_fdzCond unlock];
+            break;
+        }
+        while (!f.done) [_fdzCond wait];
+        [_fdzCond unlock];
+        [q removeObjectAtIndex:0];
+        if (!f.encoded) {
+            if (error) *error = f.error ?: TTIOMakeError(TTIOErrorDatasetWrite,
+                @"FLOAT_DELTA_ZSTD block encode failed for '%@'", c);
+            return NO;
+        }
+        if (![self _appendFdz:c encoded:f.encoded nValues:f.nValues error:error]) return NO;
+    }
+    return YES;
+}
+
+- (BOOL)_appendFdz:(NSString *)c encoded:(NSData *)encoded nValues:(NSUInteger)nValues error:(NSError **)error
+{
+    if (![_sig[c] appendData:encoded error:error]) return NO;
+    _fdzValues[c] = @([_fdzValues[c] unsignedLongLongValue] + nValues);
+    _fdzBlocks[c] = @([_fdzBlocks[c] unsignedIntegerValue] + 1);
+    return YES;
+}
+
 - (BOOL)flush:(NSError **)error
 {
     if (_pending.count == 0) return YES;
@@ -171,6 +228,7 @@ static NSArray *ttioM74Columns(void)
             NSMutableData *buf = _fdzBuf[c];
             if (buf.length > 0 && ![self _emitFdzBlock:c values:buf error:error]) return NO;
             _fdzBuf[c] = [NSMutableData data];
+            if (![self _drainFdz:c until:0 error:error]) return NO;
             NSData *hdr = [TTIOFloatDeltaZstd headerBytesForValues:[_fdzValues[c] unsignedLongLongValue]
                                                              blocks:(uint32_t)[_fdzBlocks[c] unsignedIntegerValue]];
             if (![_sig[c] writeSlice:hdr atOffset:0 error:error]) return NO;
@@ -182,6 +240,7 @@ static NSArray *ttioM74Columns(void)
         && ![TTIOAcquisitionRun writeChromatograms:_chromatograms toRunGroup:_rg error:error]) return NO;
     if (_opt.provenanceRecords.count > 0
         && ![TTIOAcquisitionRun writeProvenance:_opt.provenanceRecords toRunGroup:_rg error:error]) return NO;
+    [_pool close];
     return YES;
 }
 
@@ -352,14 +411,35 @@ static NSData *ttioZeros(TTIOPrecision p, NSUInteger n)
 
 - (BOOL)_emitFdzBlock:(NSString *)c values:(NSData *)values error:(NSError **)error
 {
-    TTIOFDZEncodedBlock *b = [TTIOFloatDeltaZstd encodeBlock:values];
-    if (!b) {
-        if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite, @"FLOAT_DELTA_ZSTD block encode failed for '%@'", c);
-        return NO;
+    NSUInteger nValues = values.length / sizeof(double);
+    if (_pool.queue == nil) {
+        TTIOFDZEncodedBlock *b = [TTIOFloatDeltaZstd encodeBlock:values];
+        if (!b) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetWrite, @"FLOAT_DELTA_ZSTD block encode failed for '%@'", c);
+            return NO;
+        }
+        return [self _appendFdz:c encoded:[TTIOFloatDeltaZstd blockBytes:b] nValues:nValues error:error];
     }
-    if (![_sig[c] appendData:[TTIOFloatDeltaZstd blockBytes:b] error:error]) return NO;
-    _fdzValues[c] = @([_fdzValues[c] unsignedLongLongValue] + values.length / sizeof(double));
-    _fdzBlocks[c] = @([_fdzBlocks[c] unsignedIntegerValue] + 1);
+    if (![self _drainFdz:c until:_threads error:error]) return NO;
+    if (!_fdzInflight[c]) _fdzInflight[c] = [NSMutableArray array];
+    TTIOInFlightFdz *f = [TTIOInFlightFdz new];
+    f.nValues = nValues;
+    [_fdzInflight[c] addObject:f];
+    NSData *copy = [values copy];   /* the caller reuses its buffer */
+    NSCondition *cond = _fdzCond;
+    [_pool.queue addOperationWithBlock:^{
+        TTIOFDZEncodedBlock *b = nil;
+        @try {
+            b = [TTIOFloatDeltaZstd encodeBlock:copy];
+        } @catch (NSException *ex) {
+            b = nil;
+        }
+        [cond lock];
+        f.encoded = b ? [TTIOFloatDeltaZstd blockBytes:b] : nil;
+        f.done = YES;
+        [cond broadcast];
+        [cond unlock];
+    }];
     return YES;
 }
 

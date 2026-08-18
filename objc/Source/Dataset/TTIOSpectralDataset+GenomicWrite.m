@@ -1846,6 +1846,12 @@ static TTIOCompression task30CompressionForProvider(id<TTIOStorageProvider> p)
 
 @implementation TTIOSpectralDataset (GenomicWrite)
 
++ (void)validateGenomicCodecOverridesForRun:(TTIOWrittenGenomicRun *)run
+{
+    _TTIO_M86_ValidateOverrides(run.signalCodecOverrides);
+    _TTIO_V17_ValidateMateInfoV2Overrides(run);
+}
+
 + (NSData *)referenceMD5ForRun:(TTIOWrittenGenomicRun *)run
 {
     return _TTIO_M93_ReferenceMD5ForRun(run);

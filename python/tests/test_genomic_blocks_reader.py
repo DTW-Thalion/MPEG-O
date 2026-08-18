@@ -73,8 +73,8 @@ def test_partial_file_reads_up_to_last_flushed_block(tmp_path):
                             reference_uri=run.reference_uri, platform=run.platform,
                             sample_name=run.sample_name,
                             reference_chrom_seqs=run.reference_chrom_seqs,
-                            embed_reference=True, block_reads=20)
-    w.append_batch(run)          # 2 full blocks flushed, 10 reads pending
+                            embed_reference=True, block_reads=20, threads=1)
+    w.append_batch(run)          # 2 full blocks written (serial writer), 10 reads pending
     w._write_close_tables()      # tables present, the pending reads are lost
     ds.close()
     with SpectralDataset.open(p) as ds2:
@@ -96,3 +96,19 @@ def test_legacy_layout_still_reads(tmp_path):
         assert g.layout == "whole" and g.block_count == 1
         for i in (0, 29):
             _check_read(g[i], run, i)
+
+
+def test_iter_reads_threaded_matches_serial(tmp_path):
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    from test_genomic_stream_writer import _big_synthetic_run, _write_with_threads
+    run = _big_synthetic_run(n=30_000)
+    path = _write_with_threads(tmp_path, run, 1, block_reads=5_000)
+    with SpectralDataset.open(path) as ds:
+        g = ds.genomic_runs["g"]
+        serial = [(r.read_name, r.sequence, r.cigar, r.mate_chromosome) for r in g.iter_reads(threads=1)]
+        threaded = [(r.read_name, r.sequence, r.cigar, r.mate_chromosome) for r in g.iter_reads(threads=4)]
+        assert threaded == serial
+        part = [r.read_name for r in g.iter_reads(12_345, 17_890, threads=3)]
+        assert part == [t[0] for t in serial[12_345:17_890]]

@@ -132,17 +132,44 @@ public final class GenomicStreamWriter implements AutoCloseable {
     private boolean embedded;
     private boolean closed;
     private final List<WrittenGenomicRun> legacyParts = new ArrayList<>();
+    private final int threads;
+    private final global.thalion.ttio.Threads.PoolScope scope;
+    private final java.util.ArrayDeque<InFlight> inflight = new java.util.ArrayDeque<>();
+    private record InFlight(WrittenGenomicRun block,
+                            java.util.concurrent.Future<GenomicBlocks.BlockBlobs> blobs) {}
 
     /** Append reads to run {@code runName} of the {@code /study} group
      *  {@code studyGroup} (the writer creates {@code genomic_runs} when
      *  absent and maintains {@code @_run_names}). */
     public GenomicStreamWriter(StorageGroup studyGroup, String runName, Options options) {
+        this(studyGroup, runName, options, global.thalion.ttio.Threads.resolve(null));
+    }
+
+    /** With {@code threads} > 1 completed blocks are encoded on a pool and
+     *  written in order by the caller's thread; at most {@code threads + 1}
+     *  blocks are pending or encoding, so memory is about that many block
+     *  working sets. The file is byte for byte the one thread's. */
+    public GenomicStreamWriter(StorageGroup studyGroup, String runName, Options options, int threads) {
         this.study = studyGroup;
         this.name = runName;
         this.opt = options;
+        this.threads = Math.max(1, threads);
+        this.scope = global.thalion.ttio.Threads.pool(this.threads);
     }
 
     public long readCount() { return readCount; }
+    public int threads() { return threads; }
+
+    /** Assign ids for every chromosome name the block introduces, in the
+     *  order the block encoder assigns them (own names in read order, "*"
+     *  included, then mate names that are not "", "*" or "="), so the
+     *  encoder only reads the map and blocks can encode concurrently. */
+    static void registerBlockChromosomes(WrittenGenomicRun block, Map<String, Integer> map) {
+        for (String n : block.chromosomes()) map.putIfAbsent(n, map.size());
+        for (String n : block.mateChromosomes()) {
+            if (n != null && !n.isEmpty() && !"*".equals(n) && !"=".equals(n)) map.putIfAbsent(n, map.size());
+        }
+    }
     public int blockCount() { return blockCount; }
 
     /** Append one read. */
@@ -205,8 +232,39 @@ public final class GenomicStreamWriter implements AutoCloseable {
             SpectralDatasetGenomicWriter.embedReferencesForRuns(study, List.of(block));
             embedded = true;
         }
-        GenomicBlocks.BlockBlobs blobs = GenomicBlocks.encodeBlock(block,
-            new GenomicWriteContext(chromMap, referenceMd5));
+        registerBlockChromosomes(block, chromMap);
+        GenomicWriteContext ctx = new GenomicWriteContext(chromMap, referenceMd5);
+        if (scope.executor() == null) {
+            writeEncoded(block, GenomicBlocks.encodeBlock(block, ctx));
+            return;
+        }
+        drain(threads);   // window: threads in the pool plus this one
+        // The worker reads the map while later flushes mutate it: give each
+        // block a snapshot (registration above fixed every id it needs).
+        GenomicWriteContext bctx =
+            new GenomicWriteContext(new java.util.LinkedHashMap<>(chromMap), referenceMd5);
+        WrittenGenomicRun fb = block;
+        inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, bctx))));
+    }
+
+    /** Write completed blocks in sequence order; wait on the oldest until
+     *  at most {@code blockUntil} remain in flight. */
+    private void drain(int blockUntil) {
+        while (!inflight.isEmpty() && (inflight.size() > blockUntil || inflight.peekFirst().blobs().isDone())) {
+            InFlight f = inflight.pollFirst();
+            try {
+                writeEncoded(f.block(), f.blobs().get());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            } catch (java.util.concurrent.ExecutionException e) {
+                Throwable c = e.getCause();
+                throw c instanceof RuntimeException r ? r : new IllegalStateException(c);
+            }
+        }
+    }
+
+    private void writeEncoded(WrittenGenomicRun block, GenomicBlocks.BlockBlobs blobs) {
         ensureLayout();
         Object[] row = new Object[INDEX_FIELDS.size()];
         row[0] = readCount;
@@ -258,13 +316,19 @@ public final class GenomicStreamWriter implements AutoCloseable {
                 readCount = whole.readCount();
             }
             legacyParts.clear();
+            scope.close();
             return;
         }
-        flush();
-        if (rg == null) ensureLayout();
-        writeCloseTables();
-        if (!opt.provenanceRecords().isEmpty()) {
-            SpectralDatasetGenomicWriter.writeRunProvenance(rg, opt.provenanceRecords());
+        try {
+            flush();
+            drain(0);
+            if (rg == null) ensureLayout();
+            writeCloseTables();
+            if (!opt.provenanceRecords().isEmpty()) {
+                SpectralDatasetGenomicWriter.writeRunProvenance(rg, opt.provenanceRecords());
+            }
+        } finally {
+            scope.close();
         }
     }
 

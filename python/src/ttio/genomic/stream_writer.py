@@ -17,6 +17,7 @@ SPDX-License-Identifier: Apache-2.0
 """
 from __future__ import annotations
 
+import concurrent.futures as _cf
 import dataclasses
 from typing import Any
 
@@ -26,6 +27,7 @@ from .. import _hdf5_io as io
 from ..enums import Compression, Precision
 from ..providers.base import CompoundField, CompoundFieldKind
 from ..written_genomic_run import WrittenGenomicRun
+from .._threads import resolve_threads, pool_context
 from . import _blocks
 
 LAYOUT = "blocks_v1"
@@ -56,8 +58,30 @@ _INDEX_ARRAYS = (
 )
 
 
+def register_block_chromosomes(block: WrittenGenomicRun, chrom_map: dict) -> None:
+    """Assign ids for every chromosome name the block introduces, in the
+    order the block encoder assigns them (own names in read order, '*'
+    included, then mate names that are not '', '*' or '='), so the
+    encoder only reads the map and blocks can encode concurrently."""
+    for name in block.chromosomes:
+        if name not in chrom_map:
+            chrom_map[name] = len(chrom_map)
+    for name in block.mate_chromosomes:
+        if name and name not in ("*", "=") and name not in chrom_map:
+            chrom_map[name] = len(chrom_map)
+
+
 class GenomicStreamWriter:
-    """Append reads to one genomic run of an open-for-write dataset."""
+    """Append reads to one genomic run of an open-for-write dataset.
+
+    With ``threads`` > 1 (the ``threads`` argument, else ``TTIO_THREADS``,
+    else cores minus 8) completed blocks are encoded on a pool and written
+    in order by the caller's thread; at most ``threads + 1`` blocks are
+    pending or encoding, so memory is about that many block working sets
+    (about 1.8 GB for a 1 M-read block of 100 bp reads, 10 GB for
+    10.6 M reads of 250 bp). The file is byte for byte the one thread's.
+    ``read_count`` and ``block_count`` count written blocks; blocks still
+    in flight are counted after ``close``."""
 
     def __init__(self, study_group, run_name: str, *,
                  acquisition_mode: int, reference_uri: str, platform: str,
@@ -69,7 +93,8 @@ class GenomicStreamWriter:
                  signal_codec_overrides: dict | None = None,
                  signal_compression: str = "gzip",
                  opt_legacy_whole_channel: bool = False,
-                 provenance_records=None):
+                 provenance_records=None,
+                 threads: int | None = None):
         self._study = study_group
         self._provenance = list(provenance_records or [])
         self._name = run_name
@@ -104,8 +129,22 @@ class GenomicStreamWriter:
         self._embedded = False
         self._closed = False
         self._legacy_parts: list[WrittenGenomicRun] = []
+        self._threads = resolve_threads(threads)
+        self._window = self._threads + 1
+        self._pool = None
+        self._pool_ctx = None
+        self._inflight: list = []
+        if self._threads > 1 and not self._legacy:
+            self._pool_ctx = pool_context(self._threads)
+            self._pool_ctx.__enter__()
+            self._pool = _cf.ThreadPoolExecutor(max_workers=self._threads,
+                                                thread_name_prefix="ttio-block-encode")
 
     # ------------------------------------------------------------------
+    @property
+    def threads(self) -> int:
+        return self._threads
+
     @property
     def read_count(self) -> int:
         return self._read_count
@@ -141,7 +180,7 @@ class GenomicStreamWriter:
             while seg_end < n and chroms[seg_end] == chrom:
                 seg_end += 1
             if self._pending and self._pending_chrom != chrom:
-                self.flush()
+                self._cut_block()
             self._pending_chrom = chrom
             while start < seg_end:
                 room_reads = self._block_reads - self._pending_reads
@@ -156,11 +195,19 @@ class GenomicStreamWriter:
                 self._pending_reads += stop - start
                 self._pending_bytes += int(np.asarray(part.lengths, dtype=np.int64).sum())
                 if self._pending_reads >= self._block_reads or self._pending_bytes >= self._block_bytes:
-                    self.flush()
+                    self._cut_block()
                 start = stop
 
     def flush(self) -> None:
-        """Encode and write the pending reads as one block."""
+        """Cut the pending reads into a block and write every block:
+        after ``flush`` returns nothing is in flight. The writer cuts
+        blocks on its own at block boundaries without waiting."""
+        self._cut_block()
+        self._drain(block_until=0)
+
+    def _cut_block(self) -> None:
+        """Encode the pending reads as one block: inline with one thread,
+        else on the pool (written, in order, by a later drain)."""
         if self._legacy or not self._pending:
             return
         block = _blocks.concat_runs(self._pending)
@@ -171,12 +218,34 @@ class GenomicStreamWriter:
             from .._dataset_write_genomic import _reference_md5_for_run
             probe = _apply_meta(block, self._meta, None)
             self._reference_md5 = _reference_md5_for_run(probe)
+        register_block_chromosomes(block, self._chrom_map)
         block = _apply_meta(block, self._meta, self._chrom_map, self._reference_md5)
         if not self._embedded and self._meta["embed_reference"]:
             from .._dataset_write_genomic import _embed_references_for_runs
             _embed_references_for_runs(self._study, {self._name: block})
             self._embedded = True
-        blobs = _blocks.encode_block(block)
+        if self._pool is None:
+            self._write_encoded(block, _blocks.encode_block(block))
+            return
+        self._drain(block_until=self._window - 1)
+        self._inflight.append((block, self._pool.submit(_blocks.encode_block, block)))
+
+    def _drain(self, block_until: int) -> None:
+        """Write completed blocks in sequence order; wait on the oldest
+        until at most ``block_until`` remain in flight."""
+        while self._inflight and (len(self._inflight) > block_until or self._inflight[0][1].done()):
+            block, fut = self._inflight.pop(0)
+            self._write_encoded(block, fut.result())
+
+    def _shutdown_pool(self) -> None:
+        if self._pool is not None:
+            self._pool.shutdown(wait=True)
+            self._pool = None
+        if self._pool_ctx is not None:
+            self._pool_ctx.__exit__(None, None, None)
+            self._pool_ctx = None
+
+    def _write_encoded(self, block: WrittenGenomicRun, blobs: _blocks.BlockBlobs) -> None:
         self._ensure_layout(blobs)
         row = {"read_start": self._read_count, "n_reads": blobs.n_reads,
                "base_start": self._base_count, "n_bases": blobs.n_bases}
@@ -207,6 +276,12 @@ class GenomicStreamWriter:
         if self._closed:
             return
         self._closed = True
+        try:
+            self._close_inner()
+        finally:
+            self._shutdown_pool()
+
+    def _close_inner(self) -> None:
         if self._legacy:
             if self._legacy_parts:
                 from .._dataset_write_genomic import (

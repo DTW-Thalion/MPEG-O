@@ -15,11 +15,14 @@ from __future__ import annotations
 
 from typing import Any
 
+import concurrent.futures as _cf
+
 import numpy as np
 
 from . import _hdf5_io as io
 from .codecs import float_delta_zstd as fdz
 from .enums import Compression, Precision, SpectrumKind
+from ._threads import resolve_threads, pool_context
 
 _INDEX_COLUMNS: tuple[tuple[str, Precision, str], ...] = (
     ("lengths", Precision.UINT32, "<u4"),
@@ -41,7 +44,13 @@ _INSTRUMENT_FIELDS = ("manufacturer", "model", "serial_number",
 
 
 class SpectralStreamWriter:
-    """Append spectra to one spectral run of an open-for-write dataset."""
+    """Append spectra to one spectral run of an open-for-write dataset.
+
+    With ``threads`` > 1 (the ``threads`` argument, else ``TTIO_THREADS``,
+    else cores minus 8) the codec-17 blocks of each channel are encoded
+    on a pool and appended in emission order by the caller's thread; at
+    most ``threads + 1`` blocks per channel are in flight. The file is
+    byte for byte the one thread's."""
 
     def __init__(self, study_group, run_name: str, *, spectrum_class: str,
                  acquisition_mode: int, channel_names: list[str],
@@ -49,7 +58,8 @@ class SpectralStreamWriter:
                  opt_disable_float_delta: bool = False,
                  signal_compression: str = "gzip",
                  nucleus_type: str = "", solvent: str = "",
-                 provenance_records=None):
+                 provenance_records=None,
+                 threads: int | None = None):
         if signal_compression not in ("gzip", "none"):
             raise ValueError("SpectralStreamWriter supports signal_compression "
                              "'gzip' or 'none' (numpress is not a streaming codec)")
@@ -78,6 +88,19 @@ class SpectralStreamWriter:
         self._centroided: bool | None = None
         self._chromatograms: list = []
         self._closed = False
+        self._threads = resolve_threads(threads)
+        self._pool = None
+        self._pool_ctx = None
+        self._fdz_inflight: dict[str, list] = {c: [] for c in self._channels}
+        if self._threads > 1 and self._codec == "float_delta_zstd":
+            self._pool_ctx = pool_context(self._threads)
+            self._pool_ctx.__enter__()
+            self._pool = _cf.ThreadPoolExecutor(max_workers=self._threads,
+                                                thread_name_prefix="ttio-fdz-encode")
+
+    @property
+    def threads(self) -> int:
+        return self._threads
 
     def set_chromatograms(self, chromatograms) -> None:
         """Chromatogram traces written at close (mzML carries them
@@ -133,6 +156,17 @@ class SpectralStreamWriter:
         if self._closed:
             return
         self._closed = True
+        try:
+            self._close_inner()
+        finally:
+            if self._pool is not None:
+                self._pool.shutdown(wait=True)
+                self._pool = None
+            if self._pool_ctx is not None:
+                self._pool_ctx.__exit__(None, None, None)
+                self._pool_ctx = None
+
+    def _close_inner(self) -> None:
         self.flush()
         if self._g is None:
             self._ensure_layout()
@@ -142,6 +176,7 @@ class SpectralStreamWriter:
                 if buf is not None and len(buf):
                     self._emit_fdz_block(c, buf)
                     self._fdz_buf[c] = np.zeros(0, dtype=np.float64)
+                self._drain_fdz(c, block_until=0)
                 self._sig[c].write_slice(
                     0, np.frombuffer(fdz.header_bytes(self._fdz_n.get(c, 0),
                                                       self._fdz_blocks.get(c, 0)),
@@ -294,7 +329,23 @@ class SpectralStreamWriter:
         io.write_int_attr(self._g.open_group("spectrum_index"), "count", self._count)
 
     def _emit_fdz_block(self, c: str, values: np.ndarray) -> None:
-        transform, body = fdz.encode_block(np.ascontiguousarray(values, dtype=np.float64))
+        values = np.ascontiguousarray(values, dtype=np.float64)
+        if self._pool is None:
+            self._append_fdz(c, fdz.encode_block(values), len(values))
+            return
+        self._drain_fdz(c, block_until=self._threads)
+        self._fdz_inflight[c].append((self._pool.submit(fdz.encode_block, values), len(values)))
+
+    def _drain_fdz(self, c: str, block_until: int) -> None:
+        """Append completed blocks of channel ``c`` in emission order;
+        wait on the oldest until at most ``block_until`` remain in flight."""
+        q = self._fdz_inflight[c]
+        while q and (len(q) > block_until or q[0][0].done()):
+            fut, n = q.pop(0)
+            self._append_fdz(c, fut.result(), n)
+
+    def _append_fdz(self, c: str, encoded, n_values: int) -> None:
+        transform, body = encoded
         self._sig[c].append(np.frombuffer(fdz.block_bytes(transform, body), dtype=np.uint8))
-        self._fdz_n[c] += len(values)
+        self._fdz_n[c] += n_values
         self._fdz_blocks[c] += 1

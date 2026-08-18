@@ -1535,6 +1535,9 @@ block when the chromosome changes (REF_DIFF_V2 codes one chromosome
 per blob; unmapped `*` reads form their own blocks). A
 coordinate-sorted whole-genome BAM therefore streams through
 REF_DIFF_V2 as long same-chromosome stretches.
+Blocks are independent, so writers may encode
+several at once; the file does not record thread counts and is
+identical whatever the count.
 
 Every blob channel is codec-coded under this layout. Defaults when the
 caller sets no override: `cigars` RANS_ORDER0 (id 4, section 10.8;

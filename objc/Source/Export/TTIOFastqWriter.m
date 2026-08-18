@@ -15,6 +15,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOFastqWriter.h"
+#import "Core/TTIOThreads.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOGenomicIndex.h"
@@ -233,7 +234,7 @@ const NSUInteger TTIOFastqWriterProgressIntervalReads = 1000;
     NSMutableSet<NSString *> *seen = [NSMutableSet set];
     __block NSUInteger done = 0;
     NSError *iterErr = nil;
-    BOOL ok = [run iterReadsFrom:0 to:n error:&iterErr
+    BOOL ok = [run iterReadsFrom:0 to:n threads:[TTIOThreads resolve:nil] error:&iterErr
                       usingBlock:^(TTIOAlignedRead *r, NSUInteger i, BOOL *stop) {
         NSData *seq = [r.sequence dataUsingEncoding:NSASCIIStringEncoding] ?: [NSData data];
         NSUInteger len = seq.length;

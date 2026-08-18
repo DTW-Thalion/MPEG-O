@@ -89,12 +89,11 @@ static inline uint16_t be_read_u16(const uint8_t *p)
 //     count, ascending symbol on tie; never below 1.
 //
 // The comparator needs the count vector — we capture it via a
-// per-call file-scope pointer (qsort is deliberately not qsort_r
-// to keep the code portable).  No threading concern because each
-// call to ttio_rans_normalise_freqs uses the helper synchronously
-// before returning.
+// per-call thread-local pointer (qsort is deliberately not qsort_r
+// to keep the code portable; __thread keeps concurrent block encodes
+// independent).  Each call uses the helper synchronously before returning.
 
-static const uint64_t *s_norm_cnt = NULL;
+static __thread const uint64_t *s_norm_cnt = NULL;
 
 static int cmp_desc_count_asc_sym(const void *a, const void *b)
 {
@@ -367,9 +366,11 @@ static uint8_t *ttio_rans_encode_o1(const uint8_t *data, size_t n,
     }
     free(counts);
 
-    // Pre-compute cumulative + x_max per non-empty row.
-    static uint16_t cums[256][257];
-    static uint64_t xmaxes[256][256];
+    // Pre-compute cumulative + x_max per non-empty row.  Heap, not
+    // static: concurrent block encodes each need their own tables.
+    uint16_t (*cums)[257] = (uint16_t (*)[257])calloc(256, sizeof(uint16_t[257]));
+    uint64_t (*xmaxes)[256] = (uint64_t (*)[256])calloc(256, sizeof(uint64_t[256]));
+    if (!cums || !xmaxes) { free(cums); free(xmaxes); return NULL; }
     char nonempty[256] = {0};
     for (int ctx = 0; ctx < 256; ctx++) {
         const uint16_t *row = &freqs_out[ctx * 256];
@@ -385,7 +386,7 @@ static uint8_t *ttio_rans_encode_o1(const uint8_t *data, size_t n,
 
     size_t cap = n * 2 + 32;
     uint8_t *renorm = (uint8_t *)malloc(cap);
-    if (!renorm) return NULL;
+    if (!renorm) { free(cums); free(xmaxes); return NULL; }
     size_t r = 0;
 
     uint64_t x = TTIO_RANS_L;
@@ -395,14 +396,14 @@ static uint8_t *ttio_rans_encode_o1(const uint8_t *data, size_t n,
         uint16_t f = freqs_out[ctx * 256 + s];
         // f cannot legitimately be zero — if it is, the freqs table
         // is inconsistent with the input.  Bail out.
-        if (f == 0 || !nonempty[ctx]) { free(renorm); return NULL; }
+        if (f == 0 || !nonempty[ctx]) { free(renorm); free(cums); free(xmaxes); return NULL; }
         uint16_t c = cums[ctx][s];
         uint64_t xm = xmaxes[ctx][s];
         while (x >= xm) {
             if (r + 1 > cap) {
                 cap *= 2;
                 uint8_t *nr = (uint8_t *)realloc(renorm, cap);
-                if (!nr) { free(renorm); return NULL; }
+                if (!nr) { free(renorm); free(cums); free(xmaxes); return NULL; }
                 renorm = nr;
             }
             renorm[r++] = (uint8_t)(x & 0xFF);
@@ -411,6 +412,8 @@ static uint8_t *ttio_rans_encode_o1(const uint8_t *data, size_t n,
         x = (x / f) * (uint64_t)TTIO_RANS_M + (x % f) + c;
     }
 
+    free(cums);
+    free(xmaxes);
     size_t payload_len = 4 + r;
     uint8_t *payload = (uint8_t *)malloc(payload_len);
     if (!payload) { free(renorm); return NULL; }
@@ -430,8 +433,12 @@ static int ttio_rans_decode_o1(const uint8_t *payload, size_t payload_len,
     if (orig_len == 0) return 0;
     if (payload_len < 4) return -1;
 
-    static uint16_t cums[256][257];
-    static uint8_t  slot_tables[256][TTIO_RANS_M];
+    /* Heap, not static: concurrent block decodes each need their own
+     * tables. */
+    uint16_t (*cums)[257] = (uint16_t (*)[257])calloc(256, sizeof(uint16_t[257]));
+    uint8_t (*slot_tables)[TTIO_RANS_M] =
+        (uint8_t (*)[TTIO_RANS_M])calloc(256, sizeof(uint8_t[TTIO_RANS_M]));
+    if (!cums || !slot_tables) { free(cums); free(slot_tables); return -1; }
     char nonempty[256] = {0};
     for (int ctx = 0; ctx < 256; ctx++) {
         const uint16_t *row = &freqs[ctx * 256];
@@ -447,7 +454,7 @@ static int ttio_rans_decode_o1(const uint8_t *payload, size_t payload_len,
     size_t pos = 4;
     uint8_t prev = 0;
     for (size_t i = 0; i < orig_len; i++) {
-        if (!nonempty[prev]) return -1;
+        if (!nonempty[prev]) { free(cums); free(slot_tables); return -1; }
         uint16_t slot = (uint16_t)(x & TTIO_RANS_M_MASK);
         uint8_t s = slot_tables[prev][slot];
         out[i] = s;
@@ -455,11 +462,13 @@ static int ttio_rans_decode_o1(const uint8_t *payload, size_t payload_len,
         uint16_t c = cums[prev][s];
         x = (uint64_t)f * (x >> TTIO_RANS_M_BITS) + slot - c;
         while (x < TTIO_RANS_L) {
-            if (pos >= payload_len) return -1;
+            if (pos >= payload_len) { free(cums); free(slot_tables); return -1; }
             x = (x << 8) | payload[pos++];
         }
         prev = s;
     }
+    free(cums);
+    free(slot_tables);
     return 0;
 }
 

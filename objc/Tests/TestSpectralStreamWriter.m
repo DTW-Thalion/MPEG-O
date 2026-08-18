@@ -12,6 +12,9 @@
 #import "Import/TTIOMzMLReader.h"
 #import "Run/TTIOAcquisitionRun.h"
 #import "Run/TTIOSpectrumIndex.h"
+#import "Run/TTIOInstrumentConfig.h"
+#import "ValueClasses/TTIOEncodingSpec.h"
+#import "ValueClasses/TTIOEnums.h"
 #import "Run/TTIOSpectralStreamWriter.h"
 #import "Run/TTIOWrittenSpectralBatch.h"
 #import "Spectra/TTIOSpectrum.h"
@@ -199,6 +202,132 @@ static void sswZlibAndMemory(void)
     PASS(back.signalCompression == TTIOCompressionZlib, "spectral stream: zlib run has no codec 17");
     [p close];
     [TTIOMemoryProvider discardStore:url];
+}
+
+static NSArray<TTIOMassSpectrum *> *sswSynthSpectra(NSUInteger nSpec, NSUInteger nPts, unsigned seed)
+{
+    srand(seed);
+    TTIOEncodingSpec *enc =
+        [TTIOEncodingSpec specWithPrecision:TTIOPrecisionFloat64
+                       compressionAlgorithm:TTIOCompressionZlib
+                                  byteOrder:TTIOByteOrderLittleEndian];
+    NSMutableArray *spectra = [NSMutableArray arrayWithCapacity:nSpec];
+    NSMutableData *mzD = [NSMutableData dataWithLength:nPts * sizeof(double)];
+    NSMutableData *inD = [NSMutableData dataWithLength:nPts * sizeof(double)];
+    for (NSUInteger k = 0; k < nSpec; k++) {
+        double *mz = mzD.mutableBytes, *in = inD.mutableBytes;
+        double base = 100.0 + (double)(k % 977);
+        for (NSUInteger i = 0; i < nPts; i++) {
+            mz[i] = base + (double)i * 0.37 + (double)(rand() % 1000) * 1e-4;
+            in[i] = (double)(rand() % 100000) * 0.1;
+        }
+        TTIOSignalArray *mzA = [[TTIOSignalArray alloc] initWithBuffer:[mzD copy] length:nPts encoding:enc axis:nil];
+        TTIOSignalArray *inA = [[TTIOSignalArray alloc] initWithBuffer:[inD copy] length:nPts encoding:enc axis:nil];
+        [spectra addObject:[[TTIOMassSpectrum alloc]
+            initWithMzArray:mzA intensityArray:inA msLevel:1
+                   polarity:TTIOPolarityPositive scanWindow:nil indexPosition:k
+            scanTimeSeconds:(double)k * 0.01 precursorMz:0 precursorCharge:0 error:NULL]];
+    }
+    return spectra;
+}
+
+/* Write the spectra with the given thread count; the path's study holds
+ * run "r". */
+static BOOL sswWriteSynth(NSString *path, NSArray<TTIOMassSpectrum *> *spectra, NSUInteger threads)
+{
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(path, TTIOStorageOpenModeCreate, &prov);
+    TTIOInstrumentConfig *cfg = [[TTIOInstrumentConfig alloc]
+        initWithManufacturer:@"" model:@"" serialNumber:@"" sourceType:@""
+                analyzerType:@"" detectorType:@""];
+    TTIOSpectralStreamWriterOptions *o = [TTIOSpectralStreamWriterOptions
+        msOptionsWithMode:TTIOAcquisitionModeMS1DDA
+             channelNames:@[@"mz", @"intensity"] instrumentConfig:cfg];
+    o.batchSpectra = 1000;
+    o.threads = threads;
+    TTIOSpectralStreamWriter *w = [[TTIOSpectralStreamWriter alloc]
+        initWithStudyGroup:study runName:@"r" options:o];
+    if (w.threads != threads) { PASS(NO, "bp-ms: writer threads resolved"); return NO; }
+    BOOL ok = YES;
+    for (TTIOMassSpectrum *sp in spectra) { ok = ok && [w appendSpectrum:sp error:&err]; }
+    ok = ok && [w close:&err];
+    [prov close];
+    if (!ok) PASS(NO, "bp-ms: write threads=%lu (%s)", (unsigned long)threads,
+                  [[err localizedDescription] UTF8String] ?: "");
+    return ok;
+}
+
+static NSData *sswChannelBytes(NSString *path, NSString *name)
+{
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(path, TTIOStorageOpenModeRead, &prov);
+    id<TTIOStorageDataset> ds = [[[[study openGroupNamed:@"ms_runs" error:NULL]
+        openGroupNamed:@"r" error:NULL] openGroupNamed:@"signal_channels" error:NULL]
+        openDatasetNamed:name error:NULL];
+    NSData *d = [ds readAll:NULL];
+    [prov close];
+    return d;
+}
+
+static void sswThreadedByteIdentical(void)
+{
+    NSArray *spectra = sswSynthSpectra(40000, 64, 13);
+    NSString *a = sswTmp("bp-serial"), *b = sswTmp("bp-threaded");
+    if (!sswWriteSynth(a, spectra, 1) || !sswWriteSynth(b, spectra, 5)) return;
+    for (NSString *ch in @[@"mz_values", @"intensity_values"]) {
+        NSData *da = sswChannelBytes(a, ch), *db = sswChannelBytes(b, ch);
+        PASS(da != nil && [da isEqualToData:db],
+             "bp-ms: %s FDZ1 bytes identical threads=1 vs 5 (%lu vs %lu)",
+             [ch UTF8String], (unsigned long)da.length, (unsigned long)db.length);
+    }
+
+    // Threaded reads on the threads=5 file.
+    NSError *err = nil;
+    id<TTIOStorageProvider> prov = nil;
+    id<TTIOStorageGroup> study = sswStudy(b, TTIOStorageOpenModeRead, &prov);
+    TTIOAcquisitionRun *run = [TTIOAcquisitionRun
+        readFromGroup:[study openGroupNamed:@"ms_runs" error:&err] name:@"r" error:&err];
+    PASS(run != nil && run.count == spectra.count, "bp-ms: streamed run open (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    if (!run) { [prov close]; return; }
+    NSUInteger totalV = 0;
+    for (NSUInteger i = 0; i < run.spectrumIndex.count; i++) totalV += [run.spectrumIndex lengthAt:i];
+    NSData *serialR = [run channelRange:@"mz" start:1000 count:totalV - 2000 threads:1 error:&err];
+    NSData *threadedR = [run channelRange:@"mz" start:1000 count:totalV - 2000 threads:4 error:&err];
+    PASS(serialR != nil && [serialR isEqualToData:threadedR],
+         "bp-ms: channelRange threads=4 equals serial (%lu values)",
+         (unsigned long)(serialR.length / sizeof(double)));
+
+    NSMutableArray *sums1 = [NSMutableArray array], *sums4 = [NSMutableArray array];
+    BOOL ok1 = [run iterSpectraWithBatch:4096 threads:1 error:&err
+                              usingBlock:^(id sp, NSUInteger index, BOOL *stop) {
+        TTIOSignalArray *ia = ((TTIOMassSpectrum *)sp).intensityArray;
+        const double *v = [ia float64Buffer].bytes;
+        double t = 0; for (NSUInteger i = 0; i < ia.length; i++) t += v[i];
+        [sums1 addObject:@(t)];
+    }];
+    BOOL ok4 = [run iterSpectraWithBatch:4096 threads:4 error:&err
+                              usingBlock:^(id sp, NSUInteger index, BOOL *stop) {
+        TTIOSignalArray *ia = ((TTIOMassSpectrum *)sp).intensityArray;
+        const double *v = [ia float64Buffer].bytes;
+        double t = 0; for (NSUInteger i = 0; i < ia.length; i++) t += v[i];
+        [sums4 addObject:@(t)];
+    }];
+    PASS(ok1 && ok4 && sums1.count == spectra.count && [sums1 isEqualToArray:sums4],
+         "bp-ms: iterSpectra threads=4 equals serial (%lu spectra)", (unsigned long)sums4.count);
+    [prov close];
+    [[NSFileManager defaultManager] removeItemAtPath:a error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:b error:NULL];
+}
+
+void testSpectralStreamWriterThreads(void);
+void testSpectralStreamWriterThreads(void)
+{
+    @autoreleasepool {
+        sswThreadedByteIdentical();
+    }
 }
 
 void testSpectralStreamWriter(void)

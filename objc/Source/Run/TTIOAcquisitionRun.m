@@ -16,6 +16,7 @@
  * Copyright (c) 2026 The Thalion Initiative
  */
 #import "TTIOAcquisitionRun.h"
+#import "Core/TTIOThreads.h"
 #import "TTIOInstrumentConfig.h"
 #import "TTIOSpectrumIndex.h"
 #import "Genomics/TTIOGenomicIndex.h"  // TTIOOffsetsFromLengths (v1.10 #10)
@@ -64,8 +65,18 @@ static void _buildStdChannelEncoding(void)
                                   byteOrder:TTIOByteOrderLittleEndian];
 }
 
+/** One FLOAT_DELTA_ZSTD block decoding in flight. */
+@interface TTIOInFlightFdzDecode : NSObject
+@property (nonatomic, strong, nullable) NSData *values;
+@property (nonatomic) BOOL done;
+@end
+
+@implementation TTIOInFlightFdzDecode
+@end
+
 @implementation TTIOAcquisitionRun
 {
+    NSUInteger _iterThreads;
     // Phase 1: Run protocol name. Set by readFromGroup:name: /
     // readFromStorageGroup:name: at load time, by
     // setPersistenceFilePath:runName: post-load (kept in sync with
@@ -1080,6 +1091,139 @@ static void _buildStdChannelEncoding(void)
     return full;
 }
 
+/** As -_fdzRange:start:count:error: with block decodes on a pool: block
+ *  bodies are read on the caller's thread, decoded concurrently, and
+ *  appended in block order. */
+- (NSData *)_fdzRange:(NSString *)chName
+                start:(NSUInteger)start
+                count:(NSUInteger)count
+              threads:(NSUInteger)nthreads
+                error:(NSError **)error
+{
+    id<TTIOStorageDataset> ds = _storageDatasets[chName];
+    if (!ds) {
+        if (error) *error = TTIOMakeError(TTIOErrorDatasetOpen,
+            @"signal channel '%@' has no open dataset", chName);
+        return nil;
+    }
+    TTIOFDZByteRangeReader reader = ^NSData *(NSUInteger offset, NSUInteger n) {
+        id raw = [ds readSliceAtOffset:offset count:n error:NULL];
+        return [raw isKindOfClass:[NSData class]] ? raw : nil;
+    };
+    TTIOFDZBlockTable *table;
+    @synchronized (self) {
+        if (!_fdzTables) _fdzTables = [NSMutableDictionary dictionary];
+        table = _fdzTables[chName];
+        if (!table) {
+            table = [TTIOFloatDeltaZstd readBlockTableWithReader:reader error:error];
+            if (!table) return nil;
+            _fdzTables[chName] = table;
+        }
+    }
+    if ((uint64_t)start + count > table.nValues) {
+        if (error) *error = TTIOMakeError(TTIOErrorOutOfRange,
+            @"channel '%@' range [%lu, %lu) beyond %llu values", chName,
+            (unsigned long)start, (unsigned long)(start + count), (unsigned long long)table.nValues);
+        return nil;
+    }
+    NSUInteger bs = table.blockSize;
+    NSUInteger k0 = start / bs;
+    NSUInteger k1 = (start + count - 1) / bs;
+    if (nthreads <= 1 || count == 0 || k1 == k0) {
+        return [self _fdzRange:chName start:start count:count error:error];
+    }
+    TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:nthreads];
+    if (pool.queue == nil) {
+        return [self _fdzRange:chName start:start count:count error:error];
+    }
+    NSMutableDictionary<NSNumber *, TTIOInFlightFdzDecode *> *pending = [NSMutableDictionary dictionary];
+    NSCondition *cond = [NSCondition new];
+    /* The one-block cache still serves a block the previous range call
+     * already decoded. */
+    NSData *cachedVals = nil;
+    NSUInteger cachedK = NSNotFound;
+    @synchronized (self) {
+        NSNumber *ck = _fdzBlockCacheIndex[chName];
+        if (ck != nil && _fdzBlockCache[chName] != nil
+            && ck.unsignedIntegerValue >= k0 && ck.unsignedIntegerValue <= k1) {
+            cachedK = ck.unsignedIntegerValue;
+            cachedVals = _fdzBlockCache[chName];
+        }
+    }
+    void (^submit)(NSUInteger) = ^(NSUInteger k) {
+        if (k > k1 || pending[@(k)]) return;
+        if (k == cachedK) {
+            TTIOInFlightFdzDecode *f = [TTIOInFlightFdzDecode new];
+            f.values = cachedVals;
+            f.done = YES;
+            pending[@(k)] = f;
+            return;
+        }
+        TTIOInFlightFdzDecode *f = [TTIOInFlightFdzDecode new];
+        pending[@(k)] = f;
+        NSData *body = reader((NSUInteger)[table offsetAt:k], [table lengthAt:k]);   /* storage read, this thread */
+        if (body.length != [table lengthAt:k]) { f.done = YES; return; }
+        NSUInteger base = (NSUInteger)[table offsetAt:k];
+        TTIOFDZByteRangeReader memReader = ^NSData *(NSUInteger offset, NSUInteger n) {
+            if (offset < base || offset + n > base + body.length) return nil;
+            return [body subdataWithRange:NSMakeRange(offset - base, n)];
+        };
+        [pool.queue addOperationWithBlock:^{
+            NSData *v = nil;
+            @try {
+                v = [TTIOFloatDeltaZstd decodeBlock:k table:table reader:memReader error:NULL];
+            } @catch (NSException *ex) {
+                v = nil;
+            }
+            [cond lock];
+            f.values = v;
+            f.done = YES;
+            [cond broadcast];
+            [cond unlock];
+        }];
+    };
+    for (NSUInteger k = k0; k <= MIN(k1, k0 + nthreads - 1); k++) submit(k);
+    NSMutableData *out = [NSMutableData dataWithCapacity:count * sizeof(double)];
+    NSUInteger pos = start, end = start + count;
+    BOOL ok = YES;
+    for (NSUInteger k = k0; k <= k1; k++) {
+        TTIOInFlightFdzDecode *f = pending[@(k)];
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+        [pending removeObjectForKey:@(k)];
+        if (!f.values) {
+            if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                @"FLOAT_DELTA_ZSTD block %lu of '%@' failed to decode",
+                (unsigned long)k, chName);
+            ok = NO;
+            break;
+        }
+        submit(k + nthreads);
+        NSUInteger blockStart = k * bs;
+        NSUInteger from = pos - blockStart;
+        NSUInteger to = MIN(end - blockStart, f.values.length / sizeof(double));
+        [out appendBytes:(const uint8_t *)f.values.bytes + from * sizeof(double)
+                  length:(to - from) * sizeof(double)];
+        pos = blockStart + to;
+        if (k == k1) {
+            @synchronized (self) {
+                if (!_fdzBlockCache) _fdzBlockCache = [NSMutableDictionary dictionary];
+                if (!_fdzBlockCacheIndex) _fdzBlockCacheIndex = [NSMutableDictionary dictionary];
+                _fdzBlockCache[chName] = f.values;
+                _fdzBlockCacheIndex[chName] = @(k);
+            }
+        }
+    }
+    for (TTIOInFlightFdzDecode *f in pending.allValues) {
+        [cond lock];
+        while (!f.done) [cond wait];
+        [cond unlock];
+    }
+    [pool close];
+    return ok ? out : nil;
+}
+
 - (NSData *)_fdzRange:(NSString *)chName
                 start:(NSUInteger)start
                 count:(NSUInteger)count
@@ -1199,6 +1343,33 @@ static void _buildStdChannelEncoding(void)
     return [self channelRange:channelName offset:start count:count error:error];
 }
 
+- (NSData *)channelRange:(NSString *)channelName
+                   start:(NSUInteger)start
+                   count:(NSUInteger)count
+                 threads:(NSUInteger)threads
+                   error:(NSError **)error
+{
+    NSUInteger nthreads = threads ? threads : [TTIOThreads resolve:nil];
+    if (nthreads > 1 && !_inMemorySpectra && !_decryptedChannels[channelName]
+        && !_numpressChannels[channelName] && !_cachedFullChannels[channelName]
+        && [_fdzChannels containsObject:channelName]) {
+        return [self _fdzRange:channelName start:start count:count threads:nthreads error:error];
+    }
+    return [self channelRange:channelName start:start count:count error:error];
+}
+
+- (BOOL)iterSpectraWithBatch:(NSUInteger)batch
+                     threads:(NSUInteger)threads
+                       error:(NSError **)error
+                  usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block
+{
+    NSUInteger keep = _iterThreads;
+    _iterThreads = threads ? threads : [TTIOThreads resolve:nil];
+    BOOL ok = [self iterSpectraWithBatch:batch error:error usingBlock:block];
+    _iterThreads = keep;
+    return ok;
+}
+
 - (BOOL)iterSpectraWithBatch:(NSUInteger)batch
                        error:(NSError **)error
                   usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block
@@ -1220,7 +1391,9 @@ static void _buildStdChannelEncoding(void)
         NSUInteger end = (NSUInteger)([_spectrumIndex offsetAt:b1 - 1] + [_spectrumIndex lengthAt:b1 - 1]);
         NSMutableDictionary<NSString *, NSData *> *cols = [NSMutableDictionary dictionary];
         for (NSString *c in _channelNames) {
-            NSData *d = [self channelRange:c offset:start count:end - start error:error];
+            NSData *d = _iterThreads > 1
+                ? [self channelRange:c start:start count:end - start threads:_iterThreads error:error]
+                : [self channelRange:c offset:start count:end - start error:error];
             if (!d) return NO;
             cols[c] = d;
         }

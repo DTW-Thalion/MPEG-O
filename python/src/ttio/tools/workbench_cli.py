@@ -312,6 +312,8 @@ def cmd_encode(args) -> int:
     Returns ``0`` on success, ``2`` on tool failure, ``3`` when the
     requested format is unsupported.
     """
+    if getattr(args, "threads", None) is not None:
+        os.environ["TTIO_THREADS"] = str(int(args.threads))
     # FASTA / FASTQ keep their richer dedicated CLIs (reference vs.
     # unaligned modes, PHRED options); everything else dispatches
     # through the format registry, which mirrors the GUI's
@@ -380,6 +382,8 @@ def cmd_export(args) -> int:
     Returns ``0`` on success, ``2`` on tool failure, ``3`` when the
     requested format is unsupported.
     """
+    if getattr(args, "threads", None) is not None:
+        os.environ["TTIO_THREADS"] = str(int(args.threads))
     # FASTA / FASTQ keep their richer dedicated CLIs (reference vs.
     # run modes, line-width / PHRED options); everything else
     # dispatches through the export registry.
@@ -941,6 +945,9 @@ def build_parser() -> argparse.ArgumentParser:
                           "container.")
     pe.add_argument("--extra", nargs=argparse.REMAINDER,
                      help="Extra args forwarded to the format-specific CLI.")
+    pe.add_argument("--threads", type=int, default=None,
+                     help="worker threads for block encode/decode (default: "
+                          "TTIO_THREADS, else cores minus 8; 1 = serial)")
     pe.set_defaults(func=cmd_encode)
 
     # export
@@ -957,6 +964,9 @@ def build_parser() -> argparse.ArgumentParser:
                           "--extra --reference <fasta>.)")
     px.add_argument("--output", required=True)
     px.add_argument("--extra", nargs=argparse.REMAINDER)
+    px.add_argument("--threads", type=int, default=None,
+                     help="worker threads for block encode/decode (default: "
+                          "TTIO_THREADS, else cores minus 8; 1 = serial)")
     px.set_defaults(func=cmd_export)
 
     # query

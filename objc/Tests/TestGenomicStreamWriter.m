@@ -15,6 +15,7 @@
 #import "Genomics/TTIOGenomicBlocks.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "Genomics/TTIOAlignedRead.h"
+#import "Genomics/TTIOGenomicRun.h"
 #import "Genomics/TTIOLazyReference.h"
 #import "Providers/TTIOMemoryProvider.h"
 #import "Providers/TTIOProviderRegistry.h"
@@ -281,4 +282,250 @@ void testGenomicStreamWriter(void)
         gswWriteMinimalDefault();
         gswLazyReference();
     }
+}
+
+// ── block-parallel writer ─────────────────────────────────────────────
+
+/* Two chromosomes, placed-unmapped reads (every 97th, cigar "*"),
+ * cross-chromosome mates (every 13th), "=" mates (every 3rd); mirrors the
+ * Python and Java tests. */
+static int gswCmpInt64(const void *a, const void *b)
+{
+    int64_t x = *(const int64_t *)a, y = *(const int64_t *)b;
+    return x < y ? -1 : (x > y ? 1 : 0);
+}
+
+static TTIOWrittenGenomicRun *gswBigSyntheticRun(NSUInteger n, unsigned seed)
+{
+    const NSUInteger L = 100;
+    srand(seed);
+    const char *alphabet = "ACGT";
+    NSMutableData *ref1 = [NSMutableData dataWithLength:400000];
+    NSMutableData *ref2 = [NSMutableData dataWithLength:400000];
+    uint8_t *r1 = ref1.mutableBytes, *r2 = ref2.mutableBytes;
+    for (NSUInteger i = 0; i < 400000; i++) { r1[i] = alphabet[rand() % 4]; r2[i] = alphabet[rand() % 4]; }
+    NSDictionary *refs = @{@"chr1": ref1, @"chr2": ref2};
+    NSUInteger half = n / 2;
+    NSMutableData *posD = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    int64_t *pos = posD.mutableBytes;
+    for (NSUInteger i = 0; i < half; i++) pos[i] = 1 + rand() % 399000;
+    for (NSUInteger i = half; i < n; i++) pos[i] = 1 + rand() % 399000;
+    qsort(pos, half, sizeof(int64_t), gswCmpInt64);
+    qsort(pos + half, n - half, sizeof(int64_t), gswCmpInt64);
+    NSMutableData *seqD = [NSMutableData dataWithLength:n * L];
+    NSMutableData *qualD = [NSMutableData dataWithLength:n * L];
+    NSMutableData *mqD = [NSMutableData dataWithLength:n];
+    NSMutableData *flD = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    NSMutableData *offD = [NSMutableData dataWithLength:n * sizeof(uint64_t)];
+    NSMutableData *lenD = [NSMutableData dataWithLength:n * sizeof(uint32_t)];
+    NSMutableData *mpD = [NSMutableData dataWithLength:n * sizeof(int64_t)];
+    NSMutableData *tlD = [NSMutableData dataWithLength:n * sizeof(int32_t)];
+    uint8_t *seq = seqD.mutableBytes, *qual = qualD.mutableBytes, *mq = mqD.mutableBytes;
+    uint32_t *fl = flD.mutableBytes, *len = lenD.mutableBytes;
+    uint64_t *off = offD.mutableBytes;
+    int64_t *mp = mpD.mutableBytes;
+    NSMutableArray *chroms = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *cigars = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *names = [NSMutableArray arrayWithCapacity:n];
+    NSMutableArray *mates = [NSMutableArray arrayWithCapacity:n];
+    for (NSUInteger i = 0; i < n; i++) {
+        NSString *c = i < half ? @"chr1" : @"chr2";
+        [chroms addObject:c];
+        const uint8_t *ref = [refs[c] bytes];
+        memcpy(seq + i * L, ref + pos[i] - 1, L);
+        for (int k = 0; k < 3; k++) seq[i * L + rand() % L] = alphabet[rand() % 4];
+        for (NSUInteger k = 0; k < L; k++) qual[i * L + k] = (uint8_t)(2 + rand() % 38);
+        off[i] = i * L; len[i] = (uint32_t)L; mq[i] = 60;
+        [names addObject:[NSString stringWithFormat:@"r%06lu", (unsigned long)i]];
+        fl[i] = 0x3; mp[i] = -1;
+        if (i % 97 == 0) { [cigars addObject:@"*"]; fl[i] = 0x5; }
+        else [cigars addObject:[NSString stringWithFormat:@"%luM", (unsigned long)L]];
+        if (i % 13 == 0) { [mates addObject:[c isEqualToString:@"chr1"] ? @"chr2" : @"chr1"]; mp[i] = pos[(i * 7) % n]; }
+        else if (i % 3 == 0) { [mates addObject:@"="]; mp[i] = pos[i] + 200; }
+        else [mates addObject:@""];
+    }
+    TTIOWrittenGenomicRun *run = [[TTIOWrittenGenomicRun alloc]
+        initWithAcquisitionMode:TTIOAcquisitionModeGenomicWGS
+                   referenceUri:@"synthetic" platform:@"ILLUMINA" sampleName:@"s"
+                      positions:posD mappingQualities:mqD flags:flD
+                      sequences:seqD qualities:qualD offsets:offD lengths:lenD
+                         cigars:cigars readNames:names mateChromosomes:mates
+                  matePositions:mpD templateLengths:tlD chromosomes:chroms
+              signalCompression:TTIOCompressionZlib signalCodecOverrides:@{}];
+    run.referenceChromSeqs = refs;
+    run.embedReference = YES;
+    return run;
+}
+
+static BOOL gswWriteThreadsToStudy(id<TTIOStorageGroup> study, TTIOWrittenGenomicRun *run,
+                                   NSUInteger threads, NSUInteger blockReads)
+{
+    NSError *err = nil;
+    TTIOGenomicStreamWriterOptions *o = [TTIOGenomicStreamWriterOptions optionsFromRun:run];
+    o.blockReads = blockReads;
+    o.threads = threads;
+    TTIOGenomicStreamWriter *w = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"g" options:o];
+    NSUInteger n = run.readCount;
+    for (NSUInteger a = 0; a < n; a += 7001) {
+        TTIOWrittenGenomicRun *part = [TTIOGenomicBlocks sliceRun:run from:a to:MIN(n, a + 7001)];
+        if (![w appendBatch:part error:&err]) { PASS(NO, "bp: appendBatch (%s)", [[err localizedDescription] UTF8String] ?: ""); return NO; }
+    }
+    PASS(w.threads == threads, "bp: writer threads resolved to %lu", (unsigned long)threads);
+    if (![w close:&err]) { PASS(NO, "bp: close (%s)", [[err localizedDescription] UTF8String] ?: ""); return NO; }
+    return YES;
+}
+
+static id<TTIOStorageGroup> gswWriteThreads(NSString *url, TTIOWrittenGenomicRun *run,
+                                            NSUInteger threads, NSUInteger blockReads)
+{
+    id<TTIOStorageGroup> study = gswStudy(url);
+    return gswWriteThreadsToStudy(study, run, threads, blockReads) ? study : nil;
+}
+
+static NSString *gswCanon(id v)
+{
+    if (v == nil) return @"nil";
+    if ([v isKindOfClass:[NSData class]]) {
+        NSData *d = (NSData *)v;
+        uint8_t md[16] = {0};
+        // cheap digest: fold length + bytes
+        unsigned long h = 1469598103u ^ d.length;
+        const uint8_t *b = d.bytes;
+        for (NSUInteger i = 0; i < d.length; i++) h = (h * 1099511628211ul) ^ b[i];
+        (void)md;
+        return [NSString stringWithFormat:@"data:%lu:%lx", (unsigned long)d.length, h];
+    }
+    if ([v isKindOfClass:[NSArray class]]) {
+        NSMutableString *s = [NSMutableString stringWithString:@"["];
+        for (id o in (NSArray *)v) { [s appendString:gswCanon(o)]; [s appendString:@","]; }
+        [s appendString:@"]"];
+        return s;
+    }
+    if ([v isKindOfClass:[NSDictionary class]]) {
+        NSMutableString *s = [NSMutableString stringWithString:@"{"];
+        for (NSString *k in [[(NSDictionary *)v allKeys] sortedArrayUsingSelector:@selector(compare:)]) {
+            [s appendFormat:@"%@=%@;", k, gswCanon(((NSDictionary *)v)[k])];
+        }
+        [s appendString:@"}"];
+        return s;
+    }
+    return [v description];
+}
+
+static void gswCollect(id<TTIOStorageGroup> g, NSString *prefix, NSMutableDictionary *out)
+{
+    NSMutableString *attrs = [NSMutableString string];
+    for (NSString *a in [[g attributeNames] sortedArrayUsingSelector:@selector(compare:)]) {
+        [attrs appendFormat:@"%@=%@;", a, gswCanon([g attributeValueForName:a error:NULL])];
+    }
+    out[prefix] = attrs;
+    for (NSString *c in [g childNames]) {
+        NSError *e = nil;
+        id<TTIOStorageGroup> sub = [g openGroupNamed:c error:&e];
+        if (sub) {
+            gswCollect(sub, [NSString stringWithFormat:@"%@/%@", prefix, c], out);
+        } else {
+            id<TTIOStorageDataset> ds = [g openDatasetNamed:c error:&e];
+            if (!ds) continue;
+            NSMutableString *da = [NSMutableString string];
+            for (NSString *a in [[ds attributeNames] sortedArrayUsingSelector:@selector(compare:)]) {
+                [da appendFormat:@"%@=%@;", a, gswCanon([ds attributeValueForName:a error:NULL])];
+            }
+            out[[NSString stringWithFormat:@"%@/%@", prefix, c]] =
+                [NSString stringWithFormat:@"%@|%@", da, gswCanon([ds readAll:NULL])];
+        }
+    }
+}
+
+static void gswThreadedIdentical(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(60000, 7);
+    id<TTIOStorageGroup> a = gswWriteThreads([NSString stringWithFormat:@"memory://gsw-bp-a-%d", (int)getpid()], run, 1, 20000);
+    id<TTIOStorageGroup> b = gswWriteThreads([NSString stringWithFormat:@"memory://gsw-bp-b-%d", (int)getpid()], run, 6, 20000);
+    if (!a || !b) return;
+    NSMutableDictionary *ma = [NSMutableDictionary dictionary], *mb = [NSMutableDictionary dictionary];
+    gswCollect(a, @"", ma);
+    gswCollect(b, @"", mb);
+    PASS([[NSSet setWithArray:ma.allKeys] isEqualToSet:[NSSet setWithArray:mb.allKeys]],
+         "bp: same object set (%lu vs %lu)", (unsigned long)ma.count, (unsigned long)mb.count);
+    BOOL same = YES;
+    NSString *bad = nil;
+    for (NSString *k in ma) {
+        if (![ma[k] isEqualToString:mb[k] ?: @""]) { same = NO; bad = k; break; }
+    }
+    PASS(same, "bp: threads=1 and threads=6 files identical%s%s",
+         bad ? " first diff at " : "", bad ? [bad UTF8String] : "");
+}
+
+static void gswRegisterOrder(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(200, 3);
+    NSMutableDictionary *m = [NSMutableDictionary dictionary];
+    [TTIOGenomicStreamWriter registerBlockChromosomes:run intoMap:m];
+    PASS([m[@"chr1"] intValue] == 0, "bp: own names first (chr1 -> 0)");
+    NSUInteger size = m.count;
+    [TTIOGenomicStreamWriter registerBlockChromosomes:run intoMap:m];
+    PASS(m.count == size, "bp: registration is idempotent");
+}
+
+/* One iterReads pass as name|sequence|cigar|mateChromosome lines. */
+static NSArray<NSString *> *gswIterStrings(TTIOGenomicRun *g, NSUInteger start, NSUInteger stop,
+                                           NSUInteger threads, BOOL *okOut)
+{
+    NSMutableArray *out = [NSMutableArray array];
+    NSError *err = nil;
+    BOOL ok = [g iterReadsFrom:start to:stop threads:threads error:&err
+                    usingBlock:^(TTIOAlignedRead *r, NSUInteger index, BOOL *stop2) {
+        [out addObject:[NSString stringWithFormat:@"%lu:%@|%@|%@|%@", (unsigned long)index,
+                        r.readName, r.sequence, r.cigar, r.mateChromosome ?: @""]];
+    }];
+    if (!ok) PASS(NO, "bp: iterReads threads=%lu (%s)", (unsigned long)threads,
+                  [[err localizedDescription] UTF8String] ?: "");
+    *okOut = ok;
+    return out;
+}
+
+static void gswIterReadsThreaded(void)
+{
+    /* A real HDF5 file: the default REF_DIFF reference resolver is built
+     * from the run group's owning file (nil on the memory provider). */
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(30000, 11);
+    NSString *path = [NSString stringWithFormat:@"/tmp/gsw-bp-it-%d.tio", (int)getpid()];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+    NSError *err = nil;
+    id<TTIOStorageProvider> pw = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path mode:TTIOStorageOpenModeCreate provider:nil error:&err];
+    id<TTIOStorageGroup> ws = [[pw rootGroupWithError:&err] createGroupNamed:@"study" error:&err];
+    if (!gswWriteThreadsToStudy(ws, run, 1, 5000)) { [pw close]; return; }
+    [pw close];
+    id<TTIOStorageProvider> pr = [[TTIOProviderRegistry sharedRegistry]
+        openURL:path mode:TTIOStorageOpenModeRead provider:nil error:&err];
+    id<TTIOStorageGroup> study = [[pr rootGroupWithError:&err] openGroupNamed:@"study" error:&err];
+    id<TTIOStorageGroup> rg = [[study openGroupNamed:@"genomic_runs" error:&err]
+                               openGroupNamed:@"g" error:&err];
+    TTIOGenomicRun *g = [TTIOGenomicRun openFromGroup:rg name:@"g" error:&err];
+    PASS(g != nil && [g readCount] == 30000, "bp: reader run open (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    if (!g) return;
+    BOOL ok1 = NO, ok4 = NO;
+    NSArray *serial = gswIterStrings(g, 0, 30000, 1, &ok1);
+    NSArray *threaded = gswIterStrings(g, 0, 30000, 4, &ok4);
+    PASS(ok1 && ok4 && [serial isEqualToArray:threaded],
+         "bp: iterReads threads=4 equals serial (%lu reads)", (unsigned long)threaded.count);
+    BOOL okA = NO, okB = NO;
+    NSArray *subS = gswIterStrings(g, 12345, 17890, 1, &okA);
+    NSArray *subT = gswIterStrings(g, 12345, 17890, 3, &okB);
+    PASS(okA && okB && subS.count == 17890 - 12345 && [subS isEqualToArray:subT],
+         "bp: iterReads sub-range threads=3 equals serial (%lu reads)", (unsigned long)subT.count);
+    [pr close];
+    [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
+}
+
+void testGenomicStreamWriterThreads(void);
+void testGenomicStreamWriterThreads(void)
+{
+    gswRegisterOrder();
+    gswThreadedIdentical();
+    gswIterReadsThreaded();
 }

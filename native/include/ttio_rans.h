@@ -298,6 +298,13 @@ int ttio_m94z_v4_decode(
 #define TTIO_M94Z_V5_VERSION 5
 #define TTIO_M94Z_V5_MIN_QUALITIES (1u << 20)
 
+/* Threads the FQZCOMP auto-tune uses for its V4/S5/S6 candidate encodes
+ * (default 3; <= 1 runs them in sequence). Process-global; the initial
+ * value is 1 when TTIO_M94Z_SEQUENTIAL=1 is set. A caller that already
+ * runs blocks on a pool sets 1 for the life of the pool. */
+void ttio_m94z_set_autotune_threads(int n);
+int  ttio_m94z_get_autotune_threads(void);
+
 int ttio_m94z_qual_encode(
     const uint8_t  *qual_in,
     size_t          n_qualities,

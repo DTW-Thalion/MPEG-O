@@ -18,6 +18,12 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface TTIOSpectralDataset (GenomicWriteInternal)
 
+/** Validate per-channel codec overrides; raises NSInvalidArgumentException
+ *  on programmer error, before any storage mutation. The stream writer
+ *  calls it on the caller's thread before a block reaches the encode
+ *  pool, so the raise keeps its serial-path surface. */
++ (void)validateGenomicCodecOverridesForRun:(TTIOWrittenGenomicRun *)run;
+
 /** Write one /study/genomic_runs/<name>/ subtree through the storage
  *  protocol; ctx carries the state a blocks_v1 writer shares across
  *  blocks (+[TTIOGenomicWriteContext none] for a whole-channel run). */

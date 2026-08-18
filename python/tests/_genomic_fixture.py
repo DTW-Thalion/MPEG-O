@@ -17,6 +17,7 @@ def make_written_genomic_run(n_reads: int, read_len: int, *,
                              with_reference: bool = False,
                              chromosomes: list[str] | None = None,
                              paired: bool = False,
+                             mate_chromosomes: list[str] | None = None,
                              seed: int = 7) -> WrittenGenomicRun:
     rng = np.random.default_rng(seed)
     if chromosomes is None:
@@ -46,6 +47,9 @@ def make_written_genomic_run(n_reads: int, read_len: int, *,
         mate_chroms = ["*"] * n_reads
         mate_pos = np.full(n_reads, -1, dtype=np.int64)
         tlen = np.zeros(n_reads, dtype=np.int32)
+    if mate_chromosomes is not None:
+        assert len(mate_chromosomes) == n_reads
+        mate_chroms = list(mate_chromosomes)
     kw = {}
     if with_reference:
         kw = {"reference_chrom_seqs": {c: ref_bytes for c in sorted(set(chromosomes))},

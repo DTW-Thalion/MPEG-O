@@ -211,6 +211,15 @@
                    count:(NSUInteger)count
                    error:(NSError **)error;
 
+/** As -channelRange:start:count:error: with FLOAT_DELTA_ZSTD blocks
+ *  decoding on <code>threads</code> workers (0 = TTIO_THREADS; <= 1 is
+ *  the serial read). Bytes are identical to the serial read's. */
+- (NSData *)channelRange:(NSString *)channelName
+                   start:(NSUInteger)start
+                   count:(NSUInteger)count
+                 threads:(NSUInteger)threads
+                   error:(NSError **)error;
+
 /**
  * Iterate the spectra in index order, reading the channels
  * <code>batch</code> spectra at a time through
@@ -219,6 +228,13 @@
  * <code>error</code> when a read fails.
  */
 - (BOOL)iterSpectraWithBatch:(NSUInteger)batch
+                       error:(NSError **)error
+                  usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block;
+
+/** As -iterSpectraWithBatch:error:usingBlock: with each batch's channel
+ *  reads decoding on <code>threads</code> workers. */
+- (BOOL)iterSpectraWithBatch:(NSUInteger)batch
+                     threads:(NSUInteger)threads
                        error:(NSError **)error
                   usingBlock:(void (^)(id spectrum, NSUInteger index, BOOL *stop))block;
 

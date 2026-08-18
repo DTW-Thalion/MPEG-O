@@ -25,6 +25,7 @@
     NSMutableDictionary<NSString *, NSData *> *_cache;
     NSUInteger _cacheN;
     NSData *_setMD5;
+    NSRecursiveLock *_lock;   /* blocks on the same chromosome may read concurrently */
 }
 
 /* NSDictionary's -init routes here; the storage is ours. */
@@ -52,6 +53,7 @@
     _entries = [NSMutableDictionary dictionary];
     _lru = [NSMutableArray array];
     _cache = [NSMutableDictionary dictionary];
+    _lock = [NSRecursiveLock new];
     _cacheN = MAX(cacheChroms, (NSUInteger)1);
     NSFileManager *fm = [NSFileManager defaultManager];
     if (![fm fileExistsAtPath:path]) {
@@ -147,36 +149,41 @@ static NSData *lr_hexToData(NSString *hex)
  * rewritten otherwise, skipped when the location is not writable. */
 - (NSData *)setMD5
 {
-    if (_setMD5) return _setMD5;
-    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:_path error:NULL];
-    unsigned long long size = [attrs fileSize];
-    long long mtime = (long long)floor([[attrs fileModificationDate] timeIntervalSince1970]);
-    NSString *stamp = [NSString stringWithFormat:@"%llu %lld", size, mtime];
-    NSString *sidecar = [_path stringByAppendingString:@".ttio-md5"];
-    NSString *text = [NSString stringWithContentsOfFile:sidecar encoding:NSASCIIStringEncoding error:NULL];
-    if (text) {
-        NSArray<NSString *> *parts = [[text stringByTrimmingCharactersInSet:
-            [NSCharacterSet whitespaceAndNewlineCharacterSet]] componentsSeparatedByString:@" "];
-        if (parts.count == 3 && [[NSString stringWithFormat:@"%@ %@", parts[1], parts[2]] isEqualToString:stamp]) {
-            NSData *cached = lr_hexToData(parts[0]);
-            if (cached) { _setMD5 = cached; return _setMD5; }
+    [_lock lock];
+    @try {
+        if (_setMD5) return _setMD5;
+        NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:_path error:NULL];
+        unsigned long long size = [attrs fileSize];
+        long long mtime = (long long)floor([[attrs fileModificationDate] timeIntervalSince1970]);
+        NSString *stamp = [NSString stringWithFormat:@"%llu %lld", size, mtime];
+        NSString *sidecar = [_path stringByAppendingString:@".ttio-md5"];
+        NSString *text = [NSString stringWithContentsOfFile:sidecar encoding:NSASCIIStringEncoding error:NULL];
+        if (text) {
+            NSArray<NSString *> *parts = [[text stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]] componentsSeparatedByString:@" "];
+            if (parts.count == 3 && [[NSString stringWithFormat:@"%@ %@", parts[1], parts[2]] isEqualToString:stamp]) {
+                NSData *cached = lr_hexToData(parts[0]);
+                if (cached) { _setMD5 = cached; return _setMD5; }
+            }
         }
+        NSArray<NSString *> *sorted = [_names sortedArrayUsingSelector:@selector(compare:)];
+        MD5_CTX c;
+        MD5_Init(&c);
+        for (NSString *name in sorted) {
+            NSData *seq = [self objectForKey:name];
+            if (seq.length) MD5_Update(&c, seq.bytes, seq.length);
+        }
+        uint8_t digest[16];
+        MD5_Final(digest, &c);
+        _setMD5 = [NSData dataWithBytes:digest length:16];
+        NSMutableString *hex = [NSMutableString stringWithCapacity:32];
+        for (int i = 0; i < 16; i++) [hex appendFormat:@"%02x", digest[i]];
+        [[NSString stringWithFormat:@"%@ %@\n", hex, stamp] writeToFile:sidecar atomically:YES
+                                                                encoding:NSASCIIStringEncoding error:NULL];
+        return _setMD5;
+    } @finally {
+        [_lock unlock];
     }
-    NSArray<NSString *> *sorted = [_names sortedArrayUsingSelector:@selector(compare:)];
-    MD5_CTX c;
-    MD5_Init(&c);
-    for (NSString *name in sorted) {
-        NSData *seq = [self objectForKey:name];
-        if (seq.length) MD5_Update(&c, seq.bytes, seq.length);
-    }
-    uint8_t digest[16];
-    MD5_Final(digest, &c);
-    _setMD5 = [NSData dataWithBytes:digest length:16];
-    NSMutableString *hex = [NSMutableString stringWithCapacity:32];
-    for (int i = 0; i < 16; i++) [hex appendFormat:@"%02x", digest[i]];
-    [[NSString stringWithFormat:@"%@ %@\n", hex, stamp] writeToFile:sidecar atomically:YES
-                                                            encoding:NSASCIIStringEncoding error:NULL];
-    return _setMD5;
 }
 
 - (NSUInteger)lengthOf:(NSString *)name
@@ -200,25 +207,30 @@ static NSData *lr_hexToData(NSString *hex)
 
 - (NSData *)objectForKey:(NSString *)name
 {
-    if (![name isKindOfClass:[NSString class]]) return nil;
-    TTIOFaiEntry *e = _entries[name];
-    if (!e) return nil;
-    NSData *cached = _cache[name];
-    if (cached) {
-        [_lru removeObject:name];
+    [_lock lock];
+    @try {
+        if (![name isKindOfClass:[NSString class]]) return nil;
+        TTIOFaiEntry *e = _entries[name];
+        if (!e) return nil;
+        NSData *cached = _cache[name];
+        if (cached) {
+            [_lru removeObject:name];
+            [_lru addObject:name];
+            return cached;
+        }
+        NSData *seq = [self _load:e name:name];
+        if (!seq) return nil;
+        _cache[name] = seq;
         [_lru addObject:name];
-        return cached;
+        while (_lru.count > _cacheN) {
+            NSString *old = _lru[0];
+            [_lru removeObjectAtIndex:0];
+            [_cache removeObjectForKey:old];
+        }
+        return seq;
+    } @finally {
+        [_lock unlock];
     }
-    NSData *seq = [self _load:e name:name];
-    if (!seq) return nil;
-    _cache[name] = seq;
-    [_lru addObject:name];
-    while (_lru.count > _cacheN) {
-        NSString *old = _lru[0];
-        [_lru removeObjectAtIndex:0];
-        [_cache removeObjectForKey:old];
-    }
-    return seq;
 }
 
 - (NSData *)_load:(TTIOFaiEntry *)e name:(NSString *)name

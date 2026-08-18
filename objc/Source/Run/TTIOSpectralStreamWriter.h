@@ -34,6 +34,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *nucleusType;
 @property (nonatomic, copy, nullable) NSString *solvent;
 @property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
+/** Worker threads for codec-17 block encode (0 = TTIO_THREADS, else cores
+ *  minus 8; 1 = the serial path). Blocks are appended in emission order by
+ *  the caller's thread; the file is byte for byte the one thread's. */
+@property (nonatomic) NSUInteger threads;
 
 /** Mass-spectrometry defaults: zlib (which resolves to codec 17 on
  *  <code>TTIOMassSpectrum</code> runs unless disabled), 4096 per batch. */
@@ -57,6 +61,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 /** Spectra written plus those still buffered. */
 @property (nonatomic, readonly) NSUInteger spectrumCount;
+@property (nonatomic, readonly) NSUInteger threads;
 
 /** Chromatograms written at close. */
 - (void)setChromatograms:(nullable NSArray<TTIOChromatogram *> *)chromatograms;

@@ -36,6 +36,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic) TTIOCompression signalCompression;
 @property (nonatomic) BOOL optLegacyWholeChannel;
 @property (nonatomic, copy) NSArray<TTIOProvenanceRecord *> *provenanceRecords;
+/** Worker threads for block encode (0 = TTIO_THREADS, else cores minus 8;
+ *  1 = the serial path). With more than one, completed blocks encode on a
+ *  queue and are written in order by the caller's thread, at most
+ *  threads + 1 in flight. The file is byte for byte the one thread's. */
+@property (nonatomic) NSUInteger threads;
 
 /** Defaults: zlib, no overrides, default block policy. */
 + (instancetype)defaultOptions;
@@ -78,6 +83,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, readonly) unsigned long long readCount;
 @property (nonatomic, readonly) NSUInteger blockCount;
+@property (nonatomic, readonly) NSUInteger threads;
+
+/** Assign ids for every chromosome name the block introduces, in the order
+ *  the block encoder assigns them (own names in read order, "*" included,
+ *  then mate names that are not "", "*" or "="). */
++ (void)registerBlockChromosomes:(TTIOWrittenGenomicRun *)block
+                         intoMap:(NSMutableDictionary<NSString *, NSNumber *> *)map;
 @property (nonatomic, readonly, copy) TTIOGenomicStreamWriterOptions *options;
 
 @end

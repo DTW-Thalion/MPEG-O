@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: LGPL-3.0-or-later
  */
 #import "Genomics/TTIOGenomicStreamWriter.h"
+#import "Core/TTIOThreads.h"
 #import "Genomics/TTIOGenomicBlocks.h"
 #import "Genomics/TTIOGenomicWriteContext.h"
 #import "Genomics/TTIOGenomicIndex.h"
@@ -78,9 +79,22 @@ static const NSUInteger kIndexArrayChunk = 65536;
     o.signalCompression = _signalCompression;
     o.optLegacyWholeChannel = _optLegacyWholeChannel;
     o.provenanceRecords = _provenanceRecords;
+    o.threads = _threads;
     return o;
 }
 
+@end
+
+/** One block in flight: filled by the encode operation, written in
+ *  sequence order by the caller's thread. */
+@interface TTIOInFlightBlock : NSObject
+@property (nonatomic, strong) TTIOWrittenGenomicRun *block;
+@property (nonatomic, strong, nullable) TTIOBlockBlobs *blobs;
+@property (nonatomic, strong, nullable) NSError *error;
+@property (nonatomic) BOOL done;
+@end
+
+@implementation TTIOInFlightBlock
 @end
 
 @implementation TTIOGenomicStreamWriter {
@@ -103,6 +117,10 @@ static const NSUInteger kIndexArrayChunk = 65536;
     BOOL _embedded;
     BOOL _closed;
     NSMutableArray<TTIOWrittenGenomicRun *> *_legacyParts;
+    NSUInteger _threads;
+    TTIOThreadPool *_pool;
+    NSMutableArray<TTIOInFlightBlock *> *_inflight;
+    NSCondition *_cond;
 }
 
 + (NSString *)layout { return kLayout; }
@@ -155,8 +173,27 @@ static void ttioBuildIndexFields(void)
         _channelDs = [NSMutableDictionary dictionary];
         _idxDs = [NSMutableDictionary dictionary];
         _legacyParts = [NSMutableArray array];
+        _threads = [TTIOThreads resolve:_opt.threads ? @(_opt.threads) : nil];
+        _pool = [TTIOThreadPool poolWithThreads:_opt.optLegacyWholeChannel ? 1 : _threads];
+        _inflight = [NSMutableArray array];
+        _cond = [NSCondition new];
     }
     return self;
+}
+
+- (NSUInteger)threads { return _threads; }
+
++ (void)registerBlockChromosomes:(TTIOWrittenGenomicRun *)block
+                         intoMap:(NSMutableDictionary<NSString *, NSNumber *> *)map
+{
+    for (NSString *n in block.chromosomes) {
+        if (map[n] == nil) map[n] = @(map.count);
+    }
+    for (NSString *n in block.mateChromosomes) {
+        if (n.length > 0 && ![n isEqualToString:@"*"] && ![n isEqualToString:@"="] && map[n] == nil) {
+            map[n] = @(map.count);
+        }
+    }
 }
 
 - (unsigned long long)readCount { return _readCount; }
@@ -281,7 +318,7 @@ static void ttioBuildIndexFields(void)
             _pendingReads += stop - start;
             for (NSUInteger i = start; i < stop; i++) _pendingBytes += lens[i];
             if (_pendingReads >= _opt.blockReads || _pendingBytes >= _opt.blockBytes) {
-                if (![self flush:error]) return NO;
+                if (![self _cutBlock:error]) return NO;
             }
             start = stop;
         }
@@ -290,6 +327,14 @@ static void ttioBuildIndexFields(void)
 }
 
 - (BOOL)flush:(NSError **)error
+{
+    /* The public barrier: cut the pending block and write everything in
+     * flight, so an unclosed file's flushed reads are on storage. */
+    if (![self _cutBlock:error]) return NO;
+    return [self _drainUntil:0 error:error];
+}
+
+- (BOOL)_cutBlock:(NSError **)error
 {
     if (_opt.optLegacyWholeChannel || _pending.count == 0) return YES;
     TTIOWrittenGenomicRun *block = [TTIOGenomicBlocks concatRuns:_pending];
@@ -304,10 +349,72 @@ static void ttioBuildIndexFields(void)
         if (![TTIOSpectralDataset embedReferencesForRuns:@[block] inStudy:_study error:error]) return NO;
         _embedded = YES;
     }
+    [TTIOSpectralDataset validateGenomicCodecOverridesForRun:block];
+    [[self class] registerBlockChromosomes:block intoMap:_chromMap];
     TTIOGenomicWriteContext *ctx =
         [TTIOGenomicWriteContext contextWithChromNameToId:_chromMap referenceMD5:_referenceMD5];
-    TTIOBlockBlobs *blobs = [TTIOGenomicBlocks encodeBlock:block context:ctx error:error];
-    if (!blobs) return NO;
+    if (_pool.queue == nil) {
+        TTIOBlockBlobs *blobs = [TTIOGenomicBlocks encodeBlock:block context:ctx error:error];
+        if (!blobs) return NO;
+        return [self _writeEncoded:block blobs:blobs error:error];
+    }
+    if (![self _drainUntil:_threads error:error]) return NO;
+    /* The worker reads the map while later flushes mutate it: give each
+     * block a snapshot (registration above fixed every id it needs). */
+    TTIOGenomicWriteContext *bctx =
+        [TTIOGenomicWriteContext contextWithChromNameToId:[_chromMap mutableCopy]
+                                             referenceMD5:_referenceMD5];
+    TTIOInFlightBlock *f = [TTIOInFlightBlock new];
+    f.block = block;
+    [_inflight addObject:f];
+    NSCondition *cond = _cond;
+    [_pool.queue addOperationWithBlock:^{
+        NSError *e = nil;
+        TTIOBlockBlobs *b = nil;
+        @try {
+            b = [TTIOGenomicBlocks encodeBlock:block context:bctx error:&e];
+        } @catch (NSException *ex) {
+            /* NSOperationQueue swallows exceptions; surface them as the
+             * block's error so the drain completes (and the serial path's
+             * raise becomes the caller's NSError). */
+            b = nil;
+            e = TTIOMakeError(TTIOErrorDatasetWrite, @"%@: %@", ex.name, ex.reason);
+        }
+        [cond lock];
+        f.blobs = b;
+        f.error = e;
+        f.done = YES;
+        [cond broadcast];
+        [cond unlock];
+    }];
+    return YES;
+}
+
+/** Write completed blocks in sequence order; wait on the oldest until at
+ *  most blockUntil remain in flight. */
+- (BOOL)_drainUntil:(NSUInteger)blockUntil error:(NSError **)error
+{
+    while (_inflight.count > 0) {
+        TTIOInFlightBlock *f = _inflight.firstObject;
+        [_cond lock];
+        if (_inflight.count <= blockUntil && !f.done) {
+            [_cond unlock];
+            break;
+        }
+        while (!f.done) [_cond wait];
+        [_cond unlock];
+        [_inflight removeObjectAtIndex:0];
+        if (!f.blobs) {
+            if (error) *error = f.error;
+            return NO;
+        }
+        if (![self _writeEncoded:f.block blobs:f.blobs error:error]) return NO;
+    }
+    return YES;
+}
+
+- (BOOL)_writeEncoded:(TTIOWrittenGenomicRun *)block blobs:(TTIOBlockBlobs *)blobs error:(NSError **)error
+{
     if (![self _ensureLayout:error]) return NO;
 
     NSArray<TTIOCompoundField *> *fields = [[self class] indexFields];
@@ -366,9 +473,12 @@ static void ttioBuildIndexFields(void)
             _readCount = whole.readCount;
         }
         [_legacyParts removeAllObjects];
+        [_pool close];
         return YES;
     }
-    if (![self flush:error]) return NO;
+    if (![self _cutBlock:error]) { [_pool close]; return NO; }
+    if (![self _drainUntil:0 error:error]) { [_pool close]; return NO; }
+    [_pool close];
     if (_rg == nil && ![self _ensureLayout:error]) return NO;
     if (![self _writeCloseTables:error]) return NO;
     if (_opt.provenanceRecords.count > 0) {

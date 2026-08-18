@@ -106,7 +106,9 @@ public class AcquisitionRun implements
             return cachedValues;
         }
 
-        double[] range(long start, int count) {
+        double[] range(long start, int count) { return range(start, count, 1); }
+
+        double[] range(long start, int count, int threads) {
             if (count <= 0) return new double[0];
             if (full != null) return Arrays.copyOfRange(full, (int) start, (int) start + count);
             if (codec == Enums.Compression.FLOAT_DELTA_ZSTD.ordinal()) {
@@ -118,10 +120,53 @@ public class AcquisitionRun implements
                     int o = (int) (start - (long) k0 * bs);
                     return Arrays.copyOfRange(blk, o, o + count);
                 }
+                Map<Integer, double[]> blocks = new LinkedHashMap<>();
+                if (threads > 1) {
+                    // storage reads on this thread, decodes on the pool; the
+                    // one-block cache still serves a block the previous
+                    // range call already decoded.
+                    if (cachedBlock >= k0 && cachedBlock <= k1) {
+                        blocks.put(cachedBlock, cachedValues);
+                    }
+                    Map<Integer, byte[]> raw = new LinkedHashMap<>();
+                    for (int k = k0; k <= k1; k++) {
+                        if (blocks.containsKey(k)) continue;
+                        raw.put(k, (byte[]) ds.readSlice(t.offsets()[k], t.lengths()[k]));
+                    }
+                    try (global.thalion.ttio.Threads.PoolScope scope = global.thalion.ttio.Threads.pool(threads)) {
+                        Map<Integer, java.util.concurrent.Future<double[]>> futs = new LinkedHashMap<>();
+                        for (int k = k0; k <= k1; k++) {
+                            if (blocks.containsKey(k)) continue;
+                            final int kk = k;
+                            final byte[] body = raw.get(k);
+                            final long base = t.offsets()[k];
+                            futs.put(k, scope.executor().submit(() ->
+                                global.thalion.ttio.codecs.FloatDeltaZstd.decodeBlock(
+                                    (off, nn) -> Arrays.copyOfRange(body, (int) (off - base), (int) (off - base + nn)),
+                                    t, kk)));
+                        }
+                        for (int k = k0; k <= k1; k++) {
+                            if (!futs.containsKey(k)) continue;
+                            try {
+                                blocks.put(k, futs.get(k).get());
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new IllegalStateException(e);
+                            } catch (java.util.concurrent.ExecutionException e) {
+                                Throwable c = e.getCause();
+                                throw c instanceof RuntimeException r ? r : new IllegalStateException(c);
+                            }
+                        }
+                    }
+                    cachedBlock = k1;
+                    cachedValues = blocks.get(k1);
+                } else {
+                    for (int k = k0; k <= k1; k++) blocks.put(k, block(k));
+                }
                 double[] out = new double[count];
                 int pos = 0;
                 for (int k = k0; k <= k1; k++) {
-                    double[] blk = block(k);
+                    double[] blk = blocks.get(k);
                     int lo = k == k0 ? (int) (start - (long) k * bs) : 0;
                     int hi = k == k1 ? (int) (start + count - (long) k * bs) : blk.length;
                     System.arraycopy(blk, lo, out, pos, hi - lo);
@@ -346,13 +391,19 @@ public class AcquisitionRun implements
     /** Values {@code [start, start + count)} of a channel, reading only
      *  what the range needs; {@code null} when the channel is absent. */
     public double[] channelRange(String channel, long start, int count) {
+        return channelRange(channel, start, count, 1);
+    }
+
+    /** As {@link #channelRange(String, long, int)}; a codec-17 range that
+     *  spans several blocks decodes them on a pool of {@code threads}. */
+    public double[] channelRange(String channel, long start, int count, int threads) {
         double[] overlay = decryptedChannels.get(channel);
         if (overlay != null) return Arrays.copyOfRange(overlay, (int) start, (int) start + count);
         double[] eager = channels.get(channel);
         if (eager != null) return Arrays.copyOfRange(eager, (int) start, (int) start + count);
         if (lazyChannels != null) {
             LazyChannel lc = lazyChannels.get(channel);
-            if (lc != null) return lc.range(start, count);
+            if (lc != null) return lc.range(start, count, Math.max(1, threads));
         }
         return null;
     }
@@ -360,6 +411,12 @@ public class AcquisitionRun implements
     /** Every spectrum in order, reading channel data in windows of
      *  {@code batch} spectra (codec-17 blocks decode once per window). */
     public java.util.Iterator<Spectrum> iterSpectra(int batch) {
+        return iterSpectra(batch, global.thalion.ttio.Threads.resolve(null));
+    }
+
+    /** As {@link #iterSpectra(int)} with an explicit thread count for the
+     *  codec-17 window decodes. */
+    public java.util.Iterator<Spectrum> iterSpectra(int batch, int threads) {
         int n = spectrumIndex.count();
         int window = Math.max(1, batch);
         List<String> names = channelNames();
@@ -380,7 +437,7 @@ public class AcquisitionRun implements
                     long total = spectrumIndex.offsetAt(winEnd - 1) + spectrumIndex.lengthAt(winEnd - 1) - winBase;
                     arrays.clear();
                     for (String c : names) {
-                        double[] a = channelRange(c, winBase, (int) total);
+                        double[] a = channelRange(c, winBase, (int) total, threads);
                         if (a != null) arrays.put(c, a);
                     }
                 }
