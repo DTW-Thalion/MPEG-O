@@ -12,6 +12,17 @@ public API is stable from onward.
 ## [Unreleased]
 
 ### Fixed
+- **REF_DIFF_V2 carries unmapped reads.** A read whose CIGAR is `*` (an unmapped
+  read placed on its mate's contig, FLAG 0x4) used to switch the whole channel,
+  and under `blocks_v1` the whole block, to BASE_PACK. On paired-end data every
+  block has such reads: the NA12878 WES chr22 slice has 839 in 992,974 and its
+  single block coded 24 MB of sequences as BASE_PACK, so TTI-O (64.1 MB) came
+  out next to BAM (66.4 MB) where CRAM 3.1 small is 32.0 MB. The shared C
+  kernel now stores an unmapped read's bases as soft clip and its length in a
+  new per-slice UL substream (the sub-header word that was reserved and 0; a
+  slice without unmapped reads still writes 0, so every earlier blob decodes
+  unchanged), and the Python, Java and ObjC writers no longer fall back on such
+  runs. docs/codecs/ref_diff_v2.md sections 4.3 and 4.4.
 - **External reference resolution (`REF_PATH`) validates a multi-chromosome
   FASTA.** Writers record the reference-set md5 (every chromosome, alphabetic
   order, case preserved; format-spec 10.10), but the external-FASTA branch of

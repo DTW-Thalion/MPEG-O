@@ -142,12 +142,15 @@ Each slice body opens with six little-endian u32 lengths:
 | `8`    | 4    | in_rans_len (IN substream)            |
 | `12`   | 4    | sc_rans_len (SC substream)            |
 | `16`   | 4    | esc_rans_len (ESC substream)          |
-| `20`   | 4    | reserved (must be 0; else corrupt)    |
+| `20`   | 4    | ul_rans_len (UL substream; 0 when the slice has no unmapped read) |
 
-The five rANS-encoded substreams follow the sub-header in exactly that
-order (FLAG, BS, IN, SC, ESC). The decoder rejects a body whose
-`24 + flag + bs + in + sc + esc` exceeds the slice body length, and
-rejects a non-zero reserved word (`TTIO_RANS_ERR_CORRUPT`).
+The rANS-encoded substreams follow the sub-header in exactly that
+order (FLAG, BS, IN, SC, ESC, UL). The decoder rejects a body whose
+`24 + flag + bs + in + sc + esc + ul` exceeds the slice body length.
+Before v1.9 the word at offset 20 was reserved and had to be 0; a
+slice without an unmapped read still writes 0 there, so every blob
+written before v1.9 decodes unchanged, and a pre-1.9 decoder rejects
+only the slices that carry a UL substream.
 
 ### 4.4 Substream contents
 
@@ -162,6 +165,14 @@ rejects a non-zero reserved word (`TTIO_RANS_ERR_CORRUPT`).
   raw byte. The decoder errors with `TTIO_RANS_ERR_RESERVED_ESC_STREAM`
   on `stream_id > 2`, and with `TTIO_RANS_ERR_ESC_LENGTH_MISMATCH` if
   the ESC stream is not fully consumed after the walk.
+- **UL** (v1.9) — one LEB128 varint per unmapped read in the slice, in
+  read order: the read's length in bases. An unmapped read is one whose
+  CIGAR is `*` (or empty); its bases all go to SC as if its CIGAR were
+  `<length>S`, its position is not consulted, and non-ACGT bases escape
+  through ESC with `stream_id 2` like any soft-clipped base. The
+  decoder derives every other read's length from its CIGAR, so UL is
+  what lets a read without an alignment sit in a reference-coded slice
+  (a mate-placed unmapped read inside a mapped block, for example).
 
 Each substream is independently compressed with rANS order-0
 (`ttio_rans_o0_encode` / `ttio_rans_o0_decode` from `ttio_rans.h`).

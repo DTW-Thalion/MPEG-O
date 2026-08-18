@@ -246,7 +246,7 @@ public final class SpectralDatasetGenomicWriter {
                 // ref-diff path: writeSequencesRefDiff handles both
                 // the v2 fast path (when the native lib is available
                 // and the run is eligible) and the BASE_PACK fallback
-                // (no reference, unmapped reads, or native lib absent).
+                // (no reference or native lib absent).
                 // The path is selected when the caller has not provided
                 // an explicit sequences codec, signalCompression is the
                 // default ZLIB, and referenceChromSeqs is supplied.
@@ -889,21 +889,12 @@ public final class SpectralDatasetGenomicWriter {
 
         byte[] rawBytes = run.sequences();
 
-        // M93 v1.2: REF_DIFF can't encode unmapped reads (cigar="*").
-        // When any read is unmapped, fall back to BASE_PACK on the whole
-        // channel — same Q5b=C semantics as missing reference.
-        boolean hasUnmapped = false;
-        for (String c : run.cigars()) {
-            if ("*".equals(c) || c == null || c.isEmpty()) {
-                hasUnmapped = true;
-                break;
-            }
-        }
-
-        // v1.0 reset Phase 2b: prefer the v2 path when eligible.
+        // v1.0 reset Phase 2b: prefer the v2 path when eligible. Unmapped
+        // reads (cigar "*") are carried by the codec since v1.9 (soft-clip
+        // bases plus the slice UL substream), so they no longer force
+        // BASE_PACK on the whole channel.
         boolean useV2 = global.thalion.ttio.codecs.RefDiffV2.isAvailable()
-            && chromSeq != null
-            && !hasUnmapped;
+            && chromSeq != null;
 
         if (useV2) {
             // v1.8 path: encode via RefDiffV2 and write as a GROUP with

@@ -105,3 +105,49 @@ def test_write_minimal_default_is_blocks_v1_and_legacy_opt_out(tmp_path):
     prov, rg = _open_run_group(p2, "g")
     assert not rg.has_attribute("layout")
     prov.close()
+
+
+def test_placed_unmapped_read_keeps_refdiff_block(tmp_path):
+    """A mate-placed unmapped read (RNAME set, FLAG 0x4, CIGAR '*') inside a
+    mapped block does not push the block's sequences to BASE_PACK: the
+    codec column stays REF_DIFF_V2 and every read reads back."""
+    import h5py
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    from ttio.spectral_dataset import SpectralDataset
+    from ttio.written_genomic_run import WrittenGenomicRun
+    n, L = 40, 60
+    ref = bytes(ord("ACGT"[(i * 7 + i // 3) % 4]) for i in range(5000))
+    positions = (np.arange(n) * 30 + 1).astype(np.int64)
+    cigars = [f"{L}M"] * n
+    flags = np.full(n, 0x3, dtype=np.uint32)
+    seqs = bytearray()
+    for i in range(n):
+        seqs.extend(ref[int(positions[i]) - 1:int(positions[i]) - 1 + L])
+    for i in (5, 21):  # placed unmapped: mate's position, no alignment
+        cigars[i] = "*"
+        flags[i] = 0x4 | 0x1
+        seqs[i * L:(i + 1) * L] = (b"GATTACA" * 10)[:L]
+    run = WrittenGenomicRun(
+        acquisition_mode=7, reference_uri="chr9", platform="ILLUMINA", sample_name="s",
+        positions=positions, mapping_qualities=np.full(n, 60, dtype=np.uint8), flags=flags,
+        sequences=np.frombuffer(bytes(seqs), dtype=np.uint8),
+        qualities=np.frombuffer(bytes([30]) * (n * L), dtype=np.uint8),
+        offsets=(np.arange(n) * L).astype(np.uint64), lengths=np.full(n, L, dtype=np.uint32),
+        cigars=cigars, read_names=[f"r{i}" for i in range(n)],
+        mate_chromosomes=[""] * n, mate_positions=np.full(n, -1, dtype=np.int64),
+        template_lengths=np.zeros(n, dtype=np.int32), chromosomes=["chr9"] * n,
+        reference_chrom_seqs={"chr9": ref}, embed_reference=True,
+    )
+    out = tmp_path / "placed.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="", runs={},
+                                  genomic_runs={"g": run})
+    with h5py.File(out, "r") as f:
+        idx = f["study/genomic_runs/g/blocks/index"][:]
+        assert set(int(x) for x in idx["sequences_codec"]) == {14}
+    with SpectralDataset.open(out) as ds:
+        g = ds.genomic_runs["g"]
+        got = b"".join(r.sequence.encode() for r in g.iter_reads())
+        assert got == bytes(seqs)
+        assert g[5].cigar == "*" and g[21].cigar == "*"

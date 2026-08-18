@@ -1538,10 +1538,14 @@ the v1.8 compound VL-string default has no blob form), `qualities`
 FQZCOMP_NX16_Z (id 12; v1.8 only used it when another v1.5 codec was
 active on the run and otherwise left zlib-filtered raw bytes), and
 `sequences` REF_DIFF_V2 (id 14) with a reference or RANS_ORDER1
-(id 5) without one. A block that contains a zero-length read (SEQ
-`*`, e.g. a secondary alignment) codes qualities with RANS_ORDER0
-because the FQZCOMP_NX16_Z kernel does not decode a stream in which a
-zero-length read precedes another read; the codec column records it.
+(id 5) without one. Unmapped reads inside a mapped block (FLAG 0x4,
+CIGAR `*`, placed on the mate's contig) stay in the REF_DIFF_V2 blob:
+the codec carries their bases as soft clip and their lengths in the
+slice's UL substream (docs/codecs/ref_diff_v2.md section 4.4). A block
+that contains a zero-length read (SEQ `*`, e.g. a secondary
+alignment) codes qualities with RANS_ORDER0 because the FQZCOMP_NX16_Z
+kernel does not decode a stream in which a zero-length read precedes
+another read; the codec column records it.
 
 `mate_info/chrom_names`, `genomic_index/chromosome_names` and the
 reference tables stay run-level; chromosome ids are assigned once per

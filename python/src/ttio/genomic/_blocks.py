@@ -130,8 +130,8 @@ def encode_block(block: WrittenGenomicRun) -> BlockBlobs:
         else:
             overrides["qualities"] = Compression.FQZCOMP_NX16_Z
     # Sequences without a reference: RANS_ORDER1 instead of raw bytes.
-    # With a reference the REF_DIFF_V2 default applies (and falls back
-    # to BASE_PACK on its own for unmapped blocks).
+    # With a reference the REF_DIFF_V2 default applies; unmapped reads
+    # inside a mapped block are carried by the codec (UL substream).
     if "sequences" not in overrides and block.reference_chrom_seqs is None:
         overrides["sequences"] = Compression.RANS_ORDER1
     if overrides != block.signal_codec_overrides:

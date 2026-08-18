@@ -35,7 +35,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *   <li>Default v1.0 write produces {@code signal_channels/sequences} as a GROUP
  *       containing {@code refdiff_v2} dataset with {@code @compression == 14}
  *       (REF_DIFF_V2).</li>
- *   <li>Unmapped reads (any cigar="*") prevent v2 → flat BASE_PACK.</li>
+ *   <li>Unmapped reads (cigar="*") ride inside v2 (UL substream, v1.9).</li>
  *   <li>v2 default round-trip: sequence bytes read back correctly.</li>
  * </ol>
  *
@@ -174,17 +174,24 @@ final class RefDiffV2DispatchTest {
         }
     }
 
-    // ── Test 2: unmapped reads prevent v2 → flat BASE_PACK ────────────
+    // ── Test 2: unmapped reads ride inside REF_DIFF_V2 (v1.9 UL) ─────
 
     @Test
     @EnabledIf("isNativeAvailable")
-    void testUnmappedReadsSkipV2(@TempDir Path tmp) {
-        // Build a run with one unmapped read (cigar="*").
+    void testUnmappedReadsStayInV2(@TempDir Path tmp) {
+        // Two placed-unmapped reads (cigar="*") inside a mapped run: the
+        // codec carries them (soft-clip bases + UL lengths), so the
+        // sequences group with refdiff_v2 is still written and every read
+        // comes back byte for byte.
         List<String> cigarsWithUnmapped = new ArrayList<>();
         for (int i = 0; i < N; i++) {
-            cigarsWithUnmapped.add(i == 10 ? "*" : READ_LEN + "M");
+            cigarsWithUnmapped.add((i == 10 || i == N - 1) ? "*" : READ_LEN + "M");
         }
         WrittenGenomicRun run = buildMinimalRunWithCigars(cigarsWithUnmapped);
+        byte[] seqs = run.sequences();
+        byte[] odd = "TTGCAN".getBytes(StandardCharsets.US_ASCII);
+        for (int k = 0; k < READ_LEN; k++) seqs[10 * READ_LEN + k] = odd[k % odd.length];
+        byte[] expectedSeq = seqs.clone();
         Path file = writeRun(tmp, run, "unmapped.tio");
 
         try (Hdf5File f = Hdf5File.openReadOnly(file.toString());
@@ -192,16 +199,24 @@ final class RefDiffV2DispatchTest {
              Hdf5Group study = root.openGroup("study");
              Hdf5Group gRuns = study.openGroup("genomic_runs");
              Hdf5Group rg   = gRuns.openGroup("genomic_0001");
-             Hdf5Group sc   = rg.openGroup("signal_channels")) {
-            // sequences must be a flat Dataset when any cigar="*".
-            try (Hdf5Dataset seqDs = sc.openDataset("sequences")) {
-                long compressionAttr = seqDs.readIntegerAttribute(
-                    "compression", -1L);
-                assertEquals(Compression.BASE_PACK.ordinal(),
-                    compressionAttr,
-                    "unmapped run must fall back to BASE_PACK = 6, "
-                    + "got " + compressionAttr);
+             Hdf5Group sc   = rg.openGroup("signal_channels");
+             Hdf5Group seqG = sc.openGroup("sequences");
+             Hdf5Dataset blobDs = seqG.openDataset("refdiff_v2")) {
+            assertEquals(Compression.REF_DIFF_V2.ordinal(),
+                blobDs.readIntegerAttribute("compression", -1L),
+                "unmapped reads must not force the BASE_PACK fallback");
+        }
+        try (SpectralDataset ds = SpectralDataset.open(file.toString())) {
+            GenomicRun gr = ds.genomicRuns().get("genomic_0001");
+            byte[] reconstructed = new byte[TOTAL];
+            int pos = 0;
+            for (int i = 0; i < N; i++) {
+                byte[] seqBytes = gr.readAt(i).sequence().getBytes(StandardCharsets.US_ASCII);
+                System.arraycopy(seqBytes, 0, reconstructed, pos, seqBytes.length);
+                pos += seqBytes.length;
             }
+            assertArrayEquals(expectedSeq, reconstructed);
+            assertEquals("*", gr.readAt(10).cigar());
         }
     }
 
