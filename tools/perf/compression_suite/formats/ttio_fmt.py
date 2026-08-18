@@ -57,19 +57,46 @@ class _Ttio:
                         "--output", str(out)], check=True, env=env)
         return out
 
+    # Source paths whose content decides what this tier writes and reads.
+    # The version string carries git's tree/blob hashes of these paths, so
+    # a row re-runs when the code it depends on changed and only then: a
+    # rebase over unrelated commits keeps every result.
+    _SOURCE_PATHS = {
+        "aligned": ["native/src", "python/src/ttio/codecs", "python/src/ttio/genomic",
+                    "python/src/ttio/_dataset_write_genomic.py", "python/src/ttio/genomic_run.py",
+                    "python/src/ttio/written_genomic_run.py", "python/src/ttio/importers/bam.py",
+                    "python/src/ttio/importers/import_result.py", "python/src/ttio/exporters/bam.py",
+                    "python/src/ttio/spectral_dataset.py"],
+        "unaligned": ["native/src", "python/src/ttio/codecs", "python/src/ttio/genomic",
+                      "python/src/ttio/_dataset_write_genomic.py", "python/src/ttio/genomic_run.py",
+                      "python/src/ttio/written_genomic_run.py", "python/src/ttio/importers/fastq.py",
+                      "python/src/ttio/importers/import_result.py", "python/src/ttio/exporters/fastq.py",
+                      "python/src/ttio/tools/fastq_import_cli.py", "python/src/ttio/tools/fastq_export_cli.py",
+                      "python/src/ttio/spectral_dataset.py"],
+        "ms": ["native/src", "python/src/ttio/codecs", "python/src/ttio/importers/mzml.py",
+               "python/src/ttio/importers/_base64_zlib.py", "python/src/ttio/importers/import_result.py",
+               "python/src/ttio/exporters/mzml.py", "python/src/ttio/spectral_stream_writer.py",
+               "python/src/ttio/acquisition_run.py", "python/src/ttio/spectral_dataset.py"],
+    }
+
     def version(self) -> str:
-        """The CLI version plus the repository commit (and a dirty mark),
-        so any change to the writers or codecs re-runs the TTI-O rows."""
+        """The CLI version plus a digest of the tree hashes of the source
+        paths this tier depends on (and a dirty mark when any of them has
+        uncommitted changes)."""
+        import hashlib
         ver = common.tool_version([TTIO_CLI, "--version"])
         repo = Path(__file__).resolve().parents[4]
+        paths = self._SOURCE_PATHS[self.tier]
         try:
-            rev = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
-                                 capture_output=True, text=True, check=True).stdout.strip()
-            dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--",
-                                    "python/src", "native/src"],
+            h = hashlib.sha256()
+            for rel in paths:
+                obj = subprocess.run(["git", "-C", str(repo), "rev-parse", f"HEAD:{rel}"],
+                                     capture_output=True, text=True)
+                h.update(rel.encode()); h.update(b"="); h.update(obj.stdout.strip().encode()); h.update(b"\n")
+            dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--", *paths],
                                    capture_output=True, text=True).stdout.strip()
-            return f"{ver} @{rev}{'+' if dirty else ''}"
-        except (OSError, subprocess.CalledProcessError):
+            return f"{ver} src:{h.hexdigest()[:12]}{'+' if dirty else ''}"
+        except OSError:
             return ver
 
 
