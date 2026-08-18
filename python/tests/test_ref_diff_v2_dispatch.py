@@ -121,27 +121,44 @@ def test_default_writes_refdiff_v2(tmp_path: Path):
 
 
 # ---------------------------------------------------------------------------
-# Test 2: unmapped reads fall back to BASE_PACK (v2 not eligible)
+# Test 2: unmapped reads ride inside REF_DIFF_V2 (v1.9: UL substream)
 # ---------------------------------------------------------------------------
 
-def test_unmapped_reads_skip_v2(tmp_path: Path):
-    """Reads with cigar='*' fall back to BASE_PACK on the v1 path."""
+def test_unmapped_reads_stay_in_v2(tmp_path: Path):
+    """A read with cigar='*' (placed unmapped) no longer drops the whole
+    channel to BASE_PACK: the codec stores its bases as soft clip and its
+    length in the UL substream, and the run round-trips."""
+    from ttio.spectral_dataset import SpectralDataset
+
     run = _build_minimal_run()
     cigars_list = list(run.cigars)
     cigars_list[10] = "*"
+    cigars_list[N - 1] = "*"
     run.cigars = cigars_list
+    # give the unmapped reads bases that differ from the reference, with an N
+    seqs = bytearray(run.sequences.tobytes())
+    seqs[10 * READ_LEN:(10 + 1) * READ_LEN] = (b"TTGCAN" * 20)[:READ_LEN]
+    run.sequences = np.frombuffer(bytes(seqs), dtype=np.uint8)
+    expected_seq = bytes(run.sequences.tobytes())
     out = _write_run(tmp_path, run, fname="unmapped.tio")
 
     import h5py
     with h5py.File(out, "r") as f:
         seq = f["study/genomic_runs/r0/signal_channels/sequences"]
-        assert isinstance(seq, h5py.Dataset), (
-            "unmapped reads → v2 not eligible → flat Dataset expected"
-        )
-        assert int(seq.attrs["compression"]) == int(Compression.BASE_PACK), (
-            f"unmapped run must fall back to BASE_PACK = 6, "
-            f"got {seq.attrs['compression']}"
-        )
+        assert isinstance(seq, h5py.Group), "unmapped reads must not force the BASE_PACK fallback"
+        assert int(seq["refdiff_v2"].attrs["compression"]) == int(Compression.REF_DIFF_V2)
+
+    ds = SpectralDataset.open(out)
+    try:
+        grun = ds.genomic_runs["r0"]
+        reconstructed = bytearray()
+        for i in range(N):
+            s_ = grun[i].sequence
+            reconstructed.extend(s_.encode("ascii") if isinstance(s_, str) else bytes(s_))
+        assert bytes(reconstructed) == expected_seq
+        assert grun[10].cigar == "*"
+    finally:
+        ds.close()
 
 
 # ---------------------------------------------------------------------------

@@ -54,7 +54,16 @@ static NSData *rdv2dRef(void)
 /** Build a minimal 5-read single-chromosome run for dispatch tests.
  *  All reads aligned to chr22, 10 bp each, cigar "10M", positions 1-5.
  *  referenceChromSeqs is set when hasReference == YES. */
+static TTIOWrittenGenomicRun *rdv2dMakeRunEx(BOOL hasReference, BOOL withUnmapped);
+
 static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL hasReference)
+{
+    return rdv2dMakeRunEx(hasReference, NO);
+}
+
+/* withUnmapped: reads 2 and 4 get cigar "*" and read 2 gets bases that
+ * differ from the reference (with an N). */
+static TTIOWrittenGenomicRun *rdv2dMakeRunEx(BOOL hasReference, BOOL withUnmapped)
 {
     NSUInteger n = 5;
     NSUInteger L = 10;
@@ -62,7 +71,7 @@ static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL hasReference)
     NSMutableData *seqData  = [NSMutableData dataWithCapacity:n * L];
     NSMutableData *qualData = [NSMutableData dataWithLength:n * L];
     for (NSUInteger i = 0; i < n; i++)
-        [seqData appendBytes:"ACGTACGTAC" length:L];
+        [seqData appendBytes:(withUnmapped && i == 2) ? "TTGCANTTGC" : "ACGTACGTAC" length:L];
     memset(qualData.mutableBytes, 30, n * L);
 
     NSMutableData *posD = [NSMutableData dataWithLength:n * sizeof(int64_t)];
@@ -98,7 +107,7 @@ static TTIOWrittenGenomicRun *rdv2dMakeRun(BOOL hasReference)
     for (NSUInteger i = 0; i < n; i++) {
         [chroms     addObject:@"22"];
         [mateChroms addObject:@"*"];
-        [cigars     addObject:@"10M"];
+        [cigars     addObject:(withUnmapped && (i == 2 || i == 4)) ? @"*" : @"10M"];
         [readNames  addObject:[NSString stringWithFormat:@"r%lu", (unsigned long)i]];
     }
 
@@ -275,6 +284,37 @@ static void testRefDiffV2DispatchRoundTripV2(void)
     rdv2dRm(path);
 }
 
+/* v1.9: a placed-unmapped read (cigar "*") inside a mapped run rides
+ * inside REF_DIFF_V2 (soft-clip bases + the slice UL substream) instead
+ * of pushing the whole channel to BASE_PACK. */
+static void testRefDiffV2DispatchUnmappedStaysInV2(void)
+{
+    NSString *path = rdv2dTmpPath(@"unmapped_v2");
+    rdv2dRm(path);
+
+    TTIOWrittenGenomicRun *run = rdv2dMakeRunEx(YES, YES);
+
+    NSError *err = nil;
+    PASS(rdv2dWrite(path, run, &err), "RefDiffV2Dispatch #4: write with unmapped reads succeeds");
+    PASS(rdv2dSequencesObjectType([path fileSystemRepresentation]) == H5O_TYPE_GROUP,
+         "RefDiffV2Dispatch #4: sequences stays a GROUP (no BASE_PACK fallback)");
+    PASS(rdv2dRefDiffV2CompressionAttr([path fileSystemRepresentation]) == 14,
+         "RefDiffV2Dispatch #4: refdiff_v2 @compression = 14");
+
+    TTIOSpectralDataset *ds = [TTIOSpectralDataset readFromFilePath:path error:&err];
+    TTIOGenomicRun *gr = ds.genomicRuns[@"genomic_0001"];
+    BOOL ok = gr != nil && gr.readCount == 5;
+    for (NSUInteger i = 0; ok && i < 5; i++) {
+        TTIOAlignedRead *r = [gr readAtIndex:i error:NULL];
+        NSString *want = (i == 2) ? @"TTGCANTTGC" : @"ACGTACGTAC";
+        if (!r || ![r.sequence isEqualToString:want]) ok = NO;
+        if (r && (i == 2 || i == 4) && ![r.cigar isEqualToString:@"*"]) ok = NO;
+    }
+    PASS(ok, "RefDiffV2Dispatch #4: all reads decode, unmapped ones byte for byte with cigar *");
+    [ds closeFile];
+    rdv2dRm(path);
+}
+
 // ── Public entry point ────────────────────────────────────────────────────────
 
 void testRefDiffV2Dispatch(void);
@@ -289,4 +329,5 @@ void testRefDiffV2Dispatch(void)
     // it asserted the v1 REF_DIFF override migration error, which is
     // gone now that TTIOCompressionRefDiff was removed.
     testRefDiffV2DispatchRoundTripV2();
+    testRefDiffV2DispatchUnmappedStaysInV2();
 }

@@ -200,11 +200,79 @@ static int test_i6_cigar_parser_smoke(void) {
     return 0;
 }
 
+
+/* v1.9 UL substream: unmapped reads (CIGAR "*") inside a mapped slice.
+ * Their bases ride in SC (with an ESC for the N), their lengths in UL, and
+ * a slice without one still writes 0 in the sub-header word at +20. */
+static int test_ul_unmapped_reads_round_trip(void) {
+    uint8_t reference[400];
+    for (int i = 0; i < 400; i++) reference[i] = "ACGT"[(i * 7 + i / 5) % 4];
+    /* 4 reads of 50: mapped, unmapped (differs from ref, has N), mapped, unmapped */
+    uint8_t sequences[200];
+    memcpy(sequences + 0,   reference + 0,   50);
+    for (int i = 0; i < 50; i++) sequences[50 + i] = "TTGCAN"[i % 6];
+    memcpy(sequences + 100, reference + 100, 50);
+    for (int i = 0; i < 50; i++) sequences[150 + i] = "GATTACA"[i % 7];
+    uint64_t offsets[5] = {0, 50, 100, 150, 200};
+    int64_t positions[4] = {1, 60, 101, 160};
+    const char *cigars[4] = {"50M", "*", "50M", "*"};
+
+    ttio_ref_diff_v2_input in = {
+        .sequences = sequences, .offsets = offsets, .positions = positions,
+        .cigar_strings = cigars, .n_reads = 4,
+        .reference = reference, .reference_length = 400,
+        .reads_per_slice = 10000,
+        .reference_md5 = (const uint8_t *)"\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+        .reference_uri = "test",
+    };
+    size_t cap = ttio_ref_diff_v2_max_encoded_size(4, 200);
+    uint8_t *enc = malloc(cap);
+    if (!enc) { fprintf(stderr, "alloc fail\n"); return 1; }
+    size_t enc_len = cap;
+    int rc = ttio_ref_diff_v2_encode(&in, enc, &enc_len);
+    if (rc != 0) { fprintf(stderr, "UL encode rc=%d\n", rc); free(enc); return 1; }
+    /* one slice: its body starts after the outer header (38 + 4) and the
+     * slice index entry (RDV2_SLICE_INDEX_ENTRY); ul_rans_len at +20 must be > 0 */
+    size_t body = 38 + 4 + RDV2_SLICE_INDEX_ENTRY;
+    uint32_t ul_len = (uint32_t)enc[body + 20] | ((uint32_t)enc[body + 21] << 8)
+                    | ((uint32_t)enc[body + 22] << 16) | ((uint32_t)enc[body + 23] << 24);
+    if (ul_len == 0) { fprintf(stderr, "UL length is 0 with unmapped reads\n"); free(enc); return 1; }
+
+    uint8_t out_seq[200];
+    uint64_t out_offsets[5] = {0, 0, 0, 0, 0};
+    rc = ttio_ref_diff_v2_decode(enc, enc_len, positions, cigars, 4,
+                                 reference, 400, out_seq, out_offsets);
+    if (rc != 0) { fprintf(stderr, "UL decode rc=%d\n", rc); free(enc); return 1; }
+    for (int i = 0; i < 5; i++) if (out_offsets[i] != offsets[i]) {
+        fprintf(stderr, "UL offsets wrong at %d: %lu\n", i, (unsigned long)out_offsets[i]); free(enc); return 1;
+    }
+    if (memcmp(sequences, out_seq, 200) != 0) {
+        fprintf(stderr, "UL seq mismatch\n"); free(enc); return 1;
+    }
+    free(enc);
+
+    /* a slice without unmapped reads keeps the word at +20 zero */
+    const char *cigars_mapped[4] = {"50M", "50M", "50M", "50M"};
+    for (int i = 0; i < 200; i++) sequences[i] = reference[i];
+    int64_t positions_mapped[4] = {1, 51, 101, 151};
+    in.cigar_strings = cigars_mapped; in.positions = positions_mapped;
+    enc = malloc(cap); enc_len = cap;
+    rc = ttio_ref_diff_v2_encode(&in, enc, &enc_len);
+    if (rc != 0) { fprintf(stderr, "mapped encode rc=%d\n", rc); free(enc); return 1; }
+    if (enc[body + 20] | enc[body + 21] | enc[body + 22] | enc[body + 23]) {
+        fprintf(stderr, "reserved word not zero for a mapped-only slice\n"); free(enc); return 1;
+    }
+    free(enc);
+    printf("UL unmapped-read round-trip: PASS\n");
+    return 0;
+}
+
 int main(void) {
     if (test_i6_cigar_parser_smoke() != 0) return 1;
     if (test_i3_single_read_round_trip() != 0) return 1;
     if (test_i3_multi_read_round_trip() != 0) return 1;
     if (test_i5_n_escape_round_trip() != 0) return 1;
+    if (test_ul_unmapped_reads_round_trip() != 0) return 1;
     printf("test_ref_diff_v2_invariants: ALL PASS\n");
     return 0;
 }

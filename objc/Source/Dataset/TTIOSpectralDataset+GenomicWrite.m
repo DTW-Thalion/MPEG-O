@@ -1461,13 +1461,13 @@ static NSData *_TTIO_M93_ResolveSingleChromForRun(TTIOWrittenGenomicRun *run,
 // _TTIO_M93_DefaultSequencesCodec deleted alongside it. The default
 // reference-aware path is now refdiff_v2 (id 14) — see the
 // _TTIO_V18_* helpers below. When v2 is not eligible (no native lib,
-// no reference, or unmapped reads) the writer falls through to the
+// or no reference) the writer falls through to the
 // generic byte-channel path with the run's signalCompression default
 // or the explicit override (RANS / BASE_PACK).
 
 // ── ref_diff v2 writer helpers ────────────────────────────────────
 //
-// When eligible (native lib + reference + all reads mapped + opt-not-disabled),
+// When eligible (native lib + reference),
 // the writer creates signal_channels/sequences as a GROUP containing a
 // single child dataset "refdiff_v2" carrying the encoded blob
 // @compression=14.  On opt-out or ineligibility the existing
@@ -1479,10 +1479,8 @@ static BOOL _TTIO_V18_UseRefDiffV2(TTIOWrittenGenomicRun *run)
 {
     if (![TTIORefDiffV2 nativeAvailable]) return NO;
     if (run.referenceChromSeqs == nil) return NO;
-    // Reject runs that have any unmapped read (cigar == "*" or "").
-    for (NSString *c in run.cigars) {
-        if (c.length == 0 || [c isEqualToString:@"*"]) return NO;
-    }
+    /* Unmapped reads (cigar "*") are carried by the codec since v1.9
+     * (soft-clip bases plus the slice UL substream). */
     return YES;
 }
 

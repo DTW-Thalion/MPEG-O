@@ -45,6 +45,14 @@ void rdv2_unpack_2bit(const uint8_t *in, uint64_t n_codes, uint8_t *out_codes) {
     }
 }
 
+/* An unmapped read (SAM CIGAR "*", also NULL or "") has no alignment:
+ * the codec stores its bases whole in the SC substream and its length in
+ * the slice's UL substream, so a placed-unmapped read can sit in a
+ * reference-coded block. */
+static int rdv2_cigar_unmapped(const char *cigar) {
+    return cigar == NULL || cigar[0] == '\0' || (cigar[0] == '*' && cigar[1] == '\0');
+}
+
 /* ── Cigar parser — counts only ─────────────────────────────────── */
 
 int rdv2_parse_cigar_counts(const char *cigar,
@@ -150,10 +158,16 @@ static int rdv2_encode_slice(
     size_t         *out_size)
 {
     /* Pass 1: count */
-    uint64_t total_match = 0, total_ins = 0, total_sc = 0;
+    uint64_t total_match = 0, total_ins = 0, total_sc = 0, n_unmapped = 0;
     for (uint64_t r = 0; r < n_reads_in_slice; r++) {
+        uint64_t gid = first_read + r;
+        if (rdv2_cigar_unmapped(cigar_strings[gid])) {
+            total_sc += offsets[gid + 1] - offsets[gid];
+            n_unmapped++;
+            continue;
+        }
         uint64_t m, ins, s;
-        if (rdv2_parse_cigar_counts(cigar_strings[first_read + r], &m, &ins, &s) != 0)
+        if (rdv2_parse_cigar_counts(cigar_strings[gid], &m, &ins, &s) != 0)
             return TTIO_RANS_ERR_PARAM;
         total_match += m; total_ins += ins; total_sc += s;
     }
@@ -165,16 +179,19 @@ static int rdv2_encode_slice(
     uint8_t *sc_codes = malloc(total_sc ? total_sc : 1);
     /* ESC: worst case 1 stream_id + ~10 varint bytes + 1 literal per base */
     uint8_t *esc_buf = malloc((total_match + total_ins + total_sc) * 12 + 16);
+    /* UL: one varint per unmapped read, its length in bases */
+    uint8_t *ul_buf = malloc(n_unmapped * 10 + 1);
     uint8_t *bs_packed = NULL, *in_packed = NULL, *sc_packed = NULL;
     uint8_t *flag_rans = NULL, *bs_rans = NULL, *in_rans = NULL, *sc_rans = NULL, *esc_rans = NULL;
+    uint8_t *ul_rans = NULL;
     int rc = 0;
 
-    if (!flag_buf || !bs_codes || !in_codes || !sc_codes || !esc_buf) {
+    if (!flag_buf || !bs_codes || !in_codes || !sc_codes || !esc_buf || !ul_buf) {
         rc = TTIO_RANS_ERR_ALLOC; goto cleanup;
     }
 
     uint64_t flag_n = 0, bs_n = 0, in_n = 0, sc_n = 0;
-    size_t esc_size = 0;
+    size_t esc_size = 0, ul_size = 0;
 
     /* Pass 2: walk reads + cigars */
     for (uint64_t r = 0; r < n_reads_in_slice; r++) {
@@ -184,6 +201,25 @@ static int rdv2_encode_slice(
         const char *cigar = cigar_strings[gid];
         int64_t ref_pos = positions[gid] - 1;  /* 1-based → 0-based */
         uint64_t read_pos = 0;
+
+        if (rdv2_cigar_unmapped(cigar)) {
+            ul_size += rdv2_varint_encode(read_len, ul_buf + ul_size);
+            for (uint64_t k = 0; k < read_len; k++) {
+                uint8_t rb = read[read_pos];
+                uint8_t code = rdv2_base_to_2bit(rb);
+                if (code == RDV2_BASE_INVALID) {
+                    sc_codes[sc_n] = 0;  /* placeholder */
+                    esc_buf[esc_size++] = RDV2_ESC_SC;
+                    esc_size += rdv2_varint_encode(sc_n, esc_buf + esc_size);
+                    esc_buf[esc_size++] = rb;
+                } else {
+                    sc_codes[sc_n] = code;
+                }
+                sc_n++;
+                read_pos++;
+            }
+            continue;
+        }
 
         const char *p = cigar;
         while (*p) {
@@ -275,42 +311,49 @@ static int rdv2_encode_slice(
     size_t in_cap   = ttio_rans_o0_max_encoded_size(in_packed_len ? in_packed_len : 1);
     size_t sc_cap   = ttio_rans_o0_max_encoded_size(sc_packed_len ? sc_packed_len : 1);
     size_t esc_cap  = ttio_rans_o0_max_encoded_size(esc_size ? esc_size : 1);
+    size_t ul_cap   = ttio_rans_o0_max_encoded_size(ul_size ? ul_size : 1);
     flag_rans = malloc(flag_cap);
     bs_rans   = malloc(bs_cap);
     in_rans   = malloc(in_cap);
     sc_rans   = malloc(sc_cap);
     esc_rans  = malloc(esc_cap);
-    if (!flag_rans || !bs_rans || !in_rans || !sc_rans || !esc_rans) { rc = TTIO_RANS_ERR_ALLOC; goto cleanup; }
+    ul_rans   = malloc(ul_cap);
+    if (!flag_rans || !bs_rans || !in_rans || !sc_rans || !esc_rans || !ul_rans) { rc = TTIO_RANS_ERR_ALLOC; goto cleanup; }
     size_t flag_rans_len = flag_cap, bs_rans_len = bs_cap;
-    size_t in_rans_len = in_cap, sc_rans_len = sc_cap, esc_rans_len = esc_cap;
+    size_t in_rans_len = in_cap, sc_rans_len = sc_cap, esc_rans_len = esc_cap, ul_rans_len = 0;
     rc = ttio_rans_o0_encode(flag_buf, flag_n, flag_rans, &flag_rans_len);
     if (!rc) rc = ttio_rans_o0_encode(bs_packed, bs_packed_len, bs_rans, &bs_rans_len);
     if (!rc) rc = ttio_rans_o0_encode(in_packed, in_packed_len, in_rans, &in_rans_len);
     if (!rc) rc = ttio_rans_o0_encode(sc_packed, sc_packed_len, sc_rans, &sc_rans_len);
     if (!rc) rc = ttio_rans_o0_encode(esc_buf, esc_size, esc_rans, &esc_rans_len);
+    /* UL is written only when the slice holds an unmapped read: a slice
+     * without one keeps ul_len = 0 in the field that was reserved (and
+     * required to be 0) before, so every earlier blob decodes unchanged. */
+    if (!rc && ul_size) { ul_rans_len = ul_cap; rc = ttio_rans_o0_encode(ul_buf, ul_size, ul_rans, &ul_rans_len); }
     if (rc != 0) goto cleanup;
 
     /* Assemble slice body */
-    size_t total = RDV2_SLICE_SUBHDR + flag_rans_len + bs_rans_len + in_rans_len + sc_rans_len + esc_rans_len;
+    size_t total = RDV2_SLICE_SUBHDR + flag_rans_len + bs_rans_len + in_rans_len + sc_rans_len + esc_rans_len + ul_rans_len;
     if (out_capacity < total) { rc = TTIO_RANS_ERR_PARAM; goto cleanup; }
     rdv2_w32(out + 0,  (uint32_t)flag_rans_len);
     rdv2_w32(out + 4,  (uint32_t)bs_rans_len);
     rdv2_w32(out + 8,  (uint32_t)in_rans_len);
     rdv2_w32(out + 12, (uint32_t)sc_rans_len);
     rdv2_w32(out + 16, (uint32_t)esc_rans_len);
-    rdv2_w32(out + 20, 0);  /* reserved */
+    rdv2_w32(out + 20, (uint32_t)ul_rans_len);
     size_t off = RDV2_SLICE_SUBHDR;
     memcpy(out + off, flag_rans, flag_rans_len); off += flag_rans_len;
     memcpy(out + off, bs_rans,   bs_rans_len);   off += bs_rans_len;
     memcpy(out + off, in_rans,   in_rans_len);   off += in_rans_len;
     memcpy(out + off, sc_rans,   sc_rans_len);   off += sc_rans_len;
     memcpy(out + off, esc_rans,  esc_rans_len);  off += esc_rans_len;
+    if (ul_rans_len) { memcpy(out + off, ul_rans, ul_rans_len); off += ul_rans_len; }
     *out_size = off;
 
 cleanup:
-    free(flag_buf); free(bs_codes); free(in_codes); free(sc_codes); free(esc_buf);
+    free(flag_buf); free(bs_codes); free(in_codes); free(sc_codes); free(esc_buf); free(ul_buf);
     free(bs_packed); free(in_packed); free(sc_packed);
-    free(flag_rans); free(bs_rans); free(in_rans); free(sc_rans); free(esc_rans);
+    free(flag_rans); free(bs_rans); free(in_rans); free(sc_rans); free(esc_rans); free(ul_rans);
     return rc;
 }
 
@@ -387,24 +430,49 @@ static int rdv2_decode_slice(
     uint32_t in_len   = rdv2_r32(body + 8);
     uint32_t sc_len   = rdv2_r32(body + 12);
     uint32_t esc_len  = rdv2_r32(body + 16);
-    uint32_t reserved = rdv2_r32(body + 20);
-    if (reserved != 0) return TTIO_RANS_ERR_CORRUPT;
-    if ((size_t)RDV2_SLICE_SUBHDR + flag_len + bs_len + in_len + sc_len + esc_len > body_size)
+    uint32_t ul_len   = rdv2_r32(body + 20);  /* 0 in every blob written before UL existed */
+    if ((size_t)RDV2_SLICE_SUBHDR + flag_len + bs_len + in_len + sc_len + esc_len + ul_len > body_size)
         return TTIO_RANS_ERR_CORRUPT;
 
-    uint64_t total_match = 0, total_ins = 0, total_sc = 0;
+    uint64_t total_match = 0, total_ins = 0, total_sc = 0, n_unmapped = 0;
     for (uint64_t r = 0; r < n_reads_in_slice; r++) {
+        if (rdv2_cigar_unmapped(cigar_strings[first_read + r])) { n_unmapped++; continue; }
         uint64_t m, ins, s;
         if (rdv2_parse_cigar_counts(cigar_strings[first_read + r], &m, &ins, &s) != 0)
             return TTIO_RANS_ERR_PARAM;
         total_match += m; total_ins += ins; total_sc += s;
     }
+    if (n_unmapped && ul_len == 0) return TTIO_RANS_ERR_CORRUPT;
 
     const uint8_t *flag_in = body + RDV2_SLICE_SUBHDR;
     const uint8_t *bs_in   = flag_in + flag_len;
     const uint8_t *in_in   = bs_in + bs_len;
     const uint8_t *sc_in   = in_in + in_len;
     const uint8_t *esc_in  = sc_in + sc_len;
+    const uint8_t *ul_in   = esc_in + esc_len;
+
+    /* UL first: the unmapped reads' lengths add to total_sc */
+    uint64_t *ul_lengths = malloc((n_unmapped ? n_unmapped : 1) * sizeof(uint64_t));
+    if (!ul_lengths) return TTIO_RANS_ERR_ALLOC;
+    if (n_unmapped) {
+        uint8_t *ul_buf = malloc(n_unmapped * 10 + 1);
+        size_t ul_dec = 0;
+        if (!ul_buf) { free(ul_lengths); return TTIO_RANS_ERR_ALLOC; }
+        int urc = ttio_rans_o0_decode(ul_in, ul_len, ul_buf, n_unmapped * 10 + 1, &ul_dec);
+        if (urc) { free(ul_buf); free(ul_lengths); return urc; }
+        size_t uoff = 0;
+        for (uint64_t u = 0; u < n_unmapped; u++) {
+            size_t consumed = 0;
+            if (rdv2_varint_decode(ul_buf + uoff, ul_dec - uoff, &ul_lengths[u], &consumed) != 0) {
+                free(ul_buf); free(ul_lengths); return TTIO_RANS_ERR_CORRUPT;
+            }
+            uoff += consumed;
+            total_sc += ul_lengths[u];
+        }
+        free(ul_buf);
+        if (uoff != ul_dec) { free(ul_lengths); return TTIO_RANS_ERR_CORRUPT; }
+    }
+    uint64_t ul_next = 0;
 
     uint8_t *flag_buf = malloc(total_match ? total_match : 1);
     uint8_t *bs_packed = malloc((total_match + 3) / 4 + 1);
@@ -476,6 +544,22 @@ static int rdv2_decode_slice(
         uint64_t gid = first_read + r;
         const char *cigar = cigar_strings[gid];
         int64_t ref_pos = positions[gid] - 1;  /* 1-based → 0-based */
+        if (rdv2_cigar_unmapped(cigar)) {
+            uint64_t ulen = ul_lengths[ul_next++];
+            for (uint64_t k = 0; k < ulen; k++) {
+                uint8_t base;
+                if (next_esc_stream == RDV2_ESC_SC && next_esc_index == sc_pos) {
+                    base = next_esc_literal;
+                    CONSUME_NEXT_ESC();
+                } else {
+                    base = rdv2_2bit_to_base(sc_codes[sc_pos]);
+                }
+                out_sequences[write_pos++] = base;
+                sc_pos++;
+            }
+            out_offsets[gid + 1] = write_pos;
+            continue;
+        }
         const char *p = cigar;
         while (*p) {
             uint64_t length = 0;
@@ -546,7 +630,7 @@ static int rdv2_decode_slice(
 
 cleanup:
     free(flag_buf); free(bs_packed); free(in_packed); free(sc_packed); free(esc_buf);
-    free(bs_codes); free(in_codes); free(sc_codes);
+    free(bs_codes); free(in_codes); free(sc_codes); free(ul_lengths);
     return rc;
 }
 

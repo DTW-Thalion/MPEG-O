@@ -133,10 +133,7 @@ def _embed_references_for_runs(
             for c in run.signal_codec_overrides.values()
             if _is_valid_compression(c)
         )
-        _uses_ref_diff_v2_default = (
-            _rdv2_meta.HAVE_NATIVE_LIB
-            and not any(c == "*" or c == "" for c in run.cigars)
-        )
+        _uses_ref_diff_v2_default = _rdv2_meta.HAVE_NATIVE_LIB
         if not (_has_context_aware_override or _uses_ref_diff_v2_default):
             continue
         md5 = _reference_md5_for_run(run)
@@ -207,11 +204,14 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
     sequences writer.
 
     Eligibility: requires libttio_rans loadable, a single-chromosome
-    run, all reads mapped (no ``cigar=="*"``), and a reference present.
-    When any precondition fails, falls back to BASE_PACK on a flat
-    dataset (Q5b = C) — same fallback semantics as the original v1.5
-    REF_DIFF path. The fallback uses the canonical, codec-free
-    sequences dataset layout.
+    run and a reference present. When any precondition fails, falls
+    back to BASE_PACK on a flat dataset (Q5b = C) — same fallback
+    semantics as the original v1.5 REF_DIFF path. The fallback uses
+    the canonical, codec-free sequences dataset layout. Unmapped reads
+    (``cigar == "*"``, for example a read placed on its mate's
+    chromosome) are carried by the codec itself since v1.9: their bases
+    go to the soft-clip substream and their lengths to the slice's UL
+    substream (docs/codecs/ref_diff_v2.md section 4.4).
 
     **Single-chromosome limitation (v1.8 first pass):** REF_DIFF_V2
     requires all reads aligned to a single chromosome. Multi-chromosome
@@ -242,15 +242,9 @@ def _write_sequences_ref_diff_v2(sc, run: WrittenGenomicRun) -> None:
 
     raw_bytes = bytes(run.sequences.tobytes())
 
-    # REF_DIFF_V2 cannot encode unmapped reads (cigar="*"). When any
-    # read in the run is unmapped, fall back to BASE_PACK on the whole
-    # channel — same Q5b=C semantics as missing-reference.
-    has_unmapped = any(c == "*" or c == "" for c in run.cigars)
-
     use_v2 = (
         _rdv2.HAVE_NATIVE_LIB
         and chrom_seq is not None
-        and not has_unmapped
     )
 
     if use_v2:
