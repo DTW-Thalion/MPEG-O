@@ -765,6 +765,9 @@ def test_base64_zlib_round_trip():
     # Round trip with zlib: encode manually, decode via module.
     encoded_z = base64.b64encode(zlib.compress(raw)).decode("ascii")
     assert decode(encoded_z, zlib_compressed=True) == raw
+    # an empty <binary/> (spectrum without peaks) is an empty array, zlib or not
+    assert decode("", zlib_compressed=True) == b""
+    assert decode("", zlib_compressed=False) == b""
 
 
 def test_stream_writer_flush_round_trip(tmp_path):

@@ -23,6 +23,8 @@ def decode(text: str, *, zlib_compressed: bool) -> bytes:
     """
     cleaned = "".join(text.split())
     raw = base64.b64decode(cleaned, validate=False)
-    if zlib_compressed:
+    if zlib_compressed and raw:
+        # An empty <binary/> (a spectrum with no peaks) is an empty array;
+        # zlib.decompress(b"") raises "incomplete or truncated stream".
         raw = zlib.decompress(raw)
     return raw
