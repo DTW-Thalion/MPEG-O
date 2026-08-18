@@ -1,0 +1,22 @@
+{
+ "corpus": "hg002_hifi_subset",
+ "tier": "aligned",
+ "format": "bam",
+ "input": "hg002_pacbio.subset",
+ "kind": "bam_full",
+ "input_bytes": 188390948,
+ "input_sha256": "a39d0c9ac9fe9ca30053b6139aad828c9ab2c801018b07384e27f2abdc841852",
+ "tool_version": "samtools 1.19.2",
+ "lossy": false,
+ "breakdown": {},
+ "max_rel_error": null,
+ "verify_note": "",
+ "bases": 264190341,
+ "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
+ "output_bytes": 188391071,
+ "encode_s": 6.36,
+ "encode_rss_mb": 45.18359375,
+ "decode_s": 6.43,
+ "decode_rss_mb": 45.1796875,
+ "verify": "PASS"
+}

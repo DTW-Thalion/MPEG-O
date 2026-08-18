@@ -1,0 +1,22 @@
+{
+ "corpus": "na12878_chr22_lowcov",
+ "tier": "aligned",
+ "format": "cram31_archive",
+ "input": "na12878.chr22.lean.mapped",
+ "kind": "bam_full",
+ "input_bytes": 151415812,
+ "input_sha256": "87d4b0f8ac60b25628e61584cae261b733684f725b6ad72ec5863ffa79ecf535",
+ "tool_version": "samtools 1.19.2",
+ "lossy": false,
+ "breakdown": {},
+ "max_rel_error": null,
+ "verify_note": "",
+ "bases": 178409733,
+ "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
+ "output_bytes": 77123201,
+ "encode_s": 16.7,
+ "encode_rss_mb": 291.65625,
+ "decode_s": 13.1,
+ "decode_rss_mb": 271.65625,
+ "verify": "PASS"
+}

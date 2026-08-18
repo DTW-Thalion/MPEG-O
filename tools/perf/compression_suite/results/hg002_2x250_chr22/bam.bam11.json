@@ -1,0 +1,22 @@
+{
+ "corpus": "hg002_2x250_chr22",
+ "tier": "aligned",
+ "format": "bam",
+ "input": "hg002_illumina.chr22",
+ "kind": "bam11",
+ "input_bytes": 1475133898,
+ "input_sha256": "8003068fd689669ddf4e4b85e3b64062782444dd135ff29c171628569ab0fc30",
+ "tool_version": "samtools 1.19.2",
+ "lossy": false,
+ "breakdown": {},
+ "max_rel_error": null,
+ "verify_note": "",
+ "bases": 2644605844,
+ "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
+ "output_bytes": 1475133935,
+ "encode_s": 79.01,
+ "encode_rss_mb": 44.71484375,
+ "decode_s": 78.99,
+ "decode_rss_mb": 44.74609375,
+ "verify": "PASS"
+}

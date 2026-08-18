@@ -1,0 +1,22 @@
+{
+ "corpus": "pxd000001_orbitrap",
+ "tier": "ms",
+ "format": "mzml_gz",
+ "input": "TMT_Erwinia_1uLSike_Top10HCD_isol2_45stepped_60min_01-20141210",
+ "kind": "mzml",
+ "input_bytes": 450032788,
+ "input_sha256": "038dd84702b01463b1aadfae09cecc4176f319376ff85e9dba883cdc3208fa67",
+ "tool_version": "psims 1.4.0, gzip",
+ "lossy": false,
+ "breakdown": {},
+ "max_rel_error": null,
+ "verify_note": "",
+ "bases": 0,
+ "format_module_sha256": "3c3657efafd146075202b9615f60366f92aa36705203003658f0fcd26bf8aede",
+ "output_bytes": 298727810,
+ "encode_s": 36.69,
+ "encode_rss_mb": 763.2109375,
+ "decode_s": 2.27,
+ "decode_rss_mb": 44.5,
+ "verify": "PASS"
+}

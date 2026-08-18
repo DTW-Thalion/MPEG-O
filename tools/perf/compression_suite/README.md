@@ -51,6 +51,18 @@ reason under "Rows that failed verification".
 
 ## Known issues found while building the suite
 
+- A blocks_v1 block that holds any unmapped read (FLAG 0x4, CIGAR `*`,
+  including reads placed on their mate's contig) codes its sequences
+  with BASE_PACK, not REF_DIFF_V2: the v1.8 rule "REF_DIFF_V2 cannot
+  encode unmapped reads, fall back on the whole channel" survives per
+  block, and placed-unmapped reads sit inside mapped blocks. The NA12878
+  WES chr22 slice has 839 such reads in 992,974 (0.08 percent) and its
+  single block codes 23.9 MB of sequences as BASE_PACK; the HG002 2x250
+  chr22 slice has 176,368 in 10,633,980. On those two corpora TTI-O is
+  close to or larger than BAM, while on the mapped-only NA12878
+  low-coverage slice REF_DIFF_V2 engages and TTI-O is the smallest
+  format. The fix is in the codec (treat CIGAR `*` as all soft clip),
+  not in this suite; the numbers here are the writer as it stands.
 - genie (MPEG-G reference software) is not lossless on SAM columns
   1-11: it drops unmapped records that have no adjacent mate, clears
   FLAG 0x20 and writes TLEN 0. Name-sorted input changes nothing.

@@ -1,0 +1,22 @@
+{
+ "corpus": "na12878_wes_chr22",
+ "tier": "aligned",
+ "format": "cram31_small",
+ "input": "na12878_wes.chr22",
+ "kind": "bam11",
+ "input_bytes": 66369001,
+ "input_sha256": "65413e3477b14f7257ce453eb65dd3c6f113f49adbe1e57aabf0aa021f6917e8",
+ "tool_version": "samtools 1.19.2",
+ "lossy": false,
+ "breakdown": {},
+ "max_rel_error": null,
+ "verify_note": "",
+ "bases": 95035281,
+ "format_module_sha256": "190663320654dcf216f97d7301ebb479846c5506d057ea3d70b46283e502edde",
+ "output_bytes": 32034195,
+ "encode_s": 11.94,
+ "encode_rss_mb": 246.0,
+ "decode_s": 6.11,
+ "decode_rss_mb": 156.12890625,
+ "verify": "PASS"
+}

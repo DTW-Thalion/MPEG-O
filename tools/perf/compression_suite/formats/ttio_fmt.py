@@ -58,7 +58,19 @@ class _Ttio:
         return out
 
     def version(self) -> str:
-        return common.tool_version([TTIO_CLI, "--version"])
+        """The CLI version plus the repository commit (and a dirty mark),
+        so any change to the writers or codecs re-runs the TTI-O rows."""
+        ver = common.tool_version([TTIO_CLI, "--version"])
+        repo = Path(__file__).resolve().parents[4]
+        try:
+            rev = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+                                 capture_output=True, text=True, check=True).stdout.strip()
+            dirty = subprocess.run(["git", "-C", str(repo), "status", "--porcelain", "--",
+                                    "python/src", "native/src"],
+                                   capture_output=True, text=True).stdout.strip()
+            return f"{ver} @{rev}{'+' if dirty else ''}"
+        except (OSError, subprocess.CalledProcessError):
+            return ver
 
 
 register(_Ttio("ttio", "aligned", "bam", "bam", ".bam"))

@@ -1,0 +1,23 @@
+{
+ "corpus": "hg002_hifi_subset",
+ "tier": "aligned",
+ "format": "mpegg",
+ "input": "hg002_pacbio.subset",
+ "kind": "bam11",
+ "input_bytes": 188391078,
+ "input_sha256": "43a991646b50a0a1e1b46cf5726694b152356e1003a9f600d745cebd5f8de651",
+ "tool_version": "genie (docker.io/muefab/genie@sha256:c3112a3879cc18061bbab5ed8f76dec255ab1be46e2133cd59320dd5ba98ef89)",
+ "lossy": false,
+ "breakdown": {},
+ "max_rel_error": null,
+ "verify_note": "",
+ "bases": 264190341,
+ "format_module_sha256": "3b33bbcb7a1182dc681b6f60682c8fa8644be0d7129e9398c6388a2dc024b676",
+ "verify": "FAIL",
+ "error": "command failed rc=1: ['/home/toddw/TTI-O/python/.venv/bin/python', '-c', '\\nimport sys; from pathlib import Path\\nsys.path.insert(0, \\'/home/toddw/TTI-O/tools/perf/compression_suite\\')\\nimport formats; reg = formats.load_all()\\nkey, inp, work, ref = sys.argv[1:5]\\nout = reg[key].encode(Path(inp), Path(work), Path(ref) if ref else None)\\n(Path(work) / \"enc.path\").write_text(str(out))\\n', 'mpegg', '/home/toddw/ttio-bench-data/prepared/hg002_hifi_subset/hg002_pacbio.subset.11col.bam', '/home/toddw/ttio-bench-data/out/hg002_hifi_subset.mpegg.om55x0mg', '']\nTraceback (most recent call last):\n  File \"<string>\", line 6, in <module>\n  File \"/home/toddw/TTI-O/tools/perf/compression_suite/formats/mpegg.py\", line 59, in encode\n    genie(\"transcode-sam\", [\"-i\", str(sam.resolve()), \"-o\", str(mgrec.resolve()),\n  File \"/home/toddw/TTI-O/tools/perf/compression_suite/formats/mpegg.py\", line 33, in genie\n    raise RuntimeError(f\"genie {op} failed (rc={p.returncode}): \"\nRuntimeError: genie transcode-sam failed (rc=0): [ERROR,      0.000s, App/TranscodeSam]: /genie/src/apps/genie/transcode-sam/program_options.cc::300: You did not pass a reference file. Reference based compression might not work and record classes N \nCommand exited with non-zero status 1\nimport sys; from pathlib import Path\nsys.path.insert(0, '/home/toddw/TTI-O/tools/perf/compression_suite')\nimport formats; reg = formats.load_all()\nkey, inp, work, ref = sys.argv[1:5]\nout = reg[key].encode(Path(inp), Path(work), Path(ref) if ref else None)\n(Path(work) / \"enc.path\").write_text(str(out))\n mpegg /home/toddw/ttio-bench-data/prepared/hg002_hifi_subset/hg002_pacbio.subset.11col.bam /home/toddw/ttio-bench-data/out/hg002_hifi_subset.mpegg.om55x0mg \"",
+ "output_bytes": 0,
+ "encode_s": 0.0,
+ "decode_s": 0.0,
+ "encode_rss_mb": 0.0,
+ "decode_rss_mb": 0.0
+}

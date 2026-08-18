@@ -84,14 +84,15 @@ def run(corpora: list[common.Corpus], formats_csv: str, smoke: bool) -> int:
                 if out_json.exists():
                     prev = json.loads(out_json.read_text())
                     if (prev.get("input_sha256") == sha and prev.get("tool_version") == ver
-                            and prev.get("format_module_sha256") == mod_sha):
+                            and prev.get("format_module_sha256") == mod_sha
+                            and prev.get("reference") == (str(ref) if ref else None)):
                         continue
                 work = Path(tempfile.mkdtemp(prefix=f"{c.id}.{key}.", dir=common.data_dir() / "out"))
                 rec = {"corpus": c.id, "tier": c.tier, "format": key, "input": item["name"],
                        "kind": item["kind"], "input_bytes": inp.stat().st_size, "input_sha256": sha,
                        "tool_version": ver, "lossy": fmt.lossy, "breakdown": {}, "max_rel_error": None,
                        "verify_note": "", "bases": item.get("bases", 0),
-                       "format_module_sha256": mod_sha}
+                       "format_module_sha256": mod_sha, "reference": str(ref) if ref else None}
                 try:
                     holder = {}
                     t_enc = common.run_timed([sys_executable(), "-c", _ENC_SNIPPET,

@@ -102,10 +102,12 @@ def run(corpora: list[common.Corpus]) -> int:
         pdir.mkdir(parents=True, exist_ok=True)
         plan_path = pdir / "plan.json"
         sha = common.sha256_of(src)
-        if plan_path.exists() and json.loads(plan_path.read_text()).get("input_sha256") == sha:
-            print(f"prepare: {c.id} up to date"); continue
-        inputs = []
         ref = reference_for(c)
+        if plan_path.exists():
+            prev = json.loads(plan_path.read_text())
+            if prev.get("input_sha256") == sha and prev.get("reference") == (str(ref) if ref else None):
+                print(f"prepare: {c.id} up to date"); continue
+        inputs = []
         if c.tier == "aligned":
             bases = count_bases_bam(src)
             inputs.append({"name": src.stem, "path": str(src), "kind": "bam_full", "bases": bases})
