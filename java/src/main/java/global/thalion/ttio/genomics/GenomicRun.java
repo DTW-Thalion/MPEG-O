@@ -253,8 +253,9 @@ public class GenomicRun
 
     /** The {@link GenomicRun} over block {@code b}, materialised on
      *  demand; the last one is cached. */
-    private GenomicRun blockView(int b) {
-        if (cachedView != null && cachedBlock == b) return cachedView;
+    /** The view handle for block {@code b}, materialised on the caller's
+     *  thread (storage reads). */
+    private BlockView.Handle materialiseHandle(int b) {
         if (mateChromNamesTable == null) {
             try (StorageGroup sc = runGroup.openGroup("signal_channels")) {
                 mateChromNamesTable = sc.hasChild("mate_info")
@@ -262,8 +263,13 @@ public class GenomicRun
                     : List.of();
             }
         }
-        BlockView.Handle h = BlockView.materialise(runGroup, blockTable, b,
+        return BlockView.materialise(runGroup, blockTable, b,
                 chromosomeNames(), mateChromNamesTable);
+    }
+
+    private GenomicRun blockView(int b) {
+        if (cachedView != null && cachedBlock == b) return cachedView;
+        BlockView.Handle h = materialiseHandle(b);
         GenomicRun sub = GenomicRun.readFrom(h.group(), name, resolverForViews());
         dropCachedView();
         cachedBlock = b;
@@ -313,6 +319,72 @@ public class GenomicRun
 
     /** Every read in order; see {@link #iterReads(int, int)}. */
     public java.util.Iterator<AlignedRead> iterReads() { return iterReads(0, readCount()); }
+
+    private record InFlightView(GenomicRun view, BlockView.Handle handle) {}
+
+    /** Reads {@code [start, stop)} in order; under {@code blocks_v1} the
+     *  next {@code threads} blocks decode ahead on a pool. {@code threads}
+     *  {@code <= 1} is the serial iterator. */
+    public java.util.Iterator<AlignedRead> iterReads(int start, int stop, int threads) {
+        int n = readCount();
+        int lo = Math.max(start, 0), hi = Math.min(stop, n);
+        int nthreads = Math.max(1, threads);
+        if (blockTable == null || nthreads <= 1 || lo >= hi) return iterReads(lo, hi);
+        final int bFirst = blockTable.blockFor(lo), bLast = blockTable.blockFor(hi - 1);
+        final global.thalion.ttio.Threads.PoolScope scope = global.thalion.ttio.Threads.pool(nthreads);
+        final java.util.Map<Integer, java.util.concurrent.Future<InFlightView>> pending = new java.util.HashMap<>();
+        final java.util.function.IntConsumer submit = b -> {
+            if (b <= bLast && !pending.containsKey(b)) {
+                BlockView.Handle h = materialiseHandle(b);       // storage reads, this thread
+                pending.put(b, scope.executor().submit(() -> {
+                    GenomicRun v = GenomicRun.readFrom(h.group(), name, resolverForViews());
+                    if (v.readCount() > 0) v.readAt(0);           // warm every channel cache
+                    return new InFlightView(v, h);
+                }));
+            }
+        };
+        for (int b = bFirst; b <= Math.min(bLast, bFirst + nthreads - 1); b++) submit.accept(b);
+        return new java.util.Iterator<>() {
+            int i = lo, b = bFirst;
+            InFlightView cur;
+            int r0, bEnd;
+            @Override public boolean hasNext() {
+                if (i < hi) return true;
+                release();
+                scope.close();
+                for (var f : pending.values()) {
+                    try { f.get().handle().discard(); } catch (Exception ignored) { }
+                }
+                pending.clear();
+                return false;
+            }
+            private void release() {
+                if (cur != null) { cur.view().close(); cur.handle().discard(); cur = null; }
+            }
+            @Override public AlignedRead next() {
+                if (i >= hi) throw new NoSuchElementException();
+                if (cur == null || i >= bEnd) {
+                    release();
+                    try {
+                        cur = pending.remove(b).get();
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        scope.close();
+                        throw new IllegalStateException(e);
+                    } catch (java.util.concurrent.ExecutionException e) {
+                        scope.close();
+                        Throwable c = e.getCause();
+                        throw c instanceof RuntimeException r ? r : new IllegalStateException(c);
+                    }
+                    submit.accept(b + nthreads);
+                    r0 = (int) blockTable.readStart[b];
+                    bEnd = Math.min(r0 + blockTable.nReads[b], hi);
+                    b++;
+                }
+                return cur.view().objectAtIndex(i++ - r0);
+            }
+        };
+    }
 
     /** Phase 2 (post-M91): read per-run provenance. Prefers the
      *  canonical compound dataset {@code provenance/steps} (matches

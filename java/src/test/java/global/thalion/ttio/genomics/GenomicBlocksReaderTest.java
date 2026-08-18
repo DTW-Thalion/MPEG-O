@@ -141,4 +141,28 @@ class GenomicBlocksReaderTest {
             assertEquals(4, t.readCount());
         }
     }
+
+    @org.junit.jupiter.api.Test
+    void iterReadsThreadedMatchesSerial() throws Exception {
+        // reference-less (RANS_ORDER1 sequences): a memory-provider readFrom has no resolver
+        WrittenGenomicRun run = GenomicStreamWriterTest.bigSyntheticRun(30_000, 11).withReference(false, null, null);
+        StorageGroup study = GenomicStreamWriterTest.writeWithThreads("memory://gbrt-th", run, 1, 5_000);
+        try (GenomicRun g = GenomicRun.readFrom(study.openGroup("genomic_runs").openGroup("g"), "g")) {
+            java.util.List<String> serial = new java.util.ArrayList<>();
+            for (var it = g.iterReads(0, g.readCount(), 1); it.hasNext(); ) {
+                var r = it.next();
+                serial.add(r.readName() + "|" + r.sequence() + "|" + r.cigar() + "|" + r.mateChromosome());
+            }
+            java.util.List<String> threaded = new java.util.ArrayList<>();
+            for (var it = g.iterReads(0, g.readCount(), 4); it.hasNext(); ) {
+                var r = it.next();
+                threaded.add(r.readName() + "|" + r.sequence() + "|" + r.cigar() + "|" + r.mateChromosome());
+            }
+            org.junit.jupiter.api.Assertions.assertEquals(serial, threaded);
+            java.util.List<String> part = new java.util.ArrayList<>();
+            for (var it = g.iterReads(12_345, 17_890, 3); it.hasNext(); ) part.add(it.next().readName());
+            org.junit.jupiter.api.Assertions.assertEquals(serial.subList(12_345, 17_890).stream()
+                .map(x -> x.split("\\|")[0]).toList(), part);
+        }
+    }
 }

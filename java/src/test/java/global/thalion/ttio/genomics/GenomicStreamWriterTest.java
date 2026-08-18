@@ -211,8 +211,8 @@ class GenomicStreamWriterTest {
     static StorageGroup writeWithThreads(String url, WrittenGenomicRun run, int threads, int blockReads) {
         StorageGroup study = study(url);
         GenomicStreamWriter.Options o = GenomicStreamWriter.Options.fromRun(run)
-            .withBlockPolicy(blockReads, Long.MAX_VALUE)
-            .withReference(run.referenceChromSeqs(), true);
+            .withBlockPolicy(blockReads, Long.MAX_VALUE);
+        if (run.referenceChromSeqs() != null) o = o.withReference(run.referenceChromSeqs(), true);
         try (GenomicStreamWriter w = new GenomicStreamWriter(study, "g", o, threads)) {
             int n = run.readCount();
             for (int a = 0; a < n; a += 7_001) {

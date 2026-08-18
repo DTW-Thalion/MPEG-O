@@ -165,7 +165,7 @@ public class BamWriter {
             run.platform(), provenance, sort);
         long total = run.readCount();
         try (SAMFileWriter writer = makeWriter(header, sort)) {
-            java.util.Iterator<AlignedRead> it = run.iterReads();
+            java.util.Iterator<AlignedRead> it = run.iterReads(0, run.readCount(), global.thalion.ttio.Threads.resolve(null));
             long done = 0;
             while (it.hasNext()) {
                 writer.addAlignment(buildSamRecord(it.next(), header));

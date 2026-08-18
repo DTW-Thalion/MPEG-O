@@ -89,6 +89,10 @@ public final class SpectralStreamWriter implements AutoCloseable {
     private final Map<String, StorageDataset> idx = new LinkedHashMap<>();
     private final Map<String, StorageDataset> sig = new LinkedHashMap<>();
     private final Map<String, double[]> fdzBuf = new LinkedHashMap<>();
+    private int threads;
+    private global.thalion.ttio.Threads.PoolScope scope;
+    private record InFlightFdz(java.util.concurrent.Future<FloatDeltaZstd.EncodedBlock> encoded, int nValues) {}
+    private final Map<String, java.util.ArrayDeque<InFlightFdz>> fdzInflight = new LinkedHashMap<>();
     private final Map<String, Long> fdzValues = new LinkedHashMap<>();
     private final Map<String, Integer> fdzBlocks = new LinkedHashMap<>();
     private boolean m74;
@@ -102,13 +106,26 @@ public final class SpectralStreamWriter implements AutoCloseable {
      *  {@code studyGroup}; creates {@code ms_runs} when absent and
      *  maintains {@code @_run_names}. */
     public SpectralStreamWriter(StorageGroup studyGroup, String runName, Options options) {
+        this(studyGroup, runName, options, global.thalion.ttio.Threads.resolve(null));
+    }
+
+    /** With {@code threads} > 1 the codec-17 blocks of each channel are
+     *  encoded on a pool and appended in emission order by the caller's
+     *  thread; at most {@code threads + 1} blocks per channel are in
+     *  flight. The file is byte for byte the one thread's. */
+    public SpectralStreamWriter(StorageGroup studyGroup, String runName, Options options, int threads) {
         this.study = studyGroup;
         this.name = runName;
         this.opt = options;
         this.useFloatDelta = options.signalCompression() == Compression.FLOAT_DELTA_ZSTD
             || (options.signalCompression() == Compression.ZLIB && !options.optDisableFloatDelta()
                 && "TTIOMassSpectrum".equals(options.spectrumClass()));
+        this.threads = Math.max(1, threads);
+        this.scope = useFloatDelta ? global.thalion.ttio.Threads.pool(this.threads)
+                                   : global.thalion.ttio.Threads.pool(1);
     }
+
+    public int threads() { return threads; }
 
     public int spectrumCount() { return count + pending.size(); }
 
@@ -143,6 +160,14 @@ public final class SpectralStreamWriter implements AutoCloseable {
     public void close() {
         if (closed) return;
         closed = true;
+        try {
+            closeInner();
+        } finally {
+            scope.close();
+        }
+    }
+
+    private void closeInner() {
         flush();
         if (rg == null) ensureLayout(null);
         for (String c : opt.channelNames()) {
@@ -150,6 +175,7 @@ public final class SpectralStreamWriter implements AutoCloseable {
             double[] buf = fdzBuf.get(c);
             if (buf.length > 0) emitFdzBlock(c, buf);
             fdzBuf.put(c, new double[0]);
+            drainFdz(c, 0);
             sig.get(c).writeSlice(0, FloatDeltaZstd.headerBytes(fdzValues.get(c), fdzBlocks.get(c)));
         }
         rg.setAttribute("spectrum_count", (long) count);
@@ -300,8 +326,37 @@ public final class SpectralStreamWriter implements AutoCloseable {
     }
 
     private void emitFdzBlock(String c, double[] values) {
-        sig.get(c).append(FloatDeltaZstd.blockBytes(FloatDeltaZstd.encodeBlock(values)));
-        fdzValues.put(c, fdzValues.get(c) + values.length);
+        if (scope.executor() == null) {
+            appendFdz(c, FloatDeltaZstd.encodeBlock(values), values.length);
+            return;
+        }
+        drainFdz(c, threads);
+        fdzInflight.computeIfAbsent(c, k -> new java.util.ArrayDeque<>())
+            .add(new InFlightFdz(scope.executor().submit(() -> FloatDeltaZstd.encodeBlock(values)), values.length));
+    }
+
+    /** Append completed blocks of channel {@code c} in emission order; wait
+     *  on the oldest until at most {@code blockUntil} remain in flight. */
+    private void drainFdz(String c, int blockUntil) {
+        java.util.ArrayDeque<InFlightFdz> q = fdzInflight.get(c);
+        if (q == null) return;
+        while (!q.isEmpty() && (q.size() > blockUntil || q.peekFirst().encoded().isDone())) {
+            InFlightFdz f = q.pollFirst();
+            try {
+                appendFdz(c, f.encoded().get(), f.nValues());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(e);
+            } catch (java.util.concurrent.ExecutionException e) {
+                Throwable t = e.getCause();
+                throw t instanceof RuntimeException r ? r : new IllegalStateException(t);
+            }
+        }
+    }
+
+    private void appendFdz(String c, FloatDeltaZstd.EncodedBlock encoded, int nValues) {
+        sig.get(c).append(FloatDeltaZstd.blockBytes(encoded));
+        fdzValues.put(c, fdzValues.get(c) + nValues);
         fdzBlocks.put(c, fdzBlocks.get(c) + 1);
     }
 
