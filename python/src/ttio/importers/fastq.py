@@ -98,6 +98,57 @@ def detect_phred_offset(qualities: bytes) -> int:
     return 33
 
 
+def _iter_fastq_records(fh) -> Iterator[tuple[str, bytes, bytes]]:
+    """The tolerant four-line record loop over a binary file
+    object: quality bytes verbatim, stray blank lines between
+    records tolerated. Shared by the serial reader and the
+    parallel producer's slow-path slice parser."""
+    line_no = 0
+    while True:
+        hdr = fh.readline()
+        if not hdr:
+            return
+        line_no += 1
+        hdr = hdr.rstrip(b"\r\n")
+        if not hdr:
+            continue  # tolerate stray blank lines between records
+        if not hdr.startswith(b"@"):
+            raise FastqParseError(
+                f"line {line_no}: expected '@<name>' header, "
+                f"got {hdr[:60]!r}"
+            )
+        name = hdr[1:].split(None, 1)[0].decode("utf-8")
+        seq_line = fh.readline()
+        line_no += 1
+        if not seq_line:
+            raise FastqParseError(
+                f"truncated record at line {line_no} "
+                f"(missing sequence)"
+            )
+        seq = seq_line.rstrip(b"\r\n")
+        plus = fh.readline()
+        line_no += 1
+        if not plus or not plus.startswith(b"+"):
+            raise FastqParseError(
+                f"line {line_no}: expected '+' separator, "
+                f"got {plus[:60]!r}"
+            )
+        qual_line = fh.readline()
+        line_no += 1
+        if not qual_line:
+            raise FastqParseError(
+                f"truncated record at line {line_no} "
+                f"(missing qualities)"
+            )
+        qual = qual_line.rstrip(b"\r\n")
+        if len(qual) != len(seq):
+            raise FastqParseError(
+                f"line {line_no}: SEQ/QUAL length mismatch "
+                f"({len(seq)} vs {len(qual)}) for read {name!r}"
+            )
+        yield name, seq, qual
+
+
 class FastqReader:
     """Read a FASTQ file into a :class:`WrittenGenomicRun`.
 
@@ -291,50 +342,7 @@ class FastqReader:
         """Yield ``(name, seq, qual)`` with quality bytes verbatim
         (no Phred conversion)."""
         with _open_maybe_gzip(self._path) as fh:
-            line_no = 0
-            while True:
-                hdr = fh.readline()
-                if not hdr:
-                    return
-                line_no += 1
-                hdr = hdr.rstrip(b"\r\n")
-                if not hdr:
-                    continue  # tolerate stray blank lines between records
-                if not hdr.startswith(b"@"):
-                    raise FastqParseError(
-                        f"line {line_no}: expected '@<name>' header, "
-                        f"got {hdr[:60]!r}"
-                    )
-                name = hdr[1:].split(None, 1)[0].decode("utf-8")
-                seq_line = fh.readline()
-                line_no += 1
-                if not seq_line:
-                    raise FastqParseError(
-                        f"truncated record at line {line_no} "
-                        f"(missing sequence)"
-                    )
-                seq = seq_line.rstrip(b"\r\n")
-                plus = fh.readline()
-                line_no += 1
-                if not plus or not plus.startswith(b"+"):
-                    raise FastqParseError(
-                        f"line {line_no}: expected '+' separator, "
-                        f"got {plus[:60]!r}"
-                    )
-                qual_line = fh.readline()
-                line_no += 1
-                if not qual_line:
-                    raise FastqParseError(
-                        f"truncated record at line {line_no} "
-                        f"(missing qualities)"
-                    )
-                qual = qual_line.rstrip(b"\r\n")
-                if len(qual) != len(seq):
-                    raise FastqParseError(
-                        f"line {line_no}: SEQ/QUAL length mismatch "
-                        f"({len(seq)} vs {len(qual)}) for read {name!r}"
-                    )
-                yield name, seq, qual
+            yield from _iter_fastq_records(fh)
 
     def _iter_with_offset(
         self, offset: int
