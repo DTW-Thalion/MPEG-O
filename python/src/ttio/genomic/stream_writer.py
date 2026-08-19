@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import concurrent.futures as _cf
 import dataclasses
+import os
 from typing import Any
 
 import numpy as np
@@ -122,6 +123,11 @@ class GenomicStreamWriter:
         self._read_count = 0
         self._base_count = 0
         self._block_count = 0
+        # Per-run sticky qualities strategy: block 0 auto-tunes, the
+        # winner is pinned for the rest of the run (spec
+        # docs/superpowers/plans/2026-08-19-fqz-v5-sticky-strategy-spec.md).
+        self._qual_hint = -1
+        self._qual_exhaustive = os.environ.get("TTIO_M94Z_EXHAUSTIVE") == "1"
         self._rg = None
         self._ds: dict[str, Any] = {}
         self._idx: dict[str, Any] = {}
@@ -238,8 +244,15 @@ class GenomicStreamWriter:
             _embed_references_for_runs(self._study, {self._name: block})
             self._embedded = True
         if self._pool is None:
-            self._write_encoded(block, _blocks.encode_block(block))
+            self._write_encoded(block, _blocks.encode_block(
+                block, qual_strategy_hint=self._qual_hint))
             return
+        if (not self._qual_exhaustive and self._qual_hint == -1
+                and (self._inflight or self._block_count)):
+            # Block-0 gate: the pin comes from the earliest written
+            # M94Z block; hold later submissions until it is known so
+            # the choice is timing-independent.
+            self._drain(block_until=0)
         self._drain(block_until=self._window - 1)
         est = int(block.sequences.nbytes + block.qualities.nbytes
                   + block.offsets.nbytes * 3) * 2
@@ -249,7 +262,8 @@ class GenomicStreamWriter:
         self._inflight_bytes += est
         self._max_inflight_bytes = max(self._max_inflight_bytes, self._inflight_bytes)
         self._inflight.append((block, est,
-                               self._pool.submit(_blocks.encode_block, block)))
+                               self._pool.submit(_blocks.encode_block, block,
+                                                 qual_strategy_hint=self._qual_hint)))
 
     def _drain(self, block_until: int) -> None:
         """Write completed blocks in sequence order; wait on the oldest
@@ -292,6 +306,12 @@ class GenomicStreamWriter:
         self._read_count += blobs.n_reads
         self._base_count += blobs.n_bases
         self._block_count += 1
+        if (self._qual_hint == -1 and not self._qual_exhaustive
+                and int(blobs.compression.get("qualities", 0))
+                    == int(Compression.FQZCOMP_NX16_Z)):
+            from ..codecs import fqzcomp_nx16_z as _fq
+            s_ = _fq.stream_strategy(blobs.blobs["qualities"])
+            self._qual_hint = _fq.HINT_V4_AUTO if s_ == 4 else s_
         io.write_int_attr(self._rg, "read_count", self._read_count)
         io.write_int_attr(self._rg, "base_count", self._base_count)
 
