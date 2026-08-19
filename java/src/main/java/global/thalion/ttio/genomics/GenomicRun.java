@@ -323,14 +323,23 @@ public class GenomicRun
     private record InFlightView(GenomicRun view, BlockView.Handle handle) {}
 
     /** Reads {@code [start, stop)} in order; under {@code blocks_v1} the
-     *  next {@code threads} blocks decode ahead on a pool. {@code threads}
+     *  next blocks decode ahead on a pool, at most
+     *  {@link #READ_AHEAD_BLOCKS} of them decoded at once. {@code threads}
      *  {@code <= 1} is the serial iterator. */
+    /** Decoded blocks a threaded sequential walk holds at most (the
+     *  decode-ahead window; memory is about this many block working sets). */
+    static final int READ_AHEAD_BLOCKS = 4;
+
     public java.util.Iterator<AlignedRead> iterReads(int start, int stop, int threads) {
         int n = readCount();
         int lo = Math.max(start, 0), hi = Math.min(stop, n);
         int nthreads = Math.max(1, threads);
         if (blockTable == null || nthreads <= 1 || lo >= hi) return iterReads(lo, hi);
         final int bFirst = blockTable.blockFor(lo), bLast = blockTable.blockFor(hi - 1);
+        // The serial consumer only needs enough decode-ahead to never
+        // stall; more in flight is pure memory. The stand-down still
+        // keys off nthreads.
+        final int window = Math.min(nthreads, READ_AHEAD_BLOCKS);
         final global.thalion.ttio.Threads.PoolScope scope = global.thalion.ttio.Threads.pool(nthreads);
         final java.util.Map<Integer, java.util.concurrent.Future<InFlightView>> pending = new java.util.HashMap<>();
         final java.util.function.IntConsumer submit = b -> {
@@ -343,7 +352,7 @@ public class GenomicRun
                 }));
             }
         };
-        for (int b = bFirst; b <= Math.min(bLast, bFirst + nthreads - 1); b++) submit.accept(b);
+        for (int b = bFirst; b <= Math.min(bLast, bFirst + window - 1); b++) submit.accept(b);
         return new java.util.Iterator<>() {
             int i = lo, b = bFirst;
             InFlightView cur;
@@ -376,7 +385,7 @@ public class GenomicRun
                         Throwable c = e.getCause();
                         throw c instanceof RuntimeException r ? r : new IllegalStateException(c);
                     }
-                    submit.accept(b + nthreads);
+                    submit.accept(b + window);
                     r0 = (int) blockTable.readStart[b];
                     bEnd = Math.min(r0 + blockTable.nReads[b], hi);
                     b++;
