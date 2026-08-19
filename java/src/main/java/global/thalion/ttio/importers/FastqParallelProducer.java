@@ -319,7 +319,7 @@ public final class FastqParallelProducer {
         final java.util.concurrent.BlockingQueue<ShardItem>[] queues =
             new java.util.concurrent.BlockingQueue[threads];
         for (int k = 0; k < threads; k++) {
-            queues[k] = new java.util.concurrent.LinkedBlockingQueue<>(2);
+            queues[k] = new java.util.concurrent.LinkedBlockingQueue<>(1);
         }
         for (int k = 0; k < threads; k++) {
             final long start = bounds[k], end = bounds[k + 1];
@@ -368,13 +368,22 @@ public final class FastqParallelProducer {
                             throw new IllegalStateException("shard ended mid-record");
                         }
                     }
-                    q.put(new ShardItem(null, null, true));
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                } catch (RuntimeException | IOException e) {
-                    RuntimeException re = e instanceof RuntimeException r ? r
-                        : new java.io.UncheckedIOException((IOException) e);
-                    try { q.put(new ShardItem(null, re, false)); } catch (InterruptedException ignored) { }
+                    return;
+                } catch (Throwable t) {
+                    RuntimeException re = t instanceof RuntimeException r ? r
+                        : new IllegalStateException(t);
+                    try { q.put(new ShardItem(null, re, false)); } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+                /* Always deliver the done marker, whatever happened
+                 * above: a shard that dies without one hangs the
+                 * consumer forever. */
+                try { q.put(new ShardItem(null, null, true)); } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
                 }
             });
         }

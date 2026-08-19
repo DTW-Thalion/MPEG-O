@@ -22,6 +22,19 @@ public API is stable from onward.
   most 4 blocks, which a serial consumer cannot outrun anyway.
 
 ### Changed
+- **The Java import producer parallelises.** The same architecture as
+  the ObjC phase on the SDK's executors: shard ranges for plain files,
+  sliced records for gzip, ordered future/queue assembly, byte-sized
+  batches and the shared byte budget. The 50 GB HiFi corpus at 24
+  threads: 8m 13s (97 MB/s) with 32 MiB batches, 64 MiB blocks, an 8 GB
+  budget and a 14 GiB heap, within the phase's 1.5x-of-ObjC bar; codec
+  bytes are identical to the ObjC import of the same file (the only
+  container difference is the pre-existing string-attribute type
+  class). On the JVM the codec's JNI workspace and input copies live
+  off heap, so size `TTIO_MEMORY_BUDGET` against the heap rather than
+  trusting the physical-memory default. BAM keeps its serial htsjdk
+  reader: its decode dominates and is not sliceable without
+  index-chunking, unlike the ObjC samtools pipe.
 - **The ObjC import producer parallelises.** FASTQ imports split into
   per-thread shard ranges on record boundaries (plain files) or slice
   records off a single scan (gzip, pipes), parse on the shared pool,
