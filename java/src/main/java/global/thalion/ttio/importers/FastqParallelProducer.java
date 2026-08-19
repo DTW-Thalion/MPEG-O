@@ -237,4 +237,189 @@ public final class FastqParallelProducer {
             }
         };
     }
+
+    private record ShardItem(WrittenGenomicRun run, RuntimeException err, boolean done) { }
+
+    /** Qualities of the complete records inside a probe window, or
+     *  null when the window holds no complete record. */
+    static byte[] probeQuals(byte[] b, int len) {
+        java.io.ByteArrayOutputStream quals = new java.io.ByteArrayOutputStream();
+        int i = 0;
+        while (i < len && b[i] == '@') {
+            int he = i;
+            while (he < len && b[he] != '\n') he++;
+            if (he >= len) break;
+            int se = he + 1;
+            while (se < len && b[se] != '\n') se++;
+            if (se >= len) break;
+            int pe = se + 1;
+            while (pe < len && b[pe] != '\n') pe++;
+            if (pe >= len) break;
+            int qs = pe + 1, qe = qs;
+            while (qe < len && b[qe] != '\n') qe++;
+            if (qe >= len) break;
+            quals.write(b, qs, qe - qs);
+            i = qe + 1;
+        }
+        return quals.size() > 0 ? quals.toByteArray() : null;
+    }
+
+    /** Shard mode for a seekable plain file: per-thread ranges on
+     *  record boundaries, each range scanning and parsing on its own
+     *  pool worker into a bounded per-shard queue (two slices deep,
+     *  which with the default batch bytes keeps the parked estimate
+     *  near the producer's half of the byte budget); the consumer
+     *  drains shard-major. Falls back to the pipeline for tiny files
+     *  or when no record fits the probe window. */
+    public static Iterator<WrittenGenomicRun> shard(Path path, String sampleName,
+                                                    int batchReadsIn, long batchBytesIn,
+                                                    int threads, ProgressSink progressIn) {
+        final int batchReads = batchReadsIn > 0 ? batchReadsIn : FastqReader.DEFAULT_BATCH_READS;
+        final long batchBytes = batchBytesIn > 0 ? batchBytesIn : FastqReader.DEFAULT_BATCH_BYTES;
+        final String sample = sampleName == null ? "" : sampleName;
+        final ProgressSink progress = progressIn == null ? ProgressSink.discard() : progressIn;
+        final long len;
+        try {
+            len = java.nio.file.Files.size(path);
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+        if (threads < 2 || len < 2L * batchBytes) {
+            return pipeline(path, sample, batchReadsIn, batchBytesIn, threads, progressIn);
+        }
+        final int phred;
+        final long[] bounds = new long[threads + 1];
+        try (java.nio.channels.FileChannel ch =
+                 java.nio.channels.FileChannel.open(path, java.nio.file.StandardOpenOption.READ)) {
+            int probeLen = (int) Math.min(len, 1L << 20);
+            java.nio.ByteBuffer probe = java.nio.ByteBuffer.allocate(probeLen);
+            ch.read(probe, 0);
+            byte[] pq = probeQuals(probe.array(), probe.position());
+            if (pq == null && len > probeLen) {
+                probeLen = (int) Math.min(len, 16L << 20);
+                probe = java.nio.ByteBuffer.allocate(probeLen);
+                ch.read(probe, 0);
+                pq = probeQuals(probe.array(), probe.position());
+            }
+            if (pq == null) {
+                return pipeline(path, sample, batchReadsIn, batchBytesIn, threads, progressIn);
+            }
+            phred = FastqReader.detectPhredOffset(pq);
+            bounds[0] = 0;
+            for (int k = 1; k < threads; k++) {
+                bounds[k] = FastqRecordScanner.boundaryAtOrAfter(ch, (len * k) / threads, len);
+                if (bounds[k] < bounds[k - 1]) bounds[k] = bounds[k - 1];
+            }
+            bounds[threads] = len;
+        } catch (IOException e) {
+            throw new java.io.UncheckedIOException(e);
+        }
+        final Threads.PoolScope scope = Threads.pool(threads);
+        @SuppressWarnings("unchecked")
+        final java.util.concurrent.BlockingQueue<ShardItem>[] queues =
+            new java.util.concurrent.BlockingQueue[threads];
+        for (int k = 0; k < threads; k++) {
+            queues[k] = new java.util.concurrent.LinkedBlockingQueue<>(2);
+        }
+        for (int k = 0; k < threads; k++) {
+            final long start = bounds[k], end = bounds[k + 1];
+            final java.util.concurrent.BlockingQueue<ShardItem> q = queues[k];
+            if (start >= end) {
+                try { q.put(new ShardItem(null, null, true)); } catch (InterruptedException ignored) { }
+                continue;
+            }
+            scope.executor().submit(() -> {
+                try (java.nio.channels.FileChannel ch = java.nio.channels.FileChannel.open(
+                         path, java.nio.file.StandardOpenOption.READ)) {
+                    long pos = start, remaining = end - start;
+                    byte[] carry = new byte[2 << 20];
+                    int carryLen = 0, scanPos = 0, newlines = 0, lastRecordEnd = 0, records = 0;
+                    while (remaining > 0 || carryLen > 0) {
+                        if (remaining > 0) {
+                            if (carryLen == carry.length) {
+                                carry = java.util.Arrays.copyOf(carry, carry.length * 2);
+                            }
+                            int want = (int) Math.min(remaining, carry.length - carryLen);
+                            java.nio.ByteBuffer buf = java.nio.ByteBuffer.wrap(carry, carryLen, want);
+                            int got = ch.read(buf, pos);
+                            if (got <= 0) throw new IllegalStateException("short shard read");
+                            pos += got;
+                            remaining -= got;
+                            carryLen += got;
+                            for (int i = scanPos; i < carryLen; i++) {
+                                if (carry[i] != '\n') continue;
+                                newlines++;
+                                if ((newlines & 3) == 0) { lastRecordEnd = i + 1; records++; }
+                            }
+                            scanPos = carryLen;
+                        }
+                        boolean atEnd = remaining == 0;
+                        if (records > 0
+                            && (records >= batchReads || (long) lastRecordEnd >= batchBytes || atEnd)) {
+                            byte[] slice = java.util.Arrays.copyOfRange(carry, 0, lastRecordEnd);
+                            System.arraycopy(carry, lastRecordEnd, carry, 0, carryLen - lastRecordEnd);
+                            carryLen -= lastRecordEnd;
+                            scanPos -= lastRecordEnd;
+                            lastRecordEnd = 0;
+                            records = 0;
+                            q.put(new ShardItem(parseSlice(slice, slice.length, phred, null, sample),
+                                                null, false));
+                        } else if (atEnd && carryLen > 0) {
+                            throw new IllegalStateException("shard ended mid-record");
+                        }
+                    }
+                    q.put(new ShardItem(null, null, true));
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (RuntimeException | IOException e) {
+                    RuntimeException re = e instanceof RuntimeException r ? r
+                        : new java.io.UncheckedIOException((IOException) e);
+                    try { q.put(new ShardItem(null, re, false)); } catch (InterruptedException ignored) { }
+                }
+            });
+        }
+        return new Iterator<>() {
+            int cur = 0;
+            long totalRecords = 0;
+            RuntimeException failure;
+            WrittenGenomicRun next;
+
+            @Override public boolean hasNext() {
+                if (next != null) return true;
+                try {
+                    while (cur < threads) {
+                        ShardItem item = queues[cur].take();
+                        if (item.done()) { cur++; continue; }
+                        if (item.err() != null && failure == null) {
+                            // Keep draining so put-blocked workers can
+                            // finish; the error is thrown once every
+                            // shard has delivered its done marker.
+                            failure = item.err();
+                            continue;
+                        }
+                        if (failure != null) continue;   // discard after failure
+                        next = item.run();
+                        totalRecords += next.readCount();
+                        progress.onProgress(totalRecords, -1);
+                        return true;
+                    }
+                    scope.close();
+                    if (failure != null) throw failure;
+                    progress.onProgress(totalRecords, totalRecords);
+                    return false;
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    scope.close();
+                    throw new IllegalStateException(e);
+                }
+            }
+
+            @Override public WrittenGenomicRun next() {
+                if (!hasNext()) throw new NoSuchElementException();
+                WrittenGenomicRun r = next;
+                next = null;
+                return r;
+            }
+        };
+    }
 }

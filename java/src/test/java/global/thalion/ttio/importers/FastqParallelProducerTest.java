@@ -68,4 +68,73 @@ class FastqParallelProducerTest {
             assertTrue(java.util.Arrays.equals(rb.qualities(), ra.qualities()), "quals at " + i);
         }
     }
+
+    static Path writePlainFixture(Path tmp, String name, int reads, int bigEvery, int bigLen)
+            throws Exception {
+        Path fq = tmp.resolve(name);
+        int rs = 777;
+        try (var out = java.nio.file.Files.newOutputStream(fq)) {
+            byte[] big = new byte[bigLen];
+            for (int i = 0; i < reads; i++) {
+                int len = (bigEvery > 0 && i % bigEvery == 0) ? bigLen : 120;
+                out.write(("@s" + i + " x\n").getBytes(StandardCharsets.ISO_8859_1));
+                for (int j = 0; j < len; j++) {
+                    rs = rs * 1103515245 + 12345;
+                    big[j] = (byte) "ACGT".charAt((rs >>> 16) & 3);
+                }
+                out.write(big, 0, len);
+                out.write("\n+\n".getBytes(StandardCharsets.ISO_8859_1));
+                for (int j = 0; j < len; j++) {
+                    rs = rs * 1103515245 + 12345;
+                    big[j] = (byte) (33 + ((rs >>> 18) & 31));
+                }
+                out.write(big, 0, len);
+                out.write('\n');
+            }
+        }
+        return fq;
+    }
+
+    static String spotDigest(StorageGroup study, int expectReads) {
+        GenomicRun g = GenomicRun.readFrom(study.openGroup("genomic_runs").openGroup("g"), "g");
+        assertEquals(expectReads, g.readCount());
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < g.readCount(); i += Math.max(1, g.readCount() / 97)) {
+            var r = g.readAt(i);
+            sb.append(r.readName()).append('|').append(r.sequence())
+              .append('|').append(java.util.Arrays.hashCode(r.qualities())).append('\n');
+        }
+        return sb.toString();
+    }
+
+    @Test
+    void shardIdenticalToSerial(@TempDir Path tmp) throws Exception {
+        // Mixed lengths: mostly 120 B with a 100 KiB read every 500.
+        Path fq = writePlainFixture(tmp, "shard.fastq", 30_000, 500, 100 * 1024);
+        StorageGroup a = writeVia(fq, "memory://fps-a", 1L << 20);
+        System.setProperty("ttio.threads", "1");
+        StorageGroup b;
+        try {
+            b = writeVia(fq, "memory://fps-b", 1L << 20);
+        } finally {
+            System.clearProperty("ttio.threads");
+        }
+        assertEquals(spotDigest(b, 30_000), spotDigest(a, 30_000));
+    }
+
+    @Test
+    void sparseShardsIdenticalToSerial(@TempDir Path tmp) throws Exception {
+        // Two 200 KiB records with a 64 KiB batch limit: the file
+        // shards, most ranges are empty, order still holds.
+        Path fq = writePlainFixture(tmp, "shard2.fastq", 2, 1, 200 * 1024);
+        StorageGroup a = writeVia(fq, "memory://fps2-a", 64L << 10);
+        System.setProperty("ttio.threads", "1");
+        StorageGroup b;
+        try {
+            b = writeVia(fq, "memory://fps2-b", 64L << 10);
+        } finally {
+            System.clearProperty("ttio.threads");
+        }
+        assertEquals(spotDigest(b, 2), spotDigest(a, 2));
+    }
 }
