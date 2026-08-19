@@ -135,8 +135,12 @@ public final class GenomicStreamWriter implements AutoCloseable {
     private final int threads;
     private final global.thalion.ttio.Threads.PoolScope scope;
     private final java.util.ArrayDeque<InFlight> inflight = new java.util.ArrayDeque<>();
+    private final long memoryBudgetBytes;
+    private long inflightBytes;
+    private long maxInFlightBytesObserved;
     private record InFlight(WrittenGenomicRun block,
-                            java.util.concurrent.Future<GenomicBlocks.BlockBlobs> blobs) {}
+                            java.util.concurrent.Future<GenomicBlocks.BlockBlobs> blobs,
+                            long estimatedBytes) {}
 
     /** Append reads to run {@code runName} of the {@code /study} group
      *  {@code studyGroup} (the writer creates {@code genomic_runs} when
@@ -150,15 +154,34 @@ public final class GenomicStreamWriter implements AutoCloseable {
      *  blocks are pending or encoding, so memory is about that many block
      *  working sets. The file is byte for byte the one thread's. */
     public GenomicStreamWriter(StorageGroup studyGroup, String runName, Options options, int threads) {
+        this(studyGroup, runName, options, threads, 0L);
+    }
+
+    /** As above with an explicit pipeline byte budget (0 = the
+     *  {@link global.thalion.ttio.Threads#resolveMemoryBudget} default).
+     *  The writer stalls block submission while its in-flight estimate
+     *  exceeds half of it; the count window stays the upper bound. */
+    public GenomicStreamWriter(StorageGroup studyGroup, String runName, Options options,
+                               int threads, long memoryBudgetBytes) {
         this.study = studyGroup;
         this.name = runName;
         this.opt = options;
         this.threads = Math.max(1, threads);
         this.scope = global.thalion.ttio.Threads.pool(this.threads);
+        this.memoryBudgetBytes = global.thalion.ttio.Threads.resolveMemoryBudget(
+            memoryBudgetBytes > 0 ? memoryBudgetBytes : null, this.threads, options.blockBytes());
     }
 
     public long readCount() { return readCount; }
     public int threads() { return threads; }
+    public long memoryBudgetBytes() { return memoryBudgetBytes; }
+    /** High-water mark of the in-flight byte estimate (tests). */
+    public long maxInFlightBytesObserved() { return maxInFlightBytesObserved; }
+
+    private static long estimateBlockBytes(WrittenGenomicRun b) {
+        long raw = (long) b.sequences().length + b.qualities().length + (long) b.offsets().length * 24L;
+        return raw * 4L;
+    }
 
     /** Assign ids for every chromosome name the block introduces, in the
      *  order the block encoder assigns them (own names in read order, "*"
@@ -243,15 +266,29 @@ public final class GenomicStreamWriter implements AutoCloseable {
         // block a snapshot (registration above fixed every id it needs).
         GenomicWriteContext bctx =
             new GenomicWriteContext(new java.util.LinkedHashMap<>(chromMap), referenceMd5);
+        drainToBudget();
         WrittenGenomicRun fb = block;
-        inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, bctx))));
+        long est = estimateBlockBytes(block);
+        inflight.add(new InFlight(block, scope.executor().submit(() -> GenomicBlocks.encodeBlock(fb, bctx)), est));
+        inflightBytes += est;
+        if (inflightBytes > maxInFlightBytesObserved) maxInFlightBytesObserved = inflightBytes;
     }
 
     /** Write completed blocks in sequence order; wait on the oldest until
      *  at most {@code blockUntil} remain in flight. */
+    /** Drain until the in-flight estimate fits the writer's half of the
+     *  byte budget. */
+    private void drainToBudget() {
+        long half = memoryBudgetBytes / 2L;
+        while (!inflight.isEmpty() && inflightBytes > half) {
+            drain(inflight.size() - 1);
+        }
+    }
+
     private void drain(int blockUntil) {
         while (!inflight.isEmpty() && (inflight.size() > blockUntil || inflight.peekFirst().blobs().isDone())) {
             InFlight f = inflight.pollFirst();
+            inflightBytes -= Math.min(f.estimatedBytes(), inflightBytes);
             try {
                 writeEncoded(f.block(), f.blobs().get());
             } catch (InterruptedException e) {
