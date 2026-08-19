@@ -24,7 +24,7 @@ import threading
 
 import numpy as np
 
-from .._threads import pool_context
+from .._threads import pool_context, resolve_memory_budget
 from ..written_genomic_run import WrittenGenomicRun
 from .fasta import (
     _UNMAPPED_CHROM,
@@ -275,9 +275,10 @@ def iter_batches_pipeline(path, *, threads, batch_reads, batch_bytes,
         try:
             dq: collections.deque = collections.deque()
             carry = b""
+            read_bytes = _chunk_bytes(batch_bytes, threads)
             with _open_maybe_gzip(path) as fh:
                 while True:
-                    chunk = fh.read(batch_bytes)
+                    chunk = fh.read(read_bytes)
                     if not chunk:
                         break
                     buf = carry + chunk
@@ -303,6 +304,16 @@ def iter_batches_pipeline(path, *, threads, batch_reads, batch_bytes,
 
 
 _DONE = object()
+
+
+def _chunk_bytes(batch_bytes: int, threads: int) -> int:
+    """The producer's read-chunk size: ``batch_bytes``, clamped so the
+    working set (a few chunks per worker across ``threads`` workers)
+    stays inside the producer's half of the resolved byte budget on
+    small machines."""
+    from ..genomic.stream_writer import DEFAULT_BLOCK_BYTES
+    half = resolve_memory_budget(None, threads, DEFAULT_BLOCK_BYTES) // 2
+    return min(batch_bytes, max(1 << 20, half // (threads * 4)))
 
 
 def iter_batches_shard(path, ranges, *, threads, batch_reads, batch_bytes,
@@ -334,12 +345,13 @@ def iter_batches_shard(path, ranges, *, threads, batch_reads, batch_bytes,
         err = None
         try:
             start, end = rng
+            read_bytes = _chunk_bytes(batch_bytes, threads)
             with open(path, "rb") as f:
                 f.seek(start)
                 remaining = end - start
                 carry = b""
                 while remaining and not stop.is_set():
-                    chunk = f.read(min(batch_bytes, remaining))
+                    chunk = f.read(min(read_bytes, remaining))
                     if not chunk:
                         raise FastqParseError(
                             f"input truncated inside shard {rng}")
