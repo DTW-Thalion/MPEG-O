@@ -163,6 +163,9 @@
             [_majors removeObjectForKey:@(_curMajor)];
             _curMajor++;
             _curMinor = 0;
+            /* The needed slot changed: parked workers re-check their
+             * park exemption against it. */
+            [_cond broadcast];
             continue;
         }
         if (_majorsFinished && _curMajor >= _majorCount) {
