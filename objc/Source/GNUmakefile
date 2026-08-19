@@ -257,6 +257,7 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOJcampDxReader.m \
 	Import/TTIOJcampDxDecode.m \
 	Import/TTIOFastaReader.m \
+	Import/TTIOFastqRecordScanner.m \
 	Import/TTIOFastqReader.m \
 	Export/TTIOMzMLWriter.m \
 	Export/TTIORunSelection.m \
