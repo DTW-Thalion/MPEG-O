@@ -22,6 +22,21 @@ public API is stable from onward.
   most 4 blocks, which a serial consumer cannot outrun anyway.
 
 ### Changed
+- **The Python import producer parallelises.** The third phase of
+  the parallel producer: shard ranges for plain FASTQ, sliced records
+  for gzip, numpy-vectorised boundary scanning and slice parsing
+  (clean four-line fast path; a tolerant serial fallback keeps stray
+  blank lines and zero-length reads correct), batches re-chunked by
+  the serial cut rule so the parallel producer is batch-for-batch
+  identical to the serial reader. The 50 GB HiFi corpus at 24
+  threads: 11m 19s (74 MB/s) with 32 MiB batches, 64 MiB
+  blocks and an 8 GB budget; the container is identical to the ObjC
+  import of the same file in every genomic dataset and attribute.
+  The throughput needs the `_rans` Cython accelerator (wheels build
+  it; an editable install builds it with `cythonize -i`) — without it
+  the pure-Python order-1 rANS holds the GIL and the pool cannot
+  help. Producer read chunks clamp to the byte budget so small
+  machines are not swamped structurally.
 - **The Java import producer parallelises.** The same architecture as
   the ObjC phase on the SDK's executors: shard ranges for plain files,
   sliced records for gzip, ordered future/queue assembly, byte-sized

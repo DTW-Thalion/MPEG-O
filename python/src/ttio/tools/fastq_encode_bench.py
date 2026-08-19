@@ -37,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     kw = {"batch_bytes": batch_bytes} if batch_bytes > 0 else {}
     threads = resolve_threads(None)
     t0 = time.monotonic()
-    source = FastqReader(src_path).stream_source(**kw)
+    source = FastqReader(src_path).stream_source(sample_name="s", **kw)
     if block_bytes is not None:
         source.block_bytes = block_bytes
     SpectralDataset.write_minimal(out, title="", isa_investigation_id="",
