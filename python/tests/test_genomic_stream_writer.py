@@ -274,3 +274,29 @@ def test_threads_default_and_window(monkeypatch, tmp_path):
                             reference_uri="", platform="", sample_name="")
     assert w.threads == 4 and w._window == 5
     w.close(); ds.close()
+
+
+def test_budget_bounds_inflight_bytes(tmp_path):
+    from ttio.codecs import ref_diff_v2 as rdv2
+    if not rdv2.HAVE_NATIVE_LIB:
+        pytest.skip("native lib")
+    run = _big_synthetic_run()
+    a = _write_with_threads(tmp_path, run, 1, block_reads=2_000)
+    out = tmp_path / "budget.tio"
+    SpectralDataset.write_minimal(out, title="t", isa_investigation_id="i", runs={})
+    ds = SpectralDataset.open(out, writable=True)
+    with GenomicStreamWriter(ds.study_group, "g", acquisition_mode=7, reference_uri="synthetic",
+                             platform="ILLUMINA", sample_name="s",
+                             reference_chrom_seqs=run.reference_chrom_seqs, embed_reference=True,
+                             block_reads=2_000, threads=6,
+                             memory_budget_bytes=4 * 2**20) as w:
+        n = int(len(run.lengths))
+        for s0 in range(0, n, 7_001):
+            w.append_batch(_blocks.slice_run(run, s0, min(n, s0 + 7_001)))
+    high = w.max_inflight_bytes_observed
+    ds.close()
+    assert 0 < high <= 2 * 2**20
+    ba, bb = _run_bytes(a), _run_bytes(out)
+    assert ba.keys() == bb.keys()
+    for k in ba:
+        assert ba[k] == bb[k], f"{k} differs under the byte budget"

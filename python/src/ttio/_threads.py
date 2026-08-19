@@ -24,6 +24,32 @@ def resolve_threads(explicit: int | None = None) -> int:
     return n
 
 
+def resolve_memory_budget(
+    explicit: int | None = None, threads: int = 1, block_bytes: int = 1
+) -> int:
+    """The producer/writer byte budget: explicit argument, then the
+    ``TTIO_MEMORY_BUDGET`` environment variable, then
+    ``max(1 GiB, min(threads * block_bytes * 16, physical_memory / 2))``.
+    Matches the ObjC and Java resolvers."""
+    if explicit is not None and int(explicit) > 0:
+        return int(explicit)
+    raw = os.environ.get("TTIO_MEMORY_BUDGET", "").strip()
+    if raw:
+        try:
+            n = int(raw)
+        except ValueError:
+            n = 0
+        if n > 0:
+            return n
+    budget = int(threads) * int(block_bytes) * 16
+    try:
+        phys = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+        budget = min(budget, phys // 2)
+    except (ValueError, OSError, AttributeError):
+        pass
+    return max(1 << 30, budget)
+
+
 def _get_autotune() -> int:
     from .codecs.fqzcomp_nx16_z import get_autotune_threads
     return get_autotune_threads()
