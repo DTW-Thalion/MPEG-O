@@ -49,3 +49,41 @@ def test_length_mismatch_raises():
 
 def test_missing_trailing_newline():
     _check(*parse_slice(_fq(RECS)[:-1]))
+
+
+def _mixed_fixture(tmp_path, gz, n=200, seed=3):
+    import gzip as gzmod
+    import random
+    rng = random.Random(seed)
+    path = tmp_path / ("m.fastq.gz" if gz else "m.fastq")
+    op = (lambda p: gzmod.open(p, "wb")) if gz else (lambda p: open(p, "wb"))
+    with op(path) as f:
+        for i in range(n):
+            ln = rng.choice([0, 1, 7, 150, 1500, 5000])
+            seq = bytes(rng.choice(b"ACGT") for _ in range(ln))
+            qual = bytes(rng.randrange(33, 74) for _ in range(ln))
+            f.write(b"@read_%d/1 c%d\n" % (i, i) + seq + b"\n+\n" + qual + b"\n")
+    return path
+
+
+def _batches(path, threads, **kw):
+    from ttio.importers.fastq import FastqReader
+    return list(FastqReader(path).iter_batches(threads=threads, **kw))
+
+
+def _assert_batches_equal(a, b):
+    assert len(a) == len(b)
+    for x, y in zip(a, b):
+        assert x.read_names == y.read_names
+        for f in ("sequences", "qualities", "offsets", "lengths",
+                  "positions", "flags", "mapping_qualities"):
+            assert np.array_equal(getattr(x, f), getattr(y, f)), f
+        assert x.chromosomes == y.chromosomes and x.cigars == y.cigars
+
+
+def test_pipeline_identical_to_serial(tmp_path):
+    fq = _mixed_fixture(tmp_path, gz=True)
+    serial = _batches(fq, 1, batch_bytes=32_768)
+    para = _batches(fq, 4, batch_bytes=32_768)
+    assert len(serial) > 3
+    _assert_batches_equal(serial, para)

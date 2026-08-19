@@ -273,12 +273,16 @@ class FastqReader:
         acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
         batch_reads: int = 100_000,
         batch_bytes: int = 64 * 2**20,
+        threads: int | None = None,
         progress: ProgressSinkLike | None = None,
     ) -> Iterator[WrittenGenomicRun]:
         """Yield the file as consecutive unaligned
         :class:`WrittenGenomicRun` batches of at most ``batch_reads``
         records (and at most ``batch_bytes`` sequence bytes; the
-        first limit reached cuts) with bounded memory. The Phred offset is forced by
+        first limit reached cuts) with bounded memory. With more
+        than one resolved thread (``threads`` argument, else
+        ``TTIO_THREADS``) the records are parsed by the parallel
+        producer; the batches are identical to the serial cut. The Phred offset is forced by
         ``force_phred`` or detected from the first batch's qualities
         (Phred+64 files carry no byte below 59, so a batch of 100 k
         reads settles it); it is recorded on
@@ -288,6 +292,22 @@ class FastqReader:
             raise ValueError("batch_reads must be >= 1")
         if batch_bytes < 1:
             raise ValueError("batch_bytes must be >= 1")
+        from .._threads import resolve_threads
+        n_threads = resolve_threads(threads)
+        if n_threads > 1:
+            from . import fastq_parallel as _pp
+            mode, ranges = _pp.plan_input(self._path, n_threads, batch_bytes)
+            if mode != "serial":
+                def _detected(off):
+                    self._detected = off
+                meta = dict(sample_name=sample_name, platform=platform,
+                            reference_uri=reference_uri,
+                            acquisition_mode=acquisition_mode)
+                yield from _pp.iter_batches_pipeline(
+                    self._path, threads=n_threads, batch_reads=batch_reads,
+                    batch_bytes=batch_bytes, forced=self._forced,
+                    detected_cb=_detected, meta=meta, progress=progress)
+                return
         offset = self._forced
         pending: list[tuple[str, bytes, bytes]] = []
         pending_bases = 0
@@ -327,6 +347,7 @@ class FastqReader:
                       acquisition_mode: AcquisitionMode = AcquisitionMode.GENOMIC_WGS,
                       batch_reads: int = 100_000,
                       batch_bytes: int = 64 * 2**20,
+                      threads: int | None = None,
                       progress: ProgressSinkLike | None = None):
         """A :class:`~ttio.importers.import_result.GenomicStreamSource`
         over :meth:`iter_batches`."""
@@ -336,7 +357,7 @@ class FastqReader:
             iter_batches=lambda: self.iter_batches(
                 sample_name=sample_name, platform=platform, reference_uri=reference_uri,
                 acquisition_mode=acquisition_mode, batch_reads=batch_reads,
-                batch_bytes=batch_bytes, progress=progress))
+                batch_bytes=batch_bytes, threads=threads, progress=progress))
 
     def _iter_records_raw(self) -> Iterator[tuple[str, bytes, bytes]]:
         """Yield ``(name, seq, qual)`` with quality bytes verbatim
