@@ -258,6 +258,9 @@ libTTIO_OBJC_FILES = \
 	Import/TTIOJcampDxDecode.m \
 	Import/TTIOFastaReader.m \
 	Import/TTIOFastqRecordScanner.m \
+  Import/TTIOOrderedBatchAssembler.m \
+  Import/TTIOInputSegmenter.m \
+  Import/TTIOFastqParallelProducer.m \
 	Import/TTIOFastqReader.m \
 	Export/TTIOMzMLWriter.m \
 	Export/TTIORunSelection.m \

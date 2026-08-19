@@ -14,6 +14,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOFastqReader.h"
+#import "Import/TTIOFastqParallelProducer.h"
+#import "Import/TTIOInputSegmenter.h"
+#import "Core/TTIOThreads.h"
 #import "Import/TTIOGenomicStreamSource.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
 #import "ValueClasses/TTIOEnums.h"
@@ -562,12 +565,30 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
                                  batchBytes:(unsigned long long)batchBytes
                                    progress:(TTIOProgressBlock)progress
 {
-    TTIOGenomicBatchProducer producer = ^BOOL(BOOL (^emit)(TTIOWrittenGenomicRun *, NSError **), NSError **error) {
-        return [self iterBatchesFromPath:path forcedPhred:0 sampleName:sampleName ?: @""
-                                platform:@"" referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
-                              batchReads:batchReads batchBytes:batchBytes outDetected:NULL progress:progress
-                                   error:error usingBlock:emit];
-    };
+    NSUInteger streamThreads = [TTIOThreads resolve:nil];
+    TTIOGenomicBatchProducer producer;
+    if (streamThreads > 1 && [TTIOInputSegmenter modeForPath:path] == TTIOInputModeShard) {
+        producer = [TTIOFastqParallelProducer shardProducerForPath:path
+                                                        sampleName:sampleName
+                                                        batchReads:batchReads
+                                                        batchBytes:batchBytes
+                                                           threads:streamThreads
+                                                          progress:progress];
+    } else if (streamThreads > 1) {
+        producer = [TTIOFastqParallelProducer pipelineProducerForPath:path
+                                                           sampleName:sampleName
+                                                           batchReads:batchReads
+                                                           batchBytes:batchBytes
+                                                              threads:streamThreads
+                                                             progress:progress];
+    } else {
+        producer = ^BOOL(BOOL (^emit)(TTIOWrittenGenomicRun *, NSError **), NSError **error) {
+            return [self iterBatchesFromPath:path forcedPhred:0 sampleName:sampleName ?: @""
+                                    platform:@"" referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
+                                  batchReads:batchReads batchBytes:batchBytes outDetected:NULL progress:progress
+                                       error:error usingBlock:emit];
+        };
+    }
     return [[TTIOGenomicStreamSource alloc] initWithName:name ?: @"genomic_0001" batches:producer
                                           referenceFasta:nil embedReference:NO
                                               blockReads:nil blockBytes:nil optLegacyWholeChannel:NO];
