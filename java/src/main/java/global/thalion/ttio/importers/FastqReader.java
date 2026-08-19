@@ -233,7 +233,22 @@ public class FastqReader {
     public Iterator<WrittenGenomicRun> iterBatches(
             String sampleName, String platform, String referenceUri,
             AcquisitionMode acquisitionMode, int batchReads) throws IOException {
+        return iterBatches(sampleName, platform, referenceUri, acquisitionMode, batchReads, 0L);
+    }
+
+    /** Decoded sequence + quality bytes per streamed batch by default
+     *  (64 MiB). Bytes are the primary batch limit: a read count is
+     *  blind to read length. */
+    public static final long DEFAULT_BATCH_BYTES = 64L << 20;
+
+    /** As above with an explicit byte limit; a batch cuts at whichever
+     *  of {@code batchReads} / {@code batchBytes} is hit first
+     *  (0 = the default for each). */
+    public Iterator<WrittenGenomicRun> iterBatches(
+            String sampleName, String platform, String referenceUri,
+            AcquisitionMode acquisitionMode, int batchReads, long batchBytesIn) throws IOException {
         if (batchReads < 1) throw new IllegalArgumentException("batchReads must be >= 1");
+        final long batchBytes = batchBytesIn > 0 ? batchBytesIn : DEFAULT_BATCH_BYTES;
         InputStream in = FastaReader.openMaybeGzip(path);
         BufferedReader br = new BufferedReader(new InputStreamReader(in, StandardCharsets.ISO_8859_1));
         return new Iterator<>() {
@@ -248,12 +263,15 @@ public class FastqReader {
                 if (next != null) return true;
                 if (done) return false;
                 try {
-                    while (names.size() < batchReads) {
+                    long pendingBytes = 0L;
+                    while (names.size() < batchReads && pendingBytes < batchBytes) {
                         String[] rec = readRecord(br, lineNo);
                         if (rec == null) break;
                         names.add(rec[0]);
-                        seqs.add(rec[1].getBytes(StandardCharsets.ISO_8859_1));
+                        byte[] sq = rec[1].getBytes(StandardCharsets.ISO_8859_1);
+                        seqs.add(sq);
                         quals.add(rec[2].getBytes(StandardCharsets.ISO_8859_1));
+                        pendingBytes += (long) sq.length * 2L;
                     }
                 } catch (IOException e) {
                     throw new java.io.UncheckedIOException(e);
@@ -318,9 +336,15 @@ public class FastqReader {
 
     /** {@link #iterBatches} as a {@link GenomicStreamSource}. */
     public GenomicStreamSource stream(String name, String sampleName, int batchReads) {
+        return stream(name, sampleName, batchReads, 0L);
+    }
+
+    /** As above with the byte limit of
+     *  {@link #iterBatches(String, String, String, AcquisitionMode, int, long)}. */
+    public GenomicStreamSource stream(String name, String sampleName, int batchReads, long batchBytes) {
         return new GenomicStreamSource(name, () -> {
             try {
-                return iterBatches(sampleName, "", "", AcquisitionMode.GENOMIC_WGS, batchReads);
+                return iterBatches(sampleName, "", "", AcquisitionMode.GENOMIC_WGS, batchReads, batchBytes);
             } catch (IOException e) {
                 throw new java.io.UncheckedIOException(e);
             }
