@@ -29,6 +29,9 @@ NS_ASSUME_NONNULL_BEGIN
 // a base-parallel sequences channel and V5 is not opted out.
 @property (nullable, copy)   NSData * _Nullable (^sequencesProvider)(void);
 @property (nullable, strong) NSData *sequences;
+/** fqzcomp encode strategy: nil/-1 auto, 0..4 V4 preset, 5/6 forced
+ *  V5, TTIOM94ZHintV4Auto V4 with internal preset selection. */
+@property (nullable, strong) NSNumber *qualStrategyHint;
 
 + (instancetype)emptyContext;
 @end

@@ -22,6 +22,11 @@ NS_ASSUME_NONNULL_BEGIN
 /** Precomputed reference digest; nil means compute from the run. */
 @property (nonatomic, copy, nullable) NSData *referenceMD5;
 
+/** Qualities strategy for FQZCOMP_NX16_Z blocks: -1 auto (the 3-way
+ *  tune, default), 5/6 forced V5, TTIOM94ZHintV4Auto V4 with internal
+ *  preset selection; the stream writer passes its per-run pin. */
+@property (nonatomic, assign) NSInteger qualStrategyHint;
+
 + (instancetype)none;
 + (instancetype)contextWithChromNameToId:(nullable NSMutableDictionary<NSString *, NSNumber *> *)map
                             referenceMD5:(nullable NSData *)md5;

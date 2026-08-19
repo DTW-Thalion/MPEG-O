@@ -247,6 +247,18 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
                                     error:(NSError * _Nullable *)error;
 
 /**
+ * Sequences-aware encode with an explicit strategy: -1 auto, 0..4 V4
+ * preset, 5..6 forced sequence strategy, TTIOM94ZHintV4Auto V4 with
+ * internal preset selection.
+ */
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                sequences:(nullable NSData *)sequences
+                             strategyHint:(NSInteger)strategyHint
+                                    error:(NSError * _Nullable *)error;
+
+/**
  * Designated encode core: V4 presets plus S5/S6 when sequences is
  * non-nil, exact-size pick, forced sequence strategy via
  * strategyHint 5 or 6.

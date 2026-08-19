@@ -7,6 +7,14 @@
 
 @implementation TTIOGenomicWriteContext
 
+- (instancetype)init
+{
+    if ((self = [super init])) {
+        _qualStrategyHint = -1;
+    }
+    return self;
+}
+
 + (instancetype)none { return [[self alloc] init]; }
 
 + (instancetype)contextWithChromNameToId:(NSMutableDictionary<NSString *, NSNumber *> *)map

@@ -477,6 +477,23 @@ static void z_set_error(NSError * _Nullable * _Nullable outError,
                                    error:error];
 }
 
++ (nullable NSData *)encodeWithQualities:(NSData *)qualities
+                              readLengths:(NSArray<NSNumber *> *)readLengths
+                             revcompFlags:(NSArray<NSNumber *> *)revcompFlags
+                                sequences:(nullable NSData *)sequences
+                             strategyHint:(NSInteger)strategyHint
+                                    error:(NSError * _Nullable *)error
+{
+    uint8_t padCount = (uint8_t)((-(NSInteger)qualities.length) & 0x3);
+    return [self encodeQualWithQualities:qualities
+                             readLengths:readLengths
+                            revcompFlags:revcompFlags
+                               sequences:sequences
+                            strategyHint:strategyHint
+                                padCount:padCount
+                                   error:error];
+}
+
 + (nullable NSDictionary *)decodeV4Data:(NSData *)data
                              revcompFlags:(nullable NSArray<NSNumber *> *)revcompFlags
                                     error:(NSError * _Nullable *)error
