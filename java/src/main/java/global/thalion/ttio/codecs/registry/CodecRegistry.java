@@ -109,9 +109,15 @@ public final class CodecRegistry {
                 throw new IllegalArgumentException(
                     "FQZCOMP_NX16_Z encode requires CodecContext.readLengths + revcompFlags");
             }
+            int hint = ctx.qualStrategyHint() != null
+                ? ctx.qualStrategyHint() : -1;
+            var opts = hint != -1
+                ? new FqzcompNx16Z.EncodeOptions().v4StrategyHint(hint)
+                : null;
             return new EncodedChannel.DatasetBytes(
                 FqzcompNx16Z.encode(bytes(v), ctx.readLengths(),
-                                    ctx.revcompFlags(), ctx.sequences()));
+                                    ctx.revcompFlags(), ctx.sequences(),
+                                    opts));
         }
     }
 

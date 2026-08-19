@@ -18,12 +18,23 @@ import java.util.Map;
  *                      means assign ids per run
  * @param referenceMd5  precomputed reference digest; {@code null} means
  *                      compute from the run's reference
+ * @param qualStrategyHint qualities strategy for FQZCOMP_NX16_Z blocks:
+ *                      -1 auto (the 3-way tune), 5/6 forced V5,
+ *                      {@link global.thalion.ttio.codecs.FqzcompNx16Z#HINT_V4_AUTO}
+ *                      V4 with internal preset selection; the stream
+ *                      writer passes its per-run pin
  */
 public record GenomicWriteContext(Map<String, Integer> chromNameToId,
-                                  byte[] referenceMd5) {
+                                  byte[] referenceMd5,
+                                  int qualStrategyHint) {
+
+    public GenomicWriteContext(Map<String, Integer> chromNameToId,
+                               byte[] referenceMd5) {
+        this(chromNameToId, referenceMd5, -1);
+    }
 
     /** No shared state: the whole-channel writer's behaviour. */
     public static GenomicWriteContext none() {
-        return new GenomicWriteContext(null, null);
+        return new GenomicWriteContext(null, null, -1);
     }
 }
