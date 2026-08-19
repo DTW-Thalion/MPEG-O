@@ -83,9 +83,38 @@ const NSUInteger TTIOFastqWriterProgressIntervalReads = 1000;
     const uint8_t  *qualBytes = quals.bytes;
     NSUInteger qualLen = quals.length;
 
-    NSMutableData *body = [NSMutableData dataWithCapacity:64 * 1024];
+    /* Stream 1 MiB chunks to a .part file renamed on success, the same
+     * shape as the read-side path below: the output of a run is its own
+     * size again, so buffering it whole doubled the export's footprint. */
+    gzFile gf = NULL;
+    FILE *fp = NULL;
+    NSString *tmp = [path stringByAppendingString:@".part"];
+    if (gz) {
+        gf = gzopen([tmp fileSystemRepresentation], "wb");
+    } else {
+        fp = fopen([tmp fileSystemRepresentation], "wb");
+    }
+    if (!gf && !fp) {
+        if (error) {
+            *error = [NSError errorWithDomain:kErrDom code:2
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"could not open %@ for writing", path] }];
+        }
+        return NO;
+    }
+    __block BOOL writeOk = YES;
+    BOOL (^flush)(NSData *) = ^BOOL(NSData *chunk) {
+        if (chunk.length == 0) return YES;
+        if (gf) {
+            if (gzwrite(gf, chunk.bytes, (unsigned)chunk.length) != (int)chunk.length) writeOk = NO;
+        } else if (fwrite(chunk.bytes, 1, chunk.length, fp) != chunk.length) {
+            writeOk = NO;
+        }
+        return writeOk;
+    };
+    NSMutableData *body = [NSMutableData dataWithCapacity:1 << 20];
     NSMutableSet<NSString *> *seen = [NSMutableSet set];
-    for (NSUInteger i = 0; i < readNames.count; i++) {
+    for (NSUInteger i = 0; writeOk && i < readNames.count; i++) {
         uint64_t off = offsets[i];
         uint32_t len = lengths[i];
         NSString *name = readNames[i];
@@ -129,37 +158,33 @@ const NSUInteger TTIOFastqWriterProgressIntervalReads = 1000;
         [body appendData:qualSlice];
         [body appendBytes:&lf length:1];
 
+        if (body.length >= (1 << 20)) {
+            flush(body);
+            body.length = 0;
+        }
+
         // Per-N progress fire. Total IS known (run.readNames.count).
         if (((i + 1) % TTIOFastqWriterProgressIntervalReads) == 0) {
             progress((int64_t)(i + 1), (int64_t)readNames.count);
         }
     }
+    flush(body);
+    if (gf) { if (gzclose(gf) != Z_OK) writeOk = NO; }
+    else if (fp) { if (fclose(fp) != 0) writeOk = NO; }
+    if (!writeOk) {
+        [[NSFileManager defaultManager] removeItemAtPath:tmp error:NULL];
+        if (error) {
+            *error = [NSError errorWithDomain:kErrDom code:3
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"short write to %@", path] }];
+        }
+        return NO;
+    }
     // Final fire — total = total.
     progress((int64_t)readNames.count, (int64_t)readNames.count);
-
-    if (gz) {
-        gzFile gf = gzopen([path fileSystemRepresentation], "wb");
-        if (gf == NULL) {
-            if (error) {
-                *error = [NSError errorWithDomain:kErrDom code:2
-                                         userInfo:@{ NSLocalizedDescriptionKey :
-                                                     [NSString stringWithFormat:@"could not open %@ for writing", path] }];
-            }
-            return NO;
-        }
-        int written = gzwrite(gf, body.bytes, (unsigned)body.length);
-        gzclose(gf);
-        if (written != (int)body.length) {
-            if (error) {
-                *error = [NSError errorWithDomain:kErrDom code:3
-                                         userInfo:@{ NSLocalizedDescriptionKey :
-                                                     [NSString stringWithFormat:@"short gzip write to %@", path] }];
-            }
-            return NO;
-        }
-        return YES;
-    }
-    return [body writeToFile:path options:NSDataWritingAtomic error:error];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm removeItemAtPath:path error:NULL];
+    return [fm moveItemAtPath:tmp toPath:path error:error];
 }
 
 + (BOOL)writeReadSideRun:(TTIOGenomicRun *)run

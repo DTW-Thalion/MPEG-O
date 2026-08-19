@@ -12,7 +12,6 @@ import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.io.ProgressSink;
 import java.nio.charset.StandardCharsets;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -249,34 +248,32 @@ public final class FastaWriter {
             ? gzipOutput
             : path.getFileName().toString().toLowerCase().endsWith(".gz");
 
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        // Stream the records, tracking the byte offset for the .fai
+        // lines with a running counter (what buf.size() gave the old
+        // in-memory pass), so the output is never held whole.
         List<String> faiLines = new ArrayList<>();
-        for (Record r : records) {
-            String hdr = ">" + r.name() + "\n";
-            buf.write(hdr.getBytes(StandardCharsets.UTF_8));
-            int seqOffset = buf.size();
-            int length = r.seq().length;
-            int start = 0;
-            while (start < length) {
-                int end = Math.min(start + lineWidth, length);
-                buf.write(r.seq(), start, end - start);
-                buf.write('\n');
-                start = end;
-            }
-            faiLines.add(
-                r.name() + "\t" + length + "\t" + seqOffset
-                    + "\t" + lineWidth + "\t" + (lineWidth + 1)
-            );
-        }
-        byte[] body = buf.toByteArray();
-
-        if (gz) {
-            try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(path))) {
-                out.write(body);
-            }
-        } else {
-            try (OutputStream out = Files.newOutputStream(path)) {
-                out.write(body);
+        OutputStream rawOut = Files.newOutputStream(path);
+        long pos = 0;
+        try (OutputStream out = new java.io.BufferedOutputStream(
+                gz ? new GZIPOutputStream(rawOut) : rawOut, 1 << 16)) {
+            for (Record r : records) {
+                byte[] hdr = (">" + r.name() + "\n").getBytes(StandardCharsets.UTF_8);
+                out.write(hdr);
+                pos += hdr.length;
+                long seqOffset = pos;
+                int length = r.seq().length;
+                int start = 0;
+                while (start < length) {
+                    int end = Math.min(start + lineWidth, length);
+                    out.write(r.seq(), start, end - start);
+                    out.write('\n');
+                    pos += (end - start) + 1;
+                    start = end;
+                }
+                faiLines.add(
+                    r.name() + "\t" + length + "\t" + seqOffset
+                        + "\t" + lineWidth + "\t" + (lineWidth + 1)
+                );
             }
         }
 

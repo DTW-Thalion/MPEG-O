@@ -11,6 +11,16 @@ public API is stable from onward.
 
 ## [Unreleased]
 
+### Fixed
+- **Exports stream their output.** The FASTQ and FASTA exporters in all
+  three SDKs built the whole output in memory before one write, so
+  exporting a run cost its own size again on top of the decode (the
+  suite's 20 GB HiFi decode-verify hit a 20 GB cap this way). They now
+  stream records to the file (a running byte position keeps the .fai
+  offsets); bytes are unchanged. The threaded sequential readers also
+  held one decoded block per worker; the decode-ahead window is now at
+  most 4 blocks, which a serial consumer cannot outrun anyway.
+
 ### Changed
 - **Block-parallel encode and decode.** `GenomicStreamWriter`, `SpectralStreamWriter`
   and the sequential readers (`iter_reads`, the exporters, `iter_spectra`,
@@ -20,7 +30,7 @@ public API is stable from onward.
   workers (unset or 0 = cores minus 8, 1 = the serial path) with at most
   `threads + 1` blocks in flight, and append them in order from the caller's
   thread, so the file is byte for byte the serial writer's; readers decode the
-  next `threads` blocks ahead. `threads=` on the writers and readers and
+  next blocks ahead (at most 4 in flight). `threads=` on the writers and readers and
   `--threads` on the CLIs override the environment. While a pool exists the
   FQZCOMP auto-tune runs its candidates in sequence
   (`ttio_m94z_set_autotune_threads`). Measured on the chr22

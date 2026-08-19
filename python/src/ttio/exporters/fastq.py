@@ -37,7 +37,6 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import gzip
-import io
 import os
 from pathlib import Path
 
@@ -97,28 +96,25 @@ class FastqWriter:
             gzip_output = out_path.name.lower().endswith(".gz")
 
         total = len(run.read_names) if isinstance(run, WrittenGenomicRun) else len(run)
-        buf = io.BytesIO()
+        # Stream records straight to the handle: the output of a run is
+        # its own size again, so buffering it (as before v1.9) doubled a
+        # 20 GB export's footprint on top of the decode. Chunked writes
+        # into one gzip stream produce the same bytes as a single write.
+        opener = gzip.open(out_path, "wb") if gzip_output else out_path.open("wb")
         n = 0
-        for name, seq, qual in _iter_records(run, phred_offset=phred_offset):
-            buf.write(b"@")
-            buf.write(name.encode("utf-8"))
-            buf.write(b"\n")
-            buf.write(seq)
-            buf.write(b"\n+\n")
-            buf.write(qual)
-            buf.write(b"\n")
-            n += 1
-            if n % PROGRESS_INTERVAL_READS == 0:
-                _fire(progress, n, total)
+        with opener as fh:
+            for name, seq, qual in _iter_records(run, phred_offset=phred_offset):
+                fh.write(b"@")
+                fh.write(name.encode("utf-8"))
+                fh.write(b"\n")
+                fh.write(seq)
+                fh.write(b"\n+\n")
+                fh.write(qual)
+                fh.write(b"\n")
+                n += 1
+                if n % PROGRESS_INTERVAL_READS == 0:
+                    _fire(progress, n, total)
         _fire(progress, n, n)
-        body = buf.getvalue()
-
-        if gzip_output:
-            with gzip.open(out_path, "wb") as gz:
-                gz.write(body)
-        else:
-            with out_path.open("wb") as fh:
-                fh.write(body)
 
 
 def _iter_records(

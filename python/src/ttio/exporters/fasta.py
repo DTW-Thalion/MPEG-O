@@ -42,7 +42,6 @@ SPDX-License-Identifier: Apache-2.0
 from __future__ import annotations
 
 import gzip
-import io
 import os
 from pathlib import Path
 from typing import Iterable
@@ -165,36 +164,31 @@ class FastaWriter:
         if gzip_output is None:
             gzip_output = path.name.lower().endswith(".gz")
 
-        # Build the body in memory so we can compute the .fai offsets
-        # in the same pass as writing. For very large references this
-        # could be streamed; for v1.0 we accept the in-memory cost
-        # (chr22 reference is ~50 MB, well within RAM).
+        # Stream the records to the handle, tracking the byte offset for
+        # the .fai lines with a running counter (what buf.tell() gave the
+        # old in-memory pass), so the output is never held whole.
         total = len(records)
-        buf = io.BytesIO()
         fai_lines: list[str] = []
-        for idx, (name, seq) in enumerate(records, 1):
-            hdr = ">" + name + "\n"
-            buf.write(hdr.encode("utf-8"))
-            seq_offset = buf.tell()
-            length = len(seq)
-            for start in range(0, length, line_width):
-                chunk = seq[start : start + line_width]
-                buf.write(chunk)
-                buf.write(b"\n")
-            fai_lines.append(
-                f"{name}\t{length}\t{seq_offset}\t{line_width}\t{line_width + 1}"
-            )
-            if idx % PROGRESS_INTERVAL_READS == 0:
-                _fire(progress, idx, total)
+        opener = gzip.open(path, "wb") if gzip_output else path.open("wb")
+        pos = 0
+        with opener as fh:
+            for idx, (name, seq) in enumerate(records, 1):
+                hdr = (">" + name + "\n").encode("utf-8")
+                fh.write(hdr)
+                pos += len(hdr)
+                seq_offset = pos
+                length = len(seq)
+                for start in range(0, length, line_width):
+                    chunk = seq[start : start + line_width]
+                    fh.write(chunk)
+                    fh.write(b"\n")
+                    pos += len(chunk) + 1
+                fai_lines.append(
+                    f"{name}\t{length}\t{seq_offset}\t{line_width}\t{line_width + 1}"
+                )
+                if idx % PROGRESS_INTERVAL_READS == 0:
+                    _fire(progress, idx, total)
         _fire(progress, total, total)
-        body = buf.getvalue()
-
-        if gzip_output:
-            with gzip.open(path, "wb") as gz:
-                gz.write(body)
-        else:
-            with path.open("wb") as fh:
-                fh.write(body)
 
         if write_fai and not gzip_output:
             fai_path = path.with_suffix(path.suffix + ".fai")

@@ -53,6 +53,11 @@ def _wrap_hdf5_group(obj: object) -> "StorageGroup":
     return _Hdf5Group(obj)  # type: ignore[arg-type]
 
 
+#: Decoded blocks a threaded sequential walk holds at most (the
+#: decode-ahead window; memory is about this many block working sets).
+_READ_AHEAD_BLOCKS = 4
+
+
 @dataclass(slots=True)
 class GenomicRun:
     """Lazy view over one /study/genomic_runs/<name>/ group.
@@ -244,20 +249,25 @@ class GenomicRun:
             return
         import concurrent.futures as _cf
         b_first, b_last = t.block_for(i), t.block_for(stop - 1)
+        # The serial consumer only needs enough decode-ahead to never
+        # stall; more in flight is pure memory (a window of 
+        # held  decoded blocks resident). Cap the window while
+        # the auto-tune stand-down still keys off .
+        window = min(nthreads, _READ_AHEAD_BLOCKS)
         with pool_context(nthreads), _cf.ThreadPoolExecutor(
-                max_workers=nthreads, thread_name_prefix="ttio-block-decode") as pool:
+                max_workers=window, thread_name_prefix="ttio-block-decode") as pool:
             pending: dict[int, "_cf.Future"] = {}
 
             def submit(b: int) -> None:
                 if b <= b_last and b not in pending:
                     pending[b] = pool.submit(self._warm, self._prefetch_view(b))
 
-            for b in range(b_first, min(b_last, b_first + nthreads - 1) + 1):
+            for b in range(b_first, min(b_last, b_first + window - 1) + 1):
                 submit(b)
             b = b_first
             while i < stop:
                 view = pending.pop(b).result()
-                submit(b + nthreads)
+                submit(b + window)
                 r0 = int(t.read_start[b])
                 b_end = min(r0 + int(t.n_reads[b]), stop)
                 for j in range(i, b_end):

@@ -1,9 +1,11 @@
 """Streaming genomic importers: BAM/SAM/CRAM and FASTQ through the block writer."""
 from __future__ import annotations
 
+import os
 import resource
 import shutil
 import subprocess
+import numpy as np
 from pathlib import Path
 
 import pytest
@@ -114,6 +116,79 @@ def test_fastq_import_memory_ceiling(tmp_path):
     assert (after - before) / 1024 < 2000, f"peak RSS grew by {(after - before) / 1024:.0f} MB"
     with SpectralDataset.open(str(out)) as ds:
         assert len(ds.genomic_runs["genomic_0001"]) == 2_000_000
+
+
+def test_fastq_export_memory_ceiling(tmp_path):
+    """Long-read FASTQ export streams: peak RSS stays far below the output.
+
+    The exporter used to build the whole FASTQ in a BytesIO before one
+    write (plus a getvalue copy), so exporting the 20 GB HiFi corpus
+    needed the output twice in memory on top of the decode and the
+    suite's 20 GB cap killed it. Long reads mirror that shape: the
+    output dwarfs every per-read structure. Measured in a subprocess so
+    the import's high-water mark does not mask the export's.
+    """
+    import sys
+    import textwrap
+
+    rng = np.random.default_rng(7)
+    big = tmp_path / "big.fastq"
+    read = 20_000
+    with open(big, "wb") as f:
+        for i in range(20_000):
+            seq = rng.integers(0, 4, read)
+            qual = rng.integers(33, 74, read).astype(np.uint8).tobytes()
+            f.write(b"@r%d\n" % i)
+            f.write(bytes(np.frombuffer(b"ACGT", dtype=np.uint8)[seq]))
+            f.write(b"\n+\n")
+            f.write(qual)
+            f.write(b"\n")
+    out = tmp_path / "big.tio"
+    src = fq_imp.FastqReader(big).stream_source(batch_reads=2_500)
+    src.block_reads = 2_500
+    SpectralDataset.write_minimal(str(out), title="", isa_investigation_id="", runs={})
+    with SpectralDataset.open(str(out), writable=True) as ds:
+        assert src.write_into(ds.study_group) == 20_000
+
+    script = textwrap.dedent("""
+        import resource, sys
+        from ttio.spectral_dataset import SpectralDataset
+        from ttio.exporters.fastq import FastqWriter
+        with SpectralDataset.open(sys.argv[1]) as ds:
+            FastqWriter.write(ds.genomic_runs["genomic_0001"], sys.argv[2])
+        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    """)
+    exported = tmp_path / "roundtrip.fastq"
+    env = dict(os.environ)
+    env["MALLOC_ARENA_MAX"] = "2"
+    proc = subprocess.Popen([sys.executable, "-c", script, str(out), str(exported)],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, env=env)
+    # The streaming property itself: the file grows while the export
+    # runs. The old exporter held the whole body in a BytesIO and wrote
+    # it after the last record, so no partial size was ever observable
+    # (and the 20 GB HiFi export needed the output twice in memory on
+    # top of the decode, dying on the suite's 20 GB cap).
+    partial = 0
+    import time
+    while proc.poll() is None:
+        if partial == 0 and exported.exists():
+            size = exported.stat().st_size
+            if 0 < size:
+                partial = size   # first observation: a true mid-write size
+        time.sleep(0.2)
+    stdout, stderr = proc.communicate()
+    assert proc.returncode == 0, stderr[-500:]
+    final = exported.stat().st_size
+    assert final / (1024 * 1024) > 700, final
+    assert 0 < partial < final, (
+        f"no mid-write size observed (first={partial}, final={final}): "
+        "the export did not stream")
+    # Backstop only: peak RSS varies with allocator behaviour, but the
+    # old code needed the 810 MB output twice on top of the decode.
+    peak_mb = int(stdout.strip().splitlines()[-1]) / 1024
+    assert peak_mb < 4096, f"export peak RSS {peak_mb:.0f} MB"
+    assert fastq_md5(exported) == fastq_md5(big)
 
 
 @pytest.mark.slow

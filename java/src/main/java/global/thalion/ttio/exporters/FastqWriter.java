@@ -10,7 +10,6 @@ import global.thalion.ttio.genomics.GenomicRun;
 import global.thalion.ttio.genomics.WrittenGenomicRun;
 import global.thalion.ttio.io.ProgressSink;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -95,10 +94,12 @@ public final class FastqWriter {
             ? gzipOutput
             : path.getFileName().toString().toLowerCase().endsWith(".gz");
 
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
         Set<String> seen = new HashSet<>();
         int nRecs = run.readNames().size();
         long total = nRecs;
+        OutputStream rawOut = Files.newOutputStream(path);
+        try (OutputStream buf = new java.io.BufferedOutputStream(
+                gz ? new GZIPOutputStream(rawOut) : rawOut, 1 << 16)) {
         for (int i = 0; i < nRecs; i++) {
             int off = (int) run.offsets()[i];
             int len = run.lengths()[i];
@@ -145,16 +146,6 @@ public final class FastqWriter {
                 progress.onProgress(done, total);
             }
         }
-        byte[] body = buf.toByteArray();
-
-        if (gz) {
-            try (OutputStream out = new GZIPOutputStream(Files.newOutputStream(path))) {
-                out.write(body);
-            }
-        } else {
-            try (OutputStream out = Files.newOutputStream(path)) {
-                out.write(body);
-            }
         }
         progress.onProgress(total, total);
     }
