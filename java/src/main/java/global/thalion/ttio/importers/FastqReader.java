@@ -342,6 +342,13 @@ public class FastqReader {
     /** As above with the byte limit of
      *  {@link #iterBatches(String, String, String, AcquisitionMode, int, long)}. */
     public GenomicStreamSource stream(String name, String sampleName, int batchReads, long batchBytes) {
+        int streamThreads = global.thalion.ttio.Threads.resolve(null);
+        if (streamThreads > 1) {
+            return new GenomicStreamSource(name, () ->
+                FastqParallelProducer.pipeline(path, sampleName, batchReads, batchBytes,
+                                               streamThreads, null),
+                null, false, null, null, false);
+        }
         return new GenomicStreamSource(name, () -> {
             try {
                 return iterBatches(sampleName, "", "", AcquisitionMode.GENOMIC_WGS, batchReads, batchBytes);
