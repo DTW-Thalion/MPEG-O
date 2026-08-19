@@ -40,6 +40,11 @@ public final class FqzcompNx16Z {
      *  docs/superpowers/specs/2026-08-16-qualities-v5-design.md). */
     public static final int VERSION_V5_SEQCTX = 5;
 
+    /** Strategy hint: V4 with its internal preset selection, sequences
+     *  ignored (kernel TTIO_M94Z_HINT_V4_AUTO). -1 auto, 0..4 V4
+     *  preset, 5..6 forced V5. */
+    public static final int HINT_V4_AUTO = 7;
+
     // ── Default context parameters ──────────────────────────────────
 
     public static final int DEFAULT_QBITS = 12;
@@ -306,6 +311,31 @@ public final class FqzcompNx16Z {
                                 int[] revcompFlags, byte[] sequences) {
         return encodeWithSequences(qualities, readLengths, revcompFlags,
                                    sequences, null);
+    }
+
+    /** Sequences-aware encode with options ({@code v4StrategyHint}
+     *  selects or pins the strategy; see {@link #HINT_V4_AUTO}). */
+    public static byte[] encode(byte[] qualities, int[] readLengths,
+                                int[] revcompFlags, byte[] sequences,
+                                EncodeOptions opts) {
+        return encodeWithSequences(qualities, readLengths, revcompFlags,
+                                   sequences, opts);
+    }
+
+    /** Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
+     *  Throws {@link IllegalArgumentException} on a stream that is not
+     *  M94.Z qualities. */
+    public static int streamStrategy(byte[] stream) {
+        if (!TtioRansNative.isAvailable()) {
+            throw new IllegalStateException(
+                "FQZCOMP_NX16_Z streamStrategy requires libttio_rans_jni");
+        }
+        int rc = TtioRansNative.qualStreamStrategy(stream);
+        if (rc < 0) {
+            throw new IllegalArgumentException(
+                "not an M94.Z qualities stream (rc=" + rc + ")");
+        }
+        return rc;
     }
 
     public static byte[] encode(byte[] qualities, int[] readLengths,

@@ -83,6 +83,20 @@ Java_global_thalion_ttio_codecs_TtioRansNative_getAutotuneThreads(JNIEnv *env, j
 }
 
 JNIEXPORT jint JNICALL
+Java_global_thalion_ttio_codecs_TtioRansNative_qualStreamStrategy(
+    JNIEnv *env, jclass cls, jbyteArray stream)
+{
+    (void)cls;
+    if (stream == NULL) return -1;
+    jsize len = (*env)->GetArrayLength(env, stream);
+    jbyte *p = (*env)->GetByteArrayElements(env, stream, NULL);
+    if (p == NULL) return -1;
+    int rc = ttio_m94z_qual_stream_strategy((const uint8_t *)p, (size_t)len);
+    (*env)->ReleaseByteArrayElements(env, stream, p, JNI_ABORT);
+    return (jint)rc;
+}
+
+JNIEXPORT jint JNICALL
 Java_global_thalion_ttio_codecs_TtioRansNative_encodeBlock(
     JNIEnv *env, jclass clazz,
     jbyteArray symbolsJ, jshortArray contextsJ, jint nContexts,
