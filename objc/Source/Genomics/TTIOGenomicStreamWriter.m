@@ -195,13 +195,15 @@ static void ttioBuildIndexFields(void)
 - (unsigned long long)maxInFlightBytesObserved { return _maxInFlightBytesObserved; }
 
 /** The bytes a pending block is expected to hold while encoding: its
- *  raw channel buffers times four for codec workspace. */
+ *  raw channel buffers times two for codec workspace. The marginal
+ *  resident cost measured on 64 MiB HiFi blocks is near raw * 1.5;
+ *  the old raw * 4 halved the encode concurrency the budget admits. */
 static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
 {
     unsigned long long raw = (unsigned long long)b.sequencesData.length
         + (unsigned long long)b.qualitiesData.length
         + (unsigned long long)b.offsetsData.length * 3ull;
-    return raw * 4ull;
+    return raw * 2ull;
 }
 
 + (void)registerBlockChromosomes:(TTIOWrittenGenomicRun *)block

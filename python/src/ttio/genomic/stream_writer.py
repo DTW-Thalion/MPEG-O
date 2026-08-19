@@ -242,7 +242,7 @@ class GenomicStreamWriter:
             return
         self._drain(block_until=self._window - 1)
         est = int(block.sequences.nbytes + block.qualities.nbytes
-                  + block.offsets.nbytes * 3) * 4
+                  + block.offsets.nbytes * 3) * 2
         half = self._budget // 2
         while self._inflight and self._inflight_bytes + est > half:
             self._drain(block_until=len(self._inflight) - 1)

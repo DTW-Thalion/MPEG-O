@@ -180,7 +180,7 @@ public final class GenomicStreamWriter implements AutoCloseable {
 
     private static long estimateBlockBytes(WrittenGenomicRun b) {
         long raw = (long) b.sequences().length + b.qualities().length + (long) b.offsets().length * 24L;
-        return raw * 4L;
+        return raw * 2L;
     }
 
     /** Assign ids for every chromosome name the block introduces, in the
