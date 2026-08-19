@@ -522,10 +522,53 @@ static void gswIterReadsThreaded(void)
     [[NSFileManager defaultManager] removeItemAtPath:path error:NULL];
 }
 
+static id<TTIOStorageGroup> gswWriteBudget(NSString *url, TTIOWrittenGenomicRun *run,
+                                           NSUInteger threads, unsigned long long budget,
+                                           unsigned long long *maxObservedOut)
+{
+    id<TTIOStorageGroup> study = gswStudy(url);
+    NSError *err = nil;
+    TTIOGenomicStreamWriterOptions *o = [TTIOGenomicStreamWriterOptions optionsFromRun:run];
+    o.blockReads = 2000;
+    o.threads = threads;
+    o.memoryBudgetBytes = budget;
+    TTIOGenomicStreamWriter *w = [[TTIOGenomicStreamWriter alloc]
+        initWithStudyGroup:study runName:@"g" options:o];
+    NSUInteger n = run.readCount;
+    for (NSUInteger a = 0; a < n; a += 7001) {
+        TTIOWrittenGenomicRun *part = [TTIOGenomicBlocks sliceRun:run from:a to:MIN(n, a + 7001)];
+        if (![w appendBatch:part error:&err]) { PASS(NO, "pp: appendBatch (%s)", [[err localizedDescription] UTF8String] ?: ""); return nil; }
+    }
+    if (![w close:&err]) { PASS(NO, "pp: close (%s)", [[err localizedDescription] UTF8String] ?: ""); return nil; }
+    if (maxObservedOut) *maxObservedOut = w.maxInFlightBytesObserved;
+    return study;
+}
+
+static void gswBudgetBounded(void)
+{
+    TTIOWrittenGenomicRun *run = gswBigSyntheticRun(40000, 5);
+    unsigned long long budget = 4ull << 20;   // 4 MiB, ~1 block in flight
+    unsigned long long maxObs = 0;
+    id<TTIOStorageGroup> a = gswWriteBudget(
+        [NSString stringWithFormat:@"memory://gsw-pp-a-%d", (int)getpid()], run, 6, budget, &maxObs);
+    unsigned long long maxSerial = ~0ull;
+    id<TTIOStorageGroup> b = gswWriteBudget(
+        [NSString stringWithFormat:@"memory://gsw-pp-b-%d", (int)getpid()], run, 1, budget, &maxSerial);
+    if (!a || !b) return;
+    PASS(maxObs > 0 && maxObs <= budget,
+         "pp: in-flight bytes bounded by the budget (%llu <= %llu)", maxObs, budget);
+    NSMutableDictionary *ma = [NSMutableDictionary dictionary], *mb = [NSMutableDictionary dictionary];
+    gswCollect(a, @"", ma);
+    gswCollect(b, @"", mb);
+    BOOL same = [ma isEqualToDictionary:mb];
+    PASS(same, "pp: budget-stalled file identical to serial (%lu objects)", (unsigned long)ma.count);
+}
+
 void testGenomicStreamWriterThreads(void);
 void testGenomicStreamWriterThreads(void)
 {
     gswRegisterOrder();
     gswThreadedIdentical();
     gswIterReadsThreaded();
+    gswBudgetBounded();
 }

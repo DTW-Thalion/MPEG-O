@@ -41,6 +41,10 @@ NS_ASSUME_NONNULL_BEGIN
  *  queue and are written in order by the caller's thread, at most
  *  threads + 1 in flight. The file is byte for byte the one thread's. */
 @property (nonatomic) NSUInteger threads;
+/** Pipeline byte budget (0 = TTIO_MEMORY_BUDGET, else
+ *  max(1 GiB, threads x blockBytes x 4)). The writer stalls block
+ *  submission while its in-flight estimate exceeds half of it. */
+@property (nonatomic) unsigned long long memoryBudgetBytes;
 
 /** Defaults: zlib, no overrides, default block policy. */
 + (instancetype)defaultOptions;
@@ -82,6 +86,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)close:(NSError **)error;
 
 @property (nonatomic, readonly) unsigned long long readCount;
+@property (nonatomic, readonly) unsigned long long memoryBudgetBytes;
+/** High-water mark of the in-flight byte estimate (tests). */
+@property (nonatomic, readonly) unsigned long long maxInFlightBytesObserved;
 @property (nonatomic, readonly) NSUInteger blockCount;
 @property (nonatomic, readonly) NSUInteger threads;
 

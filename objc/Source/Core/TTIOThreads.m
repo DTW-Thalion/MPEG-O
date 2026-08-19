@@ -9,6 +9,23 @@
 
 @implementation TTIOThreads
 
++ (unsigned long long)resolveMemoryBudget:(NSNumber *)explicitBytes
+                                  threads:(NSUInteger)threads
+                               blockBytes:(unsigned long long)blockBytes
+{
+    if (explicitBytes != nil && [explicitBytes unsignedLongLongValue] > 0) {
+        return [explicitBytes unsignedLongLongValue];
+    }
+    const char *env = getenv("TTIO_MEMORY_BUDGET");
+    if (env && env[0]) {
+        unsigned long long v = strtoull(env, NULL, 10);
+        if (v > 0) return v;
+    }
+    unsigned long long computed = (unsigned long long)threads * blockBytes * 4ull;
+    unsigned long long floor1g = 1ull << 30;
+    return computed > floor1g ? computed : floor1g;
+}
+
 + (NSUInteger)resolve:(NSNumber *)explicitCount
 {
     if (explicitCount && explicitCount.integerValue > 0) {

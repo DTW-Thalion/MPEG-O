@@ -13,6 +13,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface TTIOThreads : NSObject
 + (NSUInteger)resolve:(nullable NSNumber *)explicitCount;
+
+/** The pipeline byte budget: <code>explicit</code> > 0 wins, else the
+ *  TTIO_MEMORY_BUDGET environment variable (bytes), else
+ *  max(1 GiB, threads x blockBytes x 4) - the x4 covers codec
+ *  workspace. The writer and the batch assembler each take half. */
++ (unsigned long long)resolveMemoryBudget:(nullable NSNumber *)explicitBytes
+                                  threads:(NSUInteger)threads
+                               blockBytes:(unsigned long long)blockBytes;
 @end
 
 /** A queue of N workers (nil queue when N <= 1) that stands the FQZCOMP
