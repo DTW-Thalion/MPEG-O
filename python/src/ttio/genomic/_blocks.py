@@ -100,8 +100,13 @@ def _harvest(ds) -> tuple[bytes, int, dict]:
     return bytes(np.asarray(ds.read(), dtype=np.uint8).tobytes()), comp, attrs
 
 
-def encode_block(block: WrittenGenomicRun) -> BlockBlobs:
-    """Encode one block's channels through the whole-run writer."""
+def encode_block(block: WrittenGenomicRun,
+                 qual_strategy_hint: int = -1) -> BlockBlobs:
+    """Encode one block's channels through the whole-run writer.
+
+    ``qual_strategy_hint``: -1 auto (default), 5/6 forced V5, 7 V4 with
+    internal preset selection; the stream writer passes its per-run pin.
+    """
     from .._dataset_write_genomic import _write_genomic_run
     from ..providers.memory import MemoryProvider
 
@@ -137,7 +142,7 @@ def encode_block(block: WrittenGenomicRun) -> BlockBlobs:
     if overrides != block.signal_codec_overrides:
         block = dataclasses.replace(block, signal_codec_overrides=overrides)
     root = MemoryProvider.open("memory://ttio-block-encode", mode="w").root_group()
-    _write_genomic_run(root, "b", block)
+    _write_genomic_run(root, "b", block, qual_strategy_hint)
     sc = root.open_group("b").open_group("signal_channels")
     out = BlockBlobs(blobs={}, compression={}, seq_layout="raw",
                      n_reads=int(len(block.lengths)),

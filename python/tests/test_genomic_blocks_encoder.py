@@ -58,3 +58,16 @@ def test_encode_block_uses_preassigned_chrom_ids():
     run.chrom_name_to_id = {"chrA": 0}
     _blocks.encode_block(run)
     assert run.chrom_name_to_id == {"chrA": 0, "chrB": 1}
+
+
+def test_encode_block_forwards_qual_strategy_hint():
+    from ttio.codecs import fqzcomp_nx16_z as fq
+    run = make_written_genomic_run(n_reads=40, read_len=50)
+    default = _blocks.encode_block(run)
+    # Small block: the size floor keeps auto on V4.
+    assert fq.stream_strategy(default.blobs["qualities"]) == 4
+    forced = _blocks.encode_block(run, qual_strategy_hint=5)
+    assert fq.stream_strategy(forced.blobs["qualities"]) == 5
+    # An explicit -1 is the default path, byte for byte.
+    explicit = _blocks.encode_block(run, qual_strategy_hint=-1)
+    assert explicit.blobs["qualities"] == default.blobs["qualities"]
