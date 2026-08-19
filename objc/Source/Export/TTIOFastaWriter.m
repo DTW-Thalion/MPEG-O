@@ -62,17 +62,48 @@ static BOOL write_records(NSArray<NSString *> *names,
         gz = (gzipOutput == 1);
     }
 
-    NSMutableData *body = [NSMutableData dataWithCapacity:64 * 1024];
+    /* Stream 1 MiB chunks to a .part file renamed on success; a running
+     * byte position gives the .fai offsets the old in-memory body's
+     * length gave. */
+    gzFile gf = NULL;
+    FILE *fp = NULL;
+    NSString *tmp = [path stringByAppendingString:@".part"];
+    if (gz) {
+        gf = gzopen([tmp fileSystemRepresentation], "wb");
+    } else {
+        fp = fopen([tmp fileSystemRepresentation], "wb");
+    }
+    if (!gf && !fp) {
+        if (error) {
+            *error = [NSError errorWithDomain:kErrDom code:2
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"could not open %@ for writing", path] }];
+        }
+        return NO;
+    }
+    __block BOOL writeOk = YES;
+    BOOL (^flush)(NSData *) = ^BOOL(NSData *chunk) {
+        if (chunk.length == 0) return YES;
+        if (gf) {
+            if (gzwrite(gf, chunk.bytes, (unsigned)chunk.length) != (int)chunk.length) writeOk = NO;
+        } else if (fwrite(chunk.bytes, 1, chunk.length, fp) != chunk.length) {
+            writeOk = NO;
+        }
+        return writeOk;
+    };
+    NSMutableData *body = [NSMutableData dataWithCapacity:1 << 20];
+    unsigned long long pos = 0;
     NSMutableArray<NSString *> *faiLines = [NSMutableArray array];
 
-    for (NSUInteger i = 0; i < names.count; i++) {
+    for (NSUInteger i = 0; writeOk && i < names.count; i++) {
         NSString *name = names[i];
         NSData   *seq  = seqs[i];
         // Header
         NSString *hdr = [NSString stringWithFormat:@">%@\n", name];
         NSData *hdrData = [hdr dataUsingEncoding:NSUTF8StringEncoding];
         [body appendData:hdrData];
-        NSUInteger seqOffset = body.length;
+        pos += hdrData.length;
+        unsigned long long seqOffset = pos;
         // Wrapped sequence
         NSUInteger length = seq.length;
         const uint8_t *bytes = seq.bytes;
@@ -81,11 +112,16 @@ static BOOL write_records(NSArray<NSString *> *names,
             [body appendBytes:bytes + start length:chunk];
             uint8_t lf = '\n';
             [body appendBytes:&lf length:1];
+            pos += chunk + 1;
+            if (body.length >= (1 << 20)) {
+                flush(body);
+                body.length = 0;
+            }
         }
-        [faiLines addObject:[NSString stringWithFormat:@"%@\t%lu\t%lu\t%lu\t%lu",
+        [faiLines addObject:[NSString stringWithFormat:@"%@\t%lu\t%llu\t%lu\t%lu",
                               name,
                               (unsigned long)length,
-                              (unsigned long)seqOffset,
+                              seqOffset,
                               (unsigned long)lineWidth,
                               (unsigned long)(lineWidth + 1)]];
 
@@ -94,33 +130,24 @@ static BOOL write_records(NSArray<NSString *> *names,
             progress((int64_t)(i + 1), (int64_t)names.count);
         }
     }
+    flush(body);
+    if (gf) { if (gzclose(gf) != Z_OK) writeOk = NO; }
+    else if (fp) { if (fclose(fp) != 0) writeOk = NO; }
+    if (!writeOk) {
+        [[NSFileManager defaultManager] removeItemAtPath:tmp error:NULL];
+        if (error) {
+            *error = [NSError errorWithDomain:kErrDom code:3
+                                     userInfo:@{ NSLocalizedDescriptionKey :
+                                                 [NSString stringWithFormat:@"short write to %@", path] }];
+        }
+        return NO;
+    }
     // Final fire.
     progress((int64_t)names.count, (int64_t)names.count);
-
-    if (gz) {
-        gzFile gf = gzopen([path fileSystemRepresentation], "wb");
-        if (gf == NULL) {
-            if (error) {
-                *error = [NSError errorWithDomain:kErrDom code:2
-                                         userInfo:@{ NSLocalizedDescriptionKey :
-                                                     [NSString stringWithFormat:@"could not open %@ for writing", path] }];
-            }
-            return NO;
-        }
-        int written = gzwrite(gf, body.bytes, (unsigned)body.length);
-        gzclose(gf);
-        if (written != (int)body.length) {
-            if (error) {
-                *error = [NSError errorWithDomain:kErrDom code:3
-                                         userInfo:@{ NSLocalizedDescriptionKey :
-                                                     [NSString stringWithFormat:@"short gzip write to %@", path] }];
-            }
-            return NO;
-        }
-    } else {
-        if (![body writeToFile:path options:NSDataWritingAtomic error:error]) {
-            return NO;
-        }
+    NSFileManager *fm = [NSFileManager defaultManager];
+    [fm removeItemAtPath:path error:NULL];
+    if (![fm moveItemAtPath:tmp toPath:path error:error]) {
+        return NO;
     }
 
     if (writeFai && !gz) {

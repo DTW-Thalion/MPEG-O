@@ -297,6 +297,10 @@
     if (!_blockTable || nthreads <= 1 || start >= hi) {
         return [self iterReadsFrom:start to:hi error:error usingBlock:block];
     }
+    /* The serial consumer only needs enough decode-ahead to never
+     * stall; more in flight is pure memory. The auto-tune stand-down
+     * still keys off nthreads. */
+    NSUInteger window = MIN(nthreads, (NSUInteger)4);
     TTIOThreadPool *pool = [TTIOThreadPool poolWithThreads:nthreads];
     NSUInteger bFirst = [_blockTable blockForRead:start];
     NSUInteger bLast = [_blockTable blockForRead:hi - 1];
@@ -335,7 +339,7 @@
             [cond unlock];
         }];
     };
-    for (NSUInteger b = bFirst; b <= MIN(bLast, bFirst + nthreads - 1); b++) submit(b);
+    for (NSUInteger b = bFirst; b <= MIN(bLast, bFirst + window - 1); b++) submit(b);
     BOOL halted = NO, ok = YES;
     NSUInteger i = start;
     for (NSUInteger b = bFirst; b <= bLast && i < hi && !halted; b++) {
@@ -350,7 +354,7 @@
             [f.handle discard];
             break;
         }
-        submit(b + nthreads);
+        submit(b + window);
         NSUInteger r0 = (NSUInteger)[_blockTable readStartAt:b];
         NSUInteger bEnd = MIN(r0 + [_blockTable nReadsAt:b], hi);
         for (NSUInteger j = i; j < bEnd && !halted; j++) {
