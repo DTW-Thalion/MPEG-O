@@ -60,7 +60,12 @@ static void seBam(void)
     // The two BAMs differ only in samtools' own @PG line (it records the
     // output path), so compare sizes here and the records below.
     NSData *b1 = [NSData dataWithContentsOfFile:streamed], *b2 = [NSData dataWithContentsOfFile:eager];
-    PASS(b1.length > 0 && b1.length == b2.length, "streaming exporters: streamed BAM is the size of the whole-run export (%lu vs %lu)",
+    /* BGZF sizes of inputs differing in one path character move by a
+     * few bytes with the surrounding digits; the record comparison
+     * below is the semantic check, this is a sanity bound. */
+    long long dsz = (long long)b1.length - (long long)b2.length;
+    PASS(b1.length > 0 && dsz > -32 && dsz < 32,
+         "streaming exporters: streamed BAM within 32 bytes of the whole-run export (%lu vs %lu)",
          (unsigned long)b1.length, (unsigned long)b2.length);
     // Re-import and compare with the source SAM.
     TTIOBamReader *r = [[TTIOBamReader alloc] initWithPath:streamed];

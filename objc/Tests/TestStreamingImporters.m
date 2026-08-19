@@ -29,6 +29,7 @@
 #import "HDF5/TTIOHDF5Group.h"
 #import "HDF5/TTIOFeatureFlags.h"
 #include <unistd.h>
+#include <zlib.h>
 
 extern TTIOWrittenGenomicRun *gbM87Run(NSString *region);
 extern NSString *bgSam11Md5FromRun(TTIOGenomicRun *run);
@@ -208,6 +209,178 @@ static void siFastq(void)
     [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
 }
 
+static void siFastqBatchBytes(void)
+{
+    // 100 reads x 1 MiB: an 8 MiB byte limit (seq + qual = 2 MiB per
+    // read) cuts batches at 4 reads whatever batchReads says.
+    NSString *fq = siTmp("bb", "fastq");
+    NSMutableData *chunk = [NSMutableData dataWithLength:1 << 20];
+    memset(chunk.mutableBytes, 'A', chunk.length);
+    NSMutableData *qual = [NSMutableData dataWithLength:1 << 20];
+    memset(qual.mutableBytes, 'I', qual.length);
+    NSMutableData *body = [NSMutableData data];
+    for (int i = 0; i < 100; i++) {
+        [body appendData:[[NSString stringWithFormat:@"@r%d\n", i] dataUsingEncoding:NSASCIIStringEncoding]];
+        [body appendData:chunk];
+        [body appendData:[@"\n+\n" dataUsingEncoding:NSASCIIStringEncoding]];
+        [body appendData:qual];
+        [body appendData:[@"\n" dataUsingEncoding:NSASCIIStringEncoding]];
+    }
+    [body writeToFile:fq atomically:YES];
+    NSError *err = nil;
+    NSMutableArray<NSNumber *> *sizes = [NSMutableArray array];
+    BOOL ok = [TTIOFastqReader iterBatchesFromPath:fq forcedPhred:0 sampleName:@"s" platform:@""
+                                      referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
+                                        batchReads:1000000 batchBytes:(8ull << 20)
+                                       outDetected:NULL progress:nil error:&err
+                                        usingBlock:^BOOL(TTIOWrittenGenomicRun *b, NSError **e) {
+        (void)e; [sizes addObject:@(b.readCount)]; return YES;
+    }];
+    unsigned long long total = 0;
+    NSUInteger maxBatch = 0;
+    for (NSNumber *n in sizes) { total += n.unsignedLongLongValue; if (n.unsignedIntegerValue > maxBatch) maxBatch = n.unsignedIntegerValue; }
+    PASS(ok && total == 100 && sizes.count == 25 && maxBatch == 4,
+         "streaming importers: batchBytes cuts at 4 reads (%lu batches, max %lu, %s)",
+         (unsigned long)sizes.count, (unsigned long)maxBatch,
+         [[err localizedDescription] UTF8String] ?: "");
+    [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
+}
+
+extern NSString *bgSam11Md5FromRun(TTIOGenomicRun *run);
+
+static void siFastqParallelIdentity(void)
+{
+    // A gzip FASTQ through the parallel pipeline equals the serial
+    // producer's genomic bytes exactly.
+    NSString *fq = siTmp("par", "fastq.gz");
+    gzFile gz = gzopen([fq fileSystemRepresentation], "wb");
+    unsigned int rs = 12345;
+    for (int i = 0; i < 20000; i++) {
+        char seq[4097], qual[4097];
+        for (int j = 0; j < 4096; j++) {
+            rs = rs * 1103515245u + 12345u;
+            seq[j] = "ACGT"[(rs >> 16) & 3];
+            qual[j] = (char)(33 + ((rs >> 18) & 31));
+        }
+        seq[4096] = qual[4096] = 0;
+        gzprintf(gz, "@r%d desc\n", i);
+        gzwrite(gz, seq, 4096); gzwrite(gz, "\n+\n", 3);
+        gzwrite(gz, qual, 4096); gzwrite(gz, "\n", 1);
+    }
+    gzclose(gz);
+    NSError *err = nil;
+    NSString *outA = siTmp("par-a", "tio"), *outB = siTmp("par-b", "tio");
+    // Parallel (default threads) with small batches so many slots run.
+    TTIOImportedDataset *da = [[TTIOImportedDataset alloc] init];
+    da.genomicStreams[@"g"] = [TTIOFastqReader streamFromPath:fq name:@"g" sampleName:@"s"
+                                                   batchReads:0 batchBytes:(4ull << 20) progress:nil];
+    PASS([da writeToPath:outA error:&err], "parallel fastq: pipeline write (%s)",
+         [[err localizedDescription] UTF8String] ?: "");
+    // Serial.
+    setenv("TTIO_THREADS", "1", 1);
+    TTIOImportedDataset *db = [[TTIOImportedDataset alloc] init];
+    db.genomicStreams[@"g"] = [TTIOFastqReader streamFromPath:fq name:@"g" sampleName:@"s"
+                                                   batchReads:0 batchBytes:(4ull << 20) progress:nil];
+    BOOL okB = [db writeToPath:outB error:&err];
+    unsetenv("TTIO_THREADS");
+    PASS(okB, "parallel fastq: serial write (%s)", [[err localizedDescription] UTF8String] ?: "");
+    TTIOGenomicRun *ga = [TTIOSpectralDataset readFromFilePath:outA error:&err].genomicRuns[@"g"];
+    TTIOGenomicRun *gb = [TTIOSpectralDataset readFromFilePath:outB error:&err].genomicRuns[@"g"];
+    PASS(ga.readCount == 20000 && gb.readCount == 20000,
+         "parallel fastq: both runs hold 20000 reads (%llu, %llu)",
+         ga.readCount, gb.readCount);
+    BOOL same = YES;
+    NSUInteger idxs[6] = {0, 1, 9999, 10000, 19998, 19999};
+    for (int k = 0; k < 6 && same; k++) {
+        TTIOAlignedRead *ra = [ga readAtIndex:idxs[k] error:&err];
+        TTIOAlignedRead *rb = [gb readAtIndex:idxs[k] error:&err];
+        same = ra && rb && [ra.readName isEqualToString:rb.readName]
+            && [ra.sequence isEqualToString:rb.sequence]
+            && [ra.qualities isEqualToData:rb.qualities];
+    }
+    PASS(same, "parallel fastq: spot reads identical");
+    NSString *md5a = bgSam11Md5FromRun(ga), *md5b = bgSam11Md5FromRun(gb);
+    PASS(md5a != nil && [md5a isEqualToString:md5b],
+         "parallel fastq: full-run digest identical (%s)", [md5a UTF8String] ?: "");
+    [ga close]; [gb close];
+    [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:outA error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:outB error:NULL];
+}
+
+static void siWritePlainFixture(NSString *path, int nReads, int bigEvery, int bigLen)
+{
+    FILE *fp = fopen([path fileSystemRepresentation], "wb");
+    unsigned int rs = 777;
+    char *big = malloc((size_t)bigLen + 1);
+    for (int i = 0; i < nReads; i++) {
+        int len = (bigEvery > 0 && (i % bigEvery) == 0) ? bigLen : 120;
+        fprintf(fp, "@s%d x\n", i);
+        for (int j = 0; j < len; j++) {
+            rs = rs * 1103515245u + 12345u;
+            big[j] = "ACGT"[(rs >> 16) & 3];
+        }
+        fwrite(big, 1, (size_t)len, fp);
+        fputs("\n+\n", fp);
+        for (int j = 0; j < len; j++) {
+            rs = rs * 1103515245u + 12345u;
+            big[j] = (char)(33 + ((rs >> 18) & 31));
+        }
+        fwrite(big, 1, (size_t)len, fp);
+        fputc('\n', fp);
+    }
+    free(big);
+    fclose(fp);
+}
+
+static NSString *siShardDigest(NSString *fq, unsigned long long batchBytes, BOOL serial,
+                               unsigned long long expectReads)
+{
+    if (serial) setenv("TTIO_THREADS", "1", 1);
+    NSError *err = nil;
+    NSString *out = siTmp(serial ? "sh-s" : "sh-p", "tio");
+    TTIOImportedDataset *d = [[TTIOImportedDataset alloc] init];
+    d.genomicStreams[@"g"] = [TTIOFastqReader streamFromPath:fq name:@"g" sampleName:@"s"
+                                                  batchReads:0 batchBytes:batchBytes progress:nil];
+    BOOL ok = [d writeToPath:out error:&err];
+    if (serial) unsetenv("TTIO_THREADS");
+    if (!ok) {
+        PASS(NO, "shard fastq: write (%s)", [[err localizedDescription] UTF8String] ?: "");
+        return nil;
+    }
+    TTIOGenomicRun *g = [TTIOSpectralDataset readFromFilePath:out error:&err].genomicRuns[@"g"];
+    if (g == nil || g.readCount != expectReads) {
+        PASS(NO, "shard fastq: run open, %llu reads (want %llu)", g.readCount, expectReads);
+        return nil;
+    }
+    NSString *md5 = bgSam11Md5FromRun(g);
+    [g close];
+    [[NSFileManager defaultManager] removeItemAtPath:out error:NULL];
+    return md5;
+}
+
+static void siFastqShardIdentity(void)
+{
+    // Mixed lengths: mostly 120 B with a 100 KiB read every 500.
+    NSString *fq = siTmp("shard", "fastq");
+    siWritePlainFixture(fq, 30000, 500, 100 * 1024);
+    NSString *par = siShardDigest(fq, 1ull << 20, NO, 30000);
+    NSString *ser = siShardDigest(fq, 1ull << 20, YES, 30000);
+    PASS(par != nil && [par isEqualToString:ser],
+         "shard fastq: mixed-length digest identical (%s)", [par UTF8String] ?: "");
+    [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
+
+    // Two 200 KiB records with a 64 KiB batch limit: the file shards,
+    // most ranges are empty, order still holds.
+    NSString *fq2 = siTmp("shard2", "fastq");
+    siWritePlainFixture(fq2, 2, 1, 200 * 1024);
+    NSString *par2 = siShardDigest(fq2, 64ull << 10, NO, 2);
+    NSString *ser2 = siShardDigest(fq2, 64ull << 10, YES, 2);
+    PASS(par2 != nil && [par2 isEqualToString:ser2],
+         "shard fastq: sparse-shard digest identical (%s)", [par2 UTF8String] ?: "");
+    [[NSFileManager defaultManager] removeItemAtPath:fq2 error:NULL];
+}
+
 static void siMzML(void)
 {
     NSString *mz = siFixture(@"1min.mzML");
@@ -261,6 +434,9 @@ void testStreamingImporters(void)
         siBamBatches();
         siBamStreamWrite();
         siFastq();
+    siFastqBatchBytes();
+    siFastqParallelIdentity();
+    siFastqShardIdentity();
         siMzML();
     }
 }

@@ -15,6 +15,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 #import "TTIOBamReader.h"
+#import "Import/TTIOOrderedBatchAssembler.h"
+#import "Core/TTIOThreads.h"
 #import "Import/TTIOGenomicStreamSource.h"
 #import "Genomics/TTIOGenomicBlocks.h"
 #import "Genomics/TTIOWrittenGenomicRun.h"
@@ -496,7 +498,72 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
     /* Drain per chunk: samtools output temporaries (and each emitted
      * batch's) otherwise live until return, so memory grows with the
      * file instead of the batch. The error is carried across the pool
-     * in a strong local. */
+     * in a strong local.
+     *
+     * With threads, header lines feed the shared accumulator on this
+     * thread; record lines gather into slices that pool workers parse
+     * with their own accumulators (seeded with the header state), and
+     * the ordered assembler returns their batches in file order. The
+     * caller is both submitter and consumer, so submission never
+     * blocks and the window is bounded by pulling before submitting,
+     * the same shape as the FASTQ pipeline producer. */
+    NSUInteger bamThreads = [TTIOThreads resolve:nil];
+    TTIOThreadPool *bamPool = bamThreads > 1 ? [TTIOThreadPool poolWithThreads:bamThreads] : nil;
+    TTIOOrderedBatchAssembler *bamAsm = bamPool.queue
+        ? [[TTIOOrderedBatchAssembler alloc] initWithPool:bamPool] : nil;
+    NSUInteger bamWindow = bamThreads + 2;
+    __block NSUInteger bamSeq = 0;
+    NSUInteger bamPulled = 0;
+    BOOL headerDone = NO;
+    NSMutableArray<NSString *> *sliceLines = [NSMutableArray array];
+    __block unsigned long long totalParallel = 0;
+
+    BOOL (^pullOneBam)(BOOL) = ^BOOL(BOOL emitIt) {
+        BOOL done = NO;
+        NSError *pe = nil;
+        TTIOWrittenGenomicRun *batch = [bamAsm nextBatchWithError:&pe done:&done];
+        if (done) return YES;
+        if (batch == nil) {
+            if (emitIt) innerErr = pe ?: TTIOMakeError(TTIOErrorDatasetRead, @"SAM slice parse failed");
+            return NO;
+        }
+        if (!emitIt) return YES;   /* failure drain: discard, never re-emit */
+        self.provenanceRecords = acc.provenance;
+        NSError *e = nil;
+        if (!block(batch, &e)) { innerErr = e; return NO; }
+        return YES;
+    };
+
+    NSString *sampleCopy = sampleName;
+    BOOL (^submitSlice)(void) = ^BOOL {
+        if (sliceLines.count == 0) return YES;
+        NSArray<NSString *> *lines = [sliceLines copy];
+        [sliceLines removeAllObjects];
+        NSString *rgS = acc.rgSample, *rgP = acc.rgPlatform;
+        int64_t mtime = acc.fileMtime;
+        NSArray *sq = [acc.sqNames copy];
+        [bamAsm submitSlot:bamSeq producer:^TTIOWrittenGenomicRun *(NSError * __autoreleasing *pe) {
+            @autoreleasepool {
+                TTIOSamBatchAccumulator *wacc = [[TTIOSamBatchAccumulator alloc] init];
+                wacc.rgSample = rgS;
+                wacc.rgPlatform = rgP;
+                wacc.fileMtime = mtime;
+                [wacc.sqNames addObjectsFromArray:sq];
+                NSUInteger ln = 0;
+                for (NSString *l in lines) {
+                    ln++;
+                    NSError *ce = nil;
+                    if (![wacc consumeLine:l lineNo:ln error:&ce]) {
+                        if (pe) *pe = ce;
+                        return nil;
+                    }
+                }
+                return [wacc drainBatchWithSampleName:sampleCopy];
+            }
+        }];
+        return YES;
+    };
+
     NSError *loopErr = nil;
     BOOL reachedEof = NO;
     while (ok && !reachedEof) {
@@ -519,6 +586,25 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
                     @"samtools output not valid UTF-8 for %@ (line %lu)", _path, (unsigned long)lineNo);
                 ok = NO; break;
             }
+            BOOL isHeader = line.length > 0 && [line characterAtIndex:0] == '@';
+            if (bamAsm != nil && !isHeader) headerDone = YES;
+            if (bamAsm != nil && headerDone) {
+                [sliceLines addObject:line];
+                totalParallel++;
+                if ((totalParallel % TTIOBamReaderProgressIntervalReads) == 0) {
+                    progress((int64_t)totalParallel, (int64_t)-1);
+                }
+                if (sliceLines.count >= batchReads) {
+                    anyBatch = YES;
+                    if (!submitSlice()) { ok = NO; break; }
+                    bamSeq++;
+                    while (ok && bamSeq - bamPulled >= bamWindow) {
+                        if (!pullOneBam(YES)) { ok = NO; break; }
+                        bamPulled++;
+                    }
+                }
+                continue;
+            }
             NSUInteger before = acc.readCount;
             NSError *ce = nil;
             if (![acc consumeLine:line lineNo:lineNo error:&ce]) { loopErr = ce; ok = NO; break; }
@@ -538,14 +624,35 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
             if (ok && carry.length > 0) {
                 NSString *line = [[NSString alloc] initWithData:carry encoding:NSUTF8StringEncoding];
                 lineNo++;
-                NSUInteger before = acc.readCount;
-                NSError *ce = nil;
-                if (line && ![acc consumeLine:line lineNo:lineNo error:&ce]) { loopErr = ce; ok = NO; }
-                else if (acc.readCount > before) total++;
+                if (bamAsm != nil && headerDone && line.length > 0) {
+                    [sliceLines addObject:line];
+                    totalParallel++;
+                } else {
+                    NSUInteger before = acc.readCount;
+                    NSError *ce = nil;
+                    if (line && ![acc consumeLine:line lineNo:lineNo error:&ce]) { loopErr = ce; ok = NO; }
+                    else if (acc.readCount > before) total++;
+                }
             }
             reachedEof = YES;
         }
         }
+    }
+    if (bamAsm != nil) {
+        if (ok && sliceLines.count > 0) {
+            anyBatch = YES;
+            if (!submitSlice()) ok = NO;
+            else bamSeq++;
+        }
+        [bamAsm finishAfterSlots:bamSeq];
+        while (bamPulled < bamSeq) {
+            @autoreleasepool {
+                if (!pullOneBam(ok)) { ok = NO; }
+                bamPulled++;
+            }
+        }
+        [bamPool close];
+        total += totalParallel;
     }
     if (!ok && loopErr && error && *error == nil) *error = loopErr;
     if (ok && (acc.readCount > 0 || !anyBatch)) {

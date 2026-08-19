@@ -80,6 +80,7 @@ static const NSUInteger kIndexArrayChunk = 65536;
     o.optLegacyWholeChannel = _optLegacyWholeChannel;
     o.provenanceRecords = _provenanceRecords;
     o.threads = _threads;
+    o.memoryBudgetBytes = _memoryBudgetBytes;
     return o;
 }
 
@@ -89,6 +90,7 @@ static const NSUInteger kIndexArrayChunk = 65536;
  *  sequence order by the caller's thread. */
 @interface TTIOInFlightBlock : NSObject
 @property (nonatomic, strong) TTIOWrittenGenomicRun *block;
+@property (nonatomic) unsigned long long estimatedBytes;
 @property (nonatomic, strong, nullable) TTIOBlockBlobs *blobs;
 @property (nonatomic, strong, nullable) NSError *error;
 @property (nonatomic) BOOL done;
@@ -121,6 +123,9 @@ static const NSUInteger kIndexArrayChunk = 65536;
     TTIOThreadPool *_pool;
     NSMutableArray<TTIOInFlightBlock *> *_inflight;
     NSCondition *_cond;
+    unsigned long long _memoryBudgetBytes;
+    unsigned long long _inflightBytes;
+    unsigned long long _maxInFlightBytesObserved;
 }
 
 + (NSString *)layout { return kLayout; }
@@ -177,11 +182,27 @@ static void ttioBuildIndexFields(void)
         _pool = [TTIOThreadPool poolWithThreads:_opt.optLegacyWholeChannel ? 1 : _threads];
         _inflight = [NSMutableArray array];
         _cond = [NSCondition new];
+        _memoryBudgetBytes = [TTIOThreads resolveMemoryBudget:
+                                  _opt.memoryBudgetBytes ? @(_opt.memoryBudgetBytes) : nil
+                                                      threads:_threads
+                                                   blockBytes:_opt.blockBytes];
     }
     return self;
 }
 
 - (NSUInteger)threads { return _threads; }
+- (unsigned long long)memoryBudgetBytes { return _memoryBudgetBytes; }
+- (unsigned long long)maxInFlightBytesObserved { return _maxInFlightBytesObserved; }
+
+/** The bytes a pending block is expected to hold while encoding: its
+ *  raw channel buffers times four for codec workspace. */
+static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
+{
+    unsigned long long raw = (unsigned long long)b.sequencesData.length
+        + (unsigned long long)b.qualitiesData.length
+        + (unsigned long long)b.offsetsData.length * 3ull;
+    return raw * 4ull;
+}
 
 + (void)registerBlockChromosomes:(TTIOWrittenGenomicRun *)block
                          intoMap:(NSMutableDictionary<NSString *, NSNumber *> *)map
@@ -359,6 +380,7 @@ static void ttioBuildIndexFields(void)
         return [self _writeEncoded:block blobs:blobs error:error];
     }
     if (![self _drainUntil:_threads error:error]) return NO;
+    if (![self _drainToBudget:error]) return NO;
     /* The worker reads the map while later flushes mutate it: give each
      * block a snapshot (registration above fixed every id it needs). */
     TTIOGenomicWriteContext *bctx =
@@ -366,7 +388,10 @@ static void ttioBuildIndexFields(void)
                                              referenceMD5:_referenceMD5];
     TTIOInFlightBlock *f = [TTIOInFlightBlock new];
     f.block = block;
+    f.estimatedBytes = ppEstimateBlockBytes(block);
     [_inflight addObject:f];
+    _inflightBytes += f.estimatedBytes;
+    if (_inflightBytes > _maxInFlightBytesObserved) _maxInFlightBytesObserved = _inflightBytes;
     NSCondition *cond = _cond;
     [_pool.queue addOperationWithBlock:^{
         NSError *e = nil;
@@ -404,11 +429,24 @@ static void ttioBuildIndexFields(void)
         while (!f.done) [_cond wait];
         [_cond unlock];
         [_inflight removeObjectAtIndex:0];
+        _inflightBytes -= f.estimatedBytes <= _inflightBytes ? f.estimatedBytes : _inflightBytes;
         if (!f.blobs) {
             if (error) *error = f.error;
             return NO;
         }
         if (![self _writeEncoded:f.block blobs:f.blobs error:error]) return NO;
+    }
+    return YES;
+}
+
+/** Drain until the in-flight estimate fits the writer's half of the
+ *  byte budget (the count window of _drainUntil: stays the upper
+ *  bound; this adds the byte bound the count cannot give). */
+- (BOOL)_drainToBudget:(NSError **)error
+{
+    unsigned long long half = _memoryBudgetBytes / 2ull;
+    while (_inflight.count > 0 && _inflightBytes > half) {
+        if (![self _drainUntil:(_inflight.count - 1) error:error]) return NO;
     }
     return YES;
 }
