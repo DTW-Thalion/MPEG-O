@@ -103,6 +103,11 @@ int ttio_m94z_qual_encode(
     if (!out || !out_len) return -1;
     const size_t cap = *out_len;
 
+    if (strategy_hint == TTIO_M94Z_HINT_V4_AUTO) {
+        strategy_hint = -1;
+        seq_in = NULL;   /* V4 path with V4's own preset selection */
+    }
+
     if (strategy_hint == 5 || strategy_hint == 6) {
         if (!seq_in) return TTIO_SEQCTX_ERR_NO_SEQ;
         const ttio_seqctx_param *pm =

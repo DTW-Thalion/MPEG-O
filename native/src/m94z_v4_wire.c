@@ -176,6 +176,19 @@ int ttio_m94z_v5_unpack(
                            out_body, out_body_len);
 }
 
+int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len)
+{
+    if (in == NULL || in_len < 30) return -1;
+    if (memcmp(in, TTIO_M94Z_V4_MAGIC, 4) != 0) return -2;
+    if (in[4] == TTIO_M94Z_V4_VERSION) return 4;
+    if (in[4] != TTIO_M94Z_V5_WIRE_VERSION) return -2;
+    uint32_t rlt_len;
+    memcpy(&rlt_len, in + 22, 4);
+    if (in_len < (size_t)30 + rlt_len + 2) return -3;
+    uint8_t sid = in[30 + (size_t)rlt_len + 1];
+    return (sid == 5 || sid == 6) ? (int)sid : -3;
+}
+
 /* ---------------------------------------------------------------- */
 /* Top-level entry points: encode/decode in a single call.          */
 /* These are declared in include/ttio_rans.h so the codec layers    */
