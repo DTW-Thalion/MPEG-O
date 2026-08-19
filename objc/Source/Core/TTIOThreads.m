@@ -21,7 +21,15 @@
         unsigned long long v = strtoull(env, NULL, 10);
         if (v > 0) return v;
     }
-    unsigned long long computed = (unsigned long long)threads * blockBytes * 4ull;
+    /* Target full-thread admittance: a block in flight costs about
+     * eight times blockBytes (raw sequence + qualities, times four for
+     * codec workspace), the writer takes half the budget, so sixteen
+     * blockBytes per thread admits ~threads blocks. Clamped to half
+     * the physical memory so the target never outruns the box. */
+    unsigned long long computed = (unsigned long long)threads * blockBytes * 16ull;
+    unsigned long long ramHalf =
+        (unsigned long long)[[NSProcessInfo processInfo] physicalMemory] / 2ull;
+    if (ramHalf > 0 && computed > ramHalf) computed = ramHalf;
     unsigned long long floor1g = 1ull << 30;
     return computed > floor1g ? computed : floor1g;
 }

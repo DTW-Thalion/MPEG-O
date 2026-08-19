@@ -22,6 +22,19 @@ public API is stable from onward.
   most 4 blocks, which a serial consumer cannot outrun anyway.
 
 ### Changed
+- **The ObjC import producer parallelises.** FASTQ imports split into
+  per-thread shard ranges on record boundaries (plain files) or slice
+  records off a single scan (gzip, pipes), parse on the shared pool,
+  and reach the writer through an ordered assembler, so the output is
+  byte for byte the serial import's; SAM field parsing moves to the
+  pool the same way. Batches cut by bytes (`batchBytes`, 64 MiB
+  default) and the whole pipeline stalls against one byte budget
+  (`TTIO_MEMORY_BUDGET`, default sixteen blockBytes per thread clamped
+  to half the physical memory), replacing the block-count window. The
+  50 GB HiFi corpus at 24 threads: 13m 12s before this work, 5m 40s
+  after (140 MB/s, 17.7 GB peak) with 64 MiB blocks and a 20 GB
+  budget; the serial path is unchanged and 64 MiB blocks compress the
+  corpus marginally better than the 256 MiB default.
 - **Block-parallel encode and decode.** `GenomicStreamWriter`, `SpectralStreamWriter`
   and the sequential readers (`iter_reads`, the exporters, `iter_spectra`,
   `channel_range`) in Python, Java and ObjC run codec work for several blocks at

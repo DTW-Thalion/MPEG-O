@@ -16,8 +16,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /** The pipeline byte budget: <code>explicit</code> > 0 wins, else the
  *  TTIO_MEMORY_BUDGET environment variable (bytes), else
- *  max(1 GiB, threads x blockBytes x 4) - the x4 covers codec
- *  workspace. The writer and the batch assembler each take half. */
+ *  max(1 GiB, min(threads x blockBytes x 16, physical memory / 2)) -
+ *  sixteen blockBytes per thread admits about one in-flight block per
+ *  thread at the writer's half. The writer and the batch assembler
+ *  each take half. */
 + (unsigned long long)resolveMemoryBudget:(nullable NSNumber *)explicitBytes
                                   threads:(NSUInteger)threads
                                blockBytes:(unsigned long long)blockBytes;

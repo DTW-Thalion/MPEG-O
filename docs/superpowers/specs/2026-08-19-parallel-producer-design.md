@@ -1,7 +1,9 @@
 # Parallel Producer Design
 
-Date: 2026-08-19. Status: approved (strategy, scope and the section
-design were approved in review; this document records them).
+Date: 2026-08-19. Status: Phase 1 (ObjC) implemented; acceptance met
+(50 GB HiFi in 5m 40s at 24 threads with 64 MiB blocks and a 20 GB
+budget; 6m 02s on this 31 GB box's defaults, which the RAM clamp
+bounds; identity proven serial = pipeline = shard).
 
 ## 1. Problem and measurements
 
@@ -107,8 +109,13 @@ assembler concatenates them in order into batches.
   (Read-count batching was the 21.8 GB peak: 100 000 HiFi reads is
   3.7 GB per batch.)
 * **One byte budget bounds the whole pipeline.** Default
-  `max(1 GiB, threads x blockBytes x 4)`; the x4 covers codec
-  workspace, which measurement shows dominating the raw block. The
+  `max(1 GiB, min(threads x blockBytes x 16, physical memory / 2))`:
+  a block in flight costs about eight blockBytes once codec workspace
+  counts, the writer takes half the budget, so sixteen per thread
+  admits about one block per thread. (The x4 first written here
+  double-counted the workspace against the in-flight estimate and
+  capped concurrency at threads/4 whatever the block size; the
+  Phase 1 acceptance run caught it.) The
   `TTIO_MEMORY_BUDGET` environment variable (bytes) overrides it. Two
   consumers share it: the writer stalls block submission while its
   in-flight estimate exceeds the budget (replacing the v1.9

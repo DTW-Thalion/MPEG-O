@@ -14,6 +14,7 @@
 #import <Foundation/Foundation.h>
 #import "Import/TTIOFastqReader.h"
 #import "Import/TTIOImportedDataset.h"
+#import "Import/TTIOGenomicStreamSource.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -30,18 +31,23 @@ int main(int argc, const char *argv[])
 {
     @autoreleasepool {
         if (argc < 3) {
-            fprintf(stderr, "usage: TtioFastqEncodeBench <in.fastq[.gz]> <out.tio> [batchBytes]\n");
+            fprintf(stderr, "usage: TtioFastqEncodeBench <in.fastq[.gz]> <out.tio> [batchBytes [blockBytes]]\n");
             return 1;
         }
         NSString *in = @(argv[1]), *out = @(argv[2]);
         unsigned long long batchBytes = argc > 3 ? strtoull(argv[3], NULL, 10) : 0;
+        unsigned long long blockBytes = argc > 4 ? strtoull(argv[4], NULL, 10) : 0;
         [[NSFileManager defaultManager] removeItemAtPath:out error:NULL];
         NSError *err = nil;
         TTIOImportedDataset *d = [[TTIOImportedDataset alloc] init];
-        d.genomicStreams[@"genomic_0001"] =
+        TTIOGenomicStreamSource *src =
             [TTIOFastqReader streamFromPath:in name:@"genomic_0001"
                                  sampleName:@"s" batchReads:0 batchBytes:batchBytes
                                    progress:nil];
+        if (blockBytes > 0) {
+            src = [src sourceWithBlockReads:nil blockBytes:@(blockBytes) legacy:NO];
+        }
+        d.genomicStreams[@"genomic_0001"] = src;
         double t0 = benchNow();
         BOOL ok = [d writeToPath:out error:&err];
         double t1 = benchNow();
