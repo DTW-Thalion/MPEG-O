@@ -28,6 +28,7 @@ NSString *const TTIOFastqReaderErrorDomain = @"TTIOFastqReaderErrorDomain";
 // that per-callback overhead stays well below 1% of parse time.
 const NSUInteger TTIOFastqReaderProgressIntervalReads = 1000;
 const NSUInteger TTIOFastqReaderDefaultBatchReads = 100000;
+const unsigned long long TTIOFastqReaderDefaultBatchBytes = 64ull << 20;
 
 
 // Forward declaration of the helper exported from TTIOFastaReader.m.
@@ -416,6 +417,26 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
                       error:(NSError **)error
                  usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block
 {
+    return [self iterBatchesFromPath:path forcedPhred:forcedPhred sampleName:sampleName
+                            platform:platform referenceUri:referenceUri acquisitionMode:mode
+                          batchReads:batchReads batchBytes:0 outDetected:outDetected
+                            progress:progress error:error usingBlock:block];
+}
+
++ (BOOL)iterBatchesFromPath:(NSString *)path
+                forcedPhred:(uint8_t)forcedPhred
+                 sampleName:(NSString *)sampleName
+                   platform:(NSString *)platform
+               referenceUri:(NSString *)referenceUri
+            acquisitionMode:(TTIOAcquisitionMode)mode
+                 batchReads:(NSUInteger)batchReads
+                 batchBytes:(unsigned long long)batchBytes
+                outDetected:(uint8_t *)outDetected
+                   progress:(TTIOProgressBlock)progress
+                      error:(NSError **)error
+                 usingBlock:(BOOL (^)(TTIOWrittenGenomicRun *batch, NSError **error))block
+{
+    if (batchBytes == 0) batchBytes = TTIOFastqReaderDefaultBatchBytes;
     if (progress == nil) progress = TTIOProgressDiscard();
     if (batchReads < 1) batchReads = 1;
     if (forcedPhred != 0 && forcedPhred != 33 && forcedPhred != 64) {
@@ -443,6 +464,7 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
     unsigned long long total = 0;
     BOOL ok = YES, eof = NO;
     __block NSError *innerErr = nil;
+    __block unsigned long long pendingBytes = 0;
 
     BOOL (^emit)(void) = ^BOOL(void) {
         if (detected == 0) {
@@ -478,6 +500,7 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
             [names copy], [seqBuf copy], [qualBuf copy], offsetsArr, lengthsArr,
             sampleName, platform, referenceUri, mode);
         [names removeAllObjects]; [seqs removeAllObjects]; [quals removeAllObjects];
+        pendingBytes = 0;
         NSError *e = nil;
         if (!block(batch, &e)) { innerErr = e; return NO; }
         return YES;
@@ -498,9 +521,10 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
                 ok = NO;
             } else if (!eof) {
                 [names addObject:name]; [seqs addObject:sq]; [quals addObject:q];
+                pendingBytes += (unsigned long long)sq.length * 2ull;
                 total++;
                 if ((total % TTIOFastqReaderProgressIntervalReads) == 0) progress((int64_t)total, (int64_t)-1);
-                if (names.count >= batchReads && !emit()) ok = NO;
+                if ((names.count >= batchReads || pendingBytes >= batchBytes) && !emit()) ok = NO;
             }
         }
     }
@@ -527,10 +551,21 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
                                  batchReads:(NSUInteger)batchReads
                                    progress:(TTIOProgressBlock)progress
 {
+    return [self streamFromPath:path name:name sampleName:sampleName
+                     batchReads:batchReads batchBytes:0 progress:progress];
+}
+
++ (TTIOGenomicStreamSource *)streamFromPath:(NSString *)path
+                                       name:(NSString *)name
+                                 sampleName:(NSString *)sampleName
+                                 batchReads:(NSUInteger)batchReads
+                                 batchBytes:(unsigned long long)batchBytes
+                                   progress:(TTIOProgressBlock)progress
+{
     TTIOGenomicBatchProducer producer = ^BOOL(BOOL (^emit)(TTIOWrittenGenomicRun *, NSError **), NSError **error) {
         return [self iterBatchesFromPath:path forcedPhred:0 sampleName:sampleName ?: @""
                                 platform:@"" referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
-                              batchReads:batchReads outDetected:NULL progress:progress
+                              batchReads:batchReads batchBytes:batchBytes outDetected:NULL progress:progress
                                    error:error usingBlock:emit];
     };
     return [[TTIOGenomicStreamSource alloc] initWithName:name ?: @"genomic_0001" batches:producer

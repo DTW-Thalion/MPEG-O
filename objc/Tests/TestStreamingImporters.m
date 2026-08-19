@@ -208,6 +208,43 @@ static void siFastq(void)
     [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
 }
 
+static void siFastqBatchBytes(void)
+{
+    // 100 reads x 1 MiB: an 8 MiB byte limit (seq + qual = 2 MiB per
+    // read) cuts batches at 4 reads whatever batchReads says.
+    NSString *fq = siTmp("bb", "fastq");
+    NSMutableData *chunk = [NSMutableData dataWithLength:1 << 20];
+    memset(chunk.mutableBytes, 'A', chunk.length);
+    NSMutableData *qual = [NSMutableData dataWithLength:1 << 20];
+    memset(qual.mutableBytes, 'I', qual.length);
+    NSMutableData *body = [NSMutableData data];
+    for (int i = 0; i < 100; i++) {
+        [body appendData:[[NSString stringWithFormat:@"@r%d\n", i] dataUsingEncoding:NSASCIIStringEncoding]];
+        [body appendData:chunk];
+        [body appendData:[@"\n+\n" dataUsingEncoding:NSASCIIStringEncoding]];
+        [body appendData:qual];
+        [body appendData:[@"\n" dataUsingEncoding:NSASCIIStringEncoding]];
+    }
+    [body writeToFile:fq atomically:YES];
+    NSError *err = nil;
+    NSMutableArray<NSNumber *> *sizes = [NSMutableArray array];
+    BOOL ok = [TTIOFastqReader iterBatchesFromPath:fq forcedPhred:0 sampleName:@"s" platform:@""
+                                      referenceUri:@"" acquisitionMode:TTIOAcquisitionModeGenomicWGS
+                                        batchReads:1000000 batchBytes:(8ull << 20)
+                                       outDetected:NULL progress:nil error:&err
+                                        usingBlock:^BOOL(TTIOWrittenGenomicRun *b, NSError **e) {
+        (void)e; [sizes addObject:@(b.readCount)]; return YES;
+    }];
+    unsigned long long total = 0;
+    NSUInteger maxBatch = 0;
+    for (NSNumber *n in sizes) { total += n.unsignedLongLongValue; if (n.unsignedIntegerValue > maxBatch) maxBatch = n.unsignedIntegerValue; }
+    PASS(ok && total == 100 && sizes.count == 25 && maxBatch == 4,
+         "streaming importers: batchBytes cuts at 4 reads (%lu batches, max %lu, %s)",
+         (unsigned long)sizes.count, (unsigned long)maxBatch,
+         [[err localizedDescription] UTF8String] ?: "");
+    [[NSFileManager defaultManager] removeItemAtPath:fq error:NULL];
+}
+
 static void siMzML(void)
 {
     NSString *mz = siFixture(@"1min.mzML");
@@ -261,6 +298,7 @@ void testStreamingImporters(void)
         siBamBatches();
         siBamStreamWrite();
         siFastq();
+    siFastqBatchBytes();
         siMzML();
     }
 }
