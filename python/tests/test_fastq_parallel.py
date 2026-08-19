@@ -87,3 +87,22 @@ def test_pipeline_identical_to_serial(tmp_path):
     para = _batches(fq, 4, batch_bytes=32_768)
     assert len(serial) > 3
     _assert_batches_equal(serial, para)
+
+
+def test_shard_identical_to_serial(tmp_path):
+    from ttio.importers.fastq_parallel import plan_input
+    fq = _mixed_fixture(tmp_path, gz=False, n=400, seed=11)
+    mode, ranges = plan_input(fq, 4, 16_384)
+    assert mode == "shard" and len(ranges) > 2
+    assert ranges[0][0] == 0 and ranges[-1][1] == fq.stat().st_size
+    serial = _batches(fq, 1, batch_bytes=16_384)
+    para = _batches(fq, 4, batch_bytes=16_384)
+    _assert_batches_equal(serial, para)
+
+
+def test_sparse_shards_identical_to_serial(tmp_path):
+    from ttio.importers.fastq_parallel import plan_input
+    fq = _mixed_fixture(tmp_path, gz=False, n=6, seed=5)
+    mode, ranges = plan_input(fq, 8, 64 * 2**20)
+    assert mode == "shard" and ranges == [(0, fq.stat().st_size)]
+    _assert_batches_equal(_batches(fq, 1), _batches(fq, 8))

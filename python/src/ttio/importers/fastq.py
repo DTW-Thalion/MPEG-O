@@ -303,10 +303,17 @@ class FastqReader:
                 meta = dict(sample_name=sample_name, platform=platform,
                             reference_uri=reference_uri,
                             acquisition_mode=acquisition_mode)
-                yield from _pp.iter_batches_pipeline(
-                    self._path, threads=n_threads, batch_reads=batch_reads,
-                    batch_bytes=batch_bytes, forced=self._forced,
-                    detected_cb=_detected, meta=meta, progress=progress)
+                if mode == "shard":
+                    yield from _pp.iter_batches_shard(
+                        self._path, ranges, threads=n_threads,
+                        batch_reads=batch_reads, batch_bytes=batch_bytes,
+                        forced=self._forced, detected_cb=_detected,
+                        meta=meta, progress=progress)
+                else:
+                    yield from _pp.iter_batches_pipeline(
+                        self._path, threads=n_threads, batch_reads=batch_reads,
+                        batch_bytes=batch_bytes, forced=self._forced,
+                        detected_cb=_detected, meta=meta, progress=progress)
                 return
         offset = self._forced
         pending: list[tuple[str, bytes, bytes]] = []

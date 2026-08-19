@@ -19,6 +19,8 @@ import collections
 import concurrent.futures as _cf
 import io
 import os
+import queue as _queue
+import threading
 
 import numpy as np
 
@@ -39,7 +41,8 @@ from .fastq import (
 )
 from .fastq_scanner import boundary_at_or_after, confirm_candidate
 
-__all__ = ["parse_slice", "plan_input", "iter_batches_pipeline"]
+__all__ = ["parse_slice", "plan_input", "iter_batches_pipeline",
+           "iter_batches_shard"]
 
 
 def _parse_slice_slow(data: bytes):
@@ -296,4 +299,91 @@ def iter_batches_pipeline(path, *, threads, batch_reads, batch_bytes,
                 yield _count(run)
             _fire(progress, n, n)
         finally:
+            pool.shutdown(wait=True, cancel_futures=True)
+
+
+_DONE = object()
+
+
+def iter_batches_shard(path, ranges, *, threads, batch_reads, batch_bytes,
+                       forced, detected_cb, meta, progress=None):
+    """Shard mode: one pool task per byte range, each reading and
+    parsing its own slices onto a depth-1 queue; the caller drains the
+    queues shard-major (file order) through the shared assembler, so
+    batch cuts and Phred detection are the serial reader's. Workers
+    catch ``BaseException`` and always deliver their done marker; on a
+    forwarded error the caller drains the remaining queues without
+    emitting, then raises."""
+    from ..io.progress import _fire
+    asm = _BatchAssembler(batch_reads=batch_reads, batch_bytes=batch_bytes,
+                          forced=forced, detected_cb=detected_cb, meta=meta)
+    n = 0
+
+    def _count(run):
+        nonlocal n
+        before = n // PROGRESS_INTERVAL_READS
+        n += len(run.lengths)
+        for m in range(before + 1, n // PROGRESS_INTERVAL_READS + 1):
+            _fire(progress, m * PROGRESS_INTERVAL_READS, -1)
+        return run
+
+    queues = [_queue.Queue(maxsize=1) for _ in ranges]
+    stop = threading.Event()
+
+    def _worker(rng, q):
+        err = None
+        try:
+            start, end = rng
+            with open(path, "rb") as f:
+                f.seek(start)
+                remaining = end - start
+                carry = b""
+                while remaining and not stop.is_set():
+                    chunk = f.read(min(batch_bytes, remaining))
+                    if not chunk:
+                        raise FastqParseError(
+                            f"input truncated inside shard {rng}")
+                    remaining -= len(chunk)
+                    buf = carry + chunk
+                    if remaining:
+                        cut = _last_boundary(buf)
+                        if not cut:
+                            carry = buf
+                            continue
+                        q.put(parse_slice(buf[:cut]))
+                        carry = buf[cut:]
+                    else:
+                        q.put(parse_slice(buf))
+                        carry = b""
+        except BaseException as e:  # forwarded to the caller, never lost
+            err = e
+        finally:
+            q.put((_DONE, err))
+
+    with pool_context(threads):
+        pool = _cf.ThreadPoolExecutor(max_workers=threads,
+                                      thread_name_prefix="ttio-fastq-shard")
+        try:
+            for rng, q in zip(ranges, queues):
+                pool.submit(_worker, rng, q)
+            failure = None
+            for q in queues:
+                while True:
+                    item = q.get()
+                    if isinstance(item, tuple) and len(item) == 2 \
+                            and item[0] is _DONE:
+                        if item[1] is not None and failure is None:
+                            failure = item[1]
+                            stop.set()
+                        break
+                    if failure is None:
+                        for run in asm.add(item):
+                            yield _count(run)
+            if failure is not None:
+                raise failure
+            for run in asm.finish():
+                yield _count(run)
+            _fire(progress, n, n)
+        finally:
+            stop.set()
             pool.shutdown(wait=True, cancel_futures=True)
