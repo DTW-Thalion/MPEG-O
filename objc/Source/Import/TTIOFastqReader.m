@@ -483,18 +483,31 @@ static BOOL fqReadRecord(gzFile fh, NSMutableData *line, NSUInteger *lineNo,
         return YES;
     };
 
+    /* Drain per record: the loop's temporaries (and each emitted
+     * batch's) otherwise live until return, so memory grows with the
+     * file instead of the batch. The error is carried across the pool
+     * in a strong local (an out-param write inside the pool would be
+     * released with it). */
+    NSError *readErr = nil;
     while (ok && !eof) {
-        NSString *name = nil; NSData *sq = nil, *q = nil;
-        if (!fqReadRecord(fh, line, &lineNo, &name, &sq, &q, &eof, error)) { ok = NO; break; }
-        if (eof) break;
-        [names addObject:name]; [seqs addObject:sq]; [quals addObject:q];
-        total++;
-        if ((total % TTIOFastqReaderProgressIntervalReads) == 0) progress((int64_t)total, (int64_t)-1);
-        if (names.count >= batchReads && !emit()) { ok = NO; break; }
+        @autoreleasepool {
+            NSString *name = nil; NSData *sq = nil, *q = nil;
+            NSError *re = nil;
+            if (!fqReadRecord(fh, line, &lineNo, &name, &sq, &q, &eof, &re)) {
+                readErr = re;
+                ok = NO;
+            } else if (!eof) {
+                [names addObject:name]; [seqs addObject:sq]; [quals addObject:q];
+                total++;
+                if ((total % TTIOFastqReaderProgressIntervalReads) == 0) progress((int64_t)total, (int64_t)-1);
+                if (names.count >= batchReads && !emit()) ok = NO;
+            }
+        }
     }
     gzclose(fh);
     if (ok && names.count > 0 && !emit()) ok = NO;
     if (!ok) {
+        if (readErr && error && *error == nil) *error = readErr;
         if (innerErr && error && *error == nil) *error = innerErr;
         return NO;
     }
