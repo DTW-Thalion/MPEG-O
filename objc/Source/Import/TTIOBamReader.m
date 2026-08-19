@@ -493,7 +493,14 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
         return YES;
     };
 
-    while (ok) {
+    /* Drain per chunk: samtools output temporaries (and each emitted
+     * batch's) otherwise live until return, so memory grows with the
+     * file instead of the batch. The error is carried across the pool
+     * in a strong local. */
+    NSError *loopErr = nil;
+    BOOL reachedEof = NO;
+    while (ok && !reachedEof) {
+        @autoreleasepool {
         NSData *chunk = [outHandle availableData];
         BOOL eof = chunk.length == 0;
         if (!eof) [carry appendData:chunk];
@@ -508,12 +515,13 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
             start = i + 1;
             lineNo++;
             if (!line) {
-                if (error) *error = TTIOMakeError(TTIOErrorDatasetRead,
+                loopErr = TTIOMakeError(TTIOErrorDatasetRead,
                     @"samtools output not valid UTF-8 for %@ (line %lu)", _path, (unsigned long)lineNo);
                 ok = NO; break;
             }
             NSUInteger before = acc.readCount;
-            if (![acc consumeLine:line lineNo:lineNo error:error]) { ok = NO; break; }
+            NSError *ce = nil;
+            if (![acc consumeLine:line lineNo:lineNo error:&ce]) { loopErr = ce; ok = NO; break; }
             if (acc.readCount > before) {
                 total++;
                 if ((total % TTIOBamReaderProgressIntervalReads) == 0) {
@@ -531,12 +539,15 @@ const NSUInteger TTIOBamReaderDefaultBatchReads = 100000;
                 NSString *line = [[NSString alloc] initWithData:carry encoding:NSUTF8StringEncoding];
                 lineNo++;
                 NSUInteger before = acc.readCount;
-                if (line && ![acc consumeLine:line lineNo:lineNo error:error]) ok = NO;
+                NSError *ce = nil;
+                if (line && ![acc consumeLine:line lineNo:lineNo error:&ce]) { loopErr = ce; ok = NO; }
                 else if (acc.readCount > before) total++;
             }
-            break;
+            reachedEof = YES;
+        }
         }
     }
+    if (!ok && loopErr && error && *error == nil) *error = loopErr;
     if (ok && (acc.readCount > 0 || !anyBatch)) {
         // The remainder, or the empty run of a read-less file.
         if (!emitBatch()) ok = NO;

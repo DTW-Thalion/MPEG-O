@@ -46,7 +46,10 @@ static void seBam(void)
     TTIOGenomicRun *g = ds.genomicRuns[@"g"];
     PASS(g != nil && g.blockCount == 3, "streaming exporters: three-block source run");
 
-    NSString *streamed = seTmp("stream", "bam"), *eager = seTmp("eager", "bam");
+    /* Equal-length tags: the two BAMs differ only in samtools own @PG
+     * line, which records the output path; unequal path lengths leave
+     * the size comparison below to deflate luck. */
+    NSString *streamed = seTmp("bam-a", "bam"), *eager = seTmp("bam-b", "bam");
     TTIOBamWriter *w1 = [[TTIOBamWriter alloc] initWithPath:streamed];
     PASS([w1 writeReadSideRun:g provenanceRecords:@[] sort:NO error:&err],
          "streaming exporters: BAM writeReadSideRun (%s)", [[err localizedDescription] UTF8String] ?: "");
