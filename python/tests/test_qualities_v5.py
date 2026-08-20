@@ -190,3 +190,28 @@ def test_autotune_threads_setter_round_trips():
         assert fz.get_autotune_threads() == 3
     finally:
         fz.set_autotune_threads(before)
+
+
+def test_v6_round_trips_and_sniffs():
+    qual, _seq, lens, flags = _motif_corpus(n_reads=2000)
+    blob = fz.encode(qual, lens, flags, v4_strategy_hint=fz.HINT_V6)
+    assert blob[4] == 6
+    assert fz.stream_strategy(blob) == 8
+    back, back_lens, _rc = fz.decode_with_metadata(blob, flags)
+    assert bytes(back) == qual
+    assert list(back_lens) == list(lens)
+
+
+def test_v6_decode_needs_no_sequences():
+    """V6 builds its context from qualities alone, so unlike V5 it must
+    decode with no sequences_provider at all."""
+    qual, _seq, lens, flags = _motif_corpus(n_reads=2000)
+    blob = fz.encode(qual, lens, flags, v4_strategy_hint=fz.HINT_V6)
+    back, _lens, _rc = fz.decode_with_metadata(
+        blob, flags, sequences_provider=None)
+    assert bytes(back) == qual
+
+
+def test_auto_never_picks_v6():
+    qual, seq, lens, flags = _motif_corpus()
+    assert fz.encode(qual, lens, flags, sequences=seq)[4] in (4, 5)

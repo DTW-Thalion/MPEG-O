@@ -36,10 +36,16 @@ VERSION_V4_FQZCOMP = 4  # M94.Z V4: CRAM 3.1 fqzcomp_qual port
 VERSION_V5_SEQCTX = 5   # M94.Z V5: sequence-context body; emitted only
                         # when it beats V4 by exact size (spec at
                         # docs/superpowers/specs/2026-08-16-qualities-v5-design.md)
+VERSION_V6_SEGMENTED = 6  # M94.Z V6: segmented adaptive body, decoded
+                          # without sequences (docs/codecs/m94z_v6.md)
 
 # Strategy hint: V4 with its internal preset selection, sequences ignored
 # (kernel TTIO_M94Z_HINT_V4_AUTO). -1 auto, 0..4 V4 preset, 5..6 forced V5.
 HINT_V4_AUTO = 7
+# 8 forces V6. Auto-tune never selects it: V6 does not beat V4 or V5 on
+# size, so it stays out of the size race and is reached only by this
+# hint, or by writer policy once a GPU engine is present.
+HINT_V6 = 8
 
 
 # ── libttio_rans native library loader ──────────────────────────────────
@@ -560,10 +566,12 @@ def _decode_v4_via_native(
         raise ValueError(
             f"M94Z V4 bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
         )
-    if encoded[4] not in (VERSION_V4_FQZCOMP, VERSION_V5_SEQCTX):
+    if encoded[4] not in (VERSION_V4_FQZCOMP, VERSION_V5_SEQCTX,
+                          VERSION_V6_SEGMENTED):
         raise ValueError(
-            f"M94Z: expected version {VERSION_V4_FQZCOMP} or "
-            f"{VERSION_V5_SEQCTX}, got {encoded[4]}"
+            f"M94Z: expected version {VERSION_V4_FQZCOMP}, "
+            f"{VERSION_V5_SEQCTX} or {VERSION_V6_SEGMENTED}, got "
+            f"{encoded[4]}"
         )
     flags_byte = encoded[5]
     # pad_count occupies bits 4-5 of flags (matches V3 convention; see
@@ -680,6 +688,8 @@ def encode(
             len(qualities)).
         revcomp_flags: parallel list of 0/1.
         v4_strategy_hint: -1 = auto-tune (default), 0..4 = V4 preset,
+            ``HINT_V6`` (8) = force V6, the segmented adaptive variant,
+            which ignores ``sequences`` and needs none to decode,
             5..6 = forced V5 sequence strategy (requires
             ``sequences``), ``HINT_V4_AUTO`` (7) = V4 with its
             internal preset selection, sequences ignored.
@@ -775,10 +785,11 @@ def decode_with_metadata(
         raise ValueError(
             f"M94Z bad magic: {encoded[:4]!r}, expected {MAGIC!r}"
         )
-    if encoded[4] in (VERSION_V4_FQZCOMP, VERSION_V5_SEQCTX):
+    if encoded[4] in (VERSION_V4_FQZCOMP, VERSION_V5_SEQCTX,
+                      VERSION_V6_SEGMENTED):
         if not _HAVE_NATIVE_LIB:
             raise RuntimeError(
-                "M94Z V4/V5 decode requires libttio_rans (set "
+                "M94Z V4/V5/V6 decode requires libttio_rans (set "
                 "TTIO_RANS_LIB_PATH or install the native library)"
             )
         sequences = None
@@ -801,8 +812,9 @@ def decode_with_metadata(
             "v1.0+."
         )
     raise ValueError(
-        f"M94Z: unknown version byte {encoded[4]} (only V4 = "
-        f"{VERSION_V4_FQZCOMP} is supported in v1.0)"
+        f"M94Z: unknown version byte {encoded[4]} (supported: V4 = "
+        f"{VERSION_V4_FQZCOMP}, V5 = {VERSION_V5_SEQCTX}, V6 = "
+        f"{VERSION_V6_SEGMENTED})"
     )
 
 
