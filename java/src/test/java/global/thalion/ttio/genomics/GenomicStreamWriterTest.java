@@ -208,6 +208,40 @@ class GenomicStreamWriterTest {
             .withReference(true, refs, null);
     }
 
+    static long lastMaxInFlight;
+
+    static StorageGroup writeWithBudget(String url, WrittenGenomicRun run, int threads,
+                                        int blockReads, long budget) {
+        StorageGroup study = study(url);
+        GenomicStreamWriter.Options o = GenomicStreamWriter.Options.fromRun(run)
+            .withBlockPolicy(blockReads, Long.MAX_VALUE);
+        if (run.referenceChromSeqs() != null) o = o.withReference(run.referenceChromSeqs(), true);
+        try (GenomicStreamWriter w = new GenomicStreamWriter(study, "g", o, threads, budget)) {
+            int n = run.readCount();
+            for (int a = 0; a < n; a += 7_001) {
+                w.appendBatch(GenomicBlocks.sliceRun(run, a, Math.min(n, a + 7_001)));
+            }
+            lastMaxInFlight = w.maxInFlightBytesObserved();
+        }
+        return study;
+    }
+
+    @org.junit.jupiter.api.Test
+    void budgetBoundsInFlightBytes() {
+        WrittenGenomicRun run = bigSyntheticRun(40_000, 5);
+        long budget = 4L << 20;
+        StorageGroup a = writeWithBudget("memory://gswb-a", run, 6, 2_000, budget);
+        long maxObs = lastMaxInFlight;
+        StorageGroup b = writeWithBudget("memory://gswb-b", run, 1, 2_000, budget);
+        org.junit.jupiter.api.Assertions.assertTrue(maxObs > 0 && maxObs <= budget,
+            "in-flight bytes " + maxObs + " within " + budget);
+        Map<String, String> ma = new java.util.TreeMap<>(), mb = new java.util.TreeMap<>();
+        collect(a, "", ma);
+        collect(b, "", mb);
+        assertEquals(ma.keySet(), mb.keySet());
+        for (String k : ma.keySet()) assertEquals(ma.get(k), mb.get(k), k + " differs under the budget");
+    }
+
     static StorageGroup writeWithThreads(String url, WrittenGenomicRun run, int threads, int blockReads) {
         StorageGroup study = study(url);
         GenomicStreamWriter.Options o = GenomicStreamWriter.Options.fromRun(run)

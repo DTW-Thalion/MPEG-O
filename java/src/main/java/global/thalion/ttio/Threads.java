@@ -31,6 +31,38 @@ public final class Threads {
         return n;
     }
 
+    /** The pipeline byte budget: {@code explicit} > 0 wins, else the
+     *  {@code TTIO_MEMORY_BUDGET} environment variable (bytes), else
+     *  {@code max(1 GiB, min(threads * blockBytes * 16, physical / 2))}:
+     *  a block in flight costs about eight blockBytes once codec
+     *  workspace counts, the writer takes half the budget, so sixteen
+     *  per thread admits about one block per thread. */
+    public static long resolveMemoryBudget(Long explicitBytes, int threads, long blockBytes) {
+        if (explicitBytes != null && explicitBytes > 0) return explicitBytes;
+        String raw = System.getenv("TTIO_MEMORY_BUDGET");
+        if (raw != null && !raw.isBlank()) {
+            try {
+                long v = Long.parseLong(raw.trim());
+                if (v > 0) return v;
+            } catch (NumberFormatException ignored) { }
+        }
+        long computed = (long) threads * blockBytes * 16L;
+        long ramHalf = physicalMemory() / 2;
+        if (ramHalf > 0 && computed > ramHalf) computed = ramHalf;
+        return Math.max(computed, 1L << 30);
+    }
+
+    private static long physicalMemory() {
+        try {
+            java.lang.management.OperatingSystemMXBean os =
+                java.lang.management.ManagementFactory.getOperatingSystemMXBean();
+            if (os instanceof com.sun.management.OperatingSystemMXBean b) {
+                return b.getTotalMemorySize();
+            }
+        } catch (Throwable ignored) { }
+        return Runtime.getRuntime().maxMemory() * 4;
+    }
+
     private static int depth;
     private static int savedAutotune;
 

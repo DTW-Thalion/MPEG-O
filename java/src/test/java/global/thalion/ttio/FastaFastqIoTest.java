@@ -274,4 +274,36 @@ class FastaFastqIoTest {
         );
         assertTrue(e.getMessage().contains("length mismatch"));
     }
+    @org.junit.jupiter.api.Test
+    void fastqBatchBytesCuts(@org.junit.jupiter.api.io.TempDir java.nio.file.Path tmp) throws Exception {
+        // 100 reads x 1 MiB: an 8 MiB byte limit (seq + qual = 2 MiB per
+        // read) cuts batches at 4 reads whatever batchReads says.
+        java.nio.file.Path fq = tmp.resolve("bb.fastq");
+        StringBuilder rec = new StringBuilder();
+        char[] mb = new char[1 << 20];
+        try (java.io.BufferedWriter w = java.nio.file.Files.newBufferedWriter(fq)) {
+            for (int i = 0; i < 100; i++) {
+                java.util.Arrays.fill(mb, 'A');
+                w.write("@r" + i + "\n");
+                w.write(mb);
+                w.write("\n+\n");
+                java.util.Arrays.fill(mb, 'I');
+                w.write(mb);
+                w.write("\n");
+            }
+        }
+        var reader = new global.thalion.ttio.importers.FastqReader(fq);
+        var it = reader.iterBatches("s", "", "", global.thalion.ttio.Enums.AcquisitionMode.GENOMIC_WGS,
+                                    1_000_000, 8L << 20);
+        int batches = 0, maxBatch = 0; long total = 0;
+        while (it.hasNext()) {
+            var b = it.next();
+            batches++;
+            maxBatch = Math.max(maxBatch, b.readCount());
+            total += b.readCount();
+        }
+        org.junit.jupiter.api.Assertions.assertEquals(100, total);
+        org.junit.jupiter.api.Assertions.assertEquals(25, batches);
+        org.junit.jupiter.api.Assertions.assertEquals(4, maxBatch);
+    }
 }

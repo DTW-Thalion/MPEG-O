@@ -1,6 +1,12 @@
 # Parallel Producer Design
 
-Date: 2026-08-19. Status: Phase 1 (ObjC) implemented; acceptance met
+Date: 2026-08-19. Status: Phases 1 (ObjC) and 2 (Java) implemented;
+Java acceptance 8m 13s on the 50 GB corpus (within 1.5x of ObjC), codec
+bytes identical across the two SDKs. Java deviations: BAM stays on the
+serial htsjdk reader (its decode dominates; there is no samtools pipe
+to slice), and the JVM's off-heap JNI workspace means the byte budget
+should be set against the heap, not the physical-memory default.
+Phase 1 (ObjC) acceptance
 (50 GB HiFi in 5m 40s at 24 threads with 64 MiB blocks and a 20 GB
 budget; 6m 02s on this 31 GB box's defaults, which the RAM clamp
 bounds; identity proven serial = pipeline = shard).
