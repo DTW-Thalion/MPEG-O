@@ -186,6 +186,11 @@ target_link_libraries(test_fqzcomp_seqctx ttio_rans)
 target_compile_options(test_fqzcomp_seqctx PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_seqctx COMMAND test_fqzcomp_seqctx)
 
+add_executable(test_v6_model tests/test_v6_model.c)
+target_link_libraries(test_v6_model ttio_rans)
+target_compile_options(test_v6_model PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME v6_model COMMAND test_v6_model)
+
 add_executable(test_m94z_v6_chain tests/test_m94z_v6_chain.c)
 target_link_libraries(test_m94z_v6_chain ttio_rans)
 target_compile_options(test_m94z_v6_chain PRIVATE -Wall -Wextra -Wpedantic)

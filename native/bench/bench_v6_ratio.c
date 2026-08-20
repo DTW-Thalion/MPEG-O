@@ -18,6 +18,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "../include/ttio_rans.h"
 #include "../src/m94z_v6.h"
@@ -151,7 +152,7 @@ int main(int argc, char **argv) {
            (unsigned long long)v4_total, 8.0 * (double)v4_total / (double)qn,
            100.0 * ((double)v4_total - (double)base_total) / (double)base_total);
     printf("qbits,qshift,pbits,pshift,dbits,ctx_bits,seg_symbols,"
-           "model_MB_per_seg,seed,bytes,bits_per_qual,delta_pct\n");
+           "model_MB_per_seg,seed,bytes,bits_per_qual,delta_pct,encode_MBps\n");
     fflush(stdout);
 
     /* Sweep axes, overridable so a diagnostic pass can pin one axis:
@@ -194,8 +195,10 @@ int main(int argc, char **argv) {
                     pm.dbits = (uint8_t)db;
                     pm.seed_total = (uint16_t)seed;
 
-                    uint64_t total = 0;
-                    int      bad = 0;
+                    uint64_t        total = 0;
+                    int             bad = 0;
+                    struct timespec t0, t1;
+                    clock_gettime(CLOCK_MONOTONIC, &t0);
                     for (size_t b = 0; b < n_blk && !bad; b++) {
                         size_t l = cap;
                         int rc = ttio_m94z_v6_encode(
@@ -211,6 +214,9 @@ int main(int argc, char **argv) {
                         }
                         total += l;
                     }
+                    clock_gettime(CLOCK_MONOTONIC, &t1);
+                    double secs = (double)(t1.tv_sec - t0.tv_sec)
+                                + (double)(t1.tv_nsec - t0.tv_nsec) * 1e-9;
                     if (bad) continue;
 
                     /* Actual model footprint: the dense alphabet sizes
@@ -221,12 +227,13 @@ int main(int argc, char **argv) {
                                            blocks[0].n_qual, seed, &probe);
                     double model_mb = (double)((size_t)1 << (qb + pb + db))
                                     * (double)(probe.n + 2) * 4.0 / 1048576.0;
-                    printf("%u,%u,%u,%u,%u,%u,%u,%.2f,%u,%llu,%.4f,%+.2f\n",
+                    printf("%u,%u,%u,%u,%u,%u,%u,%.2f,%u,%llu,%.4f,%+.2f,%.1f\n",
                            qb, pm.qshift, pb, pm.pshift, db, qb + pb + db,
                            sgv[si], model_mb, seed, (unsigned long long)total,
                            8.0 * (double)total / (double)qn,
                            100.0 * ((double)total - (double)base_total)
-                               / (double)base_total);
+                               / (double)base_total,
+                           (double)qn / secs / 1.0e6);
                     fflush(stdout);
                 }
             }

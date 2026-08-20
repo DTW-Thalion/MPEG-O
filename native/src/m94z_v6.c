@@ -12,7 +12,7 @@
 #include "m94z_v4_wire.h"
 #include "m94z_v6.h"
 #include "rc_cram.h"
-#include "sm_model.h"
+#include "v6_model.h"
 
 /* Fixed by the Phase 1 ratio sweep over the four reference corpora
  * (docs/codecs/m94z_v6.md section 6). Q 8, qshift 7, P 4, pshift 4,
@@ -103,23 +103,20 @@ static int lengths_sum(const uint32_t *lengths, size_t n_reads,
 
 /* Every segment starts from a cold model, so the per-context allocation
  * the V5 body does once per block would happen N times per block here.
- * One contiguous pool for the whole context array, filled from a
- * template, replaces n_ctx callocs. The layout matches sm_init exactly:
- * sentinel at F[0], symbols at F[1..nsym], terminal at F[nsym+1]. */
+ * One contiguous pool for the whole context array replaces n_ctx
+ * callocs, and every context is seeded from the same prepared block. */
 typedef struct {
-    sm_model   *models;
-    sm_symfreq *pool;
+    v6_model *models;
+    uint16_t *pool;
 } v6_models;
 
 static int models_init(v6_models *vm, size_t n_ctx,
                        const ttio_v6_alphabet *ab) {
     const unsigned nsym = ab->n;
-    const size_t   stride = nsym + 2;
-    sm_symfreq     tmpl[256 + 2];
-    uint8_t        order[256];
+    const size_t   words = v6_model_words(nsym);
 
-    vm->models = (sm_model *)malloc(n_ctx * sizeof(*vm->models));
-    vm->pool = (sm_symfreq *)malloc(n_ctx * stride * sizeof(*vm->pool));
+    vm->models = (v6_model *)malloc(n_ctx * sizeof(*vm->models));
+    vm->pool = (uint16_t *)malloc(n_ctx * words * sizeof(*vm->pool));
     if (!vm->models || !vm->pool) {
         free(vm->models);
         free(vm->pool);
@@ -128,40 +125,21 @@ static int models_init(v6_models *vm, size_t n_ctx,
         return TTIO_SEQCTX_ERR_OOM;
     }
 
-    /* Heaviest symbol first: it matches the order the model's own
-     * bubble step converges to, and shortens the linear scan. Ties go
-     * to the lower symbol so both directions build the same table. */
-    for (unsigned i = 0; i < nsym; i++) order[i] = (uint8_t)i;
-    for (unsigned a = 0; a < nsym; a++) {
-        for (unsigned b = a + 1; b < nsym; b++) {
-            if (ab->seed[order[b]] > ab->seed[order[a]]) {
-                uint8_t t = order[a];
-                order[a] = order[b];
-                order[b] = t;
-            }
-        }
-    }
-
-    memset(tmpl, 0, stride * sizeof tmpl[0]);
-    tmpl[0].symbol = 0;
-    tmpl[0].freq = (uint16_t)SM_MAX_FREQ;
-    for (unsigned i = 0; i < nsym; i++) {
-        tmpl[i + 1].symbol = (uint16_t)order[i];
-        tmpl[i + 1].freq = ab->seed[order[i]];
-    }
-
-    for (size_t c = 0; c < n_ctx; c++) {
-        vm->models[c].nsym = (int)nsym;
-        vm->models[c].tot_freq = ab->seed_total;
-        vm->models[c].sentinel.freq = 0;
-        vm->models[c].sentinel.symbol = 0;
-        vm->models[c].F = vm->pool + c * stride;
-        memcpy(vm->models[c].F, tmpl, stride * sizeof tmpl[0]);
+    /* Build the first context, then copy it: the seeded state is the
+     * same for every context, and a memcpy beats rebuilding the tree
+     * n_ctx times. */
+    v6_model_init(&vm->models[0], vm->pool, nsym, ab->seed);
+    for (size_t c = 1; c < n_ctx; c++) {
+        uint16_t *p = vm->pool + c * words;
+        memcpy(p, vm->pool, words * sizeof(*p));
+        vm->models[c].freq = p;
+        vm->models[c].tree = p + nsym;
+        vm->models[c].nsym = nsym;
+        vm->models[c].tot = vm->models[0].tot;
     }
     return 0;
 }
 
-/* The models do not own their F arrays, so sm_destroy must not run. */
 static void models_free(v6_models *vm) {
     free(vm->models);
     free(vm->pool);
@@ -199,18 +177,29 @@ static int code_pass(const ttio_v6_param *pm, const ttio_v6_alphabet *ab,
                 d = MIN(dmax, ad);
             }
             unsigned ctx = (qctx & qmask) | (pos << ploc) | (d << dloc);
-            unsigned q;
+            v6_model *mdl = &vm.models[ctx];
+            unsigned  q;
             if (do_encode) {
                 q = ab->map[qual[k]];
-                sm_encode(&vm.models[ctx], rc_e, (uint16_t)q);
+                rc_cram_encode(rc_e, v6_model_prefix(mdl, q),
+                               v6_model_freq(mdl, q), mdl->tot);
             } else {
-                q = sm_decode(&vm.models[ctx], rc_d);
+                unsigned target = rc_cram_decode_target(rc_d, mdl->tot);
+                unsigned cf = 0;
+                if (target >= mdl->tot) {
+                    models_free(&vm);
+                    return TTIO_SEQCTX_ERR_CORRUPT;
+                }
+                q = v6_model_find(mdl, target, &cf);
                 if (q >= ab->n) {
                     models_free(&vm);
                     return TTIO_SEQCTX_ERR_CORRUPT;
                 }
+                rc_cram_decode_advance(rc_d, cf, v6_model_freq(mdl, q),
+                                       mdl->tot);
                 qual[k] = ab->inv[q];
             }
+            v6_model_update(mdl, q);
             qctx = (qctx << pm->qshift) + q;
             qpp = qp;
             qp = q;
