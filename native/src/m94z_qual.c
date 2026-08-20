@@ -94,6 +94,19 @@ static void *m94z_cand_run(void *arg)
     return NULL;
 }
 
+/* 0 means follow the auto-tune count, which is what callers got
+ * before this knob existed. */
+static int g_v6_threads;
+
+void ttio_m94z_set_v6_threads(int n) { g_v6_threads = n > 0 ? n : 0; }
+
+int ttio_m94z_get_v6_threads(void) { return g_v6_threads; }
+
+static int ttio_m94z_v6_threads(void) {
+    return g_v6_threads > 0 ? g_v6_threads
+                            : ttio_m94z_get_autotune_threads();
+}
+
 int ttio_m94z_qual_encode(
     const uint8_t  *qual_in, size_t n_qualities,
     const uint32_t *read_lengths, size_t n_reads,
@@ -113,8 +126,7 @@ int ttio_m94z_qual_encode(
         return ttio_m94z_v6_encode(qual_in, n_qualities, read_lengths,
                                    n_reads, &TTIO_V6_DEFAULT,
                                    TTIO_V6_DEFAULT_SEG_SYMBOLS,
-                                   ttio_m94z_get_autotune_threads(),
-                                   out, out_len);
+                                   ttio_m94z_v6_threads(), out, out_len);
     }
 
     if (strategy_hint == 5 || strategy_hint == 6) {
@@ -200,8 +212,8 @@ int ttio_m94z_qual_decode(
         (void)flags;
         (void)seq_in;
         return ttio_m94z_v6_decode(in, in_len, read_lengths, n_reads,
-                                   ttio_m94z_get_autotune_threads(),
-                                   out_qual, n_qualities);
+                                   ttio_m94z_v6_threads(), out_qual,
+                                   n_qualities);
     }
 
     if (in[4] == TTIO_M94Z_V5_WIRE_VERSION) {

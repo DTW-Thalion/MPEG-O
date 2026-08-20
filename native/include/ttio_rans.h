@@ -322,6 +322,20 @@ int ttio_m94z_qual_stream_strategy(const uint8_t *in, size_t in_len);
  * value is 1 when TTIO_M94Z_SEQUENTIAL=1 is set. A caller that already
  * runs blocks on a pool sets 1 for the life of the pool. */
 void ttio_m94z_set_autotune_threads(int n);
+
+/* Segments of one V6 block encoded at once.
+ *
+ * This is a different question from the auto-tune candidate count, and
+ * it wants a different answer. Auto-tune races V4 against two V5
+ * strategies, so a caller that already runs blocks on a pool sets it to
+ * 1 to avoid three candidate encodes per worker. V6 has no candidates:
+ * the same setting would simply switch off intra-block parallelism and
+ * leave the segments to encode one after another.
+ *
+ * 0, the default, means follow the auto-tune count, which is the
+ * behaviour callers had before this existed. */
+void ttio_m94z_set_v6_threads(int n);
+int  ttio_m94z_get_v6_threads(void);
 int  ttio_m94z_get_autotune_threads(void);
 
 int ttio_m94z_qual_encode(

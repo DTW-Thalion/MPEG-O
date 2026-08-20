@@ -230,3 +230,44 @@ def test_engine_name_defaults_to_cpu(monkeypatch):
     monkeypatch.delenv("TTIO_GPU", raising=False)
     assert fz.engine_name() == "cpu"
     assert fz.gpu_available() is False
+
+
+class TestSegmentThreadPolicy:
+    """Blocks and segments are both V6 parallelism, and the writer has to
+    divide its capacity between them."""
+
+    def test_segments_get_what_the_pool_leaves_spare(self, monkeypatch):
+        from ttio import _threads
+        monkeypatch.setattr(_threads.os, "cpu_count", lambda: 32)
+        assert _threads.resolve_v6_segment_threads(8) == 4
+        assert _threads.resolve_v6_segment_threads(4) == 8
+
+    def test_never_drops_to_one(self, monkeypatch):
+        """One thread per block leaves the segments to encode in
+        sequence, which measured roughly half the throughput of two."""
+        from ttio import _threads
+        monkeypatch.setattr(_threads.os, "cpu_count", lambda: 32)
+        assert _threads.resolve_v6_segment_threads(32) == 2
+        assert _threads.resolve_v6_segment_threads(1000) == 2
+
+    def test_capped_so_the_product_stays_sane(self, monkeypatch):
+        """Total concurrency wants to be near the core count; far above
+        it throughput falls."""
+        from ttio import _threads
+        monkeypatch.setattr(_threads.os, "cpu_count", lambda: 256)
+        assert _threads.resolve_v6_segment_threads(1) == 8
+
+    def test_pool_context_sets_and_restores_both_knobs(self):
+        """Auto-tune wants 1 under a pool; V6 wants the spare capacity.
+        Both must be put back afterwards."""
+        from ttio import _threads
+        from ttio.codecs._native_loader import load_ttio_rans
+        if load_ttio_rans() is None:
+            pytest.skip("native lib")
+        before_auto = fz.get_autotune_threads()
+        before_v6 = fz.get_v6_threads()
+        with _threads.pool_context(8):
+            assert fz.get_autotune_threads() == 1
+            assert fz.get_v6_threads() >= 2
+        assert fz.get_autotune_threads() == before_auto
+        assert fz.get_v6_threads() == before_v6

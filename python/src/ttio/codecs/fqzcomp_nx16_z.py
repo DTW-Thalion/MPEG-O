@@ -818,6 +818,30 @@ def decode_with_metadata(
     )
 
 
+
+def set_v6_threads(n: int) -> None:
+    """Segments of one V6 block encoded at once. 0 follows the auto-tune
+    count. See :func:`get_v6_threads`."""
+    lib = load_ttio_rans()
+    if lib is None:
+        return
+    lib.ttio_m94z_set_v6_threads.argtypes = [ctypes.c_int]
+    lib.ttio_m94z_set_v6_threads.restype = None
+    lib.ttio_m94z_set_v6_threads(int(n))
+
+
+def get_v6_threads() -> int:
+    """Segments of one V6 block encoded at once, or 0 when it follows
+    the auto-tune count. Distinct from the auto-tune candidate count:
+    that races V4 against two V5 strategies, this splits one block's
+    segments, and a writer running blocks on a pool wants a low value
+    for the first and a modest one for the second."""
+    lib = load_ttio_rans()
+    if lib is None:
+        return 0
+    lib.ttio_m94z_get_v6_threads.restype = ctypes.c_int
+    return int(lib.ttio_m94z_get_v6_threads())
+
 def engine_name() -> str:
     """Name of the engine that encodes M94.Z V6 blocks.
 
@@ -851,6 +875,8 @@ def gpu_available() -> bool:
 __all__ = [
     "encode",
     "engine_name",
+    "set_v6_threads",
+    "get_v6_threads",
     "gpu_available",
     "decode_with_metadata",
     "get_backend_name",

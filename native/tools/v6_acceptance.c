@@ -83,9 +83,21 @@ static double now_s(void) {
 static void *load(const char *path, size_t *len) {
     FILE *f = fopen(path, "rb");
     if (!f) { fprintf(stderr, "cannot open %s\n", path); exit(1); }
-    fseek(f, 0, SEEK_END);
-    long n = ftell(f);
-    fseek(f, 0, SEEK_SET);
+    /* long is 32-bit on Windows, so ftell cannot describe a file of
+     * 2 GB or more, which these corpora reach. */
+#ifdef _WIN32
+    _fseeki64(f, 0, SEEK_END);
+    long long n = _ftelli64(f);
+    _fseeki64(f, 0, SEEK_SET);
+#else
+    fseeko(f, 0, SEEK_END);
+    off_t n = ftello(f);
+    fseeko(f, 0, SEEK_SET);
+#endif
+    if (n < 0) {
+        fprintf(stderr, "cannot size %s\n", path);
+        exit(1);
+    }
     void *p = malloc((size_t)n);
     if (!p || fread(p, 1, (size_t)n, f) != (size_t)n) {
         fprintf(stderr, "cannot read %s\n", path);

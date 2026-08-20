@@ -484,3 +484,56 @@ segmentation is precisely what a many-core CPU exploits for free while
 the GPU saturates on model memory traffic at about 512 chains. Closing
 that would take roughly a fivefold improvement, and nothing measured
 here offers one.
+
+## Re-checking the thread split on a corpus with more blocks than cores
+
+The earlier sweep used a 512 MB sample, which is nine 64 MiB blocks on a
+32-thread machine. Block concurrency was therefore capped by the corpus,
+not by the hardware, and the rule fitted to it was wrong. Repeating on a
+2 GB sample, 33 blocks:
+
+| writers | segment threads | product | encode |
+| --- | --- | --- | --- |
+| 2 | 8 | 16 | 489 MB/s |
+| 4 | 8 | 32 | 869 MB/s |
+| 8 | 4 | 32 | 1038 MB/s |
+| 16 | 2 | 32 | 1109 MB/s |
+| 24 | 2 | 48 | 1128 MB/s |
+| 32 | 1 | 32 | 1487 MB/s |
+| 32 | 2 | 64 | 1462 MB/s |
+| 32 | 3 | 96 | 1328 MB/s |
+| 32 | 4 | 128 | 1143 MB/s |
+
+**`W = cores / 4` is wrong and is withdrawn.** It came from a corpus
+where nine blocks was the ceiling, so it never saw what happens when
+blocks are plentiful. Throughput keeps climbing with writers to about
+one per core: 1487 MB/s at 32 writers against 1038 at the eight that
+rule would have chosen, which is 44% left behind.
+
+The corrected reading is simpler than the original. Total concurrency
+wants to be near the core count, and the split between blocks and
+segments matters much less than the total: 32 writers at one segment
+thread and at two are within 2% of each other, while four times the core
+count costs a quarter. Prefer writers, because per-block serial work
+only overlaps across blocks, and use segment threads for the cores that
+writers cannot reach.
+
+An earlier claim in this document, that one segment thread per block is
+inherently poor because it measured 663 MB/s, was also wrong. That
+figure came from eight writers on a 32-thread machine: the loss was
+under-subscription, not the thread count. At 32 writers, one segment
+thread is the fastest setting measured.
+
+### What is implemented
+
+V6 now has its own segment-thread count, separate from the auto-tune
+candidate count. They had been sharing a knob, which was a mistake: a
+writer running blocks on a pool sets the auto-tune count to 1 so three
+candidate encodes do not run per worker, and V6 was silently inheriting
+that and encoding its segments one after another. The writer sets the
+segment count from what the pool leaves spare.
+
+The writer's own pool size still comes from `TTIO_THREADS`, whose
+default is `cpu_count - 8`, or 24 here. That measures 1128 MB/s against
+1487 at 32. Raising it would change behaviour for V4 and V5 as well as
+V6, so it is left alone and flagged rather than adjusted here.
