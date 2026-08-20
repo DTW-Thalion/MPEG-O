@@ -12,6 +12,7 @@
 #include "m94z_v4_wire.h"
 #include "m94z_v6.h"
 #include "rc_cram.h"
+#include "ttio_engine.h"
 #include "v6_model.h"
 
 /* Fixed by the ratio sweep over the four reference corpora
@@ -392,6 +393,23 @@ static int v6_run(v6_job *j, int threads) {
     return 0;
 }
 
+/* CPU engine entry: run a prepared job on the segment pool. */
+int ttio_v6_encode_job_cpu(ttio_v6_job *job) {
+    v6_job j;
+    memset(&j, 0, sizeof j);
+    j.pm = job->pm;
+    j.ab = job->ab;
+    j.segs = (const v6_seg *)job->segs;
+    j.n_segs = job->n_segs;
+    j.lengths = job->read_lengths;
+    j.bufs = job->bufs;
+    j.lens = job->lens;
+    j.errs = job->errs;
+    j.qual_in = job->qual;
+    j.do_encode = 1;
+    return v6_run(&j, job->threads);
+}
+
 static void v6_put_u16(uint8_t *p, uint16_t v) { memcpy(p, &v, 2); }
 static void v6_put_u32(uint8_t *p, uint32_t v) { memcpy(p, &v, 4); }
 
@@ -464,19 +482,22 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
         }
 
         {
-            v6_job j;
-            memset(&j, 0, sizeof j);
-            j.pm = pm;
-            j.segs = segs;
-            j.n_segs = n_segs;
-            j.lengths = read_lengths;
-            j.bufs = bufs;
-            j.lens = lens;
-            j.errs = errs;
-            j.ab = &ab;
-            j.qual_in = qual;
-            j.do_encode = 1;
-            rc = v6_run(&j, threads);
+            ttio_v6_job job;
+            memset(&job, 0, sizeof job);
+            job.pm = pm;
+            job.ab = &ab;
+            job.qual = qual;
+            job.read_lengths = read_lengths;
+            job.n_reads = n_reads;
+            job.n_qualities = n_qualities;
+            job.seg_symbols = seg_symbols;
+            job.threads = threads;
+            job.segs = segs;
+            job.n_segs = n_segs;
+            job.bufs = bufs;
+            job.lens = lens;
+            job.errs = errs;
+            rc = ttio_engine_cpu()->qual_v6_encode(&job);
         }
         if (rc != 0) goto done;
     }

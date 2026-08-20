@@ -48,6 +48,7 @@ add_library(ttio_rans SHARED
     src/fqzcomp_qual.c
     src/fqzcomp_seqctx.c
     src/m94z_v6.c
+    src/ttio_engine.c
     src/m94z_qual.c
     src/m94z_v4_wire.c
     src/mate_info_v2.c
@@ -185,6 +186,11 @@ add_executable(test_fqzcomp_seqctx tests/test_fqzcomp_seqctx.c)
 target_link_libraries(test_fqzcomp_seqctx ttio_rans)
 target_compile_options(test_fqzcomp_seqctx PRIVATE -Wall -Wextra -Wpedantic)
 add_test(NAME fqzcomp_seqctx COMMAND test_fqzcomp_seqctx)
+
+add_executable(test_engine_api tests/test_engine_api.c)
+target_link_libraries(test_engine_api PRIVATE ttio_rans Threads::Threads)
+target_compile_options(test_engine_api PRIVATE -Wall -Wextra -Wpedantic)
+add_test(NAME engine_api COMMAND test_engine_api)
 
 add_executable(test_v6_model tests/test_v6_model.c)
 target_link_libraries(test_v6_model ttio_rans)
