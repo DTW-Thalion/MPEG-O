@@ -192,7 +192,8 @@ add_subdirectory(gpu)
 add_executable(test_gpu_byte_identity tests/test_gpu_byte_identity.c)
 target_link_libraries(test_gpu_byte_identity PRIVATE ttio_rans Threads::Threads)
 target_compile_options(test_gpu_byte_identity PRIVATE -Wall -Wextra -Wpedantic)
-add_test(NAME gpu_byte_identity COMMAND test_gpu_byte_identity)
+add_test(NAME gpu_byte_identity COMMAND test_gpu_byte_identity
+         ${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/v6_gate_small.v6fx)
 
 add_executable(test_gpu_engine_probe tests/test_gpu_engine_probe.c)
 target_link_libraries(test_gpu_engine_probe PRIVATE ttio_rans Threads::Threads)
