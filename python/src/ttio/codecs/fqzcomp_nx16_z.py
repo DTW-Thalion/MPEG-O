@@ -44,7 +44,7 @@ VERSION_V6_SEGMENTED = 6  # M94.Z V6: segmented adaptive body, decoded
 HINT_V4_AUTO = 7
 # 8 forces V6. Auto-tune never selects it: V6 does not beat V4 or V5 on
 # size, so it stays out of the size race and is reached only by this
-# hint, or by writer policy once a GPU engine is present.
+# hint, or by writer policy.
 HINT_V6 = 8
 
 
@@ -845,14 +845,11 @@ def get_v6_threads() -> int:
 def engine_name() -> str:
     """Name of the engine that encodes M94.Z V6 blocks.
 
-    ``"cpu"`` normally, or ``"vulkan:<device>"`` when a GPU engine was
-    asked for with ``TTIO_GPU=force`` and came up. The engine is off by
-    default: a GPU being present is not evidence that using it is an
-    improvement, and on some machines it is slower than the CPU path.
-
-    Enabling it is also a storage decision, not only a speed one. The
-    writer then emits V6, whose output is about 6 to 7% larger than V4,
-    and that cost is permanent for every file written, not per machine.
+    Always ``"cpu"`` in this build. The engine interface and the
+    ``TTIO_GPU`` selection are still here, but no GPU engine ships: a
+    Vulkan compute engine was written, measured 5 to 8 times slower
+    than the CPU encoder on every corpus, and left out. It is kept at
+    the ``m94z-v6-vulkan-engine`` tag.
     """
     lib = load_ttio_rans()
     if lib is None:
@@ -863,8 +860,8 @@ def engine_name() -> str:
 
 
 def gpu_available() -> bool:
-    """True when a GPU engine was asked for and came up. See
-    :func:`engine_name` for what enabling it costs."""
+    """True when a GPU engine was asked for and came up. Always
+    False in this build; see :func:`engine_name`."""
     lib = load_ttio_rans()
     if lib is None:
         return False

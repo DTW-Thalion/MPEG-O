@@ -51,8 +51,7 @@ public final class FqzcompNx16Z {
 
     /** Strategy hint: force V6. Auto-tune never selects it, because V6
      *  does not beat V4 or V5 on size and must stay out of the size
-     *  race; it is reached by this hint, or by writer policy once a GPU
-     *  engine is present. */
+     *  race; it is reached by this hint, or by writer policy. */
     public static final int HINT_V6 = 8;
 
     // ── Default context parameters ──────────────────────────────────
@@ -340,18 +339,13 @@ public final class FqzcompNx16Z {
                                    sequences, opts);
     }
 
-    /** Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
-     *  Throws {@link IllegalArgumentException} on a stream that is not
-     *  M94.Z qualities. */
-    /** Name of the engine that encodes M94.Z V6 blocks: {@code "cpu"},
-     *  or {@code "vulkan:<device>"} when a GPU engine was asked for with
-     *  {@code TTIO_GPU=force} and came up. Off by default: a GPU being
-     *  present is not evidence that using it helps, and on some machines
-     *  it is slower than the CPU path.
+    /** Name of the engine that encodes M94.Z V6 blocks.
      *
-     *  <p>Enabling it is a storage decision too. The writer then emits
-     *  V6, which is about 6 to 7% larger than V4, and that cost is
-     *  permanent for every file written rather than per machine. */
+     *  <p>Always {@code "cpu"} in this build. The engine interface and
+     *  the {@code TTIO_GPU} selection are still here, but no GPU engine
+     *  ships: a Vulkan compute engine was written, measured 5 to 8
+     *  times slower than the CPU encoder on every corpus, and left out.
+     *  It is kept at the {@code m94z-v6-vulkan-engine} tag. */
     public static String engineName() {
         if (!TtioRansNative.isAvailable()) {
             return "cpu";
@@ -359,8 +353,8 @@ public final class FqzcompNx16Z {
         return TtioRansNative.engineActiveName();
     }
 
-    /** True when a GPU engine was asked for and came up. See
-     *  {@link #engineName()} for what enabling it costs. */
+    /** True when a GPU engine was asked for and came up. Always
+     *  false in this build; see {@link #engineName()}. */
     public static boolean gpuAvailable() {
         if (!TtioRansNative.isAvailable()) {
             return false;

@@ -105,23 +105,22 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
  *  (docs/codecs/m94z_v6.md). V6 decodes without sequences. Auto-tune
  *  never selects it: it does not beat V4 or V5 on size, so it stays
  *  out of the size race and is reached only by this hint, or by
- *  writer policy once a GPU engine is present. */
+ *  writer policy. */
 #define TTIOM94ZHintV6 8
 
 @interface TTIOFqzcompNx16Z : NSObject
 
-/** Name of the engine that encodes M94.Z V6 blocks: @c "cpu", or
- *  @c "vulkan:<device>" when a GPU engine was asked for with
- *  @c TTIO_GPU=force and came up. Off by default: a GPU being present
- *  is not evidence that using it helps, and on some machines it is
- *  slower than the CPU path.
+/** Name of the engine that encodes M94.Z V6 blocks.
  *
- *  Enabling it is a storage decision as well. The writer then emits V6,
- *  which is about 6 to 7% larger than V4, and that cost is permanent
- *  for every file written rather than per machine. */
+ *  Always @c "cpu" in this build. The engine interface and the
+ *  @c TTIO_GPU selection are still here, but no GPU engine ships: a
+ *  Vulkan compute engine was written, measured 5 to 8 times slower than
+ *  the CPU encoder on every corpus, and left out. It is kept at the
+ *  @c m94z-v6-vulkan-engine tag. */
 + (NSString *)engineName;
 
-/** YES when a GPU engine was asked for and came up. */
+/** YES when a GPU engine was asked for and came up. Always NO in
+ *  this build; see @c engineName. */
 + (BOOL)gpuAvailable;
 
 

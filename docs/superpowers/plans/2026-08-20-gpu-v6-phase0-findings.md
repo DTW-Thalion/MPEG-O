@@ -569,3 +569,51 @@ auto-tune knob means "how many candidate encodes race", a writer with a
 pool correctly sets it to 1, and V6 has no candidates, so it was reading
 a setting whose meaning did not apply to it and switching off its own
 intra-block parallelism as a result.
+
+## Disposition: the engine was not merged
+
+The Vulkan engine described above works. It is byte-identical to the CPU
+coder, it spills cleanly, and a CI gate held it to that on every change.
+It is not in this tree. It is preserved at the tag
+`m94z-v6-vulkan-engine`, together with the Phase 0 spike under
+`tools/perf/gpu_spike/` that produced the microbenchmark numbers.
+
+Against the thread defaults that shipped, the gap is wider than the
+figures above, which were taken before them:
+
+| Corpus | GPU best | CPU | GPU / CPU |
+| --- | --- | --- | --- |
+| NovaSeq WGS | 225 MB/s | 1270 MB/s | 0.18x |
+| lowcov chr22 | 94.7 MB/s | 482 MB/s | 0.20x |
+| HiFi | 72.3 MB/s | 604 MB/s | 0.12x |
+
+The GPU column is not re-measured. The engine saturates at two slots, a
+third and fourth were worth nothing, and both thread changes were on the
+CPU side, so it does not move.
+
+Three reasons, in order of weight.
+
+**The kernel is bound by model bytes per chain**, which is structural
+rather than a tuning miss. The margin widens as the alphabet grows, so
+HiFi is the worst row and NovaSeq the best. Large alphabets are the
+direction the codec is going, so the workloads that matter most are the
+ones the GPU handles worst.
+
+**The GLSL kernel is a second implementation of the bitstream.** Every
+V6 change has to be made twice or the byte gate goes red, and V6 changed
+four times while it was being written: the dense alphabet, C=11,
+histogram seeding, the Fenwick model. That is a standing tax on the part
+of the codec that is actually improving.
+
+**It is encode only.** Decode was never built, so it was half a feature
+in any case.
+
+What would reopen it is a device with several times this one's memory
+bandwidth, since model traffic is what binds. Worth weighing against
+that: on a node that has a GPU at all, basecalling and alignment want it
+first, and compression is the workload one would deliberately leave on
+the CPU.
+
+The engine interface, the `TTIO_GPU` selection and the block-level spill
+stay in the tree. They cost nothing with one engine registered, and they
+are where a second one would attach.

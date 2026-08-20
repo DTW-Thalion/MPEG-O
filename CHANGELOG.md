@@ -16,11 +16,10 @@ public API is stable from onward.
   as one adaptive chain, so a 64 MiB block cannot be split across
   compute units, and the qualities codec is about 73% of encode CPU.
   V6 splits a block into independent segments at read boundaries, each
-  with its own model and coder, so one block spreads across cores now
-  and across GPU lanes in a later phase. It is reached only by strategy
-  hint 8 (`HINT_V6` in Python and Java, `TTIOM94ZHintV6` in
-  Objective-C); auto-tune never selects it and V5 remains the CPU
-  default, so nothing already written changes. Output bytes are
+  with its own model and coder, so one block spreads across cores. It
+  is reached only by strategy hint 8 (`HINT_V6` in Python and Java,
+  `TTIOM94ZHintV6` in Objective-C); auto-tune never selects it and V5
+  remains the default, so nothing already written changes. Output bytes are
   identical for any thread count, and a cross-SDK golden fixture pins
   them across Python, Java and Objective-C. V6 decodes without the
   sequences channel.
@@ -30,19 +29,6 @@ public API is stable from onward.
   +6.18% on NovaSeq WGS and +6.66% on 2x250 chr22. The cost is
   per-segment model warm-up and falls as segments grow. Full table and
   method in `docs/codecs/m94z_v6.md`.
-
-- **A GPU engine for V6 qualities encode, off by default.** V6 blocks
-  can encode on a Vulkan compute device, one segment chain per GPU
-  invocation, producing bytes identical to the CPU coder; a CI gate
-  compares the two on every change rather than taking it on trust. It
-  is reached only by setting `TTIO_GPU=force`: a GPU being present is
-  not evidence that using it helps, and on this development machine it
-  is slower than the CPU path on three of four corpora. Blocks spill to
-  the CPU whenever a slot is unavailable, the device is lost, or the
-  engine declines, so enabling it cannot produce a wrong or failed
-  encode. Enabling it does mean the writer emits V6, which is 6 to 7%
-  larger than V4, and that cost is permanent per file rather than per
-  machine. `engine_name()` reports the active engine in all three SDKs.
 
 ### Fixed
 - **Exports stream their output.** The FASTQ and FASTA exporters in all
