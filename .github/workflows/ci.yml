@@ -15,6 +15,56 @@ on:
     - cron: "0 3 1 * *"
 
 jobs:
+  gpu-byte-identity:
+    name: GPU byte identity (lavapipe)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            zlib1g-dev \
+            cmake \
+            ninja-build \
+            glslang-tools \
+            libvulkan-dev \
+            mesa-vulkan-drivers \
+            vulkan-tools
+
+      # The gate reports "not applicable" when it finds no Vulkan
+      # device, which on a runner without one would make it a green
+      # no-op. Fail here instead, so the job cannot pass by skipping.
+      - name: Confirm a software rasteriser is present
+        run: |
+          vulkaninfo --summary || true
+          if ! vulkaninfo --summary 2>/dev/null | grep -qi 'llvmpipe'; then
+            echo "No lavapipe device: the byte-identity gate would skip."
+            exit 1
+          fi
+
+      - name: Build native with the GPU engine
+        run: |
+          cmake -S native -B native/_build -DCMAKE_BUILD_TYPE=Release
+          cmake --build native/_build -j
+
+      - name: Byte identity, GPU against CPU
+        env:
+          TTIO_GPU: force
+          LD_LIBRARY_PATH: ${{ github.workspace }}/native/_build/gpu:${{ github.workspace }}/native/_build
+        run: |
+          ./native/_build/test_gpu_byte_identity \
+              native/tests/fixtures/v6_gate_small.v6fx | tee /tmp/gate.log
+          grep -q 'chains identical' /tmp/gate.log
+
+      - name: Engine probe and selection
+        env:
+          LD_LIBRARY_PATH: ${{ github.workspace }}/native/_build/gpu:${{ github.workspace }}/native/_build
+        run: |
+          ./native/_build/test_gpu_engine_probe
+          ./native/_build/test_engine_selection
+          ./native/_build/test_engine_api
   objc-build-test:
     name: Objective-C — build & test (libobjc2 / gnustep-2.0)
     runs-on: ubuntu-latest
