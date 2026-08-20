@@ -45,6 +45,16 @@ public final class FqzcompNx16Z {
      *  preset, 5..6 forced V5. */
     public static final int HINT_V4_AUTO = 7;
 
+    /** M94.Z V6: segmented adaptive body, decoded without sequences
+     *  (docs/codecs/m94z_v6.md). */
+    public static final int VERSION_V6_SEGMENTED = 6;
+
+    /** Strategy hint: force V6. Auto-tune never selects it, because V6
+     *  does not beat V4 or V5 on size and must stay out of the size
+     *  race; it is reached by this hint, or by writer policy once a GPU
+     *  engine is present. */
+    public static final int HINT_V6 = 8;
+
     // ── Default context parameters ──────────────────────────────────
 
     public static final int DEFAULT_QBITS = 12;
@@ -258,24 +268,32 @@ public final class FqzcompNx16Z {
             throw new IllegalStateException(
                 "decodeQualInternal called but libttio_rans_jni not loaded");
         }
+        int ver = encoded.length >= 5 ? (encoded[4] & 0xFF) : -1;
         if (encoded.length < 26 || encoded[0] != 'M' || encoded[1] != '9'
             || encoded[2] != '4' || encoded[3] != 'Z'
-            || (encoded[4] & 0xFF) != VERSION_V5_SEQCTX) {
-            throw new IllegalArgumentException("not an M94.Z V5 stream");
+            || (ver != VERSION_V5_SEQCTX && ver != VERSION_V6_SEGMENTED)) {
+            throw new IllegalArgumentException("not an M94.Z V5 or V6 stream");
         }
         long numQual = 0L, numReads = 0L;
         for (int i = 0; i < 8; i++) numQual  |= ((long)(encoded[6 + i] & 0xFF)) << (8 * i);
         for (int i = 0; i < 8; i++) numReads |= ((long)(encoded[14 + i] & 0xFF)) << (8 * i);
         if (numQual > Integer.MAX_VALUE || numReads > Integer.MAX_VALUE) {
-            throw new IllegalArgumentException("V5 stream too large for Java int sizes");
+            throw new IllegalArgumentException(
+                "M94Z stream too large for Java int sizes");
         }
         int nQual  = (int) numQual;
         int nReads = (int) numReads;
-        if (sequences == null || sequences.length != nQual) {
+        // V6 builds its context from qualities alone; only V5 needs the
+        // sequences side input.
+        if (ver == VERSION_V5_SEQCTX
+                && (sequences == null || sequences.length != nQual)) {
             throw new IllegalArgumentException(
                 "M94Z V5: sequences length ("
                 + (sequences == null ? "null" : sequences.length)
                 + ") != num_qualities (" + nQual + ")");
+        }
+        if (ver == VERSION_V6_SEGMENTED) {
+            sequences = null;
         }
         if (revcompFlags == null) revcompFlags = new int[nReads];
         if (revcompFlags.length != nReads) {
@@ -455,6 +473,10 @@ public final class FqzcompNx16Z {
     public static DecodeResult decode(byte[] encoded, int[] revcompFlags,
                                       java.util.function.Supplier<byte[]> sequencesProvider) {
         if (encoded != null && encoded.length >= 5
+                && (encoded[4] & 0xFF) == VERSION_V6_SEGMENTED) {
+            return decodeQualInternal(encoded, revcompFlags, null);
+        }
+        if (encoded != null && encoded.length >= 5
                 && (encoded[4] & 0xFF) == VERSION_V5_SEQCTX) {
             if (sequencesProvider == null) {
                 throw new IllegalStateException(
@@ -485,6 +507,9 @@ public final class FqzcompNx16Z {
         int versionByte = encoded[4] & 0xFF;
         if (versionByte == VERSION_V4_FQZCOMP) {
             return decodeV4Internal(encoded, revcompFlags);
+        }
+        if (versionByte == VERSION_V6_SEGMENTED) {
+            return decodeQualInternal(encoded, revcompFlags, null);
         }
         if (versionByte == VERSION_V5_SEQCTX) {
             throw new IllegalStateException(

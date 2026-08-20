@@ -232,4 +232,28 @@ class QualitiesV5Test {
         Path file = writeRun(tmp, makeRun(11000, 100, true), "v4.tio");
         assertEquals(4, qualitiesVersionByte(file));
     }
+
+    @Test
+    void v6RoundTripsAndSniffs() {
+        byte[][] c = motifCorpus(2000, 100);
+        int[] lens = fill(2000, 100), flags = fill(2000, 0);
+        byte[] v6 = FqzcompNx16Z.encode(c[0], lens, flags,
+            new FqzcompNx16Z.EncodeOptions()
+                .v4StrategyHint(FqzcompNx16Z.HINT_V6));
+        assertEquals(6, v6[4]);
+        assertEquals(8, FqzcompNx16Z.streamStrategy(v6));
+        FqzcompNx16Z.DecodeResult dr = FqzcompNx16Z.decode(v6, flags, null);
+        assertArrayEquals(c[0], dr.qualities());
+    }
+
+    @Test
+    void v6DecodesWithoutSequencesOverload() {
+        byte[][] c = motifCorpus(2000, 100);
+        int[] lens = fill(2000, 100), flags = fill(2000, 0);
+        byte[] v6 = FqzcompNx16Z.encode(c[0], lens, flags,
+            new FqzcompNx16Z.EncodeOptions()
+                .v4StrategyHint(FqzcompNx16Z.HINT_V6));
+        FqzcompNx16Z.DecodeResult dr = FqzcompNx16Z.decode(v6, flags);
+        assertArrayEquals(c[0], dr.qualities());
+    }
 }
