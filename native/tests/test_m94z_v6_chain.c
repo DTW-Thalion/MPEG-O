@@ -49,7 +49,7 @@ int main(void) {
     uint8_t *dec = malloc(N);
 
     ttio_v6_alphabet ab;
-    ttio_v6_alphabet_build(qual, N, &ab);
+    ttio_v6_alphabet_build(qual, N, TTIO_V6_DEFAULT.seed_total, &ab);
 
     size_t l1 = cap;
     int rc = ttio_v6_chain_encode(&TTIO_V6_DEFAULT, &ab, qual, lens, NR, enc, &l1);
@@ -76,12 +76,12 @@ int main(void) {
 
     /* Parameter validation. */
     {
-        ttio_v6_param bad = { 12, 5, 4, 3, 2 };   /* Q+P+D = 18 */
+        ttio_v6_param bad = { 12, 5, 4, 3, 2, 4096 };   /* Q+P+D = 18 */
         size_t        lb = cap;
         rc = ttio_v6_chain_encode(&bad, &ab, qual, lens, NR, enc, &lb);
         CHECK(rc != 0, "Q+P+D over 16 is rejected");
 
-        ttio_v6_param bad_shift = { 8, 9, 4, 3, 2 };  /* qshift > 8 */
+        ttio_v6_param bad_shift = { 8, 9, 4, 3, 2, 4096 };  /* qshift > 8 */
         lb = cap;
         rc = ttio_v6_chain_encode(&bad_shift, &ab, qual, lens, NR, enc, &lb);
         CHECK(rc != 0, "qshift over 8 is rejected");

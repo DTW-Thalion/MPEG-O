@@ -14,35 +14,75 @@
 #include "rc_cram.h"
 #include "sm_model.h"
 
-/* Provisional: C = 12, matching the device envelope worked in the
- * design document. The Phase 1 ratio sweep replaces these. */
-const ttio_v6_param TTIO_V6_DEFAULT = { 6, 5, 4, 4, 2 };
+/* Fixed by the Phase 1 ratio sweep over the four reference corpora
+ * (docs/codecs/m94z_v6.md section 6). Q 8, qshift 7, P 4, pshift 4,
+ * D 2 is the single setting whose worst class is smallest; the seed
+ * mass is flat between 256 and 384 and falls away sharply above 4096,
+ * because a heavy prior stops the per-context model adapting. */
+const ttio_v6_param TTIO_V6_DEFAULT = { 8, 7, 4, 4, 2, 256 };
 
 #ifndef MIN
 #  define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
+#define V6_SEED_MAX 32768u
+
 void ttio_v6_alphabet_build(const uint8_t *qual, size_t n_qualities,
-                            ttio_v6_alphabet *ab) {
-    uint8_t seen[256];
-    memset(seen, 0, sizeof seen);
-    for (size_t i = 0; i < n_qualities; i++) seen[qual[i]] = 1;
+                            unsigned seed_total, ttio_v6_alphabet *ab) {
+    uint64_t count[256];
+    memset(count, 0, sizeof count);
+    for (size_t i = 0; i < n_qualities; i++) count[qual[i]]++;
 
     memset(ab->map, 0, sizeof ab->map);
     memset(ab->inv, 0, sizeof ab->inv);
+    memset(ab->seed, 0, sizeof ab->seed);
     ab->n = 0;
     for (unsigned q = 0; q < 256; q++) {
-        if (seen[q]) {
+        if (count[q]) {
             ab->map[q] = (uint8_t)ab->n;
             ab->inv[ab->n] = (uint8_t)q;
             ab->n++;
         }
     }
-    if (ab->n == 0) ab->n = 1;   /* an empty block still needs a model */
+    if (ab->n == 0) {
+        ab->n = 1;               /* an empty block still needs a model */
+        ab->seed[0] = 1;
+        ab->seed_total = 1;
+        return;
+    }
+
+    if (seed_total < ab->n) seed_total = ab->n;
+    if (seed_total > V6_SEED_MAX) seed_total = V6_SEED_MAX;
+
+    /* Integer scaling, so encoder and decoder cannot disagree. Every
+     * present symbol keeps at least 1 or it could not be coded. */
+    ab->seed_total = 0;
+    for (unsigned i = 0; i < ab->n; i++) {
+        uint64_t c = count[ab->inv[i]];
+        uint64_t w = (c * seed_total + n_qualities / 2) / n_qualities;
+        if (w < 1) w = 1;
+        if (w > 0xFFFFu) w = 0xFFFFu;
+        ab->seed[i] = (uint16_t)w;
+        ab->seed_total += (uint32_t)w;
+    }
+
+    /* Keep headroom under the model's normalisation threshold. */
+    while (ab->seed_total > V6_SEED_MAX) {
+        ab->seed_total = 0;
+        for (unsigned i = 0; i < ab->n; i++) {
+            ab->seed[i] = (uint16_t)(ab->seed[i] - (ab->seed[i] >> 1));
+            if (ab->seed[i] == 0) ab->seed[i] = 1;
+            ab->seed_total += ab->seed[i];
+        }
+    }
 }
 
 static int alphabet_valid(const ttio_v6_alphabet *ab) {
-    return ab && ab->n >= 1 && ab->n <= 256;
+    if (!ab || ab->n < 1 || ab->n > 256) return 0;
+    if (ab->seed_total < ab->n || ab->seed_total > V6_SEED_MAX) return 0;
+    for (unsigned i = 0; i < ab->n; i++)
+        if (ab->seed[i] == 0) return 0;
+    return 1;
 }
 
 static int param_valid(const ttio_v6_param *pm) {
@@ -71,9 +111,12 @@ typedef struct {
     sm_symfreq *pool;
 } v6_models;
 
-static int models_init(v6_models *vm, size_t n_ctx, unsigned nsym) {
-    const size_t stride = nsym + 2;
-    sm_symfreq   tmpl[256 + 2];
+static int models_init(v6_models *vm, size_t n_ctx,
+                       const ttio_v6_alphabet *ab) {
+    const unsigned nsym = ab->n;
+    const size_t   stride = nsym + 2;
+    sm_symfreq     tmpl[256 + 2];
+    uint8_t        order[256];
 
     vm->models = (sm_model *)malloc(n_ctx * sizeof(*vm->models));
     vm->pool = (sm_symfreq *)malloc(n_ctx * stride * sizeof(*vm->pool));
@@ -85,17 +128,31 @@ static int models_init(v6_models *vm, size_t n_ctx, unsigned nsym) {
         return TTIO_SEQCTX_ERR_OOM;
     }
 
+    /* Heaviest symbol first: it matches the order the model's own
+     * bubble step converges to, and shortens the linear scan. Ties go
+     * to the lower symbol so both directions build the same table. */
+    for (unsigned i = 0; i < nsym; i++) order[i] = (uint8_t)i;
+    for (unsigned a = 0; a < nsym; a++) {
+        for (unsigned b = a + 1; b < nsym; b++) {
+            if (ab->seed[order[b]] > ab->seed[order[a]]) {
+                uint8_t t = order[a];
+                order[a] = order[b];
+                order[b] = t;
+            }
+        }
+    }
+
     memset(tmpl, 0, stride * sizeof tmpl[0]);
     tmpl[0].symbol = 0;
     tmpl[0].freq = (uint16_t)SM_MAX_FREQ;
     for (unsigned i = 0; i < nsym; i++) {
-        tmpl[i + 1].symbol = (uint16_t)i;
-        tmpl[i + 1].freq = 1;
+        tmpl[i + 1].symbol = (uint16_t)order[i];
+        tmpl[i + 1].freq = ab->seed[order[i]];
     }
 
     for (size_t c = 0; c < n_ctx; c++) {
         vm->models[c].nsym = (int)nsym;
-        vm->models[c].tot_freq = nsym;
+        vm->models[c].tot_freq = ab->seed_total;
         vm->models[c].sentinel.freq = 0;
         vm->models[c].sentinel.symbol = 0;
         vm->models[c].F = vm->pool + c * stride;
@@ -121,7 +178,7 @@ static int code_pass(const ttio_v6_param *pm, const ttio_v6_alphabet *ab,
                      int do_encode) {
     size_t   n_ctx = (size_t)1 << (pm->qbits + pm->pbits + pm->dbits);
     v6_models vm;
-    int      rc = models_init(&vm, n_ctx, ab->n);
+    int      rc = models_init(&vm, n_ctx, ab);
     if (rc != 0) return rc;
 
     const unsigned qmask = (1u << pm->qbits) - 1u;
@@ -374,7 +431,7 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
 
     /* One alphabet for the whole block: every segment codes against the
      * same dense symbol set, and it is written once into the header. */
-    ttio_v6_alphabet_build(qual, n_qualities, &ab);
+    ttio_v6_alphabet_build(qual, n_qualities, pm->seed_total, &ab);
 
     if (n_segs > 0) {
         uint64_t pool_bytes = 0, at = 0;
@@ -422,7 +479,8 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
     }
 
     for (size_t i = 0; i < n_segs; i++) chain_bytes += lens[i];
-    body_len = V6_BODY_HDR + ab.n + 4u * n_segs + (size_t)chain_bytes;
+    body_len = V6_BODY_HDR + 3u * ab.n + 4u * n_segs
+             + (size_t)chain_bytes;
     body = (uint8_t *)malloc(body_len);
     if (!body) {
         rc = TTIO_SEQCTX_ERR_OOM;
@@ -440,8 +498,10 @@ int ttio_m94z_v6_encode(const uint8_t *qual, size_t n_qualities,
     body[12] = pm->dbits;
     v6_put_u16(body + 14, (uint16_t)ab.n);
     memcpy(body + V6_BODY_HDR, ab.inv, ab.n);
+    for (unsigned i = 0; i < ab.n; i++)
+        v6_put_u16(body + V6_BODY_HDR + ab.n + 2u * i, ab.seed[i]);
     {
-        uint8_t *tab = body + V6_BODY_HDR + ab.n;
+        uint8_t *tab = body + V6_BODY_HDR + 3u * ab.n;
         uint8_t *at = tab + 4u * n_segs;
         for (size_t i = 0; i < n_segs; i++) {
             v6_put_u32(tab + 4u * i, (uint32_t)lens[i]);
@@ -513,21 +573,28 @@ int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
 
     a_size = v6_get_u16(body + 14);
     if (a_size < 1 || a_size > 256) return TTIO_SEQCTX_ERR_CORRUPT;
-    if (body_len < V6_BODY_HDR + a_size + 4u * n_segs)
+    if (body_len < V6_BODY_HDR + 3u * a_size + 4u * n_segs)
         return TTIO_SEQCTX_ERR_CORRUPT;
 
     /* Rebuild the map from the stored alphabet. The values ascend, so a
      * stream claiming otherwise is corrupt. */
     memset(ab.map, 0, sizeof ab.map);
     memset(ab.inv, 0, sizeof ab.inv);
+    memset(ab.seed, 0, sizeof ab.seed);
     ab.n = (unsigned)a_size;
+    ab.seed_total = 0;
     for (size_t i = 0; i < a_size; i++) {
-        uint8_t q = body[V6_BODY_HDR + i];
+        uint8_t  q = body[V6_BODY_HDR + i];
+        uint16_t w = v6_get_u16(body + V6_BODY_HDR + a_size + 2u * i);
         if (i > 0 && q <= body[V6_BODY_HDR + i - 1])
             return TTIO_SEQCTX_ERR_CORRUPT;
+        if (w == 0) return TTIO_SEQCTX_ERR_CORRUPT;
         ab.inv[i] = q;
         ab.map[q] = (uint8_t)i;
+        ab.seed[i] = w;
+        ab.seed_total += w;
     }
+    if (!alphabet_valid(&ab)) return TTIO_SEQCTX_ERR_CORRUPT;
 
     if (v6_plan(read_lengths, (size_t)nr, seg_symbols, NULL) != n_segs)
         return TTIO_SEQCTX_ERR_CORRUPT;
@@ -542,9 +609,9 @@ int ttio_m94z_v6_decode(const uint8_t *in, size_t in_len,
     }
     v6_plan(read_lengths, (size_t)nr, seg_symbols, segs);
 
-    tab = body + V6_BODY_HDR + a_size;
+    tab = body + V6_BODY_HDR + 3u * a_size;
     at = tab + 4u * n_segs;
-    avail = body_len - V6_BODY_HDR - a_size - 4u * n_segs;
+    avail = body_len - V6_BODY_HDR - 3u * a_size - 4u * n_segs;
     for (size_t i = 0; i < n_segs; i++) {
         uint32_t sl = v6_get_u32(tab + 4u * i);
         if (sl > avail) {

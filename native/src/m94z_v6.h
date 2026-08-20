@@ -32,6 +32,11 @@ extern "C" {
 
 typedef struct {
     uint8_t qbits, qshift, pbits, pshift, dbits;
+    /* Total frequency mass the per-segment models are seeded with.
+     * Encode-side only: the resulting weights are written into the
+     * body, so a decoder never needs this. Larger seeds start closer
+     * to the block's marginal distribution but adapt more slowly. */
+    uint16_t seed_total;
 } ttio_v6_param;
 
 /* The quality values a block actually uses, mapped to a dense
@@ -45,12 +50,19 @@ typedef struct {
 typedef struct {
     uint8_t  map[256];    /* quality byte -> dense index */
     uint8_t  inv[256];    /* dense index -> quality byte, ascending */
+    uint16_t seed[256];   /* per-symbol seed frequency, indexed densely */
+    uint32_t seed_total;  /* sum of seed[0..n-1] */
     unsigned n;           /* alphabet size, 1..256 */
 } ttio_v6_alphabet;
 
-/* Build from a block's qualities. n_qualities may be 0, giving n = 1. */
+/* Build from a block's qualities: the dense alphabet, plus seed
+ * frequencies proportional to the block's symbol histogram scaled to
+ * about seed_total. Every present symbol gets at least 1. A segment
+ * primed with these starts at the block's marginal distribution rather
+ * than at a uniform prior, which is where most of the per-segment
+ * warm-up cost was going. n_qualities may be 0, giving n = 1. */
 void ttio_v6_alphabet_build(const uint8_t *qual, size_t n_qualities,
-                            ttio_v6_alphabet *ab);
+                            unsigned seed_total, ttio_v6_alphabet *ab);
 
 /* Provisional until the Phase 1 ratio sweep fixes it. */
 extern const ttio_v6_param TTIO_V6_DEFAULT;

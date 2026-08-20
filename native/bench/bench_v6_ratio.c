@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
            (unsigned long long)v4_total, 8.0 * (double)v4_total / (double)qn,
            100.0 * ((double)v4_total - (double)base_total) / (double)base_total);
     printf("qbits,qshift,pbits,pshift,dbits,ctx_bits,seg_symbols,"
-           "model_MB_per_seg,bytes,bits_per_qual,delta_pct\n");
+           "model_MB_per_seg,seed,bytes,bits_per_qual,delta_pct\n");
     fflush(stdout);
 
     /* Sweep axes, overridable so a diagnostic pass can pin one axis:
@@ -159,11 +159,14 @@ int main(int argc, char **argv) {
      * V6_PSHIFTS=2,4 V6_SEGS=524288 */
     unsigned qbv[16], pbv[16], dbv[16], qsv[16], psv[16];
     uint32_t sgv[16];
-    size_t   qbn, pbn, dbn, qsn, psn, sgn;
+    size_t   qbn, pbn, dbn, qsn, psn, sgn, sdn;
+    unsigned sdv[16];
     qbn = axis("V6_QBITS", "8,9,10,11,12", qbv);
     pbn = axis("V6_PBITS", "4,5,6", pbv);
     dbn = axis("V6_DBITS", "0,1,2,3", dbv);
     qsn = axis("V6_QSHIFTS", "5", qsv);
+    { unsigned t[16]; sdn = axis("V6_SEEDS", "4096", t);
+      for (size_t i = 0; i < sdn; i++) sdv[i] = t[i]; }
     psn = axis("V6_PSHIFTS", "4", psv);
     {
         unsigned tmp[16];
@@ -180,13 +183,16 @@ int main(int argc, char **argv) {
                 if (qb + pb + db > TTIO_V6_MAX_CTX_BITS) continue;
                 for (size_t qsi = 0; qsi < qsn; qsi++)
                 for (size_t psi = 0; psi < psn; psi++)
+                for (size_t sdi = 0; sdi < sdn; sdi++)
                 for (size_t si = 0; si < sgn; si++) {
+                    unsigned seed = sdv[sdi];
                     ttio_v6_param pm;
                     pm.qbits = (uint8_t)qb;
                     pm.qshift = (uint8_t)qsv[qsi];
                     pm.pbits = (uint8_t)pb;
                     pm.pshift = (uint8_t)psv[psi];
                     pm.dbits = (uint8_t)db;
+                    pm.seed_total = (uint16_t)seed;
 
                     uint64_t total = 0;
                     int      bad = 0;
@@ -207,11 +213,17 @@ int main(int argc, char **argv) {
                     }
                     if (bad) continue;
 
+                    /* Actual model footprint: the dense alphabet sizes
+                     * the per-context table, so it is far below the
+                     * 256-symbol worst case. */
+                    ttio_v6_alphabet probe;
+                    ttio_v6_alphabet_build(qual + blocks[0].qual_off,
+                                           blocks[0].n_qual, seed, &probe);
                     double model_mb = (double)((size_t)1 << (qb + pb + db))
-                                    * 1032.0 / 1048576.0;
-                    printf("%u,%u,%u,%u,%u,%u,%u,%.2f,%llu,%.4f,%+.2f\n", qb,
-                           pm.qshift, pb, pm.pshift, db, qb + pb + db, sgv[si],
-                           model_mb, (unsigned long long)total,
+                                    * (double)(probe.n + 2) * 4.0 / 1048576.0;
+                    printf("%u,%u,%u,%u,%u,%u,%u,%.2f,%u,%llu,%.4f,%+.2f\n",
+                           qb, pm.qshift, pb, pm.pshift, db, qb + pb + db,
+                           sgv[si], model_mb, seed, (unsigned long long)total,
                            8.0 * (double)total / (double)qn,
                            100.0 * ((double)total - (double)base_total)
                                / (double)base_total);
