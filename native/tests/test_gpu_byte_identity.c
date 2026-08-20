@@ -177,6 +177,52 @@ int main(int argc, char **argv) {
           "every chain is byte-identical to the cpu coder");
     printf("#    %u of %u chains identical\n", good, fx.n_ch);
 
+    /* Dispatch bounding. A display-attached GPU kills a dispatch that
+     * runs too long, so a block is split into several. Splitting must
+     * be invisible in the output. */
+    {
+        setenv("TTIO_GPU_MAX_CHAINS_PER_DISPATCH", "2", 1);
+        for (uint32_t c = 0; c < fx.n_ch; c++) {
+            lens[c] = fx.nqual[c] + fx.nqual[c] / 2 + 4096;
+            errs[c] = 0;
+        }
+        int rc2 = g->qual_v6_encode(&job);
+        CHECK(rc2 == 0, "encode succeeds when split across dispatches");
+        uint32_t same = 0;
+        for (uint32_t c = 0; c < fx.n_ch && rc2 == 0; c++) {
+            if (lens[c] != fx.rlen[c]
+                || memcmp(bufs[c], fx.ref + fx.roff[c], fx.rlen[c]) != 0)
+                break;
+            same++;
+        }
+        CHECK(rc2 == 0 && same == fx.n_ch,
+              "splitting into more dispatches does not change the bytes");
+        /* and prove it really was split, or the check above is vacuous */
+        if (g->debug_stat != NULL) {
+            int d = g->debug_stat(TTIO_ENGINE_STAT_DISPATCHES);
+            CHECK(d == (int)((fx.n_ch + 1) / 2),
+                  "the work was actually split across dispatches");
+            printf("#    dispatches: %d for %u chains, 2 per dispatch\n",
+                   d, fx.n_ch);
+        }
+        unsetenv("TTIO_GPU_MAX_CHAINS_PER_DISPATCH");
+    }
+
+    /* Device loss must be reported so the caller can spill, not hidden
+     * and not fatal. The spill itself is covered by the routing test. */
+    {
+        setenv("TTIO_GPU_FAULT_INJECT", "1", 1);
+        for (uint32_t c = 0; c < fx.n_ch; c++) {
+            lens[c] = fx.nqual[c] + fx.nqual[c] / 2 + 4096;
+            errs[c] = 0;
+        }
+        int rc3 = g->qual_v6_encode(&job);
+        CHECK(rc3 != 0, "an injected device loss is reported to the caller");
+        CHECK(g->try_acquire() == 0,
+              "a lost device stops offering slots");
+        unsetenv("TTIO_GPU_FAULT_INJECT");
+    }
+
     printf("%s\n", failures ? "FAILURES" : "all passed");
     return failures ? 1 : 0;
 }

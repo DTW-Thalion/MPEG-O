@@ -155,6 +155,34 @@ static int create_device(void) {
 
 /* ------------------------------------------------------------------ */
 
+static uint64_t device_local_bytes(void) {
+    VkPhysicalDeviceMemoryProperties mp;
+    vkGetPhysicalDeviceMemoryProperties(g_vk.phys, &mp);
+    uint64_t best = 0;
+    for (uint32_t i = 0; i < mp.memoryHeapCount; i++) {
+        if ((mp.memoryHeaps[i].flags & VK_MEMORY_HEAP_DEVICE_LOCAL_BIT)
+            && mp.memoryHeaps[i].size > best)
+            best = mp.memoryHeaps[i].size;
+    }
+    return best;
+}
+
+/* How much memory one in-flight block needs, near enough to size the
+ * slot count before any job has arrived: a 64 MiB block of qualities,
+ * its compressed output, and one model per segment. At the shipped
+ * defaults that is 256 segments of 2^11 contexts over a 64-symbol
+ * alphabet, which is about 68 MB of model. Half the device-local heap
+ * is left for the display and other processes. */
+#define VK_EST_BLOCK_WORKING_SET (256ull * 1024ull * 1024ull)
+
+static int default_slots(void) {
+    uint64_t usable = device_local_bytes() / 2;
+    uint64_t n = usable / VK_EST_BLOCK_WORKING_SET;
+    if (n < 1) n = 1;
+    if (n > 64) n = 64;
+    return (int)n;
+}
+
 static int vk_slots(void) { return g_vk.slots_total; }
 
 static int vk_try_acquire(void) {
@@ -237,8 +265,25 @@ static void buf_destroy(vk_buf *b) {
 typedef struct {
     uint32_t n_ctx, nsym, stride, seed_total;
     uint32_t qbits, qshift, pbits, pshift, dbits;
-    uint32_t out_stride, n_chains;
+    uint32_t out_stride, n_chains, chain_base;
 } vk_push;
+
+static int g_last_dispatches;
+
+static int vk_debug_stat(int which) {
+    if (which == TTIO_ENGINE_STAT_DISPATCHES) return g_last_dispatches;
+    return -1;
+}
+
+/* A block is split into several dispatches so no single one runs long
+ * enough to trip a display driver's timeout watchdog. The split is
+ * invisible in the output: each dispatch covers a disjoint range of
+ * chains and they share no state. */
+static uint32_t chains_per_dispatch(uint32_t n_ch) {
+    int v = env_int("TTIO_GPU_MAX_CHAINS_PER_DISPATCH", 0);
+    if (v > 0) return (uint32_t)v < n_ch ? (uint32_t)v : n_ch;
+    return n_ch;
+}
 
 /* ---- encode ------------------------------------------------------ */
 
@@ -415,54 +460,76 @@ static int vk_encode(ttio_v6_job *job) {
     if (vkCreateFence(g_vk.dev, &fi, NULL, &fence) != VK_SUCCESS) goto out;
 
     {
-        vk_push pc;
-        pc.n_ctx = n_ctx;
-        pc.nsym = nsym;
-        pc.stride = stride;
-        pc.seed_total = job->ab->seed_total;
-        pc.qbits = job->pm->qbits;
-        pc.qshift = job->pm->qshift;
-        pc.pbits = job->pm->pbits;
-        pc.pshift = job->pm->pshift;
-        pc.dbits = job->pm->dbits;
-        pc.out_stride = out_stride;
-        pc.n_chains = n_ch;
+        const uint32_t per = chains_per_dispatch(n_ch);
+        const int      inject = env_int("TTIO_GPU_FAULT_INJECT", 0);
+        g_last_dispatches = 0;
 
-        VkCommandBufferAllocateInfo cai = {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
-        };
-        cai.commandPool = cpool;
-        cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cai.commandBufferCount = 1;
-        VkCommandBuffer cb;
-        if (vkAllocateCommandBuffers(g_vk.dev, &cai, &cb) != VK_SUCCESS)
-            goto out;
-        VkCommandBufferBeginInfo cbi = {
-            VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
-        };
-        cbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-        vkBeginCommandBuffer(cb, &cbi);
-        vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, pipe);
-        vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE, playout,
-                                0, 1, &dset, 0, NULL);
-        vkCmdPushConstants(cb, playout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                           sizeof pc, &pc);
-        vkCmdDispatch(cb, (n_ch + lsz - 1) / lsz, 1, 1);
-        vkEndCommandBuffer(cb);
+        for (uint32_t base = 0; base < n_ch; base += per) {
+            uint32_t count = n_ch - base < per ? n_ch - base : per;
 
-        VkSubmitInfo si = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
-        si.commandBufferCount = 1;
-        si.pCommandBuffers = &cb;
-        VkResult sr = vkQueueSubmit(g_vk.queue, 1, &si, fence);
-        if (sr == VK_SUCCESS)
-            sr = vkWaitForFences(g_vk.dev, 1, &fence, VK_TRUE, UINT64_MAX);
-        if (sr == VK_ERROR_DEVICE_LOST) {
-            /* The device is gone for this process. Stop offering slots
-             * so later blocks go straight to the CPU. */
-            g_vk.healthy = 0;
-            goto out;
+            vk_push pc;
+            pc.n_ctx = n_ctx;
+            pc.nsym = nsym;
+            pc.stride = stride;
+            pc.seed_total = job->ab->seed_total;
+            pc.qbits = job->pm->qbits;
+            pc.qshift = job->pm->qshift;
+            pc.pbits = job->pm->pbits;
+            pc.pshift = job->pm->pshift;
+            pc.dbits = job->pm->dbits;
+            pc.out_stride = out_stride;
+            pc.n_chains = n_ch;
+            pc.chain_base = base;
+
+            VkCommandBufferAllocateInfo cai = {
+                VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO
+            };
+            cai.commandPool = cpool;
+            cai.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+            cai.commandBufferCount = 1;
+            VkCommandBuffer cb;
+            if (vkAllocateCommandBuffers(g_vk.dev, &cai, &cb) != VK_SUCCESS)
+                goto out;
+            VkCommandBufferBeginInfo cbi = {
+                VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO
+            };
+            cbi.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+            vkBeginCommandBuffer(cb, &cbi);
+            vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, pipe);
+            vkCmdBindDescriptorSets(cb, VK_PIPELINE_BIND_POINT_COMPUTE,
+                                    playout, 0, 1, &dset, 0, NULL);
+            vkCmdPushConstants(cb, playout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
+                               sizeof pc, &pc);
+            vkCmdDispatch(cb, (count + lsz - 1) / lsz, 1, 1);
+            vkEndCommandBuffer(cb);
+
+            VkSubmitInfo si = { VK_STRUCTURE_TYPE_SUBMIT_INFO };
+            si.commandBufferCount = 1;
+            si.pCommandBuffers = &cb;
+
+            VkResult sr;
+            if (inject && g_last_dispatches == 0) {
+                sr = VK_ERROR_DEVICE_LOST;   /* exercise the loss path */
+            } else {
+                sr = vkQueueSubmit(g_vk.queue, 1, &si, fence);
+                if (sr == VK_SUCCESS)
+                    sr = vkWaitForFences(g_vk.dev, 1, &fence, VK_TRUE,
+                                         UINT64_MAX);
+                if (sr == VK_SUCCESS) vkResetFences(g_vk.dev, 1, &fence);
+            }
+            g_last_dispatches++;
+
+            if (sr == VK_ERROR_DEVICE_LOST) {
+                /* Gone for this process. Stop offering slots so later
+                 * blocks go straight to the CPU rather than retrying a
+                 * device that is not coming back. */
+                pthread_mutex_lock(&g_vk.slot_mu);
+                g_vk.healthy = 0;
+                pthread_mutex_unlock(&g_vk.slot_mu);
+                goto out;
+            }
+            if (sr != VK_SUCCESS) goto out;
         }
-        if (sr != VK_SUCCESS) goto out;
     }
 
     {
@@ -514,8 +581,7 @@ const ttio_engine *ttio_vk_engine_create(void) {
         return NULL;
     }
 
-    /* Slot sizing from the device's memory arrives with the kernel. */
-    g_vk.slots_total = env_int("TTIO_GPU_SLOTS", 1);
+    g_vk.slots_total = env_int("TTIO_GPU_SLOTS", default_slots());
     g_vk.slots_free = g_vk.slots_total;
     g_vk.healthy = 1;
 
@@ -524,6 +590,7 @@ const ttio_engine *ttio_vk_engine_create(void) {
     g_engine.try_acquire = vk_try_acquire;
     g_engine.release = vk_release;
     g_engine.qual_v6_encode = vk_encode;
+    g_engine.debug_stat = vk_debug_stat;
     g_result = &g_engine;
     return g_result;
 }

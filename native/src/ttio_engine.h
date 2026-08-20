@@ -54,12 +54,19 @@ typedef struct {
     int                    *errs;
 } ttio_v6_job;
 
+/* Counters an engine may expose so tests can check that work was done
+ * the way it was meant to be, rather than only that the answer came
+ * out right. */
+#define TTIO_ENGINE_STAT_DISPATCHES 0
+
 typedef struct ttio_engine {
     const char *name;              /* "cpu" or "vulkan:<device>" */
     int  (*slots)(void);           /* concurrent block slots */
     int  (*try_acquire)(void);     /* nonblocking; 1 = got a slot */
     void (*release)(void);
     int  (*qual_v6_encode)(ttio_v6_job *job);
+    /* May be NULL. Reports a counter from the most recent encode. */
+    int  (*debug_stat)(int which);
 } ttio_engine;
 
 /* TTIO_GPU selects the engine. It is off unless the caller asks for

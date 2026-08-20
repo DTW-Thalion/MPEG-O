@@ -39,6 +39,7 @@ static const ttio_engine k_cpu = {
     cpu_try_acquire,
     cpu_release,
     ttio_v6_encode_job_cpu,
+    NULL,
 };
 
 const ttio_engine *ttio_engine_cpu(void) { return &k_cpu; }

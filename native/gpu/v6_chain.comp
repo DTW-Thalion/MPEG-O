@@ -38,6 +38,7 @@ layout(push_constant) uniform P {
     uint dbits;
     uint out_stride;
     uint n_chains;
+    uint chain_base;
 } pc;
 
 const uint SM_MAX_FREQ = (1u << 16) - 17u;
@@ -139,7 +140,7 @@ void model_update(uint base, uint ctx, uint s)
 
 void main()
 {
-    uint c = gl_GlobalInvocationID.x;
+    uint c = pc.chain_base + gl_GlobalInvocationID.x;
     if (c >= pc.n_chains) return;
 
     uint first  = chain[c * 4u + 0u];
