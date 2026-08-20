@@ -343,6 +343,31 @@ public final class FqzcompNx16Z {
     /** Strategy of an encoded M94.Z stream: 4 = V4, 5/6 = V5 S5/S6.
      *  Throws {@link IllegalArgumentException} on a stream that is not
      *  M94.Z qualities. */
+    /** Name of the engine that encodes M94.Z V6 blocks: {@code "cpu"},
+     *  or {@code "vulkan:<device>"} when a GPU engine was asked for with
+     *  {@code TTIO_GPU=force} and came up. Off by default: a GPU being
+     *  present is not evidence that using it helps, and on some machines
+     *  it is slower than the CPU path.
+     *
+     *  <p>Enabling it is a storage decision too. The writer then emits
+     *  V6, which is about 6 to 7% larger than V4, and that cost is
+     *  permanent for every file written rather than per machine. */
+    public static String engineName() {
+        if (!TtioRansNative.isAvailable()) {
+            return "cpu";
+        }
+        return TtioRansNative.engineActiveName();
+    }
+
+    /** True when a GPU engine was asked for and came up. See
+     *  {@link #engineName()} for what enabling it costs. */
+    public static boolean gpuAvailable() {
+        if (!TtioRansNative.isAvailable()) {
+            return false;
+        }
+        return TtioRansNative.engineGpuAvailable();
+    }
+
     public static int streamStrategy(byte[] stream) {
         if (!TtioRansNative.isAvailable()) {
             throw new IllegalStateException(

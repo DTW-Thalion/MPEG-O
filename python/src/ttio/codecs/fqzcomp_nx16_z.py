@@ -818,8 +818,40 @@ def decode_with_metadata(
     )
 
 
+def engine_name() -> str:
+    """Name of the engine that encodes M94.Z V6 blocks.
+
+    ``"cpu"`` normally, or ``"vulkan:<device>"`` when a GPU engine was
+    asked for with ``TTIO_GPU=force`` and came up. The engine is off by
+    default: a GPU being present is not evidence that using it is an
+    improvement, and on some machines it is slower than the CPU path.
+
+    Enabling it is also a storage decision, not only a speed one. The
+    writer then emits V6, whose output is about 6 to 7% larger than V4,
+    and that cost is permanent for every file written, not per machine.
+    """
+    lib = load_ttio_rans()
+    if lib is None:
+        return "cpu"
+    lib.ttio_engine_active_name.restype = ctypes.c_char_p
+    name = lib.ttio_engine_active_name()
+    return name.decode("ascii") if name else "cpu"
+
+
+def gpu_available() -> bool:
+    """True when a GPU engine was asked for and came up. See
+    :func:`engine_name` for what enabling it costs."""
+    lib = load_ttio_rans()
+    if lib is None:
+        return False
+    lib.ttio_engine_gpu_available.restype = ctypes.c_int
+    return bool(lib.ttio_engine_gpu_available())
+
+
 __all__ = [
     "encode",
+    "engine_name",
+    "gpu_available",
     "decode_with_metadata",
     "get_backend_name",
     "MAGIC",

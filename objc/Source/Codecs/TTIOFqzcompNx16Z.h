@@ -110,6 +110,21 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
 
 @interface TTIOFqzcompNx16Z : NSObject
 
+/** Name of the engine that encodes M94.Z V6 blocks: @c "cpu", or
+ *  @c "vulkan:<device>" when a GPU engine was asked for with
+ *  @c TTIO_GPU=force and came up. Off by default: a GPU being present
+ *  is not evidence that using it helps, and on some machines it is
+ *  slower than the CPU path.
+ *
+ *  Enabling it is a storage decision as well. The writer then emits V6,
+ *  which is about 6 to 7% larger than V4, and that cost is permanent
+ *  for every file written rather than per machine. */
++ (NSString *)engineName;
+
+/** YES when a GPU engine was asked for and came up. */
++ (BOOL)gpuAvailable;
+
+
 /**
  * Encode a flat quality byte stream with the M94.Z codec.
  *

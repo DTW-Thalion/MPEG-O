@@ -266,4 +266,10 @@ class QualitiesV5Test {
             FqzcompNx16Z.decode(blob, new int[300]);
         assertArrayEquals(expected, dr.qualities());
     }
+
+    @Test
+    void engineNameDefaultsToCpu() {
+        assertEquals("cpu", FqzcompNx16Z.engineName());
+        assertFalse(FqzcompNx16Z.gpuAvailable());
+    }
 }

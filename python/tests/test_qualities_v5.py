@@ -223,3 +223,10 @@ def test_v6_decode_needs_no_sequences():
 def test_auto_never_picks_v6():
     qual, seq, lens, flags = _motif_corpus()
     assert fz.encode(qual, lens, flags, sequences=seq)[4] in (4, 5)
+
+
+def test_engine_name_defaults_to_cpu(monkeypatch):
+    """Without the knob the encoder must not go looking for a GPU."""
+    monkeypatch.delenv("TTIO_GPU", raising=False)
+    assert fz.engine_name() == "cpu"
+    assert fz.gpu_available() is False
