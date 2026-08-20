@@ -101,6 +101,13 @@ extern NSString * const TTIOFqzcompNx16ZErrorDomain;
  *  5..6 forced V5. */
 #define TTIOM94ZHintV4Auto 7
 
+/** Strategy hint: force M94.Z V6, the segmented adaptive variant
+ *  (docs/codecs/m94z_v6.md). V6 decodes without sequences. Auto-tune
+ *  never selects it: it does not beat V4 or V5 on size, so it stays
+ *  out of the size race and is reached only by this hint, or by
+ *  writer policy once a GPU engine is present. */
+#define TTIOM94ZHintV6 8
+
 @interface TTIOFqzcompNx16Z : NSObject
 
 /**

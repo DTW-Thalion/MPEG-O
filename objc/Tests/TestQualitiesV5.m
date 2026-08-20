@@ -243,6 +243,48 @@ void testQualitiesV5(void)
         PASS([TTIOFqzcompNx16Z strategyOfEncodedStream:
                   [NSData dataWithBytes:junk length:2]] < 0,
              "sniffer rejects a non-M94Z stream");
+
+        // ── V6: hint 8, sniffs as 8, decodes with no sequences ──
+        err = nil;
+        NSData *v6 = [TTIOFqzcompNx16Z encodeQualWithQualities:qual
+                                                  readLengths:lens
+                                                 revcompFlags:flags
+                                                    sequences:nil
+                                                 strategyHint:TTIOM94ZHintV6
+                                                     padCount:pad
+                                                        error:&err];
+        PASS(v6 != nil && ((const uint8_t *)v6.bytes)[4] == 6,
+             "hint 8 emits version 6");
+        PASS([TTIOFqzcompNx16Z strategyOfEncodedStream:v6] == 8,
+             "sniffer reads V6");
+
+        err = nil;
+        NSData *v6s = [TTIOFqzcompNx16Z encodeQualWithQualities:qual
+                                                   readLengths:lens
+                                                  revcompFlags:flags
+                                                     sequences:seq
+                                                  strategyHint:TTIOM94ZHintV6
+                                                      padCount:pad
+                                                         error:&err];
+        PASS(v6s != nil && [v6s isEqualToData:v6],
+             "hint 8 ignores sequences");
+
+        err = nil;
+        NSDictionary *v6back = [TTIOFqzcompNx16Z decodeData:v6
+                                               revcompFlags:flags
+                                                      error:&err];
+        PASS(v6back != nil
+             && [(NSData *)v6back[@"qualities"] isEqualToData:qual],
+             "V6 round-trips without sequences");
+
+        err = nil;
+        NSDictionary *v6prov = [TTIOFqzcompNx16Z decodeData:v6
+                                               revcompFlags:flags
+                                          sequencesProvider:nil
+                                                      error:&err];
+        PASS(v6prov != nil
+             && [(NSData *)v6prov[@"qualities"] isEqualToData:qual],
+             "V6 decodes through the provider overload with no provider");
     }
 
     // ── Golden fixture — the cross-language decode contract ────────
