@@ -90,6 +90,11 @@ NS_ASSUME_NONNULL_BEGIN
 /** High-water mark of the in-flight byte estimate (tests). */
 @property (nonatomic, readonly) unsigned long long maxInFlightBytesObserved;
 @property (nonatomic, readonly) NSUInteger blockCount;
+
+/** The pinned per-run qualities strategy hint: -1 until block 0 is
+ *  written (or always -1 with TTIO_M94Z_EXHAUSTIVE=1), then
+ *  TTIOM94ZHintV4Auto, 5, or 6. */
+@property (nonatomic, readonly) NSInteger qualStrategyHint;
 @property (nonatomic, readonly) NSUInteger threads;
 
 /** Assign ids for every chromosome name the block introduces, in the order

@@ -16,7 +16,9 @@
 #import "HDF5/TTIOHDF5Errors.h"
 #import "HDF5/TTIOHDF5Group.h"
 #import "Dataset/TTIOCompoundIO.h"
+#import "Codecs/TTIOFqzcompNx16Z.h"
 #import <pthread.h>
+#include <string.h>
 
 static NSString *const kLayout = @"blocks_v1";
 static const NSUInteger kDefaultBlockReads = 1000000;
@@ -112,6 +114,11 @@ static const NSUInteger kIndexArrayChunk = 65536;
     unsigned long long _readCount;
     unsigned long long _baseCount;
     NSUInteger _blockCount;
+    /* Per-run sticky qualities strategy: block 0 auto-tunes, the winner
+     * is pinned for the rest of the run (spec docs/superpowers/plans/
+     * 2026-08-19-fqz-v5-sticky-strategy-spec.md). -1 = not yet pinned. */
+    NSInteger _qualStrategyHint;
+    BOOL _qualExhaustive;
     id<TTIOStorageGroup> _rg;
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_channelDs;
     NSMutableDictionary<NSString *, id<TTIOStorageDataset>> *_idxDs;
@@ -186,9 +193,14 @@ static void ttioBuildIndexFields(void)
                                   _opt.memoryBudgetBytes ? @(_opt.memoryBudgetBytes) : nil
                                                       threads:_threads
                                                    blockBytes:_opt.blockBytes];
+        _qualStrategyHint = -1;
+        const char *ex = getenv("TTIO_M94Z_EXHAUSTIVE");
+        _qualExhaustive = (ex != NULL && strcmp(ex, "1") == 0);
     }
     return self;
 }
+
+- (NSInteger)qualStrategyHint { return _qualStrategyHint; }
 
 - (NSUInteger)threads { return _threads; }
 - (unsigned long long)memoryBudgetBytes { return _memoryBudgetBytes; }
@@ -374,8 +386,16 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     }
     [TTIOSpectralDataset validateGenomicCodecOverridesForRun:block];
     [[self class] registerBlockChromosomes:block intoMap:_chromMap];
+    if (!_qualExhaustive && _qualStrategyHint == -1
+        && (_blockCount > 0 || _inflight.count > 0)) {
+        /* Block-0 gate: the pin comes from the earliest written M94Z
+         * block; hold later submissions until it is known so the
+         * choice is timing-independent. */
+        if (![self _drainUntil:0 error:error]) return NO;
+    }
     TTIOGenomicWriteContext *ctx =
         [TTIOGenomicWriteContext contextWithChromNameToId:_chromMap referenceMD5:_referenceMD5];
+    ctx.qualStrategyHint = _qualStrategyHint;
     if (_pool.queue == nil) {
         TTIOBlockBlobs *blobs = [TTIOGenomicBlocks encodeBlock:block context:ctx error:error];
         if (!blobs) return NO;
@@ -388,6 +408,7 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     TTIOGenomicWriteContext *bctx =
         [TTIOGenomicWriteContext contextWithChromNameToId:[_chromMap mutableCopy]
                                              referenceMD5:_referenceMD5];
+    bctx.qualStrategyHint = _qualStrategyHint;
     TTIOInFlightBlock *f = [TTIOInFlightBlock new];
     f.block = block;
     f.estimatedBytes = ppEstimateBlockBytes(block);
@@ -487,6 +508,15 @@ static unsigned long long ppEstimateBlockBytes(TTIOWrittenGenomicRun *b)
     _readCount += blobs.nReads;
     _baseCount += blobs.nBases;
     _blockCount++;
+    if (_qualStrategyHint == -1 && !_qualExhaustive
+        && [blobs.codecs[@"qualities"] unsignedIntegerValue]
+             == TTIOCompressionFqzcompNx16Z) {
+        NSInteger strat = [TTIOFqzcompNx16Z
+            strategyOfEncodedStream:blobs.blobs[@"qualities"]];
+        if (strat > 0) {
+            _qualStrategyHint = strat == 4 ? TTIOM94ZHintV4Auto : strat;
+        }
+    }
     if (![_rg setAttributeValue:@((int64_t)_readCount) forName:@"read_count" error:error]) return NO;
     if (![_rg setAttributeValue:@((int64_t)_baseCount) forName:@"base_count" error:error]) return NO;
     return YES;
