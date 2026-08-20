@@ -26,8 +26,8 @@ public API is stable from onward.
   sequences channel.
 
   It trades ratio for that parallelism: measured against V4 at the
-  default 256 Ki segment, +5.98% on NovaSeq WGS, +6.56% on HiFi,
-  +6.96% on low-coverage chr22 and +7.27% on 2x250 chr22. The cost is
+  default 256 Ki segment, +5.99% on low-coverage chr22, +6.12% on HiFi,
+  +6.18% on NovaSeq WGS and +6.66% on 2x250 chr22. The cost is
   per-segment model warm-up and falls as segments grow. Full table and
   method in `docs/codecs/m94z_v6.md`.
 

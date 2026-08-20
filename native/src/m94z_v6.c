@@ -17,17 +17,23 @@
 /* Fixed by the ratio sweep over the four reference corpora
  * (docs/codecs/m94z_v6.md section 6).
  *
- * C = Q + P + D = 12 is deliberately far below what V4 uses. V4 models
+ * C = Q + P + D = 11 is deliberately far below what V4 uses. V4 models
  * a whole 64 MiB block, so it can afford a large context space; a V6
  * segment is a few hundred thousand symbols, and spreading those over
- * 2^14 contexts leaves each one too sparse to learn. Dropping to 2^12
- * improves or matches every corpus AND cuts model memory fourfold.
+ * 2^14 contexts leaves each one too sparse to learn. This is the split
+ * whose worst corpus is best, and it beats every larger context space
+ * measured while using a fraction of the memory.
+ *
+ * D = 1 rather than 0 or 2: one delta bit is what NovaSeq needs and
+ * what the long-read corpora can spare. Dropping it costs NovaSeq
+ * about 0.8 points, and a second bit costs the other three more than
+ * it returns.
  *
  * The seed mass is flat between 256 and 384 and falls away sharply
  * above 4096, because a heavy prior stops the per-context model
  * adapting. qshift 7 discards quality history at Q = 6, which measures
  * better than retaining it on three of the four corpora. */
-const ttio_v6_param TTIO_V6_DEFAULT = { 6, 7, 4, 4, 2, 256 };
+const ttio_v6_param TTIO_V6_DEFAULT = { 6, 7, 4, 4, 1, 256 };
 
 #ifndef MIN
 #  define MIN(a,b) ((a)<(b)?(a):(b))
