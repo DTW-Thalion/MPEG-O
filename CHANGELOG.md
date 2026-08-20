@@ -58,8 +58,9 @@ public API is stable from onward.
 - **The default thread count is now `cpu_count - 2`, was `cpu_count - 8`.**
   `TTIO_THREADS` unset or 0 resolves to this in all three SDKs. Measured
   on a 32-thread machine encoding a corpus with more blocks than cores,
-  throughput kept climbing to roughly one writer per core: 1487 MB/s at
-  32 writers against 1128 at the 24 the old default chose. The floor of
+  throughput kept climbing to roughly one writer per core: at a fixed
+  two segment threads, 1462 MB/s at 32 writers against 1128 at the 24
+  the old default chose. The floor of
   1 stays, so a one or two core machine still resolves to a single
   worker rather than none. Callers that set `TTIO_THREADS` or pass
   `threads=` are unaffected.

@@ -537,3 +537,35 @@ The writer's own pool size still comes from `TTIO_THREADS`, whose
 default is `cpu_count - 8`, or 24 here. That measures 1128 MB/s against
 1487 at 32. Raising it would change behaviour for V4 and V5 as well as
 V6, so it is left alone and flagged rather than adjusted here.
+
+## The defaults, end to end
+
+Both changes measured together: the writer default moving from
+`cpu_count - 8` to `cpu_count - 2`, and V6 getting its own segment
+thread count instead of inheriting the auto-tune knob that a pool pins
+to 1. Best of two runs each, checksums unchanged throughout.
+
+| Corpus | blocks | old: 24 writers, 1 segment thread | new: 30 writers, 2 segment threads | change |
+| --- | --- | --- | --- | --- |
+| NovaSeq 2 GB | 33 | 1122 MB/s | 1270 MB/s | +13% |
+| NovaSeq 512 MB | 9 | 477 MB/s | 938 MB/s | +96% |
+| HiFi | 5 | 262 MB/s | 604 MB/s | +131% |
+| lowcov | 3 | 140 MB/s | 482 MB/s | +245% |
+
+The gain is smallest where blocks are plentiful and largest where they
+are scarce, which is the shape the change was aimed at. A corpus with 33
+blocks could already keep 24 writers busy, so it gains only what six
+more writers are worth. A corpus with three blocks could never use more
+than three, and under the old policy those three had one thread each:
+three cores of thirty-two, which is where the 140 MB/s came from.
+
+Most real files sit closer to the small end than the large one, so the
+headline is the two to threefold gain rather than the 13%.
+
+The two causes are worth separating, because only one is a tuning
+choice. Raising the writer default is a judgement about how much of the
+machine to take. Giving V6 its own segment count is a defect fix: the
+auto-tune knob means "how many candidate encodes race", a writer with a
+pool correctly sets it to 1, and V6 has no candidates, so it was reading
+a setting whose meaning did not apply to it and switching off its own
+intra-block parallelism as a result.
